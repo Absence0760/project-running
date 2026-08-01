@@ -39,6 +39,8 @@ use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::ice;
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
+use crate::plan_adaptive_replan::{AdaptiveConfidence, AdaptiveReason};
+use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::record::{RacePhaseView, RecordState, Snapshot};
@@ -3609,9 +3611,9 @@ fn plan_adaptive_glance(
         None => write_unfed(&mut rows, Page::PlanAdaptive, "ADAPT", Unfed::NotSynced),
         Some(v) => {
             let trend = match v.trend {
-                0 => "ON TRACK",
-                1 => "DO MORE",
-                _ => "EASE OFF",
+                AdaptiveReason::OnTrack => "ON TRACK",
+                AdaptiveReason::TrendUnderfitness => "DO MORE",
+                AdaptiveReason::TrendOvertraining => "EASE OFF",
             };
             let _ = write!(rows[2], "{:<8}{}", "ADAPT", trend);
             let _ = write!(
@@ -3623,9 +3625,9 @@ fn plan_adaptive_glance(
                 let _ = write!(rows[5], "HELD FATIGUE");
             } else {
                 let conf = match v.confidence {
-                    0 => "LOW",
-                    1 => "MEDIUM",
-                    _ => "HIGH",
+                    AdaptiveConfidence::Low => "LOW",
+                    AdaptiveConfidence::Medium => "MEDIUM",
+                    AdaptiveConfidence::High => "HIGH",
                 };
                 let _ = write!(rows[5], "{:<8}{}", "CONF", conf);
             }
@@ -3829,10 +3831,13 @@ fn race_day_glance(
             } else {
                 let _ = write!(rows[4], "AGO");
             }
+            // Four verdicts, four words: the row is a bare value with all COLS
+            // to itself, so the longest ("FAR BEHIND", 10) fits with room over.
             let feas = match v.feasible {
-                0 => "BEHIND",
-                1 => "ON TRACK",
-                _ => "AHEAD",
+                GoalFeasibilityVerdict::FarBehind => "FAR BEHIND",
+                GoalFeasibilityVerdict::Behind => "BEHIND",
+                GoalFeasibilityVerdict::OnTrack => "ON TRACK",
+                GoalFeasibilityVerdict::Ahead => "AHEAD",
             };
             let _ = write!(rows[5], "{}", feas);
         }
@@ -5433,10 +5438,12 @@ mod tests {
             ease_offs: 255,
         });
         // Raw (setter-unclamped) extremes: the rows must fit even off a view
-        // the clamping setter never shaped.
+        // the clamping setter never shaped. The two verdicts are enums with no
+        // numeric extreme, so the widest render is their longest label —
+        // `EASE OFF` and `MEDIUM`.
         rec.plan_adaptive = Some(PlanAdaptiveView {
-            trend: 255,
-            confidence: 1,
+            trend: AdaptiveReason::TrendOvertraining,
+            confidence: AdaptiveConfidence::Medium,
             flagged_weeks: 255,
             window_weeks: 255,
             changes: 255,
@@ -5480,7 +5487,9 @@ mod tests {
         });
         rec.race_day = Some(RaceDayView {
             days_until: -9999,
-            feasible: 1,
+            // The longest of the four verdict words, so the widest row is what
+            // the overflow guard actually measures.
+            feasible: GoalFeasibilityVerdict::FarBehind,
         });
         // The live-derived views (no phone push behind them) had been left out,
         // which quietly kept the Pacer / Workout / CutoffEta / Climb /
@@ -10027,7 +10036,7 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.race_day = Some(crate::record::RaceDayView {
             days_until: 3,
-            feasible: 1,
+            feasible: GoalFeasibilityVerdict::OnTrack,
         });
         let rows = page_rows(
             Page::RaceDay,
@@ -10052,6 +10061,41 @@ mod tests {
         );
         assert_eq!(rows[4].as_str(), "TO GO");
         assert_eq!(rows[5].as_str(), "ON TRACK");
+
+        // Each of the four verdicts gets its own word. `FAR BEHIND` is the
+        // reason the field carries the enum rather than a three-code byte: a
+        // runner near a cut-off acts differently on it than on `BEHIND`, and
+        // the byte space folded the two together.
+        for (verdict, word) in [
+            (GoalFeasibilityVerdict::Ahead, "AHEAD"),
+            (GoalFeasibilityVerdict::OnTrack, "ON TRACK"),
+            (GoalFeasibilityVerdict::Behind, "BEHIND"),
+            (GoalFeasibilityVerdict::FarBehind, "FAR BEHIND"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.race_day = Some(crate::record::RaceDayView {
+                days_until: -1,
+                feasible: verdict,
+            });
+            let rows = page_rows(
+                Page::RaceDay,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[5].as_str(), word, "{verdict:?}");
+            assert!(
+                word.len() <= COLS,
+                "{word} is {} of {COLS} cells",
+                word.len()
+            );
+            assert_eq!(rows[4].as_str(), "AGO", "a past race still reads AGO");
+        }
 
         // PR recency buckets whole days into a human unit.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
@@ -10195,8 +10239,8 @@ mod tests {
         // A sustained under-trend with proposed changes.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
-            trend: 1,
-            confidence: 1,
+            trend: AdaptiveReason::TrendUnderfitness,
+            confidence: AdaptiveConfidence::Medium,
             flagged_weeks: 2,
             window_weeks: 3,
             changes: 1,
@@ -10230,8 +10274,8 @@ mod tests {
         // confidence that pretends a verdict was issued.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
-            trend: 0,
-            confidence: 0,
+            trend: AdaptiveReason::OnTrack,
+            confidence: AdaptiveConfidence::Low,
             flagged_weeks: 3,
             window_weeks: 3,
             changes: 0,
