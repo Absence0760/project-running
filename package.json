@@ -75,7 +75,10 @@
     "watch:sim": "bin/watch-sim.sh",
     "watch:sim:gui": "bin/watch-sim.sh --gui",
     "watch:sim:gui:idle": "bin/watch-sim.sh --gui --no-autostart",
+    "watch:sim:idle": "bin/watch-sim.sh --no-autostart",
+    "watch:view": "bin/watch-view.sh",
     "watch:shots": "bin/watch-shots.sh",
+    "watch:preview": "bin/watch-preview.sh",
     "watch:monitor": "bin/watch-monitor.sh",
 
     "//-- gen --": "Schema codegen — run gen:all after every migration; both outputs are committed and CI's parity-types job fails on drift (docs/architecture/schema_codegen.md).",

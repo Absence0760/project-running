@@ -169,6 +169,15 @@ namespace Antmicro.Renode.Peripherals.Video
             pointerY = y;
         }
 
+        // Monitor-callable hit test (0-based key index, -1 outside every key)
+        // so an external viewer (sim/live_view.py) can map canvas clicks to
+        // keys without duplicating the geometry — it then fires the virtual-
+        // time btn macros, which press more reliably than raw pin drives.
+        public int HitButtonAt(int x, int y)
+        {
+            return HitButton(x, y);
+        }
+
         public void Press(MouseButton button = MouseButton.Left)
         {
             if(button != MouseButton.Left || buttonPort == null)

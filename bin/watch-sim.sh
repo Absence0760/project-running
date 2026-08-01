@@ -220,6 +220,12 @@ RENODE_PID=$!
 for _ in $(seq 1 150); do
 	[[ -e "$GPS_PTY" ]] && break
 	if ! kill -0 "$RENODE_PID" 2>/dev/null; then
+		if grep -q "Couldn't start UI" "$RENODE_LOG" 2>/dev/null; then
+			# This Renode build has no working UI (the macOS arm64 .NET build:
+			# renode/renode#886), so it fell back to a stdin console monitor,
+			# which read the backgrounded process's closed stdin as `quit`.
+			fatal "this Renode build cannot start its UI (renode/renode#886), so --gui cannot work here — run the sim headless (bin/watch-sim.sh) and attach the live window with bin/watch-view.sh instead"
+		fi
 		tail -n 30 "$RENODE_LOG" >&2
 		fatal "Renode exited during startup — full log: $RENODE_LOG"
 	fi
