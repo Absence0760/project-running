@@ -18,15 +18,22 @@ use watch_core::settings::{
 };
 use watch_core::settings_apply::{plan_apply, EffectKind};
 
-/// The legacy versions `decode` still accepts: v1 (no `flags2`), v2 (no CRC
-/// trailer), v3 (32-bit page mask) and v4 (no resting HR). None is emitted any
-/// more — the encoder is v5-only.
+/// Older versions in the raw-frame generator below. `decode` still accepts v3
+/// (32-bit page mask) and v4 (no resting HR); v1 (no `flags2`) and v2 (no CRC
+/// trailer) are **refused** — the checksum is mandatory, so an un-checksummed
+/// version cannot be allowed to stand in for one that failed its CRC. None of
+/// the four is emitted any more: the encoder is v8-only. V1 and V2 stay in the
+/// generator on purpose, as raw frames that must never decode.
 const V1: u8 = 1;
 const V2: u8 = 2;
 const V3: u8 = 3;
 const V4: u8 = 4;
 
-/// Width of the CRC32 trailer, present from v3.
+/// The versions `decode` accepts, and therefore the only ones the success-side
+/// assertions can be reached through.
+const DECODABLE: [u8; 3] = [V3, V4, SETTINGS_VERSION];
+
+/// Width of the CRC32 trailer, carried by every decodable version.
 const CRC_WIDTH: usize = 4;
 
 /// The legal domain of a settings frame — every field the encoder can carry
@@ -233,7 +240,7 @@ fn a_frame_with_bytes_past_the_fields_the_flags_claim_is_rejected() {
 #[test]
 fn an_unknown_version_byte_is_rejected() {
     check(512, (a_settings(), any::<u8>()), |(s, version)| {
-        prop_assume!(!matches!(version, V1 | V2 | V3 | V4 | SETTINGS_VERSION));
+        prop_assume!(!DECODABLE.contains(&version) && !matches!(version, V1 | V2));
         let mut frame = encoded(&s);
         frame[4] = version;
         prop_assert_eq!(
@@ -367,7 +374,14 @@ fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
             return Ok(());
         };
         let version = frame[4];
-        prop_assert!(matches!(version, V1 | V2 | V3 | V4 | SETTINGS_VERSION));
+        // Tighter than "one of the versions that exist": v1 and v2 are in the
+        // generator precisely so that reaching this line through one of them
+        // would be a failure.
+        prop_assert!(
+            DECODABLE.contains(&version),
+            "version {} decoded but is not decodable",
+            version
+        );
         let flags = frame[5];
         let (flags2, header_len) = if version == V1 { (0, 6) } else { (frame[6], 7) };
 
