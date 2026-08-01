@@ -9,6 +9,7 @@ mod support;
 use proptest::prelude::*;
 use proptest::sample::Index;
 use support::check;
+use watch_core::ice::ICE_WIRE_LEN;
 use watch_core::record_cadence::plausible_sea_level_pa;
 use watch_core::run_store::crc32;
 use watch_core::settings::{
@@ -307,8 +308,33 @@ fn widths(version: u8) -> [usize; 8] {
 
 /// Widths of the `flags2` fields, in bit order: `tz_offset_min`,
 /// `distance_interval_m`, `time_interval_s`, `pace_band`, `race_phases`,
-/// `guided_run`, `resting_hr` (v5).
-const WIDTHS2: [usize; 7] = [2, 4, 4, 4, 9, GUIDED_RUN_ID_LEN, 2];
+/// `guided_run`, `resting_hr` (v5), `ice` (v6). One entry per bit the byte
+/// defines, so a saturated presence byte is covered end to end rather than
+/// seven eighths of the way.
+const WIDTHS2: [usize; 8] = [2, 4, 4, 4, 9, GUIDED_RUN_ID_LEN, 2, ICE_WIRE_LEN];
+
+/// Widths of the `flags3` fields, in bit order: `auto_lap`, `storm_alert`. The
+/// byte arrived with v7 and carries the two bits it defines; the other six are
+/// unknown at every version and `decode` refuses a frame that sets one.
+const WIDTHS3: [usize; 2] = [1, 2];
+
+/// Versions whose header carries a third presence byte (`flags3`). Getting this
+/// wrong in either the generator or the length oracle below is invisible in the
+/// common case and shows up as a ~1-in-a-billion "the declared fields account
+/// for 11 of 12 bytes" failure, which is how it survived unnoticed.
+fn has_flags3(version: u8) -> bool {
+    version == SETTINGS_VERSION
+}
+
+/// Bytes of header the frame's version declares: magic + version + `flags`,
+/// plus `flags2` from v2 and `flags3` from v7.
+fn header_len(version: u8) -> usize {
+    match version {
+        V1 => 6,
+        v if has_flags3(v) => 8,
+        _ => 7,
+    }
+}
 
 /// A frame assembled from raw header bytes rather than from [`WatchSettings`],
 /// so the presence bytes and the payload length vary independently — the shape
@@ -326,10 +352,11 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
         ],
         any::<u8>(),
         prop_oneof![Just(0u8), Just(1u8), Just(0x3Fu8), any::<u8>()],
+        prop_oneof![Just(0u8), Just(1u8), Just(0x03u8), any::<u8>()],
         prop::collection::vec(any::<u8>(), 0..=90),
         any::<bool>(),
     )
-        .prop_map(|(version, flags, flags2, tail, exact)| {
+        .prop_map(|(version, flags, flags2, flags3, tail, exact)| {
             let two_presence_bytes = matches!(version, V2 | V3 | V4 | SETTINGS_VERSION);
             let checksummed = matches!(version, V3 | V4 | SETTINGS_VERSION);
             let mut frame = b"SET1".to_vec();
@@ -337,6 +364,9 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
             frame.push(flags);
             if two_presence_bytes {
                 frame.push(flags2);
+            }
+            if has_flags3(version) {
+                frame.push(flags3);
             }
             if exact {
                 // Bias toward the length the flags claim, so decode succeeds
@@ -347,6 +377,12 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
                     want += (0..WIDTHS2.len())
                         .filter(|i| flags2 & (1 << i) != 0)
                         .map(|i| WIDTHS2[i])
+                        .sum::<usize>();
+                }
+                if has_flags3(version) {
+                    want += (0..WIDTHS3.len())
+                        .filter(|i| flags3 & (1 << i) != 0)
+                        .map(|i| WIDTHS3[i])
                         .sum::<usize>();
                 }
                 let mut payload = tail.clone();
@@ -363,73 +399,114 @@ fn a_raw_frame() -> impl Strategy<Value = Vec<u8>> {
         })
 }
 
+/// The offset walk is what makes a bitfield format dangerous: one field read at
+/// the wrong width shifts every field after it. A decoded frame must therefore
+/// populate exactly the flagged fields and consume exactly the bytes their
+/// widths account for — nothing unread, nothing invented. A frame that does not
+/// decode says nothing and passes.
+///
+/// Shared by the property below and the deterministic regression beside it, so
+/// the oracle a rare generated case would have caught can be handed the exact
+/// frame instead of waited for.
+fn fields_match_the_presence_bytes(frame: &[u8]) -> Result<(), TestCaseError> {
+    let Some(got) = WatchSettings::decode(frame) else {
+        return Ok(());
+    };
+    let version = frame[4];
+    // Tighter than "one of the versions that exist": v1 and v2 are in the
+    // generator precisely so that reaching this line through one of them
+    // would be a failure.
+    prop_assert!(
+        DECODABLE.contains(&version),
+        "version {} decoded but is not decodable",
+        version
+    );
+    let flags = frame[5];
+    let flags2 = if version == V1 { 0 } else { frame[6] };
+    let flags3 = if has_flags3(version) { frame[7] } else { 0 };
+
+    let present = [
+        got.max_hr.is_some(),
+        got.pacer.is_some(),
+        got.gear.is_some(),
+        got.zone_ceiling.is_some(),
+        got.sea_level_pa.is_some(),
+        got.fuel.is_some(),
+        got.pages.is_some(),
+        got.hide_empty_pages.is_some(),
+    ];
+    let w = widths(version);
+    let mut want = header_len(version);
+    for (i, p) in present.iter().enumerate() {
+        prop_assert_eq!(*p, flags & (1 << i) != 0, "field {} presence", i);
+        if *p {
+            want += w[i];
+        }
+    }
+    let present2 = [
+        got.tz_offset_min.is_some(),
+        got.distance_interval_m.is_some(),
+        got.time_interval_s.is_some(),
+        got.pace_band.is_some(),
+        got.race_phases.is_some(),
+        got.guided_run.is_some(),
+        got.resting_hr.is_some(),
+        got.ice.is_some(),
+    ];
+    for (i, p) in present2.iter().enumerate() {
+        prop_assert_eq!(*p, flags2 & (1 << i) != 0, "flags2 field {} presence", i);
+        if *p {
+            want += WIDTHS2[i];
+        }
+    }
+    let present3 = [got.auto_lap.is_some(), got.storm_alert.is_some()];
+    for (i, p) in present3.iter().enumerate() {
+        prop_assert_eq!(*p, flags3 & (1 << i) != 0, "flags3 field {} presence", i);
+        if *p {
+            want += WIDTHS3[i];
+        }
+    }
+    if matches!(version, V3 | V4 | SETTINGS_VERSION) {
+        want += CRC_WIDTH;
+    }
+    prop_assert_eq!(
+        frame.len(),
+        want,
+        "the declared fields account for {} of {} bytes",
+        want,
+        frame.len()
+    );
+    Ok(())
+}
+
 #[test]
 fn a_decoded_frame_carries_exactly_the_fields_its_presence_bytes_declare() {
-    // The offset walk is what makes a bitfield format dangerous: one field
-    // read at the wrong width shifts every field after it. A decoded frame
-    // must therefore populate exactly the flagged fields and consume exactly
-    // the bytes their widths account for — nothing unread, nothing invented.
     check(2048, a_raw_frame(), |frame| {
-        let Some(got) = WatchSettings::decode(&frame) else {
-            return Ok(());
-        };
-        let version = frame[4];
-        // Tighter than "one of the versions that exist": v1 and v2 are in the
-        // generator precisely so that reaching this line through one of them
-        // would be a failure.
-        prop_assert!(
-            DECODABLE.contains(&version),
-            "version {} decoded but is not decodable",
-            version
-        );
-        let flags = frame[5];
-        let (flags2, header_len) = if version == V1 { (0, 6) } else { (frame[6], 7) };
-
-        let present = [
-            got.max_hr.is_some(),
-            got.pacer.is_some(),
-            got.gear.is_some(),
-            got.zone_ceiling.is_some(),
-            got.sea_level_pa.is_some(),
-            got.fuel.is_some(),
-            got.pages.is_some(),
-            got.hide_empty_pages.is_some(),
-        ];
-        let w = widths(version);
-        let mut want = header_len;
-        for (i, p) in present.iter().enumerate() {
-            prop_assert_eq!(*p, flags & (1 << i) != 0, "field {} presence", i);
-            if *p {
-                want += w[i];
-            }
-        }
-        let present2 = [
-            got.tz_offset_min.is_some(),
-            got.distance_interval_m.is_some(),
-            got.time_interval_s.is_some(),
-            got.pace_band.is_some(),
-            got.race_phases.is_some(),
-            got.guided_run.is_some(),
-            got.resting_hr.is_some(),
-        ];
-        for (i, p) in present2.iter().enumerate() {
-            prop_assert_eq!(*p, flags2 & (1 << i) != 0, "flags2 field {} presence", i);
-            if *p {
-                want += WIDTHS2[i];
-            }
-        }
-        if matches!(version, V3 | V4 | SETTINGS_VERSION) {
-            want += CRC_WIDTH;
-        }
-        prop_assert_eq!(
-            frame.len(),
-            want,
-            "the declared fields account for {} of {} bytes",
-            want,
-            frame.len()
-        );
-        Ok(())
+        fields_match_the_presence_bytes(&frame)
     });
+}
+
+#[test]
+fn the_smallest_current_version_frame_is_measured_with_its_flags3_byte() {
+    // The generated case the oracle used to get wrong, constructed rather than
+    // waited for: an all-fields-absent v8 frame is header(8) + crc(4), and an
+    // oracle that assumes the pre-v7 seven-byte header measures it as 11 of 12.
+    // The generator reached this shape only when its tail byte happened to
+    // stand in for the flags3 it never emitted, at odds around 1e-9 a case, so
+    // the bug lived behind a property that ran thousands of times.
+    let mut frame = b"SET1".to_vec();
+    frame.push(SETTINGS_VERSION);
+    frame.push(0); // flags
+    frame.push(0); // flags2
+    frame.push(0); // flags3
+    frame.extend_from_slice(&crc32(&frame).to_le_bytes());
+    assert_eq!(frame.len(), 12);
+    assert_eq!(
+        WatchSettings::decode(&frame),
+        Some(WatchSettings::default()),
+        "the frame the oracle is measured against must decode"
+    );
+    fields_match_the_presence_bytes(&frame).expect("the oracle accounts for every byte");
 }
 
 #[test]
