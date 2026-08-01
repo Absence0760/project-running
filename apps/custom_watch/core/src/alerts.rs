@@ -69,7 +69,15 @@
 //!    supersedes a fuel reminder but never a zone banner or a corral whistle;
 //!    blocked by one, it stays armed and un-cooled so it retries while the
 //!    excursion lasts, rather than being swallowed.
-//! 4. **Cutoff** — the projection on the CUT page fell to `BEHIND`: at the
+//! 4. **Off-course** — the nav task's 40 m / 20 m hysteresis latched. Until
+//!    2026-07-31 that verdict lived only as a steady banner over the Nav
+//!    page's own map panel; a runner parked on any of the other forty pages
+//!    learned about a wrong turn only by paging there. The engine
+//!    edge-detects the already-de-flapped latch, so it fires once per
+//!    excursion by construction, and it is **re-queued** when displaced:
+//!    every unseen minute banks wrong-way distance. Its release fires the
+//!    `ON COURSE` affirmation down in the dropped class.
+//! 5. **Cutoff** — the projection on the CUT page fell to `BEHIND`: at the
 //!    current pace the runner misses the next cutoff. Like the corral whistle
 //!    it warns of the race ending, but it is a *projection off recent pace*,
 //!    not the race director's own clock, so it ranks with the correct-it-now
@@ -78,7 +86,7 @@
 //!    `UNKNOWN` (a stale fix is the watch losing sight of the runner, not the
 //!    runner catching up) — and it is **re-queued** when displaced: there is
 //!    no later reminder, and the thing it warns of only gets worse.
-//! 5. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
+//! 6. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
 //!    the world rather than the runner, and it sits here because of *when* the
 //!    thing it warns of arrives. A zone excursion, a corral bell and a pace
 //!    drift all want a decision inside seconds; a front measured over three
@@ -88,11 +96,12 @@
 //!    missed gel is re-offered a cadence later, a missed front is not. It rides
 //!    the run's own alert slot, so like every other arm it is silent between
 //!    runs.
-//! 6. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//! 7. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
 //!    reminders promote eat-before-drink when a slot frees.
-//! 7. **Timer**, then **Distance**, then **Time** — milestones, and the only
+//! 8. **Back-on-course**, then **Timer**, then **Distance**, then **Time** —
+//!    milestones, and the only
 //!    arms that are *dropped* rather than queued when the slot is busy. A
 //!    milestone banner is meaningful only at the moment it is reached; showing
 //!    "5.0 KM" once the runner is at 5.4 km is worse than not showing it, and
@@ -103,7 +112,12 @@
 //!    fuel deliberately: a missed timer banner costs nothing recoverable (the
 //!    Timer page counts the overrun up), whereas §214 says a missed gel is the
 //!    one reminder that must never be silently dropped — and below the corral
-//!    whistle for the same asymmetry, one rung sharper.
+//!    whistle for the same asymmetry, one rung sharper. The `ON COURSE`
+//!    affirmation leads the group: for a runner who just corrected a wrong
+//!    turn by feel it is the answer to a live question, where the milestones
+//!    are wallpaper — but it is still in the dropped class, because a stale
+//!    all-clear shown after the runner drifted off again is a lie the Nav
+//!    page would contradict.
 //!
 //! Display-only by design: the DK has no vibration motor, and alerts are an
 //! L4 auxiliary — the engine is pure and fed *after* the recorder updates, so
@@ -213,6 +227,19 @@ pub enum Alert {
     /// and the pace still sufficient are on the CUT page, and the banner's job
     /// is to send the runner there while there is still time to act.
     CutoffBehind,
+    /// The nav task's off-course hysteresis latched
+    /// ([`Snapshot::nav_off_course`]) — until now that verdict rendered only
+    /// over the Nav page's own map panel, invisible from the other forty
+    /// pages. Carries nothing: the offset and the breadcrumb are on the Nav
+    /// page, and the banner's job is to send the runner there before the
+    /// wrong trail banks another kilometre.
+    OffCourse,
+    /// The latch released — a live projection put the runner back on the
+    /// line. The one affirmation on this engine, and the only banner without
+    /// the `!` prefix: it asks for nothing, it closes the loop the OFF CRS
+    /// banner opened, so a runner who corrected by feel knows it worked
+    /// without paging to Nav.
+    BackOnCourse,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -289,6 +316,12 @@ pub fn banner(alert: Alert) -> Banner {
         Alert::BackyardBell(min) => write!(b, "! {} MIN", min.min(9)),
         Alert::Storm => write!(b, "! STORM"),
         Alert::CutoffBehind => write!(b, "! CUTOFF"),
+        // CRS is the course wire frame's own abbreviation (`CRS1`) — the full
+        // phrase overflows the ten-cell band the `!` convention leaves.
+        Alert::OffCourse => write!(b, "! OFF CRS"),
+        // The all-clear fits whole, and drops the `!` deliberately: on this
+        // face `!` means act, and an affirmation asks for nothing.
+        Alert::BackOnCourse => write!(b, "ON COURSE"),
     };
     b
 }
@@ -371,6 +404,15 @@ pub struct AlertEngine {
     /// [`Self::reset`], unlike the storm pair: a cutoff is a property of the
     /// run's course, not of the world between runs.
     pending_cutoff: bool,
+    /// Whether the last MEASURED [`Snapshot::nav_off_course`] said off-course
+    /// — the edge detector for both course banners. A `None` sample (no
+    /// course, no projection yet) clears it silently: losing the projection
+    /// is absence of knowledge, so it must neither fire the recovery banner
+    /// nor leave a stale excursion armed against a freshly-pushed course.
+    was_off_course: bool,
+    /// A raised off-course warning waiting for the slot. Cleared by
+    /// [`Self::reset`] with the same run-scoped reasoning as the cutoff pair.
+    pending_off_course: bool,
     in_run: bool,
 }
 
@@ -410,6 +452,8 @@ impl AlertEngine {
             pending_storm: false,
             cutoff_armed: true,
             pending_cutoff: false,
+            was_off_course: false,
+            pending_off_course: false,
             in_run: false,
         }
     }
@@ -677,23 +721,39 @@ impl AlertEngine {
             self.last_backyard_warning_seq = 0;
         }
 
-        // The storm arm (§ 376). Not gated on `Recording`: a runner standing at
-        // an aid station deciding whether to go back up onto the ridge is
-        // exactly who the warning is for. It sets a pending flag rather than
-        // taking the slot, so the precedence chain at the tail places it — one
-        // rung under pace, one above fuel — and a displaced one re-queues.
-        //
-        // Only a MEASURED recovery re-arms it. A trend withdrawn because the
-        // GPS reference went stale is the watch losing sight of the weather,
-        // not the weather clearing, and re-arming on that would let one canyon
-        // turn one front into two banners.
+        // The off-course arm. The nav task's hysteresis
+        // ([`crate::course::OffCourseAlert`], 40 m latch / 20 m release)
+        // already de-flaps the signal, so the engine only edge-detects it:
+        // the latch closing raises the warning (re-queued when displaced —
+        // there is no later reminder and every unseen minute banks wrong-way
+        // distance), the latch releasing raises the ON COURSE affirmation
+        // (dropped when the slot is busy — the milestone rule: a stale
+        // all-clear is worse than none, and the Nav page carries the truth).
+        // A `None` sample clears the edge detector silently: no course or no
+        // projection is absence of knowledge, not a recovery.
+        let mut back_on_course_due = false;
+        match snap.nav_off_course {
+            Some(true) => {
+                if !self.was_off_course {
+                    self.was_off_course = true;
+                    self.pending_off_course = true;
+                }
+            }
+            Some(false) => {
+                if self.was_off_course {
+                    self.was_off_course = false;
+                    back_on_course_due = true;
+                }
+            }
+            None => self.was_off_course = false,
+        }
+
         // The cutoff arm. Not gated on `Recording`: the race clock keeps
         // running through an aid-station pause, and a paused runner drifting
         // behind the cutoff is exactly who the warning is for. Like storm it
         // sets a pending flag rather than taking the slot, so the precedence
-        // chain at the tail places it — leading the re-queued class, ahead of
-        // storm and fuel: the front wants a decision inside the hour, the
-        // cutoff sooner.
+        // chain at the tail places it — leading storm in the re-queued class:
+        // the front wants a decision inside the hour, the cutoff sooner.
         if let Some(eta) = snap.cutoff {
             match eta.status {
                 CutoffEtaStatus::Behind => {
@@ -709,6 +769,16 @@ impl AlertEngine {
             }
         }
 
+        // The storm arm (§ 376). Not gated on `Recording`: a runner standing at
+        // an aid station deciding whether to go back up onto the ridge is
+        // exactly who the warning is for. It sets a pending flag rather than
+        // taking the slot, so the precedence chain at the tail places it — one
+        // rung under pace, one above fuel — and a displaced one re-queues.
+        //
+        // Only a MEASURED recovery re-arms it. A trend withdrawn because the
+        // GPS reference went stale is the watch losing sight of the weather,
+        // not the weather clearing, and re-arming on that would let one canyon
+        // turn one front into two banners.
         if let Some(storm) = snap.storm {
             if storm.trend == StormTrend::Storm {
                 if self.storm_armed && self.storm_alert {
@@ -749,7 +819,10 @@ impl AlertEngine {
         }
 
         if self.active.is_none() {
-            if self.pending_cutoff {
+            if self.pending_off_course {
+                self.pending_off_course = false;
+                self.active = Some((Alert::OffCourse, uptime_s));
+            } else if self.pending_cutoff {
                 self.pending_cutoff = false;
                 self.active = Some((Alert::CutoffBehind, uptime_s));
             } else if self.pending_storm {
@@ -761,6 +834,8 @@ impl AlertEngine {
             } else if self.pending_drink {
                 self.pending_drink = false;
                 self.active = Some((Alert::Drink, uptime_s));
+            } else if back_on_course_due {
+                self.active = Some((Alert::BackOnCourse, uptime_s));
             } else if timer_due {
                 self.active = Some((Alert::TimerDone, uptime_s));
             } else if let Some(milestone_m) = distance_due {
@@ -783,6 +858,7 @@ impl AlertEngine {
             Some((Alert::Eat, _)) => self.pending_eat = true,
             Some((Alert::Storm, _)) => self.pending_storm = true,
             Some((Alert::CutoffBehind, _)) => self.pending_cutoff = true,
+            Some((Alert::OffCourse, _)) => self.pending_off_course = true,
             _ => {}
         }
         self.active = Some((alert, uptime_s));
@@ -806,6 +882,8 @@ impl AlertEngine {
         self.last_backyard_warning_seq = 0;
         self.cutoff_armed = true;
         self.pending_cutoff = false;
+        self.was_off_course = false;
+        self.pending_off_course = false;
         self.in_run = false;
     }
 }
@@ -888,7 +966,9 @@ impl FuelOverdueTracker {
                 | Alert::TimerDone
                 | Alert::BackyardBell(_)
                 | Alert::Storm
-                | Alert::CutoffBehind,
+                | Alert::CutoffBehind
+                | Alert::OffCourse
+                | Alert::BackOnCourse,
             )
             | None => {}
         }
@@ -956,6 +1036,7 @@ mod tests {
             readiness: None,
             goals: None,
             turn_cue: None,
+            nav_off_course: None,
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
@@ -1836,6 +1917,10 @@ mod tests {
         assert_eq!(banner(Alert::Time(3 * 3600 + 45 * 60)).as_str(), "! 3:45 H");
         assert_eq!(banner(Alert::PaceFast).as_str(), "! TOO FAST");
         assert_eq!(banner(Alert::PaceSlow).as_str(), "! TOO SLOW");
+        assert_eq!(banner(Alert::CutoffBehind).as_str(), "! CUTOFF");
+        assert_eq!(banner(Alert::OffCourse).as_str(), "! OFF CRS");
+        // The one affirmation: no bang, it asks for nothing.
+        assert_eq!(banner(Alert::BackOnCourse).as_str(), "ON COURSE");
         // A corrupt zone / milestone clamps instead of overflowing the banner.
         assert_eq!(banner(Alert::ZoneAbove(200)).as_str(), "! ZONE 9");
         assert_eq!(banner(Alert::Distance(u32::MAX)).as_str(), "! 999.9 KM");
@@ -1849,6 +1934,9 @@ mod tests {
             Alert::Time(u32::MAX),
             Alert::PaceFast,
             Alert::PaceSlow,
+            Alert::CutoffBehind,
+            Alert::OffCourse,
+            Alert::BackOnCourse,
         ] {
             assert!(banner(a).chars().count() * 2 <= crate::face::COLS);
         }
@@ -2652,5 +2740,147 @@ mod tests {
             FuelOverdue::Eat,
             "a cutoff warning supersedes the banner, never the standing fuel marker"
         );
+    }
+
+    fn off(off_course: Option<bool>, moving_s: u32) -> Snapshot {
+        Snapshot {
+            nav_off_course: off_course,
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn going_off_course_raises_one_banner_per_excursion() {
+        // The nav latch is already hysteretic (40 m on / 20 m off), so the
+        // engine's edge detector fires exactly once per excursion.
+        let mut e = AlertEngine::new();
+        assert_eq!(
+            e.on_update(&off(Some(true), 10), None, 10),
+            Some(Alert::OffCourse)
+        );
+        for t in 11..120 {
+            let shown = e.on_update(&off(Some(true), t), None, t);
+            assert!(
+                shown.is_none() || t < 10 + ALERT_TTL_S,
+                "re-fired inside one excursion at t={t}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_recovery_raises_the_on_course_affirmation_once() {
+        let mut e = AlertEngine::new();
+        assert_eq!(
+            e.on_update(&off(Some(true), 10), None, 10),
+            Some(Alert::OffCourse)
+        );
+        let t = 10 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&off(Some(false), t), None, t),
+            Some(Alert::BackOnCourse)
+        );
+        // Staying on course is not news.
+        let t = t + ALERT_TTL_S;
+        assert_eq!(e.on_update(&off(Some(false), t), None, t), None);
+    }
+
+    #[test]
+    fn a_lost_projection_is_not_a_recovery() {
+        // No course / no fix is absence of knowledge: it must not fire the
+        // affirmation, and a projection that comes back still off-course is a
+        // fresh excursion worth a fresh warning.
+        let mut e = AlertEngine::new();
+        assert_eq!(
+            e.on_update(&off(Some(true), 10), None, 10),
+            Some(Alert::OffCourse)
+        );
+        let mut t = 10 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&off(None, t), None, t), None);
+        t += 1;
+        assert_eq!(e.on_update(&off(Some(false), t), None, t), None);
+        t += 1;
+        assert_eq!(
+            e.on_update(&off(Some(true), t), None, t),
+            Some(Alert::OffCourse)
+        );
+    }
+
+    #[test]
+    fn a_zone_banner_displaces_off_course_which_re_queues_rather_than_dropping() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&off(Some(true), 10), None, 10),
+            Some(Alert::OffCourse)
+        );
+        assert_eq!(
+            e.on_update(&off(Some(true), 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        let after = 12 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&off(Some(true), after), Some(150), after),
+            Some(Alert::OffCourse),
+            "the displaced off-course warning came back"
+        );
+    }
+
+    #[test]
+    fn off_course_leads_the_re_queued_class() {
+        // Both raised on the same tick: the wrong turn beats the cutoff
+        // projection (which the wrong turn invalidates anyway), and the
+        // displaced cutoff is owed the next slot.
+        let mut e = AlertEngine::new();
+        let both = Snapshot {
+            cutoff: cut(CutoffEtaStatus::Behind, 10).cutoff,
+            ..off(Some(true), 10)
+        };
+        assert_eq!(e.on_update(&both, None, 10), Some(Alert::OffCourse));
+        let t = 10 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&both, None, t), Some(Alert::CutoffBehind));
+    }
+
+    #[test]
+    fn a_busy_slot_drops_the_on_course_affirmation() {
+        // The milestone rule: a stale all-clear shown after the runner
+        // drifted off again is a lie the Nav page would contradict.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&off(Some(true), 10), None, 10),
+            Some(Alert::OffCourse)
+        );
+        let t = 10 + ALERT_TTL_S;
+        // The recovery edge lands while a zone banner owns the slot.
+        assert_eq!(
+            e.on_update(&off(Some(false), t), Some(160), t),
+            Some(Alert::ZoneAbove(4))
+        );
+        let t = t + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&off(Some(false), t), Some(150), t),
+            None,
+            "a dropped affirmation is not owed"
+        );
+    }
+
+    #[test]
+    fn a_run_boundary_clears_the_off_course_arm() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&off(Some(true), 10), None, 10),
+            Some(Alert::OffCourse)
+        );
+        // Displace it so it is pending, then end the run while it waits.
+        assert_eq!(
+            e.on_update(&off(Some(true), 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 13), None, 13),
+            None
+        );
+        assert_eq!(e.on_update(&rec(14), None, 30), None);
     }
 }

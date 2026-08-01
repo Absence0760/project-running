@@ -4824,6 +4824,7 @@ mod tests {
             readiness: None,
             goals: None,
             turn_cue: None,
+            nav_off_course: None,
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
