@@ -177,7 +177,10 @@ moves over it with `±1` (taps) and `±4` (holds), BTN4 forward and BTN3
 backward: the same directions the keys page, so the modal never inverts the
 spatial mapping. Above the map sit two chrome rows: row 0 is the **button
 legend** (`B2 EXIT` … `B1 GO`) and row 1 the **cursor page's full
-name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells). The body
+name** (`Page::name`, longest `ELEVATION PROFILE` at 17 of 21 cells) with a
+right-aligned **position counter** (`1/45` — the cursor's seat in the enabled
+ring, §387); the two names too long to leave the counter its cells keep the
+whole row and the counter drops there, name over number. The body
 therefore seats `GRID_CAPACITY` = 4 × 7 = 28 cells against a 41-page ring, so it
 is a **window** that scrolls in whole rows to keep the cursor's row on screen
 rather than truncating the tail (§333) — scroll depth `ceil(41/4) − 7` = 4 at
