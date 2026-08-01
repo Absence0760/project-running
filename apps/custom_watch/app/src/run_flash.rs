@@ -62,6 +62,7 @@ use watch_core::ice;
 use watch_core::profiles::ActivityProfile;
 use watch_core::run_store::ManifestEntry;
 use watch_core::screens;
+use watch_core::timers;
 use watch_core::waypoints;
 
 use crate::state;
@@ -131,6 +132,7 @@ struct ConfigPage {
     waypoints: Option<waypoints::Waypoints>,
     ice: Option<ice::IceCard>,
     screens: Option<screens::Screens>,
+    timer: Option<timers::TimerRecord>,
 }
 
 impl RunStore {
@@ -551,6 +553,55 @@ impl RunStore {
         }
     }
 
+    /// Read the timer persisted by [`persist_timer`](Self::persist_timer), or
+    /// `None` when flash is unavailable, unreadable, or the record is erased /
+    /// corrupt — the watch then starts with a cleared instrument, which is the
+    /// fail-closed answer (same rule as [`read_ice`](Self::read_ice)).
+    ///
+    /// Returns the raw record rather than a `Timer`, deliberately: rebuilding one
+    /// needs a wall-clock stamp to measure the reboot gap against, and at boot
+    /// there is usually no fix yet. Resolving it here would have to pass
+    /// `wall_now = None` and so mark every restored timer's gap unknown, even the
+    /// ones a fix arriving seconds later could have measured exactly. The button
+    /// task holds the record and calls `Timer::from_record` once it has a stamp.
+    pub fn read_timer(&mut self) -> Option<timers::TimerRecord> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; timers::TIMER_RECORD_LEN];
+        let at = CONFIG_OFFSET + flash_store::TIMER_RECORD_OFFSET as u32;
+        if let Err(e) = self.flash.read(at, &mut buf) {
+            warn!("run_flash: timer read failed {:?}", e);
+            return None;
+        }
+        timers::TimerRecord::decode(&buf)
+    }
+
+    /// Persist the runner's countdown / stopwatch (§375) so a brown-out on a
+    /// cold battery cannot silently take a nap timer with it. `None` clears it —
+    /// the record is simply not rewritten after the erase, so a reset instrument
+    /// cannot be resurrected by the next boot, exactly as
+    /// [`persist_ice`](Self::persist_ice) does.
+    ///
+    /// Same best-effort / L4 rules and carry-everything-forward page rewrite as
+    /// [`persist_gnss_mode`](Self::persist_gnss_mode). The caller must gate this
+    /// on a **state change** — armed, stopped, resumed, cleared — and never on
+    /// the record's contents: an armed timer's `elapsed_s` moves every second, so
+    /// a contents-gated write would erase this page once per tick, which is over
+    /// half a page's endurance in one 90-minute countdown. The reading needs no
+    /// rewriting because the record stores the anchor, and an anchor does not
+    /// drift.
+    pub async fn persist_timer(&mut self, rec: Option<timers::TimerRecord>) {
+        let mut page = self.read_config_page();
+        page.timer = rec;
+        if self.rewrite_config_page(&page).await {
+            match rec {
+                Some(_) => info!("run_flash: persisted timer"),
+                None => info!("run_flash: cleared timer"),
+            }
+        }
+    }
+
     /// Wipe every byte of flash this store owns — the config page and all four
     /// run slots — and forget the directory that indexed them (§378). Returns
     /// whether the erase actually reached flash.
@@ -611,6 +662,7 @@ impl RunStore {
             waypoints: self.read_waypoints(),
             ice: self.read_ice(),
             screens: self.read_screens(),
+            timer: self.read_timer(),
         }
     }
 
@@ -675,6 +727,14 @@ impl RunStore {
                     warn!("run_flash: screens write failed {:?}", e);
                     return false;
                 }
+            }
+        }
+        if let Some(t) = page.timer {
+            let rec = t.encode();
+            let at = start + flash_store::TIMER_RECORD_OFFSET as u32;
+            if let Err(e) = self.flash_write(at, &rec).await {
+                warn!("run_flash: timer write failed {:?}", e);
+                return false;
             }
         }
         true
