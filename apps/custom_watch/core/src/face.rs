@@ -3954,6 +3954,25 @@ fn signed_split(delta_s: i32) -> Row {
 /// after the text, so a longer row would collide with it.
 pub const TRACKBACK_TEXT_COLS: usize = 10;
 
+/// The `~` a heading carries once it is older than the base freshness window
+/// [`trackback::HEADING_STALE_S`], empty while it is inside it.
+///
+/// § 412 scaled the budget to the GNSS cadence — `HEADING_STALE_S +
+/// (fix_interval_s - 1)` — so an Expedition arrow is not blank 83 % of the time.
+/// The price is that a rendered bearing may be ~60 s old, and a bearing that is
+/// confidently wrong about *direction* is the failure the back-to-start page
+/// exists to prevent. So the row discloses the slack the way § 389 marks a held
+/// GAP: the same glyph, and § 411's size demotion costs nothing here because HDG
+/// is a text row and never a hero. Performance can never mark — its budget *is*
+/// the base window, so nothing it shows was bought on credit.
+fn heading_age_mark(tb: &TrackbackView, uptime_s: u32) -> &'static str {
+    if uptime_s.saturating_sub(tb.heading_uptime_s) > trackback::HEADING_STALE_S {
+        "~"
+    } else {
+        ""
+    }
+}
+
 /// The back-to-start glance: distance back to the run's start up large in the
 /// rows-0-1 hero (drawn by the app from [`page_hero`] — metres under a
 /// kilometre, km with decimals beyond, the unit named on the label row), then
@@ -3963,7 +3982,10 @@ pub const TRACKBACK_TEXT_COLS: usize = 10;
 /// the left of rows 5-7 with the relative direction arrow and the right of
 /// rows 3-7 with the TrackBack breadcrumb map (see `trackback::project_track`);
 /// this text layer only reserves that space. A missing or stale heading shows
-/// `--` in the arrow's spot — an honest placeholder, never a stale arrow.
+/// `--` in the arrow's spot — an honest placeholder, never a stale arrow — and
+/// one still inside the cadence-widened budget but past the base window carries
+/// [`heading_age_mark`]'s `~`. The drawn arrow cannot carry that mark, so the
+/// HDG row is where the age is disclosed for both.
 #[allow(clippy::too_many_arguments)]
 fn back_to_start_glance(
     fix: Option<&Fix>,
@@ -3983,13 +4005,14 @@ fn back_to_start_glance(
 
     let _ = write!(rows[2], "TO START");
 
-    let heading = tb.and_then(|n| n.heading_sector(uptime_s));
+    let heading =
+        tb.and_then(|n| Some((n.heading_sector(uptime_s)?, heading_age_mark(n, uptime_s))));
     let bearing = tb.filter(|n| n.active()).and_then(|n| n.bearing_sector());
     match heading {
-        Some(s) => {
+        Some((s, mark)) => {
             let _ = write!(
                 rows[3],
-                "{:<5}{}",
+                "{:<5}{}{mark}",
                 "HDG",
                 trackback::SECTOR_NAMES[s as usize]
             );
@@ -4296,11 +4319,11 @@ fn waypoint_glance(
 
     let _ = write!(rows[2], "TO WPT");
 
-    match tb.and_then(|n| n.heading_sector(uptime_s)) {
-        Some(s) => {
+    match tb.and_then(|n| Some((n.heading_sector(uptime_s)?, heading_age_mark(n, uptime_s)))) {
+        Some((s, mark)) => {
             let _ = write!(
                 rows[3],
-                "{:<6}{}",
+                "{:<6}{}{mark}",
                 "HDG",
                 trackback::SECTOR_NAMES[s as usize]
             );
@@ -9147,6 +9170,58 @@ mod tests {
                 .as_str(),
             "1.50"
         );
+    }
+
+    #[test]
+    fn a_heading_older_than_the_base_window_is_marked_on_both_pages() {
+        // §412 widened the freshness budget to the GNSS cadence, so an
+        // Expedition bearing can legitimately be ~60 s old. It gets §389's `~`
+        // rather than passing as the current one; Performance, whose budget IS
+        // the base window, never marks.
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        rec.waypoint = Some(crate::waypoints::WaypointView {
+            distance_m: 250.0,
+            bearing_deg: 45.0,
+            count: 3,
+            marked_uptime_s: 10,
+        });
+        rec.waypoint_count = 3;
+        let mut nav = nav_east(20, 6.0); // heading due east, derived at t=20
+        nav.heading_stale_after_s =
+            trackback::heading_stale_after_s(GnssMode::Expedition.fix_interval_s());
+
+        let rows_at = |page: Page, uptime_s: u32| {
+            page_rows(
+                page,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                Some(&nav),
+                uptime_s,
+                false,
+            )
+        };
+
+        // Inside the base window: unmarked, exactly as Performance renders.
+        assert_eq!(rows_at(Page::BackToStart, 28)[3].as_str(), "HDG  E");
+        assert_eq!(rows_at(Page::Waypoint, 28)[3].as_str(), "HDG   E");
+        // 40 s old — shown only because the cadence bought it the slack, so the
+        // row says so.
+        assert_eq!(rows_at(Page::BackToStart, 60)[3].as_str(), "HDG  E~");
+        assert_eq!(rows_at(Page::Waypoint, 60)[3].as_str(), "HDG   E~");
+        // Past the widened budget it withholds the bearing entirely, unchanged.
+        let past = 20 + nav.heading_stale_after_s + 1;
+        assert_eq!(rows_at(Page::BackToStart, past)[3].as_str(), "HDG  --");
+        assert_eq!(rows_at(Page::Waypoint, past)[3].as_str(), "HDG   --");
+        // The mark must not push the back-to-start text into the breadcrumb map.
+        for row in &rows_at(Page::BackToStart, 60)[3..8] {
+            assert!(
+                row.len() <= TRACKBACK_TEXT_COLS,
+                "marked nav row collides with the map: {row:?}"
+            );
+        }
     }
 
     #[test]
