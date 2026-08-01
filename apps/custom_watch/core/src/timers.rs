@@ -336,8 +336,15 @@ pub fn press(timer: &mut Timer, key: TimerKey, now_s: u32) -> TimerPress {
     }
 }
 
-/// First row of the modal's body — rows 0 and 1 are chrome, mirroring the
-/// settings menu's legend + title band.
+/// First row of the modal's body. Row 0 is the legend and row 1 the title,
+/// mirroring the settings menu's chrome, and row 2 is held blank so that title
+/// band reads as chrome rather than as a third body line — the layout
+/// `settings_menu` also had until § 378 spent its own spacer on a seventh item.
+///
+/// The body then runs rows 3-6 (the reading, the state word, and either the
+/// armed preset or the ladder / reset row), leaving rows 7-8 unwritten. That
+/// tail is unspent capacity rather than a reserved seat: no test pins it, so a
+/// row the modal later needs comes off it before the row-2 spacer has to go.
 const TIMER_TOP_ROW: usize = 3;
 
 /// The modal's text rows.
