@@ -3464,5 +3464,7 @@
   "watchMetricRaceDayDays": "Jours avant la course",
   "watchMetricSleepBudget": "Budget de sommeil",
   "watchMetricTimerRemaining": "Minuteur",
-  "watchMetricBackyardBell": "Compte à rebours de la cloche"
+  "watchMetricBackyardBell": "Compte à rebours de la cloche",
+  "watchMetricStormDelta": "Tendance de tempête",
+  "watchMetricGap": "Allure corrigée de la pente"
 }

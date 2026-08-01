@@ -25,7 +25,7 @@ use crate::fitness::RecoveryAdvice;
 use crate::fix::Fix;
 use crate::fuel_plan::{
     build_fuel_plan, FuelLegInput, FuelPlanOptions, DEFAULT_CARBS_PER_HOUR_G,
-    DEFAULT_FLUID_PER_HOUR_ML,
+    DEFAULT_FLUID_PER_HOUR_ML, GEL_CARBS_G, SIP_FLUID_ML,
 };
 use crate::gear_wear::{gear_wear, GearWear};
 use crate::grade_adjusted_pace::GapEstimator;
@@ -496,6 +496,10 @@ pub struct Snapshot {
     /// pace while no altitude signal has arrived (grade 0), matching the
     /// Connect IQ field's no-altimeter behaviour.
     pub gap_s_per_km: Option<u32>,
+    /// Whether [`Snapshot::gap_s_per_km`] is the estimator's hold-window
+    /// value (a power-hike dip) rather than a live sample — the face marks a
+    /// held value with `~` so it cannot pass as current.
+    pub gap_held: bool,
     /// 1-based number of the lap in progress; 0 before a run starts.
     pub lap: u16,
     /// Ground covered within the current lap so far.
@@ -599,6 +603,13 @@ pub struct Snapshot {
     pub goals: Option<GoalsView>,
     /// The next turn on the loaded course, or `None` until pushed.
     pub turn_cue: Option<TurnCueView>,
+    /// The nav task's latched off-course verdict, fed per fix beside the
+    /// route position: `Some(true)` while the [`crate::course::OffCourseAlert`]
+    /// hysteresis is latched, `Some(false)` while a live projection says on
+    /// course, `None` when nothing is projecting (no course, no fix yet).
+    /// Tri-state so a course swap or a lost projection reads as *absence of
+    /// knowledge*, never as a recovery.
+    pub nav_off_course: Option<bool>,
     /// The simplified-course summary, or `None` until pushed.
     pub route_simplify: Option<RouteSimplifyView>,
     /// The auto-segment-effort match counts, or `None` until pushed.
@@ -641,6 +652,15 @@ pub struct Snapshot {
     /// between runs, so the page must stay in the cycle while the store is
     /// non-empty even before this run has an anchor to measure from.
     pub waypoint_count: u8,
+    /// Wrapping count of successful [`Recorder::mark_waypoint`] calls — the
+    /// alert engine edge-detects it into the mark's on-screen confirmation.
+    /// A counter and not [`Snapshot::waypoint_count`], because the eight-slot
+    /// newest-wins store saturates: the ninth mark changes the count not at
+    /// all and must still be answered.
+    pub waypoint_mark_seq: u8,
+    /// Wrapping count of refused marks (no position anchor) — the same edge
+    /// detection, so a dead BTN5 hold says why instead of saying nothing.
+    pub waypoint_refuse_seq: u8,
     /// The runner's countdown / stopwatch reading ([`crate::timers`], §375), or
     /// `None` while nothing is armed. Fed in from the task that owns the
     /// instrument rather than derived here — the timer outlives runs, so the
@@ -932,6 +952,7 @@ pub struct Recorder {
     readiness: Option<ReadinessView>,
     goals: Option<GoalsView>,
     turn_cue: Option<TurnCueView>,
+    nav_off_course: Option<bool>,
     route_simplify: Option<RouteSimplifyView>,
     auto_effort: Option<AutoEffortView>,
     route_elev: Option<RouteElevView>,
@@ -996,6 +1017,14 @@ pub struct Recorder {
     /// by the newest-wins eviction in [`Waypoints::mark`]. The app restores it
     /// from flash at boot via [`set_waypoints`](Recorder::set_waypoints).
     waypoints: Waypoints,
+    waypoint_mark_seq: u8,
+    waypoint_refuse_seq: u8,
+    /// The runner's pushed fuel cadences (`SET1`), seconds of moving time per
+    /// sip / gel — the same values the alert engine runs on, mirrored here so
+    /// the Fuel page's carry-out math describes THIS runner's plan rather
+    /// than the temperate default. `None` = unpushed, defaults apply.
+    fuel_drink_interval_s: Option<u32>,
+    fuel_eat_interval_s: Option<u32>,
 }
 
 impl Default for Recorder {
@@ -1060,6 +1089,7 @@ impl Recorder {
             readiness: None,
             goals: None,
             turn_cue: None,
+            nav_off_course: None,
             route_simplify: None,
             auto_effort: None,
             route_elev: None,
@@ -1077,6 +1107,10 @@ impl Recorder {
             backyard: Backyard::new(),
             last_clock: None,
             waypoints: Waypoints::new(),
+            waypoint_mark_seq: 0,
+            waypoint_refuse_seq: 0,
+            fuel_drink_interval_s: None,
+            fuel_eat_interval_s: None,
         }
     }
 
@@ -1152,12 +1186,20 @@ impl Recorder {
     /// where the runner is standing.
     pub fn mark_waypoint(&mut self, uptime_s: u32) -> bool {
         if !matches!(self.state, RecordState::Recording | RecordState::Paused) {
+            self.waypoint_refuse_seq = self.waypoint_refuse_seq.wrapping_add(1);
             return false;
         }
         let Some(last) = self.last else {
+            self.waypoint_refuse_seq = self.waypoint_refuse_seq.wrapping_add(1);
             return false;
         };
-        self.waypoints.mark(last.lat_deg, last.lon_deg, uptime_s)
+        let marked = self.waypoints.mark(last.lat_deg, last.lon_deg, uptime_s);
+        if marked {
+            self.waypoint_mark_seq = self.waypoint_mark_seq.wrapping_add(1);
+        } else {
+            self.waypoint_refuse_seq = self.waypoint_refuse_seq.wrapping_add(1);
+        }
+        marked
     }
 
     /// Restore the marks persisted in flash (the app's boot path). Whole-store
@@ -1508,6 +1550,25 @@ impl Recorder {
             direction: v.direction.min(7),
             ..v
         });
+    }
+
+    /// The nav task's latched off-course verdict, fed per fix beside
+    /// [`set_route_position`](Recorder::set_route_position) — see
+    /// [`Snapshot::nav_off_course`] for the tri-state contract.
+    pub fn set_nav_off_course(&mut self, off_course: Option<bool>) {
+        self.nav_off_course = off_course;
+    }
+
+    /// Mirror the `SET1` fuel cadences into the Fuel page's carry-out math —
+    /// the same guard shape as [`crate::alerts::AlertEngine::set_fuel_intervals`]:
+    /// a zero interval is nonsense and leaves that arm on its current value.
+    pub fn set_fuel_intervals(&mut self, drink_moving_s: u32, eat_moving_s: u32) {
+        if drink_moving_s > 0 {
+            self.fuel_drink_interval_s = Some(drink_moving_s);
+        }
+        if eat_moving_s > 0 {
+            self.fuel_eat_interval_s = Some(eat_moving_s);
+        }
     }
 
     pub fn set_route_simplify(&mut self, view: Option<RouteSimplifyView>) {
@@ -2102,6 +2163,9 @@ impl Recorder {
             avg_pace_s_per_km: self.avg_pace(),
             current_pace_s_per_km: self.current_pace(),
             gap_s_per_km: self.gap.gap_s_per_km(self.current_speed_mps as f64),
+            // After the sampling line above — struct literals evaluate in
+            // source order, and the hold flag describes that call's answer.
+            gap_held: self.gap.held(),
             lap: self.lap_index,
             lap_distance_m: self.distance_m - self.lap_start_distance_m,
             lap_elapsed_s: self.elapsed_s().saturating_sub(self.lap_start_elapsed_s),
@@ -2145,6 +2209,7 @@ impl Recorder {
             readiness: self.readiness,
             goals: self.goals,
             turn_cue: self.turn_cue,
+            nav_off_course: self.nav_off_course,
             route_simplify: self.route_simplify,
             auto_effort: self.auto_effort,
             route_elev: self.route_elev,
@@ -2161,6 +2226,8 @@ impl Recorder {
                 .last
                 .and_then(|f| self.waypoints.view(f.lat_deg, f.lon_deg)),
             waypoint_count: self.waypoints.len() as u8,
+            waypoint_mark_seq: self.waypoint_mark_seq,
+            waypoint_refuse_seq: self.waypoint_refuse_seq,
             timer: self.timer,
             track_thinning: self.track_thinning,
             pages_mask: 0,
@@ -2443,11 +2510,24 @@ impl Recorder {
                 services: if leg.is_refill { REFILL } else { DRY },
             });
         }
+        // The pushed cadences invert through the same units the alert engine's
+        // forward reduction used (one gel, one sip), so the page and the
+        // reminders describe one plan. A desert runner who tightened their
+        // drink cadence over SET1 sees the carry-out grow to match; unpushed,
+        // the temperate defaults stand.
+        let carbs_per_hour_g = self
+            .fuel_eat_interval_s
+            .map(|s| GEL_CARBS_G * 3600.0 / f64::from(s))
+            .unwrap_or(DEFAULT_CARBS_PER_HOUR_G);
+        let fluid_per_hour_ml = self
+            .fuel_drink_interval_s
+            .map(|s| SIP_FLUID_ML * 3600.0 / f64::from(s))
+            .unwrap_or(DEFAULT_FLUID_PER_HOUR_ML);
         let plan = build_fuel_plan(
             &inputs,
             FuelPlanOptions {
-                carbs_per_hour_g: DEFAULT_CARBS_PER_HOUR_G,
-                fluid_per_hour_ml: DEFAULT_FLUID_PER_HOUR_ML,
+                carbs_per_hour_g,
+                fluid_per_hour_ml,
                 heat_factor: None,
                 gel_carbs_g: None,
                 weight_kg: None,
@@ -4113,6 +4193,19 @@ mod tests {
         let f = r.snapshot().fuel.expect("fuel active with a roadbook");
         assert!(f.total_carbs_g > 0.0 && f.total_fluid_ml > 0.0);
         assert!(f.carry.is_some());
+
+        // A pushed cadence re-rates the plan through the same units the alert
+        // engine reduced through: halving the drink interval (900 → 450 s)
+        // doubles the fluid budget, and the untouched eat arm keeps its rate.
+        r.set_fuel_intervals(450, 0);
+        let f2 = r.snapshot().fuel.unwrap();
+        assert!(
+            (f2.total_fluid_ml - 2.0 * f.total_fluid_ml).abs() < 1.0,
+            "{} vs {}",
+            f2.total_fluid_ml,
+            f.total_fluid_ml
+        );
+        assert!((f2.total_carbs_g - f.total_carbs_g).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -4294,8 +4387,14 @@ mod tests {
         r.start(0);
         assert!(!r.mark_waypoint(2));
         assert!(r.waypoints().is_empty());
+        // Every outcome counts on its own wire: two refusals so far, no mark
+        // — the alert engine's edge detection answers the press either way.
+        assert_eq!(r.snapshot().waypoint_refuse_seq, 2);
+        assert_eq!(r.snapshot().waypoint_mark_seq, 0);
         r.on_fix(&fix(10.0, 20.0, 3.0, 1));
         assert!(r.mark_waypoint(3));
+        assert_eq!(r.snapshot().waypoint_mark_seq, 1);
+        assert_eq!(r.snapshot().waypoint_refuse_seq, 2);
         // A finished run's anchor is history — the run is already committed,
         // so a stray hold must not append to the store.
         r.stop(10);

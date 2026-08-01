@@ -263,6 +263,14 @@ impl GapEstimator {
             None
         }
     }
+
+    /// Whether the value the last [`Self::gap_s_per_km`] call returned was the
+    /// hold-window one rather than a live sample — the face marks it, so a
+    /// headwall crawl reads "recent effort" instead of passing a held number
+    /// off as current. Read it AFTER the sampling call for the same tick.
+    pub fn held(&self) -> bool {
+        self.dip_count.get() > 0 && self.last_gap.get().is_some()
+    }
 }
 
 /// Great-circle distance between two lat/lng points, in metres — the same
@@ -472,6 +480,30 @@ mod tests {
         // Once the dip outlasts the window the crawl is no longer a transient;
         // GAP blanks.
         assert_eq!(e.gap_s_per_km(0.3), None);
+    }
+
+    #[test]
+    fn estimator_reports_a_held_value_as_held_and_a_live_one_as_not() {
+        let mut e = GapEstimator::new();
+        e.on_sample(0.0, 100.0);
+        e.on_sample(50.0, 105.0);
+        assert!(e.gap_s_per_km(5.0).is_some());
+        assert!(!e.held(), "a live sample is not held");
+        assert!(e.gap_s_per_km(0.3).is_some());
+        assert!(e.held(), "a hold-window value is");
+        // A blank is not held — there is nothing on screen to mark.
+        for _ in 0..GAP_HOLD_WINDOW {
+            let _ = e.gap_s_per_km(0.3);
+        }
+        assert_eq!(e.gap_s_per_km(0.3), None);
+        assert!(!e.held());
+        // A genuine stop clears the flag with the value.
+        e.on_sample(100.0, 110.0);
+        assert!(e.gap_s_per_km(5.0).is_some());
+        let _ = e.gap_s_per_km(0.3);
+        assert!(e.held());
+        assert_eq!(e.gap_s_per_km(0.0), None);
+        assert!(!e.held());
     }
 
     #[test]

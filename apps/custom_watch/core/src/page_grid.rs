@@ -24,7 +24,7 @@
 
 use core::fmt::Write;
 
-use crate::face::{Row, ROWS};
+use crate::face::{Row, COLS, ROWS};
 use crate::page::Page;
 
 /// Cells per grid row. Four five-cell columns (a four-glyph code + one gap)
@@ -190,6 +190,22 @@ pub fn grid_rows(mask: u64, cursor: Page) -> [Row; ROWS] {
     let _ = write!(rows[0], "{:<16}B1 GO", "B2 EXIT");
     let _ = rows[GRID_NAME_ROW].push_str(cursor.name());
     let (index, count) = cursor_index(mask, cursor);
+    // The position counter, right-aligned beside the name — the answer to
+    // "where am I in this list" the §333 scrolling window took away when the
+    // set outgrew one screenful. It lives here and not on the legend row,
+    // because that row's staticness is a repaint invariant. The name wins
+    // when the row cannot hold both (two of the current names): the counter
+    // is orientation, the name is what the runner is about to jump to.
+    if count > 0 {
+        let mut counter = Row::new();
+        let _ = write!(counter, "{}/{}", index + 1, count);
+        if rows[GRID_NAME_ROW].len() + 1 + counter.len() <= COLS {
+            while rows[GRID_NAME_ROW].len() < COLS - counter.len() {
+                let _ = rows[GRID_NAME_ROW].push(' ');
+            }
+            let _ = rows[GRID_NAME_ROW].push_str(&counter);
+        }
+    }
     let origin = window_origin_row(index, count);
     for_each_enabled(mask, |i, p| {
         let Some(row) = windowed_row(i, origin).map(|r| GRID_TOP_ROW + r) else {
@@ -402,24 +418,40 @@ mod tests {
         let mask = u64::MAX;
         let load = grid_rows(mask, Page::TrainingLoad)[GRID_NAME_ROW].clone();
         let road = grid_rows(mask, Page::Roadbook)[GRID_NAME_ROW].clone();
-        assert_eq!(load.as_str(), "TRAINING LOAD");
-        assert_eq!(road.as_str(), "ROADBOOK");
+        assert!(load.as_str().starts_with("TRAINING LOAD"));
+        assert!(road.as_str().starts_with("ROADBOOK"));
         assert_ne!(load, road);
-        // It tracks every move, so what the box sits on is always spelled out.
+        // It tracks every move, so what the box sits on is always spelled out
+        // — and the right edge says where that seat is in the enabled ring.
         let mut g = PageGrid::open(Page::Dashboard, mask);
         assert_eq!(
             grid_rows(mask, g.cursor())[GRID_NAME_ROW].as_str(),
-            "DASHBOARD"
+            "DASHBOARD        1/45"
         );
         g.tap(mask);
         assert_eq!(
             grid_rows(mask, g.cursor())[GRID_NAME_ROW].as_str(),
-            "MY SCREEN 1"
+            "MY SCREEN 1      2/45"
         );
         g.row_down(mask);
+        assert!(grid_rows(mask, g.cursor())[GRID_NAME_ROW]
+            .as_str()
+            .starts_with(g.cursor().name()));
+    }
+
+    #[test]
+    fn the_position_counter_yields_to_a_name_that_needs_the_row() {
+        // Two names cannot leave the counter its five cells plus a gap; the
+        // name wins — it is what the runner is about to jump to — and the
+        // counter simply drops for those seats.
+        let mask = u64::MAX;
+        let row = grid_rows(mask, Page::ElevationProfile)[GRID_NAME_ROW].clone();
+        assert_eq!(row.as_str(), "ELEVATION PROFILE");
+        // A filtered mask shrinks the ring and the counter says so.
+        let two = Page::Dashboard.bit() | Page::Fuel.bit();
         assert_eq!(
-            grid_rows(mask, g.cursor())[GRID_NAME_ROW].as_str(),
-            g.cursor().name()
+            grid_rows(two, Page::Fuel)[GRID_NAME_ROW].as_str(),
+            "FUEL PLAN         2/2"
         );
     }
 
@@ -440,9 +472,11 @@ mod tests {
                         break;
                     }
                 }
-                assert_eq!(
-                    grid_rows(mask, cursor)[GRID_NAME_ROW].as_str(),
-                    cursor.name()
+                assert!(
+                    grid_rows(mask, cursor)[GRID_NAME_ROW]
+                        .as_str()
+                        .starts_with(cursor.name()),
+                    "the name row must lead with the cursor page"
                 );
             }
         }

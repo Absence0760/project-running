@@ -3464,5 +3464,7 @@
   "watchMetricRaceDayDays": "Tage bis zum Wettkampf",
   "watchMetricSleepBudget": "Schlafbudget",
   "watchMetricTimerRemaining": "Timer",
-  "watchMetricBackyardBell": "Countdown bis zur Glocke"
+  "watchMetricBackyardBell": "Countdown bis zur Glocke",
+  "watchMetricStormDelta": "Sturmtrend",
+  "watchMetricGap": "Höhenkorrigierte Pace"
 }
