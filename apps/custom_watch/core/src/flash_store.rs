@@ -218,10 +218,25 @@ pub const ICE_RECORD_OFFSET: usize = 256;
 /// at the start line, so the set cannot live only in the RAM a push fills.
 pub const SCREENS_RECORD_OFFSET: usize = 512;
 
+/// Offset of the persisted timer record ([`crate::timers`] `TMR1`, §375) within
+/// the config page — past the composed screens' extent, word-aligned, carried
+/// forward by the same shared-page rewrite. A runner arms a nap or turnaround
+/// timer and then stops watching it, which is exactly when a brown-out on a cold
+/// battery takes it: a RAM-only countdown comes back as no countdown at all,
+/// with nothing on the device saying so.
+///
+/// Its own record rather than a `CFG1` field because §372 spent that flags
+/// byte's last free bit, and a [`CONFIG_VERSION`] bump would make every existing
+/// record decode as "no saved config" — costing the runner the GNSS mode,
+/// profile, backyard arm and auto-lap rung they had already set, to store a
+/// timer. The `WPT1` / `ICE1` / `SCR1` trade, for the same reason.
+pub const TIMER_RECORD_OFFSET: usize = 1024;
+
 const _: () = assert!(BOND_RECORD_OFFSET + BOND_RECORD_LEN <= WAYPOINT_RECORD_OFFSET);
 const _: () = assert!(WAYPOINT_RECORD_OFFSET + crate::waypoints::MAX_WPT1_LEN <= ICE_RECORD_OFFSET);
 const _: () = assert!(ICE_RECORD_OFFSET + crate::ice::ICE1_RECORD_LEN <= SCREENS_RECORD_OFFSET);
-const _: () = assert!(SCREENS_RECORD_OFFSET + crate::screens::MAX_SCR1_LEN <= CONFIG_LEN);
+const _: () = assert!(SCREENS_RECORD_OFFSET + crate::screens::MAX_SCR1_LEN <= TIMER_RECORD_OFFSET);
+const _: () = assert!(TIMER_RECORD_OFFSET + crate::timers::TIMER_RECORD_LEN <= CONFIG_LEN);
 
 /// `magic(4) | version(1) | enc_flags(1) | ediv(2) | rand(8) | ltk(16) |
 /// addr_flags(1) | addr(6) | irk(16) | pad(1) | crc32(4)` — 60 bytes, a

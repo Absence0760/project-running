@@ -1446,6 +1446,7 @@ mod tests {
                 running: true,
                 expired: seq != 0,
                 expiry_seq: seq,
+                gap_unknown: false,
             }),
             ..rec(moving_s)
         }

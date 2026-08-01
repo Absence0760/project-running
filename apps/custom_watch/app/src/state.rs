@@ -29,10 +29,12 @@ use watch_core::timers::Timer;
 use watch_core::trackback::TrackbackView;
 use watch_core::workout::{WorkoutStep, MAX_WORKOUT_STEPS};
 
-/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, `nav`, and
-/// `baro` (which feeds GPS altitude into the elevation complementary filter)
-/// subscribe.
-pub static FIX: Watch<CriticalSectionRawMutex, Fix, 5> = Watch::new();
+/// Merged GPS fixes: `gps` publishes; `ui`, `phone`, `record`, `nav`, `baro`
+/// (which feeds GPS altitude into the elevation complementary filter), and
+/// `button` (which needs the receiver's UTC date + time-of-day as the wall-clock
+/// stamp a persisted timer's reboot gap is measured against, §375) subscribe.
+/// The button task only ever `try_get`s it, so a fix wakes it not at all.
+pub static FIX: Watch<CriticalSectionRawMutex, Fix, 6> = Watch::new();
 
 /// Latest heart-rate estimate, stamped with the uptime it was produced at:
 /// the `hr_source` arbiter publishes — it is the ONLY publisher, so which
@@ -132,6 +134,12 @@ pub static FACTORY_ERASE: Channel<CriticalSectionRawMutex, (), 1> = Channel::new
 /// because every reading is a function of the reader's clock — publishing a view
 /// would need a per-second wake to keep it true, which is exactly what § 328
 /// rules out. Two receivers (`record`, `ui`).
+///
+/// The instrument is persisted to the config page's `TMR1` record on every state
+/// change, so a brown-out cannot silently take an armed nap timer. The button
+/// task republishes here once it has resolved the stored record against a
+/// wall-clock stamp — which is why a restored timer can appear on these surfaces
+/// without any press having happened.
 pub static TIMER: Watch<CriticalSectionRawMutex, Timer, 2> = Watch::new();
 
 /// Whether the timer modal is open (§375) — the same ownership split as
