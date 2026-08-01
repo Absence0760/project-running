@@ -1228,8 +1228,16 @@ impl Recorder {
     /// rebase the anchor when the gap is [`GPS_REANCHOR_AFTER_S`] or longer —
     /// `run_recorder`'s #330 — so recording resumes from the reacquire point
     /// instead of freezing against a stale anchor.)
+    ///
+    /// Forwarded to the GAP estimator, whose power-hike hold budget scales
+    /// off the same cadence
+    /// ([`gap_hold_ticks`](crate::grade_adjusted_pace::gap_hold_ticks)):
+    /// `current_speed_mps` freezes between fixes, so a tick-count hold blind
+    /// to the interval would expire mid-gap against a speed that could not
+    /// yet have changed.
     pub fn set_fix_interval_s(&mut self, interval_s: u32) {
         self.fix_interval_s = interval_s.max(1);
+        self.gap.set_fix_interval_s(interval_s);
     }
 
     pub fn state(&self) -> RecordState {
@@ -3572,6 +3580,42 @@ mod tests {
         // No baro, no GPS altitude: grade stays 0 and GAP reads as raw pace —
         // the live field's no-altimeter behaviour.
         assert_eq!(r.snapshot().gap_s_per_km, Some(200));
+    }
+
+    #[test]
+    fn gap_hold_rides_out_a_throttled_mode_inter_fix_gap_and_marks_it_held() {
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        // 300 m legs at 60 s spacing: a 5 m/s runner in Expedition mode.
+        for i in 0..=3u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.0027, -105.0, 5.0, i * 60));
+        }
+        let live = r.snapshot();
+        assert_eq!(live.gap_s_per_km, Some(200));
+        assert!(!live.gap_held);
+
+        // The headwall: the next fix reports a sub-gate crawl, and the fix
+        // after it is a minute away — every 1 Hz snapshot in between samples
+        // the frozen 0.3 m/s, so a cadence-blind ten-tick hold would blank
+        // GAP for the last fifty seconds of the gap.
+        r.on_fix(&fix(40.0108, -105.0, 0.3, 240));
+        for _ in 0..60 {
+            let s = r.snapshot();
+            assert_eq!(s.gap_s_per_km, Some(200));
+            assert!(s.gap_held);
+        }
+        // The next fix confirms the crawl as sustained; the original
+        // ten-tick grace spends down and GAP blanks honestly.
+        r.on_fix(&fix(40.01096, -105.0, 0.3, 300));
+        for _ in 0..9 {
+            let s = r.snapshot();
+            assert_eq!(s.gap_s_per_km, Some(200));
+            assert!(s.gap_held);
+        }
+        let s = r.snapshot();
+        assert_eq!(s.gap_s_per_km, None);
+        assert!(!s.gap_held);
     }
 
     #[test]
