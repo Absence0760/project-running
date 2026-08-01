@@ -402,6 +402,18 @@ GPS_REANCHOR_AFTER_S = 10
 # different questions and are named apart so a change to one cannot silently
 # move the other.
 FIX_STALE_BUDGET_S = 10
+# How far past the budget the flip may honestly land, derived from the
+# firmware's clocks rather than measured and rounded up. `fix_stale` compares
+# WHOLE seconds (`now_s` and the fix anchor are both `Instant::as_secs`
+# truncations), so `> 10` first holds at an integer delta of 11 — up to one
+# second past the budget (runs 30706635377 and 30712529705 each caught
+# `recording` inside that second, at 10.3 s and 10.9 s). The anchor adds up to
+# one more: `void_start` is the decoded stamp of the last `gps: fix` line,
+# while the recorder stamps its whole-second anchor when it CONSUMES that fix
+# off the channel, which can cross the next second boundary. Assertions about
+# the settled state start after budget + slack; the frozen-distance check above
+# them still covers the void from its first snapshot.
+FIX_STALE_FLIP_SLACK_S = 2
 
 # The run view opens on `Page::default()`, so the forward walk wrapping back to
 # it marks one full lap. Asserted from the ui task's boot-time anchor line
@@ -2049,12 +2061,18 @@ def scenario_dropout(sim):
     # distance above is what holds them to account. Asserting this from void_start
     # made the verdict depend on where the first snapshot happened to land against
     # the last fix — it passed locally and failed on a CI runner from that alone.
-    pause_deadline = void_start + FIX_STALE_BUDGET_S
+    # The deadline carries FIX_STALE_FLIP_SLACK_S on top of the budget for the
+    # same reason one comment block up: the strict `>` runs on whole-second
+    # clocks, so a bare `void_start + budget` deadline re-created that lottery
+    # one second later and lost it twice in one day (runs 30706635377,
+    # 30712529705).
+    pause_deadline = void_start + FIX_STALE_BUDGET_S + FIX_STALE_FLIP_SLACK_S
     settled = [(t, m) for t, m in inside if t > pause_deadline]
     if not settled:
         raise SmokeFailure(
             f"the {span:.1f}s void produced no snapshot past the "
-            f"{FIX_STALE_BUDGET_S}s fix-stale budget (deadline t="
+            f"{FIX_STALE_BUDGET_S}s fix-stale budget plus its "
+            f"{FIX_STALE_FLIP_SLACK_S}s whole-second flip slack (deadline t="
             f"{pause_deadline:.1f}s), so the auto-pause this scenario exists to "
             "prove was never observable"
         )
@@ -2064,13 +2082,16 @@ def scenario_dropout(sim):
         raise SmokeFailure(
             f"the recorder read '{state}' at t={t:.1f}s, {t - void_start:.1f}s into "
             f"a void with no fixes and past the {FIX_STALE_BUDGET_S}s fix-stale "
-            "budget, not 'paused' — a stretch with no fixes has to auto-pause, or "
-            "the run view is telling the runner it is still tracking them"
+            f"budget plus the {FIX_STALE_FLIP_SLACK_S}s the whole-second clocks "
+            "can honestly add, not 'paused' — a stretch with no fixes has to "
+            "auto-pause, or the run view is telling the runner it is still "
+            "tracking them"
         )
     passed(
         f"distance held at {frozen:.1f} m across all {len(inside)} snapshots in the "
         f"void, and every one of the {len(settled)} past the "
-        f"{FIX_STALE_BUDGET_S}s fix-stale budget read paused"
+        f"{FIX_STALE_BUDGET_S}s(+{FIX_STALE_FLIP_SLACK_S}s) fix-stale budget "
+        "read paused"
     )
 
     # The re-anchor. Growth after the far edge of the void, and before the NMEA
