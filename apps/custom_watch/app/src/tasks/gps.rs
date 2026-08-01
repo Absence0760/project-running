@@ -53,10 +53,41 @@
 //! byte-at-a-time loop woke the executor hundreds of times a second at 9600
 //! baud; the burst read is the same data for a fraction of the active-CPU
 //! time — the DMA-not-polling lever in `docs/custom_watch/performance_path.md`,
-//! which ports straight to tier-2. (The further refinement is idle-line
-//! detection via `split_with_idle` so a buffer never waits on the next burst to
-//! fill; it needs a free TIMER + 2 PPI channels and can't be Renode-verified,
-//! so it's a tier-2 profiling item, not a bench-prototype one.)
+//! which ports straight to tier-2.
+//!
+//! **What is still owed here is DMA *depth*, and it is not idle-line
+//! detection.** One [`RX_BURST`] transfer fills in 32 * 10 / 9600 = 33.3 ms, and
+//! once its ENDRX lands the receiver is disarmed until a task runs again. An
+//! NVMC page erase halts the CPU for ~85 ms — a bus stall, so yielding buys
+//! nothing, every other task lives in flash too — which is ~82 bytes at this
+//! baud. So a checkpoint or a commit costs most of a buffer's worth of NMEA: an
+//! L4 flash write degrading L1 distance, which the layering contract forbids.
+//! The parser resyncs on the next `$`, so it costs sentences rather than the
+//! run, but it is still the wrong direction of dependency.
+//!
+//! `split_with_idle` is **not** the tool for it, even though UARTE1's settings
+//! pipe now uses exactly that (`phone::settings_rx`, decisions.md § 407) and the
+//! claim this comment used to make — that it "can't be Renode-verified" — is
+//! false: the sim's PPI, UARTE and TIMER models all implement the pieces it
+//! needs. It is wrong here because a settings frame is a short burst delimited
+//! by silence while NMEA is continuous, so `read_until_idle` would end a
+//! transfer two byte-times into every inter-sentence gap and leave the receiver
+//! disarmed *more* often, not less. Nor is a bigger single buffer a fix: it
+//! lowers the odds of a stall landing in the disarmed window without bounding
+//! the loss, and costs both latency and a larger cancellation loss in the
+//! sleep-window `select3` below.
+//!
+//! The right shape is `BufferedUarte`, whose ENDRX->STARTRX PPI chain keeps the
+//! next transfer armed in *hardware* across a CPU stall; a 512-byte ring gives a
+//! guaranteed `half_len` = 256 bytes = 267 ms of headroom, three erases' worth.
+//! It is blocked rather than declined: embassy derives that ring's write
+//! position from a TIMER byte-counter which wraps via `SHORTS.COMPARE1_CLEAR`,
+//! and Renode's `NRF52840_Timer` does not model SHORTS at all, so the counter
+//! would climb past `2 * rx_len` and then read as zero — GPS dead about a second
+//! into every sim run, which `ci_smoke.py`'s fix assertions would catch as a CI
+//! failure. Unblocking it means a `sim/` timer model carrying SHORTS, the same
+//! move `NRF52840_RTC_Overflow.cs` and `NRF52840_TWIM.cs` already make for
+//! registers the stock models omit.
 
 use defmt::{debug, info, unwrap, warn};
 use embassy_futures::select::{select3, Either3};
