@@ -78,9 +78,16 @@ pub const STALE_AFTER_S: u32 = 5;
 /// [`STALE_AFTER_S`] regardless of mode (see the gps task), so the idle face
 /// keeps the tight budget and a genuinely lost signal still flags within
 /// seconds. The mode's own interval keeps the usual slack on top.
+///
+/// The active branch is the `base + (fix_interval_s - 1)` shape this codebase
+/// settled on three times — here, in `trackback::heading_stale_after_s` (§ 412)
+/// and in `grade_adjusted_pace::gap_hold_ticks` (§ 394) — written saturating so
+/// all three agree; `fix_interval_s()` floors at 1 today, so nothing underflows
+/// now, but the guarantee should not rest on that. The `run_active` gate stays
+/// outside the shape deliberately: it selects a *surface*, not a cadence.
 pub fn stale_after_s(mode: GnssMode, run_active: bool) -> u32 {
     if run_active {
-        mode.fix_interval_s() - 1 + STALE_AFTER_S
+        STALE_AFTER_S.saturating_add(mode.fix_interval_s().saturating_sub(1))
     } else {
         STALE_AFTER_S
     }
@@ -8426,7 +8433,21 @@ mod tests {
         // Idle publication is de-rated to just under STALE_AFTER_S regardless
         // of mode (the mode throttles recording, not idle), so the idle face
         // must flag a 40 s-old fix even in Expedition mode.
-        assert_eq!(stale_after_s(GnssMode::Expedition, false), STALE_AFTER_S);
+        // Both branches of the gate, every mode: the idle side is flat at the
+        // base and only an active run earns the cadence's slack. Pinned so
+        // folding the active branch onto the shared `base + (interval - 1)`
+        // shape cannot move the ladder.
+        for mode in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            assert_eq!(stale_after_s(mode, false), STALE_AFTER_S);
+            assert_eq!(
+                stale_after_s(mode, true),
+                STALE_AFTER_S + mode.fix_interval_s() - 1
+            );
+        }
         assert_eq!(stale_after_s(GnssMode::Performance, true), STALE_AFTER_S);
         assert_eq!(stale_after_s(GnssMode::Balanced, true), 19);
         assert_eq!(stale_after_s(GnssMode::Expedition, true), 64);
