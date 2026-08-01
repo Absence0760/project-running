@@ -332,6 +332,7 @@ pub mod record;
 pub mod record_cadence;
 pub mod relink_candidates;
 pub mod roadbook;
+pub mod roadbook_store;
 pub mod route_description;
 pub mod route_elevation;
 pub mod route_geometry;
