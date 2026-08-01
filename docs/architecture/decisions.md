@@ -5417,3 +5417,27 @@ The 40 m / 20 m off-course hysteresis has rendered a steady `OFF COURSE` band ov
 **Date:** 2026-07-31
 
 `SET1` v4 put the fuel cadences on the wire and the alert engine honoured them, but the Fuel page's carry-out math still built its plan from the temperate defaults (60 g/hr, 500 ml/hr) — a desert runner who tightened their drink cadence got faster reminders and an unchanged carry-out, two surfaces describing two different plans. The recorder now mirrors the same pushed intervals (`Recorder::set_fuel_intervals`, the engine's zero-is-ignored guard shape) and `fuel_snapshot` derives its hourly rates by **inverting the exact reduction** `alerts` used forward: one gel (`GEL_CARBS_G` = 25 g) per eat interval, one sip (`SIP_FLUID_ML` = 125 ml, newly named so the two directions share the constant) per drink interval. Inversion rather than a second pair of wire fields because it keeps one source of truth — the cadence — and makes disagreement between the reminders and the plan structurally impossible. The `heat_factor` half of the desert finding stays deliberately unbuilt: § 376's shape (no runner-facing threshold controls) and the § 24 rule both point the same way, and a runner raising their fluid cadence over `SET1` achieves the same outcome through the field that already exists. The sim's shortened bench cadences (30/45 s) are deliberately NOT mirrored into the recorder — they are harness arming for the alert rail, and a 15 L/hr Fuel page would be the sim lying about the product.
+
+## 385. A signal void announces itself — and the pair lives in the dropped class, because the AUTO tag is the persistent truth
+
+**Date:** 2026-07-31
+
+§ 367 made a fix drought auto-pause the recorder and flip the corner tag to `AUTO` — but a tag is a state, not an event, and a heads-down runner reads it minutes and a kilometre of unrecorded moving later; the ultra persona hunt (2026-07-31) ranked the silence its #3 finding. The engine now edge-detects [`Snapshot::signal_lost`] into `! GPS LOST` and its release into `GPS BACK` (an affirmation, un-`!`-prefixed like `ON COURSE`). Both sit at the head of the **dropped** class rather than the re-queued one, deliberately: the tag carries the persistent truth on every run page, so a banner the slot swallows loses only the announcement — and a stale `GPS LOST` shown after the fixes returned would be the banner lying about the tag beside it. The edge detector is a plain bool, not the tri-state the off-course pair needed: `signal_lost` is always meaningful during a run and false at the start line, so there is no absence-of-knowledge state to model.
+
+## 386. GAP joins the metric catalogue at byte 39 — and the phone's catalogue catches up to storm's 38
+
+**Date:** 2026-07-31
+
+The vert persona hunt's top finding: no surface on the watch puts live grade-adjusted pace in the 32x48 face — the Pace page's hero is the whole-run average with GAP demoted to an 8 px row, and `face::Metric` had no `Gap` variant, so a runner could not even compose it. Rather than re-heroing a shipped page (the PACE page's hero should be pace) or adding a 42nd built-in, GAP takes the § 364 route: `Metric::Gap` lands at wire byte 39 with the pace hero idiom (`M:SS`, `/KM`, `NeedDistance` when unfed), and a composed screen is how it reaches a hero slot — exactly what composed screens exist for. Closing the loop exposed a live wire drift: `StormDelta = 38` had landed firmware-side with the 2026-07-31 storm batch while the phone's `WatchMetric` catalogue still ended at 37, so a storm-delta slot was compose-able on no phone and the Dart wire-contract test pinned the stale count as correct. Both entries land together on both twins (with the six-locale editor labels), and the byte-map guards on each side now pin 39.
+
+## 387. The page grid's name row carries a position counter — and the name wins the row when both cannot fit
+
+**Date:** 2026-07-31
+
+§ 333 turned the full-to-the-cell grid into a scrolling window, which took away the one thing a full grid gave for free: where you are in the list. The cursor row now reads `DASHBOARD        1/45` — the counter is the cursor's seat in the *enabled* ring, so a filtered mask shrinks both numbers honestly. It sits on the name row and not the legend row above it, because that row's staticness is a deliberate repaint invariant (it can never redraw, whatever the cursor). Two page names (`ELEVATION PROFILE`, `ADAPTIVE RE-PLAN`) cannot leave the counter its five cells plus a gap; there the name wins and the counter drops — the counter is orientation, the name is what the runner is about to jump to, and truncating the name to keep the number would invert that priority.
+
+## 388. The nav panel labels its auto-zoom state — and only that state
+
+**Date:** 2026-07-31
+
+The § 350-era nav panel silently switches between two transforms an order of magnitude apart in metres-per-pixel: whole-course fit, and the runner-centred ~1.2 km auto-zoom window a long course forces. Nothing on the panel said which one a visible fork was being read through — the navigator persona's "is that fork 100 m or 2 km away" finding. `NavPanel` now exposes the `windowed` decision (host-tested with the rest of `nav_map`) and the render layer draws a 1x `ZOOM` label at the panel's bottom-right when it is set, after the polyline so the word survives a dense breadcrumb. Only the zoomed state is labelled: whole-course is the default the panel has always meant, and a label on both states is a label on neither.
