@@ -628,7 +628,7 @@ pub fn draw_nav_panel(
         // band so the halo can't blank the title or GPS rows beside it.
         let halo = MARKER_ARM_PX + 1;
         for y in (my - halo)..=(my + halo) {
-            if y < PANEL_TOP_PX || y > PANEL_Y_MAX {
+            if !(PANEL_TOP_PX..=PANEL_Y_MAX).contains(&y) {
                 continue;
             }
             for x in (mx - halo)..=(mx + halo) {
