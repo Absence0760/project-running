@@ -115,6 +115,11 @@ pub struct RunStore {
     /// Last value published to [`state::UNSYNCED_RUNS`], change-gated for the
     /// same reason.
     unsynced_published: u8,
+    /// Bumped by every operation that can change what
+    /// [`manifest_at`](Self::manifest_at) returns, so the BLE task can skip
+    /// re-encoding an unchanged manifest — and skip the SoftDevice value-set
+    /// that goes with it — on every one of its 1 Hz ticks.
+    manifest_gen: u32,
 }
 
 /// Every record the shared config page holds. One erase covers the whole
@@ -163,6 +168,7 @@ impl RunStore {
             available,
             pending_published: 0,
             unsynced_published: 0,
+            manifest_gen: 0,
         };
         store.publish_pending();
         store
@@ -189,6 +195,25 @@ impl RunStore {
             self.unsynced_published = unsynced;
             state::UNSYNCED_RUNS.sender().send(unsynced);
         }
+    }
+
+    /// A counter that moves whenever the manifest may have changed. The BLE
+    /// task holds the last value it built from and rebuilds only when this
+    /// differs, so a connected phone no longer costs a `manifest_at` + encode +
+    /// SoftDevice value-set every second for a list that changes when a run
+    /// finishes, is evicted, or is fully pulled. Consumed by the BLE run-sync
+    /// task; unused in the default build.
+    #[cfg_attr(not(feature = "ble"), allow(dead_code))]
+    pub fn manifest_gen(&self) -> u32 {
+        self.manifest_gen
+    }
+
+    /// Deliberately over-approximates: called on ENTRY to the mutating paths
+    /// rather than only where the directory actually moves, so a future edit
+    /// that adds an eviction or an early return cannot leave a stale manifest
+    /// published. A spurious bump costs one re-encode.
+    fn bump_manifest_gen(&mut self) {
+        self.manifest_gen = self.manifest_gen.wrapping_add(1);
     }
 
     /// The one seam where the two backends diverge: NVMC erases in place
@@ -544,7 +569,14 @@ impl RunStore {
     /// to leave a shadow copy elsewhere (this store addresses pages directly).
     /// It is not a claim against charge-remnant recovery on a decapped die, and
     /// it does nothing about a probe attached *before* the erase — that is
-    /// encryption at rest, which tier 1 does not have.
+    /// encryption at rest, which tier 1 does not have. And because the `BND1`
+    /// record on that page holds the BLE long-term key that every reconnection
+    /// derives its session key from, with no forward secrecy on the data
+    /// channel, a probe attached before the erase reads more than the stored
+    /// runs: it reads the LTK, and with it retroactively decrypts any earlier
+    /// encrypted traffic an attacker had passively captured — so a lost, stolen
+    /// or resold device exposes what was ever transmitted to it, not only what
+    /// is currently on it.
     ///
     /// Best-effort / L4 like every other flash path: a failure warns and the
     /// caller carries on clearing RAM, because a wipe that half-worked must
@@ -552,6 +584,7 @@ impl RunStore {
     pub async fn factory_erase(&mut self) -> bool {
         self.dir = SlotDir::new();
         self.publish_pending();
+        self.bump_manifest_gen();
         if !self.available {
             warn!("run_flash: factory erase — flash unavailable, RAM only");
             return false;
@@ -661,6 +694,7 @@ impl RunStore {
         if !self.available {
             return false;
         }
+        self.bump_manifest_gen();
         // The plan takes the slot NOT holding this run's freshest checkpoint, so
         // a torn commit leaves that checkpoint recoverable — and the directory
         // keeps claiming that checkpoint until these bytes are actually down.
@@ -733,6 +767,9 @@ impl RunStore {
         if !self.available {
             return false;
         }
+        // A checkpoint is never itself advertised, but reserving its slot can
+        // evict a finished run that was.
+        self.bump_manifest_gen();
         let Some(plan) = flash_plan::plan_checkpoint_write(
             &mut self.dir,
             REGION_OFFSET,
@@ -801,6 +838,7 @@ impl RunStore {
         if flash_plan::chunk_completes_run(&self.dir, run_seq, next_offset) {
             self.dir.mark_synced(run_seq);
             self.publish_pending();
+            self.bump_manifest_gen();
         }
     }
 

@@ -1647,11 +1647,19 @@ pub fn metric_hero(
             }
             row
         }
+        // A held estimate carries the same `~` [`write_gap`] gives the Pace and
+        // Dashboard rows (§ 389), here on every composed slot including the hero
+        // one. The mark is what makes the value non-numeral, so
+        // [`crate::ui_frame::numeral_hero`] demotes the slot to the doubled text
+        // face — which spells `~` — instead of a numeral face dropping it (§ 364).
+        // Sizing down is the cheaper loss: a held number at full size that reads
+        // as a live sample is wrong, not merely smaller.
         Metric::Gap => {
             let mut row = Row::new();
             match snap.gap_s_per_km {
                 Some(p) => {
-                    let _ = write!(row, "{}:{:02}", (p / 60).min(99), p % 60);
+                    let mark = if snap.gap_held { "~" } else { "" };
+                    let _ = write!(row, "{}:{:02}{}", (p / 60).min(99), p % 60, mark);
                 }
                 None => {
                     let _ = write!(row, "--:--");
@@ -5342,6 +5350,10 @@ mod tests {
         rec.avg_pace_s_per_km = Some(99 * 60 + 59);
         rec.current_pace_s_per_km = Some(98 * 60 + 58);
         rec.gap_s_per_km = Some(97 * 60 + 57);
+        // Held, because that is GAP's *widest* rendering: § 389's `~` on a held
+        // estimate adds a glyph, and this snapshot exists to be the widest each
+        // row and slot can draw.
+        rec.gap_held = true;
         rec.pace_bucket_m = [12_345.6; crate::record::PACE_BUCKET_COUNT];
         rec.training_stress = Some(9999.0);
         rec.band = crate::distance_bands::band_for_distance(42_200.0);
@@ -7114,6 +7126,62 @@ mod tests {
             true,
         );
         assert_eq!(rows[4].as_str(), "NOW  4:58  GAP 4:52~");
+    }
+
+    /// The composed screens carry the same mark, in every slot including the
+    /// hero one — and marking it is what *demotes* the face that draws it.
+    ///
+    /// `Metric::Gap` is a catalogue entry (byte 39), so a runner can seat GAP on
+    /// any slot of an SC1-SC4 screen. Those slots render through
+    /// [`metric_hero`], which had formatted the held value identically to a live
+    /// one — reintroducing on the composed screens exactly what § 389 fixed on
+    /// the Pace and Dashboard rows.
+    ///
+    /// The `~` is safe on every slot because both draw paths gate on
+    /// [`crate::ui_frame::numeral_hero`] before choosing a face: slot 0 through
+    /// [`crate::ui_frame::hero_band`]'s `numeral` arm, slots 1+ through
+    /// [`crate::ui_frame::slot_band`]. Neither drops the glyph — each falls back
+    /// to the doubled *text* face, whose 8x16 table covers ASCII 32..=126 and so
+    /// spells `~`. The § 364 glyph-drop the numeral faces suffer needs a value
+    /// to reach them unchecked, and a marked GAP never does.
+    #[test]
+    fn a_held_gap_carries_the_approximate_mark_on_every_composed_slot() {
+        use crate::screens::{Layout, Screen};
+        let mut rec = snapshot(RecordState::Recording, 12_340.0);
+        rec.avg_pace_s_per_km = Some(5 * 60 + 12);
+        rec.gap_s_per_km = Some(4 * 60 + 52);
+        rec.gap_held = true;
+
+        // The hero slot (0) and a medium slot (2) of the same screen: a held GAP
+        // says so in both, not just the one that happens not to be the hero.
+        let screen =
+            Screen::new(Layout::Trio, &[Metric::Gap, Metric::AvgPace, Metric::Gap]).unwrap();
+        let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
+        assert_eq!(slots[0].value.as_str(), "4:52~");
+        assert_eq!(slots[2].value.as_str(), "4:52~");
+        // Marked, but still a measurement: the unit stays, because the value
+        // holds digits.
+        assert_eq!(slots[0].unit, Some("/KM"));
+        assert!(slots[0].unfed.is_none());
+
+        // The mark demotes each slot to the text face rather than being dropped
+        // by a numeral face that cannot spell it. Both bands, both directions —
+        // so a future edit cannot silently reinstate a numeral face over a `~`.
+        use crate::ui_frame::{numeral_hero, slot_band, HeroBand};
+        assert!(!numeral_hero("4:52~"));
+        assert!(numeral_hero("4:52"));
+        assert_eq!(slot_band(HeroBand::BigNumHero, "4:52~"), HeroBand::TextHero);
+        assert_eq!(slot_band(HeroBand::MedNumHero, "4:52~"), HeroBand::TextHero);
+        assert_eq!(
+            slot_band(HeroBand::MedNumHero, "4:52"),
+            HeroBand::MedNumHero
+        );
+
+        // A live sample is unmarked, and keeps the numeral face it earned.
+        rec.gap_held = false;
+        let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
+        assert_eq!(slots[0].value.as_str(), "4:52");
+        assert_eq!(slots[2].value.as_str(), "4:52");
     }
 
     #[test]

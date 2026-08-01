@@ -332,6 +332,38 @@ pub fn haversine_metres(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
     R * 2.0 * libm::atan2(libm::sqrt(a), libm::sqrt(1.0 - a))
 }
 
+/// The same haversine as [`haversine_metres`], in single precision, for the
+/// per-fix callers that consume the result as an `f32` anyway.
+///
+/// The Cortex-M4F's FPU is single-precision only (double precision needs M7 or
+/// better), so on this target every `f64` operation is a soft-float library
+/// call and `libm::sin`/`cos`/`atan2` are software double-precision kernels on
+/// top of that. The `f`-suffixed siblings run on the hardware.
+///
+/// The angle *deltas* are still differenced in `f64`: absolute degrees need
+/// ~9 significant digits to hold sub-metre position and `f32` carries ~7.2, so
+/// subtracting two absolute coordinates in `f32` would throw away metres.
+/// Everything after the subtraction is a short-hop magnitude where `f32`'s
+/// ~1e-7 relative precision is micrometres — orders below the GPS noise floor.
+///
+/// [`haversine_metres`] stays the canonical copy and is deliberately left in
+/// `f64`: its other callers (roadbook, route geometry, privacy zones, turn
+/// cues) are phone-fed batch consumers with no per-fix cost to save, and
+/// changing their numbers to buy nothing is not a trade worth making.
+pub fn haversine_metres_f32(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f32 {
+    const R: f32 = 6_371_000.0;
+    let d_lat = ((lat2 - lat1) as f32).to_radians();
+    let d_lng = ((lng2 - lng1) as f32).to_radians();
+    let sin_lat = libm::sinf(d_lat / 2.0);
+    let sin_lng = libm::sinf(d_lng / 2.0);
+    let a = sin_lat * sin_lat
+        + libm::cosf((lat1 as f32).to_radians())
+            * libm::cosf((lat2 as f32).to_radians())
+            * sin_lng
+            * sin_lng;
+    R * 2.0 * libm::atan2f(libm::sqrtf(a), libm::sqrtf(1.0 - a))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -672,5 +704,51 @@ mod tests {
         e.on_sample(0.0, 200.0); // re-seeds rather than seeing a 100 m cliff
         e.on_sample(50.0, 200.0);
         assert_eq!(e.grade(), 0.0);
+    }
+
+    /// The `f32` sibling must track the canonical `f64` copy to well inside the
+    /// GPS noise floor, across the latitudes and hop lengths a fix path sees:
+    /// a per-fix hop at 1 Hz, a throttled Expedition-mode hop, and the polar
+    /// and equatorial extremes where the cosine factor is worst-behaved.
+    ///
+    /// Measured worst case over this sweep is 6.4e-8 relative — about one `f32`
+    /// ulp, or 64 nm on a 1 m hop. The 1e-6 bound leaves ~15x headroom so the
+    /// test pins the conversion rather than the exact rounding of one libm
+    /// version, while still failing loudly on any real divergence.
+    #[test]
+    fn the_f32_haversine_tracks_the_canonical_f64_copy() {
+        for lat in [0.0, 40.0, 51.5, 67.0, 78.0, -33.9] {
+            for hop_m in [1.0, 4.0, 25.0, 240.0, 1_000.0] {
+                let d_lat = hop_m / 111_320.0;
+                let d_lon = d_lat / libm::cos(lat * core::f64::consts::PI / 180.0);
+                for (lat2, lon2) in [
+                    (lat + d_lat, -105.0),
+                    (lat, -105.0 + d_lon),
+                    (lat + d_lat, -105.0 + d_lon),
+                ] {
+                    let f64_m = haversine_metres(lat, -105.0, lat2, lon2);
+                    let f32_m = haversine_metres_f32(lat, -105.0, lat2, lon2) as f64;
+                    let rel = (f32_m - f64_m).abs() / f64_m;
+                    assert!(
+                        rel < 1e-6,
+                        "lat {lat} hop {hop_m} m: f32 {f32_m} vs f64 {f64_m} (rel {rel})"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_f32_haversine_is_zero_for_a_repeated_point() {
+        assert_eq!(haversine_metres_f32(40.0, -105.0, 40.0, -105.0), 0.0);
+    }
+
+    /// Antipodal-scale inputs are not a fix-path case, but the `f32` `1.0 - a`
+    /// must not go negative and hand `sqrtf` a NaN.
+    #[test]
+    fn the_f32_haversine_stays_finite_at_antipodal_scale() {
+        let d = haversine_metres_f32(-40.0, 75.0, 40.0, -105.0);
+        assert!(d.is_finite(), "antipodal distance {d}");
+        assert!((d - 20_015_000.0).abs() < 5_000.0, "antipodal distance {d}");
     }
 }

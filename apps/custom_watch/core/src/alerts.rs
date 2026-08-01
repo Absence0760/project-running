@@ -64,12 +64,23 @@
 //!    banner and to nothing else. It is a milestone in kind, though, so a
 //!    blocked one is dropped rather than owed: `3 MIN` shown at 1:40 is a lie
 //!    about the clock, and the Backyard page carries the live countdown anyway.
-//! 3. **Pace** — the same correct-it-now class as the zone alert one rung down,
-//!    because pace is a proxy for the effort HR measures directly. It
-//!    supersedes a fuel reminder but never a zone banner or a corral whistle;
-//!    blocked by one, it stays armed and un-cooled so it retries while the
-//!    excursion lasts, rather than being swallowed.
-//! 4. **Off-course** — the nav task's 40 m / 20 m hysteresis latched. Until
+//! 3. **The structured workout's edges** ([`crate::workout`], § 354) and **the
+//!    waypoint hold's answer** ([`crate::waypoints`], § 382) — a step
+//!    transition, its end-of-step warning, the plan completing, and the saved
+//!    or refused mark. One rung, because both are the runner's own action
+//!    answering at the one moment it can be acted on, and both yield to a zone
+//!    banner and to the bell and to nothing else. Milestones in kind like the
+//!    whistle, so a blocked one is dropped rather than owed: a stale `! REP 3`
+//!    is worse than none, a confirmation shown late confirms the wrong thing,
+//!    and the Workout and Waypoint pages carry the live truth regardless.
+//! 4. **Pace** — the same correct-it-now class as the zone alert two rungs
+//!    down, because pace is a proxy for the effort HR measures directly. It
+//!    supersedes a fuel reminder but never a zone banner, a corral whistle, a
+//!    workout edge or a waypoint answer; blocked by one, it stays armed and
+//!    un-cooled so it retries while the excursion lasts, rather than being
+//!    swallowed. That asymmetry is *why* it sits below the dropped arms above
+//!    it — the excursion can come back, their one banner cannot.
+//! 5. **Off-course** — the nav task's 40 m / 20 m hysteresis latched. Until
 //!    2026-07-31 that verdict lived only as a steady banner over the Nav
 //!    page's own map panel; a runner parked on any of the other forty pages
 //!    learned about a wrong turn only by paging there. The engine
@@ -77,7 +88,7 @@
 //!    excursion by construction, and it is **re-queued** when displaced:
 //!    every unseen minute banks wrong-way distance. Its release fires the
 //!    `ON COURSE` affirmation down in the dropped class.
-//! 5. **Cutoff** — the projection on the CUT page fell to `BEHIND`: at the
+//! 6. **Cutoff** — the projection on the CUT page fell to `BEHIND`: at the
 //!    current pace the runner misses the next cutoff. Like the corral whistle
 //!    it warns of the race ending, but it is a *projection off recent pace*,
 //!    not the race director's own clock, so it ranks with the correct-it-now
@@ -86,7 +97,7 @@
 //!    `UNKNOWN` (a stale fix is the watch losing sight of the runner, not the
 //!    runner catching up) — and it is **re-queued** when displaced: there is
 //!    no later reminder, and the thing it warns of only gets worse.
-//! 6. **Course-push rejected** — the ble task refused a course push (bad
+//! 7. **Course-push rejected** — the ble task refused a course push (bad
 //!    chunk, failed CRC, undecodable frame) and `state::COURSE` kept the
 //!    stale course. Race-critical navigation state: the runner watched their
 //!    phone say "sent" and now trusts a course the watch never accepted, and
@@ -94,28 +105,29 @@
 //!    front allows — so it sits under the cutoff (which warns the race is
 //!    being lost *now*) and above storm. **Re-queued** when displaced: no
 //!    later reminder exists, and no page carries the rejection.
-//! 7. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
+//! 8. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
 //!    the world rather than the runner, and it sits here because of *when* the
-//!    thing it warns of arrives. A zone excursion, a corral bell and a pace
-//!    drift all want a decision inside seconds; a front measured over three
+//!    thing it warns of arrives. A zone excursion, a corral bell, a workout
+//!    step and a pace drift all want a decision inside seconds; a front
+//!    measured over three
 //!    hours wants one inside the next hour, so it yields to all of them. But it
 //!    fires perhaps once in a race and there is no later reminder, so it is in
 //!    the **re-queued** class rather than the dropped one — ahead of fuel: a
 //!    missed gel is re-offered a cadence later, a missed front is not. It rides
 //!    the run's own alert slot, so like every other arm it is silent between
 //!    runs.
-//! 8. **Run lost** — a flash eviction destroyed a finished run the phone had
+//! 9. **Run lost** — a flash eviction destroyed a finished run the phone had
 //!    never pulled: hours of a race, gone forever, and honesty demands the
 //!    wrist say so rather than a `warn!` down a cable. It asks for no
 //!    decision — the data is already gone — so it sits at the bottom of the
 //!    re-queued class, below every arm that still has something to act on;
 //!    above fuel only because a reminder comes round again and this never
 //!    does. **Re-queued** when displaced, for exactly that reason.
-//! 9. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
-//!    only take a free slot; a superseded one **re-queues** (fuel is the
-//!    ultra-critical reminder, it must never be silently dropped) and queued
-//!    reminders promote eat-before-drink when a slot frees.
-//! 10. **GPS lost / GPS back**, then **Back-on-course**, then **Timer**, then
+//! 10. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//!     only take a free slot; a superseded one **re-queues** (fuel is the
+//!     ultra-critical reminder, it must never be silently dropped) and queued
+//!     reminders promote eat-before-drink when a slot frees.
+//! 11. **GPS lost / GPS back**, then **Back-on-course**, then **Timer**, then
 //!     **Distance**, then **Time** — milestones, and the only
 //!     arms that are *dropped* rather than queued when the slot is busy. A
 //!     milestone banner is meaningful only at the moment it is reached; showing
@@ -136,6 +148,16 @@
 //!     are wallpaper — but it is still in the dropped class, because a stale
 //!     all-clear shown after the runner drifted off again is a lie the Nav
 //!     page would contradict.
+//!
+//! The order the arms are *evaluated* in [`AlertEngine::on_update`] is
+//! load-bearing, not cosmetic. Each arm refuses a higher rung by inspecting the
+//! slot, and the slot can only hold what has already run — so an arm evaluated
+//! ahead of the one that outranks it sees a free slot, fires, banks its
+//! once-per-excursion state, and is then overwritten before the caller reads a
+//! thing. The banner never reaches a frame and (unlike fuel) is not re-queued,
+//! so a pace excursion collided with a whistle used to be lost for the whole
+//! excursion. Two rules follow, and both are load-bearing: the blocks run in
+//! ladder order, and every arm's `outranked` set names *everything* above it.
 //!
 //! Display-only by design: the DK has no vibration motor, and alerts are an
 //! L4 auxiliary — the engine is pure and fed *after* the recorder updates, so
@@ -703,42 +725,31 @@ impl AlertEngine {
                     self.zone_armed = true;
                 }
             }
+        }
 
-            // Pace band, one rung below the zone ceiling: it may take the slot
-            // off a fuel reminder (which re-queues) or a milestone, but a zone
-            // banner blocks it — and a blocked excursion neither disarms nor
-            // stamps the cooldown, so it fires on a later tick while the runner
-            // is still outside the band instead of being swallowed.
-            if let (Some((fast, slow)), Some(pace)) = (self.pace_band, snap.current_pace_s_per_km) {
-                if pace < fast || pace > slow {
-                    let cooled = self
-                        .last_pace_fire_s
-                        .is_none_or(|t| uptime_s.saturating_sub(t) >= PACE_ALERT_COOLDOWN_S);
-                    let outranked = matches!(
-                        self.active,
-                        Some((
-                            Alert::ZoneAbove(_)
-                                | Alert::BackyardBell(_)
-                                | Alert::WorkoutStep { .. }
-                                | Alert::WorkoutEnding
-                                | Alert::WorkoutDone,
-                            _
-                        ))
-                    );
-                    if self.pace_armed && cooled && !outranked {
-                        let alert = if pace < fast {
-                            Alert::PaceFast
-                        } else {
-                            Alert::PaceSlow
-                        };
-                        self.take_slot(alert, uptime_s);
-                        self.pace_armed = false;
-                        self.last_pace_fire_s = Some(uptime_s);
-                    }
-                } else {
-                    self.pace_armed = true;
+        // The corral whistles (§ 372). The race director's own 3/2/1 warnings,
+        // and the one alert on this engine that is not about the runner's body
+        // or their kit: missing the bell ends the race outright, so it outranks
+        // every milestone and every reminder and is blocked only by a zone
+        // banner — the one thing an ultra runner can afford even less to lose.
+        // Not gated on `Recording`: a runner standing in the corral is exactly
+        // who the whistle is for, which is why it sits between the two gated
+        // blocks rather than inside either.
+        //
+        // It sits above §375's `timer_due` for the same reason it sits above the
+        // milestones: `timer_due` is only a flag until the tail of this function,
+        // so a whistle that takes the slot here drops the countdown's banner —
+        // which the Timer page's own count-up survives, and a missed bell does
+        // not. Fuel is displaced rather than dropped, per `take_slot`.
+        if let Some(b) = snap.backyard {
+            if b.warning_seq != self.last_backyard_warning_seq {
+                self.last_backyard_warning_seq = b.warning_seq;
+                if b.warning_min > 0 && !matches!(self.active, Some((Alert::ZoneAbove(_), _))) {
+                    self.take_slot(Alert::BackyardBell(b.warning_min), uptime_s);
                 }
             }
+        } else {
+            self.last_backyard_warning_seq = 0;
         }
 
         // Workout edges — the step transition, the end-of-step warning, and
@@ -746,11 +757,11 @@ impl AlertEngine {
         // Recording: a timed recovery legitimately advances through an
         // auto-pause (a standing rest is that step working as intended), and
         // the next rep's entry banner is exactly what the runner needs then.
-        // One rung under the zone ceiling: a workout banner takes the slot
+        // Two rungs under the zone ceiling: a workout banner takes the slot
         // from anything below (a displaced fuel reminder re-queues) but never
-        // from a zone banner — and a blocked edge is dropped, not owed, the
-        // milestone rule: a stale "REP 3" is worse than none, and the page
-        // carries the current step regardless.
+        // from a zone banner or a corral whistle — and a blocked edge is
+        // dropped, not owed, the milestone rule: a stale "REP 3" is worse than
+        // none, and the page carries the current step regardless.
         match snap.workout {
             Some(w) => {
                 let outranked = matches!(
@@ -832,6 +843,52 @@ impl AlertEngine {
             }
         }
 
+        // Pace band, the last of the correct-it-now arms and so the last one
+        // evaluated: it may take the slot off a fuel reminder (which re-queues)
+        // or a milestone, but every arm above it blocks it — and a blocked
+        // excursion neither disarms nor stamps the cooldown, so it fires on a
+        // later tick while the runner is still outside the band instead of being
+        // swallowed. Gated on `Recording` like the zone ceiling above, for the
+        // same reason.
+        //
+        // The waypoint pair is in that list because a confirmation is *dropped*
+        // when blocked while an excursion can still retry, so letting pace win
+        // would lose the one of the two that cannot come back.
+        if snap.state == RecordState::Recording {
+            if let (Some((fast, slow)), Some(pace)) = (self.pace_band, snap.current_pace_s_per_km) {
+                if pace < fast || pace > slow {
+                    let cooled = self
+                        .last_pace_fire_s
+                        .is_none_or(|t| uptime_s.saturating_sub(t) >= PACE_ALERT_COOLDOWN_S);
+                    let outranked = matches!(
+                        self.active,
+                        Some((
+                            Alert::ZoneAbove(_)
+                                | Alert::BackyardBell(_)
+                                | Alert::WorkoutStep { .. }
+                                | Alert::WorkoutEnding
+                                | Alert::WorkoutDone
+                                | Alert::WaypointMarked
+                                | Alert::WaypointNoFix,
+                            _
+                        ))
+                    );
+                    if self.pace_armed && cooled && !outranked {
+                        let alert = if pace < fast {
+                            Alert::PaceFast
+                        } else {
+                            Alert::PaceSlow
+                        };
+                        self.take_slot(alert, uptime_s);
+                        self.pace_armed = false;
+                        self.last_pace_fire_s = Some(uptime_s);
+                    }
+                } else {
+                    self.pace_armed = true;
+                }
+            }
+        }
+
         // The run-lost and course-rejection counters, on the waypoint pair's
         // seam: a wrapping seq the app bumps, edge-detected here, with the
         // first sample of a run adopting the counter so pre-run history can't
@@ -867,30 +924,6 @@ impl AlertEngine {
                 self.last_timer_expiry_seq = t.expiry_seq;
                 timer_due = true;
             }
-        }
-
-        // The corral whistles (§ 372). The race director's own 3/2/1 warnings,
-        // and the one alert on this engine that is not about the runner's body
-        // or their kit: missing the bell ends the race outright, so it outranks
-        // every milestone and every reminder and is blocked only by a zone
-        // banner — the one thing an ultra runner can afford even less to lose.
-        // Not gated on `Recording`: a runner standing in the corral is exactly
-        // who the whistle is for.
-        //
-        // It sits above §375's `timer_due` for the same reason it sits above the
-        // milestones: `timer_due` is only a flag until the tail of this function,
-        // so a whistle that takes the slot here drops the countdown's banner —
-        // which the Timer page's own count-up survives, and a missed bell does
-        // not. Fuel is displaced rather than dropped, per `take_slot`.
-        if let Some(b) = snap.backyard {
-            if b.warning_seq != self.last_backyard_warning_seq {
-                self.last_backyard_warning_seq = b.warning_seq;
-                if b.warning_min > 0 && !matches!(self.active, Some((Alert::ZoneAbove(_), _))) {
-                    self.take_slot(Alert::BackyardBell(b.warning_min), uptime_s);
-                }
-            }
-        } else {
-            self.last_backyard_warning_seq = 0;
         }
 
         // The signal-void pair (§367). The recorder's own auto-pause verdict:
@@ -2638,6 +2671,100 @@ mod tests {
         // And the timer edge was consumed, not owed: it never resurfaces.
         let mut after = backyard_snap(RecordState::Recording, 1, 2);
         after.timer = both.timer;
+        assert_eq!(e.on_update(&after, None, 5 + ALERT_TTL_S), None);
+    }
+
+    #[test]
+    fn a_whistle_on_the_same_tick_never_swallows_a_pace_excursion() {
+        // Every arm refuses a higher rung by inspecting the slot, so the slot
+        // has to already hold it. Evaluated after pace, the whistle overwrote a
+        // `PaceFast` that had already banked `pace_armed = false` and stamped
+        // the cooldown — so an excursion that collided with a whistle was lost
+        // for the whole excursion without ever reaching a frame.
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        let mut both = backyard_snap(RecordState::Recording, 1, 3);
+        both.current_pace_s_per_km = Some(250);
+        assert_eq!(e.on_update(&both, None, 5), Some(Alert::BackyardBell(3)));
+        // Still outside the band and no new whistle edge: the blocked excursion
+        // stayed armed and un-cooled, so it surfaces once the bell's TTL lapses.
+        let after = 5 + ALERT_TTL_S;
+        let mut still = backyard_snap(RecordState::Recording, 1, 3);
+        still.current_pace_s_per_km = Some(250);
+        assert_eq!(e.on_update(&still, None, after), Some(Alert::PaceFast));
+    }
+
+    #[test]
+    fn a_workout_edge_on_the_same_tick_never_swallows_a_pace_excursion() {
+        // The same collision one rung down: a workout banner outranks pace, so
+        // a pace excursion blocked by one must retry rather than burn its
+        // once-per-excursion state on a banner the workout edge overwrites.
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        let mut both = rec_workout(wv(1, 0, false), 5);
+        both.current_pace_s_per_km = Some(250);
+        assert!(matches!(
+            e.on_update(&both, None, 5),
+            Some(Alert::WorkoutStep { .. })
+        ));
+        let after = 5 + ALERT_TTL_S;
+        let mut still = rec_workout(wv(1, 0, false), after);
+        still.current_pace_s_per_km = Some(250);
+        assert_eq!(e.on_update(&still, None, after), Some(Alert::PaceFast));
+    }
+
+    #[test]
+    fn a_waypoint_confirmation_on_the_same_tick_never_swallows_a_pace_excursion() {
+        // §382's waypoint arm carries the workout edges' rung, so it outranks
+        // pace for the same reason: the confirmation is dropped if blocked,
+        // where the excursion can still retry.
+        let mut e = AlertEngine::new();
+        e.set_pace_band(Some((300, 420)));
+        // The first sample only baselines the mark counter, and it is taken
+        // INSIDE the band so pace reaches the collision tick un-cooled — a
+        // pace alert already gated by [`PACE_ALERT_COOLDOWN_S`] would let this
+        // pass without the precedence being what held it back.
+        let mut base = marked(0, 0, 4);
+        base.current_pace_s_per_km = Some(360);
+        assert_eq!(e.on_update(&base, None, 4), None);
+        let mut both = marked(1, 0, 5);
+        both.current_pace_s_per_km = Some(250);
+        assert_eq!(
+            e.on_update(&both, None, 5),
+            Some(Alert::WaypointMarked),
+            "the confirmation the runner is looking for wins the slot"
+        );
+        let after = 5 + ALERT_TTL_S;
+        let mut still = marked(1, 0, after);
+        still.current_pace_s_per_km = Some(250);
+        assert_eq!(e.on_update(&still, None, after), Some(Alert::PaceFast));
+    }
+
+    #[test]
+    fn a_whistle_outranks_a_workout_edge_on_the_same_tick() {
+        let mut e = AlertEngine::new();
+        let mut both = backyard_snap(RecordState::Recording, 1, 2);
+        both.workout = Some(wv(1, 0, false));
+        assert_eq!(e.on_update(&both, None, 5), Some(Alert::BackyardBell(2)));
+        // A workout edge is a milestone in kind, so the blocked transition is
+        // dropped rather than owed — nothing stale surfaces at the TTL.
+        let mut after = backyard_snap(RecordState::Recording, 1, 2);
+        after.workout = Some(wv(1, 0, false));
+        assert_eq!(e.on_update(&after, None, 5 + ALERT_TTL_S), None);
+    }
+
+    #[test]
+    fn a_whistle_outranks_a_waypoint_confirmation_on_the_same_tick() {
+        let mut e = AlertEngine::new();
+        let mut base = backyard_snap(RecordState::Recording, 0, 0);
+        base.waypoint_mark_seq = 0;
+        assert_eq!(e.on_update(&base, None, 4), None);
+        let mut both = backyard_snap(RecordState::Recording, 1, 2);
+        both.waypoint_mark_seq = 1;
+        assert_eq!(e.on_update(&both, None, 5), Some(Alert::BackyardBell(2)));
+        // Dropped, not owed, exactly as a zone banner already leaves it.
+        let mut after = backyard_snap(RecordState::Recording, 1, 2);
+        after.waypoint_mark_seq = 1;
         assert_eq!(e.on_update(&after, None, 5 + ALERT_TTL_S), None);
     }
 
