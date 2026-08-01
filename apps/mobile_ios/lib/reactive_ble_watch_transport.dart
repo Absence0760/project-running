@@ -13,23 +13,28 @@ import 'sim_watch_sync.dart';
 /// licensing decision the estate already rejected, and a second BLE
 /// central stack in one app would fight over the platform's BLE manager.
 ///
-/// The service + characteristic UUIDs are constants here so they can be
-/// re-pinned to whatever the firmware GATT server settles on. Only the
-/// service UUID is frozen in the wire spec today; the char UUIDs follow
-/// the `d1f6a7e0..` sibling convention.
+/// The service + characteristic UUIDs mirror the firmware's GATT table in
+/// `apps/custom_watch/app/src/tasks/ble.rs`, which is the source of truth:
+/// `..e1` frame (read+notify), `..e2` run_manifest (read+notify), `..e3`
+/// run_chunk (write+notify), `..e4` settings, `..e5` course, `..e6`
+/// workout, `..e7` screens. A chunk request and its reply share ONE
+/// characteristic (`..e3`): the phone writes the request there and the
+/// watch notifies the slice back on the same handle (decisions §211d), so
+/// [chunkCharUuid] serves both directions.
 ///
 /// This class is untested by design — it only reaches the radio, which no
 /// unit test can drive. All decode/verify/reshape/orchestration logic
 /// lives behind [WatchBleTransport] in [WatchSyncClient] and IS tested via
 /// a fake transport. Keep it that way: no parsing or business logic here.
+/// The UUID constants are the one exception, pinned by
+/// `test/reactive_ble_watch_transport_test.dart` — a mismatch against the
+/// firmware table is invisible without hardware.
 class ReactiveBleWatchTransport implements WatchBleTransport {
   static final Uuid serviceUuid =
       Uuid.parse('d1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
   static final Uuid manifestCharUuid =
-      Uuid.parse('d1f6a7e1-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
-  static final Uuid chunkRequestCharUuid =
       Uuid.parse('d1f6a7e2-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
-  static final Uuid chunkDataCharUuid =
+  static final Uuid chunkCharUuid =
       Uuid.parse('d1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
   static final Uuid settingsCharUuid =
       Uuid.parse('d1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
@@ -93,7 +98,7 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
         if (update.connectionState == DeviceConnectionState.connected &&
             !connected.isCompleted) {
           _notifySub =
-              _ble.subscribeToCharacteristic(_char(chunkDataCharUuid)).listen(
+              _ble.subscribeToCharacteristic(_char(chunkCharUuid)).listen(
             _chunks.add,
             onError: (Object e) => debugPrint('watch chunk notify error: $e'),
           );
@@ -119,7 +124,7 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
 
   @override
   Future<void> writeChunkRequest(List<int> request) => _ble
-      .writeCharacteristicWithResponse(_char(chunkRequestCharUuid), value: request);
+      .writeCharacteristicWithResponse(_char(chunkCharUuid), value: request);
 
   @override
   Future<void> writeSettings(List<int> frame) => _ble
