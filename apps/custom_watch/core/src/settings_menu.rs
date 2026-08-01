@@ -31,7 +31,7 @@
 
 use core::fmt::Write;
 
-use crate::erase::{ERASE_LEGEND_ARMED, ERASE_ROW, ERASE_ROW_ARMED};
+use crate::erase::{erase_stake_row, ERASE_LEGEND_ARMED, ERASE_ROW, ERASE_ROW_ARMED};
 use crate::face::{Row, ROWS};
 use crate::gnss_mode::GnssMode;
 use crate::profiles::ActivityProfile;
@@ -312,13 +312,18 @@ pub fn edit(
 /// While the §378 erase is armed the legend row is *replaced* rather than
 /// appended to: both of the presses it names change meaning for the duration,
 /// and a whole changed chrome row is what keeps the arm from being missed on a
-/// nine-row panel where the row itself is one line.
+/// nine-row panel where the row itself is one line. On the same trigger the
+/// title row yields to [`erase_stake_row`] whenever the run store still holds
+/// runs the phone has not pulled (`unsynced_runs`), because those are the one
+/// thing the wipe destroys that nothing can re-push — a fully-synced store
+/// keeps the prompt byte-identical, so the stake line never cries wolf.
 pub fn menu_rows(
     view: MenuView,
     mode: GnssMode,
     hide_empty: bool,
     profile: Option<ActivityProfile>,
     backyard: bool,
+    unsynced_runs: u8,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     if view.erase_armed {
@@ -326,7 +331,16 @@ pub fn menu_rows(
     } else {
         let _ = write!(rows[0], "{:<14}B4 EXIT", "B5- B1+");
     }
-    let _ = rows[1].push_str("SETTINGS");
+    match view
+        .erase_armed
+        .then(|| erase_stake_row(unsynced_runs))
+        .flatten()
+    {
+        Some(stake) => rows[1] = stake,
+        None => {
+            let _ = rows[1].push_str("SETTINGS");
+        }
+    }
     for (i, item) in ITEMS.iter().enumerate() {
         let row = MENU_TOP_ROW + i;
         let marker = if view.cursor as usize == i { '>' } else { ' ' };
@@ -420,7 +434,7 @@ mod tests {
         hide_empty: bool,
         profile: Option<ActivityProfile>,
     ) -> [Row; ROWS] {
-        super::menu_rows(view(cursor), mode, hide_empty, profile, false)
+        super::menu_rows(view(cursor), mode, hide_empty, profile, false, 0)
     }
 
     /// An un-armed cursor — what every case written before §378's erase row
@@ -664,19 +678,49 @@ mod tests {
             cursor: 4,
             erase_armed: true,
         };
-        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false);
+        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false, 0);
         assert_eq!(rows[0].as_str(), "B1 ERASE    B4 CANCEL");
         assert_eq!(rows[6].as_str(), "> ERASE ALL? B1");
         // Nothing else moves: the runner reads the rest of the menu unchanged,
-        // so the arm reads as one row's state and not as a new screen.
-        let resting = super::menu_rows(view(4), GnssMode::Performance, true, None, false);
+        // so the arm reads as one row's state and not as a new screen. With
+        // nothing unsynced this pins the whole armed prompt byte-for-byte —
+        // the stake line may only ever exist when there is a stake.
+        let resting = super::menu_rows(view(4), GnssMode::Performance, true, None, false, 0);
         assert_eq!(rows[1], resting[1]);
+        assert_eq!(rows[1].as_str(), "SETTINGS");
         for row in 2..ROWS {
             if row != 6 {
                 assert_eq!(rows[row], resting[row], "row {row} moved under the arm");
             }
         }
         assert_eq!(resting[6].as_str(), "> FACTORY ERASE");
+    }
+
+    #[test]
+    fn an_armed_erase_with_unsynced_runs_names_the_stake_in_the_title_row() {
+        // The confirm must not price a settings reset and the destruction of
+        // never-pulled race data as the same act: while the store holds runs
+        // the phone has not synced, the title row yields to the count. Only
+        // while armed — the resting menu is not a warning surface — and every
+        // other row stays exactly as the count-free arm renders it.
+        let armed = MenuView {
+            cursor: 4,
+            erase_armed: true,
+        };
+        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false, 3);
+        assert_eq!(rows[0].as_str(), "B1 ERASE    B4 CANCEL");
+        assert_eq!(rows[1].as_str(), "3 RUNS NOT SYNCED");
+        assert_eq!(rows[6].as_str(), "> ERASE ALL? B1");
+        let quiet = super::menu_rows(armed, GnssMode::Performance, true, None, false, 0);
+        for row in 2..ROWS {
+            assert_eq!(rows[row], quiet[row], "row {row} moved under the stake");
+        }
+        let resting = super::menu_rows(view(4), GnssMode::Performance, true, None, false, 3);
+        assert_eq!(
+            resting[1].as_str(),
+            "SETTINGS",
+            "an un-armed menu never carries the stake line"
+        );
     }
 
     #[test]
@@ -743,7 +787,7 @@ mod tests {
         assert_eq!(e(ValueDir::Right, true), MenuEdit::Nothing);
         assert_eq!(e(ValueDir::Left, true), MenuEdit::SetBackyard(false));
         assert_eq!(e(ValueDir::Left, false), MenuEdit::Nothing);
-        let rows = super::menu_rows(view(3), GnssMode::Performance, true, None, true);
+        let rows = super::menu_rows(view(3), GnssMode::Performance, true, None, true, 0);
         assert_eq!(rows[5].as_str(), "> BACKYARD ON");
     }
 
@@ -754,18 +798,21 @@ mod tests {
         // lands on the final row, so an EIGHTH needs §333's scrolling window
         // rather than another line to reclaim.
         for armed in [false, true] {
-            let rows = super::menu_rows(
-                MenuView {
-                    cursor: 0,
-                    erase_armed: armed,
-                },
-                GnssMode::Expedition,
-                false,
-                Some(ActivityProfile::Ultra),
-                true,
-            );
-            for row in rows.iter() {
-                assert!(row.len() <= COLS, "menu row too wide: {row:?}");
+            for unsynced in [0, 4] {
+                let rows = super::menu_rows(
+                    MenuView {
+                        cursor: 0,
+                        erase_armed: armed,
+                    },
+                    GnssMode::Expedition,
+                    false,
+                    Some(ActivityProfile::Ultra),
+                    true,
+                    unsynced,
+                );
+                for row in rows.iter() {
+                    assert!(row.len() <= COLS, "menu row too wide: {row:?}");
+                }
             }
         }
         assert_eq!(MENU_TOP_ROW + MENU_ITEMS, ROWS, "the list fills the body");

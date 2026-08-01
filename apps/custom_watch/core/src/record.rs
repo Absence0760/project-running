@@ -520,6 +520,15 @@ pub struct Snapshot {
     /// the live BPM in a zone without owning a second copy of the max-HR
     /// configuration.
     pub zone_cutoffs: ZoneCutoffs,
+    /// The alert engine's armed zone ceiling (`Some(z)` = alert above zone
+    /// `z`), mirrored via [`Recorder::set_alert_arms`]. Carried so the Zones
+    /// page can render `CEIL Z4` / `CEIL --` — the arm is phone-pushed only,
+    /// and a runner who cannot see that it never armed trusts an alert that
+    /// will not fire.
+    pub zone_ceiling: Option<u8>,
+    /// The armed pace band `(fast, slow)` in s/km, mirrored the same way for
+    /// the Pace page's `BAND` row.
+    pub pace_band: Option<(u32, u32)>,
     /// Seconds of moving time spent in each zone (Z1..Z5). Accrues exactly
     /// where [`Snapshot::moving_s`] does — a paused / auto-paused stretch adds
     /// nothing — and only while an HR reading is live, so a sensorless run
@@ -661,6 +670,19 @@ pub struct Snapshot {
     /// Wrapping count of refused marks (no position anchor) — the same edge
     /// detection, so a dead BTN5 hold says why instead of saying nothing.
     pub waypoint_refuse_seq: u8,
+    /// Wrapping count of finished-but-unsynced runs destroyed by a flash
+    /// eviction ([`Recorder::note_run_lost`]) — the alert engine edge-detects
+    /// it into the `! RUN LOST` banner. A run in a full store exists nowhere
+    /// else on earth, and until this counter its destruction reached only a
+    /// `warn!` down a debug cable no runner carries.
+    pub run_lost_seq: u8,
+    /// Wrapping count of course pushes the watch REJECTED (bad chunk, failed
+    /// CRC, undecodable frame), mirrored from the ble task
+    /// ([`Recorder::set_course_reject_seq`]) — the alert engine edge-detects
+    /// it into the `! CRS FAIL` banner, because a phone that re-pushed a
+    /// corrected course mid-race got a defmt warn while the runner kept
+    /// navigating the stale course believing it updated.
+    pub course_reject_seq: u8,
     /// The runner's countdown / stopwatch reading ([`crate::timers`], §375), or
     /// `None` while nothing is armed. Fed in from the task that owns the
     /// instrument rather than derived here — the timer outlives runs, so the
@@ -864,6 +886,13 @@ pub struct Recorder {
     /// Zone upper bounds derived from the configured max HR — see
     /// [`set_max_hr`](Recorder::set_max_hr).
     zone_cutoffs: ZoneCutoffs,
+    /// The alert engine's armed zone ceiling + pace band, mirrored in by the
+    /// record task via [`set_alert_arms`](Recorder::set_alert_arms) so the
+    /// Zones and Pace pages can say whether their over-effort alert is armed.
+    /// Only the engine's validated state is ever mirrored — the recorder never
+    /// interprets the values, it just carries them to the face.
+    zone_ceiling: Option<u8>,
+    pace_band: Option<(u32, u32)>,
     /// Per-zone moving-time accumulators, reset on [`start`](Recorder::start).
     zone_time_s: [u32; ZONE_COUNT],
     /// Time-weighted BPM sum + its seconds, banked exactly where zone time
@@ -1019,6 +1048,13 @@ pub struct Recorder {
     waypoints: Waypoints,
     waypoint_mark_seq: u8,
     waypoint_refuse_seq: u8,
+    /// Wrapping counts for the two banners whose events happen outside this
+    /// module — a flash eviction taking an unsynced run, and the ble task
+    /// rejecting a course push. Recorder-lifetime like the waypoint seqs
+    /// (never cleared by a run boundary): the alert engine baselines them at
+    /// each run start, so pre-run history cannot replay at the start line.
+    run_lost_seq: u8,
+    course_reject_seq: u8,
     /// The runner's pushed fuel cadences (`SET1`), seconds of moving time per
     /// sip / gel — the same values the alert engine runs on, mirrored here so
     /// the Fuel page's carry-out math describes THIS runner's plan rather
@@ -1058,6 +1094,8 @@ impl Recorder {
             baro_alt_m: None,
             hr_bpm: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            zone_ceiling: None,
+            pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             hr_dt_bpm: 0,
             hr_dt_s: 0,
@@ -1109,6 +1147,8 @@ impl Recorder {
             waypoints: Waypoints::new(),
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
+            run_lost_seq: 0,
+            course_reject_seq: 0,
             fuel_drink_interval_s: None,
             fuel_eat_interval_s: None,
         }
@@ -1202,6 +1242,25 @@ impl Recorder {
         marked
     }
 
+    /// A flash eviction just destroyed a finished run the phone had never
+    /// pulled ([`crate::flash_plan::SlotWrite::evicted_unsynced`]). The app's
+    /// record task calls this at the commit / checkpoint that took the slot;
+    /// the counter reaches the alert engine through the snapshot, where its
+    /// edge becomes the `! RUN LOST` banner. A counter and not a flag,
+    /// because two evictions in one run are two losses and each must be
+    /// announced.
+    pub fn note_run_lost(&mut self) {
+        self.run_lost_seq = self.run_lost_seq.wrapping_add(1);
+    }
+
+    /// Mirror the ble task's wrapping rejected-course-push counter
+    /// ([`Snapshot::course_reject_seq`]). The recorder never interprets it —
+    /// it is carried so the alert engine, which reads only snapshots, can
+    /// edge-detect the rejection into the `! CRS FAIL` banner.
+    pub fn set_course_reject_seq(&mut self, seq: u8) {
+        self.course_reject_seq = seq;
+    }
+
     /// Restore the marks persisted in flash (the app's boot path). Whole-store
     /// replacement rather than a merge: the flash record IS the store, so a
     /// decode failure leaves whatever is already in RAM instead of clearing it.
@@ -1228,8 +1287,16 @@ impl Recorder {
     /// rebase the anchor when the gap is [`GPS_REANCHOR_AFTER_S`] or longer —
     /// `run_recorder`'s #330 — so recording resumes from the reacquire point
     /// instead of freezing against a stale anchor.)
+    ///
+    /// Forwarded to the GAP estimator, whose power-hike hold budget scales
+    /// off the same cadence
+    /// ([`gap_hold_ticks`](crate::grade_adjusted_pace::gap_hold_ticks)):
+    /// `current_speed_mps` freezes between fixes, so a tick-count hold blind
+    /// to the interval would expire mid-gap against a speed that could not
+    /// yet have changed.
     pub fn set_fix_interval_s(&mut self, interval_s: u32) {
         self.fix_interval_s = interval_s.max(1);
+        self.gap.set_fix_interval_s(interval_s);
     }
 
     pub fn state(&self) -> RecordState {
@@ -1270,6 +1337,18 @@ impl Recorder {
             self.zone_cutoffs = hr_zones::zone_cutoffs_from_max_hr(max_hr_bpm);
             self.max_hr_bpm = Some(max_hr_bpm);
         }
+    }
+
+    /// Mirror the alert engine's armed zone ceiling + pace band into the
+    /// snapshot, so the Zones and Pace pages can say whether their over-effort
+    /// alert is armed at all — a phone-less runner otherwise carries a
+    /// disarmed race-critical alert with nothing on any surface saying so.
+    /// Callers pass the engine's own getters, never raw wire values: the
+    /// engine validates on set, and this mirror must not become a second
+    /// place the values are interpreted.
+    pub fn set_alert_arms(&mut self, zone_ceiling: Option<u8>, pace_band: Option<(u32, u32)>) {
+        self.zone_ceiling = zone_ceiling;
+        self.pace_band = pace_band;
     }
 
     /// Resting HR — the lower half of the TRIMP calibration pair. With both
@@ -2177,6 +2256,8 @@ impl Recorder {
                 self.pacer.status(self.distance_m, self.elapsed_s())
             },
             zone_cutoffs: self.zone_cutoffs,
+            zone_ceiling: self.zone_ceiling,
+            pace_band: self.pace_band,
             zone_time_s: self.zone_time_s,
             cutoff: self.cutoff_snapshot(),
             sleep: self.sleep_snapshot(),
@@ -2228,6 +2309,8 @@ impl Recorder {
             waypoint_count: self.waypoints.len() as u8,
             waypoint_mark_seq: self.waypoint_mark_seq,
             waypoint_refuse_seq: self.waypoint_refuse_seq,
+            run_lost_seq: self.run_lost_seq,
+            course_reject_seq: self.course_reject_seq,
             timer: self.timer,
             track_thinning: self.track_thinning,
             pages_mask: 0,
@@ -3572,6 +3655,42 @@ mod tests {
         // No baro, no GPS altitude: grade stays 0 and GAP reads as raw pace —
         // the live field's no-altimeter behaviour.
         assert_eq!(r.snapshot().gap_s_per_km, Some(200));
+    }
+
+    #[test]
+    fn gap_hold_rides_out_a_throttled_mode_inter_fix_gap_and_marks_it_held() {
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        // 300 m legs at 60 s spacing: a 5 m/s runner in Expedition mode.
+        for i in 0..=3u32 {
+            r.on_fix(&fix(40.0 + i as f64 * 0.0027, -105.0, 5.0, i * 60));
+        }
+        let live = r.snapshot();
+        assert_eq!(live.gap_s_per_km, Some(200));
+        assert!(!live.gap_held);
+
+        // The headwall: the next fix reports a sub-gate crawl, and the fix
+        // after it is a minute away — every 1 Hz snapshot in between samples
+        // the frozen 0.3 m/s, so a cadence-blind ten-tick hold would blank
+        // GAP for the last fifty seconds of the gap.
+        r.on_fix(&fix(40.0108, -105.0, 0.3, 240));
+        for _ in 0..60 {
+            let s = r.snapshot();
+            assert_eq!(s.gap_s_per_km, Some(200));
+            assert!(s.gap_held);
+        }
+        // The next fix confirms the crawl as sustained; the original
+        // ten-tick grace spends down and GAP blanks honestly.
+        r.on_fix(&fix(40.01096, -105.0, 0.3, 300));
+        for _ in 0..9 {
+            let s = r.snapshot();
+            assert_eq!(s.gap_s_per_km, Some(200));
+            assert!(s.gap_held);
+        }
+        let s = r.snapshot();
+        assert_eq!(s.gap_s_per_km, None);
+        assert!(!s.gap_held);
     }
 
     #[test]

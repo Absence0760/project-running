@@ -168,6 +168,16 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 /// once here so a re-push replaces it cleanly, no static-cell reuse.
 pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
 
+/// Wrapping count of course pushes the watch REJECTED — a short or
+/// out-of-order chunk, a failed CRC, an undecodable frame — after which
+/// [`COURSE`] keeps whatever it already held. The `ble` task bumps and
+/// publishes it; the `record` task mirrors it into the recorder snapshot so
+/// the alert engine can edge-detect the rejection into the `! CRS FAIL`
+/// banner. Without it a phone re-pushing a corrected course mid-race that
+/// failed CRC left only a defmt warn, and the runner navigated the stale
+/// course believing it updated. One receiver (`record`).
+pub static COURSE_REJECTS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+
 /// Pushed structured workout (the `WKT1` path): the `ble` task decodes a
 /// chunked phone write into a `workout_store` frame's step list and publishes
 /// it here; the `record` task arms the recorder's workout runner with it.
@@ -307,6 +317,14 @@ pub static QNH_REZERO_REQ: Channel<CriticalSectionRawMutex, (), 1> = Channel::ne
 /// watch rebooted mid-ultra can see the run survived and needs syncing. No value
 /// published means none. One receiver (the `ui` task).
 pub static PENDING_RUNS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+
+/// How many finished runs on flash the phone has not pulled at all — the runs
+/// a §378 factory erase would destroy with no copy existing anywhere else. The
+/// `run_flash` store publishes it from the same seam as [`PENDING_RUNS`] (it is
+/// the superset count: pending additionally requires an interrupted recording);
+/// the `ui` task folds it into the armed erase prompt so the confirm names the
+/// stake, and stays silent at zero. One receiver (the `ui` task).
+pub static UNSYNCED_RUNS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 
 /// Outcome of the latest manual QNH re-zero, stamped with the uptime second it
 /// was decided: the `baro` task publishes it (honest refusals included — no

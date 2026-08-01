@@ -628,7 +628,7 @@ pub fn draw_nav_panel(
         // band so the halo can't blank the title or GPS rows beside it.
         let halo = MARKER_ARM_PX + 1;
         for y in (my - halo)..=(my + halo) {
-            if y < PANEL_TOP_PX || y > PANEL_Y_MAX {
+            if !(PANEL_TOP_PX..=PANEL_Y_MAX).contains(&y) {
                 continue;
             }
             for x in (mx - halo)..=(mx + halo) {
@@ -893,6 +893,8 @@ mod tests {
             last_lap: None,
             pacer: None,
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            zone_ceiling: None,
+            pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
             sleep: None,
@@ -931,6 +933,8 @@ mod tests {
             waypoint_count: 0,
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
+            run_lost_seq: 0,
+            course_reject_seq: 0,
             timer: None,
             storm: None,
             auto_lap: watch_core::auto_lap::AUTO_LAP_DEFAULT,

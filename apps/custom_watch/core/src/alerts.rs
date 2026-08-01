@@ -86,7 +86,15 @@
 //!    `UNKNOWN` (a stale fix is the watch losing sight of the runner, not the
 //!    runner catching up) — and it is **re-queued** when displaced: there is
 //!    no later reminder, and the thing it warns of only gets worse.
-//! 6. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
+//! 6. **Course-push rejected** — the ble task refused a course push (bad
+//!    chunk, failed CRC, undecodable frame) and `state::COURSE` kept the
+//!    stale course. Race-critical navigation state: the runner watched their
+//!    phone say "sent" and now trusts a course the watch never accepted, and
+//!    the mistake surfaces at the next fork — minutes away, not the hour a
+//!    front allows — so it sits under the cutoff (which warns the race is
+//!    being lost *now*) and above storm. **Re-queued** when displaced: no
+//!    later reminder exists, and no page carries the rejection.
+//! 7. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
 //!    the world rather than the runner, and it sits here because of *when* the
 //!    thing it warns of arrives. A zone excursion, a corral bell and a pace
 //!    drift all want a decision inside seconds; a front measured over three
@@ -96,31 +104,38 @@
 //!    missed gel is re-offered a cadence later, a missed front is not. It rides
 //!    the run's own alert slot, so like every other arm it is silent between
 //!    runs.
-//! 7. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//! 8. **Run lost** — a flash eviction destroyed a finished run the phone had
+//!    never pulled: hours of a race, gone forever, and honesty demands the
+//!    wrist say so rather than a `warn!` down a cable. It asks for no
+//!    decision — the data is already gone — so it sits at the bottom of the
+//!    re-queued class, below every arm that still has something to act on;
+//!    above fuel only because a reminder comes round again and this never
+//!    does. **Re-queued** when displaced, for exactly that reason.
+//! 9. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
 //!    reminders promote eat-before-drink when a slot frees.
-//! 8. **GPS lost / GPS back**, then **Back-on-course**, then **Timer**, then
-//!    **Distance**, then **Time** — milestones, and the only
-//!    arms that are *dropped* rather than queued when the slot is busy. A
-//!    milestone banner is meaningful only at the moment it is reached; showing
-//!    "5.0 KM" once the runner is at 5.4 km is worse than not showing it, and
-//!    unlike fuel there is nothing left to act on later — the totals are on the
-//!    page. The [`crate::timers`] expiry leads the group because it is the one
-//!    the runner set themselves, and the two automatic ones tie-break on
-//!    distance, which is what the race is measured in. The timer sits *below*
-//!    fuel deliberately: a missed timer banner costs nothing recoverable (the
-//!    Timer page counts the overrun up), whereas §214 says a missed gel is the
-//!    one reminder that must never be silently dropped — and below the corral
-//!    whistle for the same asymmetry, one rung sharper. The signal-void pair
-//!    (§367) heads the group — distance not accruing while the runner moves
-//!    is the costliest thing in it, and the AUTO tag carries the persistent
-//!    truth so a swallowed banner loses only the announcement — with the
-//!    `ON COURSE` affirmation next: for a runner who just corrected a wrong
-//!    turn by feel it is the answer to a live question, where the milestones
-//!    are wallpaper — but it is still in the dropped class, because a stale
-//!    all-clear shown after the runner drifted off again is a lie the Nav
-//!    page would contradict.
+//! 10. **GPS lost / GPS back**, then **Back-on-course**, then **Timer**, then
+//!     **Distance**, then **Time** — milestones, and the only
+//!     arms that are *dropped* rather than queued when the slot is busy. A
+//!     milestone banner is meaningful only at the moment it is reached; showing
+//!     "5.0 KM" once the runner is at 5.4 km is worse than not showing it, and
+//!     unlike fuel there is nothing left to act on later — the totals are on the
+//!     page. The [`crate::timers`] expiry leads the group because it is the one
+//!     the runner set themselves, and the two automatic ones tie-break on
+//!     distance, which is what the race is measured in. The timer sits *below*
+//!     fuel deliberately: a missed timer banner costs nothing recoverable (the
+//!     Timer page counts the overrun up), whereas §214 says a missed gel is the
+//!     one reminder that must never be silently dropped — and below the corral
+//!     whistle for the same asymmetry, one rung sharper. The signal-void pair
+//!     (§367) heads the group — distance not accruing while the runner moves
+//!     is the costliest thing in it, and the AUTO tag carries the persistent
+//!     truth so a swallowed banner loses only the announcement — with the
+//!     `ON COURSE` affirmation next: for a runner who just corrected a wrong
+//!     turn by feel it is the answer to a live question, where the milestones
+//!     are wallpaper — but it is still in the dropped class, because a stale
+//!     all-clear shown after the runner drifted off again is a lie the Nav
+//!     page would contradict.
 //!
 //! Display-only by design: the DK has no vibration motor, and alerts are an
 //! L4 auxiliary — the engine is pure and fed *after* the recorder updates, so
@@ -261,6 +276,17 @@ pub enum Alert {
     /// [`Alert::BackOnCourse`]: no `!` prefix, it closes the loop GPS LOST
     /// opened.
     SignalBack,
+    /// A flash eviction destroyed a finished run the phone had never pulled
+    /// ([`Snapshot::run_lost_seq`]). Carries nothing: there is nothing left
+    /// to carry — the run's coordinates and heart rates are gone forever,
+    /// and the banner's whole job is to say so instead of softening it.
+    RunLost,
+    /// The ble task rejected a course push ([`Snapshot::course_reject_seq`])
+    /// — the course on the watch is STILL THE OLD ONE. The label conveys
+    /// rejection, not vague error: the runner's phone said "sent", and the
+    /// next fork is where believing it gets expensive. A successful re-push
+    /// needs no banner of its own — the Nav page re-announces the course.
+    CourseRejected,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -347,6 +373,13 @@ pub fn banner(alert: Alert) -> Banner {
         Alert::WaypointNoFix => write!(b, "! NO FIX"),
         Alert::SignalLost => write!(b, "! GPS LOST"),
         Alert::SignalBack => write!(b, "GPS BACK"),
+        // LOST, not "dropped" or "evicted": the data is gone forever and the
+        // word must not soften it.
+        Alert::RunLost => write!(b, "! RUN LOST"),
+        // FAIL, not a vague error word: the push was rejected and the watch
+        // kept the old course. CRS is the course wire frame's own
+        // abbreviation, as on the OFF CRS banner.
+        Alert::CourseRejected => write!(b, "! CRS FAIL"),
     };
     b
 }
@@ -445,6 +478,25 @@ pub struct AlertEngine {
     /// reboot) can't replay as a banner at the start line.
     last_waypoint_mark_seq: Option<u8>,
     last_waypoint_refuse_seq: Option<u8>,
+    /// The last [`Snapshot::run_lost_seq`] seen, with the waypoint pair's
+    /// `None`-baseline: an eviction taken by a previous run's commit must not
+    /// replay as a banner at this run's start line — between runs the idle
+    /// face's unsynced-pressure row carries the standing truth.
+    last_run_lost_seq: Option<u8>,
+    /// A raised run-lost notice waiting for the slot. Re-queued when
+    /// displaced — the loss is permanent and no page carries it mid-run, so
+    /// dropping it would return the event to the silence it came from.
+    /// Cleared by [`Self::reset`]: between runs the idle surfaces own the
+    /// story.
+    pending_run_lost: bool,
+    /// The last [`Snapshot::course_reject_seq`] seen, same `None`-baseline: a
+    /// push that failed while the watch sat idle must not replay mid-race.
+    last_course_reject_seq: Option<u8>,
+    /// A raised course-rejection warning waiting for the slot. Re-queued when
+    /// displaced — there is no later reminder, and the runner is navigating a
+    /// course they believe was replaced. Cleared by [`Self::reset`] with the
+    /// cutoff pair's run-scoped reasoning.
+    pending_course_reject: bool,
     /// Whether the last sample said the fixes had dried up — the edge
     /// detector for the GPS LOST / GPS BACK pair. Plain, not tri-state:
     /// unlike the nav projection, `signal_lost` is always meaningful during
@@ -493,6 +545,10 @@ impl AlertEngine {
             pending_off_course: false,
             last_waypoint_mark_seq: None,
             last_waypoint_refuse_seq: None,
+            last_run_lost_seq: None,
+            pending_run_lost: false,
+            last_course_reject_seq: None,
+            pending_course_reject: false,
             was_signal_lost: false,
             in_run: false,
         }
@@ -521,6 +577,21 @@ impl AlertEngine {
             Some(z) if (1..=4).contains(&z) => self.zone_ceiling = Some(z),
             Some(_) => {}
         }
+    }
+
+    /// The armed zone ceiling, if any — read back by the record task to
+    /// mirror the arm into [`crate::record::Snapshot`], so the Zones page can
+    /// say whether the over-effort alert is armed at all. The engine stays
+    /// the single owner: only a value [`Self::set_zone_ceiling`] accepted can
+    /// ever be mirrored, so the page and the alert cannot drift.
+    pub const fn zone_ceiling(&self) -> Option<u8> {
+        self.zone_ceiling
+    }
+
+    /// The armed pace band, if any — the Pace page's mirror, same contract as
+    /// [`Self::zone_ceiling`].
+    pub const fn pace_band(&self) -> Option<(u32, u32)> {
+        self.pace_band
     }
 
     /// Configure the distance-alert cadence: fire every `interval_m` metres of
@@ -761,6 +832,30 @@ impl AlertEngine {
             }
         }
 
+        // The run-lost and course-rejection counters, on the waypoint pair's
+        // seam: a wrapping seq the app bumps, edge-detected here, with the
+        // first sample of a run adopting the counter so pre-run history can't
+        // replay at the start line. Both set pending flags rather than taking
+        // the slot — the precedence chain at the tail places them in the
+        // re-queued class, so neither can be swallowed by a busy slot the way
+        // the defmt warns they replace were swallowed by the missing cable.
+        match self.last_run_lost_seq {
+            None => self.last_run_lost_seq = Some(snap.run_lost_seq),
+            Some(last) if snap.run_lost_seq != last => {
+                self.last_run_lost_seq = Some(snap.run_lost_seq);
+                self.pending_run_lost = true;
+            }
+            Some(_) => {}
+        }
+        match self.last_course_reject_seq {
+            None => self.last_course_reject_seq = Some(snap.course_reject_seq),
+            Some(last) if snap.course_reject_seq != last => {
+                self.last_course_reject_seq = Some(snap.course_reject_seq);
+                self.pending_course_reject = true;
+            }
+            Some(_) => {}
+        }
+
         // The timer edge is consumed whether or not it can be shown — the
         // milestone rule, and the reason it is safe here: the Timer page counts
         // the overrun up, so a dropped banner loses nothing the runner cannot
@@ -920,9 +1015,15 @@ impl AlertEngine {
             } else if self.pending_cutoff {
                 self.pending_cutoff = false;
                 self.active = Some((Alert::CutoffBehind, uptime_s));
+            } else if self.pending_course_reject {
+                self.pending_course_reject = false;
+                self.active = Some((Alert::CourseRejected, uptime_s));
             } else if self.pending_storm {
                 self.pending_storm = false;
                 self.active = Some((Alert::Storm, uptime_s));
+            } else if self.pending_run_lost {
+                self.pending_run_lost = false;
+                self.active = Some((Alert::RunLost, uptime_s));
             } else if self.pending_eat {
                 self.pending_eat = false;
                 self.active = Some((Alert::Eat, uptime_s));
@@ -958,6 +1059,8 @@ impl AlertEngine {
             Some((Alert::Storm, _)) => self.pending_storm = true,
             Some((Alert::CutoffBehind, _)) => self.pending_cutoff = true,
             Some((Alert::OffCourse, _)) => self.pending_off_course = true,
+            Some((Alert::RunLost, _)) => self.pending_run_lost = true,
+            Some((Alert::CourseRejected, _)) => self.pending_course_reject = true,
             _ => {}
         }
         self.active = Some((alert, uptime_s));
@@ -985,6 +1088,10 @@ impl AlertEngine {
         self.pending_off_course = false;
         self.last_waypoint_mark_seq = None;
         self.last_waypoint_refuse_seq = None;
+        self.last_run_lost_seq = None;
+        self.pending_run_lost = false;
+        self.last_course_reject_seq = None;
+        self.pending_course_reject = false;
         self.was_signal_lost = false;
         self.in_run = false;
     }
@@ -1075,7 +1182,9 @@ impl FuelOverdueTracker {
                 | Alert::WaypointMarked
                 | Alert::WaypointNoFix
                 | Alert::SignalLost
-                | Alert::SignalBack,
+                | Alert::SignalBack
+                | Alert::RunLost
+                | Alert::CourseRejected,
             )
             | None => {}
         }
@@ -1157,6 +1266,8 @@ mod tests {
             last_lap: None,
             auto_lap: crate::auto_lap::AUTO_LAP_DEFAULT,
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            zone_ceiling: None,
+            pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             pacer: None,
             cutoff: None,
@@ -1196,6 +1307,8 @@ mod tests {
             waypoint_count: 0,
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
+            run_lost_seq: 0,
+            course_reject_seq: 0,
             timer: None,
             storm: None,
             track_thinning: 1,
@@ -3224,5 +3337,219 @@ mod tests {
             None
         );
         assert_eq!(e.on_update(&voided(false, 20), None, 30), None);
+    }
+
+    fn lost(seq: u8, moving_s: u32) -> Snapshot {
+        Snapshot {
+            run_lost_seq: seq,
+            ..rec(moving_s)
+        }
+    }
+
+    fn rejected(seq: u8, moving_s: u32) -> Snapshot {
+        Snapshot {
+            course_reject_seq: seq,
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn a_lost_run_announces_itself_once_and_a_second_loss_again() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&lost(0, 10), None, 10), None);
+        assert_eq!(e.on_update(&lost(1, 11), None, 11), Some(Alert::RunLost));
+        assert_eq!(banner(Alert::RunLost).as_str(), "! RUN LOST");
+        // A steady counter is not news — the loss already happened.
+        let t = 11 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&lost(1, t), None, t), None);
+        // Two evictions in one run are two losses; each is announced.
+        assert_eq!(
+            e.on_update(&lost(2, t + 1), None, t + 1),
+            Some(Alert::RunLost)
+        );
+    }
+
+    #[test]
+    fn counters_banked_before_the_run_do_not_replay_at_the_start_line() {
+        // Both counters survive between runs; the first sample of a run
+        // adopts them without firing, like the waypoint pair.
+        let mut e = AlertEngine::new();
+        let pre = Snapshot {
+            run_lost_seq: 3,
+            course_reject_seq: 7,
+            ..rec(10)
+        };
+        assert_eq!(e.on_update(&pre, None, 10), None);
+        let t = 10 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(
+                &Snapshot {
+                    run_lost_seq: 3,
+                    course_reject_seq: 7,
+                    ..rec(t)
+                },
+                None,
+                t
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn an_eviction_at_a_stop_time_commit_waits_for_the_idle_face() {
+        // The commit that ends a short run can itself evict; the engine has
+        // already reset by the time that counter moves, so the next start
+        // adopts it silently — the home face's unsynced-pressure row is the
+        // surface that owns the story between runs.
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&lost(0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 11), None, 11),
+            None
+        );
+        assert_eq!(e.on_update(&lost(1, 100), None, 100), None);
+    }
+
+    #[test]
+    fn a_zone_banner_displaces_a_lost_run_notice_which_re_queues_rather_than_dropping() {
+        // The loss is permanent and no page carries it mid-run; dropping the
+        // notice would return it to the silence it came from.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(e.on_update(&lost(0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&lost(1, 11), Some(160), 11),
+            Some(Alert::ZoneAbove(4))
+        );
+        let after = 11 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&lost(1, after), Some(150), after),
+            Some(Alert::RunLost),
+            "the displaced loss notice came back"
+        );
+    }
+
+    #[test]
+    fn a_lost_run_notice_yields_to_a_storm_but_leads_the_fuel_reminders() {
+        // The bottom of the re-queued class: every arm above it still has a
+        // decision to make, fuel below it comes round again.
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        e.set_fuel_intervals(300, 300);
+        assert_eq!(e.on_update(&lost(0, 10), None, 10), None);
+        let both = Snapshot {
+            run_lost_seq: 1,
+            ..stormy(StormTrend::Storm, 300)
+        };
+        assert_eq!(e.on_update(&both, None, 300), Some(Alert::Storm));
+        let t = 300 + ALERT_TTL_S;
+        let hold = Snapshot {
+            run_lost_seq: 1,
+            ..stormy(StormTrend::Storm, t)
+        };
+        assert_eq!(e.on_update(&hold, None, t), Some(Alert::RunLost));
+        let t = t + ALERT_TTL_S;
+        let hold = Snapshot {
+            run_lost_seq: 1,
+            ..stormy(StormTrend::Storm, t)
+        };
+        assert_eq!(e.on_update(&hold, None, t), Some(Alert::Eat));
+    }
+
+    #[test]
+    fn a_course_rejection_says_crs_fail_once_per_rejection() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&rejected(0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&rejected(1, 11), None, 11),
+            Some(Alert::CourseRejected)
+        );
+        assert_eq!(banner(Alert::CourseRejected).as_str(), "! CRS FAIL");
+        // A steady counter is not news; the next failed retry is.
+        let t = 11 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&rejected(1, t), None, t), None);
+        assert_eq!(
+            e.on_update(&rejected(2, t + 1), None, t + 1),
+            Some(Alert::CourseRejected)
+        );
+    }
+
+    #[test]
+    fn a_cutoff_banner_leads_a_course_rejection_which_is_owed_the_next_slot() {
+        // The cutoff warns the race is being lost now; the stale course gets
+        // expensive at the next fork — sooner than a front, later than the
+        // cutoff. Both raised on one tick: cutoff first, rejection re-queued.
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&rejected(0, 10), None, 10), None);
+        let both = Snapshot {
+            course_reject_seq: 1,
+            cutoff: cut(CutoffEtaStatus::Behind, 11).cutoff,
+            ..rec(11)
+        };
+        assert_eq!(e.on_update(&both, None, 11), Some(Alert::CutoffBehind));
+        let t = 11 + ALERT_TTL_S;
+        let hold = Snapshot {
+            course_reject_seq: 1,
+            cutoff: cut(CutoffEtaStatus::Behind, t).cutoff,
+            ..rec(t)
+        };
+        assert_eq!(e.on_update(&hold, None, t), Some(Alert::CourseRejected));
+    }
+
+    #[test]
+    fn a_course_rejection_leads_the_storm_and_never_loses_to_fuel() {
+        let mut e = AlertEngine::new();
+        e.set_storm_alert(true);
+        e.set_fuel_intervals(300, 300);
+        assert_eq!(e.on_update(&rejected(0, 10), None, 10), None);
+        let both = Snapshot {
+            course_reject_seq: 1,
+            ..stormy(StormTrend::Storm, 300)
+        };
+        assert_eq!(e.on_update(&both, None, 300), Some(Alert::CourseRejected));
+        let t = 300 + ALERT_TTL_S;
+        let hold = Snapshot {
+            course_reject_seq: 1,
+            ..stormy(StormTrend::Storm, t)
+        };
+        assert_eq!(e.on_update(&hold, None, t), Some(Alert::Storm));
+    }
+
+    #[test]
+    fn a_zone_banner_displaces_a_course_rejection_which_re_queues_rather_than_dropping() {
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(e.on_update(&rejected(0, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&rejected(1, 11), Some(160), 11),
+            Some(Alert::ZoneAbove(4))
+        );
+        let after = 11 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&rejected(1, after), Some(150), after),
+            Some(Alert::CourseRejected),
+            "the displaced rejection came back"
+        );
+    }
+
+    #[test]
+    fn a_run_boundary_clears_a_pending_loss_and_rejection() {
+        // Both are run-scoped like the cutoff pair: between runs the idle
+        // surfaces carry the standing truth, so nothing raised in one run is
+        // owed to the next.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(e.on_update(&rec(10), None, 10), None);
+        let both = Snapshot {
+            run_lost_seq: 1,
+            course_reject_seq: 1,
+            ..rec(11)
+        };
+        assert_eq!(e.on_update(&both, Some(160), 11), Some(Alert::ZoneAbove(4)));
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 12), None, 12),
+            None
+        );
+        assert_eq!(e.on_update(&rec(20), None, 30), None);
     }
 }

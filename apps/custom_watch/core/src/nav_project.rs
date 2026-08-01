@@ -15,7 +15,9 @@
 use heapless::Vec;
 
 use crate::course::{Course, NavStatus, OffCourseAlert};
-use crate::record::TurnCueView;
+use crate::grade_adjusted_pace::haversine_metres;
+use crate::record::{TurnCueView, MAX_SPEED_MPS};
+use crate::trackback::{initial_bearing_deg, BEARING_MIN_DISTANCE_M};
 use crate::turn_cues::{
     direction_code, generate_turn_cues, next_turn_ahead, TurnCue, TurnCueOptions, TurnCueWaypoint,
     MAX_TURN_CUES, MAX_TURN_CUE_WAYPOINTS,
@@ -31,6 +33,61 @@ pub fn course_cues(course: &Course) -> Vec<TurnCue, MAX_TURN_CUES> {
         });
     }
     generate_turn_cues(&waypoints, TurnCueOptions::default())
+}
+
+/// Physical-plausibility gate on the fixes the nav task projects.
+///
+/// The recorder rejects a fix implying an impossible speed before it can move
+/// the track ([`crate::record::MAX_SPEED_MPS`]); the nav task consumed the raw
+/// fix channel with no such gate, so one canyon-multipath teleport could fire
+/// `! OFF CRS` — since the cross-page banners landed, on every page at once —
+/// or, worse, clear a live alert while the runner stands exactly as lost as
+/// they were. [`project_fix`] already refuses a non-finite position; this gate
+/// refuses the finite-but-impossible one, with the same shape the recorder
+/// uses for throttled GNSS modes: the ceiling is `MAX_SPEED_MPS * dt` from the
+/// last *accepted* fix, so a rejected outlier never moves the anchor, and a
+/// genuine relocation (a signal void crossed on foot) self-heals as `dt`
+/// grows the ceiling past any real displacement.
+///
+/// A `dt` of zero is a timestamp duplicate and fails closed, mirroring the
+/// recorder. The gate is course-independent — it judges the position stream,
+/// not the projection — so a course swap must NOT reset it: the runner did not
+/// teleport because the phone pushed a new route.
+pub struct FixGate {
+    last: Option<(f64, f64, u32)>,
+}
+
+impl FixGate {
+    pub const fn new() -> Self {
+        Self { last: None }
+    }
+
+    /// Accept or reject one fix; an accepted fix becomes the new anchor.
+    pub fn accept(&mut self, lat_deg: f64, lon_deg: f64, uptime_s: u32) -> bool {
+        if !lat_deg.is_finite() || !lon_deg.is_finite() {
+            return false;
+        }
+        let Some((last_lat, last_lon, last_s)) = self.last else {
+            self.last = Some((lat_deg, lon_deg, uptime_s));
+            return true;
+        };
+        let dt = uptime_s.saturating_sub(last_s);
+        if dt == 0 {
+            return false;
+        }
+        let delta_m = haversine_metres(last_lat, last_lon, lat_deg, lon_deg);
+        if delta_m > MAX_SPEED_MPS * dt as f64 {
+            return false;
+        }
+        self.last = Some((lat_deg, lon_deg, uptime_s));
+        true
+    }
+}
+
+impl Default for FixGate {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// One fix projected onto the active course: what to publish, plus the two
@@ -75,12 +132,19 @@ pub fn project_fix(
         distance_m: (c.position_m - p.along_m).max(0.0).min(u16::MAX as f64) as u16,
         remaining,
     });
+    // The snapped point is the nearest place back on the line, so the bearing
+    // toward it is the escape direction the Nav page shows while alerting.
+    // Gated on the same stability floor the trackback BRG uses: under it the
+    // projection foot wobbles with GPS jitter and the bearing means nothing.
+    let back_to_course_deg = (p.off_m >= BEARING_MIN_DISTANCE_M as f64)
+        .then(|| initial_bearing_deg(lat_deg, lon_deg, p.lat_deg, p.lon_deg) as f32);
     Some(NavOutcome {
         status: NavStatus {
             off_m: p.off_m,
             along_m: p.along_m,
             alerting: alert.active(),
             next_turn,
+            back_to_course_deg,
         },
         went_off_course,
         back_on_course: was_alerting && !alert.active(),
@@ -317,6 +381,112 @@ mod tests {
         .unwrap();
         assert!(biased.status.along_m > unbiased.status.along_m);
         assert!((biased.status.off_m - unbiased.status.off_m).abs() < 1e-6);
+    }
+
+    #[test]
+    fn an_off_course_fix_carries_the_bearing_back_toward_the_course() {
+        // A fix due EAST of the course's north-south leg (near its top, so
+        // that leg — not the east-west one below — is nearest): the way back
+        // is west, so the published bearing must read ~270 — pointing the
+        // runner TOWARD the line, never along their own displacement away
+        // from it. This is the path the Nav page's escape line renders from.
+        let course = corner_course();
+        let mut alert = OffCourseAlert::new();
+        let cues = course_cues(&course);
+        let far = -105.2705 + lon_offset_deg(60.0);
+        let out = project_fix(&course, &mut alert, None, &cues, 40.0157, far).unwrap();
+        assert!(out.status.alerting);
+        let deg = out.status.back_to_course_deg.unwrap();
+        assert!((deg - 270.0).abs() < 2.0, "bearing {}", deg);
+        assert_eq!(crate::trackback::sector_of_deg(deg), 12, "expected W");
+    }
+
+    #[test]
+    fn a_fix_on_the_line_carries_no_back_bearing() {
+        // Under the trackback stability floor the projection foot wobbles
+        // with GPS jitter, so the bearing would be noise — and there is
+        // nothing to escape from.
+        let course = corner_course();
+        let mut alert = OffCourseAlert::new();
+        let cues = course_cues(&course);
+        let out = project_fix(&course, &mut alert, None, &cues, 40.0155, -105.2705).unwrap();
+        assert!(out.status.off_m < 1.0);
+        assert_eq!(out.status.back_to_course_deg, None);
+    }
+
+    #[test]
+    fn the_back_bearing_survives_the_hysteresis_band_while_still_latched() {
+        // The latch holds between 20 and 40 m out; the escape line renders on
+        // `alerting`, so the bearing must still be published there, not only
+        // past the 40 m trigger.
+        let course = corner_course();
+        let mut alert = OffCourseAlert::new();
+        let cues = course_cues(&course);
+        project_fix(
+            &course,
+            &mut alert,
+            None,
+            &cues,
+            40.0157,
+            -105.2705 + lon_offset_deg(60.0),
+        )
+        .unwrap();
+        let drifting = project_fix(
+            &course,
+            &mut alert,
+            None,
+            &cues,
+            40.0157,
+            -105.2705 + lon_offset_deg(30.0),
+        )
+        .unwrap();
+        assert!(drifting.status.alerting);
+        let deg = drifting.status.back_to_course_deg.unwrap();
+        assert!((deg - 270.0).abs() < 2.0, "bearing {}", deg);
+    }
+
+    #[test]
+    fn the_gate_accepts_a_first_fix_and_a_plausible_walk() {
+        let mut gate = FixGate::new();
+        assert!(gate.accept(40.0155, -105.2705, 100));
+        // ~8 m east over 1 s is a fast runner, not a teleport.
+        assert!(gate.accept(40.0155, -105.2705 + lon_offset_deg(8.0), 101));
+    }
+
+    #[test]
+    fn a_multipath_teleport_is_rejected_and_never_moves_the_anchor() {
+        // The finding this gate exists for: one canyon-bounce fix 500 m out
+        // must not reach the projection, and the NEXT honest fix — judged
+        // against the un-moved anchor — must still pass.
+        let mut gate = FixGate::new();
+        assert!(gate.accept(40.0155, -105.2705, 100));
+        assert!(!gate.accept(40.0155, -105.2705 + lon_offset_deg(500.0), 101));
+        assert!(gate.accept(40.0155, -105.2705 + lon_offset_deg(5.0), 102));
+    }
+
+    #[test]
+    fn a_real_relocation_self_heals_as_the_ceiling_grows_with_dt() {
+        // A runner crosses a 10-minute signal void on foot and reappears
+        // 1.5 km away: 600 s at the ceiling covers 6 km, so the reappearance
+        // is accepted rather than locking the gate against reality forever.
+        let mut gate = FixGate::new();
+        assert!(gate.accept(40.0155, -105.2705, 100));
+        assert!(gate.accept(40.0155, -105.2705 + lon_offset_deg(1500.0), 700));
+    }
+
+    #[test]
+    fn a_timestamp_duplicate_fails_closed() {
+        let mut gate = FixGate::new();
+        assert!(gate.accept(40.0155, -105.2705, 100));
+        assert!(!gate.accept(40.0155, -105.2705 + lon_offset_deg(1.0), 100));
+    }
+
+    #[test]
+    fn a_non_finite_position_is_rejected_without_becoming_the_anchor() {
+        let mut gate = FixGate::new();
+        assert!(!gate.accept(f64::NAN, -105.2705, 100));
+        // The first FINITE fix is still treated as the first fix.
+        assert!(gate.accept(40.0155, -105.2705, 101));
     }
 
     #[test]

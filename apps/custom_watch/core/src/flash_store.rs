@@ -665,6 +665,25 @@ impl SlotDir {
         (slot, latest.saturating_add(1))
     }
 
+    /// Whether the next reservation for `run_seq` would overwrite a finished
+    /// run the phone has never pulled — a run that exists nowhere else on
+    /// earth, gone the moment [`reserve_commit`](Self::reserve_commit) or
+    /// [`reserve_checkpoint`](Self::reserve_checkpoint) replaces its entry.
+    ///
+    /// Read BEFORE reserving, because the reservation itself destroys the
+    /// evidence: it writes the new run's meta over the victim's, and a commit
+    /// reservation is itself finished-and-unsynced, so no count taken after
+    /// the fact can tell the two apart. Re-running [`next_write`]
+    /// (`&self`, deterministic) is what keeps this a question about the same
+    /// slot the reservation will take rather than a second copy of the
+    /// victim-selection rules.
+    ///
+    /// [`next_write`]: Self::next_write
+    pub fn next_write_evicts_unsynced(&self, run_seq: u32) -> bool {
+        let (slot, _) = self.next_write(run_seq);
+        self.slots[slot].is_some_and(|m| m.run_seq != run_seq && m.finished && !m.synced)
+    }
+
     /// Choose the slot a new reservation takes: the first free slot, else an
     /// eviction victim. Never a slot holding `keep_run` — that is the run being
     /// written, and its other copy is the fallback a torn write relies on.
@@ -735,6 +754,22 @@ impl SlotDir {
             .iter()
             .flatten()
             .filter(|m| m.finished && m.partial && !m.synced)
+            .count() as u8
+    }
+
+    /// How many finished runs the phone has not pulled yet — the runs a factory
+    /// erase would destroy with no copy existing anywhere else, which is why the
+    /// §378 confirm prompt names this count while it is non-zero. A superset of
+    /// [`pending_partial_count`](Self::pending_partial_count) (that one
+    /// additionally requires `partial`), and like it the count falls as the
+    /// phone pulls each run, so any surface built on it quiets itself. A live
+    /// run's checkpoints are never counted: they are not finished, and the
+    /// surfaces this feeds are idle-only.
+    pub fn unsynced_count(&self) -> u8 {
+        self.slots
+            .iter()
+            .flatten()
+            .filter(|m| m.finished && !m.synced)
             .count() as u8
     }
 
@@ -1938,6 +1973,27 @@ mod tests {
             "the unsynced oldest run survives"
         );
         assert_eq!(dir.find(4), Some((2, 100)));
+    }
+
+    #[test]
+    fn unsynced_count_is_the_stored_runs_the_phone_has_not_pulled() {
+        // The count the §378 erase prompt names, so it must mean exactly
+        // "stored and unsynced": an empty slot, a live run's checkpoint, and a
+        // run the phone already pulled each contribute nothing.
+        let mut dir = SlotDir::new();
+        assert_eq!(dir.unsynced_count(), 0);
+        dir.reserve_commit(0, 100, 10);
+        dir.reserve_commit(1, 100, 11);
+        assert_eq!(dir.unsynced_count(), 2);
+        // A mid-run checkpoint is not a stored run — the run may still commit.
+        dir.reserve_checkpoint(2, 100, 12);
+        assert_eq!(dir.unsynced_count(), 2);
+        // A pulled run is recoverable from the phone; only the never-pulled
+        // ones are a stake the erase prompt should name.
+        dir.mark_synced(0);
+        assert_eq!(dir.unsynced_count(), 1);
+        dir.mark_synced(1);
+        assert_eq!(dir.unsynced_count(), 0);
     }
 
     #[test]

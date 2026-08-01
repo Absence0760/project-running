@@ -458,6 +458,11 @@ mod imp {
         let mut fix_rx = unwrap!(state::FIX.receiver());
         let mut elev_rx = unwrap!(state::ELEVATION.receiver());
         let course_sender = state::COURSE.sender();
+        // Wrapping rejected-course-push counter (state::COURSE_REJECTS). A
+        // Cell because the GATT handler is a plain `Fn`; it outlives the
+        // connection loop so the seq stays monotonic across reconnects.
+        let course_reject_tx = state::COURSE_REJECTS.sender();
+        let course_rejects = Cell::new(0u8);
         let mut latest = None;
         let mut elev = None;
 
@@ -525,6 +530,14 @@ mod imp {
             // Cell/Signal above; the single-threaded executor makes it sound.
             let course_asm: RefCell<CourseAssembler> = RefCell::new(CourseAssembler::new());
             let workout_asm: RefCell<WorkoutAssembler> = RefCell::new(WorkoutAssembler::new());
+            // Every way a course push can fail funnels through here, because
+            // each leaves state::COURSE holding the OLD course while the
+            // runner's phone just said "sent" — the warn! beside each site
+            // reaches a debug cable, this counter reaches the wrist.
+            let note_course_reject = || {
+                course_rejects.set(course_rejects.get().wrapping_add(1));
+                course_reject_tx.send(course_rejects.get());
+            };
 
             let gatt = gatt_server::run(&conn, server, |e| match e {
                 ServerEvent::Link(e) => match e {
@@ -589,15 +602,18 @@ mod imp {
                                     None => {
                                         warn!("ble: course frame failed to decode");
                                         asm.reset();
+                                        note_course_reject();
                                     }
                                 },
                                 CoursePush::More => {}
                                 CoursePush::Rejected => {
-                                    warn!("ble: bad course chunk @ {=usize}", offset)
+                                    warn!("ble: bad course chunk @ {=usize}", offset);
+                                    note_course_reject();
                                 }
                             }
                         } else {
                             warn!("ble: short course chunk ({=usize} B)", bytes.len());
+                            note_course_reject();
                         }
                     }
                     LinkServiceEvent::WorkoutWrite(bytes) => {

@@ -27,7 +27,10 @@
 //! A duration-split inside an idle modal would be the first gesture to break it.
 //! Two presses it is.
 
+use core::fmt::Write;
+
 use crate::button::STOP_CONFIRM_WINDOW_S;
+use crate::face::Row;
 
 /// Seconds an armed erase waits for its confirming press. The stop guard's
 /// window, not a second one — one learned dwell on a device with two
@@ -48,6 +51,34 @@ pub const ERASE_ROW_ARMED: &str = "ERASE ALL? B1";
 /// changed chrome row is additionally what stops the arm from being missed —
 /// one row of nine can be.
 pub const ERASE_LEGEND_ARMED: &str = "B1 ERASE    B4 CANCEL";
+
+/// The armed prompt's stake row — `N RUNS NOT SYNCED` — or `None` when the
+/// store holds nothing the phone has not pulled.
+///
+/// A factory erase is two different acts wearing one prompt. The settings, the
+/// ICE card, the screens and the bond are all *recoverable* — the phone
+/// authored them and re-pushes each in one action — but a finished run the
+/// phone has never pulled exists nowhere else on earth, and `ERASE ALL? B1`
+/// prices both losses identically. While any such run is on flash, the confirm
+/// names the stake; when everything is synced (or the store is empty) the
+/// prompt stays exactly what it was, so the line can never cry wolf and its
+/// appearance always means something.
+///
+/// It replaces the menu *title*, not the armed row, and adds no press: the
+/// item row's cells behind the cursor marker cannot carry both the count and
+/// the key that commits — and §337 says the key is the part that may not be
+/// dropped — while replacing a whole chrome row is already how this arm
+/// announces itself (the legend row is replaced on the same trigger). The
+/// two-press guard is untouched.
+pub fn erase_stake_row(unsynced_runs: u8) -> Option<Row> {
+    if unsynced_runs == 0 {
+        return None;
+    }
+    let mut row = Row::new();
+    let plural = if unsynced_runs == 1 { "" } else { "S" };
+    let _ = write!(row, "{unsynced_runs} RUN{plural} NOT SYNCED");
+    Some(row)
+}
 
 /// What a press on the erase row produced.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -171,6 +202,27 @@ mod tests {
         for s in [ERASE_ROW, ERASE_ROW_ARMED] {
             assert!(s.len() + 2 <= COLS, "row too wide: {s}");
         }
+    }
+
+    #[test]
+    fn no_unsynced_runs_means_no_stake_row() {
+        // The line's whole value is that it only ever appears when the wipe
+        // would destroy something unrecoverable — a warning that also fires
+        // on a fully-synced store is one the runner learns to press through.
+        assert_eq!(erase_stake_row(0), None);
+    }
+
+    #[test]
+    fn the_stake_row_carries_the_count_and_fits_the_face() {
+        // A chrome row, drawn flush like the legend — the full COLS budget.
+        for n in 1..=4u8 {
+            let row = erase_stake_row(n).expect("unsynced runs must be named");
+            assert!(row.contains("NOT SYNCED"));
+            assert!(row.starts_with(char::from(b'0' + n)));
+            assert!(row.len() <= COLS, "stake row too wide: {row}");
+        }
+        assert_eq!(erase_stake_row(1).unwrap().as_str(), "1 RUN NOT SYNCED");
+        assert_eq!(erase_stake_row(3).unwrap().as_str(), "3 RUNS NOT SYNCED");
     }
 
     #[test]

@@ -12,9 +12,9 @@ use support::check;
 use watch_core::record_cadence::plausible_sea_level_pa;
 use watch_core::run_store::crc32;
 use watch_core::settings::{
-    plausible_tz_offset_min, race_phase_preset_from_wire, FuelCfg, GearCfg, GuidedRunId,
-    PaceBandCfg, PacerGoalCfg, RacePhasesCfg, WatchSettings, GUIDED_RUN_ID_LEN, MAX_SETTINGS_LEN,
-    SETTINGS_VERSION, TZ_OFFSET_LIMIT_MIN,
+    plausible_fuel_interval_s, plausible_tz_offset_min, race_phase_preset_from_wire, FuelCfg,
+    GearCfg, GuidedRunId, PaceBandCfg, PacerGoalCfg, RacePhasesCfg, WatchSettings,
+    GUIDED_RUN_ID_LEN, MAX_SETTINGS_LEN, SETTINGS_VERSION, TZ_OFFSET_LIMIT_MIN,
 };
 use watch_core::settings_apply::{plan_apply, EffectKind};
 
@@ -501,10 +501,11 @@ fn chain_index(kind: EffectKind) -> usize {
 #[test]
 fn every_present_field_routes_to_exactly_one_effect() {
     // The unit suite pins the fully-populated frame; this pins all 2^14 presence
-    // combinations over the whole value domain, including the three guards that
+    // combinations over the whole value domain, including the guards that
     // reject rather than clamp. A field the fan-out forgets is invisible at
     // runtime — the frame decodes and the watch just ignores it — so the count
-    // is taken from the presence bits the encoder itself set.
+    // is taken from the presence bits the encoder itself set. The fuel guard
+    // runs per arm and costs the field only when neither arm survives it.
     check(1024, a_settings(), |s| {
         let rejected = usize::from(s.sea_level_pa.is_some_and(|pa| !plausible_sea_level_pa(pa)))
             + usize::from(
@@ -513,7 +514,11 @@ fn every_present_field_routes_to_exactly_one_effect() {
             + usize::from(
                 s.race_phases
                     .is_some_and(|c| race_phase_preset_from_wire(c.preset).is_none()),
-            );
+            )
+            + usize::from(s.fuel.is_some_and(|f| {
+                !plausible_fuel_interval_s(f.drink_interval_s)
+                    && !plausible_fuel_interval_s(f.eat_interval_s)
+            }));
         prop_assert_eq!(
             plan_apply(&s).len(),
             present_field_count(&s) - rejected,

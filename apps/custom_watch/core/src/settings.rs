@@ -228,10 +228,11 @@ pub struct GearCfg {
 
 /// Fuel-reminder cadences (seconds of moving time) that override the alert
 /// engine's fuel_plan-derived temperate defaults — the desert / hot-weather
-/// case, where a runner needs far more fluid than the ~500 ml/hr baseline. Fed
-/// straight into [`AlertEngine::set_fuel_intervals`], which keeps the "a zero
-/// interval is ignored" plausibility guard, so a bad value can't disarm a
-/// reminder.
+/// case, where a runner needs far more fluid than the ~500 ml/hr baseline.
+/// Range-checked per arm on the apply side ([`plausible_fuel_interval_s`])
+/// before reaching [`AlertEngine::set_fuel_intervals`], whose own "a zero
+/// interval is ignored" guard stays as defense in depth, so a bad value can
+/// neither disarm a reminder nor arm a nonsense one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct FuelCfg {
@@ -365,7 +366,8 @@ pub struct WatchSettings {
     /// task range-checks it before publishing), same discipline as the setters.
     pub sea_level_pa: Option<f32>,
     /// Fuel-reminder cadences override. Present = re-set the drink/eat moving-
-    /// time intervals; absent = keep the current cadences.
+    /// time intervals; absent = keep the current cadences. Plausibility guard:
+    /// [`plausible_fuel_interval_s`], per arm, on the apply side.
     pub fuel: Option<FuelCfg>,
     /// The curated run-view page set: bit `i` enables the page with
     /// discriminant `i` (`Page::bit`). 64-bit since v4, so every page the enum
@@ -442,6 +444,28 @@ pub struct WatchSettings {
 /// be confidently wrong, an unshifted one is honestly UTC-labelled.
 pub fn plausible_tz_offset_min(tz_offset_min: Option<i16>) -> Option<i16> {
     tz_offset_min.filter(|m| (-TZ_OFFSET_LIMIT_MIN..=TZ_OFFSET_LIMIT_MIN).contains(m))
+}
+
+/// Tightest and widest plausible fuel-reminder cadence (seconds of moving
+/// time). Below a minute the reminder would claim the shared alert slot on
+/// nearly every arbitration tick and starve the safety alerts (GPS lost,
+/// off-course, cutoff) behind an endless drink chirp; past four hours the
+/// cadence is slower than any real fueling plan — even a cold-weather eat sits
+/// near an hour — and is indistinguishable from disarmed. Neither end is a
+/// plan a runner chose.
+pub const FUEL_INTERVAL_MIN_S: u32 = 60;
+pub const FUEL_INTERVAL_MAX_S: u32 = 4 * 60 * 60;
+
+/// Whether a pushed fuel-reminder cadence is worth handing to the alert
+/// engine — the same reject-don't-repair discipline as the QNH and timezone
+/// guards: a clamp would invent a cadence the runner never chose and chirp it
+/// all race, a drop leaves the previous truthful cadence standing. This guard
+/// cannot live on [`crate::alerts::AlertEngine::set_fuel_intervals`] itself,
+/// because the bench sim deliberately sets seconds-scale cadences there so a
+/// reminder fires within a bench run — so it runs where the phone's push is
+/// routed, and the setter's zero-check stays behind it as defense in depth.
+pub fn plausible_fuel_interval_s(interval_s: u32) -> bool {
+    (FUEL_INTERVAL_MIN_S..=FUEL_INTERVAL_MAX_S).contains(&interval_s)
 }
 
 impl WatchSettings {
@@ -2405,5 +2429,21 @@ mod tests {
             );
         }
         assert_eq!(plausible_tz_offset_min(None), None);
+    }
+
+    #[test]
+    fn out_of_range_fuel_interval_is_ignored_not_clamped() {
+        for ok in [FUEL_INTERVAL_MIN_S, 450, 900, 1_800, FUEL_INTERVAL_MAX_S] {
+            assert!(plausible_fuel_interval_s(ok), "must accept {ok}");
+        }
+        for bad in [
+            0,
+            1,
+            FUEL_INTERVAL_MIN_S - 1,
+            FUEL_INTERVAL_MAX_S + 1,
+            u32::MAX,
+        ] {
+            assert!(!plausible_fuel_interval_s(bad), "must ignore {bad}");
+        }
     }
 }
