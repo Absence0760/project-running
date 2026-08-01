@@ -12119,4 +12119,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get watchMetricBackyardBell => 'Compte à rebours de la cloche';
+
+  @override
+  String get watchMetricStormDelta => 'Tendance de tempête';
+
+  @override
+  String get watchMetricGap => 'Allure corrigée de la pente';
 }
