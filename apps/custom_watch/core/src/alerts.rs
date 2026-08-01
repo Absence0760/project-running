@@ -123,11 +123,27 @@
 //!    re-queued class, below every arm that still has something to act on;
 //!    above fuel only because a reminder comes round again and this never
 //!    does. **Re-queued** when displaced, for exactly that reason.
-//! 10. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//! 10. **Track resolution dropped** — the flash slot filled and
+//!     [`crate::run_store::RunWriter::push_point_bounded`] thinned the staged
+//!     track in place, so the record the runner is creating is permanently
+//!     coarser than it was. It asks even less of them than the lost run does —
+//!     nothing was destroyed, the whole run is still represented, at half the
+//!     fidelity again — so it takes the re-queued class's bottom rung, under
+//!     the loss notice. It is above fuel for the one reason the loss is: a gel
+//!     comes round a cadence later, a halving is announced once or never.
+//!     **Re-queued** rather than dropped, which is where it parts company with
+//!     the signal-void pair below: the `AUTO` tag rides the state tag on
+//!     *every* page, so a swallowed GPS LOST loses only the announcement,
+//!     whereas the thinning factor lives on row 7 of the Distance page alone
+//!     (the Pace page spends that row on GAP) — which is the blind spot the
+//!     arm exists to close. It carries no factor precisely so a queued banner
+//!     cannot go stale: `1/2` released after the slot has thinned to `1/4`
+//!     would contradict the page it is sending the runner to.
+//! 11. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
 //!     only take a free slot; a superseded one **re-queues** (fuel is the
 //!     ultra-critical reminder, it must never be silently dropped) and queued
 //!     reminders promote eat-before-drink when a slot frees.
-//! 11. **GPS lost / GPS back**, then **Back-on-course**, then **Timer**, then
+//! 12. **GPS lost / GPS back**, then **Back-on-course**, then **Timer**, then
 //!     **Distance**, then **Time** — milestones, and the only
 //!     arms that are *dropped* rather than queued when the slot is busy. A
 //!     milestone banner is meaningful only at the moment it is reached; showing
@@ -309,6 +325,12 @@ pub enum Alert {
     /// next fork is where believing it gets expensive. A successful re-push
     /// needs no banner of its own — the Nav page re-announces the course.
     CourseRejected,
+    /// The flash slot filled and [`Snapshot::track_thinning`] rose: the staged
+    /// track was thinned in place, so the whole run is still recorded but at a
+    /// coarser resolution than the runner was last told. Carries nothing — the
+    /// factor is on row 7 of the Distance page, and a queued banner naming
+    /// `1/2` after the slot has thinned to `1/4` would contradict it.
+    TrackThinned,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -402,6 +424,10 @@ pub fn banner(alert: Alert) -> Banner {
         // kept the old course. CRS is the course wire frame's own
         // abbreviation, as on the OFF CRS banner.
         Alert::CourseRejected => write!(b, "! CRS FAIL"),
+        // TRK, not TRACK: `! TRACK RES` is eleven glyphs against the band's
+        // ten, and abbreviating the noun to keep the phrase's shape is what
+        // `! OFF CRS` already does.
+        Alert::TrackThinned => write!(b, "! TRK RES"),
     };
     b
 }
@@ -524,6 +550,19 @@ pub struct AlertEngine {
     /// unlike the nav projection, `signal_lost` is always meaningful during
     /// a run, and it is false at the start line.
     was_signal_lost: bool,
+    /// The last [`Snapshot::track_thinning`] seen — the edge detector for the
+    /// track-resolution notice. Plain rather than the waypoint pair's
+    /// `None`-baseline, for [`Self::was_signal_lost`]'s reason: this is not a
+    /// wrapping counter carrying pre-run history but a state
+    /// [`crate::record::Recorder::start`] resets, so it is provably 1 at the
+    /// start line.
+    last_track_thinning: u8,
+    /// A raised track-resolution notice waiting for the slot. Re-queued when
+    /// displaced — row 7 of the Distance page is the only one of the
+    /// forty-one that carries the factor, so a dropped banner is the
+    /// announcement gone. Cleared by [`Self::reset`]: decimation is a property
+    /// of THIS run's flash slot, not of the world between runs.
+    pending_track_thinned: bool,
     in_run: bool,
 }
 
@@ -572,6 +611,8 @@ impl AlertEngine {
             last_course_reject_seq: None,
             pending_course_reject: false,
             was_signal_lost: false,
+            last_track_thinning: 1,
+            pending_track_thinned: false,
             in_run: false,
         }
     }
@@ -1013,6 +1054,25 @@ impl AlertEngine {
             }
         }
 
+        // The track-resolution arm, in ladder position under storm and the loss
+        // notice: like them it only sets a pending flag, so the tail chain is
+        // what actually places it. Not gated on `Recording` — the slot fills
+        // from the staged track, which a manual pause does not rewind.
+        //
+        // `track_thinning` is a state rather than an event (the store's
+        // `keep_every`, fed back per `PushOutcome::Thinned`), so the engine
+        // edge-detects an INCREASE. Only an increase: a stored track never
+        // recovers its resolution, so a fall is `Recorder::start`'s reset and
+        // announcing it would invent a recovery. Every step fires, and there is
+        // deliberately no cooldown beside it — each doubling needs the slot to
+        // fill again, which takes about as long as the run so far, so the arm
+        // is rate-limited by construction (the storm arm's reasoning) and the
+        // whole geometric ladder is at most the eight steps a `u8` can name.
+        if snap.track_thinning > self.last_track_thinning {
+            self.pending_track_thinned = true;
+        }
+        self.last_track_thinning = snap.track_thinning;
+
         // Milestones advance whether or not they can be shown: a milestone the
         // busy slot swallows is gone, not owed, so the next one must still be
         // measured from where the run actually is.
@@ -1057,6 +1117,9 @@ impl AlertEngine {
             } else if self.pending_run_lost {
                 self.pending_run_lost = false;
                 self.active = Some((Alert::RunLost, uptime_s));
+            } else if self.pending_track_thinned {
+                self.pending_track_thinned = false;
+                self.active = Some((Alert::TrackThinned, uptime_s));
             } else if self.pending_eat {
                 self.pending_eat = false;
                 self.active = Some((Alert::Eat, uptime_s));
@@ -1094,6 +1157,7 @@ impl AlertEngine {
             Some((Alert::OffCourse, _)) => self.pending_off_course = true,
             Some((Alert::RunLost, _)) => self.pending_run_lost = true,
             Some((Alert::CourseRejected, _)) => self.pending_course_reject = true,
+            Some((Alert::TrackThinned, _)) => self.pending_track_thinned = true,
             _ => {}
         }
         self.active = Some((alert, uptime_s));
@@ -1126,6 +1190,8 @@ impl AlertEngine {
         self.last_course_reject_seq = None;
         self.pending_course_reject = false;
         self.was_signal_lost = false;
+        self.last_track_thinning = 1;
+        self.pending_track_thinned = false;
         self.in_run = false;
     }
 }
@@ -1217,7 +1283,8 @@ impl FuelOverdueTracker {
                 | Alert::SignalLost
                 | Alert::SignalBack
                 | Alert::RunLost
-                | Alert::CourseRejected,
+                | Alert::CourseRejected
+                | Alert::TrackThinned,
             )
             | None => {}
         }
@@ -3678,5 +3745,136 @@ mod tests {
             None
         );
         assert_eq!(e.on_update(&rec(20), None, 30), None);
+    }
+
+    fn thinned(factor: u8, moving_s: u32) -> Snapshot {
+        Snapshot {
+            track_thinning: factor,
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn a_thinned_track_announces_itself_and_every_further_halving_again() {
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&thinned(1, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&thinned(2, 11), None, 11),
+            Some(Alert::TrackThinned)
+        );
+        assert_eq!(banner(Alert::TrackThinned).as_str(), "! TRK RES");
+        // A steady factor is not news — the resolution already dropped, and
+        // the Distance page carries it from here.
+        let t = 11 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&thinned(2, t), None, t), None);
+        // The next halving is a new fact and gets its own banner: the record
+        // is coarser again, and each doubling costs about as long as the run so
+        // far, so there is nothing left to rate-limit.
+        assert_eq!(
+            e.on_update(&thinned(4, t + 1), None, t + 1),
+            Some(Alert::TrackThinned)
+        );
+    }
+
+    #[test]
+    fn a_thinning_factor_falling_back_to_full_never_fires() {
+        // A stored track never recovers its resolution, so a fall is
+        // `Recorder::start`'s reset and never a recovery to announce.
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&thinned(1, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&thinned(4, 11), None, 11),
+            Some(Alert::TrackThinned)
+        );
+        let t = 11 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&thinned(1, t), None, t), None);
+        assert_eq!(e.on_update(&thinned(1, t + 1), None, t + 1), None);
+    }
+
+    #[test]
+    fn a_lost_run_notice_outranks_a_thinned_track_which_is_owed_the_next_slot() {
+        // Both are irreversible and ask for no decision, so the order is what
+        // was lost: run-lost is a whole race gone, a thin keeps the whole run
+        // at half the fidelity. Raised on one tick, the loss shows first.
+        let mut e = AlertEngine::new();
+        assert_eq!(e.on_update(&lost(0, 10), None, 10), None);
+        let both = Snapshot {
+            track_thinning: 2,
+            ..lost(1, 11)
+        };
+        assert_eq!(e.on_update(&both, None, 11), Some(Alert::RunLost));
+        let t = 11 + ALERT_TTL_S;
+        let hold = Snapshot {
+            track_thinning: 2,
+            ..lost(1, t)
+        };
+        assert_eq!(e.on_update(&hold, None, t), Some(Alert::TrackThinned));
+    }
+
+    #[test]
+    fn a_thinned_track_notice_leads_the_fuel_reminders() {
+        // The new bottom of the re-queued class: above fuel for run-lost's one
+        // reason — a gel comes round a cadence later, a halving is announced
+        // once or never.
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(300, 300);
+        assert_eq!(e.on_update(&thinned(1, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&thinned(2, 300), None, 300),
+            Some(Alert::TrackThinned)
+        );
+        let t = 300 + ALERT_TTL_S;
+        assert_eq!(e.on_update(&thinned(2, t), None, t), Some(Alert::Eat));
+    }
+
+    #[test]
+    fn a_zone_banner_displaces_a_thinned_track_notice_which_re_queues_rather_than_dropping() {
+        // Where it parts from the signal-void pair: the `AUTO` tag rides every
+        // page, the thinning factor rides row 7 of one — so dropping the
+        // banner would return the change to the silence a runner parked on Nav
+        // was already in.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(e.on_update(&thinned(1, 10), None, 10), None);
+        assert_eq!(
+            e.on_update(&thinned(2, 11), None, 11),
+            Some(Alert::TrackThinned)
+        );
+        assert_eq!(
+            e.on_update(&thinned(2, 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        let t = 12 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&thinned(2, t), Some(150), t),
+            Some(Alert::TrackThinned),
+            "the displaced resolution notice came back"
+        );
+    }
+
+    #[test]
+    fn a_run_boundary_clears_a_pending_thinned_track_notice() {
+        // Run-scoped like the cutoff pair and unlike the storm: decimation is a
+        // property of THIS run's flash slot. The next run stages into its own
+        // slot at full resolution, so re-announcing the last one's factor would
+        // describe storage nothing is writing to any more.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(e.on_update(&thinned(1, 10), None, 10), None);
+        // Raised but blocked, so it is still queued at the boundary.
+        assert_eq!(
+            e.on_update(&thinned(2, 11), Some(160), 11),
+            Some(Alert::ZoneAbove(4))
+        );
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 12), None, 12),
+            None
+        );
+        assert_eq!(e.on_update(&thinned(1, 20), None, 30), None);
+        // The baseline reset with it, so the new run's OWN first thin fires.
+        assert_eq!(
+            e.on_update(&thinned(2, 31), None, 31),
+            Some(Alert::TrackThinned)
+        );
     }
 }
