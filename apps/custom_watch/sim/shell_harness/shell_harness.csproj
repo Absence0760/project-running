@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Host render harness for SharpMipDisplay.cs — compile the sim's display
+    model and draw its window on a machine with no Renode. See Program.cs
+    for what it renders; run with:
+
+        dotnet run [page.ppm] [out-dir]
+
+    where page.ppm is a 168x144 P6 panel dump (bin/watch-preview.sh writes
+    them for every composed page). The Renode API surface the model touches
+    is stubbed in Stubs.cs; a compile here is a strong local check but the
+    authoritative compile is still Renode's own at `include` time.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../SharpMipDisplay.cs" Link="SharpMipDisplay.cs" />
+  </ItemGroup>
+</Project>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The pinned static faces the glyph-table generators rasterise from.
+"""The pinned static faces the glyph-table generators read from.
 
 Both generators used to name their face by fontconfig family
 ("Source-Code-Pro", "Source-Code-Pro-Bold"), which resolves to whatever build
@@ -23,6 +23,9 @@ FACES = {
     ),
     "SourceCodePro-Bold.otf": (
         "6f5a4a46a99ad1b92a8675e98f148272c8d2476fc0eb067247dd5eea6a3ad84c"
+    ),
+    "spleen-8x16.bdf": (
+        "4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae"
     ),
 }
 

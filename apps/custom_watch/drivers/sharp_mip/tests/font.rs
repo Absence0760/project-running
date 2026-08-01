@@ -141,38 +141,51 @@ fn bang_is_a_stem_over_a_dot_not_a_second_colon() {
 }
 
 #[test]
-fn horizontal_bar_glyphs_keep_their_shape() {
-    // '=' and '_' rasterise correctly at 1x (pure horizontal bars never lose a
-    // sub-pixel stroke) and the repair pass must not touch them — if they move,
-    // the baseline or the vertical window shifted, which is a different bug.
-    const BAR: u8 = 0x7E;
-    let mut equals = [0u8; font::GLYPH_HEIGHT];
-    equals[7] = BAR;
-    equals[10] = BAR;
-    assert_eq!(glyph(b'='), &equals, "'=' moved");
-
-    let mut underscore = [0u8; font::GLYPH_HEIGHT];
-    underscore[14] = BAR;
-    assert_eq!(glyph(b'_'), &underscore, "'_' moved");
-
-    // '-' is the one that has to be watched. It is the innocent half of the
-    // '+'/'-' collision: nothing is wrong with its 1x form, it was only ever
-    // guilty by association. An earlier repair re-rasterised both members of
-    // the pair and thickened it to a two-row wedge, leaving the hyphen heavier
-    // than the '=' and '_' bars above — a user-visible weight mismatch from a
-    // fix for a different glyph. It must stay the single 1x bar.
-    let mut dash = [0u8; font::GLYPH_HEIGHT];
-    dash[8] = BAR;
-    assert_eq!(
-        glyph(b'-'),
-        &dash,
-        "'-' moved — the repair pass should only touch the degenerate member \
-         of a colliding pair, never the glyph that rasterised correctly"
-    );
-    assert_eq!(
-        inked_rows(glyph(b'-')),
-        1,
-        "'-' is heavier than the '=' and '_' bars it should match"
+fn horizontal_bar_glyphs_carry_one_consistent_weight() {
+    // The bar glyphs are where a weight mismatch is most visible: '--' (the
+    // absent-value marker) sits beside '=' and '_' on data rows all day. The
+    // rasterised table shipped exactly that defect once — a repair pass
+    // thickened '-' to a two-row wedge while '=' and '_' stayed single-row —
+    // so the invariant is pinned shape-wise: each is a pure horizontal bar
+    // (no ink outside its bar rows), and every bar in all three glyphs is the
+    // same thickness. Exact positions are NOT pinned; those belong to the
+    // digest-pinned source face, and re-pinning them here would only make a
+    // deliberate face change fail twice.
+    let bar_thicknesses = |g: &[u8; font::GLYPH_HEIGHT]| -> Vec<usize> {
+        let mut runs = Vec::new();
+        let mut run = 0;
+        for &row in g {
+            if row != 0 {
+                run += 1;
+            } else if run > 0 {
+                runs.push(run);
+                run = 0;
+            }
+        }
+        if run > 0 {
+            runs.push(run);
+        }
+        runs
+    };
+    let mut all_runs = Vec::new();
+    for ch in [b'-', b'=', b'_'] {
+        let g = glyph(ch);
+        for &row in g.iter().filter(|&&r| r != 0) {
+            let width = longest_horizontal_run(g);
+            assert!(
+                row.count_ones() as usize == width,
+                "{:?} has a non-bar ink row (0x{row:02X})",
+                ch as char
+            );
+        }
+        let runs = bar_thicknesses(g);
+        assert!(!runs.is_empty(), "{:?} is blank", ch as char);
+        all_runs.extend(runs);
+    }
+    assert!(
+        all_runs.windows(2).all(|w| w[0] == w[1]),
+        "bar glyphs carry mixed weights: {all_runs:?} — '-', '=' and '_' \
+         must read as one family"
     );
 }
 

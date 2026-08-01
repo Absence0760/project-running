@@ -244,18 +244,27 @@ fn the_medium_hero_occupies_exactly_the_two_rows_a_doubled_hero_does() {
     for fb in [&med, &doubled] {
         assert!((0..HEIGHT).all(|y| (5 * bignum::BIGNUM_MED_WIDTH..WIDTH).all(|x| !fb.pixel(x, y))));
     }
-    // The medium face is the heavier of the two at the same cell size — that
-    // is the whole reason to prefer it on a reflective panel with no backlight.
-    let ink = |fb: &Framebuffer| {
-        (0..HEIGHT)
-            .map(|y| (0..WIDTH).filter(|&x| fb.pixel(x, y)).count())
-            .sum::<usize>()
+    // §339's claim for the medium face is that it is a NATIVE rasterisation,
+    // not a pixel-doubling: real curves at the target size instead of 2x
+    // blocks. A doubled bitmap duplicates every source row, so rows come in
+    // identical pairs; a native rasterisation does not. (An ink-count proxy
+    // — "medium is heavier" — was pinned here before, and broke the day the
+    // text font became a designed bitmap bold enough to out-ink the numerals:
+    // mass never was the property that mattered.)
+    let row = |fb: &Framebuffer, y: usize| -> Vec<bool> {
+        (0..5 * bignum::BIGNUM_MED_WIDTH)
+            .map(|x| fb.pixel(x, y))
+            .collect()
     };
     assert!(
-        ink(&med) > ink(&doubled),
-        "medium {} vs doubled {}",
-        ink(&med),
-        ink(&doubled)
+        (0..bignum::BIGNUM_MED_HEIGHT / 2).any(|k| row(&med, 2 * k) != row(&med, 2 * k + 1)),
+        "every row pair of the medium hero is duplicated — it renders as a \
+         pixel-doubling, which is exactly what the generated face replaced"
+    );
+    assert!(
+        (0..bignum::BIGNUM_MED_HEIGHT / 2)
+            .all(|k| row(&doubled, 2 * k) == row(&doubled, 2 * k + 1)),
+        "draw_text_2x no longer row-doubles — this test's control leg is broken"
     );
 }
 

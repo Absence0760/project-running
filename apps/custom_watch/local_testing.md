@@ -157,7 +157,7 @@ You **cannot**:
 
 **The `sim-buttons` feature — driving BTN1–BTN5 in the sim.** The hardware `button` task waits on `wait_for_falling_edge`, which the nRF52840 drives from the GPIO **SENSE/DETECT + PORT-event** mechanism — and Renode's nRF52840 GPIO model implements the pin-level IN register but *not* SENSE/DETECT, so that edge future never wakes under the sim (no amount of button/GPIO poking reaches it). The default-OFF `sim-buttons` feature (also built by `watch-sim.sh`) swaps the button task for a variant that **polls** the pin levels, which Renode can drive. Two ways to press a button:
 
-1. **Click it in the `--gui` window.** The watch-screen window draws BTN1–BTN5 in bezel strips flanking the LCD, each at the physical position its §350 function occupies on the §81 Garmin-Fenix layout — BTN1 upper-right (start/pause), BTN4 lower-right (page right), BTN2 mid-left (stop; the timer modal while idle, § 375), BTN3 lower-left (page left), BTN5 upper-left (lap; the settings menu while idle). The display model implements Renode's `IAbsolutePositionPointerInput`, so the analyzer forwards mouse presses on those boxes to the same gpio0 pins the macros drive (mouse down = press, mouse up = release; the box inverts while held).
+1. **Click it in the `--gui` window.** On a Renode build that cannot start its own UI (the macOS arm64 build: renode/renode#886), `--gui` detects the failed launch and delivers the same thing another way — it relaunches headless and opens the `bin/watch-view.sh` live window automatically (see below). The watch-screen window renders a device — the panel at 3x inside a shaded case — with BTN1–BTN5 as clickable keys riding the case sides, each at the physical position its §350 function occupies on the §81 Garmin-Fenix layout — BTN1 upper-right (start/pause), BTN4 lower-right (page right), BTN2 mid-left (stop; the timer modal while idle, § 375), BTN3 lower-left (page left), BTN5 upper-left (lap; the settings menu while idle). The display model implements Renode's `IAbsolutePositionPointerInput`, so the analyzer forwards mouse presses on those boxes to the same gpio0 pins the macros drive (mouse down = press, mouse up = release; the box inverts while held).
 2. **From the monitor** — run `bin/watch-monitor.sh` in a second terminal (it finds the running sim's monitor port itself; the raw route is `ncat localhost <port>` with the port from the "Renode up" line). Note the monitor is a telnet socket, not a window: even under `--gui` there's no typeable window, and the defmt-log terminal is output-only — typing there does nothing:
 
 ```
@@ -212,7 +212,7 @@ Moving parts, all inside [`sim/`](sim/):
 
 - **`watch.resc`** — the Renode script: loads the `nrf52840` CPU platform + the DK LEDs inline (the stock `nrf52840dk_nrf52840` board repl is *not* used — its non-inverted Button peripherals drive the pins low at reset, which the firmware's pulled-up inputs would read as "pressed"), declares SPIM3 with EasyDMA + the display model, loads the ELF, arms the defmt drain, logs LED1 state changes, defines the eight button-injection macros (`btn1`..`btn5` plus the `btn3h` / `btn4h` / `btn5h` holds), bridges the phone-link UART to TCP with `flushOnConnect` so a client attaching mid-run gets the present rather than the boot, exposes the GPS UART as a pty.
 - **`defmt_rtt.py`** — gets defmt logs out. Renode's bundled `segger-rtt.py` hooks the SEGGER *C library's* function symbols, which the pure-Rust `defmt-rtt` crate doesn't have; this script instead polls the `_SEGGER_RTT` control block in emulated RAM, appends new bytes to a capture file, and advances the read offset. The wrapper tails that file through `defmt-print -e <elf>` for live decoded output.
-- **`SharpMipDisplay.cs`** — a runtime-compiled Renode peripheral modelling the Sharp Memory LCD: decodes the exact line-update protocol `drivers/sharp_mip` encodes (CS-GPIO framing, 1-based line addresses, white-is-1 polarity) into a video framebuffer, plus clickable BTN1–BTN5 keys drawn in side bezels at their §81 Fenix-analog positions and labelled with their §350 functions (the class is also the machine's `IAbsolutePositionPointerInput`, wired to gpio0 via its `buttonPort` constructor arg). `showAnalyzer sysbus.spi3.display` is the window `--gui` opens. Two dumps, and they are different artifacts: **`DumpFrame`** writes a PPM of the LCD area only (no case), flat black/white — its bytes are what every assertion reads, so they don't move — while **`DumpCanvas`** writes the whole window including the case and keys, in the canvas palette, and asserts nothing (it exists so the shell's own look can be reviewed without a display attached). Per decisions §360.
+- **`SharpMipDisplay.cs`** — a runtime-compiled Renode peripheral modelling the Sharp Memory LCD: decodes the exact line-update protocol `drivers/sharp_mip` encodes (CS-GPIO framing, 1-based line addresses, white-is-1 polarity) into a video framebuffer drawn at 3x inside a shaded watch shell (case, bezel ring, recessed glass), plus clickable BTN1–BTN5 keys riding the case sides at their §81 Fenix-analog positions and labelled with their §350 functions (the class is also the machine's `IAbsolutePositionPointerInput`, wired to gpio0 via its `buttonPort` constructor arg). `showAnalyzer sysbus.spi3.display` is the window `--gui` opens. Two dumps, and they are different artifacts: **`DumpFrame`** writes a PPM of the LCD area only (no case), flat black/white — its bytes are what every assertion reads, so they don't move — while **`DumpCanvas`** writes the whole window including the case and keys, in the canvas palette, and asserts nothing (it exists so the shell's own look can be reviewed without a display attached). Per decisions §360.
 - **`nmea/bench_jog.nmea`** — a synthetic ~2-minute rectangular jog loop (GGA+RMC pairs with valid checksums, 1 Hz fix rate like a real MAX-M10S). The wrapper loops it into the emulated `uart0` forever; the GPS task parses it into fixes that drive both the on-screen face and the phone-link frames, so the whole data path is exercised against a deterministic feed. This is the **default** fixture.
 - **`nmea/mountain_loop.nmea`** — a synthetic ~13-minute mountain loop (~800 GGA+RMC pairs, same checksummed 1 Hz format) that climbs the East + North legs and descends the West + South legs of a rectangle, encoding **~200 m of cumulative vert gain and ~200 m of loss** over sustained 18–26 % grades before returning to the valley start. Where `bench_jog` is dead flat, this feed exercises the elevation / vert accumulator (`VERT +gain -loss` on the run dashboard; the idle face keeps its clock row once a fix arrives, per decisions §289) and drives the **grade-adjusted-pace path** hard — on the steep climb legs the Pace page's `GAP` row reads visibly faster than raw pace, and on the descents visibly slower. Satellite count also varies (11 in the valley, dropping to 7–8 near the summit with a correspondingly higher HDOP, re-emitted in periodic `$GPGSV` sets) so the fix-quality path sees movement too. Select it with `--fixture mountain_loop` (or `NMEA_FIXTURE=mountain_loop`). Note the canned `sim-course` breadcrumb is derived from the `bench_jog` rectangle, so the Nav page's off-course geometry only lines up under the default fixture.
 - **`nmea/gps_dropout.nmea`** — a ~2-minute jog with a 40 s signal void in the middle (void RMC + fix-quality-0 GGA, with GSA fix-type 3→1→3 transitions and a mid-void GSV so the honest signal meter is exercisable) and a plausible reacquire 122 m downrange. It caught the un-ported `run_recorder` #330 gap re-anchor by hand in the 2026-07-19 pass and now backs `ci_smoke.py`'s `dropout` scenario. Select it with `--fixture gps_dropout`.
@@ -374,6 +374,45 @@ bin/watch-shots.sh                        # both sessions -> /tmp/watch-shots/in
 bin/watch-shots.sh --session run          # only the run-view page cycle
 bin/watch-shots.sh --session idle         # only the idle faces + the settings menu
 bin/watch-shots.sh --out-dir /path/shots  # somewhere durable
+```
+
+### The live window without Renode's UI — `bin/watch-view.sh`
+
+`--gui` needs a Renode build that can start its own window layer, and the
+macOS arm64 .NET build cannot (renode/renode#886 — "Couldn't start UI",
+console fallback, and a backgrounded console reads its closed stdin as
+`quit`). On such a build `--gui` falls back to this route by itself —
+headless relaunch plus the viewer. To drive it by hand instead:
+
+```
+bin/watch-sim.sh                # terminal 1 (or pnpm watch:sim)
+bin/watch-view.sh               # terminal 2 (or pnpm watch:view)
+```
+
+It polls the display model's `DumpCanvas` over the telnet monitor (~5 fps)
+and resolves clicks through the model's own `HitButtonAt`, then fires the
+watch.resc **virtual-time** button macros — a raw press/release pair over
+the socket lands milliseconds apart in wall time, which the firmware's
+~10 ms poll can miss and its tap-vs-hold classifier would misread. Left-click
+taps; right-click / ctrl-click holds (BTN3/BTN4: page grid, BTN5: mark
+waypoint); keys 1–5 tap, shift+key holds. Closing the window detaches like
+`watch-monitor.sh`'s Ctrl-C — the sim keeps running. Needs a python with
+tkinter (`brew install python-tk@3.13`); the wrapper probes for one.
+
+### Looking at the UI without Renode — `bin/watch-preview.sh`
+
+The host rung of the same story. `render/src/preview.rs` composes each page the
+way the ui task does; with `WATCH_PREVIEW_DIR` set, every preview test also
+dumps its panel as a 1:1 PPM. `bin/watch-preview.sh` wraps that — run the
+previews, convert to crisp PNGs, montage a contact sheet — so a layout change
+is viewable on any machine with cargo + ImageMagick, no renode, no defmt-print,
+no board. The split: this shows what the *compositions* render (a host-test
+claim); `watch-shots.sh` shows what the *firmware* drew (a sim claim).
+
+```
+bin/watch-preview.sh                      # -> /tmp/watch-preview/contact-sheet.png
+bin/watch-preview.sh --zoom 4             # bigger PNGs (default 3x)
+bin/watch-preview.sh --out-dir /path      # somewhere durable
 ```
 
 Two boots, because the run view and the idle faces are disjoint — the page cycle only exists mid-run, and the idle faces are only reachable before one starts. The `run` session uses `mountain_loop` with `scenario_terrain`'s two arming steps (the BMP581 triangle profile and a BTN5-hold waypoint mark), so `CLMB` and `WPT` are in the cycle instead of legitimately filtered out of it; the `idle` session boots `--no-autostart`. Both boot **`--no-alerts`** — see below. Expect ~25 screens and several minutes. Needs ImageMagick 7 (`magick`) on top of the sim's own prerequisites.
