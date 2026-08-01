@@ -1108,7 +1108,12 @@ fn apply_settings(
             SettingsEffect::FuelIntervals {
                 drink_interval_s,
                 eat_interval_s,
-            } => alerts.set_fuel_intervals(drink_interval_s, eat_interval_s),
+            } => {
+                alerts.set_fuel_intervals(drink_interval_s, eat_interval_s);
+                // The Fuel page's carry-out math runs on the same cadences,
+                // so the reminders and the plan describe one runner.
+                recorder.set_fuel_intervals(drink_interval_s, eat_interval_s);
+            }
             SettingsEffect::PagesEnabled(mask) => recorder.set_pages_enabled(mask),
             SettingsEffect::HideEmptyPages(hide) => recorder.set_hide_empty_pages(hide),
             SettingsEffect::TzOffsetMin(m) => {
