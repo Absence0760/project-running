@@ -8,7 +8,7 @@ stems and ragged diagonals (the '+'=='-' collision and the invisible '|'
 were casualties — `tests/font.rs`), so the text face is a bitmap font drawn
 pixel-by-pixel FOR that cell size, while at 32x48/16x32 the outline has
 whole pixels to land in and native rasterisation of a real bold face wins
-(`docs/architecture/decisions.md` § 292/§ 339/§ 406).
+(`docs/architecture/decisions.md` § 292/§ 339/§ 428).
 
 The faces are vendored rather than looked up by fontconfig family name
 because a family name resolves to whatever build the machine happens to have
@@ -35,7 +35,7 @@ table.
 - Upstream: <https://github.com/fcambus/spleen>
 - Release tag: `2.2.0` (`spleen-8x16.bdf` and `LICENSE` at that tag)
 - `SourceCodePro-Regular.otf` is retained only as the historical source of
-  the pre-§ 406 text table; `gen_font.py` no longer reads it.
+  the pre-§ 428 text table; `gen_font.py` no longer reads it.
 
 ```sh
 curl -fsSL -o spleen-8x16.bdf https://raw.githubusercontent.com/fcambus/spleen/2.2.0/spleen-8x16.bdf
@@ -92,7 +92,7 @@ is applied to anything in this repository.
 ## Rasteriser versions
 
 The pin covers the *inputs*, not the rasteriser. `gen_font.py` has no
-rasteriser at all since § 406 — the text table is a pure bit transcription of
+rasteriser at all since § 428 — the text table is a pure bit transcription of
 the BDF, reproducible by construction on any machine. The rest applies to
 `gen_bignum.py` only. The committed numeral tables were last confirmed to
 regenerate byte-for-byte with:
