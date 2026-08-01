@@ -69,21 +69,30 @@
 //!    supersedes a fuel reminder but never a zone banner or a corral whistle;
 //!    blocked by one, it stays armed and un-cooled so it retries while the
 //!    excursion lasts, rather than being swallowed.
-//! 4. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
+//! 4. **Cutoff** — the projection on the CUT page fell to `BEHIND`: at the
+//!    current pace the runner misses the next cutoff. Like the corral whistle
+//!    it warns of the race ending, but it is a *projection off recent pace*,
+//!    not the race director's own clock, so it ranks with the correct-it-now
+//!    pair above rather than beside the bell. It fires once per excursion —
+//!    re-arming only on a MEASURED recovery to `ON` or `TIGHT`, never on
+//!    `UNKNOWN` (a stale fix is the watch losing sight of the runner, not the
+//!    runner catching up) — and it is **re-queued** when displaced: there is
+//!    no later reminder, and the thing it warns of only gets worse.
+//! 5. **Storm** ([`crate::storm`], § 376) — the first arm on this engine about
 //!    the world rather than the runner, and it sits here because of *when* the
 //!    thing it warns of arrives. A zone excursion, a corral bell and a pace
 //!    drift all want a decision inside seconds; a front measured over three
-//!    hours wants one inside the next hour, so it yields to all three. But it
+//!    hours wants one inside the next hour, so it yields to all of them. But it
 //!    fires perhaps once in a race and there is no later reminder, so it is in
-//!    the **re-queued** class rather than the dropped one — and it leads that
-//!    class, ahead of fuel: a missed gel is re-offered a cadence later, a
-//!    missed front is not. It rides the run's own alert slot, so like every
-//!    other arm it is silent between runs.
-//! 5. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
+//!    the **re-queued** class rather than the dropped one — ahead of fuel: a
+//!    missed gel is re-offered a cadence later, a missed front is not. It rides
+//!    the run's own alert slot, so like every other arm it is silent between
+//!    runs.
+//! 6. **Eat**, then **Drink** — a reminder can wait eight seconds, so these
 //!    only take a free slot; a superseded one **re-queues** (fuel is the
 //!    ultra-critical reminder, it must never be silently dropped) and queued
 //!    reminders promote eat-before-drink when a slot frees.
-//! 6. **Timer**, then **Distance**, then **Time** — milestones, and the only
+//! 7. **Timer**, then **Distance**, then **Time** — milestones, and the only
 //!    arms that are *dropped* rather than queued when the slot is busy. A
 //!    milestone banner is meaningful only at the moment it is reached; showing
 //!    "5.0 KM" once the runner is at 5.4 km is worse than not showing it, and
@@ -104,6 +113,7 @@
 
 use core::fmt::Write;
 
+use crate::cutoff_eta::CutoffEtaStatus;
 use crate::hr_zones;
 use crate::record::{RecordState, Snapshot};
 use crate::storm::StormTrend;
@@ -198,6 +208,11 @@ pub enum Alert {
     /// is on the Storm page and a ten-cell banner cannot say `-5.2 HPA/3H`
     /// legibly anyway — the banner's job is to send the runner to the page.
     Storm,
+    /// The next-cutoff projection fell to [`CutoffEtaStatus::Behind`] — at the
+    /// current pace the runner misses the cutoff. Carries nothing: the margin
+    /// and the pace still sufficient are on the CUT page, and the banner's job
+    /// is to send the runner there while there is still time to act.
+    CutoffBehind,
 }
 
 /// The banner the face draws over the hero band while an alert is active —
@@ -273,6 +288,7 @@ pub fn banner(alert: Alert) -> Banner {
         // unit-tagged value, and `! 3` on a wrist at hour 30 says nothing.
         Alert::BackyardBell(min) => write!(b, "! {} MIN", min.min(9)),
         Alert::Storm => write!(b, "! STORM"),
+        Alert::CutoffBehind => write!(b, "! CUTOFF"),
     };
     b
 }
@@ -344,6 +360,17 @@ pub struct AlertEngine {
     /// next one starts — the same reasoning [`Self::last_timer_expiry_seq`]
     /// carries in the opposite direction.
     pending_storm: bool,
+    /// Set while the cutoff projection is not `Behind`; a fire disarms it
+    /// until a MEASURED status (`On` / `Tight`) says the runner recovered —
+    /// the once-per-excursion hysteresis. `Unknown` neither fires nor re-arms:
+    /// a stale fix is the watch losing sight of the runner, not the runner
+    /// catching up, and re-arming on it would turn one canyon into two banners
+    /// (the same reasoning [`Self::storm_armed`] carries).
+    cutoff_armed: bool,
+    /// A raised cutoff warning waiting for the slot. Cleared by
+    /// [`Self::reset`], unlike the storm pair: a cutoff is a property of the
+    /// run's course, not of the world between runs.
+    pending_cutoff: bool,
     in_run: bool,
 }
 
@@ -381,6 +408,8 @@ impl AlertEngine {
             pending_drink: false,
             pending_eat: false,
             pending_storm: false,
+            cutoff_armed: true,
+            pending_cutoff: false,
             in_run: false,
         }
     }
@@ -658,6 +687,28 @@ impl AlertEngine {
         // GPS reference went stale is the watch losing sight of the weather,
         // not the weather clearing, and re-arming on that would let one canyon
         // turn one front into two banners.
+        // The cutoff arm. Not gated on `Recording`: the race clock keeps
+        // running through an aid-station pause, and a paused runner drifting
+        // behind the cutoff is exactly who the warning is for. Like storm it
+        // sets a pending flag rather than taking the slot, so the precedence
+        // chain at the tail places it — leading the re-queued class, ahead of
+        // storm and fuel: the front wants a decision inside the hour, the
+        // cutoff sooner.
+        if let Some(eta) = snap.cutoff {
+            match eta.status {
+                CutoffEtaStatus::Behind => {
+                    if self.cutoff_armed && eta.has_cutoff {
+                        self.pending_cutoff = true;
+                        self.cutoff_armed = false;
+                    }
+                }
+                // Only a measured recovery re-arms — `Unknown` is the watch
+                // losing sight of the runner, not the runner catching up.
+                CutoffEtaStatus::On | CutoffEtaStatus::Tight => self.cutoff_armed = true,
+                CutoffEtaStatus::Unknown => {}
+            }
+        }
+
         if let Some(storm) = snap.storm {
             if storm.trend == StormTrend::Storm {
                 if self.storm_armed && self.storm_alert {
@@ -698,7 +749,10 @@ impl AlertEngine {
         }
 
         if self.active.is_none() {
-            if self.pending_storm {
+            if self.pending_cutoff {
+                self.pending_cutoff = false;
+                self.active = Some((Alert::CutoffBehind, uptime_s));
+            } else if self.pending_storm {
                 self.pending_storm = false;
                 self.active = Some((Alert::Storm, uptime_s));
             } else if self.pending_eat {
@@ -728,6 +782,7 @@ impl AlertEngine {
             Some((Alert::Drink, _)) => self.pending_drink = true,
             Some((Alert::Eat, _)) => self.pending_eat = true,
             Some((Alert::Storm, _)) => self.pending_storm = true,
+            Some((Alert::CutoffBehind, _)) => self.pending_cutoff = true,
             _ => {}
         }
         self.active = Some((alert, uptime_s));
@@ -749,6 +804,8 @@ impl AlertEngine {
         self.last_workout_ending_seq = 0;
         self.workout_done_fired = false;
         self.last_backyard_warning_seq = 0;
+        self.cutoff_armed = true;
+        self.pending_cutoff = false;
         self.in_run = false;
     }
 }
@@ -830,7 +887,8 @@ impl FuelOverdueTracker {
                 | Alert::WorkoutDone
                 | Alert::TimerDone
                 | Alert::BackyardBell(_)
-                | Alert::Storm,
+                | Alert::Storm
+                | Alert::CutoffBehind,
             )
             | None => {}
         }
@@ -2442,6 +2500,157 @@ mod tests {
             t.observe(Some(Alert::Storm), true, false),
             FuelOverdue::Eat,
             "a storm supersedes the banner, never the standing fuel marker"
+        );
+    }
+
+    fn cut(status: CutoffEtaStatus, moving_s: u32) -> Snapshot {
+        Snapshot {
+            cutoff: Some(crate::cutoff_eta::CutoffEta {
+                has_cutoff: true,
+                distance_to_m: 2_000.0,
+                projected_arrival_elapsed_s: Some(moving_s + 900),
+                margin_s: Some(if status == CutoffEtaStatus::Behind {
+                    -120
+                } else {
+                    600
+                }),
+                required_pace_s_per_km: Some(330.0),
+                limit_passed: false,
+                status,
+            }),
+            ..rec(moving_s)
+        }
+    }
+
+    #[test]
+    fn a_behind_projection_raises_one_banner_per_excursion() {
+        // No arming call: unlike storm, the presence of cutoff legs on the
+        // loaded course is the opt-in.
+        let mut e = AlertEngine::new();
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, 10), None, 10),
+            Some(Alert::CutoffBehind)
+        );
+        assert_eq!(banner(Alert::CutoffBehind).as_str(), "! CUTOFF");
+        // Still behind is not news — one excursion, one banner.
+        for t in 11..600 {
+            let shown = e.on_update(&cut(CutoffEtaStatus::Behind, t), None, t);
+            assert!(
+                shown.is_none() || t < 10 + ALERT_TTL_S,
+                "re-fired inside one excursion at t={t}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_measured_recovery_re_arms_the_cutoff_and_unknown_does_not() {
+        let mut e = AlertEngine::new();
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, 10), None, 10),
+            Some(Alert::CutoffBehind)
+        );
+        // A stale fix is the watch losing sight of the runner, not the runner
+        // catching up — Unknown must not re-arm.
+        let mut t = 10 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Unknown, t), None, t),
+            None
+        );
+        t += 1;
+        assert_eq!(e.on_update(&cut(CutoffEtaStatus::Behind, t), None, t), None);
+        t += 1;
+        // A measured recovery is the runner back on schedule; falling behind
+        // again is news.
+        for measured in [CutoffEtaStatus::On, CutoffEtaStatus::Tight] {
+            assert_eq!(e.on_update(&cut(measured, t), None, t), None);
+            t += 1;
+            assert_eq!(
+                e.on_update(&cut(CutoffEtaStatus::Behind, t), None, t),
+                Some(Alert::CutoffBehind)
+            );
+            t += ALERT_TTL_S;
+        }
+    }
+
+    #[test]
+    fn a_cutoff_banner_leads_the_fuel_reminders() {
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(300, 300);
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, 300), None, 300),
+            Some(Alert::CutoffBehind)
+        );
+        let a = 300 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, a), None, a),
+            Some(Alert::Eat)
+        );
+    }
+
+    #[test]
+    fn a_zone_banner_displaces_a_cutoff_which_re_queues_rather_than_dropping() {
+        // There is no later reminder, and the thing it warns of only gets
+        // worse — the §214 re-queue rule.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, 10), None, 10),
+            Some(Alert::CutoffBehind)
+        );
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        let after = 12 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, after), Some(150), after),
+            Some(Alert::CutoffBehind),
+            "the displaced cutoff warning came back"
+        );
+    }
+
+    #[test]
+    fn a_cutoff_warning_fires_through_a_pause() {
+        // The race clock keeps running through an aid-station stop; a paused
+        // runner drifting behind the cutoff is exactly who this is for.
+        let mut e = AlertEngine::new();
+        let paused = Snapshot {
+            cutoff: cut(CutoffEtaStatus::Behind, 0).cutoff,
+            ..snap(RecordState::Paused, 0)
+        };
+        assert_eq!(e.on_update(&paused, None, 10), Some(Alert::CutoffBehind));
+    }
+
+    #[test]
+    fn a_run_boundary_clears_the_cutoff_arm() {
+        // Unlike storm, a cutoff is a property of the run's course — one
+        // raised at the end of a run is not owed to the next.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, 10), None, 10),
+            Some(Alert::CutoffBehind)
+        );
+        // Displace it so it is pending, then end the run while it waits.
+        assert_eq!(
+            e.on_update(&cut(CutoffEtaStatus::Behind, 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        assert_eq!(
+            e.on_update(&snap(RecordState::Finished, 13), None, 13),
+            None
+        );
+        assert_eq!(e.on_update(&rec(14), None, 30), None);
+    }
+
+    #[test]
+    fn a_cutoff_banner_never_latches_the_fuel_marker() {
+        let mut t = FuelOverdueTracker::new();
+        assert_eq!(t.observe(Some(Alert::Eat), true, false), FuelOverdue::Eat);
+        assert_eq!(
+            t.observe(Some(Alert::CutoffBehind), true, false),
+            FuelOverdue::Eat,
+            "a cutoff warning supersedes the banner, never the standing fuel marker"
         );
     }
 }
