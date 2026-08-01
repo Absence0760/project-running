@@ -254,7 +254,11 @@ fn dump_ppm(name: &str, fb: &Framebuffer) {
         }
     }
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(std::path::Path::new(&dir).join(format!("{slug}.ppm")), bytes).unwrap();
+    std::fs::write(
+        std::path::Path::new(&dir).join(format!("{slug}.ppm")),
+        bytes,
+    )
+    .unwrap();
 }
 
 fn show(name: &str, fb: &Framebuffer) {
