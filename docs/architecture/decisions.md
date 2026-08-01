@@ -5441,3 +5441,21 @@ The vert persona hunt's top finding: no surface on the watch puts live grade-adj
 **Date:** 2026-07-31
 
 The § 350-era nav panel silently switches between two transforms an order of magnitude apart in metres-per-pixel: whole-course fit, and the runner-centred ~1.2 km auto-zoom window a long course forces. Nothing on the panel said which one a visible fork was being read through — the navigator persona's "is that fork 100 m or 2 km away" finding. `NavPanel` now exposes the `windowed` decision (host-tested with the rest of `nav_map`) and the render layer draws a 1x `ZOOM` label at the panel's bottom-right when it is set, after the polyline so the word survives a dense breadcrumb. Only the zoomed state is labelled: whole-course is the default the panel has always meant, and a label on both states is a label on neither.
+
+## 389. A held GAP carries `~` on the text rows — and never in a hero, because the numeral face drops glyphs it lacks
+
+**Date:** 2026-07-31
+
+The GAP estimator's power-hike hold (§ 24-ported from the mobile field) shows the last above-gate effort-pace for up to ten sub-gate updates so a headwall crawl reads its recent effort instead of `--:--` — but the face rendered the held value indistinguishably from a live sample, so ten updates of yesterday's pace could pass as now. The snapshot now carries `gap_held` (read off the estimator *after* the same tick's sampling call — struct literals evaluate in source order, and the flag describes that call's answer) and the two GAP text rows (the Pace glance's `GAP  4:52~ /KM`, the Dashboard's `NOW/GAP` pair) mark a held value with a trailing `~`, the race predictor's own approximate glyph. The mark deliberately never reaches a hero band: the 32x48 numeral face has no `~` and silently renders glyphs it lacks as nothing — the § 364 bug class — so a "marked" hero would read as an unmarked one, which is worse than no mark.
+
+## 390. The nav position marker gets a one-pixel cleared halo — a fork must not swallow the runner
+
+**Date:** 2026-07-31
+
+The position marker was a 5 px cross drawn with the same 1-bit ink as the course polyline, and the place a navigator most needs it — a fork — is exactly where course segments converge on the runner's position and the cross melts into the line-work. `draw_nav_panel` now clears a one-pixel ring around the cross before inking it, clipped to the panel band so the halo can't blank the title or GPS rows beside it. A cleared ring is the only contrast a 1-bit reflective panel has to spend; it costs nothing on open trail (clearing blank pixels) and buys the marker back at every junction.
+
+## 391. Sim scenarios that need a quiet alert slot drop the canned course — `--no-alerts` cannot silence data-driven arms
+
+**Date:** 2026-07-31
+
+The `storm` scenario failed on PR #656 and the failure was structural, not flaky: its "one front, one banner" and bannerless-dump assertions rest on `--no-alerts` leaving the alert slot empty, but the § 380/§ 381 cutoff and off-course arms alert on **data presence** — the canned `sim-course`'s legs and cutoff schedule — not on any sim setter, so `--no-alerts` cannot reach them. bench_jog leaves the course every lap, and each workout edge that displaced the OffCourse banner re-queued it, a handoff chain in which `record: alert cleared` never fires. The fix is scenario isolation, not engine damping: `bin/watch-sim.sh` grows `--no-course` (drops the `sim-course` feature) and the `storm` + `workout` scenarios take it — neither asserts anything the course feeds. The engine's re-queue semantics stay: on hardware, a runner off course during a workout *should* keep being told, and the `alerts`/`pages`/`terrain` scenarios still exercise the full chain with the course loaded.
