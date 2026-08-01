@@ -243,7 +243,7 @@ selection and the backyard arm all persist in the CFG1 flash record and
 restore at boot (the profile restore re-applies its page preset) — whichever
 side wrote last, menu or phone push, wins the reboot. The erase is the one
 action row that **stays open**, because the menu is its own confirmation: the
-rows above it redraw at their factory values (`GNSS MODE PERF 110H`,
+rows above it redraw at their factory values (`GNSS PERF EST 110H`,
 `PROFILE --`, `BACKYARD OFF`) on the screen the runner pressed from.
 
 **The §351 cost bound has now survived a sixth AND a seventh row, and both
