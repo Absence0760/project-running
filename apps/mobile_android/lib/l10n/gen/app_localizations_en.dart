@@ -2751,6 +2751,34 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
+    return 'Course ($points points) and race schedule ($checkpoints checkpoints) sent to the watch';
+  }
+
+  @override
+  String routeDetailWatchScheduleThinned(
+    int points,
+    int source,
+    int checkpoints,
+  ) {
+    return 'Course ($points points) sent. Race schedule thinned from $source to $checkpoints checkpoints to fit the watch';
+  }
+
+  @override
+  String routeDetailWatchScheduleClockCutoffs(int checkpoints, int unresolved) {
+    return 'Race schedule sent ($checkpoints checkpoints), but $unresolved clock cut-offs need a race start time — set one on the crew sheet so the watch gets them';
+  }
+
+  @override
+  String routeDetailWatchScheduleTooManyCutoffs(
+    int points,
+    int cutoffs,
+    int max,
+  ) {
+    return 'Course ($points points) sent, but the race schedule has $cutoffs cut-offs and the watch holds $max — remove some to send it';
+  }
+
+  @override
   String get routeDetailMadePublicForLink =>
       'Made public so anyone with the link can view it';
 
@@ -11399,6 +11427,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String simWatchPushWorkoutFailed(String error) {
     return 'Workout push failed: $error';
+  }
+
+  @override
+  String get simWatchPushRoadbookAction => 'Push roadbook to watch';
+
+  @override
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs) {
+    return 'Roadbook pushed to the watch ($checkpoints checkpoints, $cutoffs cut-offs)';
+  }
+
+  @override
+  String simWatchPushRoadbookFailed(String error) {
+    return 'Roadbook push failed: $error';
   }
 
   @override

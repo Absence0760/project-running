@@ -23,6 +23,8 @@
 
 use core::cell::Cell;
 
+use crate::stale_budget;
+
 /// Flat-ground running cost C(0) from the polynomial below.
 pub const MINETTI_FLAT_COST: f64 = 3.6;
 
@@ -66,13 +68,15 @@ pub const MAX_PACE_S_PER_KM: f64 = 5940.0;
 pub const GAP_HOLD_WINDOW: u32 = 10;
 
 /// The hold budget, in snapshot ticks, for a GNSS mode's fix cadence:
-/// [`GAP_HOLD_WINDOW`] plus the ticks one full inter-fix gap occupies beyond
-/// the 1 Hz baseline. At 1 Hz the gap term vanishes and the budget is exactly
-/// the historical ten-tick window; at Expedition's 60 s interval it is 69 —
-/// the whole gap the frozen speed spans, plus the same ten-tick grace past
-/// the fix that could have retired the hold.
+/// [`GAP_HOLD_WINDOW`] widened for the cadence by
+/// [`stale_budget::for_cadence`], which holds the shape this and the TrackBack
+/// heading budget share (and why the two baselines stay separate). At 1 Hz the
+/// gap term vanishes and the budget is exactly the historical ten-tick window;
+/// at Expedition's 60 s interval it is 69 — the whole gap the frozen speed
+/// spans, plus the same ten-tick grace past the fix that could have retired the
+/// hold.
 pub const fn gap_hold_ticks(fix_interval_s: u32) -> u32 {
-    GAP_HOLD_WINDOW.saturating_add(fix_interval_s.saturating_sub(1))
+    stale_budget::for_cadence(GAP_HOLD_WINDOW, fix_interval_s)
 }
 
 /// Floor of the hold band. Between this and [`MIN_SPEED_MPS`] the runner is

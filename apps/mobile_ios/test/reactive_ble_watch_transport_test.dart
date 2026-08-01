@@ -18,6 +18,7 @@ import '../lib/reactive_ble_watch_transport.dart';
 ///   ..e5  course        write
 ///   ..e6  workout       write
 ///   ..e7  screens       write
+///   ..e8  roadbook      write
 const _service = 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _runManifest = 'd1f6a7e2-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _runChunk = 'd1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
@@ -25,6 +26,7 @@ const _settings = 'd1f6a7e4-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _course = 'd1f6a7e5-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _workout = 'd1f6a7e6-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _screens = 'd1f6a7e7-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
+const _roadbook = 'd1f6a7e8-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 
 /// The `frame` characteristic: served by the firmware, but consumed on the
 /// phone by the status-frame decoder over the sim's TCP transport, not by
@@ -67,6 +69,10 @@ void main() {
       expect(ReactiveBleWatchTransport.screensCharUuid.toString(), _screens);
     });
 
+    test('roadbook writes to ..e8', () {
+      expect(ReactiveBleWatchTransport.roadbookCharUuid.toString(), _roadbook);
+    });
+
     test('every characteristic sits on a distinct handle', () {
       final uuids = <String>{
         ReactiveBleWatchTransport.manifestCharUuid.toString(),
@@ -75,8 +81,9 @@ void main() {
         ReactiveBleWatchTransport.courseCharUuid.toString(),
         ReactiveBleWatchTransport.workoutCharUuid.toString(),
         ReactiveBleWatchTransport.screensCharUuid.toString(),
+        ReactiveBleWatchTransport.roadbookCharUuid.toString(),
       };
-      expect(uuids, hasLength(6));
+      expect(uuids, hasLength(7));
     });
   });
 }

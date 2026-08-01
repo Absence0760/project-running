@@ -39,14 +39,18 @@ use crate::hr_zones::{self, ZoneCutoffs, ZONE_COUNT};
 use crate::ice;
 use crate::pacer::PaceVerdict;
 use crate::page::Page;
+use crate::plan_adaptive_replan::{AdaptiveConfidence, AdaptiveReason};
+use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
-use crate::record::{RacePhaseView, RecordState, Snapshot};
+use crate::readiness::ReadinessBand;
+use crate::record::{RacePhaseView, RecordState, Snapshot, TurnCueView};
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{SleepStatus, NO_WAKE_NOTICE};
 use crate::storm::StormTrend;
 use crate::trackback::{self, TrackbackView};
 use crate::training_load::LoadTrendView;
+use crate::turn_cues::TurnDirection;
 use crate::unfed::Unfed;
 use crate::workout::{PaceAdherence, WorkoutStepKind};
 
@@ -78,9 +82,16 @@ pub const STALE_AFTER_S: u32 = 5;
 /// [`STALE_AFTER_S`] regardless of mode (see the gps task), so the idle face
 /// keeps the tight budget and a genuinely lost signal still flags within
 /// seconds. The mode's own interval keeps the usual slack on top.
+///
+/// The active branch is the `base + (fix_interval_s - 1)` shape this codebase
+/// settled on three times — here, in `trackback::heading_stale_after_s` (§ 412)
+/// and in `grade_adjusted_pace::gap_hold_ticks` (§ 394) — written saturating so
+/// all three agree; `fix_interval_s()` floors at 1 today, so nothing underflows
+/// now, but the guarantee should not rest on that. The `run_active` gate stays
+/// outside the shape deliberately: it selects a *surface*, not a cadence.
 pub fn stale_after_s(mode: GnssMode, run_active: bool) -> u32 {
     if run_active {
-        mode.fix_interval_s() - 1 + STALE_AFTER_S
+        crate::stale_budget::for_cadence(STALE_AFTER_S, mode.fix_interval_s())
     } else {
         STALE_AFTER_S
     }
@@ -1814,7 +1825,12 @@ pub fn metric_hero(
             row
         }
         // The course's length, not its climb: the gain / loss pair already has
-        // the page's one text row, and rows 3..8 are the drawn profile.
+        // the page's one text row, and rows 3..8 are the drawn profile. So this
+        // deliberately does NOT gate on `route_elev.len == 0` the way
+        // [`route_elev_glance`] does — that gate withholds the *profile* and the
+        // gain / loss pair, whose zeros would be indistinguishable from a
+        // genuinely flat course, while `total_m` is measured off the polyline and
+        // is equally known either way. Only an absent course withholds it.
         Metric::RouteElevTotal => {
             let mut row = Row::new();
             match snap.route_elev.as_ref() {
@@ -2169,6 +2185,13 @@ const UNFED_HINT_ROW: usize = 5;
 /// three statements of one absence into four rows. A per-ROW placeholder is a
 /// different thing and keeps its dashes: `HDG  --` says that one field is
 /// missing while the rest of the page is fed.
+///
+/// One page pairs an unfed body with a *fed* hero, and it is not a defect:
+/// [`route_elev_glance`] on a course pushed without elevation says
+/// `NO COURSE ELEV` while its hero shows the course's length, which the missing
+/// elevation series does not make unknown. The reason here always names what the
+/// page's body is missing; that it usually coincides with an absent hero is not a
+/// rule this function can enforce.
 fn write_unfed(rows: &mut [Row; ROWS], page: Page, label: &str, why: Unfed) {
     let _ = write!(rows[body_top_row(page)], "{label}");
     let _ = write!(rows[UNFED_REASON_ROW], "{}", why.reason());
@@ -3609,9 +3632,9 @@ fn plan_adaptive_glance(
         None => write_unfed(&mut rows, Page::PlanAdaptive, "ADAPT", Unfed::NotSynced),
         Some(v) => {
             let trend = match v.trend {
-                0 => "ON TRACK",
-                1 => "DO MORE",
-                _ => "EASE OFF",
+                AdaptiveReason::OnTrack => "ON TRACK",
+                AdaptiveReason::TrendUnderfitness => "DO MORE",
+                AdaptiveReason::TrendOvertraining => "EASE OFF",
             };
             let _ = write!(rows[2], "{:<8}{}", "ADAPT", trend);
             let _ = write!(
@@ -3623,9 +3646,9 @@ fn plan_adaptive_glance(
                 let _ = write!(rows[5], "HELD FATIGUE");
             } else {
                 let conf = match v.confidence {
-                    0 => "LOW",
-                    1 => "MEDIUM",
-                    _ => "HIGH",
+                    AdaptiveConfidence::Low => "LOW",
+                    AdaptiveConfidence::Medium => "MEDIUM",
+                    AdaptiveConfidence::High => "HIGH",
                 };
                 let _ = write!(rows[5], "{:<8}{}", "CONF", conf);
             }
@@ -3650,9 +3673,9 @@ fn readiness_glance(
         None => write_unfed(&mut rows, Page::Readiness, "READY", Unfed::NotSynced),
         Some(v) => {
             let band = match v.band {
-                0 => "LOW",
-                1 => "MODERATE",
-                _ => "HIGH",
+                ReadinessBand::Low => "LOW",
+                ReadinessBand::Moderate => "MODERATE",
+                ReadinessBand::High => "HIGH",
             };
             let _ = write!(rows[2], "READINESS");
             let _ = write!(rows[4], "{}", band);
@@ -3704,18 +3727,24 @@ fn turn_cue_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
-    match snap.turn_cue {
+    // Matched on the decoded direction, not on the byte: an exhaustive match
+    // means a new `TurnDirection` variant is a compile error here rather than a
+    // turn silently rendering as whatever a catch-all arm said. The setter
+    // already refuses an undecodable code, so the `None` arm is unreachable
+    // through it — and reads as the honest empty state if it ever is reached.
+    match snap
+        .turn_cue
+        .and_then(|v| TurnCueView::direction_from_byte(v.direction).map(|d| (v, d)))
+    {
         None => write_unfed(&mut rows, Page::TurnCue, "TURN", Unfed::NotSynced),
-        Some(v) => {
-            let dir = match v.direction {
-                0 => "STRAIGHT",
-                1 => "SLIGHT L",
-                2 => "LEFT",
-                3 => "SHARP L",
-                4 => "SLIGHT R",
-                5 => "RIGHT",
-                6 => "SHARP R",
-                _ => "U-TURN",
+        Some((v, direction)) => {
+            let dir = match direction {
+                TurnDirection::Straight => "STRAIGHT",
+                TurnDirection::SlightLeft => "SLIGHT L",
+                TurnDirection::Left => "LEFT",
+                TurnDirection::SlightRight => "SLIGHT R",
+                TurnDirection::Right => "RIGHT",
+                TurnDirection::Uturn => "U-TURN",
             };
             let _ = write!(rows[2], "{:<7}{}", "TURN", dir);
             let _ = write!(rows[4], "{:<7}{}", "REMAIN", v.remaining);
@@ -3829,10 +3858,13 @@ fn race_day_glance(
             } else {
                 let _ = write!(rows[4], "AGO");
             }
+            // Four verdicts, four words: the row is a bare value with all COLS
+            // to itself, so the longest ("FAR BEHIND", 10) fits with room over.
             let feas = match v.feasible {
-                0 => "BEHIND",
-                1 => "ON TRACK",
-                _ => "AHEAD",
+                GoalFeasibilityVerdict::FarBehind => "FAR BEHIND",
+                GoalFeasibilityVerdict::Behind => "BEHIND",
+                GoalFeasibilityVerdict::OnTrack => "ON TRACK",
+                GoalFeasibilityVerdict::Ahead => "AHEAD",
             };
             let _ = write!(rows[5], "{}", feas);
         }
@@ -3954,6 +3986,25 @@ fn signed_split(delta_s: i32) -> Row {
 /// after the text, so a longer row would collide with it.
 pub const TRACKBACK_TEXT_COLS: usize = 10;
 
+/// The `~` a heading carries once it is older than the base freshness window
+/// [`trackback::HEADING_STALE_S`], empty while it is inside it.
+///
+/// § 412 scaled the budget to the GNSS cadence — `HEADING_STALE_S +
+/// (fix_interval_s - 1)` — so an Expedition arrow is not blank 83 % of the time.
+/// The price is that a rendered bearing may be ~60 s old, and a bearing that is
+/// confidently wrong about *direction* is the failure the back-to-start page
+/// exists to prevent. So the row discloses the slack the way § 389 marks a held
+/// GAP: the same glyph, and § 411's size demotion costs nothing here because HDG
+/// is a text row and never a hero. Performance can never mark — its budget *is*
+/// the base window, so nothing it shows was bought on credit.
+fn heading_age_mark(tb: &TrackbackView, uptime_s: u32) -> &'static str {
+    if uptime_s.saturating_sub(tb.heading_uptime_s) > trackback::HEADING_STALE_S {
+        "~"
+    } else {
+        ""
+    }
+}
+
 /// The back-to-start glance: distance back to the run's start up large in the
 /// rows-0-1 hero (drawn by the app from [`page_hero`] — metres under a
 /// kilometre, km with decimals beyond, the unit named on the label row), then
@@ -3963,7 +4014,10 @@ pub const TRACKBACK_TEXT_COLS: usize = 10;
 /// the left of rows 5-7 with the relative direction arrow and the right of
 /// rows 3-7 with the TrackBack breadcrumb map (see `trackback::project_track`);
 /// this text layer only reserves that space. A missing or stale heading shows
-/// `--` in the arrow's spot — an honest placeholder, never a stale arrow.
+/// `--` in the arrow's spot — an honest placeholder, never a stale arrow — and
+/// one still inside the cadence-widened budget but past the base window carries
+/// [`heading_age_mark`]'s `~`. The drawn arrow cannot carry that mark, so the
+/// HDG row is where the age is disclosed for both.
 #[allow(clippy::too_many_arguments)]
 fn back_to_start_glance(
     fix: Option<&Fix>,
@@ -3983,13 +4037,14 @@ fn back_to_start_glance(
 
     let _ = write!(rows[2], "TO START");
 
-    let heading = tb.and_then(|n| n.heading_sector(uptime_s));
+    let heading =
+        tb.and_then(|n| Some((n.heading_sector(uptime_s)?, heading_age_mark(n, uptime_s))));
     let bearing = tb.filter(|n| n.active()).and_then(|n| n.bearing_sector());
     match heading {
-        Some(s) => {
+        Some((s, mark)) => {
             let _ = write!(
                 rows[3],
-                "{:<5}{}",
+                "{:<5}{}{mark}",
                 "HDG",
                 trackback::SECTOR_NAMES[s as usize]
             );
@@ -4296,11 +4351,11 @@ fn waypoint_glance(
 
     let _ = write!(rows[2], "TO WPT");
 
-    match tb.and_then(|n| n.heading_sector(uptime_s)) {
-        Some(s) => {
+    match tb.and_then(|n| Some((n.heading_sector(uptime_s)?, heading_age_mark(n, uptime_s)))) {
+        Some((s, mark)) => {
             let _ = write!(
                 rows[3],
-                "{:<6}{}",
+                "{:<6}{}{mark}",
                 "HDG",
                 trackback::SECTOR_NAMES[s as usize]
             );
@@ -4591,18 +4646,24 @@ fn home_face(
     rows
 }
 
-/// The mode picker's read-out — BTN3 cycles the GNSS mode while idle —
-/// pairing the mode tag with its battery figure. "EST" marks the figure as an
-/// unmeasured estimate, not a guaranteed runtime — the tier-1 bench can't
-/// measure power at all, so the number is a tier-2 projection derived in
-/// `gnss_mode`. Reading it as a spec ("~220H") would over-promise; "EST 220H"
-/// is honest at a glance.
+/// The mode picker's read-out — BTN3 cycles the GNSS mode while idle — pairing
+/// the mode tag with the fix cadence it runs at.
+///
+/// The cadence, not the hours: [`GnssMode::battery_est_h`] is a projection for
+/// tier-2 hardware that assumes a receiver power-down this build has never run,
+/// so on a DK bench prototype it is a different watch's number. The old row
+/// tagged it `EST`, which reads as *this* watch's estimate — and the honest
+/// phrase ("projection for unbuilt hardware") does not fit: the row has 3 cells
+/// spare and its sibling in [`crate::settings_menu`] has 1, so every qualifier
+/// that fits is one that misleads. Withholding it costs the picker nothing the
+/// runner needs, because the cadence is the trade — 1 s of fidelity against
+/// 60 s of battery — stated as a fact about the firmware in front of them.
 fn write_mode_row(row: &mut Row, mode: GnssMode) {
-    let _ = write!(row, "MODE {:<5}EST {}H", mode.label(), mode.battery_est_h());
+    let _ = write!(row, "MODE {:<5}{}", mode.label(), mode.cadence_label());
 }
 
 /// The diagnostics layout — the bench acquisition view the idle face was
-/// before §291: the selected GNSS mode with its projected hours, GPS status,
+/// before §291: the selected GNSS mode with its fix cadence, GPS status,
 /// last-known position, speed, altitude, HR, and the seconds clock (falling
 /// back to cumulative vert with no fix). Kept verbatim behind BTN4: bench
 /// bring-up still needs raw LAT/LON and a per-fix clock, they just no longer
@@ -5433,10 +5494,12 @@ mod tests {
             ease_offs: 255,
         });
         // Raw (setter-unclamped) extremes: the rows must fit even off a view
-        // the clamping setter never shaped.
+        // the clamping setter never shaped. The two verdicts are enums with no
+        // numeric extreme, so the widest render is their longest label —
+        // `EASE OFF` and `MEDIUM`.
         rec.plan_adaptive = Some(PlanAdaptiveView {
-            trend: 255,
-            confidence: 1,
+            trend: AdaptiveReason::TrendOvertraining,
+            confidence: AdaptiveConfidence::Medium,
             flagged_weeks: 255,
             window_weeks: 255,
             changes: 255,
@@ -5451,7 +5514,9 @@ mod tests {
         });
         rec.readiness = Some(ReadinessView {
             score: 100,
-            band: 1,
+            // The longest of the three band labels, so the row the overflow
+            // guard measures is the widest one.
+            band: ReadinessBand::Moderate,
         });
         rec.goals = Some(GoalsView {
             percent: 100,
@@ -5480,7 +5545,9 @@ mod tests {
         });
         rec.race_day = Some(RaceDayView {
             days_until: -9999,
-            feasible: 1,
+            // The longest of the four verdict words, so the widest row is what
+            // the overflow guard actually measures.
+            feasible: GoalFeasibilityVerdict::FarBehind,
         });
         // The live-derived views (no phone push behind them) had been left out,
         // which quietly kept the Pacer / Workout / CutoffEta / Climb /
@@ -6366,7 +6433,7 @@ mod tests {
         // Title row is static (no ticking uptime) so the idle screen doesn't
         // force a per-second wake; time of day still shows on the UTC row.
         assert_eq!(rows[0].as_str(), "THREKIR");
-        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF 1 FIX/1S");
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
         assert_eq!(rows[3].as_str(), "LAT     40.01502");
         assert_eq!(rows[4].as_str(), "LON   -105.27050");
@@ -6503,7 +6570,7 @@ mod tests {
         // Baro-preferred altitude, same preference as the diagnostics ALT row.
         assert_eq!(rows[6].as_str(), "HR 72 BPM  ALT 1600 M");
         assert_eq!(rows[7].as_str(), "GPS 8 SATS        UTC");
-        assert_eq!(rows[8].as_str(), "MODE PERF EST 110H");
+        assert_eq!(rows[8].as_str(), "MODE PERF 1 FIX/1S");
         for row in &rows {
             assert!(row.chars().count() <= COLS);
         }
@@ -7192,6 +7259,70 @@ mod tests {
         let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
         assert_eq!(slots[0].value.as_str(), "4:52");
         assert_eq!(slots[2].value.as_str(), "4:52");
+    }
+
+    #[test]
+    fn a_course_without_elevation_still_reports_the_length_it_knows() {
+        use crate::screens::{Layout, Screen};
+        // `len == 0` means the course arrived without an elevation series. It
+        // gates the PROFILE and the gain / loss pair — which would otherwise
+        // read D+0 D-0, indistinguishable from a genuinely flat course — but not
+        // this metric, whose value is `total_m`, the course's LENGTH. That is
+        // measured off the polyline and is exactly as known with or without
+        // elevation, so both paths render it: withholding it would be the app
+        // pretending not to know a number it holds. What the two paths must
+        // never do is diverge, so they are pinned side by side.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.route_elev = Some(crate::record::RouteElevView {
+            gain_m: 0,
+            loss_m: 0,
+            points: 48,
+            total_m: 42_195,
+            samples: [0; crate::record::COURSE_PROFILE_CAP],
+            len: 0,
+        });
+
+        let screen = Screen::new(Layout::Duo, &[Metric::RouteElevTotal, Metric::Distance]).unwrap();
+        let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
+        assert_eq!(slots[0].value.as_str(), "42.1");
+        assert_eq!(slots[0].unit, Some("KM"));
+        assert!(
+            slots[0].unfed.is_none(),
+            "a synced course's length is fed, elevation or not"
+        );
+        // The page's hero is the same metric through the same arm, so a divergence
+        // between the two paths is impossible to introduce on one side alone.
+        assert_eq!(
+            page_hero(Page::RouteElev, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            slots[0].value.as_str()
+        );
+        // And the page body still says the profile is what is missing.
+        let rows = page_rows(
+            Page::RouteElev,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[UNFED_REASON_ROW].as_str(), "NO COURSE ELEV");
+
+        // No course at all is the one absence that withholds the number, on both
+        // paths — there is no polyline to have measured.
+        rec.route_elev = None;
+        let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
+        assert_eq!(slots[0].unfed, Some(Unfed::NotSynced));
+        assert_eq!(
+            page_hero(Page::RouteElev, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "--"
+        );
     }
 
     #[test]
@@ -8251,18 +8382,34 @@ mod tests {
             None,
         );
         assert_eq!(rows[2].as_str(), "GPS  8 SATS");
-        assert_eq!(rows[1].as_str(), "MODE PERF EST 110H");
+        assert_eq!(rows[1].as_str(), "MODE PERF 1 FIX/1S");
     }
 
     #[test]
-    fn idle_mode_row_pairs_each_mode_with_its_projected_hours() {
-        // The BTN3 mode picker's read-out: the tag plus the (projection-marked)
-        // battery figure, one per mode — row 1 on the diagnostics view, the
-        // bottom row on the home view.
+    fn idle_mode_row_pairs_each_mode_with_its_fix_cadence() {
+        // The BTN3 mode picker's read-out: the tag plus the cadence this build
+        // actually runs at, one per mode — row 1 on the diagnostics view, the
+        // bottom row on the home view. Deliberately NOT the tier-2 battery
+        // projection: no qualifier short enough for the row says "another
+        // watch's number", so the row states a fact about this one instead.
+        for mode in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            let mut row = Row::new();
+            super::write_mode_row(&mut row, mode);
+            let mut projection: heapless::String<8> = heapless::String::new();
+            let _ = write!(projection, "{}", mode.battery_est_h());
+            assert!(
+                !row.contains(projection.as_str()),
+                "tier-2 battery projection back on a wearer-facing row: {row:?}"
+            );
+        }
         for (mode, expected) in [
-            (GnssMode::Performance, "MODE PERF EST 110H"),
-            (GnssMode::Balanced, "MODE BAL  EST 180H"),
-            (GnssMode::Expedition, "MODE EXP  EST 220H"),
+            (GnssMode::Performance, "MODE PERF 1 FIX/1S"),
+            (GnssMode::Balanced, "MODE BAL  1 FIX/15S"),
+            (GnssMode::Expedition, "MODE EXP  1 FIX/60S"),
         ] {
             let rows = super::face_rows(
                 Some(&fix()),
@@ -8381,7 +8528,21 @@ mod tests {
         // Idle publication is de-rated to just under STALE_AFTER_S regardless
         // of mode (the mode throttles recording, not idle), so the idle face
         // must flag a 40 s-old fix even in Expedition mode.
-        assert_eq!(stale_after_s(GnssMode::Expedition, false), STALE_AFTER_S);
+        // Both branches of the gate, every mode: the idle side is flat at the
+        // base and only an active run earns the cadence's slack. Pinned so
+        // folding the active branch onto the shared `base + (interval - 1)`
+        // shape cannot move the ladder.
+        for mode in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            assert_eq!(stale_after_s(mode, false), STALE_AFTER_S);
+            assert_eq!(
+                stale_after_s(mode, true),
+                STALE_AFTER_S + mode.fix_interval_s() - 1
+            );
+        }
         assert_eq!(stale_after_s(GnssMode::Performance, true), STALE_AFTER_S);
         assert_eq!(stale_after_s(GnssMode::Balanced, true), 19);
         assert_eq!(stale_after_s(GnssMode::Expedition, true), 64);
@@ -9125,6 +9286,58 @@ mod tests {
                 .as_str(),
             "1.50"
         );
+    }
+
+    #[test]
+    fn a_heading_older_than_the_base_window_is_marked_on_both_pages() {
+        // §412 widened the freshness budget to the GNSS cadence, so an
+        // Expedition bearing can legitimately be ~60 s old. It gets §389's `~`
+        // rather than passing as the current one; Performance, whose budget IS
+        // the base window, never marks.
+        let mut rec = snapshot(RecordState::Recording, 100.0);
+        rec.waypoint = Some(crate::waypoints::WaypointView {
+            distance_m: 250.0,
+            bearing_deg: 45.0,
+            count: 3,
+            marked_uptime_s: 10,
+        });
+        rec.waypoint_count = 3;
+        let mut nav = nav_east(20, 6.0); // heading due east, derived at t=20
+        nav.heading_stale_after_s =
+            trackback::heading_stale_after_s(GnssMode::Expedition.fix_interval_s());
+
+        let rows_at = |page: Page, uptime_s: u32| {
+            page_rows(
+                page,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                Some(&nav),
+                uptime_s,
+                false,
+            )
+        };
+
+        // Inside the base window: unmarked, exactly as Performance renders.
+        assert_eq!(rows_at(Page::BackToStart, 28)[3].as_str(), "HDG  E");
+        assert_eq!(rows_at(Page::Waypoint, 28)[3].as_str(), "HDG   E");
+        // 40 s old — shown only because the cadence bought it the slack, so the
+        // row says so.
+        assert_eq!(rows_at(Page::BackToStart, 60)[3].as_str(), "HDG  E~");
+        assert_eq!(rows_at(Page::Waypoint, 60)[3].as_str(), "HDG   E~");
+        // Past the widened budget it withholds the bearing entirely, unchanged.
+        let past = 20 + nav.heading_stale_after_s + 1;
+        assert_eq!(rows_at(Page::BackToStart, past)[3].as_str(), "HDG  --");
+        assert_eq!(rows_at(Page::Waypoint, past)[3].as_str(), "HDG   --");
+        // The mark must not push the back-to-start text into the breadcrumb map.
+        for row in &rows_at(Page::BackToStart, 60)[3..8] {
+            assert!(
+                row.len() <= TRACKBACK_TEXT_COLS,
+                "marked nav row collides with the map: {row:?}"
+            );
+        }
     }
 
     #[test]
@@ -10027,7 +10240,7 @@ mod tests {
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.race_day = Some(crate::record::RaceDayView {
             days_until: 3,
-            feasible: 1,
+            feasible: GoalFeasibilityVerdict::OnTrack,
         });
         let rows = page_rows(
             Page::RaceDay,
@@ -10052,6 +10265,41 @@ mod tests {
         );
         assert_eq!(rows[4].as_str(), "TO GO");
         assert_eq!(rows[5].as_str(), "ON TRACK");
+
+        // Each of the four verdicts gets its own word. `FAR BEHIND` is the
+        // reason the field carries the enum rather than a three-code byte: a
+        // runner near a cut-off acts differently on it than on `BEHIND`, and
+        // the byte space folded the two together.
+        for (verdict, word) in [
+            (GoalFeasibilityVerdict::Ahead, "AHEAD"),
+            (GoalFeasibilityVerdict::OnTrack, "ON TRACK"),
+            (GoalFeasibilityVerdict::Behind, "BEHIND"),
+            (GoalFeasibilityVerdict::FarBehind, "FAR BEHIND"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.race_day = Some(crate::record::RaceDayView {
+                days_until: -1,
+                feasible: verdict,
+            });
+            let rows = page_rows(
+                Page::RaceDay,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[5].as_str(), word, "{verdict:?}");
+            assert!(
+                word.len() <= COLS,
+                "{word} is {} of {COLS} cells",
+                word.len()
+            );
+            assert_eq!(rows[4].as_str(), "AGO", "a past race still reads AGO");
+        }
 
         // PR recency buckets whole days into a human unit.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
@@ -10174,6 +10422,95 @@ mod tests {
         }
     }
 
+    /// Every readiness band and every turn direction gets its own word, and each
+    /// fits the row it is written into. Neither ladder had a label assertion
+    /// before: the turn page's byte `match` carried `SHARP L` / `SHARP R` arms
+    /// for a class `turn_cues` has no variant for and no producer can emit, so
+    /// two of its eight labels were unreachable — matching on the decoded
+    /// direction deletes them and makes a new variant a compile error here.
+    #[test]
+    fn readiness_bands_and_turn_directions_each_render_their_own_word() {
+        for (band, word) in [
+            (ReadinessBand::Low, "LOW"),
+            (ReadinessBand::Moderate, "MODERATE"),
+            (ReadinessBand::High, "HIGH"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.readiness = Some(crate::record::ReadinessView { score: 55, band });
+            let rows = page_rows(
+                Page::Readiness,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[4].as_str(), word, "{band:?}");
+            // A bare value row, so the whole width is available.
+            assert!(word.len() <= COLS, "{word} is {} of {COLS}", word.len());
+        }
+
+        // `TURN` is padded to 7 cells, leaving COLS - 7 for the direction.
+        const TURN_LABEL_CELLS: usize = 7;
+        for (direction, word) in [
+            (TurnDirection::Straight, "STRAIGHT"),
+            (TurnDirection::SlightLeft, "SLIGHT L"),
+            (TurnDirection::Left, "LEFT"),
+            (TurnDirection::SlightRight, "SLIGHT R"),
+            (TurnDirection::Right, "RIGHT"),
+            (TurnDirection::Uturn, "U-TURN"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.turn_cue = Some(TurnCueView {
+                direction: crate::turn_cues::direction_code(direction),
+                distance_m: 420,
+                remaining: 3,
+            });
+            let rows = page_rows(
+                Page::TurnCue,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[2].as_str(), format!("TURN   {word}"), "{direction:?}");
+            assert!(
+                word.len() <= COLS - TURN_LABEL_CELLS,
+                "{word} is {} of {} cells",
+                word.len(),
+                COLS - TURN_LABEL_CELLS
+            );
+        }
+
+        // A code no producer emits reads as the empty state, never as a turn.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.turn_cue = Some(TurnCueView {
+            direction: 3,
+            distance_m: 420,
+            remaining: 3,
+        });
+        let rows = page_rows(
+            Page::TurnCue,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "TURN");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+    }
+
     #[test]
     fn plan_adaptive_glance_renders_trend_weeks_changes_and_the_fatigue_hold() {
         // Empty state — nothing pushed yet.
@@ -10195,8 +10532,8 @@ mod tests {
         // A sustained under-trend with proposed changes.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
-            trend: 1,
-            confidence: 1,
+            trend: AdaptiveReason::TrendUnderfitness,
+            confidence: AdaptiveConfidence::Medium,
             flagged_weeks: 2,
             window_weeks: 3,
             changes: 1,
@@ -10230,8 +10567,8 @@ mod tests {
         // confidence that pretends a verdict was issued.
         let mut rec = snapshot(RecordState::Recording, 5000.0);
         rec.plan_adaptive = Some(crate::record::PlanAdaptiveView {
-            trend: 0,
-            confidence: 0,
+            trend: AdaptiveReason::OnTrack,
+            confidence: AdaptiveConfidence::Low,
             flagged_weeks: 3,
             window_weeks: 3,
             changes: 0,

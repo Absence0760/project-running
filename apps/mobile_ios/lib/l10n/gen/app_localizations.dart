@@ -4661,6 +4661,38 @@ abstract class AppLocalizations {
   /// **'Couldn\'t send the course to the watch: {error}'**
   String routeDetailWatchCourseFailed(String error);
 
+  /// Banner when both the course and its full race schedule reached the watch
+  ///
+  /// In en, this message translates to:
+  /// **'Course ({points} points) and race schedule ({checkpoints} checkpoints) sent to the watch'**
+  String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints);
+
+  /// Banner when the race schedule had to be reduced to the watch's checkpoint cap
+  ///
+  /// In en, this message translates to:
+  /// **'Course ({points} points) sent. Race schedule thinned from {source} to {checkpoints} checkpoints to fit the watch'**
+  String routeDetailWatchScheduleThinned(
+    int points,
+    int source,
+    int checkpoints,
+  );
+
+  /// Banner when clock-only cutoffs could not be resolved without a race start time
+  ///
+  /// In en, this message translates to:
+  /// **'Race schedule sent ({checkpoints} checkpoints), but {unresolved} clock cut-offs need a race start time — set one on the crew sheet so the watch gets them'**
+  String routeDetailWatchScheduleClockCutoffs(int checkpoints, int unresolved);
+
+  /// Banner when the route has more cutoffs than the watch frame carries, so the schedule was refused
+  ///
+  /// In en, this message translates to:
+  /// **'Course ({points} points) sent, but the race schedule has {cutoffs} cut-offs and the watch holds {max} — remove some to send it'**
+  String routeDetailWatchScheduleTooManyCutoffs(
+    int points,
+    int cutoffs,
+    int max,
+  );
+
   /// Banner shown when tapping Share link auto-publishes a private route so its link resolves
   ///
   /// In en, this message translates to:
@@ -19277,6 +19309,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Workout push failed: {error}'**
   String simWatchPushWorkoutFailed(String error);
+
+  /// Tooltip for the dev sim-watch action that pushes the canned RBK1 roadbook schedule
+  ///
+  /// In en, this message translates to:
+  /// **'Push roadbook to watch'**
+  String get simWatchPushRoadbookAction;
+
+  /// Status line after the dev sim-watch roadbook push succeeds
+  ///
+  /// In en, this message translates to:
+  /// **'Roadbook pushed to the watch ({checkpoints} checkpoints, {cutoffs} cut-offs)'**
+  String simWatchRoadbookPushed(int checkpoints, int cutoffs);
+
+  /// Status line after the dev sim-watch roadbook push fails
+  ///
+  /// In en, this message translates to:
+  /// **'Roadbook push failed: {error}'**
+  String simWatchPushRoadbookFailed(String error);
 
   /// Button that pushes a demo breadcrumb course to the custom watch over BLE
   ///

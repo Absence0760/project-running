@@ -36,6 +36,11 @@
 //! round against what the 1-fix-per-60-s class actually ships (Suunto 9:
 //! 25 h → 50 h; Garmin Enduro 2: 150 h → 300 h UltraTrac; Fenix 7X:
 //! 89 h → 122 h at the conservative end). Hence ~110 / ~180 / ~220 h.
+//!
+//! Those hours are **not shown to a wearer** — they describe the tier-2 target,
+//! and no qualifier short enough for a 21-cell row can say so. The mode rows
+//! carry [`GnssMode::cadence_label`] instead; see
+//! [`battery_est_h`](GnssMode::battery_est_h).
 
 /// A user-selectable GNSS recording mode, cycled by BTN3 on the idle face
 /// (mid-run BTN3 cycles the data pages instead — see [`crate::button`]).
@@ -81,9 +86,40 @@ impl GnssMode {
         }
     }
 
-    /// Projected recording hours on the tier-2 target hardware — a *battery
-    /// estimate for the mode picker*, not a measurement (see the module docs
-    /// for the derivation; the tier-1 DK cannot measure power).
+    /// How often this mode forwards a fix, as the mode row's read-out — the
+    /// cadence this firmware actually runs at, which is the honest half of the
+    /// battery-versus-fidelity trade the picker exists to make. At most 9
+    /// characters so a 21-cell row fits it beside the mode tag.
+    ///
+    /// This is what a wearer-facing row shows instead of
+    /// [`battery_est_h`](GnssMode::battery_est_h): a cadence is a property of
+    /// the build in front of them, an hour figure is a property of hardware that
+    /// does not exist yet.
+    pub const fn cadence_label(self) -> &'static str {
+        match self {
+            GnssMode::Performance => "1 FIX/1S",
+            GnssMode::Balanced => "1 FIX/15S",
+            GnssMode::Expedition => "1 FIX/60S",
+        }
+    }
+
+    /// Projected recording hours for the **tier-2 target hardware**, not for
+    /// this build and not a measurement of anything.
+    ///
+    /// Two separate reasons it is not this watch's runtime: the derivation is
+    /// anchored on `vision.md`'s tier-2 ~110 h headline (see the module docs),
+    /// and the throttled figures already *assume* the UBX-RXM-PMREQ receiver
+    /// power-down, which tier-1 schedules but has never run on a receiver. So
+    /// the number describes a watch nobody has held, on a device
+    /// (`quality_standards.md`) that cannot measure power at all.
+    ///
+    /// Therefore it must not reach a wearer-facing row: no three- or four-letter
+    /// qualifier fits a 21-cell row *and* conveys "projection for unbuilt
+    /// hardware", and every one that fits — `EST`, `PROJ` — reads as this
+    /// watch's own estimate, which is the false claim. A runner picking
+    /// Expedition to survive a 100-hour race is the failure mode. Use
+    /// [`cadence_label`](GnssMode::cadence_label) on a row; keep this for
+    /// bench-side logging and tier-2 planning.
     pub const fn battery_est_h(self) -> u32 {
         match self {
             GnssMode::Performance => 110,
@@ -121,6 +157,7 @@ impl GnssMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::fmt::Write;
 
     #[test]
     fn default_is_performance() {
@@ -182,6 +219,23 @@ mod tests {
         ] {
             assert!(!m.label().is_empty());
             assert!(m.label().len() <= 4, "label too wide: {}", m.label());
+        }
+    }
+
+    #[test]
+    fn cadence_labels_name_the_interval_and_fit_a_row() {
+        for m in [
+            GnssMode::Performance,
+            GnssMode::Balanced,
+            GnssMode::Expedition,
+        ] {
+            let label = m.cadence_label();
+            assert!(label.len() <= 9, "cadence label too wide: {label}");
+            // The label must name the interval it is derived from, or a mode row
+            // states a cadence the recorder does not run at.
+            let mut expected: heapless::String<12> = heapless::String::new();
+            let _ = write!(expected, "1 FIX/{}S", m.fix_interval_s());
+            assert_eq!(label, expected.as_str());
         }
     }
 

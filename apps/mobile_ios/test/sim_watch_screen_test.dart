@@ -32,6 +32,7 @@ class _FakeSyncTransport implements WatchBleTransport {
   final workoutWrites = <List<int>>[];
   final courseWrites = <List<int>>[];
   final screensWrites = <List<int>>[];
+  final roadbookWrites = <List<int>>[];
   @override
   Future<void> scan() async {}
   @override
@@ -72,6 +73,11 @@ class _FakeSyncTransport implements WatchBleTransport {
   @override
   Future<void> writeScreens(List<int> frame) async {
     screensWrites.add(frame);
+  }
+
+  @override
+  Future<void> writeRoadbook(List<int> chunk) async {
+    roadbookWrites.add(chunk);
   }
 }
 
@@ -448,6 +454,53 @@ void main() {
         find.text('Course pushed to the watch (3 points)'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('roadbook push', () {
+    testWidgets('Push-roadbook action writes the chunked RBK1 frame',
+        (tester) async {
+      final transport = _FakeSyncTransport();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SimWatchScreen(
+            transportFactory: () => transport,
+            runSink: (_) async {},
+          ),
+        ),
+      );
+      await tester.tap(find.byIcon(Icons.table_chart_outlined));
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+
+      // The canned three-checkpoint / two-cut-off sim schedule is
+      // 8 + 3*14 + 2*8 + 4 = 70 B, so it fits one chunk. The frame bytes are
+      // the RBK1 golden fixture watch_roadbook_test.dart pins byte-exact
+      // against the Rust vectors; this pins the plumbing.
+      expect(transport.roadbookWrites, hasLength(1));
+      final chunk = transport.roadbookWrites.single;
+      expect(chunk.sublist(0, 2), [0x00, 0x00]);
+      final frame = chunk.sublist(2);
+      expect(frame, hasLength(70));
+      expect(frame.sublist(0, 4), [0x52, 0x42, 0x4b, 0x31]); // RBK1
+      expect(frame[5], 3, reason: 'three demo checkpoints');
+      expect(frame[6], 2, reason: 'two demo cut-offs');
+      final trailer = frame[66] |
+          (frame[67] << 8) |
+          (frame[68] << 16) |
+          (frame[69] << 24);
+      expect(trailer, crc32(frame.sublist(0, 66)));
+      expect(
+        find.text('Roadbook pushed to the watch (3 checkpoints, 2 cut-offs)'),
+        findsOneWidget,
+      );
+      expect(transport.courseWrites, isEmpty,
+          reason: 'the roadbook action must not touch the course handle');
     });
   });
 }

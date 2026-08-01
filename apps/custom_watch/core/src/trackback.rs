@@ -25,6 +25,7 @@
 use crate::grade_adjusted_pace::haversine_metres_f32;
 use crate::record::METRES_PER_DEGREE_LAT;
 use crate::route_simplify::{point_segment_distance, simplify_to_budget};
+use crate::stale_budget;
 
 /// Breadcrumb capacity, in stored points. With the initial spacing this covers
 /// ~1.9 km before the first thinning; each thinning halves the count and
@@ -50,8 +51,9 @@ pub const HEADING_MIN_SEP_M: f32 = 5.0;
 pub const HEADING_STALE_S: u32 = 10;
 
 /// The heading freshness budget for a GNSS mode's fix cadence:
-/// [`HEADING_STALE_S`] plus the seconds one full inter-fix gap occupies beyond
-/// the 1 Hz baseline.
+/// [`HEADING_STALE_S`] widened for the cadence by
+/// [`stale_budget::for_cadence`], which holds the shape this and the GAP hold
+/// budget share (and why the two baselines stay separate).
 ///
 /// A fixed budget silently makes the arrow *absent* in exactly the mode a
 /// multi-day runner selects and the get-un-lost mode they need it in: a heading
@@ -70,7 +72,7 @@ pub const HEADING_STALE_S: u32 = 10;
 /// before a switchback pointing down the old leg — and a stale bearing walks a
 /// runner the wrong way, where a stale pace only misreads effort.
 pub const fn heading_stale_after_s(fix_interval_s: u32) -> u32 {
-    HEADING_STALE_S.saturating_add(fix_interval_s.saturating_sub(1))
+    stale_budget::for_cadence(HEADING_STALE_S, fix_interval_s)
 }
 
 /// Within this distance of the start the bearing is unstable and meaningless
