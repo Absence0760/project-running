@@ -43,12 +43,14 @@ use crate::plan_adaptive_replan::{AdaptiveConfidence, AdaptiveReason};
 use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
-use crate::record::{RacePhaseView, RecordState, Snapshot};
+use crate::readiness::ReadinessBand;
+use crate::record::{RacePhaseView, RecordState, Snapshot, TurnCueView};
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{SleepStatus, NO_WAKE_NOTICE};
 use crate::storm::StormTrend;
 use crate::trackback::{self, TrackbackView};
 use crate::training_load::LoadTrendView;
+use crate::turn_cues::TurnDirection;
 use crate::unfed::Unfed;
 use crate::workout::{PaceAdherence, WorkoutStepKind};
 
@@ -3652,9 +3654,9 @@ fn readiness_glance(
         None => write_unfed(&mut rows, Page::Readiness, "READY", Unfed::NotSynced),
         Some(v) => {
             let band = match v.band {
-                0 => "LOW",
-                1 => "MODERATE",
-                _ => "HIGH",
+                ReadinessBand::Low => "LOW",
+                ReadinessBand::Moderate => "MODERATE",
+                ReadinessBand::High => "HIGH",
             };
             let _ = write!(rows[2], "READINESS");
             let _ = write!(rows[4], "{}", band);
@@ -3706,18 +3708,24 @@ fn turn_cue_glance(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     summary_frame(&mut rows, fix, tag, uptime_s, animate, mode);
-    match snap.turn_cue {
+    // Matched on the decoded direction, not on the byte: an exhaustive match
+    // means a new `TurnDirection` variant is a compile error here rather than a
+    // turn silently rendering as whatever a catch-all arm said. The setter
+    // already refuses an undecodable code, so the `None` arm is unreachable
+    // through it — and reads as the honest empty state if it ever is reached.
+    match snap
+        .turn_cue
+        .and_then(|v| TurnCueView::direction_from_byte(v.direction).map(|d| (v, d)))
+    {
         None => write_unfed(&mut rows, Page::TurnCue, "TURN", Unfed::NotSynced),
-        Some(v) => {
-            let dir = match v.direction {
-                0 => "STRAIGHT",
-                1 => "SLIGHT L",
-                2 => "LEFT",
-                3 => "SHARP L",
-                4 => "SLIGHT R",
-                5 => "RIGHT",
-                6 => "SHARP R",
-                _ => "U-TURN",
+        Some((v, direction)) => {
+            let dir = match direction {
+                TurnDirection::Straight => "STRAIGHT",
+                TurnDirection::SlightLeft => "SLIGHT L",
+                TurnDirection::Left => "LEFT",
+                TurnDirection::SlightRight => "SLIGHT R",
+                TurnDirection::Right => "RIGHT",
+                TurnDirection::Uturn => "U-TURN",
             };
             let _ = write!(rows[2], "{:<7}{}", "TURN", dir);
             let _ = write!(rows[4], "{:<7}{}", "REMAIN", v.remaining);
@@ -5458,7 +5466,9 @@ mod tests {
         });
         rec.readiness = Some(ReadinessView {
             score: 100,
-            band: 1,
+            // The longest of the three band labels, so the row the overflow
+            // guard measures is the widest one.
+            band: ReadinessBand::Moderate,
         });
         rec.goals = Some(GoalsView {
             percent: 100,
@@ -10216,6 +10226,95 @@ mod tests {
         for r in rows.iter().take(8).skip(3) {
             assert!(r.is_empty(), "row reserved for the profile shape: {:?}", r);
         }
+    }
+
+    /// Every readiness band and every turn direction gets its own word, and each
+    /// fits the row it is written into. Neither ladder had a label assertion
+    /// before: the turn page's byte `match` carried `SHARP L` / `SHARP R` arms
+    /// for a class `turn_cues` has no variant for and no producer can emit, so
+    /// two of its eight labels were unreachable — matching on the decoded
+    /// direction deletes them and makes a new variant a compile error here.
+    #[test]
+    fn readiness_bands_and_turn_directions_each_render_their_own_word() {
+        for (band, word) in [
+            (ReadinessBand::Low, "LOW"),
+            (ReadinessBand::Moderate, "MODERATE"),
+            (ReadinessBand::High, "HIGH"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.readiness = Some(crate::record::ReadinessView { score: 55, band });
+            let rows = page_rows(
+                Page::Readiness,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[4].as_str(), word, "{band:?}");
+            // A bare value row, so the whole width is available.
+            assert!(word.len() <= COLS, "{word} is {} of {COLS}", word.len());
+        }
+
+        // `TURN` is padded to 7 cells, leaving COLS - 7 for the direction.
+        const TURN_LABEL_CELLS: usize = 7;
+        for (direction, word) in [
+            (TurnDirection::Straight, "STRAIGHT"),
+            (TurnDirection::SlightLeft, "SLIGHT L"),
+            (TurnDirection::Left, "LEFT"),
+            (TurnDirection::SlightRight, "SLIGHT R"),
+            (TurnDirection::Right, "RIGHT"),
+            (TurnDirection::Uturn, "U-TURN"),
+        ] {
+            let mut rec = snapshot(RecordState::Recording, 5000.0);
+            rec.turn_cue = Some(TurnCueView {
+                direction: crate::turn_cues::direction_code(direction),
+                distance_m: 420,
+                remaining: 3,
+            });
+            let rows = page_rows(
+                Page::TurnCue,
+                Some(&fix()),
+                None,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                false,
+            );
+            assert_eq!(rows[2].as_str(), format!("TURN   {word}"), "{direction:?}");
+            assert!(
+                word.len() <= COLS - TURN_LABEL_CELLS,
+                "{word} is {} of {} cells",
+                word.len(),
+                COLS - TURN_LABEL_CELLS
+            );
+        }
+
+        // A code no producer emits reads as the empty state, never as a turn.
+        let mut rec = snapshot(RecordState::Recording, 5000.0);
+        rec.turn_cue = Some(TurnCueView {
+            direction: 3,
+            distance_m: 420,
+            remaining: 3,
+        });
+        let rows = page_rows(
+            Page::TurnCue,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        );
+        assert_eq!(rows[2].as_str(), "TURN");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
     }
 
     #[test]

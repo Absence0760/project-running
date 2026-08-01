@@ -43,6 +43,7 @@ use crate::race_phases::{
     RacePhaseIntent, RacePhasePreset,
 };
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
+use crate::readiness::ReadinessBand;
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{sleep_budget, SleepBudget};
 use crate::storm::StormView;
@@ -51,6 +52,7 @@ use crate::training_load::{
     compute_calibration, compute_stress, HrPrefs, LoadTrendView, RunForLoad, StressMode,
 };
 use crate::training_paces::{paces_from_goal_pace, TrainingGender, TrainingPaces};
+use crate::turn_cues::TurnDirection;
 use crate::waypoints::{WaypointView, Waypoints};
 use crate::workout::{StepResult, WorkoutAdherence, WorkoutRunner, WorkoutStep, WorkoutView};
 use crate::workout_store;
@@ -406,12 +408,39 @@ pub struct GuidedRunView {
     pub remaining_s: u32,
 }
 
-/// The training-readiness score (0..=100) and its band ([`crate::readiness`]):
-/// `band` is 0 low / 1 moderate / 2 high.
+/// The training-readiness score (0..=100) and its band ([`crate::readiness`]).
+///
+/// `score` is a genuine percentage and is range-clamped; `band` carries the
+/// enum, so the face matches on the variants and no code space stands between
+/// the two sides.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReadinessView {
     pub score: u8,
-    pub band: u8,
+    pub band: ReadinessBand,
+}
+
+impl ReadinessView {
+    /// Encode: the wire byte for `band`, low → high.
+    pub const fn band_code(band: ReadinessBand) -> u8 {
+        match band {
+            ReadinessBand::Low => 0,
+            ReadinessBand::Moderate => 1,
+            ReadinessBand::High => 2,
+        }
+    }
+
+    /// Decode: `None` for any byte outside the code space. The clamp this
+    /// replaced saturated to 2 — telling a runner whose push was corrupt that
+    /// their readiness is **HIGH**, which is the one direction that gets a
+    /// fatigued athlete to go hard.
+    pub const fn band_from_byte(b: u8) -> Option<ReadinessBand> {
+        match b {
+            0 => Some(ReadinessBand::Low),
+            1 => Some(ReadinessBand::Moderate),
+            2 => Some(ReadinessBand::High),
+            _ => None,
+        }
+    }
 }
 
 /// The primary goal's ring progress ([`crate::goals`]): percent 0..=100 and
@@ -422,14 +451,44 @@ pub struct GoalsView {
     pub complete: bool,
 }
 
-/// The next turn on the loaded course ([`crate::turn_cues`]): a direction code
-/// (0 straight / 1 slight-left / 2 left / 3 sharp-left / 4 slight-right /
-/// 5 right / 6 sharp-right / 7 u-turn), metres to it, and how many cues remain.
+/// The next turn on the loaded course ([`crate::turn_cues`]): the direction code
+/// [`turn_cues::direction_code`](crate::turn_cues::direction_code) emits, metres
+/// to it, and how many cues remain.
+///
+/// This one field stays a byte rather than carrying [`TurnDirection`], because
+/// its producer — `nav_project::project_nav`, the sole writer — already encodes
+/// through that exhaustive map, and the wire code space is a symmetric
+/// eight-rung ladder that reserves 3 (sharp-left) and 6 (sharp-right) for a
+/// class the model does not yet classify. [`Self::direction_from_byte`] is the
+/// total inverse, and it refuses the two reserved rungs along with everything
+/// past the ladder: a code no producer can emit must not render as a turn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TurnCueView {
     pub direction: u8,
     pub distance_m: u16,
     pub remaining: u8,
+}
+
+impl TurnCueView {
+    /// Decode: the direction the wire byte names, or `None` for a code
+    /// [`turn_cues::direction_code`](crate::turn_cues::direction_code) cannot
+    /// produce (the reserved 3 / 6 sharp rungs, and anything past 7).
+    ///
+    /// The clamp this replaced saturated to 7 — turning any corrupt byte into
+    /// `U-TURN`, the one instruction that sends a runner back down the trail
+    /// they just climbed. On a navigation page a refused cue reads as "not
+    /// synced", which is the honest answer.
+    pub const fn direction_from_byte(b: u8) -> Option<TurnDirection> {
+        match b {
+            0 => Some(TurnDirection::Straight),
+            1 => Some(TurnDirection::SlightLeft),
+            2 => Some(TurnDirection::Left),
+            4 => Some(TurnDirection::SlightRight),
+            5 => Some(TurnDirection::Right),
+            7 => Some(TurnDirection::Uturn),
+            _ => None,
+        }
+    }
 }
 
 /// A simplified-course summary ([`crate::route_simplify`]): point count after
@@ -1706,10 +1765,14 @@ impl Recorder {
 
     /// The readiness score is clamped to 0..=100 and the band to 0..=2 so a
     /// corrupt push can't render an out-of-range ring or an unknown band label.
+    /// The score is a percentage and clamps to its range — 100 is a real value
+    /// and saturating onto it is correct. The band needs no clamp: it is an
+    /// enum, and a bad wire byte is refused at
+    /// [`ReadinessView::band_from_byte`] before it becomes a view.
     pub fn set_readiness(&mut self, view: Option<ReadinessView>) {
         self.readiness = view.map(|v| ReadinessView {
             score: v.score.min(100),
-            band: v.band.min(2),
+            ..v
         });
     }
 
@@ -1722,13 +1785,14 @@ impl Recorder {
         });
     }
 
-    /// The turn direction is clamped to the 0..=7 code space so an unknown code
-    /// can't index past the face's direction glyphs.
+    /// A cue whose direction byte is not one
+    /// [`turn_cues::direction_code`](crate::turn_cues::direction_code) emits is
+    /// **refused whole**, not clamped: the page then reads its empty state
+    /// rather than naming a turn nobody sent. Dropping the distance and
+    /// remaining count with it is deliberate — a distance to an unknown turn is
+    /// not a navigable instruction.
     pub fn set_turn_cue(&mut self, view: Option<TurnCueView>) {
-        self.turn_cue = view.map(|v| TurnCueView {
-            direction: v.direction.min(7),
-            ..v
-        });
+        self.turn_cue = view.filter(|v| TurnCueView::direction_from_byte(v.direction).is_some());
     }
 
     /// The nav task's latched off-course verdict, fed per fix beside
@@ -5091,14 +5155,16 @@ mod tests {
         }));
         assert_eq!(r.snapshot().recap.unwrap().runs, 120);
 
-        // A corrupt push can't render an out-of-range ring or an unknown band /
-        // verdict / turn glyph — the setters clamp to the code space.
+        // The two genuine numeric ranges: a score and a ring percent both
+        // saturate at 100, which is a real value for each. The code-space
+        // fields no longer clamp at all — see
+        // `the_code_space_view_fields_refuse_an_unknown_byte_instead_of_saturating`.
         r.set_readiness(Some(ReadinessView {
             score: 200,
-            band: 9,
+            band: ReadinessBand::High,
         }));
         let rd = r.snapshot().readiness.unwrap();
-        assert_eq!((rd.score, rd.band), (100, 2));
+        assert_eq!((rd.score, rd.band), (100, ReadinessBand::High));
 
         r.set_goals(Some(GoalsView {
             percent: 250,
@@ -5106,12 +5172,13 @@ mod tests {
         }));
         assert_eq!(r.snapshot().goals.unwrap().percent, 100);
 
+        // Refused, not clamped. The old clamp made this read `U-TURN`.
         r.set_turn_cue(Some(TurnCueView {
             direction: 42,
             distance_m: 100,
             remaining: 3,
         }));
-        assert_eq!(r.snapshot().turn_cue.unwrap().direction, 7);
+        assert!(r.snapshot().turn_cue.is_none());
 
         // The two verdict fields have no clamp to exercise — they are enums, so
         // the out-of-range push this test used to feed them cannot be built. The
@@ -5255,6 +5322,87 @@ mod tests {
             PlanAdaptiveView::confidence_code(AdaptiveConfidence::High),
             2
         );
+    }
+
+    /// The remaining code-space fields, and the distinction that decides which
+    /// ones get this treatment. `band` and `direction` are byte encodings of an
+    /// enum, so saturating a corrupt value lands on a REAL verdict nobody sent —
+    /// `HIGH` readiness for a fatigued runner, `U-TURN` for a navigating one.
+    /// `score` and `percent` are percentages, where 100 is a genuine value and
+    /// saturating onto it is the correct answer; those keep their clamps.
+    #[test]
+    fn the_code_space_view_fields_refuse_an_unknown_byte_instead_of_saturating() {
+        for band in [
+            ReadinessBand::Low,
+            ReadinessBand::Moderate,
+            ReadinessBand::High,
+        ] {
+            let byte = ReadinessView::band_code(band);
+            assert_eq!(ReadinessView::band_from_byte(byte), Some(band));
+        }
+        assert_eq!(ReadinessView::band_code(ReadinessBand::Low), 0);
+        assert_eq!(ReadinessView::band_code(ReadinessBand::Moderate), 1);
+        assert_eq!(ReadinessView::band_code(ReadinessBand::High), 2);
+        for b in 3..=u8::MAX {
+            assert_eq!(
+                ReadinessView::band_from_byte(b),
+                None,
+                "band {b} must refuse, not read as HIGH"
+            );
+        }
+
+        // The turn ladder is the encode `turn_cues::direction_code` emits, and
+        // the decode is its exact inverse — including the two rungs it reserves
+        // and never produces.
+        for direction in [
+            TurnDirection::Straight,
+            TurnDirection::SlightLeft,
+            TurnDirection::Left,
+            TurnDirection::SlightRight,
+            TurnDirection::Right,
+            TurnDirection::Uturn,
+        ] {
+            let byte = crate::turn_cues::direction_code(direction);
+            assert_eq!(
+                TurnCueView::direction_from_byte(byte),
+                Some(direction),
+                "{direction:?} does not survive its own byte {byte}"
+            );
+        }
+        for b in [3u8, 6] {
+            assert_eq!(
+                TurnCueView::direction_from_byte(b),
+                None,
+                "the reserved sharp rung {b} has no direction to name"
+            );
+        }
+        for b in 8..=u8::MAX {
+            assert_eq!(
+                TurnCueView::direction_from_byte(b),
+                None,
+                "direction {b} must refuse, not read as U-TURN"
+            );
+        }
+
+        // Refusal at the setter, for every byte no producer can emit.
+        let mut r = Recorder::new();
+        for b in [3u8, 6, 8, 42, 255] {
+            r.set_turn_cue(Some(TurnCueView {
+                direction: crate::turn_cues::direction_code(TurnDirection::Left),
+                distance_m: 100,
+                remaining: 2,
+            }));
+            assert!(r.snapshot().turn_cue.is_some(), "the control cue is kept");
+            r.set_turn_cue(Some(TurnCueView {
+                direction: b,
+                distance_m: 100,
+                remaining: 2,
+            }));
+            assert!(
+                r.snapshot().turn_cue.is_none(),
+                "direction {b} must refuse the whole cue"
+            );
+        }
     }
 
     #[test]
