@@ -327,8 +327,8 @@ async fn commit_run(store: &'static SharedStore, open: OpenRun, snap: &Snapshot)
 /// Canned cut-off legs for the sim course (the `nav` task's ~180 m rectangle,
 /// distances along its NW->SW->SE polyline). Two aid-station-style cut-offs the
 /// bench_jog fixture sweeps past each lap, so the CutoffEta page shows a live
-/// on / tight / behind verdict under the sim. Hardware carries none until a
-/// course-push path lands, so its CutoffEta page reads "no cutoffs".
+/// on / tight / behind verdict under the sim. Hardware gets its own from a
+/// phone's `RBK1` push and reads "no cutoffs" until one arrives.
 #[cfg(feature = "sim-course")]
 static SIM_CUTOFFS: [CutoffLeg; 2] = [
     CutoffLeg {
@@ -344,7 +344,8 @@ static SIM_CUTOFFS: [CutoffLeg; 2] = [
 /// Canned roadbook checkpoints for the sim course — start, an aid at 90 m, and
 /// the 180 m finish, with demo arrival times matching the ~3 m/s bench_jog
 /// fixture, so the Roadbook + Fuel pages show a live schedule + carry-to-aid
-/// under the sim. Hardware carries none until a course-push path lands.
+/// under the sim. Also the `roadbook_store` golden vector's fixture, so the sim
+/// pushes exactly the bytes the codec test and the Dart encoder pin.
 #[cfg(feature = "sim-course")]
 static SIM_ROADBOOK: [watch_core::record::RoadbookCheckpoint; 3] = [
     watch_core::record::RoadbookCheckpoint {
@@ -380,6 +381,7 @@ pub async fn run(store: &'static SharedStore) {
     let mut timer_rx = unwrap!(state::TIMER.receiver());
     let mut route_profile_rx = unwrap!(state::ROUTE_PROFILE.receiver());
     let mut workout_rx = unwrap!(state::WORKOUT.receiver());
+    let mut roadbook_rx = unwrap!(state::ROADBOOK.receiver());
     let mut storm_rx = unwrap!(state::STORM.receiver());
     let sender = state::RECORD.sender();
     let alert_sender = state::ALERT.sender();
@@ -645,14 +647,23 @@ pub async fn run(store: &'static SharedStore) {
     }
     #[cfg(not(feature = "sim-autostart"))]
     info!("record: waiting for BTN1 to start");
-    // The canned sim course carries cut-off legs so the CutoffEta page shows a
-    // live verdict; hardware has none until a course-push path lands.
+    // The canned sim schedule, published on the SAME channel a phone's `RBK1`
+    // push feeds rather than set straight into the recorder — so the sim
+    // exercises the whole publish → apply path the hardware build depends on,
+    // not a shortcut past it (the `sim-screens` rule).
     #[cfg(feature = "sim-course")]
     {
-        recorder.set_cutoff_legs(&SIM_CUTOFFS);
-        info!("record: sim cutoff legs loaded (90 m/2:00, 170 m/4:00)");
-        recorder.set_roadbook(&SIM_ROADBOOK);
-        info!("record: sim roadbook loaded (start / aid 90 m / finish 180 m)");
+        let mut rb = watch_core::roadbook_store::PushedRoadbook::new();
+        for cp in &SIM_ROADBOOK {
+            let _ = rb.checkpoints.push(*cp);
+        }
+        for leg in &SIM_CUTOFFS {
+            let _ = rb.cutoffs.push(*leg);
+        }
+        state::ROADBOOK.sender().send(Some(rb));
+        info!(
+            "record: sim roadbook queued (start / aid 90 m / finish 180 m, cutoffs 90 m/2:00 + 170 m/4:00)"
+        );
     }
     loop {
         // A tick only means something while a run is advancing a clock. Idle and
@@ -769,6 +780,32 @@ pub async fn run(store: &'static SharedStore) {
                 None => {
                     recorder.set_workout(&[]);
                     info!("record: workout cleared");
+                }
+            }
+        }
+
+        // A pushed roadbook + cut-off schedule (the ble task's RBK1 decode).
+        // One frame carries both series, so a re-push replaces the whole
+        // schedule and a `None` clears it — the Roadbook / CutoffEta / Fuel /
+        // SleepStation pages then read their unfed states rather than keeping a
+        // finished race's legs. Not persisted: unlike the ICE card or the
+        // composed screens, a schedule belongs to one course, and re-pushing it
+        // is the same action as pushing the course it describes.
+        if let Some(pushed) = roadbook_rx.try_changed() {
+            match pushed {
+                Some(rb) => {
+                    recorder.set_roadbook(&rb.checkpoints);
+                    recorder.set_cutoff_legs(&rb.cutoffs);
+                    info!(
+                        "record: roadbook armed ({=usize} checkpoints, {=usize} cutoffs)",
+                        rb.checkpoints.len(),
+                        rb.cutoffs.len()
+                    );
+                }
+                None => {
+                    recorder.set_roadbook(&[]);
+                    recorder.set_cutoff_legs(&[]);
+                    info!("record: roadbook cleared");
                 }
             }
         }

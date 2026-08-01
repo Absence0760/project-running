@@ -20,6 +20,7 @@ use watch_core::ice::IceCard;
 use watch_core::page::Page;
 use watch_core::profiles::ActivityProfile;
 use watch_core::record::{RouteElevView, Snapshot};
+use watch_core::roadbook_store::PushedRoadbook;
 use watch_core::screens::Screens;
 use watch_core::settings::WatchSettings;
 use watch_core::settings_menu::MenuView;
@@ -189,6 +190,19 @@ pub static WORKOUT: Watch<
     Option<heapless::Vec<WorkoutStep, MAX_WORKOUT_STEPS>>,
     1,
 > = Watch::new();
+
+/// Pushed roadbook + cut-off schedule (the `RBK1` path): the `ble` task decodes
+/// a chunked phone write into a `roadbook_store` frame and publishes it here;
+/// the `record` task loads both series into the recorder, which is what backs
+/// the Roadbook, CutoffEta, Fuel and SleepStation pages and the virtual
+/// partner's terrain schedule. `None` means nothing pushed yet, and an empty
+/// schedule is an explicit clear — either way those pages read their honest
+/// unfed states rather than a stale race's legs.
+///
+/// Latest-value like `WORKOUT` and unlike the `SETTINGS` deltas: one frame
+/// carries the whole schedule, so a re-push replaces it outright and a
+/// coalesced intermediate is not a lost edit. One receiver (`record`).
+pub static ROADBOOK: Watch<CriticalSectionRawMutex, Option<PushedRoadbook>, 1> = Watch::new();
 
 /// The runner's composed data screens (the `SCR1` path, §364): the `ble` task
 /// decodes one unchunked phone write and publishes it here; the `record` task
