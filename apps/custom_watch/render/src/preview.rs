@@ -61,6 +61,8 @@ fn base_snapshot() -> Snapshot {
         last_lap: None,
         pacer: None,
         zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+        zone_ceiling: None,
+        pace_band: None,
         zone_time_s: [0; 5],
         cutoff: None,
         sleep: None,
@@ -99,6 +101,8 @@ fn base_snapshot() -> Snapshot {
         waypoint_count: 0,
         waypoint_mark_seq: 0,
         waypoint_refuse_seq: 0,
+        run_lost_seq: 0,
+        course_reject_seq: 0,
         timer: None,
         storm: None,
         auto_lap: watch_core::auto_lap::AUTO_LAP_DEFAULT,
@@ -790,6 +794,7 @@ fn preview_nav_map_panel() {
         off_m: 12.0,
         alerting: false,
         next_turn: None,
+        back_to_course_deg: None,
     };
     let mut fb = Framebuffer::new();
     draw_nav_page(&mut fb, NavView::Status(status), None);
@@ -798,6 +803,7 @@ fn preview_nav_map_panel() {
     let off_course = NavView::Status(watch_core::course::NavStatus {
         off_m: 180.0,
         alerting: true,
+        back_to_course_deg: Some(300.0),
         ..status
     });
     let mut fb2 = Framebuffer::new();

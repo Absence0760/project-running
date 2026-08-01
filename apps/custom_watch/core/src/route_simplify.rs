@@ -20,6 +20,12 @@
 //! split order); at the budget it degrades by keeping the most significant
 //! points — the whole line is thinned, the tail is never truncated. No recursion.
 //!
+//! The priority loop itself is index-based and metric-generic, so it also
+//! serves callers whose points are not geographic degrees: [`simplify_to_budget`]
+//! is the fixed-point-count entry (the sibling of the mobile `simplifyToBudget`)
+//! the trackback breadcrumb uses to halve itself without cutting switchback
+//! corners, feeding planar metre offsets through [`point_segment_distance`].
+//!
 //! Pure logic, no peripherals, no allocator.
 
 use core::f64::consts::PI;
@@ -87,10 +93,54 @@ pub fn simplify_track(points: &[LatLng], epsilon_metres: f64) -> Vec<LatLng, MAX
 /// twin, and at the budget the most significant points survive across the whole
 /// line rather than the tail being dropped. `points.len()` must be >= 3.
 fn dp_budgeted(points: &[LatLng], eps: f64) -> Vec<usize, MAX_SIMPLIFY_POINTS> {
-    let mut kept: Vec<usize, MAX_SIMPLIFY_POINTS> = Vec::new();
+    priority_split(points.len(), eps, MAX_SIMPLIFY_POINTS, false, |a, b, i| {
+        perp_distance_metres(&points[i], &points[a], &points[b])
+    })
+}
+
+/// Priority Douglas-Peucker to a fixed point count rather than to a tolerance —
+/// the firmware sibling of the mobile `simplifyToBudget`. Reduces a polyline of
+/// `len` points to exactly `min(budget, len)` kept indices (never fewer than
+/// the two endpoints), choosing splits by greatest deviation first so the
+/// shape-defining vertices — a switchback's apexes — survive and the
+/// near-collinear filler is what gets shed. `perp(a, b, i)` reports point `i`'s
+/// deviation from the chord `a`-`b`, which keeps the engine agnostic to the
+/// coordinate space: geographic callers project degrees, planar callers (the
+/// trackback breadcrumb's metre offsets) go straight to
+/// [`point_segment_distance`]. When no remaining point deviates at all — a
+/// featureless straight — it falls back to splitting the widest index gap at
+/// its midpoint, so a caller relying on the exact output count (the
+/// breadcrumb's halve-on-overflow occupancy contract) still gets it.
+pub fn simplify_to_budget<const CAP: usize, F: Fn(usize, usize, usize) -> f64>(
+    len: usize,
+    budget: usize,
+    perp: F,
+) -> Vec<usize, CAP> {
+    priority_split(len, 0.0, budget, true, perp)
+}
+
+/// The shared priority-split loop behind [`dp_budgeted`] (stop below `eps`,
+/// never fill) and [`simplify_to_budget`] (fill to the budget). Kept indices
+/// come back in ascending order with both endpoints always present; degenerate
+/// inputs (`len` < 2) come back whole.
+fn priority_split<const CAP: usize, F: Fn(usize, usize, usize) -> f64>(
+    len: usize,
+    eps: f64,
+    budget: usize,
+    fill_to_budget: bool,
+    perp: F,
+) -> Vec<usize, CAP> {
+    let mut kept: Vec<usize, CAP> = Vec::new();
+    if len == 0 {
+        return kept;
+    }
     let _ = kept.push(0);
-    let _ = kept.push(points.len() - 1);
-    while kept.len() < MAX_SIMPLIFY_POINTS {
+    if len == 1 {
+        return kept;
+    }
+    let _ = kept.push(len - 1);
+    let budget = budget.min(CAP);
+    while kept.len() < budget {
         let mut best_dev = eps;
         let mut best_slot = 0;
         let mut best_index = 0;
@@ -104,7 +154,7 @@ fn dp_budgeted(points: &[LatLng], eps: f64) -> Vec<usize, MAX_SIMPLIFY_POINTS> {
             let mut seg_dev = 0.0;
             let mut seg_index = a;
             for i in (a + 1)..b {
-                let d = perp_distance_metres(&points[i], &points[a], &points[b]);
+                let d = perp(a, b, i);
                 if d > seg_dev {
                     seg_dev = d;
                     seg_index = i;
@@ -117,10 +167,27 @@ fn dp_budgeted(points: &[LatLng], eps: f64) -> Vec<usize, MAX_SIMPLIFY_POINTS> {
                 found = true;
             }
         }
-        if !found {
+        if found {
+            let _ = kept.insert(best_slot + 1, best_index);
+            continue;
+        }
+        if !fill_to_budget {
             break;
         }
-        let _ = kept.insert(best_slot + 1, best_index);
+        let mut widest_slot = 0;
+        let mut widest_gap = 0;
+        for slot in 0..kept.len() - 1 {
+            let gap = kept[slot + 1] - kept[slot];
+            if gap > widest_gap {
+                widest_gap = gap;
+                widest_slot = slot;
+            }
+        }
+        if widest_gap < 2 {
+            break;
+        }
+        let mid = (kept[widest_slot] + kept[widest_slot + 1]) / 2;
+        let _ = kept.insert(widest_slot + 1, mid);
     }
     kept
 }
@@ -132,14 +199,14 @@ fn perp_distance_metres(p: &LatLng, a: &LatLng, b: &LatLng) -> f64 {
     let cos_lat = libm::cos(lat_rad);
     let x = |w: &LatLng| (w.lng * PI / 180.0) * cos_lat * R_M;
     let y = |w: &LatLng| (w.lat * PI / 180.0) * R_M;
+    point_segment_distance(x(p), y(p), x(a), y(a), x(b), y(b))
+}
 
-    let ax = x(a);
-    let ay = y(a);
-    let bx = x(b);
-    let by = y(b);
-    let px = x(p);
-    let py = y(p);
-
+/// Distance from the planar point `(px, py)` to the segment
+/// `(ax, ay)`-`(bx, by)`, with the projection clamped to the segment's ends.
+/// Coordinate-space agnostic: [`perp_distance_metres`] feeds it projected
+/// degrees, the trackback breadcrumb feeds it metre offsets directly.
+pub fn point_segment_distance(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     let dx = bx - ax;
     let dy = by - ay;
     let len_sq = dx * dx + dy * dy;
@@ -340,6 +407,55 @@ mod tests {
             idx.iter().any(|&i| i > MAX_SIMPLIFY_POINTS && i < n - 1),
             "an interior corner past the 256th point must survive"
         );
+    }
+
+    #[test]
+    fn simplify_to_budget_fills_to_the_exact_budget_on_a_collinear_line() {
+        let xs: std::vec::Vec<f64> = (0..20).map(f64::from).collect();
+        let kept = simplify_to_budget::<32, _>(20, 10, |a, b, i| {
+            point_segment_distance(xs[i], 0.0, xs[a], 0.0, xs[b], 0.0)
+        });
+        assert_eq!(
+            kept.len(),
+            10,
+            "no deviation signal, the uniform fallback still fills the budget"
+        );
+        assert_eq!(kept[0], 0);
+        assert_eq!(kept[kept.len() - 1], 19);
+        for w in kept.windows(2) {
+            assert!(w[0] < w[1], "kept indices ascend");
+        }
+    }
+
+    #[test]
+    fn simplify_to_budget_keeps_the_corner_over_collinear_filler() {
+        // An L: east along y = 0 to (5, 0), then north up x = 5. A budget of
+        // three leaves room for one interior point — it must be the corner.
+        let pts: std::vec::Vec<(f64, f64)> = (0..=5)
+            .map(|i| (f64::from(i), 0.0))
+            .chain((1..=4).map(|i| (5.0, f64::from(i))))
+            .collect();
+        let kept = simplify_to_budget::<16, _>(pts.len(), 3, |a, b, i| {
+            point_segment_distance(pts[i].0, pts[i].1, pts[a].0, pts[a].1, pts[b].0, pts[b].1)
+        });
+        assert_eq!(kept.len(), 3);
+        assert_eq!(
+            pts[kept[1]],
+            (5.0, 0.0),
+            "the corner is the interior survivor"
+        );
+    }
+
+    #[test]
+    fn simplify_to_budget_degenerate_lengths_and_budgets() {
+        let flat = |_a: usize, _b: usize, _i: usize| 0.0;
+        assert!(simplify_to_budget::<8, _>(0, 4, flat).is_empty());
+        assert_eq!(&simplify_to_budget::<8, _>(1, 4, flat)[..], &[0]);
+        assert_eq!(&simplify_to_budget::<8, _>(2, 4, flat)[..], &[0, 1]);
+        // A budget below two still keeps both endpoints; one beyond the line
+        // keeps every point.
+        assert_eq!(&simplify_to_budget::<8, _>(5, 0, flat)[..], &[0, 4]);
+        assert_eq!(&simplify_to_budget::<8, _>(3, 8, flat)[..], &[0, 1, 2]);
     }
 
     #[test]

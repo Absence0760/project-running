@@ -49,13 +49,31 @@ pub const MAX_PACE_S_PER_KM: f64 = 5940.0;
 /// A power-hike up a steep headwall crawls below [`MIN_SPEED_MPS`] while the
 /// effort-equivalent pace is *most* worth reading, so [`GapEstimator`] holds
 /// the last valid GAP through such a dip rather than blanking to `--:--`. The
-/// hold is bounded to this many consecutive sub-gate snapshot updates; the
-/// recorder samples the estimator once per ~1 Hz active-clock tick, so this is
-/// roughly a ten-second grace before a *sustained* slow crawl blanks. This is
-/// watch-local streaming behaviour layered on top of the ported math — it does
-/// NOT touch [`grade_factor`] or the parity-locked constants above, so it is
-/// not part of the four-way lockstep.
+/// hold is bounded in consecutive sub-gate snapshot updates; the recorder
+/// samples the estimator once per ~1 Hz active-clock tick, so at the 1 Hz
+/// Performance cadence this is roughly a ten-second grace before a
+/// *sustained* slow crawl blanks. That tick clock is NOT the fix clock: a
+/// throttled GNSS mode freezes the speed the snapshot feeds in between fixes,
+/// so spending this budget raw would exhaust it ~10 s into Expedition's 60 s
+/// inter-fix gap and blank GAP for the remaining five sixths of every gap —
+/// defeating the hold on exactly the headwall it exists for. The budget is
+/// therefore scaled per cadence by [`gap_hold_ticks`]: this window plus one
+/// full inter-fix gap, so a hold always survives to the next fix that could
+/// refresh or retire it, and the grace beyond that fix stays the ten ticks
+/// chosen here. This is watch-local streaming behaviour layered on top of the
+/// ported math — it does NOT touch [`grade_factor`] or the parity-locked
+/// constants above, so it is not part of the four-way lockstep.
 pub const GAP_HOLD_WINDOW: u32 = 10;
+
+/// The hold budget, in snapshot ticks, for a GNSS mode's fix cadence:
+/// [`GAP_HOLD_WINDOW`] plus the ticks one full inter-fix gap occupies beyond
+/// the 1 Hz baseline. At 1 Hz the gap term vanishes and the budget is exactly
+/// the historical ten-tick window; at Expedition's 60 s interval it is 69 —
+/// the whole gap the frozen speed spans, plus the same ten-tick grace past
+/// the fix that could have retired the hold.
+pub const fn gap_hold_ticks(fix_interval_s: u32) -> u32 {
+    GAP_HOLD_WINDOW.saturating_add(fix_interval_s.saturating_sub(1))
+}
 
 /// Floor of the hold band. Between this and [`MIN_SPEED_MPS`] the runner is
 /// still moving forward (a power-hike, ~0.3 m/s), so the held GAP is honest;
@@ -184,8 +202,12 @@ pub struct GapEstimator {
     /// so the hold bookkeeping has to advance without a `&mut` handle.
     last_gap: Cell<Option<u32>>,
     /// Consecutive sub-gate updates the held GAP has been shown for; blanks
-    /// once it passes [`GAP_HOLD_WINDOW`].
+    /// once it passes the cadence-scaled [`gap_hold_ticks`] budget.
     dip_count: Cell<u32>,
+    /// Seconds between the fixes feeding the speed the estimator is sampled
+    /// with, from the selected GNSS mode — the [`gap_hold_ticks`] input. 1 at
+    /// the full-rate default, matching the recorder's own interval clamp.
+    fix_interval_s: u32,
 }
 
 impl Default for GapEstimator {
@@ -202,11 +224,28 @@ impl GapEstimator {
             grade: 0.0,
             last_gap: Cell::new(None),
             dip_count: Cell::new(0),
+            fix_interval_s: 1,
         }
     }
 
+    /// Clears the run state (anchors, grade, hold) but keeps the fix cadence:
+    /// like the recorder's sticky baro altitude, the GNSS mode is device
+    /// configuration, not run state, and it is applied while idle — before
+    /// the start that triggers this reset could see it.
     pub fn reset(&mut self) {
+        let fix_interval_s = self.fix_interval_s;
         *self = Self::new();
+        self.fix_interval_s = fix_interval_s;
+    }
+
+    /// Expected seconds between incoming fixes, from the selected GNSS mode
+    /// (clamped to at least 1, mirroring
+    /// [`Recorder::set_fix_interval_s`](crate::record::Recorder::set_fix_interval_s),
+    /// which forwards here). Sizes the power-hike hold via [`gap_hold_ticks`]
+    /// so the hold survives a full inter-fix gap of the active mode instead
+    /// of expiring against a speed that cannot yet have refreshed.
+    pub fn set_fix_interval_s(&mut self, interval_s: u32) {
+        self.fix_interval_s = interval_s.max(1);
     }
 
     /// The current smoothed, clamped grade (rise/run, fractional).
@@ -237,11 +276,12 @@ impl GapEstimator {
     /// Above [`MIN_SPEED_MPS`] this is the pure [`gap_pace_s_per_km`], recorded
     /// as the value to hold. A dip into the power-hike band (between
     /// [`GAP_HOLD_MIN_SPEED_MPS`] and the gate) keeps showing that held value
-    /// for up to [`GAP_HOLD_WINDOW`] consecutive updates before blanking, so a
-    /// steep-headwall crawl reads its recent effort-pace instead of `--:--`. A
-    /// genuine stop (at or below [`GAP_HOLD_MIN_SPEED_MPS`]) blanks at once and
-    /// forgets the held value, so a resumed hike can't resurrect a pre-stop
-    /// pace.
+    /// for up to [`gap_hold_ticks`] consecutive updates — the cadence-scaled
+    /// [`GAP_HOLD_WINDOW`] — before blanking, so a steep-headwall crawl reads
+    /// its recent effort-pace instead of `--:--` even when the next fix that
+    /// could refresh the speed is a minute away. A genuine stop (at or below
+    /// [`GAP_HOLD_MIN_SPEED_MPS`]) blanks at once and forgets the held value,
+    /// so a resumed hike can't resurrect a pre-stop pace.
     pub fn gap_s_per_km(&self, speed_mps: f64) -> Option<u32> {
         if speed_mps <= GAP_HOLD_MIN_SPEED_MPS {
             self.last_gap.set(None);
@@ -256,7 +296,7 @@ impl GapEstimator {
         }
         let held_for = self.dip_count.get().saturating_add(1);
         self.dip_count.set(held_for);
-        if held_for <= GAP_HOLD_WINDOW {
+        if held_for <= gap_hold_ticks(self.fix_interval_s) {
             self.last_gap.get()
         } else {
             self.last_gap.set(None);
@@ -518,6 +558,68 @@ mod tests {
 
         // The full window is available again after the recovery.
         for _ in 0..GAP_HOLD_WINDOW {
+            assert_eq!(e.gap_s_per_km(0.3), Some(gap));
+        }
+        assert_eq!(e.gap_s_per_km(0.3), None);
+    }
+
+    #[test]
+    fn hold_budget_is_the_bare_window_at_one_hz_and_scales_with_the_cadence() {
+        assert_eq!(gap_hold_ticks(1), GAP_HOLD_WINDOW);
+        assert_eq!(gap_hold_ticks(0), GAP_HOLD_WINDOW);
+        assert_eq!(gap_hold_ticks(15), GAP_HOLD_WINDOW + 14);
+        assert_eq!(gap_hold_ticks(60), GAP_HOLD_WINDOW + 59);
+    }
+
+    #[test]
+    fn estimator_at_expedition_cadence_holds_and_marks_across_a_full_inter_fix_gap() {
+        let mut e = GapEstimator::new();
+        e.set_fix_interval_s(60);
+        e.on_sample(0.0, 100.0);
+        e.on_sample(50.0, 105.0);
+        let hiking_gap = e.gap_s_per_km(5.0).unwrap();
+
+        // The crawl drops sub-gate just after a fix; the speed the snapshot
+        // feeds is frozen until the next fix a minute later, so the bare
+        // ten-tick budget would blank ~10 s into the gap. The scaled budget
+        // rides out the whole gap plus the original grace...
+        for _ in 0..gap_hold_ticks(60) {
+            assert_eq!(e.gap_s_per_km(0.3), Some(hiking_gap));
+            assert!(e.held());
+        }
+        // ...and still blanks once fresh fixes have confirmed the crawl as
+        // sustained rather than a transient.
+        assert_eq!(e.gap_s_per_km(0.3), None);
+        assert!(!e.held());
+    }
+
+    #[test]
+    fn estimator_at_expedition_cadence_still_blanks_a_genuine_stop_at_once() {
+        let mut e = GapEstimator::new();
+        e.set_fix_interval_s(60);
+        e.on_sample(0.0, 100.0);
+        e.on_sample(50.0, 105.0);
+        assert!(e.gap_s_per_km(5.0).is_some());
+        assert!(e.gap_s_per_km(0.3).is_some());
+        // A fix reporting a real stop exits through the floor immediately —
+        // the widened budget stretches the sub-gate hold, never this.
+        assert_eq!(e.gap_s_per_km(0.0), None);
+        assert!(!e.held());
+        assert_eq!(e.gap_s_per_km(0.3), None);
+    }
+
+    #[test]
+    fn estimator_reset_keeps_the_configured_fix_cadence() {
+        let mut e = GapEstimator::new();
+        e.set_fix_interval_s(60);
+        e.reset();
+        e.on_sample(0.0, 100.0);
+        e.on_sample(50.0, 105.0);
+        let gap = e.gap_s_per_km(5.0).unwrap();
+        // The mode is applied while idle and start resets the estimator; the
+        // cadence must survive that reset or every run would silently fall
+        // back to the ten-tick 1 Hz budget.
+        for _ in 0..gap_hold_ticks(60) {
             assert_eq!(e.gap_s_per_km(0.3), Some(gap));
         }
         assert_eq!(e.gap_s_per_km(0.3), None);

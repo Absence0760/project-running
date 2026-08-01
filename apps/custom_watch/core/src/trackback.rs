@@ -5,8 +5,12 @@
 //! back-to-start glance needs: the live distance and great-circle initial
 //! bearing to the run's start point, the runner's current heading, and a
 //! fixed-capacity, distance-decimated breadcrumb of the track for a thumbnail
-//! map. Pure logic like the rest of `core` — no peripherals, no allocator; the
-//! whole buffer lives in RAM and the flash run-store wire format is untouched.
+//! map. When the buffer fills, the halving is geometric (the budgeted
+//! Douglas-Peucker in [`crate::route_simplify`]), never index parity, so a
+//! switchback's apex vertices survive thinning instead of being replaced by a
+//! straight chord across the terrain the switchbacks exist to avoid. Pure
+//! logic like the rest of `core` — no peripherals, no allocator; the whole
+//! buffer lives in RAM and the flash run-store wire format is untouched.
 //!
 //! The heading is **course over ground**: the bearing between the last two
 //! accepted fixes at least [`HEADING_MIN_SEP_M`] apart. There is no
@@ -17,6 +21,7 @@
 
 use crate::grade_adjusted_pace::haversine_metres;
 use crate::record::METRES_PER_DEGREE_LAT;
+use crate::route_simplify::{point_segment_distance, simplify_to_budget};
 
 /// Breadcrumb capacity, in stored points. With the initial spacing this covers
 /// ~1.9 km before the first thinning; each thinning halves the count and
@@ -63,8 +68,11 @@ pub fn sector_of_deg(deg: f32) -> u8 {
 }
 
 /// Great-circle initial bearing from point 1 toward point 2, degrees clockwise
-/// from north in `[0, 360)`.
-fn initial_bearing_deg(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
+/// from north in `[0, 360)`. Public because every "which way" surface on the
+/// watch must share one compass: the Nav page's back-to-course bearing
+/// ([`crate::nav_project::project_fix`]) reuses this rather than deriving its
+/// own, so it cannot disagree with the BRG rows here and on the Waypoint page.
+pub fn initial_bearing_deg(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let p1 = lat1.to_radians();
     let p2 = lat2.to_radians();
     let dl = (lon2 - lon1).to_radians();
@@ -324,18 +332,35 @@ impl Trackback {
         }
     }
 
-    /// Halve the breadcrumb by keeping every other point and doubling the
-    /// spacing — the whole track stays represented at coarser resolution
-    /// instead of the tail falling off.
+    /// Halve the breadcrumb geometrically and double the spacing — the whole
+    /// track stays represented at coarser resolution instead of the tail
+    /// falling off. The half that survives is chosen by the budgeted
+    /// Douglas-Peucker in [`crate::route_simplify`], not by index parity:
+    /// parity thinning kept `points[0, 2, 4, ...]` blind to shape, so on a
+    /// switchbacked climb it could drop the apex vertices and render a
+    /// straight chord across the terrain the switchbacks exist to avoid — on
+    /// exactly the page a benighted runner has to trust. The geometric
+    /// reduction sheds near-collinear filler instead, and both endpoints
+    /// always survive. On a featureless straight the engine falls back to
+    /// uniform index splitting, so occupancy still halves exactly and the
+    /// cadence of when thinning triggers is unchanged.
     fn thin(&mut self) {
-        let mut kept = 0;
-        let mut i = 0;
-        while i < self.len {
-            self.points[kept] = self.points[i];
-            kept += 1;
-            i += 2;
+        let points = &self.points;
+        let kept =
+            simplify_to_budget::<BREADCRUMB_CAP, _>(self.len, self.len.div_ceil(2), |a, b, i| {
+                point_segment_distance(
+                    points[i].0 as f64,
+                    points[i].1 as f64,
+                    points[a].0 as f64,
+                    points[a].1 as f64,
+                    points[b].0 as f64,
+                    points[b].1 as f64,
+                )
+            });
+        for (slot, &index) in kept.iter().enumerate() {
+            self.points[slot] = self.points[index];
         }
-        self.len = kept;
+        self.len = kept.len();
         self.spacing_m *= 2.0;
     }
 
@@ -548,9 +573,182 @@ mod tests {
             "tail still reaches the runner: {}",
             last_e
         );
-        // Spacing doubled: consecutive kept points are now ~40 m apart.
-        let (e1, _) = v.points[1];
-        assert!((36.0..=48.0).contains(&e1), "post-thin spacing: {}", e1);
+        // Spacing doubled for crumbs accepted after the thin: the newest pair
+        // sits ~40 m apart, not ~20.
+        let (e_last, _) = v.points[v.len - 1];
+        let (e_prev, _) = v.points[v.len - 2];
+        assert!(
+            (36.0..=54.0).contains(&(e_last - e_prev)),
+            "post-thin spacing: {}",
+            e_last - e_prev
+        );
+    }
+
+    /// Crumb positions (metres east/north) of a switchbacked climb: 600 m
+    /// east-west legs of 25 m hops joined by 30 m northward hairpin hops, so
+    /// every hop clears the 20 m breadcrumb spacing and every position becomes
+    /// a crumb.
+    fn switchback_positions(count: usize) -> std::vec::Vec<(f64, f64)> {
+        let mut out = std::vec::Vec::with_capacity(count);
+        let (mut e, mut n, mut east) = (0.0f64, 0.0f64, true);
+        out.push((0.0, 0.0));
+        while out.len() < count {
+            if (east && e >= 600.0) || (!east && e <= 0.0) {
+                n += 30.0;
+                east = !east;
+            } else if east {
+                e += 25.0;
+            } else {
+                e -= 25.0;
+            }
+            out.push((e, n));
+        }
+        out
+    }
+
+    fn feed(tb: &mut Trackback, positions: &[(f64, f64)], t0: u32) -> u32 {
+        let mut t = t0;
+        for &(e, n) in positions {
+            tb.on_point(LAT0 + n * lat_per_m(), LON0 + e * lon_per_m(), t);
+            t += 1;
+        }
+        t
+    }
+
+    /// Greatest distance from any of `original` to the polyline `thinned` —
+    /// the cross-track error a thinning pass introduced.
+    fn max_deviation_m(original: &[(f32, f32)], thinned: &[(f32, f32)]) -> f64 {
+        original
+            .iter()
+            .map(|&(pe, pn)| {
+                thinned
+                    .windows(2)
+                    .map(|w| {
+                        point_segment_distance(
+                            pe as f64,
+                            pn as f64,
+                            w[0].0 as f64,
+                            w[0].1 as f64,
+                            w[1].0 as f64,
+                            w[1].1 as f64,
+                        )
+                    })
+                    .fold(f64::INFINITY, f64::min)
+            })
+            .fold(0.0, f64::max)
+    }
+
+    #[test]
+    fn thinning_a_switchbacked_climb_keeps_the_apexes_parity_thinning_cut() {
+        let positions = switchback_positions(BREADCRUMB_CAP + 1);
+        let mut tb = Trackback::new();
+        let t = feed(&mut tb, &positions[..BREADCRUMB_CAP], 0);
+        let before = tb.view();
+        assert_eq!(before.len, BREADCRUMB_CAP, "buffer exactly full");
+
+        feed(&mut tb, &positions[BREADCRUMB_CAP..], t);
+        let after = tb.view();
+        assert_eq!(
+            after.len,
+            BREADCRUMB_CAP / 2 + 1,
+            "half kept plus the crumb that triggered the thin"
+        );
+
+        let originals = &before.points[..before.len];
+        let geometric = max_deviation_m(originals, &after.points[..after.len]);
+        assert!(
+            geometric < 2.0,
+            "geometric thinning cross-track error: {geometric} m"
+        );
+
+        // The old index-parity thinning (keep points[0, 2, 4, ...]) drops one
+        // vertex of every other hairpin and chords straight across the
+        // switchback — an error an order of magnitude past the geometric one.
+        let parity: std::vec::Vec<(f32, f32)> = originals.iter().copied().step_by(2).collect();
+        let parity_dev = max_deviation_m(originals, &parity);
+        assert!(
+            parity_dev > 15.0,
+            "parity thinning should have cut a corner, deviated {parity_dev} m"
+        );
+
+        // Every hairpin vertex survives: a corner is any crumb whose incoming
+        // and outgoing steps turn.
+        for i in 1..before.len - 1 {
+            let a = originals[i - 1];
+            let b = originals[i];
+            let c = originals[i + 1];
+            let turn = (b.0 - a.0) * (c.1 - b.1) - (b.1 - a.1) * (c.0 - b.0);
+            if turn.abs() > 1.0 {
+                assert!(
+                    after.points[..after.len].contains(&b),
+                    "apex at ({}, {}) must survive thinning",
+                    b.0,
+                    b.1
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn thinning_always_keeps_both_endpoints() {
+        let positions = switchback_positions(BREADCRUMB_CAP + 1);
+        let mut tb = Trackback::new();
+        let t = feed(&mut tb, &positions[..BREADCRUMB_CAP], 0);
+        let before = tb.view();
+        let newest = before.points[before.len - 1];
+
+        feed(&mut tb, &positions[BREADCRUMB_CAP..], t);
+        let after = tb.view();
+        assert_eq!(after.points[0], (0.0, 0.0), "the start survives");
+        assert_eq!(
+            after.points[after.len - 2],
+            newest,
+            "the newest pre-thin crumb survives, ahead of the trigger crumb"
+        );
+    }
+
+    #[test]
+    fn thinning_halves_occupancy_exactly_even_on_a_featureless_straight() {
+        // A dead-straight line gives the deviation ranking nothing to rank, so
+        // the uniform fallback must still deliver the exact halving the
+        // overflow arithmetic assumes.
+        let mut tb = Trackback::new();
+        for i in 0..=95u32 {
+            tb.on_point(LAT0, LON0 + f64::from(i) * 25.0 * lon_per_m(), i);
+        }
+        assert_eq!(tb.view().len, BREADCRUMB_CAP);
+        tb.on_point(LAT0, LON0 + 96.0 * 25.0 * lon_per_m(), 96);
+        let v = tb.view();
+        assert_eq!(
+            v.len,
+            BREADCRUMB_CAP / 2 + 1,
+            "48 kept plus the crumb that triggered the thin"
+        );
+        assert_eq!(v.points[0], (0.0, 0.0));
+    }
+
+    #[test]
+    fn repeated_thinning_terminates_and_stays_within_capacity() {
+        // ~30 km of switchbacked walking forces several thinning passes; the
+        // buffer must never exceed capacity and the crumb must keep spanning
+        // start to runner throughout.
+        let positions = switchback_positions(1200);
+        let mut tb = Trackback::new();
+        let mut t = 0u32;
+        for &(e, n) in &positions {
+            tb.on_point(LAT0 + n * lat_per_m(), LON0 + e * lon_per_m(), t);
+            t += 1;
+            assert!(tb.view().len <= BREADCRUMB_CAP);
+        }
+        let v = tb.view();
+        assert!(v.active());
+        assert_eq!(v.points[0], (0.0, 0.0), "the start survives every thin");
+        let (_, final_n) = *positions.last().unwrap();
+        let (_, tail_n) = v.points[v.len - 1];
+        assert!(
+            f64::from(tail_n) > final_n - 700.0,
+            "tail still reaches the runner: {tail_n} of {final_n}"
+        );
     }
 
     #[test]

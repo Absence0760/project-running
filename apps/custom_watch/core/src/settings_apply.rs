@@ -28,10 +28,13 @@
 //! Some guards are not a setter's and so run here, meaning an implausible value
 //! yields NO effect rather than a clamped one: the QNH sea-level reference
 //! ([`crate::record_cadence::plausible_sea_level_pa`], whose sink is a `state`
-//! watch the baro task consumes) and the home-clock timezone offset
+//! watch the baro task consumes), the home-clock timezone offset
 //! ([`crate::settings::plausible_tz_offset_min`], whose sink is the watch the
-//! ui task consumes). Every other field is routed unconditionally and rejected,
-//! if at all, at its setter.
+//! ui task consumes), and the fuel-reminder cadences
+//! ([`crate::settings::plausible_fuel_interval_s`], whose setter must keep
+//! accepting the seconds-scale cadences the bench sim arms, so its only guard
+//! of its own is a zero-check). Every other field is routed unconditionally and
+//! rejected, if at all, at its setter.
 
 use heapless::Vec;
 
@@ -40,7 +43,8 @@ use crate::ice::IceCard;
 use crate::race_phases::RacePhasePreset;
 use crate::record_cadence::plausible_sea_level_pa;
 use crate::settings::{
-    plausible_tz_offset_min, race_phase_preset_from_wire, GuidedRunId, WatchSettings,
+    plausible_fuel_interval_s, plausible_tz_offset_min, race_phase_preset_from_wire, GuidedRunId,
+    WatchSettings,
 };
 
 /// One routed settings field: which sink to feed and the value to feed it,
@@ -63,7 +67,9 @@ pub enum SettingsEffect {
     ZoneCeiling(Option<u8>),
     /// The baro task's QNH reference watch (`state::SEA_LEVEL_PA`).
     SeaLevelPa(f32),
-    /// [`crate::alerts::AlertEngine::set_fuel_intervals`]
+    /// [`crate::alerts::AlertEngine::set_fuel_intervals`]. An arm that failed
+    /// its plausibility guard arrives as that setter's own leave-alone zero,
+    /// so the other arm's update still lands.
     FuelIntervals {
         drink_interval_s: u32,
         eat_interval_s: u32,
@@ -270,10 +276,29 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         let _ = plan.push(SettingsEffect::SeaLevelPa(pa));
     }
     if let Some(f) = fuel {
-        let _ = plan.push(SettingsEffect::FuelIntervals {
-            drink_interval_s: f.drink_interval_s,
-            eat_interval_s: f.eat_interval_s,
-        });
+        // A guard the setter cannot own (the bench sim legitimately arms
+        // seconds-scale cadences there), run per arm rather than per field: an
+        // implausible arm routes as the setter's leave-alone zero — dropped,
+        // not clamped, so the arm keeps the cadence the runner last chose —
+        // while a good arm beside it still lands. A tiny interval would
+        // otherwise win the shared alert slot nearly every tick and starve the
+        // safety alerts. When neither arm survives there is nothing to route.
+        let drink_interval_s = if plausible_fuel_interval_s(f.drink_interval_s) {
+            f.drink_interval_s
+        } else {
+            0
+        };
+        let eat_interval_s = if plausible_fuel_interval_s(f.eat_interval_s) {
+            f.eat_interval_s
+        } else {
+            0
+        };
+        if drink_interval_s != 0 || eat_interval_s != 0 {
+            let _ = plan.push(SettingsEffect::FuelIntervals {
+                drink_interval_s,
+                eat_interval_s,
+            });
+        }
     }
     if let Some(mask) = pages {
         // Already the recorder's full-width mask: since the v4 frame carries 64
@@ -334,7 +359,7 @@ pub fn plan_apply(s: &WatchSettings) -> SettingsPlan {
         // No guard here: an armed threshold's plausibility window lives on the
         // tracker's setter, which leaves the current threshold standing rather
         // than clamping — routing it unconditionally keeps this seam a pure
-        // fan-out, the same as every other alert cadence.
+        // fan-out, the same as the distance and time cadences.
         let _ = plan.push(SettingsEffect::StormAlert(threshold));
     }
     plan
@@ -347,7 +372,10 @@ mod tests {
     use crate::settings::{
         race_phase_preset_to_wire, PaceBandCfg, RacePhasesCfg, GUIDED_RUN_ID_LEN,
     };
-    use crate::settings::{FuelCfg, GearCfg, PacerGoalCfg, MAX_SETTINGS_LEN, TZ_OFFSET_LIMIT_MIN};
+    use crate::settings::{
+        FuelCfg, GearCfg, PacerGoalCfg, FUEL_INTERVAL_MAX_S, FUEL_INTERVAL_MIN_S, MAX_SETTINGS_LEN,
+        TZ_OFFSET_LIMIT_MIN,
+    };
 
     /// A frame carrying every field, each with a value its guard accepts. An
     /// exhaustive struct literal on purpose: a new `WatchSettings` field is a
@@ -710,16 +738,96 @@ mod tests {
     }
 
     #[test]
+    fn an_implausible_fuel_cadence_is_dropped_rather_than_clamped() {
+        // A 1 s cadence would win the shared alert slot nearly every tick and
+        // starve the GPS-lost / off-course / cutoff alerts; a clamp would
+        // chirp a cadence the runner never chose all race. Dropping leaves the
+        // arm on the cadence it already had, and with neither arm surviving
+        // there is no effect at all.
+        for s in [
+            1,
+            FUEL_INTERVAL_MIN_S - 1,
+            FUEL_INTERVAL_MAX_S + 1,
+            u32::MAX,
+        ] {
+            let plan = plan_apply(&WatchSettings {
+                fuel: Some(FuelCfg {
+                    drink_interval_s: s,
+                    eat_interval_s: s,
+                }),
+                ..WatchSettings::default()
+            });
+            assert!(plan.is_empty(), "{s} must not be routed");
+        }
+        for s in [FUEL_INTERVAL_MIN_S, 900, FUEL_INTERVAL_MAX_S] {
+            let plan = plan_apply(&WatchSettings {
+                fuel: Some(FuelCfg {
+                    drink_interval_s: s,
+                    eat_interval_s: s,
+                }),
+                ..WatchSettings::default()
+            });
+            assert_eq!(
+                plan.as_slice(),
+                &[SettingsEffect::FuelIntervals {
+                    drink_interval_s: s,
+                    eat_interval_s: s,
+                }][..]
+            );
+        }
+    }
+
+    #[test]
+    fn a_bad_fuel_arm_costs_only_itself_not_its_sibling() {
+        // The guard runs per arm: a desert runner's tightened drink cadence
+        // must not vanish because the eat half of the same push was corrupt.
+        // The failed arm routes as the setter's leave-alone zero, so its
+        // current cadence stands.
+        for (drink, eat, effect) in [
+            (
+                1,
+                1_800,
+                SettingsEffect::FuelIntervals {
+                    drink_interval_s: 0,
+                    eat_interval_s: 1_800,
+                },
+            ),
+            (
+                900,
+                FUEL_INTERVAL_MAX_S + 1,
+                SettingsEffect::FuelIntervals {
+                    drink_interval_s: 900,
+                    eat_interval_s: 0,
+                },
+            ),
+        ] {
+            let plan = plan_apply(&WatchSettings {
+                fuel: Some(FuelCfg {
+                    drink_interval_s: drink,
+                    eat_interval_s: eat,
+                }),
+                ..WatchSettings::default()
+            });
+            assert_eq!(plan.as_slice(), &[effect][..]);
+        }
+    }
+
+    #[test]
     fn a_rejected_guard_costs_only_its_own_field() {
-        // The two guards live outside their sinks, so a bad value there must not
+        // These guards live outside their sinks, so a bad value there must not
         // take the rest of the frame down with it.
         let mut s = fully_populated();
         s.sea_level_pa = Some(f32::NAN);
         s.tz_offset_min = Some(i16::MAX);
+        s.fuel = Some(FuelCfg {
+            drink_interval_s: 1,
+            eat_interval_s: u32::MAX,
+        });
         let plan = plan_apply(&s);
-        assert_eq!(plan.len(), EffectKind::COUNT - 2);
+        assert_eq!(plan.len(), EffectKind::COUNT - 3);
         assert!(!kinds_of(&plan).contains(&EffectKind::SeaLevelPa));
         assert!(!kinds_of(&plan).contains(&EffectKind::TzOffsetMin));
+        assert!(!kinds_of(&plan).contains(&EffectKind::FuelIntervals));
     }
 
     #[test]

@@ -299,6 +299,17 @@ pub struct NavStatus {
     /// course. `None` when there is no upcoming turn (past the last one, or a
     /// course with no turns).
     pub next_turn: Option<crate::record::TurnCueView>,
+    /// Absolute great-circle bearing from the fix toward its snapped on-course
+    /// point, degrees clockwise from north — the numeric way back when the map
+    /// cannot show one. The panel fit keeps only [`PANEL_MARGIN_PX`] of slack,
+    /// so by the time the off-course latch trips at [`OFF_COURSE_THRESHOLD_M`]
+    /// the position marker has usually left the panel entirely; this bearing is
+    /// what the Nav page falls back to, in the same 16-wind absolute convention
+    /// the Waypoint / Back-to-start BRG rows use (tier 1 has no magnetometer,
+    /// so nothing on the watch renders a heading-relative direction as text).
+    /// `None` within [`crate::trackback::BEARING_MIN_DISTANCE_M`] of the line,
+    /// where the bearing is noise and there is nothing to escape from.
+    pub back_to_course_deg: Option<f32>,
 }
 
 /// Pixels of breathing room the fit keeps inside each panel edge.
