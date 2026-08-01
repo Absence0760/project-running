@@ -108,7 +108,12 @@ jobs:
           #                     stack: schema, RLS, edge functions, seed
           #   root lockfiles  — how a web dependency bump actually arrives
           #                     (maplibre-gl v6 came in exactly this way)
-          if echo "$files" | grep -qvE '^(docs/|\.claude/|infra/|packages/|apps/(custom_watch|watch_wear|watch_ios|watch_garmin|mobile_android|mobile_ios)/)|\.md$|^(analysis_options\.yaml|melos\.yaml|pubspec\.yaml)$'; then
+          # bin/ IS excluded: operator + watch-sim tooling nothing in the web
+          # jobs executes (the live-hub script lives under apps/web/tests-e2e/
+          # scripts/, and the sim CI job replicates bin/watch-sim.sh rather
+          # than calling it) — a bin/ edit alongside firmware work was pulling
+          # the full Playwright suite back in.
+          if echo "$files" | grep -qvE '^(docs/|\.claude/|infra/|bin/|packages/|apps/(custom_watch|watch_wear|watch_ios|watch_garmin|mobile_android|mobile_ios)/)|\.md$|^(analysis_options\.yaml|melos\.yaml|pubspec\.yaml)$'; then
             echo "web_e2e=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::nothing the web suite can reach changed — web e2e skips"
