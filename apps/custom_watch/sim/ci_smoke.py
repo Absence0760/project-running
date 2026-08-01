@@ -43,7 +43,9 @@ whole emulator. Both cover a rail that had no assertion at all:
 shortened cadences under `sim-autostart` (drink 30 s / eat 45 s of moving time,
 a 100 m distance arm, a 60 s elapsed arm, and a 5:00-5:20/km band the ~5:33/km
 bench_jog fixture sits outside), so this asserts what that arming makes
-inevitable and nothing more — see `scenario_alerts`.
+inevitable and nothing more — see `scenario_alerts`. Boots `--no-course`: the
+§380/§381 course-driven arms would otherwise hold the slot through the opening
+quiet window the baseline dump depends on.
 
 `pages` — the paged glance cycle. Walks the cycle right with `runMacro $btn4`
 (§350: the lower-right key pages right) and, for each page of interest, waits
@@ -229,10 +231,11 @@ SCENARIO_FIXTURES = {
 }
 
 # Extra `bin/watch-sim.sh` flags a scenario needs to boot the firmware it
-# asserts against. Three carry them: the composed data screens (§364) seat
-# immediately after the Dashboard, so building them into every session would
-# shift the page walk `pages` and `terrain` assert on; `idle` needs the run
-# never to start; and `workout` needs the alert slot to itself.
+# asserts against: the composed data screens (§364) seat immediately after
+# the Dashboard, so building them into every session would shift the page
+# walk `pages` and `terrain` assert on; `idle` needs the run never to start;
+# `workout` and `storm` need the alert slot to themselves; and `alerts`
+# needs a course-free opening window for its quiet baseline.
 SCENARIO_LAUNCHER_ARGS = {
     # `--no-alerts` as well: the shortened sim fuel cadences overlap into a
     # continuous banner past ~100 s, and a banner OWNS the hero band — it would
@@ -270,6 +273,13 @@ SCENARIO_LAUNCHER_ARGS = {
     # scenario that caught it: the OffCourse / workout-edge handoff chain
     # never let the slot clear before the Storm page dump.
     "storm": ("--storm", "--no-alerts", "--no-course"),
+    # `--no-course` for the same §380/§381 reason — the off-course arm rides
+    # data presence, so it fires within the opening quiet window and the
+    # baseline dump never lands on a bannerless frame. This scenario keeps
+    # `sim-alerts` (the fuel / distance / time / pace arms ARE its subject);
+    # none of its assertions read the course, and the course-driven kinds are
+    # host-tested (`core/src/alerts.rs`), not sim-asserted.
+    "alerts": ("--no-course",),
 }
 
 # The pages the walk has to reach and render. Two always-available heroes
