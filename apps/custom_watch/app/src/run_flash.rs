@@ -33,16 +33,21 @@
 //! access while it is enabled can fault or assert — so the backend there is
 //! `nrf_softdevice::Flash`, which routes every erase/write through
 //! `sd_flash_*` and completes it via a SoC event. That makes the mutating half
-//! of the store async: the `ble` path genuinely awaits the SoftDevice's
-//! completion signal (never spin-blocks the executor), while the default path
-//! keeps the NVMC backend's blocking behaviour unchanged behind the same async
-//! signatures. Reads stay synchronous on both builds — SoC flash is
+//! of the store async on both builds, for different reasons: the `ble` path
+//! awaits the SoftDevice's completion signal, while the default path awaits
+//! nothing and instead subdivides its NVMC work so the executor gets the
+//! CPU back between pages and between write bursts. The two end up handing
+//! the other tasks the same shaped gaps — see
+//! [`flash_erase`](RunStore::flash_erase) for the one gap neither build can
+//! close. Reads stay synchronous on both builds — SoC flash is
 //! memory-mapped and `nrf_softdevice::Flash` itself reads with a plain copy.
 //! The `ble` backend is compile-only but correct by construction: it is the
 //! arbitrated path the S140 requires, and only hardware bring-up (no dev kit
 //! yet) remains to verify it.
 
 use defmt::{debug, info, warn};
+#[cfg(not(feature = "ble"))]
+use embassy_futures::yield_now;
 use embassy_nrf::nvmc;
 #[cfg(not(feature = "ble"))]
 use embassy_nrf::nvmc::Nvmc;
@@ -86,6 +91,11 @@ const _: () = assert!(CONFIG_OFFSET.is_multiple_of(flash_store::CONFIG_LEN as u3
 /// Renode sim's bare flash memory.
 #[cfg(not(feature = "ble"))]
 const NVMC_READY_ADDR: usize = 0x4001_E400;
+
+/// Bytes per NVMC write burst — 64 words, ≈ 2.6 ms of halted core. The arithmetic
+/// behind the number is on [`RunStore::flash_write`].
+#[cfg(not(feature = "ble"))]
+const WRITE_CHUNK: usize = 256;
 
 /// The per-build flash backend: embassy-nrf's blocking NVMC by default,
 /// the SoftDevice-arbitrated `nrf_softdevice::Flash` on the `ble` build
@@ -216,13 +226,46 @@ impl RunStore {
         self.manifest_gen = self.manifest_gen.wrapping_add(1);
     }
 
-    /// The one seam where the two backends diverge: NVMC erases in place
-    /// (blocking, unchanged), the SoftDevice schedules the erase between radio
-    /// events and signals completion — so the ble variant awaits that signal
-    /// instead of polling.
+    /// Erase one NVMC page per command, handing the executor the CPU between
+    /// pages so the GPS and button tasks are not held off for the whole range.
+    ///
+    /// **A single page erase cannot be subdivided, polled or yielded through.**
+    /// The nRF52840 halts the core for the entire `tERASEPAGE` = 85 ms the
+    /// moment it fetches an instruction from flash while the NVMC is busy
+    /// (nRF52840 PS § 4.4 NVMC: "The CPU is halted if the CPU executes code
+    /// from the flash while the NVMC is writing to the flash", stated for
+    /// `ERASEPAGE` too) — which is also why embassy-nrf's own `READY` spin-loop
+    /// needs no RAM-resident thunk: the halt is a bus stall, not a fault.
+    /// Driving `ERASEPAGE` / `READY` by hand and awaiting a timer between polls
+    /// would buy nothing, because every other task on this executor is in flash
+    /// as well, so there is nothing the core could run in the window; only a
+    /// whole-firmware-in-RAM build would change that, which 256 KiB does not
+    /// allow. A commit or a checkpoint erases exactly one slot
+    /// (`SLOT_LEN` == `PAGE_SIZE` == 4 KiB) and so keeps its single 85 ms stall,
+    /// irreducibly; the win here is [`factory_erase`](Self::factory_erase)'s
+    /// five pages, which no longer monopolise the CPU for 425 ms at once.
+    ///
+    /// The bounds + alignment guard is embassy-nrf's own, hoisted: `Nvmc::erase`
+    /// rejects a bad range before touching flash, and erasing page-by-page must
+    /// not turn that into a partial erase followed by the same error.
     #[cfg(not(feature = "ble"))]
     async fn flash_erase(&mut self, from: u32, to: u32) -> Result<(), FlashError> {
-        self.flash.erase(from, to)
+        if to < from || to as usize > nvmc::FLASH_SIZE {
+            return Err(nvmc::Error::OutOfBounds);
+        }
+        let page = nvmc::PAGE_SIZE as u32;
+        if !from.is_multiple_of(page) || !to.is_multiple_of(page) {
+            return Err(nvmc::Error::Unaligned);
+        }
+        let mut at = from;
+        while at < to {
+            self.flash.erase(at, at + page)?;
+            at += page;
+            if at < to {
+                yield_now().await;
+            }
+        }
+        Ok(())
     }
 
     #[cfg(feature = "ble")]
@@ -230,9 +273,42 @@ impl RunStore {
         self.flash.erase(from, to).await
     }
 
+    /// Write in [`WRITE_CHUNK`] bursts, yielding between them.
+    ///
+    /// Unlike an erase, a write *can* be broken up: each 32-bit word costs
+    /// `tWRITE` = 41 µs of halted core (nRF52840 PS § 4.4) and the halt ends
+    /// with the word, so between words the flash is fetchable and the executor
+    /// runs normally. A full 4 KiB slot is 1024 words ≈ 42 ms as one burst; at
+    /// 64 words per chunk nothing else waits on the store for more than
+    /// ≈ 2.6 ms, and the 15 scheduler passes plus 32 extra `CONFIG.WEN`
+    /// transitions it costs are register writes and empty poll loops against an
+    /// idle controller — well under 1 % of the 42 ms. A finer chunk would
+    /// buy latency that the irreducible 85 ms erase in front of every slot
+    /// write dominates anyway. Small records (every config page write) are one
+    /// chunk and yield nowhere.
+    ///
+    /// Same hoisted guard as [`flash_erase`](Self::flash_erase), for the same
+    /// reason, and the same 256 B the `ble` path bounces through — so both
+    /// builds hand the other tasks identically shaped gaps.
     #[cfg(not(feature = "ble"))]
     async fn flash_write(&mut self, offset: u32, bytes: &[u8]) -> Result<(), FlashError> {
-        self.flash.write(offset, bytes)
+        if offset as usize + bytes.len() > nvmc::FLASH_SIZE {
+            return Err(nvmc::Error::OutOfBounds);
+        }
+        if !offset.is_multiple_of(4) || !bytes.len().is_multiple_of(4) {
+            return Err(nvmc::Error::Unaligned);
+        }
+        let mut written = 0;
+        while written < bytes.len() {
+            let n = (bytes.len() - written).min(WRITE_CHUNK);
+            self.flash
+                .write(offset + written as u32, &bytes[written..written + n])?;
+            written += n;
+            if written < bytes.len() {
+                yield_now().await;
+            }
+        }
+        Ok(())
     }
 
     /// `sd_flash_write` requires a word-aligned source and the staging buffers
