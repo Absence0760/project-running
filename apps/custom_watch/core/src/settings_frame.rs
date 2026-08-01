@@ -447,21 +447,62 @@ mod tests {
     }
 
     #[test]
-    fn a_short_legacy_frame_still_applies() {
-        // The v1 golden vector, which an un-upgraded phone still pushes: it is
-        // well under the buffer, and nothing about the accumulator may care.
-        let v1: [u8; 8] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x01, 0xbe, 0x00];
+    fn a_short_frame_still_applies() {
+        // A single-field push is far under the buffer, and nothing about the
+        // accumulator may care how little arrived before the gap closed it.
+        // This carried the v1 golden vector until the pre-CRC versions were
+        // withdrawn from `WatchSettings::decode`; the property being pinned is
+        // the accumulator's, not that version's, so it re-seats on the shortest
+        // frame the current encoder emits.
+        let short = encoded(&WatchSettings {
+            max_hr: Some(190),
+            ..Default::default()
+        });
+        assert!(short.len() < MAX_SETTINGS_LEN, "must be a short frame");
         let mut framer = SettingsFramer::new();
         assert_eq!(
-            push_then_gap(&mut framer, &v1),
+            push_then_gap(&mut framer, &short),
             SettingsPush::Applied {
                 settings: WatchSettings {
                     max_hr: Some(190),
                     ..Default::default()
                 },
-                len: 8
+                len: short.len()
             }
         );
+    }
+
+    #[test]
+    fn a_pre_crc_legacy_frame_is_reported_rejected_not_applied() {
+        // The v1 and v2 golden vectors an un-upgraded phone would push. They no
+        // longer decode (see `settings`' module docs — an accepted
+        // un-checksummed version makes the CRC decorative), and the accumulator
+        // must surface that as a `Rejected` the driver can log rather than as a
+        // silent `Empty` or a partial `Applied`. Kept as literal bytes so the
+        // framing stays valid and the version is the only thing wrong.
+        let v1: [u8; 8] = [0x53, 0x45, 0x54, 0x31, 0x01, 0x01, 0xbe, 0x00];
+        let v2: [u8; 9] = [0x53, 0x45, 0x54, 0x31, 0x02, 0x01, 0x00, 0xbe, 0x00];
+        for body in [v1.as_slice(), &v2] {
+            // Both as sent and sealed with a valid trailer. The sealed pass is
+            // the one that isolates the version: un-sealed, these are refused by
+            // the mandatory checksum whether or not the version gate exists.
+            let sealed = {
+                let mut f = body.to_vec();
+                f.extend_from_slice(&crate::run_store::crc32(body).to_le_bytes());
+                f
+            };
+            for frame in [body, sealed.as_slice()] {
+                let mut framer = SettingsFramer::new();
+                assert_eq!(
+                    push_then_gap(&mut framer, frame),
+                    SettingsPush::Rejected { len: frame.len() },
+                    "legacy frame {frame:?}"
+                );
+                // The latch must clear with the boundary, or one legacy push
+                // would poison every push after it.
+                assert!(framer.is_empty());
+            }
+        }
     }
 
     #[test]
