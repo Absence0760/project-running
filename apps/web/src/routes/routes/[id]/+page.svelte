@@ -3,7 +3,7 @@
 	import { formatDistance } from '$lib/core/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/routes/gpx';
 	import { toRouteGpxWithMarkers, type RouteGpxMarker } from '$lib/routes/route_gpx';
-	import { fetchRouteById, fetchRouteMarkers, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/core/data';
+	import { fetchRouteById, fetchRouteMarkers, getRouteReviews, upsertRouteReview, deleteRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/core/data';
 	import type { RouteMarker } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -69,6 +69,7 @@
 	let reviewRating = $state(4);
 	let reviewComment = $state('');
 	let reviewSubmitting = $state(false);
+	let confirmDeleteReview = $state<string | null>(null);
 
 	let avgRating = $derived(
 		reviews.length > 0
@@ -120,6 +121,21 @@
 			showToast(m('routeDetail.reviewSubmitFailed', { error: `${e}` }), 'error');
 		} finally {
 			reviewSubmitting = false;
+		}
+	}
+
+	async function deleteOwnReview() {
+		const target = confirmDeleteReview;
+		if (!route || !target) return;
+		confirmDeleteReview = null;
+		try {
+			await deleteRouteReview(route.id);
+			reviews = await getRouteReviews(route.id);
+			reviewsError = false;
+			showReviewForm = false;
+			reviewComment = '';
+		} catch (e) {
+			showToast(m('routeDetail.reviewDeleteFailed', { error: `${e}` }), 'error');
 		}
 	}
 
@@ -825,6 +841,16 @@
 									>
 										<span class="material-symbols" aria-hidden="true">flag</span>
 									</button>
+								{:else if auth.loggedIn && auth.user?.id === review.user_id}
+									<button
+										type="button"
+										class="review-delete-btn"
+										aria-label={m('routeDetail.deleteReview')}
+										title={m('routeDetail.deleteReview')}
+										onclick={() => (confirmDeleteReview = review.id)}
+									>
+										<span class="material-symbols" aria-hidden="true">delete</span>
+									</button>
 								{/if}
 							</div>
 							{#if review.comment}
@@ -887,6 +913,16 @@
 		targetKind="route_review"
 		targetId={reportReviewId ?? ''}
 		onclose={() => (reportReviewId = null)}
+	/>
+	<ConfirmDialog
+		open={confirmDeleteReview !== null}
+		data-testid="review-delete-confirm-dialog"
+		title={m('routeDetail.deleteReviewConfirmTitle')}
+		message={m('routeDetail.deleteReviewConfirmBody')}
+		confirmLabel={m('routeDetail.deleteReviewConfirmCta')}
+		danger
+		onconfirm={deleteOwnReview}
+		oncancel={() => (confirmDeleteReview = null)}
 	/>
 	<ConfirmDialog
 		open={showShareConfirm}
@@ -1382,7 +1418,8 @@
 		color: var(--color-text-tertiary);
 	}
 
-	.review-report-btn {
+	.review-report-btn,
+	.review-delete-btn {
 		margin-inline-start: auto;
 		display: inline-flex;
 		align-items: center;
@@ -1395,7 +1432,8 @@
 		border-radius: var(--radius-sm);
 	}
 
-	.review-report-btn:hover {
+	.review-report-btn:hover,
+	.review-delete-btn:hover {
 		color: var(--color-danger);
 	}
 
