@@ -2623,6 +2623,28 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get routeDetailSendToAppleWatch => 'Apple Watchに送信';
+
+  @override
+  String routeDetailAppleWatchRouteSent(int points) {
+    return 'ルートをApple Watchに送信しました（$points地点）';
+  }
+
+  @override
+  String routeDetailAppleWatchRouteSimplified(int source, int points) {
+    return 'ルートをApple Watchに送信しました — 収まるように$source地点から$points地点に間引きました';
+  }
+
+  @override
+  String get routeDetailAppleWatchRouteTooShort =>
+      'このルートは地点が少なすぎてApple Watchでたどれません';
+
+  @override
+  String routeDetailAppleWatchRouteFailed(String error) {
+    return 'ルートをApple Watchに送信できませんでした: $error';
+  }
+
+  @override
   String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
     return 'コース（$points ポイント）とレーススケジュール（$checkpoints チェックポイント）をウォッチに送信しました';
   }
@@ -6514,6 +6536,10 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get prefsEmailLifecycleDripHint =>
       'オンボーディング、再開、連続記録のリマインダーを時々受け取ります。初期設定はオフで、週刊ダイジェストや通知メールとは別です。';
+
+  @override
+  String get prefsEmailReOptInFailed =>
+      '以前の配信停止を解除できませんでした。メールがブロックされたままの可能性があります。もう一度お試しください。';
 
   @override
   String get prefsWeekStart => '週の開始曜日';

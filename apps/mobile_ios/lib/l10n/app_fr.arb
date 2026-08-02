@@ -762,6 +762,11 @@
   "routeDetailWatchCourseSimplified": "Parcours envoyé à la montre — réduit de {source} à {points} points pour tenir",
   "routeDetailWatchCourseTooShort": "Cet itinéraire a trop peu de points pour être suivi sur la montre",
   "routeDetailWatchCourseFailed": "Impossible d'envoyer le parcours à la montre : {error}",
+  "routeDetailSendToAppleWatch": "Envoyer à l'Apple Watch",
+  "routeDetailAppleWatchRouteSent": "Itinéraire envoyé à l'Apple Watch ({points} points)",
+  "routeDetailAppleWatchRouteSimplified": "Itinéraire envoyé à l'Apple Watch — réduit de {source} à {points} points pour tenir",
+  "routeDetailAppleWatchRouteTooShort": "Cet itinéraire a trop peu de points pour être suivi sur l'Apple Watch",
+  "routeDetailAppleWatchRouteFailed": "Impossible d'envoyer l'itinéraire à l'Apple Watch : {error}",
   "routeDetailWatchCourseAndScheduleSent": "Parcours ({points} points) et plan de course ({checkpoints} points de contrôle) envoyés à la montre",
   "@routeDetailWatchCourseAndScheduleSent": {
     "placeholders": {
@@ -1906,6 +1911,7 @@
   "prefsEmailWeeklyDigestHint": "Inscrivez-vous à un récapitulatif hebdomadaire de votre entraînement et des temps forts de la communauté. Désactivé par défaut ; distinct de vos e-mails de notification.",
   "prefsEmailLifecycleDrip": "E-mail de conseils et encouragements",
   "prefsEmailLifecycleDripHint": "Inscrivez-vous pour recevoir occasionnellement des rappels de prise en main, de réengagement et de série. Désactivé par défaut ; distinct de votre récapitulatif hebdomadaire et de vos e-mails de notification.",
+  "prefsEmailReOptInFailed": "Impossible d'annuler votre désabonnement précédent. Les e-mails peuvent rester bloqués ; réessayez.",
   "prefsWeekStart": "La semaine commence le",
   "prefsWeekStartMonday": "Lundi",
   "prefsWeekStartSunday": "Dimanche",

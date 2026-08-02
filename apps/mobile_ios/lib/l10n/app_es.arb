@@ -762,6 +762,11 @@
   "routeDetailWatchCourseSimplified": "Recorrido enviado al reloj: reducido de {source} a {points} puntos para que quepa",
   "routeDetailWatchCourseTooShort": "Esta ruta tiene muy pocos puntos para seguirla en el reloj",
   "routeDetailWatchCourseFailed": "No se pudo enviar el recorrido al reloj: {error}",
+  "routeDetailSendToAppleWatch": "Enviar al Apple Watch",
+  "routeDetailAppleWatchRouteSent": "Ruta enviada al Apple Watch ({points} puntos)",
+  "routeDetailAppleWatchRouteSimplified": "Ruta enviada al Apple Watch: reducida de {source} a {points} puntos para que quepa",
+  "routeDetailAppleWatchRouteTooShort": "Esta ruta tiene muy pocos puntos para seguirla en el Apple Watch",
+  "routeDetailAppleWatchRouteFailed": "No se pudo enviar la ruta al Apple Watch: {error}",
   "routeDetailWatchCourseAndScheduleSent": "Ruta ({points} puntos) y plan de carrera ({checkpoints} puntos de control) enviados al reloj",
   "@routeDetailWatchCourseAndScheduleSent": {
     "placeholders": {
@@ -1906,6 +1911,7 @@
   "prefsEmailWeeklyDigestHint": "Suscríbete a un resumen semanal de tu entrenamiento y lo más destacado de la comunidad. Desactivado por defecto; independiente de tus correos de notificaciones.",
   "prefsEmailLifecycleDrip": "Correo de consejos y ánimo",
   "prefsEmailLifecycleDripHint": "Suscríbete para recibir recordatorios ocasionales de inicio, reactivación y rachas. Desactivado por defecto; independiente de tu resumen semanal y de tus correos de notificaciones.",
+  "prefsEmailReOptInFailed": "No se pudo anular tu baja anterior. Es posible que los correos sigan bloqueados; inténtalo de nuevo.",
   "prefsWeekStart": "La semana empieza el",
   "prefsWeekStartMonday": "Lunes",
   "prefsWeekStartSunday": "Domingo",

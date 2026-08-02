@@ -762,6 +762,11 @@
   "routeDetailWatchCourseSimplified": "Strecke an die Uhr gesendet — von {source} auf {points} Punkte ausgedünnt",
   "routeDetailWatchCourseTooShort": "Diese Route hat zu wenige Punkte, um ihr auf der Uhr zu folgen",
   "routeDetailWatchCourseFailed": "Strecke konnte nicht an die Uhr gesendet werden: {error}",
+  "routeDetailSendToAppleWatch": "An Apple Watch senden",
+  "routeDetailAppleWatchRouteSent": "Route an die Apple Watch gesendet ({points} Punkte)",
+  "routeDetailAppleWatchRouteSimplified": "Route an die Apple Watch gesendet — von {source} auf {points} Punkte ausgedünnt",
+  "routeDetailAppleWatchRouteTooShort": "Diese Route hat zu wenige Punkte, um ihr auf der Apple Watch zu folgen",
+  "routeDetailAppleWatchRouteFailed": "Route konnte nicht an die Apple Watch gesendet werden: {error}",
   "routeDetailWatchCourseAndScheduleSent": "Strecke ({points} Punkte) und Rennplan ({checkpoints} Kontrollpunkte) an die Uhr gesendet",
   "@routeDetailWatchCourseAndScheduleSent": {
     "placeholders": {
@@ -1906,6 +1911,7 @@
   "prefsEmailWeeklyDigestHint": "Abonniere eine wöchentliche Übersicht über dein Training und Community-Highlights. Standardmäßig aus; getrennt von deinen Benachrichtigungs-E-Mails.",
   "prefsEmailLifecycleDrip": "E-Mail mit Tipps & Motivation",
   "prefsEmailLifecycleDripHint": "Erhalte gelegentliche Einstiegs-, Reaktivierungs- und Serien-Erinnerungen. Standardmäßig aus; getrennt von deiner wöchentlichen Zusammenfassung und deinen Benachrichtigungs-E-Mails.",
+  "prefsEmailReOptInFailed": "Deine frühere Abmeldung konnte nicht aufgehoben werden. E-Mails werden möglicherweise weiterhin blockiert – bitte erneut versuchen.",
   "prefsWeekStart": "Woche beginnt am",
   "prefsWeekStartMonday": "Montag",
   "prefsWeekStartSunday": "Sonntag",

@@ -3725,6 +3725,44 @@
     },
     "description": "Banner when the BLE course push to the watch fails"
   },
+  "routeDetailSendToAppleWatch": "Send to Apple Watch",
+  "@routeDetailSendToAppleWatch": {
+    "description": "Share-menu option that pushes the route to the paired Apple Watch so it can be followed during a wrist-recorded run"
+  },
+  "routeDetailAppleWatchRouteSent": "Route sent to Apple Watch ({points} points)",
+  "@routeDetailAppleWatchRouteSent": {
+    "placeholders": {
+      "points": {
+        "type": "int"
+      }
+    },
+    "description": "Banner after the route was pushed to the Apple Watch unchanged"
+  },
+  "routeDetailAppleWatchRouteSimplified": "Route sent to Apple Watch — thinned from {source} points to {points} to fit",
+  "@routeDetailAppleWatchRouteSimplified": {
+    "placeholders": {
+      "source": {
+        "type": "int"
+      },
+      "points": {
+        "type": "int"
+      }
+    },
+    "description": "Banner after a route too dense for one Apple Watch push was thinned before being sent"
+  },
+  "routeDetailAppleWatchRouteTooShort": "This route has too few points to follow on Apple Watch",
+  "@routeDetailAppleWatchRouteTooShort": {
+    "description": "Banner when a route cannot be sent to the Apple Watch because it has fewer than two positions"
+  },
+  "routeDetailAppleWatchRouteFailed": "Couldn't send the route to Apple Watch: {error}",
+  "@routeDetailAppleWatchRouteFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    },
+    "description": "Banner when the Watch Connectivity route push to the Apple Watch fails"
+  },
   "routeDetailWatchCourseAndScheduleSent": "Course ({points} points) and race schedule ({checkpoints} checkpoints) sent to the watch",
   "@routeDetailWatchCourseAndScheduleSent": {
     "placeholders": {
@@ -9205,6 +9243,10 @@
   "prefsEmailLifecycleDripHint": "Opt in to occasional onboarding, re-engagement, and streak nudges. Off by default; separate from your weekly digest and notification emails.",
   "@prefsEmailLifecycleDripHint": {
     "description": "Subtitle for the lifecycle-drip opt-in toggle"
+  },
+  "prefsEmailReOptInFailed": "Couldn't lift your earlier unsubscribe. Emails may still be blocked — try again.",
+  "@prefsEmailReOptInFailed": {
+    "description": "Shown when lifting a prior one-click unsubscribe block fails after re-opting into an email stream"
   },
   "prefsWeekStart": "Week starts on",
   "@prefsWeekStart": {
