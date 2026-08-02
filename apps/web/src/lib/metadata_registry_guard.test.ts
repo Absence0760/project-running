@@ -103,15 +103,25 @@ function stripJsComments(source: string): string {
 /// bodies (real TS, comment-stripped) and its markup (HTML comments dropped);
 /// running the string-aware comment stripper over raw markup would trip on
 /// apostrophes in prose and blank whole regions.
+///
+/// The tag patterns are case-insensitive and anchor the tag name on a
+/// delimiter (`\b` would let `<scripts>` through). A `<SCRIPT>` body that
+/// failed to match would be scanned as markup instead of as TS, so the
+/// object-literal and `METADATA_KEYS` extraction would silently skip it — a
+/// guard that under-enforces without saying so, which is the exact failure
+/// this file exists to replace.
+const SCRIPT_BLOCK = /<script(?=[\s/>])[^>]*>[\s\S]*?<\/script\s*>/gi;
+const STYLE_BLOCK = /<style(?=[\s/>])[^>]*>[\s\S]*?<\/style\s*>/gi;
+
 function chunksOf(file: string, raw: string): string[] {
 	if (!file.endsWith('.svelte')) return [stripJsComments(raw)];
-	const scripts = [...raw.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) =>
+	const scripts = [...raw.matchAll(/<script(?=[\s/>])[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((m) =>
 		stripJsComments(m[1]),
 	);
 	const markup = raw
-		.replace(/<script[^>]*>[\s\S]*?<\/script>/g, ' ')
-		.replace(/<style[^>]*>[\s\S]*?<\/style>/g, ' ')
-		.replace(/<!--[\s\S]*?-->/g, ' ');
+		.replace(SCRIPT_BLOCK, ' ')
+		.replace(STYLE_BLOCK, ' ')
+		.replace(/<!--[\s\S]*?--!?>/g, ' ');
 	return [...scripts, markup];
 }
 
