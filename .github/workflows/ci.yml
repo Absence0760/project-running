@@ -351,6 +351,32 @@ jobs:
           node scripts/check_watch_ble_uuids.mjs
           node --test scripts/check_watch_ble_uuids.test.mjs
 
+  lambda-alias-coverage:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: Lambda alias sync coverage
+    # decisions.md § 433 — an env-only `terraform apply` publishes a fresh
+    # Lambda version, but the `live` aliases the Function URLs target are
+    # CI-owned, so a rotation only reaches the serving path once
+    # bin/lambda-alias-sync.sh repoints them. That script's coverage was a
+    # hand-maintained bash array: correct for the eight Lambdas that exist, and
+    # silently short the day a ninth is added — the exact drift issue #590 was
+    # opened over, one function at a time. The script parses the Terraform
+    # module, the sync script and release-web.yml rather than transcribing any
+    # of them (§ 416 / § 439), and runs offline: no AWS credentials, no
+    # `terraform init`. Its own `node --test` suite runs beside it because a
+    # parser that silently stops matching passes vacuously.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Terraform Lambda aliases vs the tooling that repoints them
+        run: |
+          node scripts/check_lambda_alias_sync.mjs
+          node --test scripts/check_lambda_alias_sync.test.mjs
+
   build-watch-wear:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -1828,6 +1854,7 @@ jobs:
       - build-web
       - parity-matrix
       - watch-ble-uuids
+      - lambda-alias-coverage
       - build-watch-wear
       - build-firmware
       - sim-firmware
