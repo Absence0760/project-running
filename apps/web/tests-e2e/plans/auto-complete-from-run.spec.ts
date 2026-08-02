@@ -8,20 +8,16 @@ import { USER_A } from '../fixtures/users';
 /**
  * Auto-complete a planned workout from a matching logged run.
  *
- * The audit found that `autoMatchRunToPlanWorkout` (apps/web/src/lib/
- * data.ts:2565) implements the canonical match algorithm (same user,
- * same calendar date, target distance within ±25%, sorted by delta)
- * — but it isn't wired into any UI path today. `/runs/new` →
- * `createManualRun()` does not invoke it; nothing else does either
- * (`grep -r autoMatchRunToPlanWorkout apps/web/src` returns one hit:
- * the definition itself).
+ * `autoMatchRunToPlanWorkout` (apps/web/src/lib/core/data.ts)
+ * implements the canonical match algorithm (same user, same calendar
+ * date, target distance within ±25%, sorted by delta) and is invoked
+ * after a successful insert by both `createManualRun` (/runs/new) and
+ * `saveRun` (importer path), wrapped in its own try/catch so a match
+ * failure never blocks the run save. The first test drives the full
+ * end-to-end saga: log a run via /runs/new → today's matching plan
+ * workout flips `completed_run_id`.
  *
- * So the end-to-end UI saga ("log a run via /runs/new → matching
- * workout auto-completes") can't pass today — there's no production
- * code path that closes the loop. Tracked as a `test.skip` with the
- * canonical TODO so the gap is visible.
- *
- * We DO pin the read-side of the contract: when `completed_run_id`
+ * We ALSO pin the read-side of the contract: when `completed_run_id`
  * is set on a plan_workouts row, the workout-detail page renders
  * the `.completed-card` and the in-grid editor's "Mark not done"
  * button is disabled with an explanatory title. The seed already
