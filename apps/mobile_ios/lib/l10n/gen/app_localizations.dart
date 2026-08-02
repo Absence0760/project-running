@@ -5164,6 +5164,36 @@ abstract class AppLocalizations {
   /// **'Sign in to leave a review'**
   String get routeDetailSignInToReview;
 
+  /// Tooltip on the delete button for the viewer's own route review
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your review'**
+  String get routeDetailDeleteReview;
+
+  /// Title of the confirm dialog for deleting your own route review
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your review?'**
+  String get routeDetailDeleteReviewTitle;
+
+  /// Body of the confirm dialog for deleting your own route review
+  ///
+  /// In en, this message translates to:
+  /// **'Your rating and comment will be removed from this route. You can leave a new review afterwards.'**
+  String get routeDetailDeleteReviewBody;
+
+  /// Confirm action in the delete-your-review dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete review'**
+  String get routeDetailDeleteReviewCta;
+
+  /// Banner shown when deleting your own route review fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete the review: {error}'**
+  String routeDetailReviewDeleteFailed(String error);
+
   /// Banner shown when submitting a review fails
   ///
   /// In en, this message translates to:

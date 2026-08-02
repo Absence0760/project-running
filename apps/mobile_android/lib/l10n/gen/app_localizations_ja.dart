@@ -2905,6 +2905,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailSignInToReview => 'レビューを残すにはサインインしてください';
 
   @override
+  String get routeDetailDeleteReview => '自分のレビューを削除';
+
+  @override
+  String get routeDetailDeleteReviewTitle => '自分のレビューを削除しますか？';
+
+  @override
+  String get routeDetailDeleteReviewBody =>
+      '評価とコメントがこのルートから削除されます。あとで新しいレビューを投稿できます。';
+
+  @override
+  String get routeDetailDeleteReviewCta => 'レビューを削除';
+
+  @override
+  String routeDetailReviewDeleteFailed(String error) {
+    return 'レビューを削除できませんでした: $error';
+  }
+
+  @override
   String routeDetailReviewFailed(String error) {
     return 'レビューの送信に失敗しました: $error';
   }

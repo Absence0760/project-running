@@ -3090,6 +3090,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeDetailSignInToReview => 'Connectez-vous pour laisser un avis';
 
   @override
+  String get routeDetailDeleteReview => 'Supprimer votre avis';
+
+  @override
+  String get routeDetailDeleteReviewTitle => 'Supprimer votre avis ?';
+
+  @override
+  String get routeDetailDeleteReviewBody =>
+      'Votre note et votre commentaire seront retirés de cet itinéraire. Vous pourrez laisser un nouvel avis ensuite.';
+
+  @override
+  String get routeDetailDeleteReviewCta => 'Supprimer l\'avis';
+
+  @override
+  String routeDetailReviewDeleteFailed(String error) {
+    return 'Impossible de supprimer l\'avis : $error';
+  }
+
+  @override
   String routeDetailReviewFailed(String error) {
     return 'Échec de l\'envoi de l\'avis : $error';
   }

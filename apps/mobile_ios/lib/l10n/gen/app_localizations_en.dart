@@ -3057,6 +3057,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailSignInToReview => 'Sign in to leave a review';
 
   @override
+  String get routeDetailDeleteReview => 'Delete your review';
+
+  @override
+  String get routeDetailDeleteReviewTitle => 'Delete your review?';
+
+  @override
+  String get routeDetailDeleteReviewBody =>
+      'Your rating and comment will be removed from this route. You can leave a new review afterwards.';
+
+  @override
+  String get routeDetailDeleteReviewCta => 'Delete review';
+
+  @override
+  String routeDetailReviewDeleteFailed(String error) {
+    return 'Couldn\'t delete the review: $error';
+  }
+
+  @override
   String routeDetailReviewFailed(String error) {
     return 'Failed to submit review: $error';
   }
