@@ -533,7 +533,10 @@ resource "aws_lambda_function_url" "coach" {
     # `aws_lambda_function.coach` resource). Missing this header
     # silently breaks CORS preflight on any non-CloudFront origin
     # (preview deployments hit it first). Audit/coach May 2026 Low #12.
-    allow_headers = ["authorization", "content-type", "x-supabase-authorization"]
+    # `x-amz-content-sha256` is the client-supplied sigv4 payload hash
+    # OAC-signed POSTs require (issue #590 defect 3) — not
+    # CORS-safelisted, so a cross-origin preflight must allow it too.
+    allow_headers = ["authorization", "content-type", "x-supabase-authorization", "x-amz-content-sha256"]
     max_age       = 3600
   }
 }
@@ -1340,7 +1343,10 @@ resource "aws_lambda_function_url" "generate_route" {
   cors {
     allow_origins = ["https://${var.domain_name}"]
     allow_methods = ["POST"]
-    allow_headers = ["content-type"]
+    # `x-amz-content-sha256` — the client-supplied sigv4 payload hash
+    # OAC-signed POSTs require (issue #590 defect 3); the JWT rides
+    # `x-supabase-authorization` (the OAC owns `Authorization`).
+    allow_headers = ["content-type", "x-supabase-authorization", "x-amz-content-sha256"]
     max_age       = 3600
   }
 }

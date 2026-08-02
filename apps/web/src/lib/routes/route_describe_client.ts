@@ -12,6 +12,7 @@
 // error and keep the locally-rendered baseline.
 
 import { supabase } from '../core/supabase';
+import { payloadSha256Hex } from '../util/payload_hash';
 import type { RouteDescriptionInput } from './route_description';
 
 export interface AiDescriptionResult {
@@ -42,14 +43,19 @@ function toBody(input: RouteDescriptionInput): Record<string, unknown> {
 export async function requestAiDescription(
 	input: RouteDescriptionInput,
 ): Promise<AiDescriptionResult> {
+	const body = JSON.stringify(toBody(input));
+	// CloudFront's Lambda OAC can't hash the body itself — the client
+	// supplies the sigv4 payload hash or the Function URL 403s (#590).
+	const bodyHash = await payloadSha256Hex(body);
 	const post = (token: string) =>
 		fetch('/api/coach/route-describe', {
 			method: 'POST',
 			headers: {
 				'content-type': 'application/json',
 				'X-Supabase-Authorization': `Bearer ${token}`,
+				'x-amz-content-sha256': bodyHash,
 			},
-			body: JSON.stringify(toBody(input)),
+			body,
 		});
 
 	let token = (await supabase.auth.getSession()).data.session?.access_token;
