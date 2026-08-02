@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { RoutineAdherence, SetAdherenceStatus } from '$lib/gym/gym_adherence';
 	import type { GymStepResult, NextTargetHint } from '$lib/gym/gym_session_types';
+	import { reviewRowKey } from '$lib/gym/gym_workout_review';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -123,7 +124,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each ordered as s (s.exercise_key + ':' + s.set_index + ':' + s.status)}
+				{#each ordered as s (reviewRowKey(s))}
 					<tr>
 						<td class="status-cell">
 							<span class="status-pill status-{s.status}">
