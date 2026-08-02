@@ -231,7 +231,8 @@ Edit a secret in place (the encrypted file lives in the PRIVATE estate repo):
 ```bash
 sops ../infra-secrets/running/prod.sops.yaml      # opens $EDITOR with decrypted YAML
 ( cd ../infra-secrets && git commit -am 'running: rotate prod secret' )   # commit in the private repo
-cd infra/envs/prod && terraform apply             # pushes new value to Lambda
+cd infra/envs/prod && terraform apply             # publishes a new Lambda version with the new env
+bin/lambda-alias-sync.sh prod                     # repoint the CI-owned `live` aliases so it actually serves
 ```
 
 Or non-interactively for one specific key (no shell history leak — value comes via stdin / `--from-file`; `bin/secret-set.sh` writes to `../infra-secrets/running/<env>.sops.yaml`):
@@ -240,11 +241,12 @@ Or non-interactively for one specific key (no shell history leak — value comes
 echo -n "$NEW_VALUE" | bin/secret-set.sh prod ANTHROPIC_API_KEY
 ( cd ../infra-secrets && git commit -am 'running: rotate ANTHROPIC_API_KEY' )
 cd infra/envs/prod && terraform apply
+bin/lambda-alias-sync.sh prod
 ```
 
 If you ever change the *KMS key itself* (destroyed + recreated, or moved in the estate `.sops.yaml`), the existing encrypted file still decrypts under the OLD key in its metadata. Re-encrypt under the new key with [`bin/key-rotate.sh`](../bin/README.md). For *AWS-native key material* rotation (`aws kms enable-key-rotation`) no re-encrypt is needed — sops sees the same key alias.
 
-The Lambda's environment variables update in-place; in-flight requests finish on the old config, new requests pick up the new value within ~10 s.
+**An env-only apply does not reach the serving path by itself** (issue #590 defect 2). The functions publish on every apply (`publish = true`), but the `live` aliases — which the Function URLs target — are CI-owned (`ignore_changes` in Terraform; `release-web.yml` repoints them on code deploys), so the apply's freshly published version sits unserved while the alias keeps the old version's frozen env snapshot. Run `bin/lambda-alias-sync.sh <env>` after the apply (or cut a release); it repoints each of the eight web Lambdas' `live` alias to its newest published version. In-flight requests finish on the old config; new requests pick up the new value within ~10 s of the repoint.
 
 ## State
 

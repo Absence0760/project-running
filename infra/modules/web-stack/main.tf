@@ -505,6 +505,14 @@ resource "aws_lambda_alias" "live" {
 
   # CI retargets this alias on every deploy. Same rationale as
   # ignore_changes on the function itself.
+  #
+  # Consequence (issue #590 defect 2, same for all eight aliases in
+  # this module): an env-only `terraform apply` publishes a fresh
+  # version (`publish = true`) carrying the new env, but the alias —
+  # and the Function URL, which targets the alias — keeps serving the
+  # old version with its FROZEN env snapshot. After any secret / env
+  # rotation apply, run `bin/lambda-alias-sync.sh <env>` (or cut a
+  # release) so the rotation actually reaches the serving path.
   lifecycle {
     ignore_changes = [function_version]
   }
@@ -525,7 +533,10 @@ resource "aws_lambda_function_url" "coach" {
     # `aws_lambda_function.coach` resource). Missing this header
     # silently breaks CORS preflight on any non-CloudFront origin
     # (preview deployments hit it first). Audit/coach May 2026 Low #12.
-    allow_headers = ["authorization", "content-type", "x-supabase-authorization"]
+    # `x-amz-content-sha256` is the client-supplied sigv4 payload hash
+    # OAC-signed POSTs require (issue #590 defect 3) — not
+    # CORS-safelisted, so a cross-origin preflight must allow it too.
+    allow_headers = ["authorization", "content-type", "x-supabase-authorization", "x-amz-content-sha256"]
     max_age       = 3600
   }
 }
@@ -557,6 +568,30 @@ resource "aws_lambda_permission" "cloudfront_invoke" {
   # avoids a brief window where the new permission isn't attached yet
   # but the old one has already been deleted, which would 403 every
   # in-flight CloudFront → Lambda call.
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# AWS's OAC-for-Lambda contract requires TWO grants: `InvokeFunctionUrl`
+# above AND plain `lambda:InvokeFunction`. With only the first, the
+# Function URL rejects every CloudFront-signed request with 403 BEFORE
+# invocation — and the distribution's SPA error fallback rewrites that
+# 403 into the shell at 200, so the surface looks healthy while the
+# Lambda never runs. Direct admin sigv4 probes still succeed (operator
+# identity policies carry both actions), which is why the config reviews
+# as correct without this resource. Issue #590; empirically proven
+# 2026-07-21 by a temporary additive grant on share-run.
+# `function_url_auth_type` is only valid on InvokeFunctionUrl grants, so
+# it's omitted here.
+resource "aws_lambda_permission" "cloudfront_invoke_function" {
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.coach.function_name
+  qualifier     = aws_lambda_alias.live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
   lifecycle {
     create_before_destroy = true
   }
@@ -678,6 +713,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_run" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_run" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareRun"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_run.function_name
+  qualifier     = aws_lambda_alias.share_run_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true
@@ -808,6 +858,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_route" {
   }
 }
 
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_route" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareRoute"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_route.function_name
+  qualifier     = aws_lambda_alias.share_route_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Share-recap Lambda (Year-in-Running "Wrapped" share parity) ───
 #
 # Per-request SSR handler for /recap/share/<id> (HTML + OG tags) +
@@ -920,6 +985,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_recap" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_recap" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareRecap"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_recap.function_name
+  qualifier     = aws_lambda_alias.share_recap_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true
@@ -1046,6 +1126,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_badge" {
   }
 }
 
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_badge" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareBadge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_badge.function_name
+  qualifier     = aws_lambda_alias.share_badge_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Shared entity-SSR Lambda (/share/{event,profile,club,race}) ───
 #
 # One HTML-only Lambda serving the four public entity share paths (see
@@ -1147,6 +1242,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_entity" {
   }
 }
 
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_entity" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareEntity"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_entity.function_name
+  qualifier     = aws_lambda_alias.share_entity_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Generate-route Lambda (server-side round-trip route generation) ───
 #
 # Non-streaming JSON handler for POST /api/routes/generate. Replaces the
@@ -1233,7 +1343,10 @@ resource "aws_lambda_function_url" "generate_route" {
   cors {
     allow_origins = ["https://${var.domain_name}"]
     allow_methods = ["POST"]
-    allow_headers = ["content-type"]
+    # `x-amz-content-sha256` — the client-supplied sigv4 payload hash
+    # OAC-signed POSTs require (issue #590 defect 3); the JWT rides
+    # `x-supabase-authorization` (the OAC owns `Authorization`).
+    allow_headers = ["content-type", "x-supabase-authorization", "x-amz-content-sha256"]
     max_age       = 3600
   }
 }
@@ -1253,6 +1366,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_generate_route" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_generate_route" {
+  statement_id  = "AllowCloudFrontInvokeFunctionGenerateRoute"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.generate_route.function_name
+  qualifier     = aws_lambda_alias.generate_route_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true
@@ -1361,6 +1489,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_osrm_proxy" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_osrm_proxy" {
+  statement_id  = "AllowCloudFrontInvokeFunctionOsrmProxy"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.osrm_proxy.function_name
+  qualifier     = aws_lambda_alias.osrm_proxy_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true

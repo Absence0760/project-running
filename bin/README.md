@@ -30,6 +30,7 @@ the stack is re-applied so the Lambda gets them. Run the rows top-to-bottom:
 |---|---|
 | AWS session expired | `bin/aws-login.sh` |
 | Debugging a Lambda response | `bin/lambda-logs.sh preview --tail` |
+| After an env-only `terraform apply` (secret / env rotation) — repoint every web Lambda's CI-owned `live` alias to the freshly published version, so the rotation actually serves (issue #590) | `bin/lambda-alias-sync.sh preview` (`--dry-run` to just report drift) |
 | Dependabot left ghost CI runs | `bin/cancel-stale-runs.sh --apply` |
 | Local dev without burning the MapTiler quota | `bin/protomaps-dev.sh start` (then paste the printed env vars into each app's `.env.local`; full recipe at [`docs/ops/protomaps_local_setup.md`](../docs/ops/protomaps_local_setup.md), design at [decisions.md § 68](../docs/architecture/decisions.md#68-tile-rendering-honours-an-env-override-so-local-dev-can-use-self-hosted-protomaps-without-touching-prod-code-paths)) |
 | Testing Stripe / RevenueCat payments locally | `bin/payments-dev.sh start` (= `pnpm dev:payments`: boots Supabase + functions serve with `.env.local` + `stripe listen`; `… replay` POSTs a signed RevenueCat event to flip the tier — full recipe at [`docs/testing/local_testing_stubs.md § Stripe`](../docs/testing/local_testing_stubs.md)) |
@@ -60,7 +61,7 @@ Wrappers around `cargo` + `probe-rs` (and Renode, for the simulator) for the Rus
 
 ## Conventions
 
-- Read-only by default. Gated by a prompt (or `--auto-approve`): `deploy-preview`, `deploy-prod`, `onboard-operator`, `disaster-recovery`. Gated by an explicit flag: `cancel-stale-runs` (`--apply`). Ungated but local-file-only, idempotent, and verified with a decrypt round-trip: `secret-set`, `sops-init`, `key-rotate` (they rewrite the estate repo's `.sops.yaml` / encrypted file — the mutation is the point).
+- Read-only by default. Gated by a prompt (or `--auto-approve`): `deploy-preview`, `deploy-prod`, `onboard-operator`, `disaster-recovery`, `lambda-alias-sync`. Gated by an explicit flag: `cancel-stale-runs` (`--apply`). Ungated but local-file-only, idempotent, and verified with a decrypt round-trip: `secret-set`, `sops-init`, `key-rotate` (they rewrite the estate repo's `.sops.yaml` / encrypted file — the mutation is the point).
 - Idempotent. Re-running on an already-completed step prints "skipping" and exits 0.
 - Profile selection: scripts honour `$AWS_PROFILE` (set it once in `~/.bashrc.d/26-aliases-aws.sh`). If unset, `running` (this account's workstation SSO profile) is the default.
 - Region: pinned to `us-east-1` everywhere (CloudFront + ACM constraint).
