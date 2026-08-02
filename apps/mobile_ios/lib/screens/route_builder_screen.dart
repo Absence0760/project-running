@@ -1372,13 +1372,15 @@ class _StatusPill extends StatelessWidget {
               tooltip: l10n.routeBuilderDeletePoint(dragIndex! + 1),
               color: theme.colorScheme.error,
               onPressed: onDeleteDragged,
-              visualDensity: VisualDensity.compact,
+              constraints:
+                  const BoxConstraints(minWidth: 48, minHeight: 48),
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 18),
               tooltip: l10n.routeBuilderCancelDrag,
               onPressed: onCancelDrag,
-              visualDensity: VisualDensity.compact,
+              constraints:
+                  const BoxConstraints(minWidth: 48, minHeight: 48),
             ),
           ] else if (routing || saving) ...[
             const SizedBox(width: 8),

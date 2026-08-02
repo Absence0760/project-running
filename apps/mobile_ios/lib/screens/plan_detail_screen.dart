@@ -1134,19 +1134,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                     color: theme.colorScheme.outline,
                   )),
               if (_isOwner(p) && !p.isTemplate)
-                SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: IconButton(
-                    iconSize: 16,
-                    padding: EdgeInsets.zero,
-                    splashRadius: 18,
-                    visualDensity: VisualDensity.compact,
-                    tooltip: l10n.planDetailDuplicateWeek,
-                    icon: Icon(Icons.content_copy,
-                        color: theme.colorScheme.outline),
-                    onPressed: _bulkBusy ? null : () => _duplicateWeek(p, w),
-                  ),
+                IconButton(
+                  iconSize: 16,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
+                  tooltip: l10n.planDetailDuplicateWeek,
+                  icon: Icon(Icons.content_copy,
+                      color: theme.colorScheme.outline),
+                  onPressed: _bulkBusy ? null : () => _duplicateWeek(p, w),
                 ),
             ],
           ),
@@ -1216,19 +1212,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             // Inline edit affordance — discoverable button alongside the
             // long-press gesture. Hidden on rest days; nothing to edit.
             if (!isRest)
-              SizedBox(
-                width: 28,
-                height: 28,
-                child: IconButton(
-                  iconSize: 16,
-                  padding: EdgeInsets.zero,
-                  splashRadius: 18,
-                  visualDensity: VisualDensity.compact,
-                  tooltip: l10n.planDetailEditTooltip,
-                  icon: Icon(Icons.edit_outlined,
-                      color: theme.colorScheme.outline),
-                  onPressed: () => _editWorkout(wo),
-                ),
+              IconButton(
+                iconSize: 16,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 48, minHeight: 48),
+                tooltip: l10n.planDetailEditTooltip,
+                icon: Icon(Icons.edit_outlined,
+                    color: theme.colorScheme.outline),
+                onPressed: () => _editWorkout(wo),
               ),
           ],
         ),

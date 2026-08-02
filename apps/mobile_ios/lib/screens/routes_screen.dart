@@ -1165,7 +1165,6 @@ class RoutesScreenState extends State<RoutesScreen> {
               IconButton(
                 icon: const Icon(Icons.cloud_download, size: 20),
                 tooltip: l10n.routesSyncFromCloud,
-                visualDensity: VisualDensity.compact,
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 onPressed: _fetchRemoteRoutes,
               ),

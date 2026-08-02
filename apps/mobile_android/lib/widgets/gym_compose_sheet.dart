@@ -550,17 +550,16 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                     ),
                     const SizedBox(width: 4),
                     SizedBox(
-                      width: 32,
+                      width: 48,
                       child: si == 0
                           ? null
                           : IconButton(
                               tooltip: l10n.gymEditorRemoveSet,
                               icon: const Icon(Icons.close, size: 18),
                               color: theme.colorScheme.outline,
-                              visualDensity: VisualDensity.compact,
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(
-                                  minWidth: 32, minHeight: 32),
+                                  minWidth: 48, minHeight: 48),
                               onPressed: () => _removeSet(ex, si),
                             ),
                     ),
