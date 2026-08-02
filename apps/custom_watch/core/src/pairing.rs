@@ -85,6 +85,27 @@ pub fn window_remaining_s(until_s: u32, now_s: u32) -> Option<u32> {
 /// reaches Level 2, which is exactly what every characteristic's gate
 /// accepts. Naming a requirement `IoCapabilities::None` cannot satisfy fails
 /// the pairing procedure itself.
+/// Whether a stored bond is still the wearer's, given the factory-erase
+/// generation it was formed under and the device's current one.
+///
+/// FACTORY ERASE (§ 378) wipes the `BND1` flash record, but the live keys sit
+/// in RAM inside the SoftDevice security handler and the firmware never
+/// reboots — so before this predicate existed an erased watch kept serving the
+/// previous owner's phone its LTK until the battery died. `privacy.md` calls
+/// the bond "a live credential, not a stale record"; that is exactly what made
+/// the gap matter, and the erase's whole purpose is a watch that is lost,
+/// stolen, or handed on.
+///
+/// The generation is compared, never a boolean "erased" flag, because the
+/// watch must be able to pair again immediately afterwards: a re-pair records
+/// the generation it happened under, so the next erase invalidates it in turn.
+/// An equal generation is the only live case; a stored bond from any earlier
+/// generation is treated as absent, which also makes `may_bond` see an
+/// unbonded watch and restores first-time-setup pairing with no window.
+pub fn bond_is_live(bonded_at_gen: u32, current_gen: u32) -> bool {
+    bonded_at_gen == current_gen
+}
+
 pub fn may_bond(bonded: bool, window_open: bool) -> bool {
     !bonded || window_open
 }
@@ -256,5 +277,36 @@ mod tests {
         assert!(!PAIR_ROW.contains("B1"));
         assert!(PAIR_LEGEND_ARMED.contains("B1"));
         assert!(PAIR_LEGEND_ARMED.contains("B4"));
+    }
+
+    #[test]
+    fn a_bond_survives_until_the_erase_generation_moves() {
+        assert!(bond_is_live(0, 0));
+        assert!(bond_is_live(7, 7));
+        assert!(!bond_is_live(0, 1));
+    }
+
+    #[test]
+    fn an_erased_bond_reads_as_unbonded_so_the_watch_pairs_freely_again() {
+        // The erase's point is a watch that can be handed on. Once the stored
+        // bond is dead, `may_bond` must see an unbonded device and admit a
+        // new phone with no window — first-time setup, which is what a wiped
+        // watch is.
+        let live_after_erase = bond_is_live(3, 4);
+        assert!(!live_after_erase);
+        assert!(may_bond(live_after_erase, false));
+    }
+
+    #[test]
+    fn re_pairing_after_an_erase_is_itself_erasable() {
+        // A boolean "erased" flag would have to be cleared on re-pair, and a
+        // missed clear would leave the next erase inert. The generation makes
+        // that unrepresentable: the new bond records the CURRENT generation.
+        let gen_after_first_erase = 1;
+        assert!(bond_is_live(gen_after_first_erase, gen_after_first_erase));
+        assert!(!bond_is_live(
+            gen_after_first_erase,
+            gen_after_first_erase + 1
+        ));
     }
 }
