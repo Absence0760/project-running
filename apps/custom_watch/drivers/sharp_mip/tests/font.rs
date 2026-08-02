@@ -270,3 +270,28 @@ fn plus_reads_as_a_cross_at_every_scale() {
         );
     }
 }
+
+#[test]
+fn no_two_printable_small_chars_share_a_bitmap() {
+    // The same gate as the 8x16 table, over the 6x12 label face: space is
+    // the only legitimately blank glyph, everything else must be tellable
+    // apart on the panel.
+    use sharp_mip::font_small;
+    let mut collisions: Vec<String> = Vec::new();
+    for (i, a) in font_small::FONT.iter().enumerate() {
+        for (j, b) in font_small::FONT.iter().enumerate().skip(i + 1) {
+            if a == b {
+                let (ca, cb) = (
+                    font_small::FIRST_CHAR + i as u8,
+                    font_small::FIRST_CHAR + j as u8,
+                );
+                collisions.push(format!("{:?} == {:?}", ca as char, cb as char));
+            }
+        }
+    }
+    assert!(
+        collisions.is_empty(),
+        "small chars share a bitmap: {}",
+        collisions.join(", ")
+    );
+}

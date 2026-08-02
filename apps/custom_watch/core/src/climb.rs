@@ -93,6 +93,24 @@ impl ClimbView {
     pub fn is_empty(&self) -> bool {
         self.active.is_none() && self.ahead.is_none()
     }
+
+    /// Height fraction of the whole climb already banked — `gain` over
+    /// `gain + still-to-climb`, the number the Climb page's thermometer
+    /// fills by (§ 430). Both halves are net height, so a dip on the way
+    /// distorts neither side. `None` without both: with no crest the total
+    /// is unknowable and a fraction of a guess would render as progress, and
+    /// with no active climb yet there is nothing banked to show — the crest
+    /// block's rows already carry what is known.
+    pub fn crest_progress(&self) -> Option<f32> {
+        let (active, ahead) = (self.active?, self.ahead?);
+        let banked = active.gain_m.max(0.0);
+        let left = ahead.gain_m.max(0.0);
+        let total = banked + left;
+        if !total.is_finite() || total <= 0.0 {
+            return None;
+        }
+        Some((banked / total).clamp(0.0, 1.0))
+    }
 }
 
 /// Grade as a percent over a run, `0` when the run is too short to divide by.
@@ -485,5 +503,61 @@ mod tests {
             ..Default::default()
         }
         .is_empty());
+    }
+}
+
+#[cfg(test)]
+mod crest_progress_tests {
+    use super::*;
+
+    fn view(banked: f32, left: f32) -> ClimbView {
+        ClimbView {
+            active: Some(ActiveClimb {
+                gain_m: banked,
+                distance_m: 1_000.0,
+                avg_grade_pct: 10.0,
+            }),
+            ahead: Some(CrestAhead {
+                distance_m: 500.0,
+                gain_m: left,
+                avg_grade_pct: 12.0,
+            }),
+        }
+    }
+
+    #[test]
+    fn banked_over_total_height() {
+        assert_eq!(view(220.0, 110.0).crest_progress(), Some(220.0 / 330.0));
+        assert_eq!(view(0.0, 100.0).crest_progress(), Some(0.0));
+    }
+
+    #[test]
+    fn refuses_without_both_halves_or_a_total() {
+        let mut only_ahead = view(1.0, 1.0);
+        only_ahead.active = None;
+        assert_eq!(only_ahead.crest_progress(), None);
+        let mut only_active = view(1.0, 1.0);
+        only_active.ahead = None;
+        assert_eq!(only_active.crest_progress(), None);
+        assert_eq!(
+            view(0.0, 0.0).crest_progress(),
+            None,
+            "zero total is a guess"
+        );
+        assert_eq!(
+            view(-5.0, 0.0).crest_progress(),
+            None,
+            "negatives clamp to no total"
+        );
+    }
+
+    #[test]
+    fn a_crest_passed_mid_update_clamps_to_full() {
+        assert_eq!(
+            view(f32::INFINITY, 1.0).crest_progress(),
+            None,
+            "non-finite refuses"
+        );
+        assert_eq!(view(330.0, 0.0).crest_progress(), Some(1.0));
     }
 }

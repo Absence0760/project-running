@@ -420,6 +420,34 @@ pub fn tall_hero(page: Page) -> bool {
     body_top_row(page) == TALL_HERO_BAND_ROWS
 }
 
+/// Rows the paint layer renders in the 6x12 chrome face rather than the 8x16
+/// body face (decisions § 429): the metric-label row under the hero band and
+/// the GPS status footer. Labels and chrome shrink; values never do — which
+/// is the whole hierarchy. Returned as a row bitmask so the paint layer stays
+/// a lookup.
+///
+/// The label row is [`body_top_row`] — on every glance page the first body
+/// row names the metric (`AVG PACE`, `TO CREST`, `ELEV PROFILE`) — so this
+/// inherits that function's exhaustive-match discipline instead of keeping a
+/// second page list that can drift. The exceptions are structural: the
+/// Dashboard is the ruled field grid (every row is data), Nav's row 0 is a
+/// title beside a map panel, and a composed screen owns every row.
+///
+/// The footer bit is universal across run views (`page_rows_carry_the_gps_
+/// footer_where_chrome_says_so` pins that against the composed rows, so a
+/// page whose row 8 carries data cannot be silently demoted to the small
+/// face).
+pub fn chrome_rows(page: Page, run_view: bool) -> u16 {
+    if !run_view {
+        return 0;
+    }
+    match page {
+        Page::Dashboard | Page::Screen1 | Page::Screen2 | Page::Screen3 | Page::Screen4 => 0,
+        Page::Nav => 1 << GPS_ROW,
+        p => (1 << GPS_ROW) | (1 << body_top_row(p)),
+    }
+}
+
 /// Cells the widest run-state tag needs. `AUTO` — a genuinely stationary
 /// stretch — is the long one; see [`rec_tag`].
 pub const TAG_COLS: usize = 4;
@@ -6284,6 +6312,46 @@ mod tests {
                     if p == Page::default() {
                         break;
                     }
+                }
+            }
+        }
+    }
+
+    /// § 429: the paint layer renders the GPS row in the 6x12 chrome face
+    /// wherever [`chrome_rows`] names it, and chrome is for labels — a value
+    /// must never shrink. So every page carrying the footer bit must compose
+    /// that row as the GPS status line (or leave it blank), walked fed and
+    /// unfed so neither branch can smuggle data onto it.
+    #[test]
+    fn page_rows_carry_the_gps_footer_where_chrome_says_so() {
+        let fed = fed_snapshot();
+        let unfed = snapshot(RecordState::Recording, 15_000.0);
+        let e = elev(99_999.0, 99_999.0, 99_999.0);
+        for rec in [&fed, &unfed] {
+            let mut p = Page::default();
+            loop {
+                if chrome_rows(p, true) >> GPS_ROW & 1 != 0 {
+                    let rows = page_rows(
+                        p,
+                        Some(&fix()),
+                        Some(150),
+                        Some(rec),
+                        Some(&e),
+                        NavView::NoCourse,
+                        None,
+                        42,
+                        false,
+                    );
+                    let footer = rows[GPS_ROW].as_str();
+                    assert!(
+                        footer.contains("SATS") || footer.trim().is_empty(),
+                        "page {p:?} composes {footer:?} on the GPS row — chrome \
+                         would demote a value to the label face"
+                    );
+                }
+                p = p.next();
+                if p == Page::default() {
+                    break;
                 }
             }
         }

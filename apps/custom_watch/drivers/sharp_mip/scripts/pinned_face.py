@@ -27,6 +27,15 @@ FACES = {
     "spleen-8x16.bdf": (
         "4a3d97ee61a8c86a7525d8c723cb8a14081f395cd2feb4227ba5e3baf0629bae"
     ),
+    "spleen-6x12.bdf": (
+        "fc0743d164690f99b7e2e1b9d503180e4c719a9831ae03fd8f6da18c857dee27"
+    ),
+    "spleen-16x32.bdf": (
+        "f6db2549d46c5699ceca7ccc26e747c8bdad3af76239f86aae6ed995bd2f3d37"
+    ),
+    "spleen-32x64.bdf": (
+        "46897e4c11aec89547805c329b1e8fb572f7580ccb2f7217f5b82aff3b035a71"
+    ),
 }
 
 FONT_DIR = pathlib.Path(__file__).resolve().parent.parent / "fonts"

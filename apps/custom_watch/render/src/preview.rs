@@ -150,12 +150,19 @@ fn draw_face(fb: &mut Framebuffer, page: Page, snap: Option<&Snapshot>, hr: Opti
         None,
         None,
     );
-    let field_grid = page == Page::Dashboard && snap.is_some();
+    let layout = ui_frame::FrameLayout {
+        page,
+        run_view: snap.is_some(),
+        idle_view: IdleView::Home,
+        panel_active: false,
+        panel_repaint: false,
+    };
     for (r, row) in rows.iter().enumerate() {
-        if field_grid {
-            widgets::ruled_dashboard_row(fb, r, row);
-        } else {
-            fb.draw_text_row(r, row);
+        match ui_frame::row_paint(r, layout) {
+            ui_frame::RowPaint::Skip => {}
+            ui_frame::RowPaint::Ruled => widgets::ruled_dashboard_row(fb, r, row),
+            ui_frame::RowPaint::Chrome => fb.draw_text_row_small(r, row),
+            ui_frame::RowPaint::Text => fb.draw_text_row(r, row),
         }
     }
     draw_hero(
@@ -684,6 +691,34 @@ fn preview_page_grid() {
         widgets::draw_grid_cursor(&mut fb2, cell);
     }
     show("page grid: filtered mask, cursor on ROAD", &fb2);
+}
+
+#[test]
+fn preview_climb_page() {
+    // Mid-climb with a named crest: the crest block, the banked block, and
+    // the § 430 crest thermometer filled to the banked share of the height.
+    use watch_core::climb::{ActiveClimb, ClimbView, CrestAhead};
+    let mut snap = base_snapshot();
+    snap.climb = ClimbView {
+        active: Some(ActiveClimb {
+            gain_m: 220.0,
+            distance_m: 1_400.0,
+            avg_grade_pct: 15.7,
+        }),
+        ahead: Some(CrestAhead {
+            distance_m: 600.0,
+            gain_m: 110.0,
+            avg_grade_pct: 18.3,
+        }),
+    };
+    let mut fb = Framebuffer::new();
+    draw_face(&mut fb, Page::Climb, Some(&snap), None);
+    widgets::draw_page_indicator(
+        &mut fb,
+        watch_core::statusbar::page_indicator(Page::Climb, u64::MAX),
+    );
+    widgets::draw_climb_overlay(&mut fb, &snap);
+    show("climb: crest ahead + banked-height thermometer", &fb);
 }
 
 #[test]

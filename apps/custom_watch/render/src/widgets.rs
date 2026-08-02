@@ -270,6 +270,31 @@ pub fn draw_gear_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
     }
 }
 
+/// The Climb page's crest thermometer (§ 430): a vertical gauge on the right
+/// shoulder — the column of rows the crest and banked blocks leave blank —
+/// filled bottom-up by [`ClimbView::crest_progress`], height banked over the
+/// climb's whole height. Vertical because the number it draws IS a height.
+/// No-op without both halves of the view: a fraction of an unknown total
+/// would render a guess as progress.
+///
+/// [`ClimbView::crest_progress`]: watch_core::climb::ClimbView::crest_progress
+pub fn draw_climb_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
+    let Some(frac) = snap.climb.crest_progress() else {
+        return;
+    };
+    const X: usize = WIDTH - 26;
+    const W: usize = 22;
+    const Y: usize = 3 * CELL_H + 2;
+    const H: usize = 5 * CELL_H - 6;
+    fb.stroke_rect(X, Y, W, H, true);
+    let inner_h = H - 2;
+    let filled = (inner_h as f32 * frac.clamp(0.0, 1.0)) as usize;
+    // Cleared above, filled below — the same erase-your-own-tail discipline
+    // as draw_progress_bar, rotated: a shrinking fill must not strand ink.
+    fb.fill_rect(X + 1, Y + 1, W - 2, inner_h - filled, false);
+    fb.fill_rect(X + 1, Y + 1 + (inner_h - filled), W - 2, filled, true);
+}
+
 /// The fuel page's carry-load gauge: a progress bar on row 3 fed by
 /// [`gauge::fuel_fill`] (share of the plan's carbohydrate riding in the next
 /// carry-out). No-op without a loaded fuel plan.

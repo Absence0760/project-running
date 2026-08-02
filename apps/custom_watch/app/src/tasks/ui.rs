@@ -479,6 +479,7 @@ pub async fn screen_task(
             match ui_frame::row_paint(row, layout) {
                 RowPaint::Skip => continue,
                 RowPaint::Ruled => widgets::ruled_dashboard_row(&mut fb, row, text),
+                RowPaint::Chrome => fb.draw_text_row_small(row, text),
                 RowPaint::Text => fb.draw_text_row(row, text),
             }
             if let Some(icon) = icons[row] {
@@ -571,6 +572,7 @@ pub async fn screen_task(
                     Page::Workout => widgets::draw_workout_overlay(&mut fb, snap),
                     Page::Fuel => widgets::draw_fuel_overlay(&mut fb, snap),
                     Page::GearWear => widgets::draw_gear_overlay(&mut fb, snap),
+                    Page::Climb => widgets::draw_climb_overlay(&mut fb, snap),
                     Page::Zones => widgets::draw_zones_overlay(&mut fb, snap, hr_bpm),
                     Page::Splits => widgets::draw_splits_overlay(&mut fb, snap),
                     Page::ElevationProfile => widgets::draw_elev_profile_overlay(&mut fb, snap),
