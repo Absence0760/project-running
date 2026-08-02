@@ -313,6 +313,11 @@ mod imp {
     /// scorched-earth fallback that also clears `BND1`.
     pub struct Bonder {
         peer: Cell<Option<Peer>>,
+        /// The `state::bond_erase_gen()` `peer` was stored under. A FACTORY
+        /// ERASE bumps that counter, so a stale generation here means the
+        /// wearer wiped this bond and the keys below must stop being served —
+        /// the firmware never reboots, so nothing else would retire them.
+        peer_gen: Cell<u32>,
         sys_attrs: RefCell<heapless::Vec<u8, 64>>,
     }
 
@@ -320,8 +325,26 @@ mod imp {
         fn default() -> Self {
             Bonder {
                 peer: Cell::new(None),
+                peer_gen: Cell::new(0),
                 sys_attrs: RefCell::new(heapless::Vec::new()),
             }
+        }
+    }
+
+    impl Bonder {
+        /// The stored peer, or `None` once a factory erase has retired it.
+        /// Every read of `peer` goes through here — reading the field directly
+        /// is what let an erased watch keep serving the previous owner.
+        fn live_peer(&self) -> Option<Peer> {
+            pairing::bond_is_live(self.peer_gen.get(), state::bond_erase_gen())
+                .then(|| self.peer.get())
+                .flatten()
+        }
+
+        /// Adopt `peer` as of the current erase generation.
+        fn set_peer(&self, peer: Option<Peer>) {
+            self.peer.set(peer);
+            self.peer_gen.set(state::bond_erase_gen());
         }
     }
 
@@ -349,7 +372,7 @@ mod imp {
     pub async fn bond_persist(store: &'static SharedStore, bonder: &'static Bonder) -> ! {
         loop {
             BOND_SAVED.wait().await;
-            if let Some(rec) = bonder.peer.get().map(Peer::to_record) {
+            if let Some(rec) = bonder.live_peer().map(Peer::to_record) {
                 store.lock().await.persist_bond(rec).await;
             }
         }
@@ -370,8 +393,10 @@ mod imp {
         /// takeover rather than a re-pair.
         fn can_bond(&self, _conn: &Connection) -> bool {
             let now_s = Instant::now().as_secs() as u32;
-            let ok =
-                pairing::may_bond(self.peer.get().is_some(), state::pairing_window_open(now_s));
+            let ok = pairing::may_bond(
+                self.live_peer().is_some(),
+                state::pairing_window_open(now_s),
+            );
             if !ok {
                 PAIRING_REFUSED.signal(());
             }
@@ -395,7 +420,10 @@ mod imp {
         /// interaction, since there is no passkey face to interact with.
         fn request_mitm_protection(&self, _conn: &Connection) -> bool {
             let now_s = Instant::now().as_secs() as u32;
-            !pairing::may_bond(self.peer.get().is_some(), state::pairing_window_open(now_s))
+            !pairing::may_bond(
+                self.live_peer().is_some(),
+                state::pairing_window_open(now_s),
+            )
         }
 
         fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
@@ -416,7 +444,7 @@ mod imp {
             state::close_pairing_window();
             // Fresh bond, fresh CCCD state.
             self.sys_attrs.borrow_mut().clear();
-            self.peer.set(Some(Peer {
+            self.set_peer(Some(Peer {
                 master_id,
                 key,
                 peer_id,
@@ -425,13 +453,12 @@ mod imp {
         }
 
         fn get_key(&self, _conn: &Connection, master_id: MasterId) -> Option<EncryptionInfo> {
-            self.peer
-                .get()
+            self.live_peer()
                 .and_then(|peer| (master_id == peer.master_id).then_some(peer.key))
         }
 
         fn save_sys_attrs(&self, conn: &Connection) {
-            if let Some(peer) = self.peer.get() {
+            if let Some(peer) = self.live_peer() {
                 if peer.peer_id.is_match(conn.peer_address()) {
                     let mut sys_attrs = self.sys_attrs.borrow_mut();
                     let capacity = sys_attrs.capacity();
@@ -617,7 +644,7 @@ mod imp {
                 "ble: restored persisted bond (ediv {=u16})",
                 rec.master_ediv
             );
-            bonder.peer.set(Some(Peer::from_record(&rec)));
+            bonder.set_peer(Some(Peer::from_record(&rec)));
         }
 
         loop {

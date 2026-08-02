@@ -18,6 +18,7 @@ use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::HrSample;
+use watch_core::hr_source::HrSource;
 use watch_core::ice::IceCard;
 use watch_core::page::Page;
 use watch_core::pairing;
@@ -49,6 +50,14 @@ pub static FIX: Watch<CriticalSectionRawMutex, Fix, 6> = Watch::new();
 /// holds only within the mode's bounded staleness and then blanks / stops
 /// banking everywhere at once.
 pub static HR: Watch<CriticalSectionRawMutex, HrSample, 2> = Watch::new();
+
+/// Which sensor [`HR`]'s latest reading was credited to, or `None` when nothing
+/// is authoritative (the blank the arbiter synthesises has no producer). The
+/// `hr_source` arbiter publishes it beside the sample; `record` subscribes and
+/// mirrors it onto the run snapshot so the zones page can name the sensor.
+/// Without it the arbitration ended at a defmt line and a strap that never
+/// paired was indistinguishable, on the wrist, from one that won.
+pub static HR_SOURCE: Watch<CriticalSectionRawMutex, Option<HrSource>, 1> = Watch::new();
 
 /// The optical (MAX86177) sensor's own estimate: the `hr` task publishes, the
 /// `hr_source` arbiter subscribes. A separate seam from [`HR`] so the wrist
@@ -381,4 +390,31 @@ pub fn pairing_window_remaining_s(now_s: u32) -> Option<u32> {
 
 pub fn pairing_window_open(now_s: u32) -> bool {
     pairing_window_remaining_s(now_s).is_some()
+}
+
+/// Factory-erase generation. Bumped by the button task when the wearer
+/// completes FACTORY ERASE (§ 378); the BLE security handler records the
+/// generation each bond was formed under and treats an older one as absent
+/// (`pairing::bond_is_live`).
+///
+/// An atomic for the same reason the pairing deadline is one: the SoftDevice's
+/// security callbacks run in event context and can neither await nor hold a
+/// `Watch` receiver, so the erase has to be legible to them without being
+/// delivered to them. A `Channel` cannot serve this — it has one receiver, and
+/// `record` already consumes it.
+static BOND_ERASE_GEN: AtomicU32 = AtomicU32::new(0);
+
+/// Read only by the `ble` build's security handler — the non-BLE build has no
+/// keys to retire, but still bumps the counter so the two builds share one
+/// erase path rather than a `cfg` at the call site.
+#[cfg(feature = "ble")]
+pub fn bond_erase_gen() -> u32 {
+    BOND_ERASE_GEN.load(Ordering::Relaxed)
+}
+
+/// Invalidate the live bond. Wrapping is harmless and unreachable in practice:
+/// the predicate compares for equality, and a wearer would have to complete
+/// 2^32 guarded erases to alias one.
+pub fn bump_bond_erase_gen() {
+    BOND_ERASE_GEN.fetch_add(1, Ordering::Relaxed);
 }

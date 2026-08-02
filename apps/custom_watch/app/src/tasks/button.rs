@@ -407,9 +407,20 @@ fn wall_stamp_now(fix: Option<&Fix>, now_s: u32) -> Option<u32> {
 /// from here.
 async fn factory_erase(nav: &mut NavState, store: &'static SharedStore) {
     let wiped = store.lock().await.factory_erase().await;
+    // Retire the LIVE bond, not just its flash record. The SoftDevice's keys
+    // sit in RAM inside the security handler and nothing here reboots, so
+    // erasing `BND1` alone left the previous owner's phone able to reconnect
+    // and read everything until the battery died — the exact lost / stolen /
+    // handed-on case this action exists for, and the opposite of what
+    // `privacy.md` promises about a bond being a live credential. The handler
+    // compares this generation on every key it is asked for
+    // (`pairing::bond_is_live`), so the retirement takes effect inside the
+    // event context that serves the keys rather than waiting to be scheduled.
+    state::bump_bond_erase_gen();
     // A live §432 window has nothing left to guard once the bond is gone —
-    // an unbonded watch pairs freely — but a countdown surviving the wipe
-    // would read as state the erase missed.
+    // an unbonded watch pairs freely, which is true only because of the bump
+    // above — but a countdown surviving the wipe would read as state the
+    // erase missed.
     state::close_pairing_window();
     // The pushed course is where the runner PLANS to be; the pushed workout is
     // their session. Both are RAM-only, and both are drawn on a page a next
