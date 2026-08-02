@@ -4150,6 +4150,31 @@
   "@routeDetailSignInToReview": {
     "description": "Banner shown when a signed-out user tries to review a route"
   },
+  "routeDetailDeleteReview": "Delete your review",
+  "@routeDetailDeleteReview": {
+    "description": "Tooltip on the delete button for the viewer's own route review"
+  },
+  "routeDetailDeleteReviewTitle": "Delete your review?",
+  "@routeDetailDeleteReviewTitle": {
+    "description": "Title of the confirm dialog for deleting your own route review"
+  },
+  "routeDetailDeleteReviewBody": "Your rating and comment will be removed from this route. You can leave a new review afterwards.",
+  "@routeDetailDeleteReviewBody": {
+    "description": "Body of the confirm dialog for deleting your own route review"
+  },
+  "routeDetailDeleteReviewCta": "Delete review",
+  "@routeDetailDeleteReviewCta": {
+    "description": "Confirm action in the delete-your-review dialog"
+  },
+  "routeDetailReviewDeleteFailed": "Couldn't delete the review: {error}",
+  "@routeDetailReviewDeleteFailed": {
+    "description": "Banner shown when deleting your own route review fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "routeDetailReviewFailed": "Failed to submit review: {error}",
   "@routeDetailReviewFailed": {
     "description": "Banner shown when submitting a review fails",

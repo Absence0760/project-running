@@ -1,0 +1,188 @@
+import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' as cm;
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/local_route_store.dart';
+import '../lib/preferences.dart';
+import '../lib/screens/route_detail_screen.dart';
+import '../lib/widgets/top_banner.dart';
+
+cm.Route _route() => cm.Route(
+      id: 'r1',
+      userId: 'someone-else',
+      name: 'River Loop',
+      waypoints: const [],
+      distanceMetres: 8500,
+      elevationGainMetres: 45,
+      isPublic: true,
+    );
+
+cm.RouteReviewRow _review({required String userId, String id = 'rev1'}) =>
+    cm.RouteReviewRow(
+      id: id,
+      routeId: 'r1',
+      userId: userId,
+      rating: 4,
+      comment: 'Lovely riverside path',
+      createdAt: DateTime.utc(2026, 5, 1),
+    );
+
+/// Serves a fixed review list and records delete calls. `deleteThrows`
+/// drives the failure path.
+class _ReviewsApi extends ApiClient {
+  _ReviewsApi({required this.reviewerId, this.deleteThrows = false});
+
+  final String reviewerId;
+  final bool deleteThrows;
+  int deleteCalls = 0;
+
+  @override
+  String? get userId => 'viewer';
+
+  @override
+  Future<List<cm.RouteReviewRow>> getRouteReviews(String routeId) async =>
+      [_review(userId: reviewerId)];
+
+  @override
+  Future<void> deleteRouteReview(String routeId) async {
+    deleteCalls++;
+    if (deleteThrows) throw StateError('network down');
+  }
+}
+
+Future<void> _pump(WidgetTester tester, ApiClient api) async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = Preferences();
+  await prefs.init();
+
+  // The reviews sit near the bottom of a lazy ListView, so on a phone-sized
+  // viewport they are never built. A tall surface keeps the whole page in
+  // one layout pass instead of driving scroll animations past LiveRunMap.
+  tester.view.physicalSize = const Size(1200, 8000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: RouteDetailScreen(
+        route: _route(),
+        routeStore: LocalRouteStore(),
+        preferences: prefs,
+        apiClient: api,
+        isOwner: false,
+      ),
+    ),
+  );
+  // pumpAndSettle would spin LiveRunMap's pulse animation forever.
+  await tester.pump();
+  await tester.pump(Duration.zero);
+}
+
+/// The route-level delete lives in the app bar under the same icon, so every
+/// finder here is scoped by the review affordance's own tooltip.
+Finder _deleteReviewButton(WidgetTester tester) => find.byTooltip(
+      AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)))
+          .routeDetailDeleteReview,
+    );
+
+Finder _reportReviewButton(WidgetTester tester) => find.byTooltip(
+      AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)))
+          .routeDetailReportReview,
+    );
+
+void main() {
+  setUpAll(() {
+    dotenv.loadFromString(isOptional: true);
+  });
+
+  group('route review delete', () {
+    testWidgets('shows delete on your own review, not report', (tester) async {
+      final api = _ReviewsApi(reviewerId: 'viewer');
+      await _pump(tester, api);
+
+      expect(_deleteReviewButton(tester), findsOneWidget);
+      expect(_reportReviewButton(tester), findsNothing);
+    });
+
+    testWidgets('shows report on someone else\'s review, not delete',
+        (tester) async {
+      final api = _ReviewsApi(reviewerId: 'other-user');
+      await _pump(tester, api);
+
+      expect(_reportReviewButton(tester), findsOneWidget);
+      expect(_deleteReviewButton(tester), findsNothing);
+    });
+
+    testWidgets('cancelling the confirm dialog does not delete', (tester) async {
+      final api = _ReviewsApi(reviewerId: 'viewer');
+      await _pump(tester, api);
+
+      await tester.tap(_deleteReviewButton(tester));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final l10n =
+          AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)));
+      expect(find.text(l10n.routeDetailDeleteReviewTitle), findsOneWidget);
+
+      final dialog = find.byType(AlertDialog);
+      await tester.tap(find.descendant(
+          of: dialog, matching: find.text(l10n.routeDetailCancel)));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      expect(api.deleteCalls, 0,
+          reason: 'a dismissed confirm must not delete the review');
+    });
+
+    testWidgets('confirming deletes and refetches', (tester) async {
+      final api = _ReviewsApi(reviewerId: 'viewer');
+      await _pump(tester, api);
+
+      await tester.tap(_deleteReviewButton(tester));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final l10n =
+          AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)));
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text(l10n.routeDetailDeleteReviewCta)));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      expect(api.deleteCalls, 1);
+    });
+
+    testWidgets('a failing delete surfaces a banner', (tester) async {
+      final api = _ReviewsApi(reviewerId: 'viewer', deleteThrows: true);
+      await _pump(tester, api);
+
+      await tester.tap(_deleteReviewButton(tester));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      final l10n =
+          AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)));
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text(l10n.routeDetailDeleteReviewCta)));
+      await tester.pump();
+      await tester.pump(Duration.zero);
+
+      expect(api.deleteCalls, 1);
+      expect(find.textContaining("Couldn't delete the review"), findsOneWidget);
+
+      // showTopBanner schedules an auto-dismiss timer; the binding asserts on
+      // a pending timer at teardown, so it has to be cleared here.
+      hideTopBanner();
+      await tester.pump();
+    });
+  });
+}

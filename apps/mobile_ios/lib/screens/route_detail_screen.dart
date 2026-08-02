@@ -831,6 +831,47 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     }
   }
 
+  /// Delete the viewer's own review. Scoped by (route_id, user_id) inside
+  /// the client rather than by review id, so the call can't be aimed at
+  /// another user's row; the route_reviews delete RLS policy is the hard
+  /// gate behind it.
+  Future<void> _deleteOwnReview() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.routeDetailDeleteReviewTitle),
+        content: Text(l10n.routeDetailDeleteReviewBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.routeDetailCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(l10n.routeDetailDeleteReviewCta),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      await api.deleteRouteReview(widget.route.id);
+      await _fetchReviews();
+    } catch (e) {
+      debugPrint('route detail review delete failed: $e');
+      if (mounted) {
+        showTopBanner(
+            context, AppLocalizations.of(context).routeDetailReviewDeleteFailed(friendlyError(AppLocalizations.of(context), e)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1362,25 +1403,36 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                                       color: theme.colorScheme.outline,
                                     ),
                                   ),
-                                if (widget.apiClient != null &&
-                                    widget.apiClient!.userId != null &&
-                                    widget.apiClient!.userId != review.userId)
-                                  IconButton(
-                                    icon: const Icon(Icons.flag_outlined, size: 16),
-                                    tooltip: l10n.routeDetailReportReview,
-                                    padding: const EdgeInsets.only(left: 8),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 48,
-                                      minHeight: 48,
+                                if (widget.apiClient?.userId != null)
+                                  if (widget.apiClient!.userId != review.userId)
+                                    IconButton(
+                                      icon: const Icon(Icons.flag_outlined, size: 16),
+                                      tooltip: l10n.routeDetailReportReview,
+                                      padding: const EdgeInsets.only(left: 8),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
+                                      ),
+                                      color: theme.colorScheme.outline,
+                                      onPressed: () => showReportSheet(
+                                        context,
+                                        api: widget.apiClient!,
+                                        targetKind: 'route_review',
+                                        targetId: review.id,
+                                      ),
+                                    )
+                                  else
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 16),
+                                      tooltip: l10n.routeDetailDeleteReview,
+                                      padding: const EdgeInsets.only(left: 8),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 48,
+                                        minHeight: 48,
+                                      ),
+                                      color: theme.colorScheme.outline,
+                                      onPressed: _deleteOwnReview,
                                     ),
-                                    color: theme.colorScheme.outline,
-                                    onPressed: () => showReportSheet(
-                                      context,
-                                      api: widget.apiClient!,
-                                      targetKind: 'route_review',
-                                      targetId: review.id,
-                                    ),
-                                  ),
                               ],
                             ),
                             if (review.comment != null &&

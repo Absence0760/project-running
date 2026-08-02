@@ -3089,6 +3089,24 @@ class AppLocalizationsDe extends AppLocalizations {
       'Melde dich an, um eine Bewertung abzugeben';
 
   @override
+  String get routeDetailDeleteReview => 'Eigene Bewertung löschen';
+
+  @override
+  String get routeDetailDeleteReviewTitle => 'Eigene Bewertung löschen?';
+
+  @override
+  String get routeDetailDeleteReviewBody =>
+      'Deine Bewertung und dein Kommentar werden von dieser Route entfernt. Du kannst danach eine neue Bewertung abgeben.';
+
+  @override
+  String get routeDetailDeleteReviewCta => 'Bewertung löschen';
+
+  @override
+  String routeDetailReviewDeleteFailed(String error) {
+    return 'Bewertung konnte nicht gelöscht werden: $error';
+  }
+
+  @override
   String routeDetailReviewFailed(String error) {
     return 'Bewertung konnte nicht gesendet werden: $error';
   }

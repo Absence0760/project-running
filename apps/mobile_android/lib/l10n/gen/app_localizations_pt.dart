@@ -3079,6 +3079,24 @@ class AppLocalizationsPt extends AppLocalizations {
       'Faça login para deixar uma avaliação';
 
   @override
+  String get routeDetailDeleteReview => 'Excluir sua avaliação';
+
+  @override
+  String get routeDetailDeleteReviewTitle => 'Excluir sua avaliação?';
+
+  @override
+  String get routeDetailDeleteReviewBody =>
+      'Sua nota e seu comentário serão removidos desta rota. Você poderá deixar uma nova avaliação depois.';
+
+  @override
+  String get routeDetailDeleteReviewCta => 'Excluir avaliação';
+
+  @override
+  String routeDetailReviewDeleteFailed(String error) {
+    return 'Não foi possível excluir a avaliação: $error';
+  }
+
+  @override
   String routeDetailReviewFailed(String error) {
     return 'Falha ao enviar avaliação: $error';
   }
@@ -15247,6 +15265,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get routeDetailSignInToReview =>
       'Faça login para deixar uma avaliação';
+
+  @override
+  String get routeDetailDeleteReview => 'Excluir sua avaliação';
+
+  @override
+  String get routeDetailDeleteReviewTitle => 'Excluir sua avaliação?';
+
+  @override
+  String get routeDetailDeleteReviewBody =>
+      'Sua nota e seu comentário serão removidos desta rota. Você poderá deixar uma nova avaliação depois.';
+
+  @override
+  String get routeDetailDeleteReviewCta => 'Excluir avaliação';
+
+  @override
+  String routeDetailReviewDeleteFailed(String error) {
+    return 'Não foi possível excluir a avaliação: $error';
+  }
 
   @override
   String routeDetailReviewFailed(String error) {

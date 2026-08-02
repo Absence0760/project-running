@@ -3080,6 +3080,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeDetailSignInToReview => 'Inicia sesión para dejar una reseña';
 
   @override
+  String get routeDetailDeleteReview => 'Eliminar tu reseña';
+
+  @override
+  String get routeDetailDeleteReviewTitle => '¿Eliminar tu reseña?';
+
+  @override
+  String get routeDetailDeleteReviewBody =>
+      'Tu valoración y tu comentario se quitarán de esta ruta. Después podrás dejar una reseña nueva.';
+
+  @override
+  String get routeDetailDeleteReviewCta => 'Eliminar reseña';
+
+  @override
+  String routeDetailReviewDeleteFailed(String error) {
+    return 'No se pudo eliminar la reseña: $error';
+  }
+
+  @override
   String routeDetailReviewFailed(String error) {
     return 'Error al enviar la reseña: $error';
   }
