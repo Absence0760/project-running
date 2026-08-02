@@ -10,6 +10,7 @@ import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
 import '../push_messaging_bridge.dart';
 import '../settings_sync.dart';
+import '../widgets/top_banner.dart';
 import 'settings_body_metrics_screen.dart';
 
 class SettingsPreferencesScreen extends StatefulWidget {
@@ -718,6 +719,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     // separate key from the transactional email_notifications.
     final on = _bagValue<String>(SettingsKeys.emailWeeklyDigest) == 'on';
     await _putUniversal(SettingsKeys.emailWeeklyDigest, on ? 'off' : 'on');
+    if (!on) await _clearUnsubscribeBlock();
   }
 
   Future<void> _editEmailLifecycleDrip() async {
@@ -726,6 +728,28 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     // opt-in is never consent to the other.
     final on = _bagValue<String>(SettingsKeys.emailLifecycleDrip) == 'on';
     await _putUniversal(SettingsKeys.emailLifecycleDrip, on ? 'off' : 'on');
+    if (!on) await _clearUnsubscribeBlock();
+  }
+
+  /// Re-opting into an engagement stream must also lift any prior one-click
+  /// unsubscribe address block, or the send stays silently hard-blocked while
+  /// the toggle reads 'on' (issue #392). The suppression row is address-keyed
+  /// so it covers every stream — either toggle turning on clears it. Mirrors
+  /// web `/settings/preferences` `setEngagementPref`.
+  Future<void> _clearUnsubscribeBlock() async {
+    final client = widget.apiClient;
+    if (client == null) return;
+    try {
+      await client.clearMyUnsubscribeSuppression();
+    } catch (e) {
+      // The pref itself is already saved; a failure here leaves the block in
+      // place, so tell the user rather than letting the stream stay dead.
+      debugPrint('clear_my_unsubscribe_suppression failed: $e');
+      if (mounted) {
+        showTopBanner(
+            context, AppLocalizations.of(context).prefsEmailReOptInFailed);
+      }
+    }
   }
 
   // New users have no stored week_start_day — fall back to the locale

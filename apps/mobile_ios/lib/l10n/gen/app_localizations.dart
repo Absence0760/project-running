@@ -4685,6 +4685,36 @@ abstract class AppLocalizations {
   /// **'Couldn\'t send the course to the watch: {error}'**
   String routeDetailWatchCourseFailed(String error);
 
+  /// Share-menu option that pushes the route to the paired Apple Watch so it can be followed during a wrist-recorded run
+  ///
+  /// In en, this message translates to:
+  /// **'Send to Apple Watch'**
+  String get routeDetailSendToAppleWatch;
+
+  /// Banner after the route was pushed to the Apple Watch unchanged
+  ///
+  /// In en, this message translates to:
+  /// **'Route sent to Apple Watch ({points} points)'**
+  String routeDetailAppleWatchRouteSent(int points);
+
+  /// Banner after a route too dense for one Apple Watch push was thinned before being sent
+  ///
+  /// In en, this message translates to:
+  /// **'Route sent to Apple Watch — thinned from {source} points to {points} to fit'**
+  String routeDetailAppleWatchRouteSimplified(int source, int points);
+
+  /// Banner when a route cannot be sent to the Apple Watch because it has fewer than two positions
+  ///
+  /// In en, this message translates to:
+  /// **'This route has too few points to follow on Apple Watch'**
+  String get routeDetailAppleWatchRouteTooShort;
+
+  /// Banner when the Watch Connectivity route push to the Apple Watch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send the route to Apple Watch: {error}'**
+  String routeDetailAppleWatchRouteFailed(String error);
+
   /// Banner when both the course and its full race schedule reached the watch
   ///
   /// In en, this message translates to:
@@ -11342,6 +11372,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Opt in to occasional onboarding, re-engagement, and streak nudges. Off by default; separate from your weekly digest and notification emails.'**
   String get prefsEmailLifecycleDripHint;
+
+  /// Shown when lifting a prior one-click unsubscribe block fails after re-opting into an email stream
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t lift your earlier unsubscribe. Emails may still be blocked — try again.'**
+  String get prefsEmailReOptInFailed;
 
   /// Tile and picker title for the week-start day
   ///

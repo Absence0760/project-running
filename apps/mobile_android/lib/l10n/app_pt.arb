@@ -762,6 +762,11 @@
   "routeDetailWatchCourseSimplified": "Percurso enviado para o relógio — reduzido de {source} para {points} pontos para caber",
   "routeDetailWatchCourseTooShort": "Esta rota tem pontos de menos para ser seguida no relógio",
   "routeDetailWatchCourseFailed": "Não foi possível enviar o percurso para o relógio: {error}",
+  "routeDetailSendToAppleWatch": "Enviar para o Apple Watch",
+  "routeDetailAppleWatchRouteSent": "Rota enviada para o Apple Watch ({points} pontos)",
+  "routeDetailAppleWatchRouteSimplified": "Rota enviada para o Apple Watch — reduzida de {source} para {points} pontos para caber",
+  "routeDetailAppleWatchRouteTooShort": "Esta rota tem pontos de menos para ser seguida no Apple Watch",
+  "routeDetailAppleWatchRouteFailed": "Não foi possível enviar a rota para o Apple Watch: {error}",
   "routeDetailWatchCourseAndScheduleSent": "Percurso ({points} pontos) e plano de corrida ({checkpoints} pontos de controlo) enviados para o relógio",
   "@routeDetailWatchCourseAndScheduleSent": {
     "placeholders": {
@@ -1906,6 +1911,7 @@
   "prefsEmailWeeklyDigestHint": "Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.",
   "prefsEmailLifecycleDrip": "E-mail de dicas e incentivo",
   "prefsEmailLifecycleDripHint": "Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por padrão; separado do seu resumo semanal e dos seus e-mails de notificação.",
+  "prefsEmailReOptInFailed": "Não foi possível anular o teu cancelamento anterior. Os e-mails podem continuar bloqueados; tenta novamente.",
   "prefsWeekStart": "A semana começa em",
   "prefsWeekStartMonday": "Segunda-feira",
   "prefsWeekStartSunday": "Domingo",

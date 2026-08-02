@@ -2764,6 +2764,28 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get routeDetailSendToAppleWatch => 'Send to Apple Watch';
+
+  @override
+  String routeDetailAppleWatchRouteSent(int points) {
+    return 'Route sent to Apple Watch ($points points)';
+  }
+
+  @override
+  String routeDetailAppleWatchRouteSimplified(int source, int points) {
+    return 'Route sent to Apple Watch — thinned from $source points to $points to fit';
+  }
+
+  @override
+  String get routeDetailAppleWatchRouteTooShort =>
+      'This route has too few points to follow on Apple Watch';
+
+  @override
+  String routeDetailAppleWatchRouteFailed(String error) {
+    return 'Couldn\'t send the route to Apple Watch: $error';
+  }
+
+  @override
   String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
     return 'Course ($points points) and race schedule ($checkpoints checkpoints) sent to the watch';
   }
@@ -6823,6 +6845,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get prefsEmailLifecycleDripHint =>
       'Opt in to occasional onboarding, re-engagement, and streak nudges. Off by default; separate from your weekly digest and notification emails.';
+
+  @override
+  String get prefsEmailReOptInFailed =>
+      'Couldn\'t lift your earlier unsubscribe. Emails may still be blocked — try again.';
 
   @override
   String get prefsWeekStart => 'Week starts on';

@@ -2794,6 +2794,28 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get routeDetailSendToAppleWatch => 'An Apple Watch senden';
+
+  @override
+  String routeDetailAppleWatchRouteSent(int points) {
+    return 'Route an die Apple Watch gesendet ($points Punkte)';
+  }
+
+  @override
+  String routeDetailAppleWatchRouteSimplified(int source, int points) {
+    return 'Route an die Apple Watch gesendet — von $source auf $points Punkte ausgedünnt';
+  }
+
+  @override
+  String get routeDetailAppleWatchRouteTooShort =>
+      'Diese Route hat zu wenige Punkte, um ihr auf der Apple Watch zu folgen';
+
+  @override
+  String routeDetailAppleWatchRouteFailed(String error) {
+    return 'Route konnte nicht an die Apple Watch gesendet werden: $error';
+  }
+
+  @override
   String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
     return 'Strecke ($points Punkte) und Rennplan ($checkpoints Kontrollpunkte) an die Uhr gesendet';
   }
@@ -6907,6 +6929,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get prefsEmailLifecycleDripHint =>
       'Erhalte gelegentliche Einstiegs-, Reaktivierungs- und Serien-Erinnerungen. Standardmäßig aus; getrennt von deiner wöchentlichen Zusammenfassung und deinen Benachrichtigungs-E-Mails.';
+
+  @override
+  String get prefsEmailReOptInFailed =>
+      'Deine frühere Abmeldung konnte nicht aufgehoben werden. E-Mails werden möglicherweise weiterhin blockiert – bitte erneut versuchen.';
 
   @override
   String get prefsWeekStart => 'Woche beginnt am';

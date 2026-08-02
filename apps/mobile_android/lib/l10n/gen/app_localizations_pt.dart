@@ -2783,6 +2783,28 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get routeDetailSendToAppleWatch => 'Enviar para o Apple Watch';
+
+  @override
+  String routeDetailAppleWatchRouteSent(int points) {
+    return 'Rota enviada para o Apple Watch ($points pontos)';
+  }
+
+  @override
+  String routeDetailAppleWatchRouteSimplified(int source, int points) {
+    return 'Rota enviada para o Apple Watch — reduzida de $source para $points pontos para caber';
+  }
+
+  @override
+  String get routeDetailAppleWatchRouteTooShort =>
+      'Esta rota tem pontos de menos para ser seguida no Apple Watch';
+
+  @override
+  String routeDetailAppleWatchRouteFailed(String error) {
+    return 'Não foi possível enviar a rota para o Apple Watch: $error';
+  }
+
+  @override
   String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
     return 'Percurso ($points pontos) e plano de corrida ($checkpoints pontos de controlo) enviados para o relógio';
   }
@@ -6894,6 +6916,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get prefsEmailLifecycleDripHint =>
       'Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por padrão; separado do seu resumo semanal e dos seus e-mails de notificação.';
+
+  @override
+  String get prefsEmailReOptInFailed =>
+      'Não foi possível anular o teu cancelamento anterior. Os e-mails podem continuar bloqueados; tenta novamente.';
 
   @override
   String get prefsWeekStart => 'A semana começa em';
@@ -14927,6 +14953,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get routeDetailSendToAppleWatch => 'Enviar para o Apple Watch';
+
+  @override
+  String routeDetailAppleWatchRouteSent(int points) {
+    return 'Rota enviada para o Apple Watch ($points pontos)';
+  }
+
+  @override
+  String routeDetailAppleWatchRouteSimplified(int source, int points) {
+    return 'Rota enviada para o Apple Watch — reduzida de $source para $points pontos para caber';
+  }
+
+  @override
+  String get routeDetailAppleWatchRouteTooShort =>
+      'Esta rota tem pontos de menos para ser seguida no Apple Watch';
+
+  @override
+  String routeDetailAppleWatchRouteFailed(String error) {
+    return 'Não foi possível enviar a rota para o Apple Watch: $error';
+  }
+
+  @override
   String routeDetailWatchCourseAndScheduleSent(int points, int checkpoints) {
     return 'Percurso ($points pontos) e plano de corrida ($checkpoints pontos de controle) enviados para o relógio';
   }
@@ -19037,6 +19085,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsEmailLifecycleDripHint =>
       'Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por padrão; separado do seu resumo semanal e dos seus e-mails de notificação.';
+
+  @override
+  String get prefsEmailReOptInFailed =>
+      'Não foi possível cancelar seu descadastramento anterior. Os e-mails podem continuar bloqueados; tente novamente.';
 
   @override
   String get prefsWeekStart => 'A semana começa em';

@@ -343,6 +343,19 @@ class ApiClient {
     await _client.rpc('confirm_age_and_terms');
   }
 
+  /// Lifts the caller's own one-click-unsubscribe address block so a
+  /// re-opted-in engagement stream can actually send again (issue #392).
+  /// The worker's unsubscribe endpoint writes an address-keyed
+  /// `email_suppressions` row alongside flipping the pref off, and that row
+  /// outlives the pref — so without this the toggle reads "on" while every
+  /// send stays silently hard-blocked. The definer RPC resolves the address
+  /// from `auth.uid()` and only ever clears `reason = 'unsubscribe'`, never a
+  /// bounce/complaint/manual deliverability block.
+  Future<int> clearMyUnsubscribeSuppression() async {
+    final cleared = await _client.rpc('clear_my_unsubscribe_suppression');
+    return cleared is int ? cleared : 0;
+  }
+
   /// Exchange a Google ID token (obtained by the host app via the native
   /// Android `google_sign_in` flow) for a Supabase session. Returns the
   /// user ID.

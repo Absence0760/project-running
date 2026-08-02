@@ -762,6 +762,11 @@
   "routeDetailWatchCourseSimplified": "コースをウォッチに送信しました — 収まるように{source}地点から{points}地点に間引きました",
   "routeDetailWatchCourseTooShort": "このルートは地点が少なすぎてウォッチでたどれません",
   "routeDetailWatchCourseFailed": "コースをウォッチに送信できませんでした: {error}",
+  "routeDetailSendToAppleWatch": "Apple Watchに送信",
+  "routeDetailAppleWatchRouteSent": "ルートをApple Watchに送信しました（{points}地点）",
+  "routeDetailAppleWatchRouteSimplified": "ルートをApple Watchに送信しました — 収まるように{source}地点から{points}地点に間引きました",
+  "routeDetailAppleWatchRouteTooShort": "このルートは地点が少なすぎてApple Watchでたどれません",
+  "routeDetailAppleWatchRouteFailed": "ルートをApple Watchに送信できませんでした: {error}",
   "routeDetailWatchCourseAndScheduleSent": "コース（{points} ポイント）とレーススケジュール（{checkpoints} チェックポイント）をウォッチに送信しました",
   "@routeDetailWatchCourseAndScheduleSent": {
     "placeholders": {
@@ -1906,6 +1911,7 @@
   "prefsEmailWeeklyDigestHint": "トレーニングとコミュニティのハイライトをまとめた週刊メールを受け取ります。初期設定はオフで、通知メールとは別です。",
   "prefsEmailLifecycleDrip": "ヒントと応援メール",
   "prefsEmailLifecycleDripHint": "オンボーディング、再開、連続記録のリマインダーを時々受け取ります。初期設定はオフで、週刊ダイジェストや通知メールとは別です。",
+  "prefsEmailReOptInFailed": "以前の配信停止を解除できませんでした。メールがブロックされたままの可能性があります。もう一度お試しください。",
   "prefsWeekStart": "週の開始曜日",
   "prefsWeekStartMonday": "月曜日",
   "prefsWeekStartSunday": "日曜日",
