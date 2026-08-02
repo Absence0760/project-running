@@ -22,7 +22,9 @@
 -- and it doesn't scale to the 6+ tables the project will eventually
 -- want column-redacted.
 --
--- The intended replacement is the redacted-view pattern from
+-- The intended replacement AT THE TIME (rejected the next day — see
+-- the historical note at the foot of this file) was the redacted-view
+-- pattern from
 -- `20260813_001_race_sessions_admin_column_redaction.sql`: a
 -- `security_invoker = on` view that nulls the sensitive columns for
 -- non-privileged readers. Reads route through the view; writes hit
@@ -31,7 +33,8 @@
 -- the template for the follow-up that re-tightens `clubs.invite_token`
 -- and `events.meet_lat / meet_lng`.
 --
--- Privacy regression while this is reverted:
+-- Privacy regression while this is reverted (closed the next day by
+-- `20260818_001` — the window was one migration wide):
 --   - `clubs.invite_token` is readable via `?select=invite_token` for
 --     any anon or authenticated caller who can pass the existing RLS
 --     ("public clubs are readable by anyone" + the various member
@@ -59,12 +62,18 @@ grant select on events to authenticated, anon;
 -- redacted-view migration that replaces this should drop them
 -- explicitly.
 
--- TODO(redacted-view-follow-up): introduce
--- `clubs_redacted` (nulls `invite_token` for non-admins) and
--- `events_redacted` (nulls `meet_lat`/`meet_lng` for non-members)
--- following the `race_sessions_redacted` template, then route
--- `fetchClubBySlug` / `fetchEventById` / `fetchUpcomingEvents` /
--- mobile equivalents through the view. The admin / member predicate
--- already exists (`is_club_admin`, `is_club_member`) and the
--- security_invoker = on posture preserves caller identity for the
--- inner RLS to evaluate correctly.
+-- Historical note (superseded — do not chase this): this migration
+-- originally carried a TODO to introduce `clubs_redacted` /
+-- `events_redacted` views on the `race_sessions_redacted` template.
+-- That follow-up was NOT taken. `20260818_001_redo_column_grant_lockdowns.sql`
+-- re-applied the column-level grants instead, and records why the
+-- redacted-view shape cannot compose with them: a
+-- `security_invoker = on` view evaluates its `case when ... then
+-- invite_token end` under the caller's grants, so revoking SELECT on
+-- the column makes the view body itself raise 42501, while a
+-- `security_invoker = off` view bypasses base-table RLS and is not
+-- reachable by PostgREST resource embedding. The shipped posture is
+-- column-level grants plus explicit column enumeration at every read
+-- site, enforced by `architecture_guards_test.dart` (mobile) and
+-- `apps/web/tests-e2e/cross-cutting/select-star-discipline.spec.ts`
+-- (web). Read `20260818_001` before touching either grant.
