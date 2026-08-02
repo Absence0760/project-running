@@ -60,6 +60,7 @@ const ALIGNED_ROWS = [
 	['roadbook', U(8)],
 ];
 const ALIGNED_CONSTS = [
+	['frameCharUuid', U(1)],
 	['manifestCharUuid', U(2)],
 	['chunkCharUuid', U(3)],
 	['settingsCharUuid', U(4)],
@@ -69,8 +70,13 @@ const ALIGNED_CONSTS = [
 	['roadbookCharUuid', U(8)],
 ];
 
-const verdict = (rows, consts) =>
-	compareTables(parseFirmware(fakeFirmware(rows)), parseDart(fakeDart(consts)));
+const verdict = (rows, consts, pairs, unclaimed) =>
+	compareTables(
+		parseFirmware(fakeFirmware(rows)),
+		parseDart(fakeDart(consts)),
+		pairs,
+		unclaimed,
+	);
 
 test('the real firmware table and the real phone client agree', () => {
 	const { errors, ok } = compareTables(
@@ -101,25 +107,52 @@ test('the § 410 one-row shift fails and names the characteristic misread', () =
 	// Exactly the shipped bug: manifest aimed at `frame`, chunk at
 	// `run_manifest`, everything from `settings` on still aligned.
 	const { errors } = verdict(ALIGNED_ROWS, [
+		['frameCharUuid', U(1)],
 		['manifestCharUuid', U(1)],
 		['chunkCharUuid', U(2)],
-		...ALIGNED_CONSTS.slice(2),
+		...ALIGNED_CONSTS.slice(3),
 	]);
-	assert.equal(errors.length, 3);
+	assert.equal(errors.length, 2);
 	assert.match(errors[0], /drift on "run_manifest"/);
 	assert.match(errors[0], /this is the firmware's "frame" characteristic/);
 	assert.match(errors[0], new RegExp(`Fix: set manifestCharUuid to ${U(2)}`));
 	assert.match(errors[1], /drift on "run_chunk"/);
 	assert.match(errors[1], /the firmware's "run_manifest" characteristic/);
-	// The unclaimed-row rule catches the same bug from the other direction, so
-	// the report names it twice rather than leaving it to be inferred.
-	assert.match(errors[2], /points manifestCharUuid at .* "frame"/s);
+});
+
+// The production UNCLAIMED list emptied out when the phone claimed `frame`, so
+// these two drive the rule with an explicit table. It has to keep working: the
+// next characteristic the firmware adds ahead of the phone lands there, and a
+// constant misaimed at it is the § 410 shape all over again.
+test('an unclaimed firmware row the phone leaves alone passes', () => {
+	const { errors, warnings, ok } = verdict(
+		[...ALIGNED_ROWS, ['telemetry', U(9)]],
+		ALIGNED_CONSTS,
+		PAIRS,
+		['telemetry'],
+	);
+	assert.deepEqual(errors, []);
+	assert.deepEqual(warnings, []);
+	assert.equal(ok.length, PAIRS.length + 1);
+});
+
+test('an unclaimed firmware row a Dart constant points at fails', () => {
+	const { errors } = verdict(
+		[...ALIGNED_ROWS, ['telemetry', U(9)]],
+		[...ALIGNED_CONSTS.slice(0, 7), ['roadbookCharUuid', U(9)]],
+		PAIRS,
+		['telemetry'],
+	);
+	assert.equal(errors.length, 2);
+	assert.match(errors[0], /drift on "roadbook"/);
+	assert.match(errors[1], /points roadbookCharUuid at .* "telemetry"/s);
 });
 
 test('a UUID belonging to no characteristic at all says so', () => {
 	const { errors } = verdict(ALIGNED_ROWS, [
+		ALIGNED_CONSTS[0],
 		['manifestCharUuid', 'deadbeef-0000-0000-0000-000000000000'],
-		...ALIGNED_CONSTS.slice(1),
+		...ALIGNED_CONSTS.slice(2),
 	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /not any firmware characteristic/);
@@ -158,7 +191,10 @@ test('a Dart constant nothing pairs against fails rather than going unchecked', 
 });
 
 test('a missing Dart constant fails', () => {
-	const { errors } = verdict(ALIGNED_ROWS, ALIGNED_CONSTS.slice(1));
+	const { errors } = verdict(ALIGNED_ROWS, [
+		ALIGNED_CONSTS[0],
+		...ALIGNED_CONSTS.slice(2),
+	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /Dart constant "manifestCharUuid" not found/);
 });

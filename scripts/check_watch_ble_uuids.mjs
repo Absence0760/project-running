@@ -40,12 +40,14 @@ export const DART_FILE =
 // firmware GATT field name → the Dart constant that must carry the same UUID.
 // `service` is the synthetic name for the `gatt_service` attribute itself.
 //
-// `frame` is deliberately absent: it is the live-status notify characteristic,
-// which this transport does not consume (the phone reads status over the dev
-// TCP link, `sim_watch_link.dart`). An unclaimed firmware row is therefore not
-// a failure — see UNCLAIMED below for the one thing it must still satisfy.
+// Every row the firmware declares is claimed. `frame` — the per-second
+// live-status notify — was the last holdout: the phone read status over the
+// dev TCP link only (`sim_watch_link.dart`), so § 447's forwarder had no BLE
+// feed. `ReactiveBleWatchFrameSource` now subscribes to it on its own
+// connection, so it is a checked pair like the rest.
 export const PAIRS = [
 	{ firmware: 'service', dart: 'serviceUuid' },
+	{ firmware: 'frame', dart: 'frameCharUuid' },
 	{ firmware: 'run_manifest', dart: 'manifestCharUuid' },
 	{ firmware: 'run_chunk', dart: 'chunkCharUuid' },
 	{ firmware: 'settings', dart: 'settingsCharUuid' },
@@ -59,7 +61,12 @@ export const PAIRS = [
 // to be absent from the Dart side entirely: an unclaimed row whose UUID shows
 // up under some OTHER Dart constant is precisely the § 410 bug — the client
 // pointing at the wrong characteristic — so that IS a hard failure.
-export const UNCLAIMED = ['frame'];
+//
+// Empty today: the phone consumes all eight characteristics. The rule stays
+// because the watch is free to grow its table ahead of the phone, and the day
+// it does, listing the new row here silences the "no phone counterpart"
+// warning WITHOUT giving up the misaimed-constant check.
+export const UNCLAIMED = [];
 
 // `#[nrf_softdevice::gatt_service(uuid = "…")] pub struct LinkService { … }`,
 // then one `#[characteristic(uuid = "…", …)] <name>: <ty>` per row. Parsed by
@@ -95,8 +102,17 @@ export function parseDart(src) {
 }
 
 // The whole verdict as data, so the tests can assert on it without capturing
-// stdout. `errors` fails the build; `warnings` do not.
-export function compareTables(firmware, dart) {
+// stdout. `errors` fails the build; `warnings` do not. `pairs` / `unclaimed`
+// are overridable for the same reason the two file paths are: a rule only
+// exercised by the production tables stops being exercised the moment those
+// tables stop containing an example of it, which is exactly what happened to
+// `unclaimed` when the phone claimed `frame`.
+export function compareTables(
+	firmware,
+	dart,
+	pairs = PAIRS,
+	unclaimed = UNCLAIMED,
+) {
 	const errors = [];
 	const warnings = [];
 	const ok = [];
@@ -116,7 +132,7 @@ export function compareTables(firmware, dart) {
 		);
 	}
 
-	for (const { firmware: fwName, dart: dartName } of PAIRS) {
+	for (const { firmware: fwName, dart: dartName } of pairs) {
 		const fwUuid = firmware.get(fwName);
 		const dartUuid = dart.get(dartName);
 
@@ -156,7 +172,7 @@ export function compareTables(firmware, dart) {
 
 	// A firmware row nobody claims is fine; a firmware row nobody claims whose
 	// UUID the Dart side nonetheless references under another name is the bug.
-	for (const name of UNCLAIMED) {
+	for (const name of unclaimed) {
 		const uuid = firmware.get(name);
 		if (!uuid) {
 			warnings.push(
@@ -184,7 +200,7 @@ export function compareTables(firmware, dart) {
 	// discovers by UUID, not by index — that is what made § 410's shift a bug
 	// rather than a mere mismatch). It is surfaced so nobody has to notice the
 	// firmware grew a row on their own.
-	const claimed = new Set([...PAIRS.map((p) => p.firmware), ...UNCLAIMED]);
+	const claimed = new Set([...pairs.map((p) => p.firmware), ...unclaimed]);
 	for (const [name, uuid] of firmware) {
 		if (claimed.has(name)) continue;
 		warnings.push(
@@ -198,7 +214,7 @@ export function compareTables(firmware, dart) {
 
 	// A Dart constant pointing at a UUID nothing checks against the firmware.
 	for (const [name, uuid] of dart) {
-		if (PAIRS.some((p) => p.dart === name)) continue;
+		if (pairs.some((p) => p.dart === name)) continue;
 		errors.push(
 			`Dart constant "${name}" (${uuid}) is not in PAIRS, so nothing checks it ` +
 				`against the firmware.\n` +
