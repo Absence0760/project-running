@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
 	import { onMount, onDestroy } from 'svelte';
 	import maplibregl from '$lib/routes/maplibre';
 	import { env } from '$env/dynamic/public';

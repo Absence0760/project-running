@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
 	import { onMount, onDestroy } from 'svelte';
 	import { formatDuration as baseDuration } from '$lib/format/time';
 	import { page } from '$app/stores';

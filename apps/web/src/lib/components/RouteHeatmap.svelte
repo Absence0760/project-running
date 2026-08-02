@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
 	import { onMount, onDestroy } from 'svelte';
 	import maplibregl from '$lib/routes/maplibre';
 	import 'maplibre-gl/dist/maplibre-gl.css';
