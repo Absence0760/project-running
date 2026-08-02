@@ -190,7 +190,12 @@ export function parseSyncScript(src) {
   }
 
   const aliasNames = new Set();
-  const re = /aws\s+lambda\s+(?:get|update)-alias\b[\s\S]{0,400}?(?:^|\s)--name\s+(\S+)/g;
+  // `\s` and not `(?:^|\s)`: the pattern requires `aws lambda …-alias`
+  // before this point, so a `^` without the `m` flag could only ever match at
+  // offset 0 and never here — a dead alternative, which is precisely the
+  // silently-stops-matching failure this whole guard exists to prevent.
+  // A newline is whitespace, so `\s` already covers the start-of-line case.
+  const re = /aws\s+lambda\s+(?:get|update)-alias\b[\s\S]{0,400}?\s--name\s+(\S+)/g;
   let m;
   while ((m = re.exec(src)) !== null) aliasNames.add(m[1]);
 
