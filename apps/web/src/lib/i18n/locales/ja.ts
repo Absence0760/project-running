@@ -4558,7 +4558,7 @@ export const messages = {
 	"learn.ctaNutrition": "栄養を記録",
 	"learn.ctaAiCoach": "AIコーチに相談",
 	"learn.ctaClubs": "一緒に走るクラブを探す",
-	"learn.ctaRacing": "クラブやイベントを探す",
+	"learn.ctaRacing": "レースカレンダーを見る",
 	"learn.ctaExplore": "近くのルートを探す",
 	// Achievements / badges (BadgeGrid + profile + feed + share)
 	"badges.section.title": "実績",

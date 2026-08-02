@@ -39,11 +39,6 @@ export function getCategory(id: string): LearnCategory | undefined {
 /// routes — an anon reader who clicks is sent through the layout auth
 /// guard to `/login?return_to=...`, which is the intended acquisition
 /// funnel.
-///
-/// `racing` deliberately points at `/social?tab=clubs`: there is no
-/// public race-calendar feature shipped yet (clubs have events, but no
-/// aggregated race-finder). When a race calendar ships, repoint this
-/// entry — see docs/features/learn.md.
 export type CtaTarget = {
 	feature: string;
 	route: string;
@@ -57,7 +52,7 @@ export const CTA_TARGETS: CtaTarget[] = [
 	{ feature: 'nutrition', route: '/nutrition', labelKey: 'learn.ctaNutrition' },
 	{ feature: 'ai-coach', route: '/coach', labelKey: 'learn.ctaAiCoach' },
 	{ feature: 'clubs', route: '/social?tab=clubs', labelKey: 'learn.ctaClubs' },
-	{ feature: 'racing', route: '/social?tab=clubs', labelKey: 'learn.ctaRacing' },
+	{ feature: 'racing', route: '/races', labelKey: 'learn.ctaRacing' },
 	{ feature: 'explore', route: '/routes?tab=explore', labelKey: 'learn.ctaExplore' },
 ];
 

@@ -4,7 +4,7 @@ description: Wie du ein anfängerfreundliches Event findest, was die Anmeldung u
 category: racing
 slug: your-first-race
 order: 2
-updated: 2026-06-15
+updated: 2026-08-02
 cta:
   feature: racing
 ---
@@ -34,4 +34,4 @@ Die Anmeldung für ein organisiertes Rennen ist meist ein kurzes Online-Formular
 - **Starte langsam** (siehe unseren Leitfaden zum Einteilen deines ersten Rennens) und genieße es. Die Menge, die anderen Läufer und die Ziellinie sind der ganze Sinn.
 - **Sauge das Ziel auf.** Deine erste Ziellinie ist ein echter Meilenstein. Was auch immer die Zeit auf der Uhr sagt — du bist jetzt ein Läufer, der ein Rennen bestritten hat.
 
-> Eine Anmerkung zum Finden von Events: Ein eigener Rennkalender steht auf unserer Roadmap. Im Moment ist der beste Weg, anfängerfreundliche Rennen in deiner Nähe zu entdecken, über Laufvereine und ihre Events — fang dort an.
+> Eine Anmerkung zum Finden von Events: Im Rennkalender findest du anstehende Veranstaltungen, die du nach Distanz filtern und in deiner Nähe suchen kannst — und nach dem Lauf importierst du dort dein offizielles Ergebnis. Laufvereine und ihre Events sind der zweite gute Einstieg; mit beidem findest du garantiert dein erstes Rennen.

@@ -4563,7 +4563,7 @@ export const messages = {
 	"learn.ctaNutrition": "Ernährung verfolgen",
 	"learn.ctaAiCoach": "Mit dem KI-Coach sprechen",
 	"learn.ctaClubs": "Einen Club zum Laufen finden",
-	"learn.ctaRacing": "Club oder Event finden",
+	"learn.ctaRacing": "Rennkalender durchsuchen",
 	"learn.ctaExplore": "Routen in deiner Nähe entdecken",
 	// Achievements / badges (BadgeGrid + profile + feed + share)
 	"badges.section.title": "Erfolge",

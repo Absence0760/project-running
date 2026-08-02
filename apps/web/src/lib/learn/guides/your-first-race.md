@@ -4,7 +4,7 @@ description: How to find a beginner-friendly event, what registration involves, 
 category: racing
 slug: your-first-race
 order: 2
-updated: 2026-06-15
+updated: 2026-08-02
 cta:
   feature: racing
 ---
@@ -34,4 +34,4 @@ Registration for an organised race is usually a short online form: your name, ag
 - **Start slow** (see our guide on pacing your first race) and enjoy it. The crowd, the other runners, and the finish line are the whole point.
 - **Soak up the finish.** Your first finish line is a genuine milestone. Whatever the time on the clock, you are now a runner who has raced.
 
-> A note on finding events: a dedicated race calendar is on our roadmap. For now, the best way to discover beginner-friendly races near you is through running clubs and their events — start there.
+> A note on finding events: the race calendar lists upcoming events you can filter by distance and search near you, and once you have run one you can import your official result. Running clubs and their events are the other good on-ramp — between the two, you should not be short of a first race.

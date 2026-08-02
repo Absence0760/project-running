@@ -4,7 +4,7 @@ description: Comment trouver un événement accueillant pour les débutants, ce 
 category: racing
 slug: your-first-race
 order: 2
-updated: 2026-06-15
+updated: 2026-08-02
 cta:
   feature: racing
 ---
@@ -34,4 +34,4 @@ L'inscription à une course organisée se résume en général à un court formu
 - **Partez lentement** (voir notre guide sur la gestion de l'allure de votre première course) et profitez-en. La foule, les autres coureurs et la ligne d'arrivée sont tout l'intérêt.
 - **Savourez l'arrivée.** Votre première ligne d'arrivée est un véritable cap. Quel que soit le temps au chrono, vous êtes désormais un coureur qui a couru une course.
 
-> Une note sur la recherche d'événements : un calendrier des courses dédié figure sur notre feuille de route. Pour l'instant, le meilleur moyen de découvrir des courses accueillantes pour débutants près de chez vous reste les clubs de course et leurs événements — commencez par là.
+> Une note sur la recherche d'événements : le calendrier des courses recense les épreuves à venir, que vous pouvez filtrer par distance et chercher près de chez vous, et une fois la course terminée vous y importez votre résultat officiel. Les clubs de course et leurs événements restent l'autre bonne porte d'entrée — entre les deux, vous ne manquerez pas de première course.

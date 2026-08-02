@@ -4,7 +4,7 @@ description: Cómo encontrar un evento amigable para principiantes, qué implica
 category: racing
 slug: your-first-race
 order: 2
-updated: 2026-06-15
+updated: 2026-08-02
 cta:
   feature: racing
 ---
@@ -34,4 +34,4 @@ La inscripción a una carrera organizada suele ser un breve formulario en línea
 - **Sal despacio** (mira nuestra guía sobre cómo dosificar tu primera carrera) y disfrútalo. La multitud, los demás corredores y la meta son lo que de verdad importa.
 - **Empápate de la meta.** Tu primera línea de meta es un hito de verdad. Sea cual sea el tiempo del reloj, ahora eres un corredor que ha competido.
 
-> Una nota sobre encontrar eventos: un calendario de carreras propio está en nuestra hoja de ruta. Por ahora, la mejor forma de descubrir carreras amigables para principiantes cerca de ti es a través de los clubes de corredores y sus eventos — empieza por ahí.
+> Una nota sobre encontrar eventos: el calendario de carreras reúne las próximas pruebas, que puedes filtrar por distancia y buscar cerca de ti, y cuando termines podrás importar allí tu resultado oficial. Los clubes de corredores y sus eventos son la otra buena vía de entrada — entre ambos, no te faltará una primera carrera.

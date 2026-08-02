@@ -4,7 +4,7 @@ description: Como encontrar um evento amigável para iniciantes, o que envolve a
 category: racing
 slug: your-first-race
 order: 2
-updated: 2026-06-15
+updated: 2026-08-02
 cta:
   feature: racing
 ---
@@ -34,4 +34,4 @@ A inscrição em uma prova organizada costuma ser um formulário curto on-line: 
 - **Comece devagar** (veja nosso guia sobre administrar o ritmo da sua primeira prova) e aproveite. A multidão, os outros corredores e a linha de chegada são todo o sentido.
 - **Absorva a chegada.** Sua primeira linha de chegada é um marco de verdade. Seja qual for o tempo no relógio, você agora é um corredor que correu uma prova.
 
-> Uma nota sobre encontrar eventos: um calendário de provas próprio está no nosso roteiro. Por enquanto, a melhor forma de descobrir provas amigáveis para iniciantes perto de você é por meio dos clubes de corrida e seus eventos — comece por aí.
+> Uma nota sobre encontrar eventos: o calendário de corridas reúne as próximas provas, que você pode filtrar por distância e buscar perto de você, e depois de correr dá para importar ali o seu resultado oficial. Os clubes de corrida e seus eventos são a outra boa porta de entrada — entre os dois, não vai faltar uma primeira prova.
