@@ -273,9 +273,11 @@ deleting.
    concurrent edit.
 4. **Just-works pairing carries no MITM protection** during the one-time
    pairing itself. Accepted and documented at § 285 rather than hidden: the
-   tier-1 face has no passkey UI. A single bond, replaceable by re-pairing, is
-   the standard wearable trade-off — possession of the watch beats possession
-   of an old radio capture.
+   tier-1 face has no passkey UI. Since § 432 the exposure is scoped, not
+   standing: a bonded watch refuses pairing outright except inside the 90 s
+   wearer-armed PAIR PHONE window, so the bond is replaceable only by whoever
+   holds the watch — possession beats possession of an old radio capture,
+   and beats mere radio range too.
 5. **The advertised name is the constant `"Threkir"`.** A passive observer can
    track the device's presence — and by extension the wearer's — without ever
    pairing. Resolvable private addresses are the answer; that is a SoftDevice

@@ -58,6 +58,7 @@ use watch_core::input_flow::{
 };
 use watch_core::page::Page;
 use watch_core::page_grid::{PageGrid, GRID_AUTOSELECT_S};
+use watch_core::pairing::{PairGuard, PairPress, PAIRING_WINDOW_S, PAIR_CONFIRM_WINDOW_S};
 use watch_core::profiles::{self, ActivityProfile};
 use watch_core::record::RecordState;
 use watch_core::settings::WatchSettings;
@@ -102,7 +103,9 @@ const TIMER_TIMEOUT: Duration = Duration::from_secs(TIMER_MENU_TIMEOUT_S as u64)
 /// It borrows the menu's single deadline slot while armed, because the arm is
 /// the shorter of the two and must lapse *visibly*: a row still reading
 /// `ERASE ALL? B1` after its window closed would be a prompt for a press that
-/// no longer confirms.
+/// no longer confirms. The §432 pair arm shares it — same guard shape, same
+/// window, same visible lapse (`pairing::PAIR_CONFIRM_WINDOW_S` is the stop
+/// guard's number too, pinned by test).
 const ERASE_CONFIRM: Duration = Duration::from_secs(ERASE_CONFIRM_WINDOW_S as u64);
 
 /// The view/navigation state both task variants thread through the shared
@@ -118,6 +121,11 @@ struct NavState {
     /// The §378 factory-erase confirm, held beside the menu because that is the
     /// only surface it exists on — closing the menu disarms it.
     erase: EraseGuard,
+    /// The §432 pair-window confirm, on exactly the erase's terms. Only the
+    /// arm lives here — the open window itself is shared BLE-layer state
+    /// (`state::open_pairing_window`) and outlives the menu, because the
+    /// wearer opens it and then walks away to the phone.
+    pair: PairGuard,
     /// Last view published to [`state::SETTINGS_MENU`], so an edit that leaves
     /// the cursor and the arm alone wakes the composer not at all.
     menu_published: Option<MenuView>,
@@ -147,6 +155,7 @@ impl NavState {
             menu: None,
             menu_deadline: None,
             erase: EraseGuard::new(),
+            pair: PairGuard::new(),
             menu_published: None,
             timer: timers::Timer::new(),
             timer_restore: None,
@@ -176,6 +185,7 @@ impl NavState {
         info!("button: BTN5 -> settings menu");
         self.menu = Some(m);
         self.erase.disarm();
+        self.pair.disarm();
         self.publish_menu();
     }
 
@@ -186,8 +196,11 @@ impl NavState {
             self.menu_published = None;
         }
         // An arm may never outlive the screen that shows it: a menu reopened
-        // later must not inherit a live confirm from the one before it.
+        // later must not inherit a live confirm from the one before it. (An
+        // OPEN §432 window deliberately survives — the wearer closed the menu
+        // to go pick the phone up.)
         self.erase.disarm();
+        self.pair.disarm();
         self.menu_deadline = None;
     }
 
@@ -201,9 +214,11 @@ impl NavState {
     /// re-publishing an unchanged cursor would wake the composer for nothing.
     fn publish_menu(&mut self) {
         let Some(m) = self.menu else { return };
+        let now_s = Instant::now().as_secs() as u32;
         let view = MenuView {
             cursor: m.cursor(),
-            erase_armed: self.erase.armed(Instant::now().as_secs() as u32),
+            erase_armed: self.erase.armed(now_s),
+            pair_armed: self.pair.armed(now_s),
         };
         if self.menu_published != Some(view) {
             self.menu_published = Some(view);
@@ -211,7 +226,7 @@ impl NavState {
         }
         self.menu_deadline = Some(
             Instant::now()
-                + if view.erase_armed {
+                + if view.erase_armed || view.pair_armed {
                     ERASE_CONFIRM
                 } else {
                     MENU_TIMEOUT
@@ -325,9 +340,13 @@ impl NavState {
     /// clock: `publish_menu` sets the short deadline exactly when it publishes
     /// an armed view, so the two can never disagree about which timer fired.
     fn menu_deadline_fired(&mut self) {
-        if self.menu_published.is_some_and(|v| v.erase_armed) {
-            info!("button: factory erase disarmed (confirm window lapsed)");
+        if self
+            .menu_published
+            .is_some_and(|v| v.erase_armed || v.pair_armed)
+        {
+            info!("button: armed menu confirm lapsed");
             self.erase.disarm();
+            self.pair.disarm();
             self.publish_menu();
         } else {
             self.close_menu("timeout");
@@ -342,6 +361,7 @@ impl NavState {
             // Stepping off the row cancels its arm: the confirm has to be the
             // very next thing the runner does, or it is not a confirm.
             self.erase.disarm();
+            self.pair.disarm();
             self.publish_menu();
         }
     }
@@ -352,6 +372,7 @@ impl NavState {
             m.down();
             info!("button: menu cursor -> {}", m.item());
             self.erase.disarm();
+            self.pair.disarm();
             self.publish_menu();
         }
     }
@@ -386,6 +407,10 @@ fn wall_stamp_now(fix: Option<&Fix>, now_s: u32) -> Option<u32> {
 /// from here.
 async fn factory_erase(nav: &mut NavState, store: &'static SharedStore) {
     let wiped = store.lock().await.factory_erase().await;
+    // A live §432 window has nothing left to guard once the bond is gone —
+    // an unbonded watch pairs freely — but a countdown surviving the wipe
+    // would read as state the erase missed.
+    state::close_pairing_window();
     // The pushed course is where the runner PLANS to be; the pushed workout is
     // their session. Both are RAM-only, and both are drawn on a page a next
     // holder would page straight to.
@@ -455,15 +480,50 @@ async fn menu_edit(
     let Some(item) = nav.menu.as_ref().map(|m| m.item()) else {
         return;
     };
-    let edit = settings_menu::edit(item, dir, nav.mode, hide_now, nav.profile, backyard_now);
-    // Every press that is not the confirming right on the erase row cancels the
-    // arm — including a left on that row, which is what its legend's `B4
+    let edit = settings_menu::edit(
+        item,
+        dir,
+        nav.mode,
+        hide_now,
+        nav.profile,
+        backyard_now,
+        state::pairing_window_open(now_s),
+    );
+    // Every press that is not the confirming right on a guarded row cancels
+    // that row's arm — including a left on it, which is what its legend's `B4
     // CANCEL` sibling promises the runner. One rule, applied before the
     // dispatch, so no later branch can forget it.
     if edit != MenuEdit::EraseRow {
         nav.erase.disarm();
     }
+    if edit != MenuEdit::PairRow {
+        nav.pair.disarm();
+    }
     match edit {
+        MenuEdit::PairRow => {
+            match nav.pair.press(now_s) {
+                PairPress::Armed => info!(
+                    "button: menu -> pairing window armed, press again within {=u32}s",
+                    PAIR_CONFIRM_WINDOW_S
+                ),
+                PairPress::Opened => {
+                    state::open_pairing_window(now_s);
+                    info!(
+                        "button: menu -> BLE pairing window OPEN for {=u32}s",
+                        PAIRING_WINDOW_S
+                    );
+                }
+            }
+            // Open either way: armed, the row is showing the prompt; opened,
+            // it is showing the countdown the wearer will watch while the
+            // phone pairs.
+            nav.publish_menu();
+            return;
+        }
+        MenuEdit::ClosePairing => {
+            info!("button: menu -> pairing window closed");
+            state::close_pairing_window();
+        }
         MenuEdit::EraseRow => {
             match nav.erase.press(now_s) {
                 ErasePress::Armed => info!(
