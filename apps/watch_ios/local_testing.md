@@ -71,7 +71,7 @@ To verify pairing: in the watch simulator, you should see the watch face. If it 
 
 ### Route navigation
 
-Not yet implemented. `RouteNavigator.swift` is a scaffold (no nearest-segment math, no haptic wiring), and there is no phone-side UI for pushing a route to the watch. See `reviews/watch-ios/gap-analysis.md` items M3 (route preview) and M4 (mini-map) for the planned shape.
+The detection engine in `RouteNavigator.swift` is implemented and unit-tested (`RouteNavigatorTests.swift`): nearest-perpendicular-foot projection onto the route polyline (the web `route_geometry.ts` / `route_snap.ts` math), deviation + distance-remaining, the cross-platform 40 m / 20 m off-route hysteresis, and a `WKInterfaceDevice` haptic on the off-route rising edge. There is **no UI or route source wired to it yet** — no phone-side push of a route to the watch and no screen consuming the published values — so it isn't manually testable end-to-end; exercise it via `xcodebuild test` (`-only-testing:WatchAppTests/RouteNavigatorTests`). See `reviews/watch-ios/gap-analysis.md` items M3 (route preview) and M4 (mini-map) for the planned surface.
 
 ### Pause / resume
 
