@@ -113,13 +113,18 @@ pub struct ChecklistSection {
     pub items: Vec<ChecklistItem, MAX_CHECKLIST_ITEMS>,
 }
 
+/// Discriminants are pinned to the `RaceDayView` wire codes (see
+/// [`crate::record::RaceDayView::feasible_code`]) so that a cast and the codec
+/// cannot disagree — on this field the gap between them is the difference
+/// between showing a runner `AHEAD` and `FAR BEHIND`. Declaration order is
+/// unchanged; only the numbering is fixed. `record.rs` pins the equality.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum GoalFeasibilityVerdict {
-    Ahead,
-    OnTrack,
-    Behind,
-    FarBehind,
+    Ahead = 2,
+    OnTrack = 1,
+    Behind = 0,
+    FarBehind = 3,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
