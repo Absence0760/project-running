@@ -12206,4 +12206,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get watchMetricGap => 'Höhenkorrigierte Pace';
+
+  @override
+  String get watchMetricFluid => 'Flüssigkeit';
 }

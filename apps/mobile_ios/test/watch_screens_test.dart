@@ -116,15 +116,15 @@ void main() {
 
     /// The guard that makes a reorder of either enum a red test instead of a
     /// silent re-point of every screen already pushed to a watch.
-    test('metric bytes are unique, stable, and cover 1..=39', () {
+    test('metric bytes are unique, stable, and cover 1..=40', () {
       final seen = <int>{};
       for (final m in WatchMetric.values) {
         expect(m.wire, greaterThanOrEqualTo(1));
-        expect(m.wire, lessThanOrEqualTo(39));
+        expect(m.wire, lessThanOrEqualTo(40));
         expect(seen.add(m.wire), isTrue, reason: 'byte ${m.wire} claimed twice');
         expect(m.wireName, isNotEmpty);
       }
-      expect(WatchMetric.values.length, 39,
+      expect(WatchMetric.values.length, 40,
           reason: 'the catalogue and its byte map have drifted from the watch');
       // Pinned by name, so a reorder cannot quietly renumber them.
       expect(WatchMetric.elapsed.wire, 1);
@@ -146,6 +146,10 @@ void main() {
       expect(WatchMetric.stormDelta.wireName, 'storm_delta');
       expect(WatchMetric.gap.wire, 39);
       expect(WatchMetric.gap.wireName, 'gap');
+      // 40 is the fluid half of the Fuel page's pair — its own entry because a
+      // desert runner's binding constraint is not the carbs.
+      expect(WatchMetric.fluid.wire, 40);
+      expect(WatchMetric.fluid.wireName, 'fluid');
     });
 
     test('layout bytes round-trip and reserve the Quad seat', () {

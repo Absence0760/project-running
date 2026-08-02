@@ -14,7 +14,7 @@
 use crate::gear_wear::{GearWear, GearWearStatus};
 use crate::hr_zones::{zone_for_bpm, ZoneCutoffs};
 use crate::pacer::PacerStatus;
-use crate::record::FuelView;
+use crate::record::{FuelBasis, FuelView};
 use crate::workout::WorkoutView;
 
 /// Full-scale window for the centre-out pacer bar: a ±120 s (two-minute) lead
@@ -49,18 +49,31 @@ pub fn gear_overdue(gear: &GearWear) -> bool {
     gear.status == GearWearStatus::Worn
 }
 
-/// Fill for the fuel bar, in `0.0..=1.0`. [`FuelView`] carries what to carry out
-/// to the next aid plus the whole-plan totals — not a carried-vs-needed split —
-/// so the most honest single ratio it supports is the carry-to-next-aid
-/// carbohydrate as a share of the whole plan's carbohydrate: the visual weight
-/// of the current leg's fuel load against the race. A `None` carry (past the
-/// final aid) or a zero / non-finite plan total reads 0.0.
-pub fn fuel_fill(fuel: &FuelView) -> f32 {
-    let Some(carry) = fuel.carry else { return 0.0 };
-    if !fuel.total_carbs_g.is_finite() || fuel.total_carbs_g <= 0.0 || !carry.carbs_g.is_finite() {
-        return 0.0;
+/// Fill for the fuel bar, in `0.0..=1.0`, or `None` when there is no bar to
+/// draw at all.
+///
+/// [`FuelView`] carries what to carry out to the next aid plus the whole-plan
+/// totals — not a carried-vs-needed split — so the most honest single ratio it
+/// supports is the carry-to-next-aid carbohydrate as a share of the whole
+/// plan's carbohydrate: the visual weight of the current leg's fuel load
+/// against the race.
+///
+/// `None` on [`FuelBasis::Cadence`], because there is no race to be a share of.
+/// Deliberately not 0.0: an empty bar under a live fuel page reads as "nothing
+/// to carry", which is the opposite of what a cadence run is telling the
+/// runner. A `None` carry (past the final aid) or a zero / non-finite plan
+/// total is a real empty and still reads 0.0.
+pub fn fuel_fill(fuel: &FuelView) -> Option<f32> {
+    let FuelBasis::NextAid { total } = fuel.basis else {
+        return None;
+    };
+    let Some(carry) = fuel.carry else {
+        return Some(0.0);
+    };
+    if !total.carbs_g.is_finite() || total.carbs_g <= 0.0 || !carry.carbs_g.is_finite() {
+        return Some(0.0);
     }
-    clamp01(carry.carbs_g / fuel.total_carbs_g)
+    Some(clamp01(carry.carbs_g / total.carbs_g))
 }
 
 /// Fill for the workout step-progress bar, in `0.0..=1.0`: the active step's
@@ -170,34 +183,58 @@ mod tests {
 
     fn fuel(carry_carbs: Option<f32>, total_carbs: f32) -> FuelView {
         FuelView {
+            basis: FuelBasis::NextAid {
+                total: FuelCarryView {
+                    carbs_g: total_carbs,
+                    fluid_ml: 0.0,
+                },
+            },
             carry: carry_carbs.map(|c| FuelCarryView {
                 carbs_g: c,
                 fluid_ml: 0.0,
             }),
-            total_carbs_g: total_carbs,
-            total_fluid_ml: 0.0,
         }
     }
 
     #[test]
     fn fuel_full_carry_leg_reads_full() {
         // A single-leg plan where the whole race's carbs are the next carry-out.
-        assert_eq!(fuel_fill(&fuel(Some(120.0), 120.0)), 1.0);
+        assert_eq!(fuel_fill(&fuel(Some(120.0), 120.0)), Some(1.0));
     }
 
     #[test]
     fn fuel_partial_carry_leg_reads_partial() {
-        assert!((fuel_fill(&fuel(Some(60.0), 120.0)) - 0.5).abs() < 1e-6);
+        assert!((fuel_fill(&fuel(Some(60.0), 120.0)).unwrap() - 0.5).abs() < 1e-6);
     }
 
     #[test]
     fn fuel_degenerate_inputs_read_empty_not_nan() {
         // Zero plan total: guarded, no divide-by-zero NaN.
-        let f = fuel_fill(&fuel(Some(60.0), 0.0));
+        let f = fuel_fill(&fuel(Some(60.0), 0.0)).unwrap();
         assert_eq!(f, 0.0);
         assert!(!f.is_nan());
         // No carry (past the final aid): empty.
-        assert_eq!(fuel_fill(&fuel(None, 120.0)), 0.0);
+        assert_eq!(fuel_fill(&fuel(None, 120.0)), Some(0.0));
+    }
+
+    /// A cadence run has no race to be a share of, so the bar is absent rather
+    /// than empty — an empty bar under a live fuel page reads as "nothing to
+    /// carry".
+    #[test]
+    fn a_cadence_basis_has_no_bar_at_all() {
+        let f = FuelView {
+            basis: FuelBasis::Cadence {
+                per_hour: FuelCarryView {
+                    carbs_g: 60.0,
+                    fluid_ml: 500.0,
+                },
+            },
+            carry: Some(FuelCarryView {
+                carbs_g: 90.0,
+                fluid_ml: 750.0,
+            }),
+        };
+        assert_eq!(fuel_fill(&f), None);
     }
 
     #[test]

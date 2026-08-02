@@ -213,19 +213,44 @@ pub struct RoadbookView {
     pub upcoming_len: u8,
 }
 
-/// The Fuel page view: what to carry to the next aid from the current position,
-/// plus the whole-plan totals, from [`crate::fuel_plan`] over the loaded
-/// roadbook.
+/// What the Fuel page's numbers are counted against — and the payload only that
+/// basis has, so the invariant "exactly one of these is present" is the type's
+/// rather than a pair of `Option`s a caller could read both of.
+///
+/// A watch with a pushed roadbook plans against aid stations. A watch without
+/// one is not fuel-blind: [`crate::alerts`] has been reminding the runner to
+/// drink and eat on a moving-time cadence since the first tick, off the same
+/// rates. The cadence basis is that plan made readable.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum FuelBasis {
+    /// A roadbook is loaded: the plan is the aid-station schedule, and this is
+    /// what the whole of it comes to.
+    NextAid { total: FuelCarryView },
+    /// No roadbook: the plan is the runner's own drink/eat cadence, at this
+    /// hourly rate. Deliberately not a total — an open-ended run has no end to
+    /// total against, and a number labelled `TOTAL` on a run with no finish
+    /// would be a made-up one.
+    Cadence { per_hour: FuelCarryView },
+}
+
+/// The Fuel page view. On [`FuelBasis::NextAid`] it is what to carry to the next
+/// aid from the current position plus the whole-plan totals, from
+/// [`crate::fuel_plan`] over the loaded roadbook. On [`FuelBasis::Cadence`] it
+/// is what the runner's own cadence has already called for, plus the rate it
+/// calls at.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FuelView {
-    /// Carbs/fluid to carry out from the last aid to the next; `None` past the
-    /// final aid.
+    pub basis: FuelBasis,
+    /// On [`FuelBasis::NextAid`], carbs/fluid to carry out from the last aid to
+    /// the next; `None` past the final aid. On [`FuelBasis::Cadence`], the
+    /// intake the cadence has called for so far — never `None`, because a
+    /// cadence has no last aid to pass.
     pub carry: Option<FuelCarryView>,
-    pub total_carbs_g: f32,
-    pub total_fluid_ml: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct FuelCarryView {
     pub carbs_g: f32,
     pub fluid_ml: f32,
@@ -675,6 +700,14 @@ pub struct Snapshot {
     /// and a runner who cannot see that it never armed trusts an alert that
     /// will not fire.
     pub zone_ceiling: Option<u8>,
+    /// Which sensor the shown pulse is coming from, mirrored via
+    /// [`Recorder::set_hr_source`], or `None` when nothing is authoritative.
+    /// Carried for the same reason [`Snapshot::zone_ceiling`] is: the
+    /// arbitration between a chest strap and the wrist optical
+    /// ([`crate::hr_source::select_hr`]) decides which number a runner is
+    /// looking at, and until it reached the panel a strap that never paired was
+    /// indistinguishable from one that won.
+    pub hr_source: Option<crate::hr_source::HrSource>,
     /// The armed pace band `(fast, slow)` in s/km, mirrored the same way for
     /// the Pace page's `BAND` row.
     pub pace_band: Option<(u32, u32)>,
@@ -725,7 +758,8 @@ pub struct Snapshot {
     /// The upcoming-checkpoint window of the loaded roadbook, or `None` when no
     /// roadbook is loaded.
     pub roadbook: Option<RoadbookView>,
-    /// The fuelling headline over the loaded roadbook, or `None` without one.
+    /// The fuelling headline — the loaded roadbook's plan, or the runner's own
+    /// drink/eat cadence when no roadbook is loaded. `None` only while idle.
     pub fuel: Option<FuelView>,
     /// The training-pace zones derived from the synced goal-race pace, or `None`
     /// until a goal pace is synced.
@@ -1056,6 +1090,7 @@ pub struct Recorder {
     /// Only the engine's validated state is ever mirrored — the recorder never
     /// interprets the values, it just carries them to the face.
     zone_ceiling: Option<u8>,
+    hr_source: Option<crate::hr_source::HrSource>,
     pace_band: Option<(u32, u32)>,
     /// Per-zone moving-time accumulators, reset on [`start`](Recorder::start).
     zone_time_s: [u32; ZONE_COUNT],
@@ -1259,6 +1294,7 @@ impl Recorder {
             hr_bpm: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
             zone_ceiling: None,
+            hr_source: None,
             pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             hr_dt_bpm: 0,
@@ -1487,6 +1523,14 @@ impl Recorder {
     /// time after the sensor goes quiet.
     pub fn set_hr(&mut self, bpm: Option<u16>) {
         self.hr_bpm = bpm;
+    }
+
+    /// Which sensor the arbiter ([`crate::hr_source::hr_to_publish`]) credited
+    /// the current reading to, `None` when nothing is authoritative. Carried
+    /// straight to the face — the recorder never re-derives precedence, which
+    /// would make it a second place the rule lives.
+    pub fn set_hr_source(&mut self, source: Option<crate::hr_source::HrSource>) {
+        self.hr_source = source;
     }
 
     /// Rebuild the zone ladder from a configured max HR — the settings-sync
@@ -2426,6 +2470,7 @@ impl Recorder {
             },
             zone_cutoffs: self.zone_cutoffs,
             zone_ceiling: self.zone_ceiling,
+            hr_source: self.hr_source,
             pace_band: self.pace_band,
             zone_time_s: self.zone_time_s,
             cutoff: self.cutoff_snapshot(),
@@ -2743,12 +2788,22 @@ impl Recorder {
         })
     }
 
-    /// The fuelling headline over the loaded roadbook — the carry out of the
-    /// last aid at/behind the current position plus the whole-plan totals,
-    /// scaled by [`crate::fuel_plan`]. `None` without a roadbook or while idle.
+    /// The fuelling headline. With a roadbook loaded that is the carry out of
+    /// the last aid at/behind the current position plus the whole-plan totals,
+    /// scaled by [`crate::fuel_plan`]. Without one it is the cadence basis: what
+    /// the drink/eat reminders have already called for, and the hourly rate they
+    /// call at. `None` only while idle.
+    ///
+    /// The cadence basis exists because the page was inert for every run without
+    /// a pushed course while [`crate::alerts`] was reminding the runner to drink
+    /// and eat the whole time, off these same rates — so the one page named
+    /// FUEL could not say what the fuelling plan was.
     fn fuel_snapshot(&self) -> Option<FuelView> {
-        if self.state == RecordState::Idle || self.roadbook_legs.is_empty() {
+        if self.state == RecordState::Idle {
             return None;
+        }
+        if self.roadbook_legs.is_empty() {
+            return Some(self.cadence_fuel_snapshot());
         }
         // Reconstruct the aid services from the pushed refill flag; static
         // slices satisfy `FuelLegInput`'s borrow without owning storage.
@@ -2762,19 +2817,7 @@ impl Recorder {
                 services: if leg.is_refill { REFILL } else { DRY },
             });
         }
-        // The pushed cadences invert through the same units the alert engine's
-        // forward reduction used (one gel, one sip), so the page and the
-        // reminders describe one plan. A desert runner who tightened their
-        // drink cadence over SET1 sees the carry-out grow to match; unpushed,
-        // the temperate defaults stand.
-        let carbs_per_hour_g = self
-            .fuel_eat_interval_s
-            .map(|s| GEL_CARBS_G * 3600.0 / f64::from(s))
-            .unwrap_or(DEFAULT_CARBS_PER_HOUR_G);
-        let fluid_per_hour_ml = self
-            .fuel_drink_interval_s
-            .map(|s| SIP_FLUID_ML * 3600.0 / f64::from(s))
-            .unwrap_or(DEFAULT_FLUID_PER_HOUR_ML);
+        let (carbs_per_hour_g, fluid_per_hour_ml) = self.fuel_rates_per_hour();
         let plan = build_fuel_plan(
             &inputs,
             FuelPlanOptions {
@@ -2809,10 +2852,58 @@ impl Recorder {
                 .map(carry_view);
         }
         Some(FuelView {
+            basis: FuelBasis::NextAid {
+                total: FuelCarryView {
+                    carbs_g: plan.total_carbs_g as f32,
+                    fluid_ml: plan.total_fluid_ml as f32,
+                },
+            },
             carry,
-            total_carbs_g: plan.total_carbs_g as f32,
-            total_fluid_ml: plan.total_fluid_ml as f32,
         })
+    }
+
+    /// The hourly carbs/fluid the fuelling runs at.
+    ///
+    /// The pushed cadences invert through the same units the alert engine's
+    /// forward reduction used (one gel, one sip), so the page and the reminders
+    /// describe one plan. A desert runner who tightened their drink cadence over
+    /// `SET1` sees both move together; unpushed, the temperate defaults stand —
+    /// and those defaults are exactly what [`crate::alerts`] starts at, so the
+    /// cadence basis is never describing a schedule the reminders are not
+    /// running.
+    fn fuel_rates_per_hour(&self) -> (f64, f64) {
+        (
+            self.fuel_eat_interval_s
+                .map(|s| GEL_CARBS_G * 3600.0 / f64::from(s))
+                .unwrap_or(DEFAULT_CARBS_PER_HOUR_G),
+            self.fuel_drink_interval_s
+                .map(|s| SIP_FLUID_ML * 3600.0 / f64::from(s))
+                .unwrap_or(DEFAULT_FLUID_PER_HOUR_ML),
+        )
+    }
+
+    /// The Fuel page without a roadbook: the intake the drink/eat cadence has
+    /// already called for, and the rate it calls at.
+    ///
+    /// Counted off **moving** time, not elapsed, because that is the clock
+    /// [`crate::alerts`] schedules its reminders on — a runner who has spent an
+    /// hour at an aid station has not been told to drink four more times, and a
+    /// page that said so would be inventing a debt.
+    fn cadence_fuel_snapshot(&self) -> FuelView {
+        let (carbs_per_hour_g, fluid_per_hour_ml) = self.fuel_rates_per_hour();
+        let hours = f64::from(self.moving_s) / 3600.0;
+        FuelView {
+            basis: FuelBasis::Cadence {
+                per_hour: FuelCarryView {
+                    carbs_g: carbs_per_hour_g as f32,
+                    fluid_ml: fluid_per_hour_ml as f32,
+                },
+            },
+            carry: Some(FuelCarryView {
+                carbs_g: (carbs_per_hour_g * hours) as f32,
+                fluid_ml: (fluid_per_hour_ml * hours) as f32,
+            }),
+        }
     }
 
     /// Is the fed along-course position too old to speak for where the runner
@@ -4525,7 +4616,7 @@ mod tests {
     fn roadbook_and_fuel_wire_through() {
         let mut r = Recorder::new();
         assert!(r.snapshot().roadbook.is_none());
-        assert!(r.snapshot().fuel.is_none());
+        assert!(r.snapshot().fuel.is_none(), "idle has no fuelling to state");
         r.set_roadbook(&[
             RoadbookCheckpoint {
                 cum_dist_m: 0.0,
@@ -4563,21 +4654,86 @@ mod tests {
         // Fuel scales onto the schedule: non-zero totals + a carry out of the
         // aid we are between.
         let f = r.snapshot().fuel.expect("fuel active with a roadbook");
-        assert!(f.total_carbs_g > 0.0 && f.total_fluid_ml > 0.0);
+        let FuelBasis::NextAid { total } = f.basis else {
+            panic!("a loaded roadbook plans against aid stations");
+        };
+        assert!(total.carbs_g > 0.0 && total.fluid_ml > 0.0);
         assert!(f.carry.is_some());
 
         // A pushed cadence re-rates the plan through the same units the alert
         // engine reduced through: halving the drink interval (900 → 450 s)
         // doubles the fluid budget, and the untouched eat arm keeps its rate.
         r.set_fuel_intervals(450, 0);
-        let f2 = r.snapshot().fuel.unwrap();
+        let FuelBasis::NextAid { total: total2 } = r.snapshot().fuel.unwrap().basis else {
+            panic!("still an aid-station plan");
+        };
         assert!(
-            (f2.total_fluid_ml - 2.0 * f.total_fluid_ml).abs() < 1.0,
+            (total2.fluid_ml - 2.0 * total.fluid_ml).abs() < 1.0,
             "{} vs {}",
-            f2.total_fluid_ml,
-            f.total_fluid_ml
+            total2.fluid_ml,
+            total.fluid_ml
         );
-        assert!((f2.total_carbs_g - f.total_carbs_g).abs() < f32::EPSILON);
+        assert!((total2.carbs_g - total.carbs_g).abs() < f32::EPSILON);
+    }
+
+    /// Without a roadbook the page is not inert: the alert engine has been
+    /// reminding the runner to drink and eat since the first tick, and this is
+    /// that plan made readable.
+    #[test]
+    fn without_a_roadbook_the_fuel_view_falls_back_to_the_cadence() {
+        let mut r = Recorder::new();
+        r.start(0);
+        // Half an hour of running, 3 m/s up a meridian.
+        for t in 0..=1800 {
+            r.on_fix(&fix(north(3.0 * f64::from(t)), -105.0, 3.0, t));
+        }
+        let s = r.snapshot();
+        assert_eq!(s.moving_s, 1800);
+        let f = s.fuel.expect("a cadence is a plan");
+        let FuelBasis::Cadence { per_hour } = f.basis else {
+            panic!("no roadbook means the cadence basis");
+        };
+        // The untouched defaults are the ones `alerts` starts at: 60 g/hr at one
+        // 25 g gel every 25 min, 500 ml/hr at one 125 ml sip every 900 s.
+        assert!((per_hour.carbs_g - DEFAULT_CARBS_PER_HOUR_G as f32).abs() < 0.01);
+        assert!((per_hour.fluid_ml - DEFAULT_FLUID_PER_HOUR_ML as f32).abs() < 0.01);
+        // Half an hour in, half the hourly rate has been called for.
+        let carry = f.carry.expect("a cadence has no last aid to pass");
+        assert!((carry.carbs_g - 30.0).abs() < 0.01, "{}", carry.carbs_g);
+        assert!((carry.fluid_ml - 250.0).abs() < 0.01, "{}", carry.fluid_ml);
+
+        // A pushed cadence re-rates it through the same units, and the intake
+        // already called for moves with it.
+        r.set_fuel_intervals(450, 0);
+        let f2 = r.snapshot().fuel.unwrap();
+        let FuelBasis::Cadence { per_hour: p2 } = f2.basis else {
+            panic!("still a cadence");
+        };
+        assert!((p2.fluid_ml - 1000.0).abs() < 0.01, "{}", p2.fluid_ml);
+        assert!((p2.carbs_g - per_hour.carbs_g).abs() < f32::EPSILON);
+        assert!((f2.carry.unwrap().fluid_ml - 500.0).abs() < 0.01);
+    }
+
+    /// Moving time, not elapsed: a runner who spent an hour at an aid station
+    /// was not told to drink four more times, and a page that said so would be
+    /// inventing a debt against them.
+    #[test]
+    fn the_cadence_basis_counts_moving_time_not_elapsed() {
+        let mut r = Recorder::new();
+        r.start(0);
+        for t in 0..=900 {
+            r.on_fix(&fix(north(3.0 * f64::from(t)), -105.0, 3.0, t));
+        }
+        r.pause(900);
+        for t in 901..=4500u32 {
+            r.tick(t);
+        }
+        let s = r.snapshot();
+        assert_eq!(s.moving_s, 900);
+        assert_eq!(s.elapsed_s, 4500);
+        let carry = s.fuel.unwrap().carry.unwrap();
+        // A quarter hour of moving, so a quarter of the hourly fluid.
+        assert!((carry.fluid_ml - 125.0).abs() < 0.01, "{}", carry.fluid_ml);
     }
 
     #[test]
@@ -4917,7 +5073,6 @@ mod tests {
         for p in [
             Page::Zones,
             Page::Roadbook,
-            Page::Fuel,
             Page::Nav,
             Page::GearWear,
             Page::Fitness,
@@ -4927,6 +5082,9 @@ mod tests {
         ] {
             assert_eq!(mask & p.bit(), 0, "{p:?} has no data and must be hidden");
         }
+        // Fuel is NOT in that list: the drink/eat reminders are running off the
+        // default cadence on this very run, so the page has a plan to state.
+        assert_ne!(mask & Page::Fuel.bit(), 0);
     }
 
     #[test]
@@ -5014,9 +5172,13 @@ mod tests {
         // With hide-empty back on, curation still can't resurrect a dataless
         // page: enabled ∩ available.
         r.set_hide_empty_pages(true);
-        r.set_pages_enabled(Page::Fuel.bit() | Page::Distance.bit());
+        r.set_pages_enabled(Page::Roadbook.bit() | Page::Distance.bit());
         let mask = r.snapshot().pages_mask;
-        assert_eq!(mask & Page::Fuel.bit(), 0, "no roadbook, no Fuel page");
+        assert_eq!(
+            mask & Page::Roadbook.bit(),
+            0,
+            "no roadbook, no Roadbook page"
+        );
         assert_ne!(mask & Page::Distance.bit(), 0);
     }
 

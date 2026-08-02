@@ -106,6 +106,8 @@ String watchMetricLabel(AppLocalizations l10n, WatchMetric m) {
       return l10n.watchMetricStormDelta;
     case WatchMetric.gap:
       return l10n.watchMetricGap;
+    case WatchMetric.fluid:
+      return l10n.watchMetricFluid;
   }
 }
 

@@ -12068,4 +12068,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get watchMetricGap => 'Grade-adjusted pace';
+
+  @override
+  String get watchMetricFluid => 'Fluid';
 }

@@ -297,10 +297,11 @@ pub fn draw_climb_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
 
 /// The fuel page's carry-load gauge: a progress bar on row 3 fed by
 /// [`gauge::fuel_fill`] (share of the plan's carbohydrate riding in the next
-/// carry-out). No-op without a loaded fuel plan.
+/// carry-out). No-op without a loaded fuel plan, and no-op on the cadence
+/// basis, which has no race for the carry to be a share of.
 pub fn draw_fuel_overlay(fb: &mut Framebuffer, snap: &Snapshot) {
-    if let Some(fuel) = snap.fuel {
-        fb.draw_progress_bar(BAR_X, bar_y(3), BAR_W, BAR_H, gauge::fuel_fill(&fuel));
+    if let Some(fill) = snap.fuel.as_ref().and_then(gauge::fuel_fill) {
+        fb.draw_progress_bar(BAR_X, bar_y(3), BAR_W, BAR_H, fill);
     }
 }
 
@@ -880,7 +881,7 @@ mod tests {
     use watch_core::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM, ZONE_COUNT};
     use watch_core::pacer::{PaceVerdict, PacerGoal, PacerStatus};
     use watch_core::page::Page;
-    use watch_core::record::{FuelCarryView, FuelView, RecordState, PACE_BUCKET_COUNT};
+    use watch_core::record::{FuelBasis, FuelCarryView, FuelView, RecordState, PACE_BUCKET_COUNT};
     use watch_core::workout::{PaceAdherence, WorkoutStepKind, WorkoutView};
 
     // Count set pixels inside a rectangle — the tests assert *where* ink lands.
@@ -919,6 +920,7 @@ mod tests {
             pacer: None,
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
             zone_ceiling: None,
+            hr_source: None,
             pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
@@ -1518,8 +1520,12 @@ mod tests {
                 carbs_g: 120.0,
                 fluid_ml: 1_500.0,
             }),
-            total_carbs_g: 120.0,
-            total_fluid_ml: 1_500.0,
+            basis: FuelBasis::NextAid {
+                total: FuelCarryView {
+                    carbs_g: 120.0,
+                    fluid_ml: 1_500.0,
+                },
+            },
         });
         assert_no_overlap(Page::Fuel, &fuel_snap, None, draw_fuel_overlay);
 
@@ -1564,8 +1570,12 @@ mod tests {
                 carbs_g: 120.0,
                 fluid_ml: 0.0,
             }),
-            total_carbs_g: 120.0,
-            total_fluid_ml: 0.0,
+            basis: FuelBasis::NextAid {
+                total: FuelCarryView {
+                    carbs_g: 120.0,
+                    fluid_ml: 0.0,
+                },
+            },
         });
         let mut part = snapshot();
         part.fuel = Some(FuelView {
@@ -1573,8 +1583,12 @@ mod tests {
                 carbs_g: 30.0,
                 fluid_ml: 0.0,
             }),
-            total_carbs_g: 120.0,
-            total_fluid_ml: 0.0,
+            basis: FuelBasis::NextAid {
+                total: FuelCarryView {
+                    carbs_g: 120.0,
+                    fluid_ml: 0.0,
+                },
+            },
         });
         let (mut ff, mut fp) = (Framebuffer::new(), Framebuffer::new());
         draw_fuel_overlay(&mut ff, &full);

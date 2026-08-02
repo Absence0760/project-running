@@ -3560,5 +3560,6 @@
   "watchMetricTimerRemaining": "Temporizador",
   "watchMetricBackyardBell": "Contagem decrescente do sino",
   "watchMetricStormDelta": "Tendência de tempestade",
-  "watchMetricGap": "Ritmo ajustado à inclinação"
+  "watchMetricGap": "Ritmo ajustado à inclinação",
+  "watchMetricFluid": "Líquido"
 }

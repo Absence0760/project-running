@@ -3560,5 +3560,6 @@
   "watchMetricTimerRemaining": "Minuteur",
   "watchMetricBackyardBell": "Compte à rebours de la cloche",
   "watchMetricStormDelta": "Tendance de tempête",
-  "watchMetricGap": "Allure corrigée de la pente"
+  "watchMetricGap": "Allure corrigée de la pente",
+  "watchMetricFluid": "Liquide"
 }

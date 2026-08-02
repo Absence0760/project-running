@@ -12195,4 +12195,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get watchMetricGap => 'Ritmo ajustado por pendiente';
+
+  @override
+  String get watchMetricFluid => 'Líquido';
 }
