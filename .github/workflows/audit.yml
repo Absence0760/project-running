@@ -1,6 +1,7 @@
 name: Dependency audit
 
-# Weekly scheduled audit + manual trigger. Runs `pnpm audit` against all
+# Weekly scheduled audit + manual trigger. Runs `pnpm audit` AND `npm audit`
+# (the two lockfiles drift independently — see the audit step) against all
 # workspaces and opens an issue if any vulnerabilities at moderate or
 # higher severity are found. Closes the issue automatically when the next
 # clean run completes.
@@ -42,25 +43,46 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run pnpm audit
+      - name: Run dependency audits (both lockfiles)
         id: audit
         run: |
           set +e
           # --audit-level=moderate ignores low/info findings (typically
           # noise from dev-only deps with no real exposure). The exit
           # code is non-zero when issues are found at >= the level.
-          pnpm audit --audit-level=moderate --json > audit.json
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-          if [ -s audit.json ]; then
-            echo "## pnpm audit findings (moderate or higher)" > audit-summary.md
-            echo "" >> audit-summary.md
-            echo '```json' >> audit-summary.md
-            head -c 60000 audit.json >> audit-summary.md
-            echo '' >> audit-summary.md
-            echo '```' >> audit-summary.md
+          #
+          # BOTH lockfiles are audited. They drift independently, and for a
+          # while only pnpm-lock.yaml was checked — while package-lock.json
+          # is what CI's `npm ci` jobs and the web build compile gate
+          # actually install. Two high-severity advisories sat in it
+          # unreported behind a clean pnpm audit (issue #633). Dependabot
+          # does not close the gap either: it bumps DECLARED dependencies,
+          # so a transitive six levels down a `^` range is only ever
+          # refreshed by `npm audit fix --package-lock-only`.
+          pnpm audit --audit-level=moderate --json > audit-pnpm.json
+          pnpm_code=$?
+          npm audit --audit-level=moderate --package-lock-only --json > audit-npm.json
+          npm_code=$?
+          if [ "$pnpm_code" != "0" ] || [ "$npm_code" != "0" ]; then
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
           else
-            echo "No findings." > audit-summary.md
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
           fi
+          {
+            echo "## Dependency audit findings (moderate or higher)"
+            echo ""
+            echo "### pnpm-lock.yaml (exit $pnpm_code)"
+            echo '```json'
+            head -c 30000 audit-pnpm.json
+            echo ''
+            echo '```'
+            echo ""
+            echo "### package-lock.json (exit $npm_code)"
+            echo '```json'
+            head -c 30000 audit-npm.json
+            echo ''
+            echo '```'
+          } > audit-summary.md
           cat audit-summary.md
 
       - name: Open or update tracking issue on findings
@@ -74,7 +96,7 @@ jobs:
           # there. Lets the workflow run cleanly on a fresh repo.
           gh label create dependency-audit --repo "$REPO" \
             --color FBCA04 \
-            --description "Findings from the scheduled pnpm audit workflow" \
+            --description "Findings from the scheduled dependency-audit workflow" \
             2>/dev/null || true
 
           # Look for an existing open issue tagged "dependency-audit". If
@@ -89,7 +111,7 @@ jobs:
               --body "Re-detected on $(date -u +%Y-%m-%d). See workflow run $GITHUB_RUN_ID."
           else
             gh issue create --repo "$REPO" \
-              --title "pnpm audit: vulnerabilities detected" \
+              --title "Dependency audit: vulnerabilities detected" \
               --body-file "$body_file" \
               --label dependency-audit
           fi
