@@ -50,4 +50,71 @@ void main() {
       );
     });
   });
+
+  group('postLiveVisibilityActionOnStop', () {
+    // Issue #664: the live window's is_public=true opt-in must not
+    // silently outlive the run — keeping a live-shared run public is an
+    // explicit post-stop choice, never a side effect of sharing for
+    // safety (incl. the Settings → Safety auto-live-share path).
+    test('an active broadcast at stop prompts for an explicit choice', () {
+      expect(
+        postLiveVisibilityActionOnStop(
+          broadcastBegun: true,
+          broadcasterActiveAtStop: true,
+          defaultPublic: false,
+          signedIn: true,
+        ),
+        PostLiveVisibilityAction.prompt,
+      );
+    });
+
+    test('a share stopped mid-run reverts quietly — the runner already chose',
+        () {
+      expect(
+        postLiveVisibilityActionOnStop(
+          broadcastBegun: true,
+          broadcasterActiveAtStop: false,
+          defaultPublic: false,
+          signedIn: true,
+        ),
+        PostLiveVisibilityAction.revertToDefault,
+      );
+    });
+
+    test('a public default needs no resolution — the save honoured it', () {
+      expect(
+        postLiveVisibilityActionOnStop(
+          broadcastBegun: true,
+          broadcasterActiveAtStop: true,
+          defaultPublic: true,
+          signedIn: true,
+        ),
+        PostLiveVisibilityAction.none,
+      );
+    });
+
+    test('no broadcast begun means nothing to resolve', () {
+      expect(
+        postLiveVisibilityActionOnStop(
+          broadcastBegun: false,
+          broadcasterActiveAtStop: false,
+          defaultPublic: false,
+          signedIn: true,
+        ),
+        PostLiveVisibilityAction.none,
+      );
+    });
+
+    test('signed out cannot flip visibility either way', () {
+      expect(
+        postLiveVisibilityActionOnStop(
+          broadcastBegun: true,
+          broadcasterActiveAtStop: true,
+          defaultPublic: false,
+          signedIn: false,
+        ),
+        PostLiveVisibilityAction.none,
+      );
+    });
+  });
 }

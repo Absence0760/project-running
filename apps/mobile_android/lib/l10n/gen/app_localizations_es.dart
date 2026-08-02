@@ -656,7 +656,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Inicia automáticamente el directo cuando empieza una carrera en este teléfono. La carrera en curso es visible para cualquiera con el enlace.';
+      'Inicia automáticamente el directo cuando empieza una carrera en este teléfono. La carrera en curso es visible para cualquiera con el enlace; al terminar la carrera, vuelve a tu visibilidad predeterminada.';
 
   @override
   String get safetyOffRouteTitle => 'Aviso de salida de ruta';
@@ -1159,6 +1159,19 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get runLiveShareStopped => 'Se dejó de compartir en vivo';
+
+  @override
+  String get runLiveShareEndedTitle => 'Directo finalizado';
+
+  @override
+  String get runLiveShareEndedBody =>
+      'El enlace en directo ya no se actualiza. ¿Mantener la carrera guardada pública para que cualquiera con el enlace pueda verla? Si no, seguirá tu visibilidad predeterminada.';
+
+  @override
+  String get runLiveShareKeepPublic => 'Mantener pública';
+
+  @override
+  String get runLiveShareKeepPrivate => 'Mantener privada';
 
   @override
   String get runTrainingPlans => 'Planes de entrenamiento';

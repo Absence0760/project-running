@@ -2239,12 +2239,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     }
   }
 
-  /// Flip the run back to private. The live-broadcast stop path
-  /// re-asserts is_public=true (run_screen._stop) and the auto_live_share
-  /// pref can flip a run public without a per-run tap, so this is the
-  /// undo. Offered whenever signed in — the mobile Run model doesn't
-  /// surface is_public and makeRunPrivate is idempotent, mirroring the
-  /// always-prompt Share idiom above.
+  /// Flip the run back to private. The undo for any public flip — a
+  /// Share here, a `public` privacy default, or an explicit "Keep
+  /// public" at the end of a live-shared run (run_screen's post-stop
+  /// dialog, issue #664 — live share itself no longer persists
+  /// is_public past the stop). Offered whenever signed in — the mobile
+  /// Run model doesn't surface is_public and makeRunPrivate is
+  /// idempotent, mirroring the always-prompt Share idiom above.
   Future<void> _makePrivate() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;

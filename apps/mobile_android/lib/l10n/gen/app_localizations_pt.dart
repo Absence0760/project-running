@@ -655,7 +655,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link.';
+      'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link; quando a corrida termina, volta à sua visibilidade padrão.';
 
   @override
   String get safetyOffRouteTitle => 'Alerta de saída de rota';
@@ -1157,6 +1157,19 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runLiveShareStopped => 'Partilha em direto terminada';
+
+  @override
+  String get runLiveShareEndedTitle => 'Partilha em direto terminada';
+
+  @override
+  String get runLiveShareEndedBody =>
+      'O link em direto já não é atualizado. Manter a corrida guardada pública para que qualquer pessoa com o link a possa ver? Caso contrário, segue a sua visibilidade padrão.';
+
+  @override
+  String get runLiveShareKeepPublic => 'Manter pública';
+
+  @override
+  String get runLiveShareKeepPrivate => 'Manter privada';
 
   @override
   String get runTrainingPlans => 'Planos de treino';
@@ -12787,7 +12800,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link.';
+      'Inicia automaticamente o compartilhamento ao vivo quando uma corrida começa neste telefone. A corrida em andamento fica visível para qualquer pessoa com o link; quando a corrida termina, ela volta à sua visibilidade padrão.';
 
   @override
   String get safetyOffRouteTitle => 'Alerta de saída de rota';
@@ -13289,6 +13302,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runLiveShareStopped => 'Compartilhamento ao vivo encerrado';
+
+  @override
+  String get runLiveShareEndedTitle => 'Compartilhamento ao vivo encerrado';
+
+  @override
+  String get runLiveShareEndedBody =>
+      'O link ao vivo não é mais atualizado. Manter a corrida salva pública para que qualquer pessoa com o link possa vê-la? Caso contrário, ela segue sua visibilidade padrão.';
+
+  @override
+  String get runLiveShareKeepPublic => 'Manter pública';
+
+  @override
+  String get runLiveShareKeepPrivate => 'Manter privada';
 
   @override
   String get runTrainingPlans => 'Planos de treino';

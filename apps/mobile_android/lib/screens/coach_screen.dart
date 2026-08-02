@@ -1245,8 +1245,8 @@ class _CoachScreenState extends State<CoachScreen> {
           ),
           IconButton(
             tooltip: AppLocalizations.of(context).commonDismiss,
-            visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             iconSize: 18,
             onPressed: () => setState(() => _error = null),
             icon: Icon(Icons.close, color: cs.onErrorContainer),
@@ -1451,18 +1451,16 @@ class _CoachScreenState extends State<CoachScreen> {
           IconButton(
             tooltip: l10n.coachActionCopy,
             icon: Icon(Icons.copy_all_outlined, size: 16, color: iconColor),
-            visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onPressed: () => _copy(m.content.value),
           ),
           if (isUser)
             IconButton(
               tooltip: l10n.coachActionEdit,
               icon: Icon(Icons.edit_outlined, size: 16, color: iconColor),
-              visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               onPressed: _busy
                   ? null
                   : () {
@@ -1474,9 +1472,8 @@ class _CoachScreenState extends State<CoachScreen> {
             IconButton(
               tooltip: l10n.coachActionRegenerate,
               icon: Icon(Icons.refresh, size: 16, color: iconColor),
-              visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               onPressed: _busy ? null : () => _regenerate(m.id!),
             ),
             IconButton(
@@ -1488,9 +1485,8 @@ class _CoachScreenState extends State<CoachScreen> {
                 size: 16,
                 color: m.reaction == 'up' ? cs.primary : iconColor,
               ),
-              visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               onPressed: () => _react(m.id!, 'up'),
             ),
             IconButton(
@@ -1502,9 +1498,8 @@ class _CoachScreenState extends State<CoachScreen> {
                 size: 16,
                 color: m.reaction == 'down' ? cs.error : iconColor,
               ),
-              visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               onPressed: () => _react(m.id!, 'down'),
             ),
           ],

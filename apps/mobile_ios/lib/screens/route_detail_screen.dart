@@ -1348,7 +1348,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                                   IconButton(
                                     icon: const Icon(Icons.flag_outlined, size: 16),
                                     tooltip: l10n.routeDetailReportReview,
-                                    visualDensity: VisualDensity.compact,
                                     padding: const EdgeInsets.only(left: 8),
                                     constraints: const BoxConstraints(
                                       minWidth: 48,

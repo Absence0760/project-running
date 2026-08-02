@@ -373,7 +373,8 @@ class _RouteConditionsState extends State<RouteConditions> {
                 if (_canDelete(c))
                   IconButton(
                     icon: const Icon(Icons.close, size: 16),
-                    visualDensity: VisualDensity.compact,
+                    constraints:
+                        const BoxConstraints(minWidth: 48, minHeight: 48),
                     tooltip: l10n.routeConditionsDelete,
                     onPressed: () => _delete(c),
                   ),

@@ -272,10 +272,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // The tile sits below the lazy list's build extent (the
+      // auto-live-share subtitle grew a line for issue #664), so scroll
+      // it into existence before asserting.
+      await tester.scrollUntilVisible(
+        find.text('Off-route alert'),
+        120,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       final offRoute = find.widgetWithText(SwitchListTile, 'Off-route alert');
       expect(offRoute, findsOneWidget);
-      await tester.ensureVisible(offRoute);
-      await tester.pumpAndSettle();
       await tester.tap(offRoute);
       await tester.pumpAndSettle();
 

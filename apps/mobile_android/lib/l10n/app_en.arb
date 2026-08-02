@@ -906,7 +906,7 @@
   "@safetyAutoLiveShareTitle": {
     "description": "Title of the auto-live-share device toggle"
   },
-  "safetyAutoLiveShareSubtitle": "Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.",
+  "safetyAutoLiveShareSubtitle": "Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link; when the run ends it returns to your default run visibility.",
   "@safetyAutoLiveShareSubtitle": {
     "description": "Subtitle of the auto-live-share device toggle (public-by-link disclosure)"
   },
@@ -1535,6 +1535,22 @@
   "runLiveShareStopped": "Live sharing stopped",
   "@runLiveShareStopped": {
     "description": "Confirmation banner shown after the runner stops the live-tracking share mid-run"
+  },
+  "runLiveShareEndedTitle": "Live sharing ended",
+  "@runLiveShareEndedTitle": {
+    "description": "Title of the post-stop dialog asking whether a live-shared run should stay public"
+  },
+  "runLiveShareEndedBody": "The live link no longer updates. Keep the saved run public so anyone with the link can view it? If not, it follows your default run visibility.",
+  "@runLiveShareEndedBody": {
+    "description": "Body of the post-stop dialog: the live window is over and keeping the run public is an explicit choice"
+  },
+  "runLiveShareKeepPublic": "Keep public",
+  "@runLiveShareKeepPublic": {
+    "description": "Dialog action that keeps the finished live-shared run publicly viewable"
+  },
+  "runLiveShareKeepPrivate": "Keep private",
+  "@runLiveShareKeepPrivate": {
+    "description": "Dialog action that returns the finished live-shared run to the runner's default (not public) visibility"
   },
   "runTrainingPlans": "Training plans",
   "@runTrainingPlans": {

@@ -941,9 +941,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         if (canMarkAttendance) ...[
                           const SizedBox(width: 6),
                           IconButton(
-                            visualDensity: VisualDensity.compact,
                             constraints: const BoxConstraints(
-                                minWidth: 32, minHeight: 32),
+                                minWidth: 48, minHeight: 48),
                             padding: EdgeInsets.zero,
                             iconSize: 18,
                             tooltip: l10n.eventMarkAttended,
@@ -957,9 +956,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     a.userId, a.attendance, 'attended'),
                           ),
                           IconButton(
-                            visualDensity: VisualDensity.compact,
                             constraints: const BoxConstraints(
-                                minWidth: 32, minHeight: 32),
+                                minWidth: 48, minHeight: 48),
                             padding: EdgeInsets.zero,
                             iconSize: 18,
                             tooltip: l10n.eventMarkNoShow,
@@ -1587,7 +1585,7 @@ class _ResultRow extends StatelessWidget {
           )) ...[
             const SizedBox(width: 4),
             IconButton(
-              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               tooltip: AppLocalizations.of(context).clubEventDownloadCertificate,
               icon: const Icon(Icons.workspace_premium_outlined, size: 20),
               onPressed: () => showFinisherCertificateSheet(

@@ -497,13 +497,15 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
                 ),
                 if (_canEditMarker(m)) ...[
                   IconButton(
-                    visualDensity: VisualDensity.compact,
+                    constraints:
+                        const BoxConstraints(minWidth: 48, minHeight: 48),
                     tooltip: l10n.routeMarkerEdit,
                     icon: const Icon(Icons.edit, size: 18),
                     onPressed: () => _openEditor(existing: m),
                   ),
                   IconButton(
-                    visualDensity: VisualDensity.compact,
+                    constraints:
+                        const BoxConstraints(minWidth: 48, minHeight: 48),
                     tooltip: l10n.routeMarkerDelete,
                     icon: const Icon(Icons.delete_outline, size: 18),
                     onPressed: () => _confirmDelete(m),
