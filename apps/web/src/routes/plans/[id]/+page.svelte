@@ -29,15 +29,7 @@
 		type AdaptiveConfidence
 	} from '$lib/training/plan_adaptive_replan';
 	import { computeTrainingLoadSeries } from '$lib/training/training_load';
-
-	// P2 fitness direction gate (gen v2, decisions §144). OFF by default — the
-	// health-derived-load → prescription path stays inert in prod until this
-	// flag is flipped, which is the CISO/Security-Analyst sign-off-gated action
-	// (mirrors the paid-events pre-prod gate, §139). Flipping it ON is what
-	// "ships" P2; the wiring below is otherwise dormant.
-	const ADAPTIVE_FITNESS_GATE =
-		import.meta.env.PUBLIC_ADAPTIVE_FITNESS_GATE === '1' ||
-		import.meta.env.PUBLIC_ADAPTIVE_FITNESS_GATE === 'true';
+	import { isAdaptiveFitnessGateEnabled } from '$lib/training/adaptive_fitness_flag';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
@@ -426,9 +418,16 @@
 
 	// ─── Re-plan around missed sessions (owner-only) ───
 	let replanPreview = $state<ReplanChange[] | null>(null);
+	/// Only a genuine multi-week TREND gets the badge — the `on_track` and
+	/// (P2) `deload_fatigue` outcomes explain themselves through a toast, so
+	/// they're excluded at the type level rather than by convention.
+	type AdaptiveTrendInfo = {
+		reason: Exclude<AdaptiveReason, 'on_track' | 'deload_fatigue'>;
+		confidence: AdaptiveConfidence;
+	};
 	// Set only when the CURRENT preview came from the adaptive (trend-based)
 	// path, so its header can explain the multi-week reason + confidence.
-	let adaptiveInfo = $state<{ reason: AdaptiveReason; confidence: AdaptiveConfidence } | null>(null);
+	let adaptiveInfo = $state<AdaptiveTrendInfo | null>(null);
 
 	/// Assemble the pure engine's input from the loaded plan + the runs
 	/// window. Per-week planned volume, actual mileage (runs dated in the
@@ -489,7 +488,7 @@
 	/// Latest training-load point as the P2 fitness input — null unless the
 	/// gate flag is on, so the health-derived-load path is dormant by default.
 	function adaptiveFitnessInput(): { tsb: number; atl: number; ctl: number } | null {
-		if (!ADAPTIVE_FITNESS_GATE) return null;
+		if (!isAdaptiveFitnessGateEnabled()) return null;
 		const last = computeTrainingLoadSeries(recentRuns, {}, 90, new Date()).at(-1);
 		return last ? { tsb: last.tsb, atl: last.atl, ctl: last.ctl } : null;
 	}
@@ -501,15 +500,25 @@
 			today,
 			fitness: adaptiveFitnessInput()
 		});
+		const reason = r.reason;
+		if (reason === 'deload_fatigue') {
+			// P2 arm 2: the load signal overrode the direction. Volume is never
+			// added on top of deep fatigue; the deload is proposed instead (or
+			// nothing at all, when there's no future week left to ease).
+			showToast(m('planDetail.adaptiveFitnessHeld'));
+			adaptiveInfo = null;
+			replanPreview = r.changes.length > 0 ? r.changes : null;
+			return;
+		}
 		if (r.fitnessGated) {
-			// P2: an add-volume trend was withheld because the runner is carrying
-			// fatigue (TSB < 0) — the adherence and fitness signals disagree.
+			// P2 arms 1 + 3: an add-volume trend was withheld because the runner is
+			// carrying fatigue (TSB < 0) — the adherence and fitness signals disagree.
 			showToast(m('planDetail.adaptiveFitnessHeld'));
 			replanPreview = null;
 			adaptiveInfo = null;
 			return;
 		}
-		if (r.reason === 'on_track') {
+		if (reason === 'on_track') {
 			showToast(m('planDetail.adaptiveOnTrack'));
 			replanPreview = null;
 			adaptiveInfo = null;
@@ -523,11 +532,11 @@
 			adaptiveInfo = null;
 			return;
 		}
-		adaptiveInfo = { reason: r.reason, confidence: r.confidence };
+		adaptiveInfo = { reason, confidence: r.confidence };
 		replanPreview = r.changes;
 	}
 
-	function adaptiveBadgeText(info: { reason: AdaptiveReason; confidence: AdaptiveConfidence }): string {
+	function adaptiveBadgeText(info: AdaptiveTrendInfo): string {
 		const reason =
 			info.reason === 'trend_underfitness'
 				? m('planDetail.adaptiveReasonUnder')

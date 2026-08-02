@@ -44,16 +44,14 @@ bool _isWorkoutCompleted(PlanWorkoutRow wo) =>
 /// Web `isWorkoutSkipped` twin — deliberately dropped, off the books.
 bool _isWorkoutSkipped(PlanWorkoutRow wo) => isWorkoutSkipped(wo.skippedAt);
 
-/// P2 fitness direction gate (gen v2, decisions §144). OFF by default — the
-/// health-derived-load → prescription path stays inert until this dotenv flag
-/// is flipped, which is the CISO/Security-Analyst sign-off-gated action
-/// (reviews/plan-generator-v2-p2-ciso-note.md; mirrors the web
-/// PUBLIC_ADAPTIVE_FITNESS_GATE + the paid-events pre-prod gate, §139). The
-/// wiring below is dormant until then.
+/// P2 fitness direction gate (gen v2, decisions §144 + §150). OFF by default —
+/// the health-derived-load → prescription path stays inert until this dotenv
+/// flag is flipped, which is the CISO/Security-Analyst sign-off-gated action
+/// (mirrors the web PUBLIC_ADAPTIVE_FITNESS_GATE). The parse itself lives in
+/// the parity pair so the two platforms accept exactly the same values.
 bool get _adaptiveFitnessGate {
   try {
-    final v = dotenv.env['ADAPTIVE_FITNESS_GATE'];
-    return v == '1' || v == 'true';
+    return adaptiveFitnessGateEnabled(dotenv.env['ADAPTIVE_FITNESS_GATE']);
   } catch (_) {
     // dotenv not loaded (e.g. widget tests) → gate stays off.
     return false;
@@ -356,9 +354,20 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       today: toIsoDate(DateTime.now()),
       fitness: _adaptiveFitnessInput(),
     );
+    if (res.reason == AdaptiveReason.deloadFatigue) {
+      // P2 arm 2: the load signal overrode the direction. Volume is never added
+      // on top of deep fatigue; the deload is proposed instead (or nothing at
+      // all, when there's no future week left to ease).
+      setState(() {
+        _adaptiveInfo = null;
+        _replanPreview = res.changes.isEmpty ? null : res.changes;
+      });
+      showTopBanner(context, l10n.planDetailAdaptiveFitnessHeld);
+      return;
+    }
     if (res.fitnessGated) {
-      // P2: an add-volume trend was withheld because the runner is carrying
-      // fatigue (TSB < 0) — the adherence and fitness signals disagree.
+      // P2 arms 1 + 3: an add-volume trend was withheld because the runner is
+      // carrying fatigue (TSB < 0) — the adherence and fitness signals disagree.
       setState(() {
         _replanPreview = null;
         _adaptiveInfo = null;

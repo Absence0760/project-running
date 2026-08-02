@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	easeOffNextWeek,
 	replanRemaining,
 	MAKE_UP_MAX_INCREASE,
 	EASE_OFF_SCALE,
@@ -429,4 +430,63 @@ test('replanRemaining: never touches a past (frozen) future-week placeholder or 
 	const r = replanRemaining({ weeks, today: '2026-06-05' });
 	assert.equal(r.changes.length, 0);
 	assert.equal(r.onTrack, true);
+});
+
+test('easeOffNextWeek: scales the first future non-taper week, skipping long / rest / past / skipped ids', () => {
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 40_000,
+			isComplete: true,
+			workouts: [wo('done', '2026-06-01', 'tempo', 10_000, { completed: true, isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 42_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [
+				wo('gone', '2026-06-06', 'easy', 6_000, { isPast: true }),
+				wo('easy', '2026-06-09', 'easy', 12_000),
+				wo('tempo', '2026-06-10', 'tempo', 9_000),
+				wo('long', '2026-06-11', 'long', 24_000),
+				wo('rest', '2026-06-12', 'rest', null),
+			],
+		},
+	];
+	const changes = easeOffNextWeek(weeks, 0, new Set(['tempo']));
+	assert.deepEqual(
+		changes.map((c) => [c.workoutId, c.toMetres, c.reason]),
+		[['easy', Math.round(12_000 * EASE_OFF_SCALE), 'ease_over_running']],
+	);
+});
+
+test('easeOffNextWeek: returns nothing when the only week ahead is a taper (and -1 eases the earliest)', () => {
+	const taperOnly: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'taper',
+			plannedMetres: 30_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('t', '2026-06-08', 'tempo', 8_000)],
+		},
+	];
+	assert.equal(easeOffNextWeek(taperOnly, -1).length, 0);
+
+	const buildOnly: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 30_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [wo('t', '2026-06-08', 'tempo', 8_000)],
+		},
+	];
+	// -1 means "no completed week yet" — the earliest eligible week is eased.
+	assert.equal(easeOffNextWeek(buildOnly, -1).length, 1);
 });

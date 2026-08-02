@@ -429,4 +429,67 @@ void main() {
     expect(r.changes.length, 0);
     expect(r.onTrack, true);
   });
+
+  test('easeOffNextWeek: scales the first future non-taper week, skipping long / rest / past / skipped ids',
+      () {
+    final weeks = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'build',
+        plannedMetres: 40000,
+        actualMetres: 40000,
+        isComplete: true,
+        workouts: [
+          _wo('done', '2026-06-01', 'tempo', 10000, completed: true, isPast: true)
+        ],
+      ),
+      ReplanWeek(
+        weekIndex: 1,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [
+          _wo('gone', '2026-06-06', 'easy', 6000, isPast: true),
+          _wo('easy', '2026-06-09', 'easy', 12000),
+          _wo('tempo', '2026-06-10', 'tempo', 9000),
+          _wo('long', '2026-06-11', 'long', 24000),
+          _wo('rest', '2026-06-12', 'rest', null),
+        ],
+      ),
+    ];
+    final changes = easeOffNextWeek(weeks, 0, skipWorkoutIds: {'tempo'});
+    expect(changes.length, 1);
+    expect(changes.first.workoutId, 'easy');
+    expect(changes.first.toMetres, (12000 * easeOffScale).round().toDouble());
+    expect(changes.first.reason, ReplanReason.easeOverRunning);
+  });
+
+  test('easeOffNextWeek: returns nothing when the only week ahead is a taper (and -1 eases the earliest)',
+      () {
+    final taperOnly = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'taper',
+        plannedMetres: 30000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [_wo('t', '2026-06-08', 'tempo', 8000)],
+      ),
+    ];
+    expect(easeOffNextWeek(taperOnly, -1).length, 0);
+
+    final buildOnly = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'build',
+        plannedMetres: 30000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [_wo('t', '2026-06-08', 'tempo', 8000)],
+      ),
+    ];
+    // -1 means "no completed week yet" — the earliest eligible week is eased.
+    expect(easeOffNextWeek(buildOnly, -1).length, 1);
+  });
 }

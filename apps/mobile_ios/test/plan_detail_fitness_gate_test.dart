@@ -13,12 +13,14 @@ import '../lib/training_service.dart';
 /// P2 adaptive-replan fitness gate wiring on plan_detail_screen.
 ///
 /// The gate is OFF unless `ADAPTIVE_FITNESS_GATE` is set in dotenv. When ON and
-/// the runner is carrying fatigue (TSB < 0), an under-fitness add-volume trend
-/// is HELD — `_proposeAdaptiveReplan` surfaces the held toast and proposes no
-/// change. When OFF (default), no fitness is consulted and the P1 behaviour is
-/// unchanged (an under-trend proposes a make-up). The engine's `fitnessGated`
-/// branch itself is covered by `plan_adaptive_replan_test.dart`; this pins the
-/// screen wiring (dotenv flag + LocalRunStore-threaded full-Run fitness input).
+/// the runner is DEEPLY fatigued (TSB past the floor with acute load high
+/// against the chronic base), the under-fitness add-volume trend is overridden
+/// to a DELOAD — `_proposeAdaptiveReplan` surfaces the held banner and previews
+/// ease-off changes instead of the make-up. When OFF (default), no fitness is
+/// consulted and the P1 behaviour is unchanged (an under-trend proposes a
+/// make-up). The engine's branches themselves are covered by
+/// `plan_adaptive_replan_test.dart`; this pins the screen wiring (dotenv flag +
+/// LocalRunStore-threaded full-Run fitness input).
 
 const _uid = 'owner-uuid';
 
@@ -117,24 +119,32 @@ void main() {
       // runs, so it qualifies as a make-up target for the missed long.
       _wo('next', 'w3', _mondayThisWeek().add(const Duration(days: 9)), 'long',
           22000),
+      // A future NON-long workout, so a deload has something to ease. Long runs
+      // are never eased, so which of the two moves tells the two directions
+      // apart in the assertions below.
+      _wo('easy', 'w3', _mondayThisWeek().add(const Duration(days: 10)), 'easy',
+          8000),
     ];
     return (training: _FakeTraining(_plan(start), weeks, workouts), start: start);
   }
 
-  /// A LocalRunStore seeded with a recent high-volume block so the latest
-  /// training-load point has TSB < 0 (ATL spikes above CTL with no prior
-  /// history) — i.e. a fatigued runner.
-  Future<LocalRunStore> fatiguedStore(WidgetTester tester) async {
+  /// Seed a store with `days` consecutive daily runs of `metres`, newest today.
+  Future<LocalRunStore> seededStore(
+    WidgetTester tester,
+    String prefix, {
+    required int days,
+    required double metres,
+  }) async {
     final store = LocalRunStore();
-    await store.init(overrideDirectory: tmp('fitness_gate_runs_'));
+    await store.init(overrideDirectory: tmp(prefix));
     final now = DateTime.now();
     final runs = [
-      for (var i = 0; i < 6; i++)
+      for (var i = 0; i < days; i++)
         Run(
-          id: 'recent-$i',
+          id: 'seed-$i',
           startedAt: now.subtract(Duration(days: i)),
-          duration: const Duration(minutes: 75),
-          distanceMetres: 15000,
+          duration: Duration(minutes: (metres / 200).round()),
+          distanceMetres: metres,
           track: const [],
           source: RunSource.app,
         ),
@@ -142,6 +152,18 @@ void main() {
     await tester.runAsync(() => store.saveManyFromRemote(runs));
     return store;
   }
+
+  /// A short, heavy recent block with no chronic base: ATL runs away from CTL,
+  /// so the latest load point is TSB ≈ -66 with ACWR ≈ 4.3 — past both
+  /// `adaptiveDeepFatigueTsb` and `adaptiveHighAcwr`, i.e. DEEPLY fatigued.
+  Future<LocalRunStore> deeplyFatiguedStore(WidgetTester tester) =>
+      seededStore(tester, 'fitness_gate_deep_', days: 6, metres: 15000);
+
+  /// Three months of steady daily running: CTL has caught up, so the latest
+  /// load point is TSB ≈ -9 with ACWR ≈ 1.13 — negative form, but nowhere near
+  /// the deload thresholds. The arm-1 hold, not the arm-2 override.
+  Future<LocalRunStore> mildlyFatiguedStore(WidgetTester tester) =>
+      seededStore(tester, 'fitness_gate_mild_', days: 90, metres: 8000);
 
   Future<void> pump(
     WidgetTester tester, {
@@ -167,11 +189,11 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('gate ON + fatigued runner holds the under-trend re-plan',
+  testWidgets('gate ON + deeply fatigued runner deloads instead of adding volume',
       (tester) async {
     dotenv.loadFromString(envString: 'ADAPTIVE_FITNESS_GATE=true');
     final p = underTrendPlan();
-    final store = await fatiguedStore(tester);
+    final store = await deeplyFatiguedStore(tester);
     await pump(
       tester,
       training: p.training,
@@ -182,13 +204,39 @@ void main() {
     await tester.tap(find.text('Adaptive re-plan'));
     await tester.pump();
 
-    // Held toast shown; no preview proposed.
+    // Held banner shown, and the preview is the ease-off — never the make-up.
+    expect(
+      find.textContaining('carrying fatigue', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.text('Proposed changes'), findsOneWidget);
+    expect(find.textContaining('ease off', findRichText: true), findsOneWidget);
+    expect(find.textContaining('make up a missed long run', findRichText: true),
+        findsNothing);
+    // Drain the showTopBanner auto-dismiss timer before teardown.
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('gate ON + mildly fatigued runner holds, proposing nothing',
+      (tester) async {
+    dotenv.loadFromString(envString: 'ADAPTIVE_FITNESS_GATE=true');
+    final p = underTrendPlan();
+    final store = await mildlyFatiguedStore(tester);
+    await pump(
+      tester,
+      training: p.training,
+      social: _FakeSocial(const []),
+      runStore: store,
+    );
+
+    await tester.tap(find.text('Adaptive re-plan'));
+    await tester.pump();
+
     expect(
       find.textContaining('carrying fatigue', findRichText: true),
       findsOneWidget,
     );
     expect(find.text('Proposed changes'), findsNothing);
-    // Drain the showTopBanner auto-dismiss timer before teardown.
     await tester.pump(const Duration(seconds: 4));
   });
 
@@ -196,7 +244,7 @@ void main() {
       (tester) async {
     // No dotenv flag → _adaptiveFitnessInput returns null → P1 behaviour.
     final p = underTrendPlan();
-    final store = await fatiguedStore(tester);
+    final store = await deeplyFatiguedStore(tester);
     await pump(
       tester,
       training: p.training,
@@ -207,10 +255,12 @@ void main() {
     await tester.tap(find.text('Adaptive re-plan'));
     await tester.pump();
 
-    // No held toast; the under-trend proposes a make-up.
+    // No held banner; the under-trend proposes the make-up, not a deload.
     expect(find.textContaining('carrying fatigue', findRichText: true),
         findsNothing);
     expect(find.text('Proposed changes'), findsOneWidget);
+    expect(find.textContaining('make up a missed long run', findRichText: true),
+        findsOneWidget);
     await tester.pump(const Duration(seconds: 4));
   });
 }

@@ -83,6 +83,40 @@ function isTaper(phase: string): boolean {
 	return TAPER_PHASES.has(phase);
 }
 
+/// Bleed a week's worth of load: scale every non-long, non-rest FUTURE workout
+/// of the first non-taper week after `afterWeekIndex` by `EASE_OFF_SCALE`.
+/// `weeks` must already be sorted by `weekIndex`; pass `-1` to ease the
+/// earliest eligible week. Exported because two callers need to deload
+/// identically — the over-running rule below, and the adaptive layer's
+/// deep-fatigue override (`plan_adaptive_replan.ts`) — and a second copy of
+/// these skip rules would drift.
+export function easeOffNextWeek(
+	weeks: ReplanWeek[],
+	afterWeekIndex: number,
+	skipWorkoutIds: ReadonlySet<string> = new Set<string>(),
+): ReplanChange[] {
+	const nextWeek = weeks.find(
+		(w) => w.weekIndex > afterWeekIndex && !isTaper(w.phase) &&
+			w.workouts.some((wo) => !wo.isPast),
+	);
+	if (!nextWeek) return [];
+	const changes: ReplanChange[] = [];
+	for (const wo of nextWeek.workouts) {
+		if (wo.isPast || wo.kind === 'rest' || wo.kind === 'long') continue;
+		if (wo.targetDistanceM == null || wo.targetDistanceM <= 0) continue;
+		if (skipWorkoutIds.has(wo.id)) continue;
+		changes.push({
+			workoutId: wo.id,
+			scheduledDate: wo.scheduledDate,
+			reason: 'ease_over_running',
+			field: 'target_distance_m',
+			fromMetres: wo.targetDistanceM,
+			toMetres: Math.round(wo.targetDistanceM * EASE_OFF_SCALE),
+		});
+	}
+	return changes;
+}
+
 /// Whether a step-back week (a >15% planned-volume drop) immediately
 /// follows `week` — mirrors the heuristic the plan-detail adherence
 /// surface uses.
@@ -153,26 +187,15 @@ export function replanRemaining(input: {
 	if (lastComplete) {
 		const drift = weeklyDrift(lastComplete.plannedMetres, lastComplete.actualMetres);
 		if (drift.direction === 'over') {
-			const nextWeek = weeks.find(
-				(w) => w.weekIndex > lastComplete.weekIndex && !isTaper(w.phase) &&
-					w.workouts.some((wo) => !wo.isPast),
+			// The skip set keeps the ease pass from double-touching a workout the
+			// make-up pass already changed.
+			changes.push(
+				...easeOffNextWeek(
+					weeks,
+					lastComplete.weekIndex,
+					new Set(changes.map((c) => c.workoutId)),
+				),
 			);
-			if (nextWeek) {
-				for (const wo of nextWeek.workouts) {
-					if (wo.isPast || wo.kind === 'rest' || wo.kind === 'long') continue;
-					if (wo.targetDistanceM == null || wo.targetDistanceM <= 0) continue;
-					// Don't double-touch a workout already changed by the make-up pass.
-					if (changes.some((c) => c.workoutId === wo.id)) continue;
-					changes.push({
-						workoutId: wo.id,
-						scheduledDate: wo.scheduledDate,
-						reason: 'ease_over_running',
-						field: 'target_distance_m',
-						fromMetres: wo.targetDistanceM,
-						toMetres: Math.round(wo.targetDistanceM * EASE_OFF_SCALE),
-					});
-				}
-			}
 		}
 	}
 

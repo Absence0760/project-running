@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/plan_adaptive_replan.dart';
 import '../lib/plan_replan.dart';
@@ -239,5 +241,174 @@ void main() {
     );
     expect(r.reason, AdaptiveReason.trendOvertraining);
     expect(r.fitnessGated, false);
+  });
+
+  // ── P2 arm 2: the deep-fatigue deload override ──
+
+  /// Deeply fatigued: TSB past the -25 floor AND ATL >= 1.3 * CTL.
+  const deep = AdaptiveFitness(tsb: -34, atl: 104, ctl: 70);
+
+  /// An under-running trend whose next week holds BOTH a future long (the
+  /// make-up target) and a future easy run (the deload target), so a test can
+  /// tell the two directions apart by which workout moved.
+  List<ReplanWeek> underTrendWeeksWithEasy() {
+    final missed = _wo('missed', '2026-06-15', 'long', 28000, isPast: true);
+    final future = _wo('next', '2026-07-06', 'long', 22000);
+    final easy = _wo('easy', '2026-07-07', 'easy', 8000);
+    return [
+      _week(0, 'under', workouts: [missed]),
+      _week(1, 'under'),
+      _week(2, 'under'),
+      ReplanWeek(
+        weekIndex: 3,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [future, easy],
+      ),
+    ];
+  }
+
+  test('adaptiveReplanRemaining: deep fatigue overrides an on-track plan into a deload', () {
+    final easy = _wo('easy', '2026-07-07', 'easy', 8000);
+    final weeks = [
+      _week(0, 'ontrack'),
+      _week(1, 'ontrack'),
+      _week(2, 'ontrack'),
+      ReplanWeek(
+        weekIndex: 3,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [easy],
+      ),
+    ];
+    final r = adaptiveReplanRemaining(
+        weeks: weeks, today: '2026-07-01', fitness: deep);
+    expect(r.reason, AdaptiveReason.deloadFatigue);
+    expect(r.confidence, AdaptiveConfidence.high);
+    expect(r.onTrack, false);
+    expect(r.changes.length, 1);
+    expect(r.changes.first.workoutId, 'easy');
+    expect(r.changes.first.fromMetres, 8000);
+    expect(r.changes.first.toMetres, 6800);
+  });
+
+  test('adaptiveReplanRemaining: deep fatigue overrides an under-trend to a deload, never a make-up', () {
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeksWithEasy(),
+      today: '2026-07-01',
+      fitness: deep,
+    );
+    expect(r.reason, AdaptiveReason.deloadFatigue);
+    // The volume-adding make-up on the future long is NOT proposed...
+    expect(r.changes.any((c) => c.workoutId == 'next'), false);
+    // ...only the ease-off on the future easy run.
+    expect(r.changes.any((c) => c.workoutId == 'easy'), true);
+  });
+
+  test('adaptiveReplanRemaining: high acute load with shallow TSB does not deload', () {
+    // ACWR 100/70 = 1.43 (over the bar) but TSB -5 is a normal hard week.
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeksWithEasy(),
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(tsb: -5, atl: 100, ctl: 70),
+    );
+    expect(r.reason, isNot(AdaptiveReason.deloadFatigue));
+    expect(r.fitnessGated, true);
+    expect(r.changes.length, 0);
+  });
+
+  test('adaptiveReplanRemaining: deeply negative TSB without high acute load does not deload', () {
+    // TSB -30 is past the floor, but ACWR 100/95 = 1.05 — a big, well-absorbed
+    // block, not an acute spike.
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeksWithEasy(),
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(tsb: -30, atl: 100, ctl: 95),
+    );
+    expect(r.reason, isNot(AdaptiveReason.deloadFatigue));
+    expect(r.fitnessGated, true);
+  });
+
+  test('adaptiveReplanRemaining: no chronic base (ctl 0) never deloads', () {
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeksWithEasy(),
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(tsb: -60, atl: 60, ctl: 0),
+    );
+    expect(r.reason, isNot(AdaptiveReason.deloadFatigue));
+    expect(r.fitnessGated, true);
+  });
+
+  test('adaptiveReplanRemaining: non-finite load values fail closed', () {
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeksWithEasy(),
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(
+          tsb: double.negativeInfinity, atl: double.infinity, ctl: 70),
+    );
+    expect(r.reason, isNot(AdaptiveReason.deloadFatigue));
+    expect(r.changes.length, 0);
+  });
+
+  test('adaptiveReplanRemaining: deep fatigue with only a taper week ahead proposes nothing', () {
+    final easy = _wo('easy', '2026-07-07', 'easy', 8000);
+    final weeks = [
+      _week(0, 'ontrack'),
+      _week(1, 'ontrack'),
+      _week(2, 'ontrack'),
+      ReplanWeek(
+        weekIndex: 3,
+        phase: 'taper',
+        plannedMetres: 20000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [easy],
+      ),
+    ];
+    final r = adaptiveReplanRemaining(
+        weeks: weeks, today: '2026-07-01', fitness: deep);
+    expect(r.reason, AdaptiveReason.deloadFatigue);
+    expect(r.changes.length, 0);
+    expect(r.onTrack, true);
+  });
+
+  test('adaptiveReplanRemaining: the fitness snapshot never leaves the function', () {
+    // Structural, not behavioural: the result carries no load number back to
+    // the caller, and the library logs nothing — so a TSB cannot reach a log
+    // line, a plan row, or the network. A stated condition of the P2 sign-off.
+    final r = adaptiveReplanRemaining(
+      weeks: underTrendWeeksWithEasy(),
+      today: '2026-07-01',
+      fitness: const AdaptiveFitness(tsb: -33.7, atl: 101.3, ctl: 71.9),
+    );
+    for (final c in r.changes) {
+      expect(c.fromMetres, isNot(anyOf(-33.7, 101.3, 71.9)));
+      expect(c.toMetres, isNot(anyOf(-33.7, 101.3, 71.9)));
+    }
+    final source = File('lib/plan_adaptive_replan.dart').readAsStringSync();
+    final start = source.indexOf('class AdaptiveReplanResult');
+    final end = source.indexOf('/// Pure parse of the P2 fitness-gate deploy flag');
+    expect(start >= 0 && end > start, true,
+        reason: 'could not slice AdaptiveReplanResult — rename?');
+    expect(RegExp(r'\b(tsb|atl|ctl)\s*[;,)]').hasMatch(source.substring(start, end)), false,
+        reason: 'AdaptiveReplanResult must not carry a load number back out');
+    expect(RegExp(r'\b(print|debugPrint)\s*\(').hasMatch(source), false,
+        reason: 'the library must not log');
+  });
+
+  test('adaptiveFitnessGateEnabled: unset / empty / negative values are off', () {
+    for (final raw in [null, '', '   ', 'false', '0', 'off', 'no', 'enabled', 'truthy']) {
+      expect(adaptiveFitnessGateEnabled(raw), false, reason: '$raw must be off');
+    }
+  });
+
+  test('adaptiveFitnessGateEnabled: only an explicit affirmative turns it on', () {
+    for (final raw in ['1', 'true', 'yes', 'on', 'TRUE', ' On ', 'Yes']) {
+      expect(adaptiveFitnessGateEnabled(raw), true, reason: '$raw must be on');
+    }
   });
 }
