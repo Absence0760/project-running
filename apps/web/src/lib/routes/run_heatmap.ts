@@ -1,3 +1,4 @@
+import type * as GeoJSON from 'geojson';
 /// Pure aggregation for the personal run-track heatmap (`/runs/heatmap`,
 /// persona-hunt finding #53 — privacy / strava-migration). Flattens many
 /// of the runner's own GPS tracks into weighted grid cells: repeated
