@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:health/health.dart';
 
 import 'embedded_bests.dart';
@@ -16,6 +17,55 @@ typedef HcRoutePoint = ({
   DateTime at,
   double? altitudeMetres,
 });
+
+/// What one Health Connect route read produced: the tracks it released, and
+/// the sessions whose route it refused to release.
+typedef HealthConnectRoutes = ({
+  Map<String, List<Waypoint>> tracks,
+  Set<String> withheldSessionIds,
+});
+
+/// A Health Connect import: the runs, and the sessions whose GPS route Health
+/// Connect withheld. The withheld set is the only honest trigger for offering
+/// the route grant — there is no point asking a runner for a permission that
+/// would buy them nothing.
+typedef HealthConnectImport = ({
+  List<Run> runs,
+  Set<String> withheldSessionIds,
+});
+
+/// The Health Connect permission that releases a workout's GPS route. Must
+/// agree with `AndroidManifest.xml`, `res/xml/health_permissions.xml` and
+/// `HealthRoutePermissionBridge.PERMISSION`; a mismatch is refused by the
+/// platform with no dialog and no error the runner can act on.
+const String kHealthRoutePermission =
+    'android.permission.health.READ_EXERCISE_ROUTES';
+
+/// Method channel to `HealthRoutePermissionBridge.kt`. Android only.
+@visibleForTesting
+const MethodChannel healthRoutePermissionChannel =
+    MethodChannel('run_app/health_route_permission');
+
+/// Ask Health Connect for the exercise-route grant.
+///
+/// Only ever called from an explicit runner action, never chained onto the
+/// import's own permission sheet — tapping "import" must not spring a second
+/// system dialog on someone who asked for workouts, not for location data.
+///
+/// Returns false off Android, when Health Connect isn't installed, when the
+/// runner refuses, and on any channel error. Every one of those leaves the
+/// import working exactly as it does today, summary-only.
+Future<bool> requestHealthRoutePermission({required bool isAndroid}) async {
+  if (!isAndroid) return false;
+  try {
+    final granted = await healthRoutePermissionChannel
+        .invokeMethod<bool>('requestRoutePermission');
+    return granted == true;
+  } catch (e) {
+    debugPrint('Health Connect route permission request failed: $e');
+    return false;
+  }
+}
 
 /// Pulls workouts from Android Health Connect (Google Fit, Samsung Health,
 /// Garmin Connect, Fitbit, etc. all sync into Health Connect on Android 14+).
@@ -65,7 +115,7 @@ class HealthConnectImporter {
   /// summary, each carrying its GPS route when Health Connect released one.
   /// Activities without GPS data still count — they're recorded with an
   /// empty track.
-  static Future<List<Run>> fetchWorkouts({
+  static Future<HealthConnectImport> fetchWorkouts({
     DateTime? from,
     DateTime? to,
   }) async {
@@ -78,7 +128,8 @@ class HealthConnectImporter {
       endTime: end,
     );
 
-    final routeTracks = await _fetchRouteTracks(start, end);
+    final routes = await fetchRoutes(from: start, to: end);
+    final routeTracks = routes.tracks;
 
     final runs = <Run>[];
     for (final point in data) {
@@ -109,7 +160,7 @@ class HealthConnectImporter {
         // ExerciseSessionRecord id, so that is the join key.
         final track = routeTracks[point.uuid] ?? const <Waypoint>[];
 
-        final externalId = 'healthconnect:${point.uuid}';
+        final externalId = '$_externalIdPrefix${point.uuid}';
         runs.add(Run(
           // Stable id derived from external_id so a re-import maps to the same
           // local run (no duplicate) and the server upsert never rewrites the
@@ -134,25 +185,30 @@ class HealthConnectImporter {
         debugPrint('Failed to map Health Connect workout: $e');
       }
     }
-    return runs;
+    return (runs: runs, withheldSessionIds: routes.withheldSessionIds);
   }
 
-  /// Per-workout GPS tracks Health Connect will release for the window,
-  /// keyed by `ExerciseSessionRecord` id.
+  /// Per-workout GPS tracks Health Connect will release for the window, keyed
+  /// by `ExerciseSessionRecord` id, plus the sessions it refused to release.
   ///
   /// Wrapped whole: a route read that throws (permission revoked mid-import,
   /// Health Connect updating underneath us) degrades every workout in the
   /// batch to a summary-only import rather than failing the import outright.
-  static Future<Map<String, List<Waypoint>>> _fetchRouteTracks(
-    DateTime start,
-    DateTime end,
-  ) async {
-    if (!Platform.isAndroid) return const {};
+  static Future<HealthConnectRoutes> fetchRoutes({
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    if (!Platform.isAndroid) {
+      return (
+        tracks: const <String, List<Waypoint>>{},
+        withheldSessionIds: const <String>{},
+      );
+    }
     try {
       final data = await _health.getHealthDataFromTypes(
         types: const [HealthDataType.WORKOUT_ROUTE],
-        startTime: start,
-        endTime: end,
+        startTime: from ?? DateTime.now().subtract(const Duration(days: 365)),
+        endTime: to ?? DateTime.now(),
       );
       final routes = <({String uuid, List<HcRoutePoint> points})>[];
       for (final point in data) {
@@ -171,12 +227,35 @@ class HealthConnectImporter {
           ],
         ));
       }
-      return tracksFromRoutePoints(routes);
+      return (
+        tracks: tracksFromRoutePoints(routes),
+        withheldSessionIds: withheldRouteSessionIds(routes),
+      );
     } catch (e) {
       debugPrint('Health Connect route fetch failed: $e');
-      return const {};
+      return (
+        tracks: const <String, List<Waypoint>>{},
+        withheldSessionIds: const <String>{},
+      );
     }
   }
+
+  /// Sessions whose GPS route Health Connect has but refused to release.
+  ///
+  /// The plugin renders `ExerciseRouteResult.ConsentRequired` as a
+  /// `WORKOUT_ROUTE` point carrying zero locations, and emits nothing at all
+  /// for a session that simply has no route (`NoData`). So an empty point
+  /// means "this workout has a route you are not allowed to read" — the one
+  /// case where asking for `READ_EXERCISE_ROUTES` would actually produce a
+  /// map, and therefore the only case worth asking in.
+  @visibleForTesting
+  static Set<String> withheldRouteSessionIds(
+    List<({String uuid, List<HcRoutePoint> points})> routes,
+  ) =>
+      {
+        for (final route in routes)
+          if (route.points.isEmpty) route.uuid,
+      };
 
   /// Shape Health Connect route locations into per-workout tracks. Pure so
   /// the join + ordering + screening is unit-testable without the plugin.
@@ -206,6 +285,58 @@ class HealthConnectImporter {
             timestamp: p.at,
           ),
       ];
+    }
+    return out;
+  }
+
+  static const _externalIdPrefix = 'healthconnect:';
+
+  /// The `ExerciseSessionRecord` id behind a run imported from Health
+  /// Connect, or null for a run from anywhere else. Both the route join and
+  /// the after-the-fact backfill key on it, so the encoding lives here.
+  static String? sessionIdOf(Run run) {
+    if (run.source != RunSource.healthconnect) return null;
+    final external = run.externalId;
+    if (external == null || !external.startsWith(_externalIdPrefix)) return null;
+    final id = external.substring(_externalIdPrefix.length);
+    return id.isEmpty ? null : id;
+  }
+
+  /// Copies of the runs a just-granted route permission fills in — the only
+  /// runs worth rewriting after the grant, since a Health Connect re-import
+  /// is suppressed by `isCrossSourceDuplicate` and would never reach them.
+  ///
+  /// A run that already has a track is left alone: Health Connect is not
+  /// authoritative over geometry the runner already has. So is a run from any
+  /// other source, and one whose route Health Connect still withholds. The
+  /// embedded bests are recomputed exactly as a routed import computes them,
+  /// so a backfilled run and a first-time routed import are indistinguishable.
+  static List<Run> runsWithBackfilledTracks(
+    List<Run> runs,
+    Map<String, List<Waypoint>> tracks,
+  ) {
+    final out = <Run>[];
+    for (final run in runs) {
+      if (run.track.isNotEmpty) continue;
+      final sessionId = sessionIdOf(run);
+      if (sessionId == null) continue;
+      final track = tracks[sessionId];
+      if (track == null || track.isEmpty) continue;
+      out.add(Run(
+        id: run.id,
+        startedAt: run.startedAt,
+        duration: run.duration,
+        distanceMetres: run.distanceMetres,
+        track: track,
+        routeId: run.routeId,
+        source: run.source,
+        externalId: run.externalId,
+        metadata: enrichMetadataWithEmbeddedBests(
+          track: track,
+          metadata: run.metadata,
+        ),
+        createdAt: run.createdAt,
+      ));
     }
     return out;
   }
