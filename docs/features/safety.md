@@ -88,7 +88,11 @@ safety contacts a "may be overdue" alert with the live link — once.
    `is_public=true` — that's what makes the spectator link work for a
    logged-out partner), so it must be an explicit opt-in. The escalation
    applies to ANY live broadcast (auto or manually shared) — the overdue scan
-   doesn't know or care how the broadcast started.
+   doesn't know or care how the broadcast started. **The public flip is
+   scoped to the live window** (issue #664, decisions §434): on stop the
+   saved run follows the runner's default visibility, and keeping it
+   public is an explicit post-stop choice — the stop path never silently
+   leaves a safety share `is_public=true`.
 6. **Escalation is opt-in via the threshold** (`safety_overdue_minutes`,
    U scope, null = off). Fail-closed: no threshold → no scan match → no
    email, even with confirmed contacts. Both prefs surface on the safety
@@ -108,8 +112,14 @@ active — auto or manually shared — the recording chrome carries the persiste
 top-left, driven by the `_liveShareActive` `ValueNotifier`. Tapping it opens
 `showLiveShareSheet` with "Share link again" and "Stop sharing" — stop
 concludes the broadcast mid-run (`concludeLiveBroadcast`) without ending the
-run, so the share persists until the run finishes. No web change (web doesn't
-record).
+run, so the share persists until the run finishes. **On finish** the stop
+path resolves the saved run's visibility (`_resolvePostLiveVisibility`,
+issue #664): with a not-public default it asks — an `AlertDialog` where
+"Keep public" is the explicit act and decline/dismiss fails closed to
+`makeRunPrivate`; a share the runner already stopped mid-run reverts
+quietly (that also clears the `is_public=true` stub when the cloud save
+failed). A `public` privacy default needs no dialog. No web change (web
+doesn't record).
 
 ### Backend (overdue scan)
 
@@ -163,9 +173,12 @@ clipping; the email only carries times + the link.
 - Live location of a named person flows to their contacts: **both sides have
   opted in** — the runner by enabling the pref(s), the contact by the
   existing double-opt-in confirm. No new consent surface needed.
-- The auto-shared run is public-by-link mid-run (existing manual-share
-  semantics, UUID-keyed URL, RLS-gated SELECT, privacy-zone clipping on
-  pings both client- and server-side). The pref copy states this plainly.
+- The auto-shared run is public-by-link mid-run **and only mid-run**
+  (existing manual-share semantics, UUID-keyed URL, RLS-gated SELECT,
+  privacy-zone clipping on pings both client- and server-side); on stop
+  the run returns to the runner's default visibility unless they
+  explicitly keep it public (issue #664, decisions §434). The pref copy
+  states both plainly.
 - The escalation email contains times and a link only, never coordinates.
 - Pre-prod deploy checklist (not a code gate): CISO/counsel review of the
   overdue email copy + this posture section. The feature is fail-closed
