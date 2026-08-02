@@ -716,11 +716,21 @@ pub struct Snapshot {
     /// nothing — and only while an HR reading is live, so a sensorless run
     /// keeps all five at zero.
     pub zone_time_s: [u32; ZONE_COUNT],
-    /// The live next-cutoff ETA when the loaded course carries cutoff legs and
-    /// a run is under way; `None` otherwise, so the CutoffEta page reads an
-    /// honest "no cutoffs loaded". Distance-along-route is fed from the nav
-    /// projection via [`Recorder::set_route_position`]; a stale route position
-    /// withholds the projected time rather than fabricate one off an old fix.
+    /// Whether the loaded course carries cutoff legs and a run is under way —
+    /// the presence bit for the CutoffEta + SleepStation pages, kept apart from
+    /// the projections below because the two absences are different
+    /// instructions: no cut-offs pushed is the phone's to fix, an unprojected
+    /// position is the sky's.
+    pub cutoffs_loaded: bool,
+    /// The live next-cutoff ETA, or `None` when no cut-offs are loaded, the run
+    /// is idle, or **no position has been projected onto the course** — the
+    /// checkpoint the projection is about cannot be picked without one, and the
+    /// course start is not a stand-in for it (see [`Recorder::cutoff_snapshot`]).
+    /// Read alongside [`Snapshot::cutoffs_loaded`] to tell those apart.
+    /// Distance-along-route is fed from the nav projection via
+    /// [`Recorder::set_route_position`]; a stale — as opposed to absent —
+    /// position still names the checkpoint but withholds the projected time
+    /// rather than fabricate one off an old fix.
     pub cutoff: Option<CutoffEta>,
     /// How long the runner may sleep and still make the next cut-off
     /// ([`crate::sleep_station`], §373) — present exactly when
@@ -2473,6 +2483,7 @@ impl Recorder {
             hr_source: self.hr_source,
             pace_band: self.pace_band,
             zone_time_s: self.zone_time_s,
+            cutoffs_loaded: self.state != RecordState::Idle && !self.cutoff_legs.is_empty(),
             cutoff: self.cutoff_snapshot(),
             sleep: self.sleep_snapshot(),
             race_prediction: self.race_prediction_snapshot(),
@@ -2573,8 +2584,11 @@ impl Recorder {
         set(Page::RacePredictor, s.race_prediction.is_some());
         set(Page::TrainingLoad, s.training_stress.is_some());
         set(Page::DistanceBand, s.band.is_some());
-        set(Page::CutoffEta, s.cutoff.is_some());
-        set(Page::SleepStation, s.sleep.is_some());
+        // Keyed on the legs, not on the projection: a runner who has not been
+        // fixed onto the course yet still has cut-offs, and a page that left
+        // the cycle until the first fix would renumber every page behind it.
+        set(Page::CutoffEta, s.cutoffs_loaded);
+        set(Page::SleepStation, s.cutoffs_loaded);
         set(Page::Roadbook, s.roadbook.is_some());
         set(Page::Fuel, s.fuel.is_some());
         set(Page::Nav, self.course_loaded);
@@ -2947,19 +2961,42 @@ impl Recorder {
         )
     }
 
-    /// The live next-cutoff ETA, or `None` when idle or no cutoff legs are
-    /// loaded. Projects from the fed route position + the whole-run moving pace;
-    /// a missing or stale route position (lost signal) drops the projected time
-    /// to `Unknown` — see [`crate::cutoff_eta`].
+    /// The live next-cutoff ETA, or `None` when idle, when no cutoff legs are
+    /// loaded, or when no position has ever been projected onto the course.
+    ///
+    /// **The course start is not a stand-in for an unknown position.** Which
+    /// checkpoint the projection is about is chosen by distance-along-course, so
+    /// substituting `0.0` picks cut-off *one* — whose limit a runner four hours
+    /// in cleared before dawn — and [`crate::cutoff_eta::CutoffEta::limit_passed`]
+    /// is computed before the staleness gate can withhold anything, so the
+    /// answer comes back settled and wrong: the Cut-off page counts down to a
+    /// checkpoint behind the runner and the sleep page reads `MISSED`. There is
+    /// no position, so there is no checkpoint; the pages say so
+    /// ([`Snapshot::cutoffs_loaded`] keeps that apart from an unsynced course).
+    /// Same `?` the profile marker and the climb crest already take.
+    ///
+    /// A *stale* position is a different case and deliberately still projects:
+    /// the last known position still names the right checkpoint, and
+    /// `cutoff_eta` withholds only the projected time.
+    ///
+    /// The pace is the run's RACE pace — distance over the elapsed clock, every
+    /// aid-station stop priced in — not its moving pace. The projection is of a
+    /// future the runner will also stop during, and since moving pace is race
+    /// pace scaled by (1 − stopped fraction), projecting off it **understates
+    /// the remaining leg by exactly the fraction of the race spent standing
+    /// still** — error in one direction only, which is how a runner who will
+    /// miss reads `ON`. It is also the pace [`Recorder::sleep_snapshot`] ends up
+    /// projecting from, so the two pages now share one projection, as
+    /// [`crate::page::Page::SleepStation`] says they do.
     fn cutoff_snapshot(&self) -> Option<CutoffEta> {
         if self.state == RecordState::Idle || self.cutoff_legs.is_empty() {
             return None;
         }
         let stale = self.route_position_stale();
         Some(next_cutoff_eta(
-            self.route_along_m.unwrap_or(0.0),
+            self.route_along_m?,
             self.elapsed_s(),
-            self.avg_pace().map(f64::from),
+            self.race_pace(),
             stale,
             &self.cutoff_legs,
         ))
@@ -2967,18 +3004,21 @@ impl Recorder {
 
     /// The sleep-station nap budget, on the same gate as the cut-off ETA — the
     /// two answer one question from one projection, so a course whose cut-offs
-    /// feed one must feed the other.
+    /// feed one must feed the other, and a position neither can pick a
+    /// checkpoint from withholds both.
     ///
     /// Both paces are handed over rather than picked here: `avg_pace` is the
-    /// run's MOVING pace, which the cut-off page projects from, and the race
-    /// pace below divides by the elapsed clock so every aid-station stop the
-    /// runner has already taken is priced in. [`sleep_budget`] takes the slower.
+    /// run's MOVING pace and the race pace below divides by the elapsed clock so
+    /// every aid-station stop the runner has already taken is priced in.
+    /// [`sleep_budget`] takes the slower, which is always the race pace while
+    /// one exists — the guard earns its keep on the run that has moving time but
+    /// no elapsed pace to compare against.
     fn sleep_snapshot(&self) -> Option<SleepBudget> {
         if self.state == RecordState::Idle || self.cutoff_legs.is_empty() {
             return None;
         }
         Some(sleep_budget(
-            self.route_along_m.unwrap_or(0.0),
+            self.route_along_m?,
             self.elapsed_s(),
             self.avg_pace().map(f64::from),
             self.race_pace(),
@@ -4386,6 +4426,105 @@ mod tests {
     fn idle_has_no_sleep_budget() {
         let r = Recorder::new();
         assert_eq!(r.snapshot().sleep, None);
+    }
+
+    /// A course whose position was never projected must not be read as the
+    /// course START: that picks cut-off one, whose limit a runner hours into the
+    /// race has long cleared, and `limit_passed` is settled before the staleness
+    /// gate can withhold anything — so the cut-off page counted down to a
+    /// checkpoint behind the runner and the sleep page reported `MISSED`.
+    #[test]
+    fn an_unprojected_position_withholds_both_cutoff_surfaces_rather_than_naming_the_first_leg() {
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        r.on_fix(&fix(40.00216, -105.0, 4.0, 60));
+        r.set_cutoff_legs(&[
+            CutoffLeg {
+                cum_dist_m: 20_000.0,
+                limit_elapsed_s: 7_200,
+            },
+            CutoffLeg {
+                cum_dist_m: 40_000.0,
+                limit_elapsed_s: 18_000,
+            },
+        ]);
+
+        // Four hours in — both limits above are hours old — with no position
+        // ever projected onto the course (a course pushed mid-race, or a
+        // receiver that has not fixed since boot).
+        r.tick(14_400);
+        let s = r.snapshot();
+        assert_eq!(s.cutoff, None);
+        assert_eq!(s.sleep, None);
+        // The legs are loaded, so the pages keep their seats in the cycle and
+        // can say which absence this is.
+        assert!(s.cutoffs_loaded);
+        assert_ne!(s.pages_mask & Page::CutoffEta.bit(), 0);
+        assert_ne!(s.pages_mask & Page::SleepStation.bit(), 0);
+
+        // A position lands: both surfaces come back, on the leg the runner is
+        // actually short of rather than on leg one.
+        r.set_route_position(Some(25_000.0));
+        let s = r.snapshot();
+        let eta = s.cutoff.expect("a projected position feeds the ETA");
+        assert!((eta.distance_to_m - 15_000.0).abs() < 1e-6);
+        assert!(!eta.limit_passed);
+        assert!(s.sleep.is_some());
+
+        // With no cut-offs at all the presence bit is off, which is what
+        // separates "the phone never pushed any" from "the sky has not placed
+        // you on the course yet".
+        r.set_cutoff_legs(&[]);
+        assert!(!r.snapshot().cutoffs_loaded);
+    }
+
+    /// The cut-off projection is of a future the runner will also stop during,
+    /// so it is taken against the elapsed clock. Projecting off MOVING pace
+    /// discounts every aid-station stop the race has already cost and errs in
+    /// one direction only — optimistic — which is how a runner who will miss by
+    /// minutes reads `ON`.
+    #[test]
+    fn the_cutoff_eta_projects_from_race_pace_not_moving_pace() {
+        use crate::cutoff_eta::{next_cutoff_eta, CutoffEtaStatus};
+
+        let mut r = Recorder::new();
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(40.0, -105.0, 4.0, 0));
+        let mut lat = 40.0;
+        for i in 1..=10 {
+            lat += 0.00216;
+            r.on_fix(&fix(lat, -105.0, 4.0, i * 60));
+        }
+        // Two thirds of the race is then spent standing at aid stations, with
+        // the course position refreshed so nothing here turns on staleness.
+        for t in (660..=1_800).step_by(60) {
+            r.tick(t);
+            r.set_route_position(Some(2_000.0));
+        }
+
+        let leg = CutoffLeg {
+            cum_dist_m: 6_000.0,
+            limit_elapsed_s: 4_700,
+        };
+        r.set_cutoff_legs(&[leg]);
+        let s = r.snapshot();
+        assert_eq!(s.moving_s, 600);
+        assert_eq!(s.elapsed_s, 1_800);
+
+        let moving_pace = f64::from(s.avg_pace_s_per_km.unwrap());
+        let race_pace = f64::from(s.elapsed_s) * 1000.0 / s.distance_m;
+        let by_moving = next_cutoff_eta(2_000.0, s.elapsed_s, Some(moving_pace), false, &[leg]);
+        let by_race = next_cutoff_eta(2_000.0, s.elapsed_s, Some(race_pace), false, &[leg]);
+        assert_eq!(by_moving.status, CutoffEtaStatus::On);
+        assert_eq!(by_race.status, CutoffEtaStatus::Behind);
+
+        assert_eq!(s.cutoff, Some(by_race));
+        // And the sleep page projects from the same number, which is what
+        // `Page::SleepStation` promises: one projection, two readings.
+        assert_eq!(s.sleep.unwrap().pace_s_per_km, Some(race_pace));
     }
 
     #[test]
