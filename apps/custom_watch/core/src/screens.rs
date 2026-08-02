@@ -475,9 +475,9 @@ mod tests {
                 n += 1;
             }
         }
-        assert_eq!(n, 39, "the catalogue and its byte map have drifted");
+        assert_eq!(n, 40, "the catalogue and its byte map have drifted");
         assert!(Metric::from_byte(0).is_none(), "0 is the empty slot");
-        assert!(Metric::from_byte(40).is_none(), "40 is past the catalogue");
+        assert!(Metric::from_byte(41).is_none(), "41 is past the catalogue");
         // A handful pinned by name, so a reorder cannot quietly renumber them.
         assert_eq!(Metric::from_byte(1).unwrap().wire_name(), "elapsed");
         assert_eq!(Metric::from_byte(2).unwrap().wire_name(), "distance");
@@ -485,6 +485,7 @@ mod tests {
         assert_eq!(Metric::from_byte(34).unwrap().wire_name(), "race_day_days");
         assert_eq!(Metric::from_byte(39).unwrap().wire_name(), "gap");
         assert_eq!(Metric::from_byte(35).unwrap().wire_name(), "sleep_budget");
+        assert_eq!(Metric::from_byte(40).unwrap().wire_name(), "fluid");
     }
 
     #[test]

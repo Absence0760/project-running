@@ -12224,4 +12224,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get watchMetricGap => 'Allure corrigée de la pente';
+
+  @override
+  String get watchMetricFluid => 'Liquide';
 }

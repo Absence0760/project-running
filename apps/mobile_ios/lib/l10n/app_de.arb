@@ -3560,5 +3560,6 @@
   "watchMetricTimerRemaining": "Timer",
   "watchMetricBackyardBell": "Countdown bis zur Glocke",
   "watchMetricStormDelta": "Sturmtrend",
-  "watchMetricGap": "Höhenkorrigierte Pace"
+  "watchMetricGap": "Höhenkorrigierte Pace",
+  "watchMetricFluid": "Flüssigkeit"
 }

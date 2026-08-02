@@ -15605,5 +15605,6 @@
   "watchMetricTimerRemaining": "Timer",
   "watchMetricBackyardBell": "Bell countdown",
   "watchMetricStormDelta": "Storm trend",
-  "watchMetricGap": "Grade-adjusted pace"
+  "watchMetricGap": "Grade-adjusted pace",
+  "watchMetricFluid": "Fluid"
 }

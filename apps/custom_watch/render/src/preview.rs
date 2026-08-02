@@ -14,7 +14,9 @@ use watch_core::fix::Fix;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM};
 use watch_core::page::Page;
-use watch_core::record::{FuelCarryView, FuelView, RecordState, Snapshot, PACE_BUCKET_COUNT};
+use watch_core::record::{
+    FuelBasis, FuelCarryView, FuelView, RecordState, Snapshot, PACE_BUCKET_COUNT,
+};
 use watch_core::ui_frame::{self, HeroBand, HeroFrame};
 
 use crate::widgets;
@@ -62,6 +64,7 @@ fn base_snapshot() -> Snapshot {
         pacer: None,
         zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
         zone_ceiling: None,
+        hr_source: None,
         pace_band: None,
         zone_time_s: [0; 5],
         cutoff: None,
@@ -642,8 +645,12 @@ fn preview_gear_and_fuel_pages() {
             carbs_g: 60.0,
             fluid_ml: 500.0,
         }),
-        total_carbs_g: 240.0,
-        total_fluid_ml: 2000.0,
+        basis: FuelBasis::NextAid {
+            total: FuelCarryView {
+                carbs_g: 240.0,
+                fluid_ml: 2000.0,
+            },
+        },
     });
     let mut fb2 = Framebuffer::new();
     draw_face(&mut fb2, Page::Fuel, Some(&fuel_snap), None);

@@ -12191,6 +12191,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get watchMetricGap => 'Ritmo ajustado à inclinação';
+
+  @override
+  String get watchMetricFluid => 'Líquido';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -24376,4 +24379,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get watchMetricGap => 'Ritmo ajustado à inclinação';
+
+  @override
+  String get watchMetricFluid => 'Líquido';
 }

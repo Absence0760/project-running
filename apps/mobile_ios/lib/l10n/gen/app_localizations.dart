@@ -20407,6 +20407,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Grade-adjusted pace'**
   String get watchMetricGap;
+
+  /// No description provided for @watchMetricFluid.
+  ///
+  /// In en, this message translates to:
+  /// **'Fluid'**
+  String get watchMetricFluid;
 }
 
 class _AppLocalizationsDelegate

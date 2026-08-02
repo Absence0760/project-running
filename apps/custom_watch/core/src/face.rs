@@ -44,7 +44,7 @@ use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::readiness::ReadinessBand;
-use crate::record::{RacePhaseView, RecordState, Snapshot, TurnCueView};
+use crate::record::{FuelBasis, RacePhaseView, RecordState, Snapshot, TurnCueView};
 use crate::roadbook::CutoffStatus;
 use crate::sleep_station::{SleepStatus, NO_WAKE_NOTICE};
 use crate::storm::StormTrend;
@@ -939,10 +939,16 @@ pub enum Metric {
     /// Pace page's hero is the whole-run average), so the composed screens
     /// are how a runner puts GAP in the 32x48 face.
     Gap,
+    /// The fluid half of [`Metric::FuelCarbs`] — millilitres to carry to the
+    /// next aid, or millilitres the cadence has called for
+    /// ([`crate::record::FuelBasis`]). Its own catalogue entry because the Fuel
+    /// page leads with carbs and a desert runner's binding constraint is the
+    /// other one.
+    Fluid,
 }
 
 impl Metric {
-    /// This metric's byte on the `SCR1` wire, in `1..=39`.
+    /// This metric's byte on the `SCR1` wire, in `1..=40`.
     ///
     /// **Stable, and hand-written for that reason.** A screen layout names its
     /// slots by these bytes and that layout is persisted to flash and pushed
@@ -994,6 +1000,7 @@ impl Metric {
             Metric::BackyardBell => 37,
             Metric::StormDelta => 38,
             Metric::Gap => 39,
+            Metric::Fluid => 40,
         }
     }
 
@@ -1045,6 +1052,7 @@ impl Metric {
             37 => Metric::BackyardBell,
             38 => Metric::StormDelta,
             39 => Metric::Gap,
+            40 => Metric::Fluid,
             _ => return None,
         })
     }
@@ -1096,6 +1104,7 @@ impl Metric {
             Metric::BackyardBell => "backyard_bell",
             Metric::StormDelta => "storm_delta",
             Metric::Gap => "gap",
+            Metric::Fluid => "fluid",
         }
     }
 
@@ -1147,6 +1156,7 @@ impl Metric {
             Metric::BackyardBell => "BELL",
             Metric::StormDelta => "STORM",
             Metric::Gap => "GAP",
+            Metric::Fluid => "FLUID",
         }
     }
 }
@@ -1287,7 +1297,9 @@ pub fn metric_unfed(
             None => Some(Unfed::NotSynced),
             Some(rb) => (rb.upcoming_len == 0).then_some(Unfed::LastAidPassed),
         },
-        Metric::FuelCarbs => match snap.fuel {
+        // The cadence basis always carries a pair, so `LastAidPassed` here can
+        // only mean what it says: a plan whose final refill is behind us.
+        Metric::FuelCarbs | Metric::Fluid => match snap.fuel {
             None => Some(Unfed::NotSynced),
             Some(f) => f.carry.is_none().then_some(Unfed::LastAidPassed),
         },
@@ -1545,6 +1557,18 @@ pub fn metric_hero(
             match snap.fuel.and_then(|f| f.carry) {
                 Some(c) => {
                     let _ = write!(row, "{}", (c.carbs_g as u32).min(9999));
+                }
+                None => {
+                    let _ = write!(row, "--");
+                }
+            }
+            row
+        }
+        Metric::Fluid => {
+            let mut row = Row::new();
+            match snap.fuel.and_then(|f| f.carry) {
+                Some(c) => {
+                    let _ = write!(row, "{}", (c.fluid_ml as u32).min(99999));
                 }
                 None => {
                     let _ = write!(row, "--");
@@ -2012,6 +2036,7 @@ pub fn metric_unit(
         Metric::StormDelta => Some("HPA"),
         Metric::Gap => Some("/KM"),
         Metric::FuelCarbs => Some("G"),
+        Metric::Fluid => Some("ML"),
         Metric::GearWear => Some("%"),
         Metric::DistanceToStart => trackback_distance(tb).map(distance_unit),
         Metric::WaypointDistance => snap.waypoint.map(|w| distance_unit(w.distance_m)),
@@ -2423,18 +2448,35 @@ fn zones_glance(
     }
 
     // The hero's own `BPM` unit (§ 361) is directly above this row, so the
-    // label names the metric — and the slack cells beside it carry the
-    // zone-ceiling arm. The over-effort alert arms only from a phone push,
-    // so `CEIL --` is the one place a runner at the start line can see it
-    // never armed; a runner who cannot see that trusts an alert that will
-    // not fire.
+    // label spends its five cells naming the *sensor* the number came from
+    // rather than repeating the metric — `STRAP` when the chest strap is
+    // authoritative, `WRIST` for the optical AFE, `HR` when neither is. That
+    // costs nothing (all three fit the existing gutter) and closes the same
+    // blind spot the ceiling cell beside it closes: a strap that never paired
+    // was indistinguishable from one that won the arbitration.
+    //
+    // The slack cells beside it carry the zone-ceiling arm. The over-effort
+    // alert arms only from a phone push, so `CEIL --` is the one place a
+    // runner at the start line can see it never armed; a runner who cannot see
+    // that trusts an alert that will not fire.
+    //
+    // Read against the BPM this render was handed, not against the snapshot
+    // alone: the two arrive on different clocks (the face ages its reading
+    // through `hr_duty::shown_bpm` every frame, the snapshot is stamped at the
+    // last fix), and a row naming a sensor over a `--` hero would credit a
+    // reading that is not on the screen.
+    let label = match (hr_bpm, snap.hr_source) {
+        (Some(_), Some(crate::hr_source::HrSource::Strap)) => "STRAP",
+        (Some(_), Some(crate::hr_source::HrSource::Optical)) => "WRIST",
+        _ => "HR",
+    };
     let mut left = Row::new();
     match snap.zone_ceiling {
         Some(z) => {
-            let _ = write!(left, "{:<5}CEIL Z{}", "HR", z);
+            let _ = write!(left, "{label:<5}CEIL Z{z}");
         }
         None => {
-            let _ = write!(left, "{:<5}CEIL --", "HR");
+            let _ = write!(left, "{label:<5}CEIL --");
         }
     }
     match hr_bpm {
@@ -3146,9 +3188,12 @@ fn roadbook_glance(
     rows
 }
 
-/// The fuel glance: the carbs to carry to the next aid up large in the hero,
-/// with the fluid to carry and the whole-plan totals. Unfed without a roadbook;
-/// "LAST AID PASSED" once past the final refill.
+/// The fuel glance. With a roadbook loaded: the carbs to carry to the next aid
+/// up large in the hero, with the fluid to carry and the whole-plan totals, and
+/// "LAST AID PASSED" once past the final refill. Without one it falls back to
+/// the cadence basis — the intake the drink/eat reminders have already called
+/// for, over the hourly rate they call at ([`crate::record::FuelBasis`]). Unfed
+/// only while idle.
 #[allow(clippy::too_many_arguments)]
 fn fuel_glance(
     fix: Option<&Fix>,
@@ -3167,22 +3212,50 @@ fn fuel_glance(
     match &snap.fuel {
         None => write_unfed(&mut rows, Page::Fuel, "FUEL", Unfed::NotSynced),
         Some(f) => {
-            let _ = write!(rows[2], "FUEL  TO NEXT AID");
+            // The header names the basis, because the two second rows carry
+            // different units — a race total in grams, a cadence in grams an
+            // hour — and a runner reading `60G` has to know which.
+            let _ = write!(
+                rows[2],
+                "FUEL  {}",
+                match f.basis {
+                    FuelBasis::NextAid { .. } => "TO NEXT AID",
+                    FuelBasis::Cadence { .. } => "ON CADENCE",
+                }
+            );
             match f.carry {
                 Some(c) => {
-                    let _ = write!(rows[4], "{:<7}{} ML", "FLUID", (c.fluid_ml as u32));
+                    let _ = write!(
+                        rows[4],
+                        "{:<7}{} ML",
+                        "FLUID",
+                        (c.fluid_ml as u32).min(99999)
+                    );
                 }
                 None => {
                     let _ = write!(rows[4], "{}", Unfed::LastAidPassed.reason());
                 }
             }
-            let _ = write!(
-                rows[5],
-                "{:<7}{}G {}ML",
-                "TOTAL",
-                (f.total_carbs_g as u32).min(9999),
-                (f.total_fluid_ml as u32)
-            );
+            match f.basis {
+                FuelBasis::NextAid { total } => {
+                    let _ = write!(
+                        rows[5],
+                        "{:<7}{}G {}ML",
+                        "TOTAL",
+                        (total.carbs_g as u32).min(9999),
+                        (total.fluid_ml as u32)
+                    );
+                }
+                FuelBasis::Cadence { per_hour } => {
+                    let _ = write!(
+                        rows[5],
+                        "{:<7}{}G {}ML/H",
+                        "RATE",
+                        (per_hour.carbs_g as u32).min(9999),
+                        (per_hour.fluid_ml as u32).min(99999)
+                    );
+                }
+            }
         }
     }
 
@@ -5032,6 +5105,7 @@ mod tests {
             pacer: None,
             zone_cutoffs: hr_zones::zone_cutoffs_from_max_hr(hr_zones::DEFAULT_MAX_HR_BPM),
             zone_ceiling: None,
+            hr_source: None,
             pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
             cutoff: None,
@@ -5105,6 +5179,133 @@ mod tests {
         for row in face_rows(Some(&fix()), Some(220), None, Some(&e), 999_999) {
             assert!(row.len() <= COLS, "status row too wide: {:?}", row);
         }
+    }
+
+    fn fuel_snapshot(basis: FuelBasis, carry: Option<(f32, f32)>) -> Snapshot {
+        let mut rec = snapshot(RecordState::Recording, 4200.0);
+        rec.fuel = Some(crate::record::FuelView {
+            basis,
+            carry: carry
+                .map(|(carbs_g, fluid_ml)| crate::record::FuelCarryView { carbs_g, fluid_ml }),
+        });
+        rec
+    }
+
+    fn fuel_rows(snap: &Snapshot) -> [Row; ROWS] {
+        page_rows(
+            Page::Fuel,
+            Some(&fix()),
+            None,
+            Some(snap),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            false,
+        )
+    }
+
+    /// The plan basis: the carry-out in the hero, the fluid beside it, the
+    /// race's own totals underneath.
+    #[test]
+    fn the_fuel_page_on_a_roadbook_states_the_carry_and_the_race_total() {
+        let rec = fuel_snapshot(
+            FuelBasis::NextAid {
+                total: crate::record::FuelCarryView {
+                    carbs_g: 240.0,
+                    fluid_ml: 2000.0,
+                },
+            },
+            Some((60.0, 500.0)),
+        );
+        let rows = fuel_rows(&rec);
+        assert_eq!(rows[2].as_str(), "FUEL  TO NEXT AID");
+        assert_eq!(rows[4].as_str(), "FLUID  500 ML");
+        assert_eq!(rows[5].as_str(), "TOTAL  240G 2000ML");
+        assert_eq!(
+            page_hero(Page::Fuel, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "60"
+        );
+    }
+
+    /// The cadence basis: the same two numbers, counted against the runner's own
+    /// drink/eat cadence rather than an aid station — and the header says so,
+    /// because the row below it is grams an hour where the plan's is grams.
+    #[test]
+    fn the_fuel_page_without_a_roadbook_states_the_cadence_instead() {
+        let rec = fuel_snapshot(
+            FuelBasis::Cadence {
+                per_hour: crate::record::FuelCarryView {
+                    carbs_g: 60.0,
+                    fluid_ml: 500.0,
+                },
+            },
+            Some((90.0, 750.0)),
+        );
+        let rows = fuel_rows(&rec);
+        assert_eq!(rows[2].as_str(), "FUEL  ON CADENCE");
+        assert_eq!(rows[4].as_str(), "FLUID  750 ML");
+        assert_eq!(rows[5].as_str(), "RATE   60G 500ML/H");
+        assert_eq!(
+            page_hero(Page::Fuel, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "90"
+        );
+    }
+
+    /// `Fluid` is the fluid half of the same pair, so a composed screen can put
+    /// the desert runner's binding constraint in the big face. It is fed and
+    /// unfed exactly where `FuelCarbs` is.
+    #[test]
+    fn the_fluid_metric_tracks_the_fuel_pages_own_millilitres() {
+        let cadence = FuelBasis::Cadence {
+            per_hour: crate::record::FuelCarryView {
+                carbs_g: 60.0,
+                fluid_ml: 500.0,
+            },
+        };
+        let rec = fuel_snapshot(cadence, Some((90.0, 750.0)));
+        let hero = |snap: &Snapshot| {
+            metric_hero(Metric::Fluid, Some(&fix()), None, snap, None, 42, None)
+                .as_str()
+                .to_string()
+        };
+        assert_eq!(hero(&rec), "750");
+        assert_eq!(
+            metric_unfed(Metric::Fluid, None, None, &rec, None, 42, None),
+            None
+        );
+        assert_eq!(metric_unit(Metric::Fluid, &rec, None), Some("ML"));
+        assert_eq!(Metric::Fluid.slot_label(), "FLUID");
+
+        // Past the final aid the pair is gone, and both halves say the same
+        // thing about why.
+        let passed = fuel_snapshot(
+            FuelBasis::NextAid {
+                total: crate::record::FuelCarryView {
+                    carbs_g: 240.0,
+                    fluid_ml: 2000.0,
+                },
+            },
+            None,
+        );
+        assert_eq!(hero(&passed), "--");
+        assert_eq!(
+            metric_unfed(Metric::Fluid, None, None, &passed, None, 42, None),
+            metric_unfed(Metric::FuelCarbs, None, None, &passed, None, 42, None),
+        );
+
+        // No run at all: not synced, like every other pushed metric.
+        let mut idle = fuel_snapshot(cadence, Some((90.0, 750.0)));
+        idle.fuel = None;
+        assert_eq!(hero(&idle), "--");
+        assert_eq!(
+            metric_unfed(Metric::Fluid, None, None, &idle, None, 42, None),
+            Some(Unfed::NotSynced)
+        );
     }
 
     #[test]
@@ -5477,8 +5678,12 @@ mod tests {
                 carbs_g: 9999.0,
                 fluid_ml: 99_999.0,
             }),
-            total_carbs_g: 9999.0,
-            total_fluid_ml: 999_999.0,
+            basis: crate::record::FuelBasis::NextAid {
+                total: FuelCarryView {
+                    carbs_g: 9999.0,
+                    fluid_ml: 999_999.0,
+                },
+            },
         });
         // A slow goal pace stresses the widest zone-pace rows; "NO DATA" is the
         // longest recovery word and 999 the widest VO2.
@@ -7772,6 +7977,56 @@ mod tests {
             true,
         );
         assert_eq!(rows[2].as_str(), "HR   CEIL Z4  ZONE 3");
+    }
+
+    /// The arbitration between a chest strap and the wrist optical decides
+    /// which number the hero is showing; before this it ended at a log line, so
+    /// a strap that never paired looked exactly like one that won.
+    #[test]
+    fn the_zones_row_names_the_sensor_the_shown_pulse_came_from() {
+        let with_bpm = |bpm, source| {
+            let mut rec = snapshot(RecordState::Recording, 12_340.0);
+            rec.hr_source = source;
+            page_rows(
+                Page::Zones,
+                Some(&fix()),
+                bpm,
+                Some(&rec),
+                None,
+                NavView::NoCourse,
+                None,
+                42,
+                true,
+            )[2]
+            .as_str()
+            .to_string()
+        };
+        let row = |source| with_bpm(Some(152), source);
+        assert_eq!(
+            row(Some(crate::hr_source::HrSource::Strap)),
+            "STRAPCEIL --  ZONE 3"
+        );
+        assert_eq!(
+            row(Some(crate::hr_source::HrSource::Optical)),
+            "WRISTCEIL --  ZONE 3"
+        );
+        // Nothing authoritative: the row falls back to naming the metric, and
+        // the ceiling cell keeps its column either way.
+        assert_eq!(row(None), "HR   CEIL --  ZONE 3");
+        for source in [
+            Some(crate::hr_source::HrSource::Strap),
+            Some(crate::hr_source::HrSource::Optical),
+            None,
+        ] {
+            assert!(row(source).len() <= COLS);
+            // A held-out reading blanks the hero, so the row must not go on
+            // crediting a sensor for a number that is no longer on the screen.
+            assert_eq!(
+                with_bpm(None, source),
+                "HR   CEIL --  ZONE --",
+                "{source:?} named a sensor over a blank hero"
+            );
+        }
     }
 
     #[test]

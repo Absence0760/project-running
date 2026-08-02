@@ -11632,4 +11632,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get watchMetricGap => '勾配調整ペース';
+
+  @override
+  String get watchMetricFluid => '水分';
 }

@@ -3560,5 +3560,6 @@
   "watchMetricTimerRemaining": "タイマー",
   "watchMetricBackyardBell": "ベルまでの残り時間",
   "watchMetricStormDelta": "気圧低下傾向",
-  "watchMetricGap": "勾配調整ペース"
+  "watchMetricGap": "勾配調整ペース",
+  "watchMetricFluid": "水分"
 }
