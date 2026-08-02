@@ -1075,7 +1075,6 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
         ],
       ),
       trailing: IconButton(
-        visualDensity: VisualDensity.compact,
         constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
         icon: Icon(
           _pinnedIds.contains(p.id)

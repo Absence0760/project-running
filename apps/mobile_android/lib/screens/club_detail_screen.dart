@@ -782,7 +782,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 IconButton(
                   tooltip: l10n.clubDetailReportPost,
                   icon: const Icon(Icons.flag_outlined, size: 18),
-                  visualDensity: VisualDensity.compact,
+                  constraints:
+                      const BoxConstraints(minWidth: 48, minHeight: 48),
                   onPressed: () => showReportSheet(
                     context,
                     api: ApiClient(),

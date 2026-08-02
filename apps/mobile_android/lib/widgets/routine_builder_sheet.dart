@@ -523,7 +523,7 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
             tooltip: l10n.gymEditorRemoveSet,
             icon: const Icon(Icons.close, size: 18),
             color: theme.colorScheme.outline,
-            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onPressed: () => _removeSet(ex, si),
           ),
         ],
