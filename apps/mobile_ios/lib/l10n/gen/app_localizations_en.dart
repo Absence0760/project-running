@@ -650,7 +650,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.';
+      'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link; when the run ends it returns to your default run visibility.';
 
   @override
   String get safetyOffRouteTitle => 'Off-route alert';
@@ -1149,6 +1149,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runLiveShareStopped => 'Live sharing stopped';
+
+  @override
+  String get runLiveShareEndedTitle => 'Live sharing ended';
+
+  @override
+  String get runLiveShareEndedBody =>
+      'The live link no longer updates. Keep the saved run public so anyone with the link can view it? If not, it follows your default run visibility.';
+
+  @override
+  String get runLiveShareKeepPublic => 'Keep public';
+
+  @override
+  String get runLiveShareKeepPrivate => 'Keep private';
 
   @override
   String get runTrainingPlans => 'Training plans';

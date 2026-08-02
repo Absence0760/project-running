@@ -1178,7 +1178,7 @@ abstract class AppLocalizations {
   /// Subtitle of the auto-live-share device toggle (public-by-link disclosure)
   ///
   /// In en, this message translates to:
-  /// **'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link.'**
+  /// **'Start a live share automatically when a run starts on this phone. The in-progress run is viewable by anyone with the link; when the run ends it returns to your default run visibility.'**
   String get safetyAutoLiveShareSubtitle;
 
   /// Title of the off-route auto-notify toggle on the safety settings screen
@@ -2074,6 +2074,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Live sharing stopped'**
   String get runLiveShareStopped;
+
+  /// Title of the post-stop dialog asking whether a live-shared run should stay public
+  ///
+  /// In en, this message translates to:
+  /// **'Live sharing ended'**
+  String get runLiveShareEndedTitle;
+
+  /// Body of the post-stop dialog: the live window is over and keeping the run public is an explicit choice
+  ///
+  /// In en, this message translates to:
+  /// **'The live link no longer updates. Keep the saved run public so anyone with the link can view it? If not, it follows your default run visibility.'**
+  String get runLiveShareEndedBody;
+
+  /// Dialog action that keeps the finished live-shared run publicly viewable
+  ///
+  /// In en, this message translates to:
+  /// **'Keep public'**
+  String get runLiveShareKeepPublic;
+
+  /// Dialog action that returns the finished live-shared run to the runner's default (not public) visibility
+  ///
+  /// In en, this message translates to:
+  /// **'Keep private'**
+  String get runLiveShareKeepPrivate;
 
   /// Idle-screen button opening the training-plans list when no active plan exists
   ///

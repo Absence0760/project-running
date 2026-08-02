@@ -656,7 +656,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Startet auf diesem Telefon automatisch ein Live-Teilen, wenn ein Lauf beginnt. Der laufende Lauf ist für alle mit dem Link sichtbar.';
+      'Startet auf diesem Telefon automatisch ein Live-Teilen, wenn ein Lauf beginnt. Der laufende Lauf ist für alle mit dem Link sichtbar; nach dem Ende des Laufs gilt wieder deine Standard-Sichtbarkeit.';
 
   @override
   String get safetyOffRouteTitle => 'Routen-Warnung';
@@ -1158,6 +1158,19 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runLiveShareStopped => 'Live-Teilen beendet';
+
+  @override
+  String get runLiveShareEndedTitle => 'Live-Teilen beendet';
+
+  @override
+  String get runLiveShareEndedBody =>
+      'Der Live-Link wird nicht mehr aktualisiert. Soll der gespeicherte Lauf öffentlich bleiben, sodass ihn jeder mit dem Link sehen kann? Andernfalls gilt deine Standard-Sichtbarkeit.';
+
+  @override
+  String get runLiveShareKeepPublic => 'Öffentlich lassen';
+
+  @override
+  String get runLiveShareKeepPrivate => 'Privat halten';
 
   @override
   String get runTrainingPlans => 'Trainingspläne';
