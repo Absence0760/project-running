@@ -298,6 +298,46 @@ class AppLocalizationsDe extends AppLocalizations {
       'Liest Workout-Zusammenfassungen (Datum, Distanz, Dauer, Typ) des letzten Jahres. GPS-Routen werden von Health Connect nicht bereitgestellt — so importierte Läufe haben keinen Karten-Track.';
 
   @override
+  String importHealthRoutesWithheld(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count importierte Aktivitäten haben GPS-Karten, die Threkir nicht lesen darf.',
+      one:
+          '1 importierte Aktivität hat eine GPS-Karte, die Threkir nicht lesen darf.',
+    );
+    return '$_temp0 Health Connect schützt die Route eines Workouts mit einer eigenen Berechtigung.';
+  }
+
+  @override
+  String get importHealthRoutesAllowButton => 'Kartenimport erlauben';
+
+  @override
+  String get importHealthRoutesRequesting =>
+      'Kartenzugriff wird bei Health Connect angefragt...';
+
+  @override
+  String get importHealthRoutesDenied =>
+      'Kartenzugriff nicht erteilt. Importe bleiben ohne Karte – du kannst das jederzeit in Health Connect ändern.';
+
+  @override
+  String get importHealthRoutesAdding =>
+      'Karten werden zu importierten Aktivitäten hinzugefügt...';
+
+  @override
+  String importHealthRoutesAdded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Karten zu $count Aktivitäten hinzugefügt.',
+      one: 'Karte zu 1 Aktivität hinzugefügt.',
+      zero: 'Es konnten keine Karten hinzugefügt werden.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String peopleFollowFailedBanner(Object error) {
     return 'Follow konnte nicht aktualisiert werden: $error';
   }
@@ -12225,4 +12265,71 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get watchMetricFluid => 'Flüssigkeit';
+
+  @override
+  String get watchLiveTitle => 'Uhrenlauf verfolgen';
+
+  @override
+  String get watchLiveTileSubtitle =>
+      'Position deiner eigenen Uhr an einen Live-Link weiterleiten';
+
+  @override
+  String get watchLiveIntro =>
+      'Solange dieser Bildschirm geöffnet ist, überträgt dein Telefon die Position der Uhr etwa einmal pro Sekunde an Zuschauer. Behalte das Telefon bei dir und in Bluetooth-Reichweite – wenn du diesen Bildschirm verlässt, endet die Übertragung.';
+
+  @override
+  String get watchLiveStateOff => 'Nicht verbunden';
+
+  @override
+  String get watchLiveStateConnecting => 'Verbinde';
+
+  @override
+  String get watchLiveStateLive => 'Live';
+
+  @override
+  String get watchLiveStateGap => 'Lücke';
+
+  @override
+  String get watchLiveStateLost => 'Aufgegeben';
+
+  @override
+  String get watchLiveDetailOff => 'Es wird nichts gesendet.';
+
+  @override
+  String get watchLiveDetailSearching => 'Suche nach deiner Uhr …';
+
+  @override
+  String get watchLiveDetailAwaitingFix =>
+      'Verbunden – warte auf die erste Position der Uhr.';
+
+  @override
+  String get watchLiveDetailGap =>
+      'Zuschauer sehen die letzte Position als verzögert, nicht als aktuell';
+
+  @override
+  String get watchLiveDetailLost =>
+      'Deine Uhr ist aus oder außer Reichweite. Es wird nichts Neues gesendet.';
+
+  @override
+  String get watchLiveStart => 'Übertragung starten';
+
+  @override
+  String get watchLiveStop => 'Übertragung beenden';
+
+  @override
+  String get watchLiveRetry => 'Erneut versuchen';
+
+  @override
+  String get watchLiveShare => 'Live-Link teilen';
+
+  @override
+  String get watchLiveStartFailed =>
+      'Live-Übertragung konnte nicht gestartet werden – es wird nichts geteilt.';
+
+  @override
+  String get watchLiveSyncAction => 'Läufe von der Uhr synchronisieren';
+
+  @override
+  String get watchLiveSyncSubtitle =>
+      'Holt aufgezeichnete Läufe von der Uhr. Die Übertragung pausiert währenddessen.';
 }

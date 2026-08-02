@@ -297,6 +297,46 @@ class AppLocalizationsFr extends AppLocalizations {
       'Lit les résumés de séances (date, distance, durée, type) de la dernière année. Les itinéraires GPS ne sont pas exposés par Health Connect — les courses importées ainsi n\'auront pas de tracé sur la carte.';
 
   @override
+  String importHealthRoutesWithheld(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count activités importées ont des cartes GPS que Threkir n\'est pas autorisé à lire.',
+      one:
+          '1 activité importée a une carte GPS que Threkir n\'est pas autorisé à lire.',
+    );
+    return '$_temp0 Health Connect protège l\'itinéraire d\'une séance par une autorisation distincte.';
+  }
+
+  @override
+  String get importHealthRoutesAllowButton => 'Autoriser l\'import des cartes';
+
+  @override
+  String get importHealthRoutesRequesting =>
+      'Demande d\'accès aux cartes à Health Connect…';
+
+  @override
+  String get importHealthRoutesDenied =>
+      'Accès aux cartes non accordé. Les imports resteront sans carte — vous pouvez le changer dans Health Connect à tout moment.';
+
+  @override
+  String get importHealthRoutesAdding =>
+      'Ajout des cartes aux activités importées…';
+
+  @override
+  String importHealthRoutesAdded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Cartes ajoutées à $count activités.',
+      one: 'Carte ajoutée à 1 activité.',
+      zero: 'Aucune carte n\'a pu être ajoutée.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String peopleFollowFailedBanner(Object error) {
     return 'Impossible de mettre à jour l\'abonnement : $error';
   }
@@ -12243,4 +12283,71 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get watchMetricFluid => 'Liquide';
+
+  @override
+  String get watchLiveTitle => 'Suivre la course de la montre';
+
+  @override
+  String get watchLiveTileSubtitle =>
+      'Relayer la position de votre montre vers un lien en direct';
+
+  @override
+  String get watchLiveIntro =>
+      'Tant que cet écran est ouvert, votre téléphone relaie la position de la montre aux spectateurs environ une fois par seconde. Gardez le téléphone sur vous et à portée Bluetooth : quitter cet écran arrête le relais.';
+
+  @override
+  String get watchLiveStateOff => 'Non connecté';
+
+  @override
+  String get watchLiveStateConnecting => 'Connexion';
+
+  @override
+  String get watchLiveStateLive => 'En direct';
+
+  @override
+  String get watchLiveStateGap => 'Interruption';
+
+  @override
+  String get watchLiveStateLost => 'Abandon';
+
+  @override
+  String get watchLiveDetailOff => 'Rien n\'est envoyé.';
+
+  @override
+  String get watchLiveDetailSearching => 'Recherche de votre montre…';
+
+  @override
+  String get watchLiveDetailAwaitingFix =>
+      'Connecté — en attente de la première position de la montre.';
+
+  @override
+  String get watchLiveDetailGap =>
+      'les spectateurs voient la dernière position comme différée, pas comme actuelle';
+
+  @override
+  String get watchLiveDetailLost =>
+      'Votre montre est éteinte ou hors de portée. Plus rien n\'est envoyé.';
+
+  @override
+  String get watchLiveStart => 'Démarrer le relais';
+
+  @override
+  String get watchLiveStop => 'Arrêter le relais';
+
+  @override
+  String get watchLiveRetry => 'Réessayer';
+
+  @override
+  String get watchLiveShare => 'Partager le lien en direct';
+
+  @override
+  String get watchLiveStartFailed =>
+      'Impossible de démarrer la diffusion en direct — rien n\'est partagé.';
+
+  @override
+  String get watchLiveSyncAction => 'Synchroniser les courses de la montre';
+
+  @override
+  String get watchLiveSyncSubtitle =>
+      'Récupère les courses enregistrées sur la montre. Le relais est suspendu pendant ce temps.';
 }

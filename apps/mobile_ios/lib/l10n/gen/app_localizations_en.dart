@@ -296,6 +296,45 @@ class AppLocalizationsEn extends AppLocalizations {
       'Reads workout summaries (date, distance, duration, type) from the last year. GPS routes are not exposed by Health Connect — runs imported this way won\'t have a map trace.';
 
   @override
+  String importHealthRoutesWithheld(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count imported activities have GPS maps Threkir isn\'t allowed to read.',
+      one: '1 imported activity has a GPS map Threkir isn\'t allowed to read.',
+    );
+    return '$_temp0 Health Connect keeps a workout\'s route behind its own permission.';
+  }
+
+  @override
+  String get importHealthRoutesAllowButton => 'Allow map import';
+
+  @override
+  String get importHealthRoutesRequesting =>
+      'Asking Health Connect for map access...';
+
+  @override
+  String get importHealthRoutesDenied =>
+      'Map access not granted. Imports stay summary-only — you can change this in Health Connect at any time.';
+
+  @override
+  String get importHealthRoutesAdding =>
+      'Adding maps to imported activities...';
+
+  @override
+  String importHealthRoutesAdded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Added maps to $count activities.',
+      one: 'Added a map to 1 activity.',
+      zero: 'No maps could be added.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String peopleFollowFailedBanner(Object error) {
     return 'Could not update follow: $error';
   }
@@ -12087,4 +12126,71 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get watchMetricFluid => 'Fluid';
+
+  @override
+  String get watchLiveTitle => 'Follow watch run';
+
+  @override
+  String get watchLiveTileSubtitle =>
+      'Relay your custom watch\'s position to a live link';
+
+  @override
+  String get watchLiveIntro =>
+      'While this screen is open your phone relays the watch\'s position to spectators about once a second. Keep the phone with you and in Bluetooth range — leaving this screen ends the relay.';
+
+  @override
+  String get watchLiveStateOff => 'Not connected';
+
+  @override
+  String get watchLiveStateConnecting => 'Connecting';
+
+  @override
+  String get watchLiveStateLive => 'Live';
+
+  @override
+  String get watchLiveStateGap => 'Gap';
+
+  @override
+  String get watchLiveStateLost => 'Gave up';
+
+  @override
+  String get watchLiveDetailOff => 'Nothing is being sent.';
+
+  @override
+  String get watchLiveDetailSearching => 'Looking for your watch…';
+
+  @override
+  String get watchLiveDetailAwaitingFix =>
+      'Connected — waiting for the watch\'s first position.';
+
+  @override
+  String get watchLiveDetailGap =>
+      'spectators see the last position as delayed, not current';
+
+  @override
+  String get watchLiveDetailLost =>
+      'Your watch is off or out of range. Nothing new is being sent.';
+
+  @override
+  String get watchLiveStart => 'Start relay';
+
+  @override
+  String get watchLiveStop => 'Stop relay';
+
+  @override
+  String get watchLiveRetry => 'Try again';
+
+  @override
+  String get watchLiveShare => 'Share live link';
+
+  @override
+  String get watchLiveStartFailed =>
+      'Couldn\'t start the live broadcast — nothing is being shared.';
+
+  @override
+  String get watchLiveSyncAction => 'Sync runs from watch';
+
+  @override
+  String get watchLiveSyncSubtitle =>
+      'Pulls recorded runs off the watch. The relay pauses while it runs.';
 }
