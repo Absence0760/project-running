@@ -62,6 +62,9 @@ test.describe('a non-author signed-in viewer', () => {
 		const flag = page.locator(`${reviewCard} .review-report-btn`);
 		await expect(flag).toBeVisible({ timeout: 10_000 });
 
+		// Delete is author-only — a non-author gets the flag instead.
+		await expect(page.locator(`${reviewCard} .review-delete-btn`)).toHaveCount(0);
+
 		await flag.click();
 
 		// The report dialog opens with its reason picker.
@@ -72,11 +75,12 @@ test.describe('a non-author signed-in viewer', () => {
 test.describe('the review author', () => {
 	test.use({ storageState: USER_B.storageStatePath });
 
-	test('does not see a flag on their own review', async ({ page }) => {
+	test('sees a delete affordance instead of a flag on their own review', async ({ page }) => {
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
 
 		await expect(page.locator(reviewCard)).toBeVisible({ timeout: 10_000 });
 		await expect(page.locator(`${reviewCard} .review-report-btn`)).toHaveCount(0);
+		await expect(page.locator(`${reviewCard} .review-delete-btn`)).toBeVisible();
 	});
 });
 

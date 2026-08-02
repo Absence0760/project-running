@@ -21,18 +21,12 @@ async function deleteAuthorReviews() {
 
 /**
  * /routes/[id] — full route-review lifecycle on the canonical UI:
- * submit → render → edit → row removed after a service-role delete.
+ * submit → render → edit → delete, every leg through the real UI.
  *
  * Companion to routes/detail.spec.ts:171 (single-shot submit only).
  * The cookie-consent banner is fixed-position and intercepts clicks on
  * the Submit button, so we pre-accept via addInitScript — same pattern
  * as cross-user/sagas/kudos-notification.spec.ts.
- *
- * There is no UI delete affordance on the review card today
- * (apps/web/src/routes/routes/[id]/+page.svelte renders rating + date
- * + comment with no row-level delete button), so the "delete" leg of
- * the saga goes through service-role + reload. The TODO below tracks
- * that gap.
  */
 
 test.describe('/routes/[id] reviews — submit, edit, delete', () => {
@@ -47,7 +41,7 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 		await deleteAuthorReviews();
 	});
 
-	test('submit → render in list, edit → rating persists, service-role delete → row gone', async ({
+	test('submit → render in list, edit → rating persists, delete → row gone', async ({
 		page
 	}) => {
 		const admin = getAdminClient();
@@ -105,16 +99,45 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 			.single();
 		expect((edited.data as { rating: number }).rating).toBe(5);
 
-		// TODO: there is no UI delete affordance for route reviews — when
-		// a per-row delete button lands on .review-card, swap this for a
-		// click + assertion. For now, the closest behavioural pin is
-		// service-role delete + reload → row disappears.
-		await deleteAuthorReviews();
-		await page.reload();
+		// Delete through the UI: the author's own card carries a delete
+		// button, gated behind the shared ConfirmDialog.
+		await editedCard.locator('.review-delete-btn').click();
+		const dialog = page.getByTestId('review-delete-confirm-dialog');
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Delete review' }).click();
+
 		await expect(
 			page.locator('.review-card', { hasText: comment })
-		).toHaveCount(0);
+		).toHaveCount(0, { timeout: 10_000 });
 		await expect(page.locator('.no-reviews')).toBeVisible();
+
+		// The row is actually gone, not just hidden client-side.
+		const remaining = await admin
+			.from('route_reviews')
+			.select('id')
+			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+			.eq('user_id', USER_A.id);
+		expect(remaining.data).toEqual([]);
+	});
+
+	test('cancelling the delete confirm keeps the review', async ({ page }) => {
+		const comment = `e2e keep review ${Date.now()}`;
+
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await page.getByRole('button', { name: 'Rate', exact: true }).click();
+		await page.locator('.review-textarea').fill(comment);
+		await page.locator('.review-form').getByRole('button', { name: 'Submit' }).click();
+
+		const card = page.locator('.review-card', { hasText: comment });
+		await expect(card).toBeVisible({ timeout: 10_000 });
+
+		await card.locator('.review-delete-btn').click();
+		const dialog = page.getByTestId('review-delete-confirm-dialog');
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+		await expect(dialog).toBeHidden();
+		await expect(card).toBeVisible();
 	});
 
 	test('Submit disables while the upsert is in flight (no double-submit)', async ({ page }) => {

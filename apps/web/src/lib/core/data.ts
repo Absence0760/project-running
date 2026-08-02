@@ -1196,6 +1196,21 @@ export async function upsertRouteReview(review: {
 	if (error) throw error;
 }
 
+/// Delete the signed-in user's own review of a route. Scoped by
+/// `(route_id, user_id)` — the table's unique key — rather than by review
+/// id so a caller can't be tricked into aiming the delete at someone else's
+/// row; the "users delete their own reviews" RLS policy is the hard gate.
+export async function deleteRouteReview(routeId: string): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase
+		.from(TABLES.route_reviews)
+		.delete()
+		.eq('route_id', routeId)
+		.eq('user_id', userId);
+	if (error) throw error;
+}
+
 // --- Routes ---
 
 export async function nearbyPublicRoutes(options: {
