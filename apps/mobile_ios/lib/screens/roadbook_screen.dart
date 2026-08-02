@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../elevation.dart';
@@ -16,10 +20,194 @@ import '../widgets/top_banner.dart';
 ///
 /// Lives here rather than in `roadbook.dart` because that module is a
 /// TS↔Dart parity twin and a Dart-only export would put the pair out of
-/// lockstep. Shared with the route-detail watch push, which builds the same
-/// schedule headlessly: two independent defaults would put a different set of
-/// projected arrivals on the wrist than the crew sheet shows.
+/// lockstep. It seeds a field the runner is asked to confirm; nothing builds a
+/// pushed schedule from it unattended (see [RoadbookPlan]).
 const int kRoadbookDefaultSecPerKm = 390;
+
+/// Where a route's race plan is kept between visits. Device-local and per
+/// route: a plan is one runner's attempt at one course, not a property of the
+/// account or of the shared route row.
+String roadbookPlanPrefsKey(String routeId) => 'roadbook_plan.$routeId';
+
+/// The three inputs a race schedule cannot be honest without: the goal time it
+/// allocates, the wall-clock start a clock-only cut-off is resolved against,
+/// and the model that distributes the goal across the course.
+///
+/// One persisted record because the crew sheet and the custom-watch push both
+/// build a schedule from it. A start clock in particular is not a nicety: with
+/// none, `buildRoadbook` cannot turn a "barrier closes at 14:00" marker into an
+/// elapsed limit, so the cut-off is dropped from the push entirely and a race
+/// whose barriers are all wall-clock reaches the wrist with no cut-offs at all.
+class RoadbookPlan {
+  final int goalSeconds;
+  final int? startClockMin;
+  final PacingModel model;
+
+  const RoadbookPlan({
+    required this.goalSeconds,
+    this.startClockMin,
+    this.model = PacingModel.effort,
+  });
+}
+
+/// Read this route's stored plan, or null when there is none to read. Anything
+/// unparseable reads as absent so the caller asks rather than schedules a race
+/// against a corrupted goal.
+Future<RoadbookPlan?> loadRoadbookPlan(String routeId) async {
+  String? raw;
+  try {
+    raw = (await SharedPreferences.getInstance())
+        .getString(roadbookPlanPrefsKey(routeId));
+  } catch (e) {
+    debugPrint('roadbook plan read failed: $e');
+    return null;
+  }
+  if (raw == null) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    final goal = decoded['goal_s'];
+    if (goal is! int || goal <= 0) return null;
+    final start = decoded['start_min'];
+    return RoadbookPlan(
+      goalSeconds: goal,
+      startClockMin:
+          start is int && start >= 0 && start < 1440 ? start : null,
+      model: decoded['model'] == 'even' ? PacingModel.even : PacingModel.effort,
+    );
+  } catch (e) {
+    debugPrint('roadbook plan decode failed: $e');
+    return null;
+  }
+}
+
+Future<void> saveRoadbookPlan(String routeId, RoadbookPlan plan) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      roadbookPlanPrefsKey(routeId),
+      jsonEncode({
+        'goal_s': plan.goalSeconds,
+        if (plan.startClockMin != null) 'start_min': plan.startClockMin,
+        'model': plan.model == PacingModel.even ? 'even' : 'effort',
+      }),
+    );
+  } catch (e) {
+    debugPrint('roadbook plan persist failed: $e');
+  }
+}
+
+/// Ask for the goal time and race start a schedule has to be built from.
+/// Returns null when the runner backs out, and the caller must then send no
+/// schedule at all — a canned pace would put arrivals and cut-off verdicts on
+/// the wrist that no surface on the phone agrees with.
+///
+/// The start clock stays optional: a race whose barriers are all elapsed-based
+/// needs none, and refusing to proceed without one would block that runner over
+/// a field they have no answer for. Skipping it costs exactly the clock-only
+/// cut-offs, which the push already counts and discloses.
+Future<RoadbookPlan?> showRoadbookPlanSheet(
+  BuildContext context, {
+  required double distanceMetres,
+}) {
+  final l10n = AppLocalizations.of(context);
+  final seed = (distanceMetres / 1000 * kRoadbookDefaultSecPerKm)
+      .round()
+      .clamp(60, 1 << 30);
+  final goal = TextEditingController(text: _elapsedLabel(seed.toDouble()));
+  int? startClockMin;
+  String? goalError;
+  return showDialog<RoadbookPlan>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocalState) => AlertDialog(
+        title: Text(l10n.roadbookPlanTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.roadbookPlanExplain),
+            const SizedBox(height: 12),
+            TextField(
+              controller: goal,
+              keyboardType: TextInputType.datetime,
+              decoration: InputDecoration(
+                labelText: l10n.roadbookGoalTime,
+                hintText: '4:30:00',
+                errorText: goalError,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final picked = await showTimePicker(
+                  context: ctx,
+                  initialTime: startClockMin == null
+                      ? const TimeOfDay(hour: 6, minute: 0)
+                      : TimeOfDay(
+                          hour: startClockMin! ~/ 60,
+                          minute: startClockMin! % 60),
+                );
+                if (picked != null) {
+                  setLocalState(
+                      () => startClockMin = picked.hour * 60 + picked.minute);
+                }
+              },
+              icon: const Icon(Icons.schedule, size: 18),
+              label: Text(startClockMin == null
+                  ? l10n.roadbookStartTime
+                  : _clockLabel(startClockMin!.toDouble())),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(l10n.roadbookPlanCancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              final secs =
+                  parseGoalTimeS(goal.text, distanceM: distanceMetres);
+              if (secs == null || secs <= 0) {
+                setLocalState(() => goalError = l10n.roadbookPlanGoalInvalid);
+                return;
+              }
+              Navigator.of(ctx).pop(RoadbookPlan(
+                goalSeconds: secs,
+                startClockMin: startClockMin,
+              ));
+            },
+            child: Text(l10n.roadbookPlanSend),
+          ),
+        ],
+      ),
+    ),
+  ).whenComplete(goal.dispose);
+}
+
+String _elapsedLabel(double seconds) {
+  final total = seconds.round();
+  final h = total ~/ 3600;
+  final m = (total % 3600) ~/ 60;
+  final s = total % 60;
+  if (h > 0) {
+    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+  return '$m:${s.toString().padLeft(2, '0')}';
+}
+
+String _clockLabel(double minutesPastMidnight) {
+  final h = (minutesPastMidnight ~/ 60) % 24;
+  final m = (minutesPastMidnight % 60).round();
+  return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+}
+
+String _marginLabel(double seconds) {
+  final sign = seconds < 0 ? '−' : '+';
+  return '$sign${_elapsedLabel(seconds.abs())}';
+}
 
 /// Race roadbook — the crew sheet for a route's course markers + a goal time.
 /// Flutter twin of the web `/routes/[id]/roadbook` page. Controls (goal /
@@ -69,12 +257,38 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     super.initState();
     final km = widget.route.distanceMetres / 1000;
     _goalSeconds = (km * _defaultSecPerKm).round().clamp(60, 1 << 30);
-    _goal = TextEditingController(text: _fmtElapsed(_goalSeconds.toDouble()));
+    _goal = TextEditingController(text: _elapsedLabel(_goalSeconds.toDouble()));
+    unawaited(_loadPlan());
     if (widget.initialMarkers != null) {
       _markers = widget.initialMarkers!;
     } else {
       _load();
     }
+  }
+
+  /// Adopt this route's stored plan, so the sheet opens on the numbers the
+  /// runner last set here — the same record the custom-watch push builds its
+  /// schedule from.
+  Future<void> _loadPlan() async {
+    final plan = await loadRoadbookPlan(widget.route.id);
+    if (plan == null || !mounted) return;
+    setState(() {
+      _goalSeconds = plan.goalSeconds;
+      _startClockMin = plan.startClockMin;
+      _model = plan.model;
+      _goal.text = _elapsedLabel(_goalSeconds.toDouble());
+    });
+  }
+
+  void _persistPlan() {
+    unawaited(saveRoadbookPlan(
+      widget.route.id,
+      RoadbookPlan(
+        goalSeconds: _goalSeconds,
+        startClockMin: _startClockMin,
+        model: _model,
+      ),
+    ));
   }
 
   @override
@@ -133,8 +347,9 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
         parseGoalTimeS(v, distanceM: widget.route.distanceMetres);
     if (secs != null && secs > 0) {
       setState(() => _goalSeconds = secs);
+      _persistPlan();
     }
-    _goal.text = _fmtElapsed(_goalSeconds.toDouble());
+    _goal.text = _elapsedLabel(_goalSeconds.toDouble());
   }
 
   Future<void> _pickStart() async {
@@ -146,6 +361,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     );
     if (picked != null) {
       setState(() => _startClockMin = picked.hour * 60 + picked.minute);
+      _persistPlan();
     }
   }
 
@@ -179,9 +395,9 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     final lines = <String>['${widget.route.name} — ${l10n.roadbookTitle}', ''];
     for (final leg in rb.legs) {
       final name = _checkpointLabel(l10n, leg);
-      final arrival = _fmtElapsed(leg.projectedElapsedS) +
-          (leg.projectedClockMin != null ? ' (${_fmtClock(leg.projectedClockMin!)})' : '');
-      final cut = leg.cutoff != null ? '  ⏱ ${_fmtMargin(leg.cutoff!.marginS)}' : '';
+      final arrival = _elapsedLabel(leg.projectedElapsedS) +
+          (leg.projectedClockMin != null ? ' (${_clockLabel(leg.projectedClockMin!)})' : '');
+      final cut = leg.cutoff != null ? '  ⏱ ${_marginLabel(leg.cutoff!.marginS)}' : '';
       lines.add('${UnitFormat.distance(leg.cumDistM, unit)}  $name  $arrival$cut');
     }
     Share.share(lines.join('\n'));
@@ -242,7 +458,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                 icon: const Icon(Icons.schedule, size: 18),
                 label: Text(_startClockMin == null
                     ? l10n.roadbookStartTime
-                    : _fmtClock(_startClockMin!.toDouble())),
+                    : _clockLabel(_startClockMin!.toDouble())),
               ),
             ],
           ),
@@ -253,7 +469,10 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
               ButtonSegment(value: PacingModel.even, label: Text(l10n.roadbookEven)),
             ],
             selected: {_model},
-            onSelectionChanged: (s) => setState(() => _model = s.first),
+            onSelectionChanged: (s) {
+              setState(() => _model = s.first);
+              _persistPlan();
+            },
           ),
           const SizedBox(height: 4),
           Row(
@@ -288,7 +507,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                     l10n.roadbookSummary(
                       UnitFormat.distance(rb.totalDistM, unit),
                       formatElevationForPref(rb.totalGainM),
-                      _fmtElapsed(rb.totalSeconds),
+                      _elapsedLabel(rb.totalSeconds),
                     ),
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
@@ -341,8 +560,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                 ),
                 Text(
                   [
-                    _fmtElapsed(leg.projectedElapsedS),
-                    if (leg.projectedClockMin != null) _fmtClock(leg.projectedClockMin!),
+                    _elapsedLabel(leg.projectedElapsedS),
+                    if (leg.projectedClockMin != null) _clockLabel(leg.projectedClockMin!),
                     if (leg.legGainM >= 1) '+${leg.legGainM.round()}m',
                   ].join(' · '),
                   style: theme.textTheme.bodySmall,
@@ -357,7 +576,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '${l10n.routeMarkerKindCutoff} ${_fmtMargin(cutoff.marginS)}',
+                        '${l10n.routeMarkerKindCutoff} ${_marginLabel(cutoff.marginS)}',
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: _cutoffColor(cutoff.status)),
                       ),
@@ -432,28 +651,6 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
   static Color _hex(String hex) {
     final v = int.tryParse(hex.replaceFirst('#', ''), radix: 16);
     return v == null ? const Color(0xFF6B7280) : Color(0xFF000000 | v);
-  }
-
-  static String _fmtElapsed(double seconds) {
-    final total = seconds.round();
-    final h = total ~/ 3600;
-    final m = (total % 3600) ~/ 60;
-    final s = total % 60;
-    if (h > 0) {
-      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    }
-    return '$m:${s.toString().padLeft(2, '0')}';
-  }
-
-  static String _fmtClock(double minutesPastMidnight) {
-    final h = (minutesPastMidnight ~/ 60) % 24;
-    final m = (minutesPastMidnight % 60).round();
-    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
-  }
-
-  static String _fmtMargin(double seconds) {
-    final sign = seconds < 0 ? '−' : '+';
-    return '$sign${_fmtElapsed(seconds.abs())}';
   }
 
 }

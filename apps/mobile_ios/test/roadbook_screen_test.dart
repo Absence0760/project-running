@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/roadbook_screen.dart';
@@ -53,7 +56,18 @@ Widget _host(List<RouteMarkerRow> markers) {
   );
 }
 
+/// Let real store I/O land — the screen adopts this route's stored race plan
+/// asynchronously, and a fake-async pump never delivers it.
+Future<void> _settleStore(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 20)),
+  );
+  await tester.pump();
+}
+
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('renders the schedule with checkpoints, services and a cutoff',
       (tester) async {
     await tester.pumpWidget(_host([
@@ -88,5 +102,54 @@ void main() {
     await tester.tap(find.text('Even'));
     await tester.pump();
     expect(find.text('Aid 1'), findsOneWidget);
+  });
+
+  testWidgets('a stored plan opens the sheet on the runner\'s own numbers',
+      (tester) async {
+    // The same record the custom-watch push builds its schedule from, so a
+    // clock cut-off resolves identically on both surfaces.
+    SharedPreferences.setMockInitialValues({
+      roadbookPlanPrefsKey('route-1'):
+          '{"goal_s":7200,"start_min":480,"model":"even"}',
+    });
+    await tester.pumpWidget(_host([
+      _marker('cutoff', 'Gate', 1000, {'cutoff_clock': '09:00'}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.text('2:00:00'), findsOneWidget);
+    expect(find.text('08:00'), findsOneWidget);
+    expect(find.textContaining('Cut-off +'), findsOneWidget);
+  });
+
+  testWidgets('without a start clock the same barrier resolves to nothing',
+      (tester) async {
+    // The reason the start clock is collected at all: a wall-clock barrier has
+    // no elapsed limit to compare against until the gun time is known, so it
+    // silently stops being a cut-off on every surface that reads the schedule.
+    await tester.pumpWidget(_host([
+      _marker('cutoff', 'Gate', 1000, {'cutoff_clock': '09:00'}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.text('Gate'), findsOneWidget);
+    expect(find.textContaining('Cut-off'), findsNothing);
+  });
+
+  testWidgets('editing the goal is persisted for the watch push',
+      (tester) async {
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 445, const {}),
+    ]));
+    await _settleStore(tester);
+
+    await tester.enterText(find.byType(TextField), '1:30:00');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await _settleStore(tester);
+
+    final stored = await tester.runAsync(() async =>
+        (await SharedPreferences.getInstance())
+            .getString(roadbookPlanPrefsKey('route-1')));
+    expect(jsonDecode(stored!), {'goal_s': 5400, 'model': 'effort'});
   });
 }

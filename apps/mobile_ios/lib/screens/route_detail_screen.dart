@@ -27,7 +27,7 @@ import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
 import '../route_gpx.dart';
 import '../roadbook.dart'
-    show PacingModel, RoadbookMarker, RoadbookWaypoint, buildRoadbook;
+    show RoadbookMarker, RoadbookWaypoint, buildRoadbook;
 import '../sim_watch_link.dart' show maybeDevBackendUrl;
 import '../sim_watch_sync.dart' show WatchBleTransport, WatchSyncClient;
 import '../social_service.dart' show ClubView, SocialService;
@@ -1555,6 +1555,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     }
     setState(() => _watchPushBusy = true);
     try {
+      // Shaped before the radio opens: the schedule half may have to ask the
+      // runner for a goal time and a start clock, and a modal answered at
+      // leisure would otherwise hold a live BLE connection open behind it.
+      final schedule = await _watchRoadbook();
+      if (!mounted) return;
       final client = WatchSyncClient(
         transport: (widget.watchTransportFactory ??
             ReactiveBleWatchTransport.new)(),
@@ -1566,7 +1571,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         chunkCourse(encodeCourse(points, elevationM: course.elevationM)),
       );
 
-      final schedule = await _watchRoadbook();
       if (schedule?.checkpoints != null) {
         await client.pushRoadbook(chunkRoadbook(
           encodeRoadbook(schedule!.checkpoints!, schedule.cutoffs!),
@@ -1633,14 +1637,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   /// Build the schedule to push alongside the course, or null when this route
   /// has none to build.
   ///
-  /// The goal time is the crew sheet's own opening default rather than
-  /// something invented here, so the arrivals on the wrist match the arrivals
-  /// on the sheet the runner reads. No start clock is available headlessly, so
-  /// clock-only cut-offs cannot resolve — [WatchRoadbookResult] counts those
-  /// and the banner says so rather than letting a cut-off vanish.
+  /// Built from the runner's own [RoadbookPlan] — the same stored record the
+  /// crew sheet reads and writes — so the arrivals and cut-off verdicts on the
+  /// wrist are the ones on the sheet in the crew's hands. Nothing here invents
+  /// a pace: a canned one guarantees the two disagree, and a missing start
+  /// clock silently drops every wall-clock cut-off from the push, which on a
+  /// race whose barriers are all wall-clock is the entire schedule.
   ///
   /// Fetching markers is an auxiliary step: a failure degrades to a course-only
-  /// push (the course already landed) instead of sinking the whole action.
+  /// push (the course still goes) instead of sinking the whole action.
   Future<WatchRoadbookResult?> _watchRoadbook() async {
     final api = widget.apiClient;
     if (api == null) return null;
@@ -1651,8 +1656,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       debugPrint('sendToWatch: fetchRouteMarkers failed: $e');
       return null;
     }
-    if (markers.isEmpty) return null;
-    final km = widget.route.distanceMetres / 1000;
+    if (markers.isEmpty || !mounted) return null;
+    final plan = await _roadbookPlan();
+    if (plan == null || !mounted) return null;
     return watchRoadbookFromRoadbook(buildRoadbook(
       [
         for (final w in _displayWaypoints)
@@ -1663,9 +1669,25 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           RoadbookMarker(
               positionM: m.positionM, kind: m.kind, label: m.label, meta: m.meta),
       ],
-      goalSeconds: (km * kRoadbookDefaultSecPerKm).clamp(60, 1 << 30).toDouble(),
-      model: PacingModel.effort,
+      goalSeconds: plan.goalSeconds.toDouble(),
+      startClockMin: plan.startClockMin?.toDouble(),
+      model: plan.model,
     ));
+  }
+
+  /// This route's stored race plan, asking for one when there is none. A
+  /// declined prompt returns null and the caller sends no schedule at all.
+  Future<RoadbookPlan?> _roadbookPlan() async {
+    final stored = await loadRoadbookPlan(widget.route.id);
+    if (stored != null) return stored;
+    if (!mounted) return null;
+    final asked = await showRoadbookPlanSheet(
+      context,
+      distanceMetres: widget.route.distanceMetres,
+    );
+    if (asked == null) return null;
+    await saveRoadbookPlan(widget.route.id, asked);
+    return asked;
   }
 
   /// The one thing worth telling the runner about a completed push. Ordered by

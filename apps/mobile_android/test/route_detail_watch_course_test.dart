@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -12,12 +13,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
+import '../lib/screens/roadbook_screen.dart'
+    show RoadbookScreen, roadbookPlanPrefsKey;
 import '../lib/screens/route_detail_screen.dart';
 import '../lib/sim_watch_sync.dart' show WatchBleTransport;
 import '../lib/watch_course.dart' show kMaxCoursePoints;
 
 const _localBackend = 'http://127.0.0.1:54321';
 const _prodBackend = 'https://abcdefgh.supabase.co';
+
+/// A four-hour goal off an 08:00 gun — a plan the runner already set on the
+/// crew sheet, which is the ordinary case for every test not about the prompt.
+const _defaultPlan = '{"goal_s":14400,"start_min":480,"model":"effort"}';
 
 /// Course-only transport: the push writes chunks, nothing else is exercised.
 class _FakeCourseTransport implements WatchBleTransport {
@@ -83,6 +90,36 @@ class _FakeCourseTransport implements WatchBleTransport {
 
   int get checkpointCount => roadbookFrame[5];
   int get cutoffCount => roadbookFrame[6];
+
+  ({int distM, int elapsedS}) checkpointAt(int i) {
+    final view = ByteData.sublistView(roadbookFrame);
+    final off = 8 + i * 14;
+    return (
+      distM: view.getUint32(off, Endian.little),
+      elapsedS: view.getUint32(off + 8, Endian.little),
+    );
+  }
+
+  ({int distM, int limitS}) cutoffAt(int i) {
+    final view = ByteData.sublistView(roadbookFrame);
+    final off = 8 + checkpointCount * 14 + i * 8;
+    return (
+      distM: view.getUint32(off, Endian.little),
+      limitS: view.getUint32(off + 4, Endian.little),
+    );
+  }
+
+  /// The margin the watch will read at [distM]: the cut-off's limit less the
+  /// arrival the same frame projects for that checkpoint.
+  int wireMarginAt(int distM) {
+    final cutoff = [
+      for (var i = 0; i < cutoffCount; i++) cutoffAt(i),
+    ].firstWhere((c) => c.distM == distM);
+    final checkpoint = [
+      for (var i = 0; i < checkpointCount; i++) checkpointAt(i),
+    ].firstWhere((c) => c.distM == distM);
+    return cutoff.limitS - checkpoint.elapsedS;
+  }
 
   static Uint8List _reassemble(List<List<int>> writes) {
     var length = 0;
@@ -205,6 +242,26 @@ List<cm.Waypoint> _longLine(int km) {
   ];
 }
 
+/// A stored race plan, in the shape `roadbook_screen.dart` persists.
+String _planJson({int goalS = 4 * 3600, int? startMin}) => jsonEncode({
+      'goal_s': goalS,
+      if (startMin != null) 'start_min': startMin,
+      'model': 'effort',
+    });
+
+/// The margin string the crew sheet prints beside a cut-off. Written out here
+/// rather than reached for in the screen, so the test's arithmetic is
+/// independent of the code it is checking.
+String _marginText(int seconds) {
+  final sign = seconds < 0 ? '−' : '+';
+  final a = seconds.abs();
+  final h = a ~/ 3600;
+  final m = (a % 3600) ~/ 60;
+  final s = a % 60;
+  final two = (int v) => v.toString().padLeft(2, '0');
+  return h > 0 ? '$sign$h:${two(m)}:${two(s)}' : '$sign$m:${two(s)}';
+}
+
 Future<void> _pump(
   WidgetTester tester,
   cm.Route route, {
@@ -212,8 +269,11 @@ Future<void> _pump(
   String backendUrl = _localBackend,
   ApiClient? api,
   bool? isOwner,
+  String? plan = _defaultPlan,
 }) async {
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues({
+    if (plan != null) roadbookPlanPrefsKey(route.id): plan,
+  });
   final prefs = Preferences();
   await prefs.init();
 
@@ -243,9 +303,19 @@ Future<void> _openShareMenu(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
+/// Let real store I/O land: the schedule half reads the route's stored race
+/// plan out of SharedPreferences, which a fake-async pump never delivers.
+Future<void> _settleStore(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 20)),
+  );
+  await tester.pump();
+}
+
 Future<void> _sendToWatch(WidgetTester tester) async {
   await tester.tap(find.text('Send to watch'));
   await tester.pump();
+  await _settleStore(tester);
   await tester.pump(const Duration(milliseconds: 400));
 }
 
@@ -478,9 +548,9 @@ void main() {
 
     testWidgets('clock-only cut-offs are disclosed, never silently missing',
         (tester) async {
-      // No start clock is available headlessly, so a clock-only cut-off cannot
-      // resolve into a limit. It must be reported — a cut-off that quietly
-      // fails to reach the watch is the exact failure this schedule prevents.
+      // A plan with no start clock cannot resolve a clock-only cut-off into an
+      // elapsed limit. It must be reported — a cut-off that quietly fails to
+      // reach the watch is the exact failure this schedule prevents.
       final transport = _FakeCourseTransport();
       await _pump(
         tester,
@@ -491,6 +561,7 @@ void main() {
           _marker('b', positionM: 5000, kind: 'cutoff', cutoffClock: '14:00'),
         ]),
         isOwner: true,
+        plan: _planJson(),
       );
       await _openShareMenu(tester);
       await _sendToWatch(tester);
@@ -522,6 +593,178 @@ void main() {
       expect(transport.roadbookWrites, isEmpty);
       expect(find.textContaining('Course sent to the watch'), findsOneWidget);
       await _drainBanner(tester);
+    });
+  });
+
+  group("RouteDetailScreen — the schedule is built from the runner's plan", () {
+    testWidgets('a wall-clock cut-off reaches the watch, and the margin '
+        'matches the crew sheet', (tester) async {
+      // A race whose barriers are all "closes at 11:00" is the ordinary ultra
+      // case. Without a start clock every one of them resolves to nothing and
+      // the frame carries zero cut-offs, so the watch's CutoffEta, SleepStation
+      // and Roadbook pages have no limit to project against.
+      final transport = _FakeCourseTransport();
+      final markers = [
+        _marker('a', positionM: 2000),
+        _marker('b', positionM: 5000, kind: 'cutoff', cutoffClock: '11:00'),
+      ];
+      final route = _route(waypoints: _longLine(30));
+      await _pump(
+        tester,
+        route,
+        transport: transport,
+        api: _MarkersApi(markers),
+        isOwner: true,
+        plan: _planJson(goalS: 4 * 3600, startMin: 8 * 60),
+      );
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(transport.cutoffCount, 1);
+      final wire = transport.cutoffAt(0);
+      expect(wire.distM, 5000);
+      // 08:00 gun, 11:00 barrier: three hours of elapsed race.
+      expect(wire.limitS, 3 * 3600);
+      final margin = transport.wireMarginAt(5000);
+      await _drainBanner(tester);
+
+      // The crew sheet reads the same stored plan, so the margin printed for
+      // the crew is the one the watch was handed.
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RoadbookScreen(
+          route: route,
+          waypoints: route.waypoints,
+          api: null,
+          initialMarkers: markers,
+        ),
+      ));
+      await _settleStore(tester);
+      expect(find.text('Cut-off ${_marginText(margin)}'), findsOneWidget);
+    });
+
+    testWidgets('with no stored plan the push asks instead of assuming a pace',
+        (tester) async {
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi([
+          _marker('a', positionM: 2000),
+          _marker('b', positionM: 5000, kind: 'cutoff', cutoffClock: '11:00'),
+        ]),
+        isOwner: true,
+        plan: null,
+      );
+      await _openShareMenu(tester);
+      await tester.tap(find.text('Send to watch'));
+      await tester.pump();
+      await _settleStore(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Race plan'), findsOneWidget);
+      expect(transport.courseWrites, isEmpty,
+          reason: 'the radio must not be held open behind a modal');
+
+      await tester.tap(find.text('Start time'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('OK'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('06:00'), findsOneWidget);
+
+      await tester.tap(find.text('Send'));
+      await tester.pump();
+      await _settleStore(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(transport.courseWrites, isNotEmpty);
+      expect(transport.cutoffCount, 1);
+      // 06:00 gun, 11:00 barrier.
+      expect(transport.cutoffAt(0).limitS, 5 * 3600);
+      await _drainBanner(tester);
+
+      // Answered once, remembered — the crew sheet opens on the same numbers.
+      final stored = await tester.runAsync(() async =>
+          (await SharedPreferences.getInstance())
+              .getString(roadbookPlanPrefsKey('r1')));
+      // The seed the runner accepted unchanged: the route's stored 8.5 km at
+      // the sheet's own opening 6:30/km.
+      expect(jsonDecode(stored!), {
+        'goal_s': 3315,
+        'start_min': 6 * 60,
+        'model': 'effort',
+      });
+    });
+
+    testWidgets('backing out of the prompt sends the course alone',
+        (tester) async {
+      // Declining is not consent to a canned pace: a schedule nobody chose
+      // would put arrival times on the wrist that no surface on the phone
+      // agrees with.
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi([
+          _marker('b', positionM: 5000, kind: 'cutoff', cutoffElapsedS: 3600),
+        ]),
+        isOwner: true,
+        plan: null,
+      );
+      await _openShareMenu(tester);
+      await tester.tap(find.text('Send to watch'));
+      await tester.pump();
+      await _settleStore(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Race plan'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await _settleStore(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(transport.courseWrites, isNotEmpty);
+      expect(transport.roadbookWrites, isEmpty);
+      expect(find.textContaining('Course sent to the watch'), findsOneWidget);
+      final stored = await tester.runAsync(() async =>
+          (await SharedPreferences.getInstance())
+              .getString(roadbookPlanPrefsKey('r1')));
+      expect(stored, isNull);
+      await _drainBanner(tester);
+    });
+
+    testWidgets('an unparseable goal is refused in place, not sent',
+        (tester) async {
+      final transport = _FakeCourseTransport();
+      await _pump(
+        tester,
+        _route(waypoints: _longLine(30)),
+        transport: transport,
+        api: _MarkersApi([
+          _marker('b', positionM: 5000, kind: 'cutoff', cutoffElapsedS: 3600),
+        ]),
+        isOwner: true,
+        plan: null,
+      );
+      await _openShareMenu(tester);
+      await tester.tap(find.text('Send to watch'));
+      await tester.pump();
+      await _settleStore(tester);
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tester.enterText(find.byType(TextField), 'soon');
+      await tester.tap(find.text('Send'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Enter a goal time like 4:30:00'), findsOneWidget);
+      expect(find.text('Race plan'), findsOneWidget);
+      expect(transport.courseWrites, isEmpty);
     });
   });
 }

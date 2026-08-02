@@ -17840,6 +17840,36 @@ abstract class AppLocalizations {
   /// **'Start time'**
   String get roadbookStartTime;
 
+  /// Title of the sheet asking for the goal time and race start before a schedule is sent to the watch
+  ///
+  /// In en, this message translates to:
+  /// **'Race plan'**
+  String get roadbookPlanTitle;
+
+  /// Explains why the goal time and start clock are being asked for
+  ///
+  /// In en, this message translates to:
+  /// **'The watch builds its arrival and cut-off times from these. Set a start time so cut-offs given as a time of day can be sent too.'**
+  String get roadbookPlanExplain;
+
+  /// Dismiss the race-plan sheet without sending a schedule
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get roadbookPlanCancel;
+
+  /// Confirm the race plan and send the schedule
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get roadbookPlanSend;
+
+  /// Validation error when the goal time cannot be parsed
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a goal time like 4:30:00'**
+  String get roadbookPlanGoalInvalid;
+
   /// Effort pacing model
   ///
   /// In en, this message translates to:
