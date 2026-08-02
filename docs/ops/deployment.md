@@ -220,6 +220,8 @@ The matrix of "what lives where":
 
 **Operator scripts.** The AWS-side rotation flows are wrapped in [`bin/`](../../bin/README.md): `secret-set.sh <env> <KEY>` (rewrite a single sops-encrypted Lambda secret without opening an editor), `key-rotate.sh <env>` (re-encrypt under a new KMS key when the key itself is replaced), and `onboard-operator.sh <arn>` (grant a second human/role decrypt access on the env's KMS key). All take input via stdin / file / prompt — nothing routes secrets through argv or shell history.
 
+**Lambda env rotations need an alias repoint.** An env-only `terraform apply` publishes a new Lambda version but the eight web Lambdas' `live` aliases are CI-owned and stay behind, still serving the previous version's frozen env — the rotated secret isn't live until the alias moves (issue #590 defect 2). Finish every web-Lambda env rotation with `bin/lambda-alias-sync.sh <env>` (or cut a `web@*` release, whose deploy repoints the aliases anyway).
+
 ---
 
 ## Release vs deploy
