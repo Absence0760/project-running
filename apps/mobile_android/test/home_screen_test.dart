@@ -268,10 +268,11 @@ void main() {
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      // Icon-only fan — the label is on the Tooltip, not visible text.
       expect(find.byTooltip('Log run'), findsOneWidget);
       expect(find.byTooltip('Log lift'), findsOneWidget);
       expect(find.byTooltip('Log food'), findsOneWidget);
+      // Each fan item carries its label as visible text, not only a tooltip.
+      expect(find.text('Log run'), findsOneWidget);
     });
 
     testWidgets('keepRunPrimary: tapping the Log FAB starts a run, no menu',

@@ -10,8 +10,16 @@ import 'log_sheet.dart';
 // bottom. The fan items radiate out from that anchor.
 const double _kBarHeight = 64;
 // Radius of the arc the three icons sit on, measured from the FAB centre.
-const double _kArcRadius = 96;
+// The radius has to keep `_kItemWidth <= 0.74 * _kArcRadius` (0.74 is the
+// side slots' horizontal unit): below that the top-centre item's label runs
+// into the two lower icons, which sit at the label's own height.
+const double _kArcRadius = 128;
 const double _kItemSize = 52;
+// Width of the whole item (icon above its label), and the gap between them.
+// Wider than the icon so the label has room to wrap instead of ellipsising in
+// the longer locales.
+const double _kItemWidth = 84;
+const double _kLabelGap = 6;
 
 // Unit offsets (x from centre, y upward) for the three slots: one directly
 // above, one down-left, one down-right — a shallow arc over the button, not a
@@ -30,7 +38,7 @@ const List<Offset> _kAnchoredSlotUnits = [
   Offset(0.67, -0.74), // right, below
 ];
 
-/// Fan the three capture actions (Run / Lift / Food) out as icon-only buttons
+/// Fan the three capture actions (Run / Lift / Food) out as labelled buttons
 /// in a shallow arc around the centre Log FAB, over a dismiss scrim. Resolves
 /// to the picked [LogAction], or null on scrim tap / back — same contract as
 /// [showLogSheet] so the caller (HomeScreen) still owns the navigation.
@@ -107,7 +115,7 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final actions = orderedLogActions(widget.recent);
-    final centreX = MediaQuery.sizeOf(context).width / 2;
+    final screen = MediaQuery.sizeOf(context);
     return Stack(
       children: [
         Positioned.fill(
@@ -133,7 +141,7 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
           child: Stack(
             children: [
               for (var i = 0; i < actions.length; i++)
-                _item(context, l10n, actions[i], i, actions.length, centreX),
+                _item(context, l10n, actions[i], i, actions.length, screen),
             ],
           ),
         ),
@@ -147,7 +155,7 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
     LogAction action,
     int index,
     int count,
-    double centreX,
+    Size screen,
   ) {
     final theme = Theme.of(context);
     final (icon, label) = switch (action) {
@@ -167,19 +175,53 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
       button: true,
       label: label,
       child: Tooltip(
+        // The visible label wraps to two lines and then ellipsises; the
+        // tooltip still carries the full string for the longest locales.
         message: label,
-        child: Material(
-          color: theme.colorScheme.secondaryContainer,
-          shape: const CircleBorder(),
-          elevation: 3,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: () => _close(action),
-            child: SizedBox(
-              width: _kItemSize,
-              height: _kItemSize,
-              child: Icon(icon, color: theme.colorScheme.onSecondaryContainer),
-            ),
+        child: SizedBox(
+          width: _kItemWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Material(
+                color: theme.colorScheme.secondaryContainer,
+                shape: const CircleBorder(),
+                elevation: 3,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _close(action),
+                  child: SizedBox(
+                    width: _kItemSize,
+                    height: _kItemSize,
+                    child:
+                        Icon(icon, color: theme.colorScheme.onSecondaryContainer),
+                  ),
+                ),
+              ),
+              const SizedBox(height: _kLabelGap),
+              Material(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(8),
+                elevation: 2,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  // The enclosing Semantics already announces the label; the
+                  // Text would otherwise make a screen reader say it twice.
+                  child: ExcludeSemantics(
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -193,12 +235,15 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
         final dx = unit.dx * _kArcRadius * v;
         final up = unit.dy * _kArcRadius * v;
         final anchor = widget.anchor;
+        // Anchored on the icon's top edge, never the item's bottom: the label
+        // wraps to a second line in the longer locales, so a bottom-anchored
+        // item would shove its own icon off the arc by its label's height.
+        final iconTop = anchor == null
+            ? screen.height - widget.fabCentreFromBottom - up - _kItemSize / 2
+            : anchor.dy - up - _kItemSize / 2;
         return Positioned(
-          left: (anchor?.dx ?? centreX) + dx - _kItemSize / 2,
-          bottom: anchor == null
-              ? widget.fabCentreFromBottom + up - _kItemSize / 2
-              : null,
-          top: anchor == null ? null : anchor.dy - up - _kItemSize / 2,
+          left: (anchor?.dx ?? screen.width / 2) + dx - _kItemWidth / 2,
+          top: iconTop,
           child: Opacity(
             opacity: _controller.value.clamp(0.0, 1.0),
             child: Transform.scale(scale: 0.6 + 0.4 * _controller.value, child: child),
