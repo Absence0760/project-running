@@ -291,18 +291,42 @@ pub fn hr_to_publish(
     strap: Option<HrSample>,
     optical: Option<HrSample>,
     now_s: u32,
-) -> Option<HrSample> {
-    let next = match select_hr(strap, optical, now_s) {
-        Some(selection) => selection.sample,
+) -> Option<HrPublication> {
+    let (next, source) = match select_hr(strap, optical, now_s) {
+        Some(selection) => (selection.sample, Some(selection.source)),
         None => {
             last?.bpm?;
-            HrSample {
-                bpm: None,
-                at_s: now_s,
-            }
+            (
+                HrSample {
+                    bpm: None,
+                    at_s: now_s,
+                },
+                None,
+            )
         }
     };
-    should_publish(last, next).then_some(next)
+    should_publish(last, next).then_some(HrPublication {
+        sample: next,
+        source,
+    })
+}
+
+/// A sample to publish and the sensor it came from.
+///
+/// The source rides with the sample because the arbitration used to end at a
+/// log line: [`select_hr`] decided a strap outranked the wrist, the winning
+/// *rate* reached the panel and the winning *sensor* did not. A runner could
+/// then read a BPM with no way to tell whether the strap they buckled on was
+/// connected at all — the same blind spot the zones page's `CEIL --` exists to
+/// close, and the reason a strap that silently never paired is indistinguishable
+/// from one that did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct HrPublication {
+    pub sample: HrSample,
+    /// `None` for the synthesised blank — no sensor produced it, and naming one
+    /// there would credit a reading that does not exist.
+    pub source: Option<HrSource>,
 }
 
 /// Seconds until a currently-authoritative strap sample stops being one, or
@@ -598,9 +622,10 @@ mod tests {
     #[test]
     fn the_first_reading_publishes_and_a_repeat_does_not() {
         let first = hr_to_publish(None, None, sample(Some(120), 10), 10).unwrap();
-        assert_eq!(first.bpm, Some(120));
+        assert_eq!(first.sample.bpm, Some(120));
+        assert_eq!(first.source, Some(HrSource::Optical));
         assert_eq!(
-            hr_to_publish(Some(first), None, sample(Some(120), 10), 10),
+            hr_to_publish(Some(first.sample), None, sample(Some(120), 10), 10),
             None
         );
     }
@@ -618,7 +643,12 @@ mod tests {
             11,
         )
         .unwrap();
-        assert_eq!(next.bpm, Some(150));
+        assert_eq!(next.sample.bpm, Some(150));
+        assert_eq!(
+            next.source,
+            Some(HrSource::Strap),
+            "the winning sensor rides with the winning rate"
+        );
     }
 
     #[test]
@@ -632,10 +662,14 @@ mod tests {
         };
         let now = 10 + STRAP_STALE_AFTER_S + 1;
         let blank = hr_to_publish(Some(published), sample(Some(150), 10), None, now).unwrap();
-        assert_eq!(blank.bpm, None);
-        assert_eq!(blank.at_s, now);
+        assert_eq!(blank.sample.bpm, None);
+        assert_eq!(blank.sample.at_s, now);
         assert_eq!(
-            hr_to_publish(Some(blank), sample(Some(150), 10), None, now + 1),
+            blank.source, None,
+            "nothing produced the blank, so nothing may be credited with it"
+        );
+        assert_eq!(
+            hr_to_publish(Some(blank.sample), sample(Some(150), 10), None, now + 1),
             None,
             "the blank must not repeat once per second forever"
         );
@@ -657,8 +691,13 @@ mod tests {
         // carries its own timestamp; replacing it with a synthesised blank
         // would move the freshness stamp the consumer ages against.
         let next = hr_to_publish(None, None, sample(None, 42), 100).unwrap();
-        assert_eq!(next.at_s, 42);
-        assert_eq!(next.bpm, None);
+        assert_eq!(next.sample.at_s, 42);
+        assert_eq!(next.sample.bpm, None);
+        assert_eq!(
+            next.source,
+            Some(HrSource::Optical),
+            "a real reading of no pulse is still the optical sensor's"
+        );
     }
 
     #[test]

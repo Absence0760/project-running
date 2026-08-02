@@ -15,6 +15,12 @@
 //! blanks on time instead of holding its last rate for a whole
 //! `hr_duty::hold_budget_s`. No polling, no free-running waker.
 //!
+//! It publishes two seams, not one: `state::HR` (the rate) and
+//! `state::HR_SOURCE` (which sensor produced it), together, so the run view can
+//! name the sensor a runner is reading. The arbitration used to end at the
+//! defmt line below, which meant a strap that never paired looked on the wrist
+//! exactly like one that won.
+//!
 //! Present on every build. Without the `ble` feature nothing ever writes the
 //! strap seam, so this forwards the optical sensor unchanged.
 
@@ -31,15 +37,19 @@ pub async fn run() -> ! {
     let mut optical_rx = unwrap!(state::HR_OPTICAL.receiver());
     let mut strap_rx = unwrap!(state::HR_STRAP.receiver());
     let sender = state::HR.sender();
+    let source_sender = state::HR_SOURCE.sender();
     let mut optical: Option<HrSample> = None;
     let mut strap: Option<HrSample> = None;
     let mut published: Option<HrSample> = None;
     let mut logged_source: Option<Option<HrSource>> = None;
     loop {
         let now_s = Instant::now().as_secs() as u32;
-        if let Some(sample) = hr_source::hr_to_publish(published, strap, optical, now_s) {
-            sender.send(sample);
-            published = Some(sample);
+        // The winning sensor rides out with the winning rate, on the same
+        // publication, so a consumer can never pair one with the other's.
+        if let Some(pub_) = hr_source::hr_to_publish(published, strap, optical, now_s) {
+            source_sender.send(pub_.source);
+            sender.send(pub_.sample);
+            published = Some(pub_.sample);
         }
         let source = hr_source::select_hr(strap, optical, now_s).map(|s| s.source);
         if logged_source != Some(source) {

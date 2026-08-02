@@ -374,6 +374,7 @@ static SIM_ROADBOOK: [watch_core::record::RoadbookCheckpoint; 3] = [
 pub async fn run(store: &'static SharedStore) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut hr_rx = unwrap!(state::HR.receiver());
+    let mut hr_source_rx = unwrap!(state::HR_SOURCE.receiver());
     let mut elev_rx = unwrap!(state::ELEVATION.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut nav_rx = unwrap!(state::NAV.receiver());
@@ -473,6 +474,7 @@ pub async fn run(store: &'static SharedStore) {
     screens_tx.send(persisted_screens.clone());
     let mut open: Option<OpenRun> = None;
     let mut hr: Option<HrSample> = None;
+    let mut hr_source: Option<watch_core::hr_source::HrSource> = None;
     let mut mode = GnssMode::default();
     let mut latest_baro_alt_m: Option<f32> = None;
     let mut trackback = Trackback::new();
@@ -893,6 +895,9 @@ pub async fn run(store: &'static SharedStore) {
                 if let Some(s) = hr_rx.try_changed() {
                     hr = Some(s);
                 }
+                if let Some(src) = hr_source_rx.try_changed() {
+                    hr_source = src;
+                }
                 // The recorder's zone-time accumulators bank against the same
                 // HR the track points are stamped with, and only within the
                 // mode's duty-cycle hold budget (`hr_duty::shown_bpm`): a
@@ -901,6 +906,7 @@ pub async fn run(store: &'static SharedStore) {
                 // by. A dropped pulse (bpm None) stops the accrual instantly.
                 let held = hr_duty::shown_bpm(hr, fix.uptime_s, mode);
                 recorder.set_hr(held);
+                recorder.set_hr_source(held.and(hr_source));
                 if let Some(r) = elev_rx.try_changed() {
                     latest_baro_alt_m = Some(r.alt_m);
                     // The recorder's live-GAP grade prefers the barometric
