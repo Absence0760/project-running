@@ -16,9 +16,10 @@ import '../preferences.dart';
 import '../settings_sync.dart';
 import '../strava_importer.dart';
 
-/// Build the post-import status line. Appends a no-route note for sources
-/// (Health Connect) that expose workout summaries but not GPS geometry, so a
-/// map-less run detail reads as expected rather than a bug (#37).
+/// Build the post-import status line. Appends a no-route note when the batch
+/// came in without any GPS geometry, so a map-less run detail reads as
+/// expected rather than a bug (#37). The caller decides — a Health Connect
+/// import carries tracks only when the exercise-route permission is granted.
 String buildImportStatus({
   required int savedCount,
   required int errorCount,
@@ -99,10 +100,15 @@ class _ImportScreenState extends State<ImportScreen> {
 
       setState(() => _status = l10n.importHealthReadingWorkouts);
       final runs = await HealthConnectImporter.fetchWorkouts();
-      // Health Connect exposes workout summaries but not route geometry, so
-      // these runs land without a GPS track / map — tell the user so a
-      // map-less run detail doesn't read as a bug (garmin persona #37).
-      await _saveImportedRuns(runs, label: _healthLabel, noGpsNote: true);
+      // Health Connect only releases a workout's route when the exercise-route
+      // permission is granted, so an import can land with maps or without.
+      // Only claim there are no tracks when there genuinely are none —
+      // otherwise the note contradicts the maps the user can see (#37, #664).
+      await _saveImportedRuns(
+        runs,
+        label: _healthLabel,
+        noGpsNote: runs.every((r) => r.track.isEmpty),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {

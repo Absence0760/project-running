@@ -40,6 +40,12 @@
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <!-- The GPS route attached to a workout is a separate, more-sensitive
+         grant than the session itself (#664). Without it Health Connect
+         answers ConsentRequired for routes written by other apps and the
+         import lands summary-only; the importer degrades to a trackless
+         run rather than failing. Plural, unlike WRITE_EXERCISE_ROUTE. -->
+    <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTES" />
     <!-- Write recorded runs back to Health Connect (persona #36). Opt-in
          per-device; the workout session + its distance record need these. -->
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
