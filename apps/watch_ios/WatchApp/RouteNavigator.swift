@@ -152,3 +152,47 @@ class RouteNavigator: ObservableObject {
         if fired { playOffRouteHaptic() }
     }
 }
+
+// MARK: - Display shaping
+
+/// Turns the navigator's published values into what the run screen renders.
+/// Pure and unit-tested separately from the SwiftUI view.
+enum RouteGuidance {
+    enum Status: Equatable {
+        case onRoute
+        case offRoute
+        /// No projection is available — a degenerate route, or a fix the
+        /// geometry refused. Distinct from `onRoute` on purpose: a runner
+        /// shown nothing cannot tell "you are on the line" from "the watch
+        /// has lost track of the line".
+        case unknown
+    }
+
+    /// A latched off-route state outranks a missing deviation, so one bad fix
+    /// cannot downgrade a live alert to "unknown" and back.
+    static func status(isOffRoute: Bool, deviationMetres: Double?) -> Status {
+        if isOffRoute { return .offRoute }
+        return deviationMetres == nil ? .unknown : .onRoute
+    }
+
+    /// Distance still to run, in the user's preferred unit. Nil when the
+    /// navigator has no projection to report.
+    static func remainingText(metres: Double?) -> String? {
+        guard let metres, metres.isFinite, metres >= 0 else { return nil }
+        return RunFormat.distance(metres: metres, fractionDigits: 2)
+    }
+
+    /// How far off the line the runner is, always in metres — a deviation
+    /// rendered in miles (`0.04 mi`) tells a runner nothing they can act on,
+    /// so this one readout stays metric in both unit modes, matching Wear OS.
+    static func deviationText(metres: Double?) -> String? {
+        guard let metres, metres.isFinite, metres >= 0 else { return nil }
+        let formatter = MeasurementFormatter()
+        formatter.locale = Locale.current
+        formatter.unitOptions = .providedUnit
+        formatter.numberFormatter.maximumFractionDigits = 0
+        return formatter.string(
+            from: Measurement(value: metres.rounded(), unit: UnitLength.meters)
+        )
+    }
+}

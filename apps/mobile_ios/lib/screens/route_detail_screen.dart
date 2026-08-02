@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
 import '../backend_timeout.dart';
 import '../dev_auto_login.dart' show isLocalSupabaseUrl;
@@ -160,6 +161,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   bool _starBusy = false;
   bool _watchPushBusy = false;
 
+  /// Whether a paired Apple Watch running the app can take a route push.
+  /// Resolved once in [initState] over the native bridge; false on Android
+  /// and on an iPhone with no watch, so the menu row never offers a send
+  /// that can only fail.
+  bool _appleWatchAvailable = false;
+  bool _appleWatchPushBusy = false;
+
   // Waypoints handed to the renderer. For the owner this mirrors
   // widget.route.waypoints from the row; for non-owners this is the
   // privacy-zone-clipped output of clip_route_for_viewer (decisions
@@ -208,6 +216,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     _fetchReviews();
     _loadBookmarkState();
     _resolveDisplayWaypoints();
+    _resolveAppleWatchAvailability();
+  }
+
+  Future<void> _resolveAppleWatchAvailability() async {
+    final available = await AppleWatchRouteBridge.isAvailable();
+    if (!mounted || !available) return;
+    setState(() => _appleWatchAvailable = true);
   }
 
   @override
@@ -859,6 +874,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             onSelected: (fmt) => switch (fmt) {
               'link' => _shareLink(context),
               'watch' => _sendCourseToWatch(),
+              'apple_watch' => _sendRouteToAppleWatch(),
               _ => _shareAs(context, fmt),
             },
             itemBuilder: (_) => [
@@ -884,6 +900,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               if (_watchPushAvailable && !_watchPushBusy)
                 PopupMenuItem(
                     value: 'watch', child: Text(l10n.routeDetailSendToWatch)),
+              if (_appleWatchAvailable && !_appleWatchPushBusy)
+                PopupMenuItem(
+                    value: 'apple_watch',
+                    child: Text(l10n.routeDetailSendToAppleWatch)),
             ],
           ),
           // Offline-pin affordance — local-only flag (never synced).
@@ -1509,6 +1529,52 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           context, l10n.routeDetailWatchCourseFailed(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _watchPushBusy = false);
+    }
+  }
+
+  /// Send this route to the paired Apple Watch so its `RouteNavigator` has a
+  /// line to follow during a wrist-recorded run — the counterpart of
+  /// [_sendCourseToWatch] for the watch a runner actually owns.
+  ///
+  /// Reads the same clipped polyline the map and the GPX exporter do, so a
+  /// non-owner sending a public route to their own watch can't carry the
+  /// owner's unclipped trace out over Watch Connectivity (decisions §33).
+  ///
+  /// A route too dense for one push is thinned to fit and the runner is told
+  /// by how much; one that can't be represented at all is refused with a
+  /// reason. Neither path quietly sends a partial line — the watch would then
+  /// call the runner off route against geometry the route does not have.
+  Future<void> _sendRouteToAppleWatch() async {
+    if (_appleWatchPushBusy) return;
+    final l10n = AppLocalizations.of(context);
+    final shaped = appleWatchRouteFromWaypoints(_displayWaypoints);
+    final points = shaped.points;
+    if (points == null) {
+      showTopBanner(context, l10n.routeDetailAppleWatchRouteTooShort);
+      return;
+    }
+    setState(() => _appleWatchPushBusy = true);
+    try {
+      await AppleWatchRouteBridge.push(
+        id: widget.route.id,
+        name: widget.route.name,
+        distanceMetres: widget.route.distanceMetres,
+        points: points,
+      );
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        shaped.simplified
+            ? l10n.routeDetailAppleWatchRouteSimplified(
+                shaped.sourcePointCount, points.length)
+            : l10n.routeDetailAppleWatchRouteSent(points.length),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context,
+          l10n.routeDetailAppleWatchRouteFailed(friendlyError(l10n, e)));
+    } finally {
+      if (mounted) setState(() => _appleWatchPushBusy = false);
     }
   }
 

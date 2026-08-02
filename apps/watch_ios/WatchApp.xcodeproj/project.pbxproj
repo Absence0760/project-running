@@ -18,6 +18,7 @@
 		A1B2C3D4E5F60001000A000D /* HealthKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A000B /* HealthKitManager.swift */; };
 		A1B2C3D4E5F60001000A000F /* ActiveRunBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A000F /* ActiveRunBridge.swift */; };
 		A1B2C3D4E5F60001000A0011 /* RunFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0011 /* RunFormat.swift */; };
+		A1B2C3D4E5F60001000A0012 /* ArmedRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0012 /* ArmedRoute.swift */; };
 		A1B2C3D4E5F60001000A0007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0007 /* Assets.xcassets */; };
 		A1B2C3D4E5F60001000A0010 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0010 /* Localizable.xcstrings */; };
 		A1B2C3D4E5F60001000A0008 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0001 /* HealthKit.framework */; };
@@ -34,6 +35,9 @@
 		B2C3D4E5F6A70001000B0009 /* TransferStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */; };
 		B2C3D4E5F6A70001000B0010 /* WorkoutManagerDistanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0010 /* WorkoutManagerDistanceTests.swift */; };
 		B2C3D4E5F6A70001000B0011 /* RouteNavigatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0011 /* RouteNavigatorTests.swift */; };
+		B2C3D4E5F6A70001000B0012 /* ArmedRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0012 /* ArmedRouteTests.swift */; };
+		B2C3D4E5F6A70001000B0013 /* RouteGuidanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0013 /* RouteGuidanceTests.swift */; };
+		B2C3D4E5F6A70001000B0014 /* MetadataRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0014 /* MetadataRegistryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +53,7 @@
 		A1B2C3D4E5F60002000A000F /* ActiveRunBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveRunBridge.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0010 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0011 /* RunFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunFormat.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60002000A0012 /* ArmedRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArmedRoute.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A000C /* WatchApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WatchApp.entitlements; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -67,6 +72,9 @@
 		B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferStateTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70002000B0010 /* WorkoutManagerDistanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManagerDistanceTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70002000B0011 /* RouteNavigatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteNavigatorTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0012 /* ArmedRouteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArmedRouteTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0013 /* RouteGuidanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteGuidanceTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0014 /* MetadataRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataRegistryTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70004000B0001 /* WatchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WatchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -115,6 +123,9 @@
 				B2C3D4E5F6A70002000B0009 /* TransferStateTests.swift */,
 				B2C3D4E5F6A70002000B0010 /* WorkoutManagerDistanceTests.swift */,
 				B2C3D4E5F6A70002000B0011 /* RouteNavigatorTests.swift */,
+				B2C3D4E5F6A70002000B0012 /* ArmedRouteTests.swift */,
+				B2C3D4E5F6A70002000B0013 /* RouteGuidanceTests.swift */,
+				B2C3D4E5F6A70002000B0014 /* MetadataRegistryTests.swift */,
 			);
 			path = WatchAppTests;
 			sourceTree = "<group>";
@@ -127,6 +138,7 @@
 				A1B2C3D4E5F60002000A0002 /* ContentView.swift */,
 				A1B2C3D4E5F60002000A0003 /* WorkoutManager.swift */,
 				A1B2C3D4E5F60002000A0005 /* RouteNavigator.swift */,
+				A1B2C3D4E5F60002000A0012 /* ArmedRoute.swift */,
 				A1B2C3D4E5F60002000A0006 /* WatchConnectivityManager.swift */,
 				A1B2C3D4E5F60002000A0009 /* SupabaseService.swift */,
 				A1B2C3D4E5F60002000A000A /* AppTheme.swift */,
@@ -295,6 +307,7 @@
 				A1B2C3D4E5F60001000A000D /* HealthKitManager.swift in Sources */,
 				A1B2C3D4E5F60001000A000F /* ActiveRunBridge.swift in Sources */,
 				A1B2C3D4E5F60001000A0011 /* RunFormat.swift in Sources */,
+				A1B2C3D4E5F60001000A0012 /* ArmedRoute.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,6 +326,9 @@
 				B2C3D4E5F6A70001000B0009 /* TransferStateTests.swift in Sources */,
 				B2C3D4E5F6A70001000B0010 /* WorkoutManagerDistanceTests.swift in Sources */,
 				B2C3D4E5F6A70001000B0011 /* RouteNavigatorTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0012 /* ArmedRouteTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0013 /* RouteGuidanceTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0014 /* MetadataRegistryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

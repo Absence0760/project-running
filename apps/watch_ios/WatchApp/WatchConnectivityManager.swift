@@ -9,6 +9,9 @@ import WatchConnectivity
 /// survive app closure and watch reboot, so a day of offline runs will all
 /// drain to Supabase the moment the phone companion app next activates its
 /// own `WCSession`.
+///
+/// The same session carries the inbound direction: the phone's unit
+/// preference and the route it armed for this watch to follow (`ArmedRoute`).
 class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchConnectivityManager()
 
@@ -21,6 +24,11 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
 
     @Published var transferState: TransferState = .idle
     @Published var queuedCount: Int = 0
+
+    /// The route the phone last pushed, restored from disk so it survives the
+    /// gap between arriving (often while the app is backgrounded) and the
+    /// runner opening the app to start.
+    @Published var armedRoute: ArmedRoute? = ArmedRouteStore.load()
 
     override init() {
         super.init()
@@ -74,6 +82,25 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        receive(message)
+    }
+
+    // Also handle the alternative `userInfo` transport (queued, durable
+    // across watch reboots). The phone may push via either sendMessage
+    // (when the watch is reachable) or transferUserInfo (queues until the
+    // watch wakes), so honour both. Routes always arrive this way — the
+    // phone has no reason to expect a reachable watch when the runner
+    // picks a route.
+    func session(
+        _ session: WCSession,
+        didReceiveUserInfo userInfo: [String: Any] = [:]
+    ) {
+        receive(userInfo)
+    }
+
+    /// Apply whatever the phone put in a payload. Every key is independent:
+    /// a payload carrying only one of them leaves the rest untouched.
+    private func receive(_ payload: [String: Any]) {
         // `preferred_unit` — the user's distance preference on the
         // phone (`'km'` or `'mi'`). Stored in UserDefaults so the
         // pre-run pace presets (see `pacePresets()` in
@@ -82,24 +109,25 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
         // Phone-side push isn't wired yet — when it lands, this
         // handler is what makes the watch's UI flip to imperial
         // labels in mi-mode users.
-        if let unit = message["preferred_unit"] as? String,
+        if let unit = payload["preferred_unit"] as? String,
            unit == "km" || unit == "mi" {
             UserDefaults.standard.set(unit, forKey: "preferred_unit")
         }
-        // Future: handle route pushes from phone.
+        // A malformed or over-budget route is dropped whole rather than
+        // trimmed — see `ArmedRoute.decode`. Persist before publishing so a
+        // route that arrives while the app is backgrounded is still there
+        // when the runner next opens it.
+        if let route = ArmedRoute.decode(payload) {
+            ArmedRouteStore.save(route)
+            DispatchQueue.main.async { self.armedRoute = route }
+        }
     }
 
-    // Also handle the alternative `userInfo` transport (queued, durable
-    // across watch reboots). The phone may push the unit via either
-    // sendMessage (when the watch is reachable) or transferUserInfo
-    // (queues until the watch wakes), so honour both.
-    func session(
-        _ session: WCSession,
-        didReceiveUserInfo userInfo: [String: Any] = [:]
-    ) {
-        if let unit = userInfo["preferred_unit"] as? String,
-           unit == "km" || unit == "mi" {
-            UserDefaults.standard.set(unit, forKey: "preferred_unit")
-        }
+    /// Drop the armed route from the wrist. The phone is the only writer, so
+    /// without this the runner's only way out of a route they no longer want
+    /// is to go back to the phone.
+    func clearArmedRoute() {
+        ArmedRouteStore.clear()
+        armedRoute = nil
     }
 }

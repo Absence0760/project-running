@@ -32,6 +32,16 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Inicia uma nova corrida, ativando o GPS e o registro da frequência cardíaca" } }
       }
     },
+    "Clear route" : {
+      "comment" : "Pre-run button that drops the route the phone pushed.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Route entfernen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar ruta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer l'itinéraire" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルートを消去" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover rota" } }
+      }
+    },
     "Clears this synced run from the watch and returns to the start screen" : {
       "comment" : "VoiceOver hint on the Start-next-run button.",
       "localizations" : {
@@ -109,6 +119,26 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune — touchez pour définir" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "なし — タップして設定" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Nenhum — toque para definir" } }
+      }
+    },
+    "Off route" : {
+      "comment" : "Off-route warning during a run when the deviation distance is momentarily unavailable. Wording matches Wear OS's off_route_distance.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Abseits der Route" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Fuera de ruta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Hors itinéraire" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート外" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota" } }
+      }
+    },
+    "Off route · %@" : {
+      "comment" : "Off-route warning during a run; the placeholder is the deviation in metres.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Abseits der Route · %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Fuera de ruta · %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Hors itinéraire · %@" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート外 · %@" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota · %@" } }
       }
     },
     "Open the Run app" : {
@@ -220,6 +250,16 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar a corrida não salva de %1$@, %2$@, %3$@?" } }
       }
     },
+    "Removes the route your iPhone sent, so the next run is unguided" : {
+      "comment" : "VoiceOver hint on the Clear-route button (pre-run screen).",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Entfernt die vom iPhone gesendete Route, sodass der nächste Lauf ohne Führung läuft" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elimina la ruta enviada desde tu iPhone, de modo que la próxima carrera no tenga guía" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retire l'itinéraire envoyé par votre iPhone : la prochaine course se fera sans guidage" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "iPhoneから送られたルートを削除し、次のランはガイドなしになります" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remove a rota enviada pelo seu iPhone, para que a próxima corrida seja sem orientação" } }
+      }
+    },
     "Restores the unsaved run from the last checkpoint" : {
       "comment" : "VoiceOver hint on the Recover button.",
       "localizations" : {
@@ -247,6 +287,26 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Reprend l'enregistrement en pause" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "一時停止中の記録を再開します" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Retoma o registro pausado" } }
+      }
+    },
+    "Route" : {
+      "comment" : "Pre-run label above the name of the route the phone pushed.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Route" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ruta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Itinéraire" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Rota" } }
+      }
+    },
+    "Route position unknown" : {
+      "comment" : "Shown during a guided run when the watch cannot project the current fix onto the route.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Routenposition unbekannt" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Posición en la ruta desconocida" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Position sur l'itinéraire inconnue" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート上の位置が不明です" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Posição na rota desconhecida" } }
       }
     },
     "RUN" : {
@@ -394,6 +454,16 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Course non enregistrée" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "未保存のラン" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Corrida não salva" } }
+      }
+    },
+    "%@ to go" : {
+      "comment" : "Distance remaining on the armed route during a run; the placeholder already carries its unit. Wording matches Wear OS's distance_km_to_go.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "noch %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ restantes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ restants" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "残り %@" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "faltam %@" } }
       }
     },
     "%lld bpm" : {

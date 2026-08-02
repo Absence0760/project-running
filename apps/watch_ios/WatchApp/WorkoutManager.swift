@@ -35,6 +35,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// keeping memory flat regardless of run length.
     private let maxInMemoryTrackPoints = 600
 
+    /// Off-route guidance for the route the phone armed, or nil when this run
+    /// is unguided. Built once at `start()` and fed from the GPS stream as an
+    /// auxiliary (L4) effect — see `didUpdateLocations`.
+    @Published var routeNavigator: RouteNavigator?
+
     /// The completed run data, available after stop() or recovery.
     var finishedRun: FinishedRun?
 
@@ -129,6 +134,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
         lastLocationForDistance = nil
+        routeNavigator = ArmedRouteStore.load()
+            .map { RouteNavigator(routePoints: $0.locations) }
         healthKit.reset()
 
         let store = CheckpointStore(runId: runId)
@@ -236,6 +243,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
         lastLocationForDistance = nil
+        routeNavigator = nil
         checkpointStore = nil
         currentRunId = nil
         state = .idle
@@ -299,6 +307,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         var newPoints: [TrackPointRecord] = []
+        var lastAcceptedFix: CLLocation?
         for location in locations {
             guard location.horizontalAccuracy >= 0, location.horizontalAccuracy < 30 else { continue }
 
@@ -306,6 +315,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                 distanceMetres += Self.distanceDelta(from: last, to: location)
             }
             lastLocationForDistance = location
+            lastAcceptedFix = location
 
             track.append(location)
             newPoints.append(TrackPointRecord(
@@ -327,6 +337,14 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
 
         updatePace()
+
+        // Route guidance runs last, after the distance, the on-disk track and
+        // the pace have all been committed — an auxiliary L4 effect that a
+        // core L1 recording step never waits on and never shares state with,
+        // so a route with no usable geometry costs the run nothing.
+        if let navigator = routeNavigator, let fix = lastAcceptedFix {
+            navigator.update(currentLocation: fix)
+        }
     }
 
     private func writeCheckpoint() {
