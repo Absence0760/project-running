@@ -296,6 +296,15 @@ namespace Antmicro.Renode.Peripherals.Video
                 PanelWidth * Scale + 2 * GlassMargin, PanelHeight * Scale + 2 * GlassMargin,
                 GlassRadius, Glass, Glass);
 
+            // The inactive glass: real Sharp MIP panels carry a border of the
+            // same reflective material around the active area, with no pixel
+            // structure — which is why text on real glass never reads as
+            // touching the bezel. Drawn flat (no inter-pixel texture), so the
+            // active area's pixel grid still reads as exactly the panel.
+            FillRoundedRect(shellCache, PanelLeft - InactiveGlass, PanelTop - InactiveGlass,
+                PanelWidth * Scale + 2 * InactiveGlass, PanelHeight * Scale + 2 * InactiveGlass,
+                2, PanelPaper, PanelPaper);
+
             for(var i = 0; i < ButtonPins.Length; i++)
             {
                 DrawKeyInto(shellCache, i, false);
@@ -505,6 +514,7 @@ namespace Antmicro.Renode.Peripherals.Video
         // derives from these so the layout stays one set of knobs.
         private const int Scale = 3;
         private const int GlassMargin = 14;
+        private const int InactiveGlass = 9;
         private const int BezelRing = 12;
         private const int CaseSide = 62;
         private const int CaseTopBand = 26;

@@ -72,7 +72,10 @@ if [[ ${#ppms[@]} -eq 0 ]]; then
 fi
 
 for ppm in "${ppms[@]}"; do
+	# Inner paper border first: the inactive glass a real panel carries
+	# around its active area, so page edges read as they would on glass.
 	magick "$ppm" -scale "$((ZOOM * 100))%" \
+		-bordercolor '#C7D1C2' -border 8 \
 		-bordercolor '#14171d' -border 10 "${ppm%.ppm}.png"
 	rm -f "$ppm"
 done

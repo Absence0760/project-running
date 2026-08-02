@@ -445,7 +445,9 @@ figcaption { margin-top: .8rem; }
   border: 1px solid var(--line); border-radius: .25rem; padding: .12rem .3rem; }
 .key b { color: var(--fg); font-weight: 600; }
 .panel { background: #fff; border-radius: .2rem; overflow: hidden;
-  display: flex; box-shadow: 0 0 0 1px var(--line); }
+  display: flex; box-shadow: 0 0 0 1px var(--line);
+  /* The inactive glass a real panel carries around its active area. */
+  padding: 4px; }
 .panel img { width: 100%; height: auto; display: block;
   image-rendering: pixelated; }
 /* Reflective-panel approximation. A viewing aid, not the captured pixels:
