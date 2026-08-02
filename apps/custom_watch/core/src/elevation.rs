@@ -68,7 +68,9 @@ pub fn sea_level_pa(pressure_pa: f32, altitude_m: f32) -> Option<f32> {
 
 /// A barometric elevation snapshot the `app/` baro task publishes for the
 /// face and phone link: the latest altitude plus the run's cumulative ascent
-/// and descent. All `f32` to match [`crate::fix::Fix::alt_m`] and the
+/// and descent — the run's, because the task calls
+/// [`VertAccumulator::start_run`] when [`run_restarted`] sees the clock go
+/// back. All `f32` to match [`crate::fix::Fix::alt_m`] and the
 /// [`VertAccumulator`] totals it is assembled from.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Reading {
@@ -408,9 +410,45 @@ impl VertAccumulator {
         }
     }
 
-    pub fn reset(&mut self) {
-        *self = Self::new();
+    /// Open a new run: clear the cumulative totals and drop the deadband
+    /// anchor, keeping the complementary filter's bias.
+    ///
+    /// The totals are the *run's* ([`Reading`]), but the accumulator lives for
+    /// the whole power cycle — so without this a second run's VERT row opens
+    /// holding the first run's climb, under an elevation sparkline
+    /// ([`crate::record::Recorder::start`] resets that one) that correctly
+    /// starts empty. The anchor goes with them because it is what the next
+    /// delta is measured from: a sub-deadband climb left pending before the gun
+    /// would otherwise bank into the new run's first sample.
+    ///
+    /// The bias stays. It estimates the *atmosphere's* offset from the
+    /// barometer, not anything about the run, and re-seeding it would step the
+    /// published altitude and leave [`SEED_SAMPLES`] samples of vert
+    /// uncorrected at exactly the moment a race starts. Same rule
+    /// [`crate::record::Recorder::start`] states for the sticky altitude and
+    /// HR: current readings are not run state.
+    pub fn start_run(&mut self) {
+        self.gain_m = 0.0;
+        self.loss_m = 0.0;
+        self.reference = None;
     }
+}
+
+/// Whether the vert totals belong to a run that has since been replaced.
+///
+/// The baro task owns one [`VertAccumulator`] for the whole power cycle and
+/// sees the recorder only through published snapshots, which an
+/// `embassy_sync::Watch` overwrites rather than queues — so a whole
+/// `Idle -> Recording` edge can pass between two 1 Hz polls and "entered
+/// Recording" is not a signal the task can rely on. The run clock is:
+/// [`crate::record::Snapshot::elapsed_s`] restarts at zero in
+/// [`crate::record::Recorder::start`] and never goes backwards within a run
+/// (`advance_now` clamps), so a value below the last one observed is a new run
+/// however many states were skipped getting there — including the whole-recorder
+/// replacement a factory erase performs. Before any snapshot the accumulator is
+/// already fresh, so the first observation resets nothing.
+pub fn run_restarted(last_elapsed_s: Option<u32>, elapsed_s: u32) -> bool {
+    last_elapsed_s.is_some_and(|last| elapsed_s < last)
 }
 
 #[cfg(test)]
@@ -538,15 +576,86 @@ mod tests {
     }
 
     #[test]
-    fn reset_clears_totals_and_reference() {
+    fn start_run_clears_the_totals_and_the_anchor() {
         let mut acc = VertAccumulator::new();
         acc.push(0.0, true, None);
         acc.push(50.0, true, None);
-        acc.reset();
+        acc.start_run();
         assert_eq!(acc.gain_m(), 0.0);
+        assert_eq!(acc.loss_m(), 0.0);
+        // The anchor went with them: the first sample of the new run re-bases
+        // rather than banking the 950 m step from the old one.
         acc.push(1000.0, true, None);
+        assert_eq!(acc.gain_m(), 0.0);
         acc.push(1050.0, true, None);
         assert!((acc.gain_m() - 50.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn start_run_keeps_the_complementary_bias() {
+        // Re-seeding at the gun would step the published altitude from
+        // GPS-corrected back to raw baro and leave the seed window's samples of
+        // vert uncorrected — on the first minute of a race.
+        let mut acc = VertAccumulator::new();
+        for _ in 0..SEED_SAMPLES + 1 {
+            acc.push(1624.0, true, Some(1610.0));
+        }
+        acc.start_run();
+        let corrected = acc.push(1624.0, true, Some(1610.0));
+        assert!(
+            (corrected - 1610.0).abs() < 1e-3,
+            "the bias is the atmosphere's, not the run's: {corrected}"
+        );
+    }
+
+    #[test]
+    fn a_new_run_is_detected_from_the_recorders_own_clock_and_a_resume_is_not() {
+        // Driven through the real recorder rather than invented numbers,
+        // because the claim is about what `Snapshot::elapsed_s` actually does
+        // across a stop, a dismiss and a second start.
+        use crate::record::Recorder;
+        let mut r = Recorder::new();
+        r.start(0);
+        let mut seq = [0u32; 8];
+        seq[0] = r.snapshot().elapsed_s;
+        r.tick(120);
+        seq[1] = r.snapshot().elapsed_s;
+        r.pause(150);
+        seq[2] = r.snapshot().elapsed_s;
+        r.resume(200);
+        seq[3] = r.snapshot().elapsed_s;
+        r.stop(3600);
+        seq[4] = r.snapshot().elapsed_s;
+        r.reset(3700);
+        seq[5] = r.snapshot().elapsed_s;
+        r.start(3701);
+        seq[6] = r.snapshot().elapsed_s;
+        r.tick(3705);
+        seq[7] = r.snapshot().elapsed_s;
+
+        let mut last = None;
+        let mut restarted_at = None;
+        for (i, e) in seq.iter().enumerate() {
+            if run_restarted(last, *e) {
+                assert_eq!(restarted_at, None, "twice over one run pair: {seq:?}");
+                restarted_at = Some(i);
+            }
+            last = Some(*e);
+        }
+        assert_eq!(restarted_at, Some(6), "{seq:?}");
+    }
+
+    #[test]
+    fn the_first_snapshot_ever_seen_restarts_nothing() {
+        // A task that subscribes mid-run holds a fresh accumulator already;
+        // treating the first observation as a restart would be a no-op at best
+        // and, on a resubscribe, would drop a run's banked climb.
+        assert!(!run_restarted(None, 0));
+        assert!(!run_restarted(None, 9_999));
+        assert!(!run_restarted(Some(120), 120));
+        assert!(!run_restarted(Some(120), 121));
+        assert!(run_restarted(Some(120), 119));
+        assert!(run_restarted(Some(120), 0));
     }
 
     #[test]

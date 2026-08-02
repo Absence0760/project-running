@@ -44,7 +44,8 @@ use embassy_time::{with_timeout, Duration, Instant, Ticker};
 use embedded_hal::i2c::Operation;
 use watch_core::baro_rezero::{self, BaroSample};
 use watch_core::elevation::{
-    altitude_m, should_publish, Reading, RezeroStatus, VertAccumulator, STANDARD_SEA_LEVEL_PA,
+    altitude_m, run_restarted, should_publish, Reading, RezeroStatus, VertAccumulator,
+    STANDARD_SEA_LEVEL_PA,
 };
 use watch_core::fix::Fix;
 use watch_core::storm::{StormTracker, StormView};
@@ -140,6 +141,7 @@ pub async fn run(mut twim: Twim<'static>) {
     let mut fix_rx = unwrap!(state::FIX.receiver());
     let mut vert = VertAccumulator::new();
     let mut moving = false;
+    let mut last_elapsed_s: Option<u32> = None;
     // The latest merged fix and raw baro altitude (with the uptime it was
     // sampled), kept for the manual re-zero: the snap needs the current baro
     // altitude plus a GPS altitude it can judge freshness on
@@ -187,6 +189,18 @@ pub async fn run(mut twim: Twim<'static>) {
         // point-acceptance min-move filter also parks a genuinely climbing
         // runner there.
         if let Some(snap) = rec_rx.try_changed() {
+            // ...and open a new run at zero vert. The totals published here are
+            // the RUN's, but this task's accumulator lives for the whole power
+            // cycle, so a second run would otherwise open holding the first
+            // one's climb — beneath a run-scoped elevation sparkline that
+            // correctly starts empty. Keyed on the recorder's clock going back
+            // (`run_restarted`), not on a state edge: this watch keeps only the
+            // latest snapshot, so an edge can pass entirely between two ticks.
+            if run_restarted(last_elapsed_s, snap.elapsed_s) {
+                vert.start_run();
+                info!("baro: vert reset for a new run");
+            }
+            last_elapsed_s = Some(snap.elapsed_s);
             moving = snap.is_moving();
         }
         // Pick up a recalibrated sea-level reference without blocking the tick.
