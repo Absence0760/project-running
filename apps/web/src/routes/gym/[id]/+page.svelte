@@ -28,8 +28,8 @@
 	import RoutineEditor from '$lib/components/RoutineEditor.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import GymWorkoutReview from '$lib/components/GymWorkoutReview.svelte';
-	import type { GymStepResult, NextTargetHint } from '$lib/gym/gym_session_types';
-	import type { RoutineAdherence, RoutineVerdict, SetAdherence } from '$lib/gym/gym_adherence';
+	import type { NextTargetHint } from '$lib/gym/gym_session_types';
+	import { reviewFromMetadata } from '$lib/gym/gym_workout_review';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -298,35 +298,11 @@
 		return { exercises: names.size, sets: sets.length, volume: Math.round(volume) };
 	});
 
-	// Planned-vs-actual review, reconstructed from the gym_workouts.metadata trio
-	// written by the guided session (routine_id / gym_step_results /
-	// gym_adherence — metadata.md). Self-hides when the keys are absent.
-	const review = $derived.by((): { adherence: RoutineAdherence; stepResults: GymStepResult[] } | null => {
-		const meta = (data?.workout as { metadata?: Record<string, unknown> | null } | undefined)?.metadata;
-		if (!meta || typeof meta !== 'object') return null;
-		const verdict = meta['gym_adherence'];
-		const raw = meta['gym_step_results'];
-		if (typeof verdict !== 'string' || !Array.isArray(raw) || raw.length === 0) return null;
-		const stepResults = raw as GymStepResult[];
-		const sets: SetAdherence[] = stepResults.map((s) => ({
-			exerciseKey: s.exercise_key,
-			setIndex: s.set_index,
-			status: s.status,
-			repsDelta: null,
-			weightDeltaKg: null,
-		}));
-		const planned = stepResults.filter((s) => s.status !== 'extra');
-		const completedCount = planned.filter((s) => s.status === 'hit').length;
-		const plannedCount = planned.length;
-		const adherence: RoutineAdherence = {
-			sets,
-			plannedCount,
-			completedCount,
-			adherencePct: plannedCount === 0 ? 0 : completedCount / plannedCount,
-			verdict: verdict as RoutineVerdict,
-		};
-		return { adherence, stepResults };
-	});
+	const review = $derived(
+		reviewFromMetadata(
+			(data?.workout as { metadata?: Record<string, unknown> | null } | undefined)?.metadata,
+		),
+	);
 
 	function onUpdated() {
 		editing = false;

@@ -25,11 +25,19 @@ export interface NextTargetHint {
 	reason: 'increase_weight' | 'increase_reps' | 'hold' | 'establish_baseline' | 'deload';
 }
 
+// One persisted `gym_workouts.metadata.gym_step_results` row (metadata.md).
 // Weights canonical kg.
 export interface GymStepResult {
 	exercise_key: string;
+	/// Ordinal position in the expanded step list — the planned↔actual match
+	/// identity (gym_adherence.refKey). Optional only because rows persisted
+	/// before decisions §304 keyed on `set_index` and carry no `step_index`;
+	/// jsonb history is immutable, so a reader has to cope with both.
+	step_index?: number;
 	set_index: number;
 	status: SetAdherenceStatus;
+	reps_delta: number | null;
+	weight_delta_kg: number | null;
 	target_reps_min: number | null;
 	target_reps_max: number | null;
 	target_weight_kg: number | null;

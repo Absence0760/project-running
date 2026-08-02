@@ -285,6 +285,15 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # svelte-check is the only gate that type-checks INSIDE .svelte files:
+      # `tsx --test` never loads them, and the vite build below compiles
+      # Svelte without cross-module type checking. It caught a real
+      # planned-vs-actual mismatch on /gym/[id] that had shipped unnoticed
+      # since decisions § 304 — the reader dropped `stepIndex`, half of the
+      # key that matches a logged set to its planned one. Warnings do not
+      # affect its exit code, so this stays green under the two pre-existing
+      # PlanEditor warnings without suppressing future ones from the log.
+      - run: npm run check --workspace=apps/web
       # This is a COMPILE GATE, not a deploy — it never uploads or
       # releases anything (the prod/preview release is tag-gated in
       # release-web.yml). The SvelteKit build resolves the PUBLIC_* keys
@@ -317,6 +326,30 @@ jobs:
         with:
           channel: stable
       - run: dart run scripts/check_parity_matrix.dart
+
+  watch-ble-uuids:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: Watch ↔ phone GATT UUID drift
+    # decisions.md § 416 — the firmware's GATT table in
+    # apps/custom_watch/app/src/tasks/ble.rs is the source of truth for its own
+    # UUIDs, and the phone's reactive_ble_watch_transport.dart must point at the
+    # same rows. That path has never run on hardware and cannot be simulated
+    # (§ 210), so a shifted row is invisible until a board exists — § 410 was
+    # exactly that, and watch→phone run sync could not have worked at all. The
+    # script parses both sources rather than transcribing either; without a job
+    # running it, it enforced nothing. Only the Android copy is read: the iOS
+    # twin is byte-identical by the twin-parity job (§ 39).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Firmware GATT table vs phone client constants
+        run: |
+          node scripts/check_watch_ble_uuids.mjs
+          node --test scripts/check_watch_ble_uuids.test.mjs
 
   build-watch-wear:
     needs: changes
@@ -1794,6 +1827,7 @@ jobs:
       - parity-types
       - build-web
       - parity-matrix
+      - watch-ble-uuids
       - build-watch-wear
       - build-firmware
       - sim-firmware
