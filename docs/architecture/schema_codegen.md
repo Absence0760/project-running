@@ -10,7 +10,7 @@ This doc covers:
 - [Testing drift detection end-to-end](#testing-drift-detection-end-to-end)
 - [Troubleshooting](#troubleshooting)
 
-Phase 1 of "Cross-platform parity enforcement" in [roadmap.md](../product/roadmap.md) is the initiative this flow comes from. Phase 2 (parity matrix) shipped as the `parity-matrix` CI job that runs `scripts/check_parity_matrix.dart` on every PR. Phase 3 (cross-client integration test) is not built yet.
+Phase 1 of "Cross-platform parity enforcement" in [roadmap.md](../product/roadmap.md) is the initiative this flow comes from. Phase 2 (parity matrix) shipped as the `parity-matrix` CI job that runs `scripts/check_parity_matrix.dart` on every PR. Phase 3 (cross-client integration test) shipped as the `cross-client-roundtrip` CI job — `packages/api_client/test/cross_client_roundtrip_test.dart` writes through the Dart client, then `apps/web/scripts/cross_client_roundtrip_read.mjs` reads the same row back through the web client and deep-equal asserts the shape. Runs + routes + in-progress-run + sync-path round-trips are covered; extending it to the auth flows is still an open stretch item.
 
 ---
 

@@ -1,6 +1,6 @@
 # Treadmill live-mode run-screen toggle — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** Shipped mobile 2026-06-19. Specced 2026-06-15; the plan below was executed as written, so it now reads as the design record rather than a to-do. On disk: `_toggleTreadmillMode` in `apps/mobile_android/lib/screens/run_screen.dart` (paired-belt-gated toggle, own `_treadmillSub` / `_treadmillStatusSub`, L4 try/catch + banner-revert) against the already-shipped `BleTreadmill` reader and `RunRecorder.setTreadmillSample` seam; `BleTreadmill` is now the app-owned singleton threaded `main.dart` → `HomeScreen` → `RunScreen` and → `TreadmillTile`. Byte-identical iOS twin. No recorder change, no migration. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
 
 ## Goal & user value
 A runner on a treadmill can flip "Treadmill mode" on (and off) from the live run
@@ -118,11 +118,11 @@ ARB keys (camelCase) in **all six** locales `app_{en,de,fr,es,ja,pt_BR}.arb`
 - `runTreadmillNotFound` → "Couldn't reach the treadmill" (+ reuse `runReconnect` for the action)
 No web locales change (web is N/A).
 
-## Docs to update (same/next commit)
+## Docs to update (same/next commit) — all done at landing
 - `docs/product/roadmap.md` item 13: flip from "Partial / Deferred: the live run-screen mode toggle" to shipped (remove the deferred clause).
 - `docs/product/parity.md` Treadmill row: flip the Android (and iOS) cell to ✓.
 - `docs/features/integrations.md § Treadmills (BLE FTMS)`: change the two "Still deferred: the live run-screen mode toggle" lines (the header note ~line 9, the Status block ~line 427, and the "Still deferred" paragraph ~line 446) to reflect that the toggle shipped; keep the watch-BLE follow-up deferred.
-- `apps/mobile_android/CLAUDE.md` + `apps/mobile_ios/CLAUDE.md`: update the `ble_treadmill.dart` entry ("Live run-screen wiring is not yet built") to note the toggle shipped; mention the new shared singleton + the `RunScreen.treadmill` constructor arg.
+- `apps/mobile_android/CLAUDE.md` + `apps/mobile_ios/CLAUDE.md`: the `ble_treadmill.dart` entry now reads "Live run-screen toggle shipped" and covers the shared singleton + the `RunScreen.treadmill` constructor arg.
 - No `decisions.md` entry strictly required (the design — singleton mirroring HR, opt-in toggle — follows the established HR pattern). Add a one-paragraph ADR only if the reviewer flags the singleton conversion of `TreadmillTile` as non-obvious.
 
 ## Gating / compliance
@@ -138,12 +138,12 @@ track, so map/privacy-zone surfaces are already skipped).
 
 Path-scope every commit (shared working tree; never `git add -A`).
 
-## Open questions / decisions owed by the user
-1. **Convert `TreadmillTile` to the shared singleton?** Recommended (durable; mirrors HR). The alternative — run_screen constructs its own second `BleTreadmill` — re-runs `connectCached` and risks two GATT clients fighting over one belt. Confirm the conversion is in scope.
-2. **Should treadmill mode auto-engage if a paired belt is already streaming when a run starts?** Recommended NO (explicit opt-in via toggle) so a belt in range can't hijack an outdoor GPS run. Flag if the product wants auto-engage for a known-indoor context.
-3. **Toggle placement** — confirm "near the recording controls in `_buildLive`" vs. surfacing it on the idle pre-run screen too (e.g. "Start on treadmill"). Plan assumes mid-run toggle only (the deferred item's literal scope).
+## Open questions — resolved as built
+1. **Convert `TreadmillTile` to the shared singleton?** *Yes* — `BleTreadmill` is constructed once in `main.dart` and threaded to both the tile and `RunScreen`, so there is one GATT client.
+2. **Should treadmill mode auto-engage if a paired belt is already streaming?** *No* — the toggle is off by default and only engages on explicit user action, so a belt in range can't hijack an outdoor GPS run.
+3. **Toggle placement** — *mid-run only*, a `SwitchListTile` over the recording view in `_buildLive`. No "start on treadmill" affordance on the idle screen.
 
-## Sequencing for the implementer
+## Sequencing for the implementer (executed as written)
 1. Read `run_recording.md § Layering` (the belt is an L1 distance-source override that degrades to the pedometer fallback, layer 14 — not its own row) and the HR wiring in `run_screen.dart` (the `_hrSub` / `_hrStatusSub` block around lines 974–1031) + `_reconnectHeartRate` (1071) — that's the template for everything below.
 2. Build the shared `BleTreadmill` singleton: `main.dart` (construct + `connectCached`), thread through `home_screen.dart` → `RunScreen`, convert `TreadmillTile` to take it. Update `treadmill_tile_test.dart`. Mirror all to iOS twin. Commit (piece 1). Run `flutter test test/treadmill_tile_test.dart`.
 3. Add the run-screen state fields + `_begin` status subscription + cancel-in-stop/discard/dispose. Mirror to twin.

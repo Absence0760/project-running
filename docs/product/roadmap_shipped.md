@@ -135,7 +135,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Auto-sync on reconnect — `system/NetworkWatcher.kt` exposes a `ConnectivityManager.NetworkCallback` flow; `RunViewModel.observeConnectivity()` fires `drainQueue()` on every offline→online transition (seeds first emission to skip the cold-start case).
 - [x] Manual sync chip on `PreRunScreen` — the "N runs to sync" caption at the top of the home screen is now a tappable `CompactChip` that calls `vm.sync()` (which wraps `drainQueue()` with a `syncing` UI flag). Disabled when offline or already syncing; spinner replaces the label while a drain is in flight. Complements the auto-drain triggers (connectivity edge, app cold-start, post-run) for the "I just got home and want my run synced now" case.
 
-### Route navigation on watch
+### Route navigation on watch (Wear OS)
 
 Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported to Kotlin as `watch_wear:recording/RouteMath.kt` with a 17-test mirror suite against the Dart twin. Route data syncs to the watch via `SupabaseClient.fetchRoutes` + `LocalRouteStore`. The pre-run Route chip + picker wire a selection into the recording loop, and `RunningScreen` renders the off-route banner (with hysteresis + haptic) and the "X to go" badge. What's left: rendering the route *visually* during a run, which requires a live map on the watch.
 
