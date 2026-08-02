@@ -348,10 +348,12 @@ pub struct PlanAdaptiveView {
 }
 
 impl PlanAdaptiveView {
-    /// Encode: the wire byte for `reason`. Deliberately **not**
+    /// Encode: the wire byte for `reason`. This numbering is **not**
     /// [`AdaptiveReason`]'s declaration order, which puts `TrendUnderfitness`
-    /// first — a `reason as u8` would send a runner who needs to do more as
-    /// on-track, and an on-track runner as needing to ease off.
+    /// first — so the enum carries explicit discriminants matching these codes
+    /// and `trend_code_matches_discriminant` pins the two together. Without
+    /// that, a `reason as u8` slipped in later would send a runner who needs to
+    /// do more as on-track, and an on-track runner as needing to ease off.
     pub const fn trend_code(reason: AdaptiveReason) -> u8 {
         match reason {
             AdaptiveReason::OnTrack => 0,
@@ -372,8 +374,9 @@ impl PlanAdaptiveView {
     }
 
     /// Encode: the wire byte for `confidence`. The ladder runs low → high while
-    /// [`AdaptiveConfidence`] declares `High` first, so a cast would send every
-    /// verdict at exactly the opposite strength.
+    /// [`AdaptiveConfidence`] declares `High` first, so the enum carries
+    /// explicit discriminants matching these codes; a cast would otherwise send
+    /// every verdict at exactly the opposite strength.
     pub const fn confidence_code(confidence: AdaptiveConfidence) -> u8 {
         match confidence {
             AdaptiveConfidence::Low => 0,
@@ -537,10 +540,12 @@ pub struct RaceDayView {
 }
 
 impl RaceDayView {
-    /// Encode: the wire byte for `verdict`. Deliberately **not**
+    /// Encode: the wire byte for `verdict`. This numbering is **not**
     /// [`GoalFeasibilityVerdict`]'s declaration order, which puts `Ahead`
-    /// first — a `verdict as u8` would send an ahead-of-goal runner as behind
-    /// and a behind one as ahead.
+    /// first — so the enum carries explicit discriminants matching these codes
+    /// and `feasible_code_matches_discriminant` pins the two together. Without
+    /// that, a `verdict as u8` slipped in later would send an ahead-of-goal
+    /// runner as behind and a behind one as ahead.
     pub const fn feasible_code(verdict: GoalFeasibilityVerdict) -> u8 {
         match verdict {
             GoalFeasibilityVerdict::Behind => 0,
@@ -5322,6 +5327,48 @@ mod tests {
             PlanAdaptiveView::confidence_code(AdaptiveConfidence::High),
             2
         );
+    }
+
+    /// The three verdict enums number their variants against the wire codes
+    /// rather than against declaration order, so a stray `as u8` reaching the
+    /// wire renders the same verdict the codec would — not its opposite. Pinned
+    /// here because nothing else forces the two numberings to agree.
+    #[test]
+    fn verdict_discriminants_match_their_wire_codes() {
+        for verdict in [
+            GoalFeasibilityVerdict::Ahead,
+            GoalFeasibilityVerdict::OnTrack,
+            GoalFeasibilityVerdict::Behind,
+            GoalFeasibilityVerdict::FarBehind,
+        ] {
+            assert_eq!(
+                verdict as u8,
+                RaceDayView::feasible_code(verdict),
+                "{verdict:?}"
+            );
+        }
+        for reason in [
+            AdaptiveReason::TrendUnderfitness,
+            AdaptiveReason::TrendOvertraining,
+            AdaptiveReason::OnTrack,
+        ] {
+            assert_eq!(
+                reason as u8,
+                PlanAdaptiveView::trend_code(reason),
+                "{reason:?}"
+            );
+        }
+        for confidence in [
+            AdaptiveConfidence::High,
+            AdaptiveConfidence::Medium,
+            AdaptiveConfidence::Low,
+        ] {
+            assert_eq!(
+                confidence as u8,
+                PlanAdaptiveView::confidence_code(confidence),
+                "{confidence:?}"
+            );
+        }
     }
 
     /// The remaining code-space fields, and the distinction that decides which

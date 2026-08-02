@@ -32,21 +32,28 @@ pub const ADAPTIVE_TREND_WINDOW: usize = 3;
 /// a trend. Two-of-three is the "sustained, not noise" bar.
 pub const ADAPTIVE_TREND_MIN: usize = 2;
 
+/// Discriminants are pinned to the `PlanAdaptiveView` wire codes (see
+/// [`crate::record::PlanAdaptiveView::trend_code`]) so a cast and the codec
+/// cannot disagree — the two trend directions are opposite advice. Declaration
+/// order is unchanged; only the numbering is fixed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AdaptiveReason {
-    TrendUnderfitness,
-    TrendOvertraining,
-    OnTrack,
+    TrendUnderfitness = 1,
+    TrendOvertraining = 2,
+    OnTrack = 0,
 }
 
-/// How strongly the window agrees with the trend direction.
+/// How strongly the window agrees with the trend direction. Discriminants are
+/// pinned to the low → high wire ladder in
+/// [`crate::record::PlanAdaptiveView::confidence_code`], which runs opposite to
+/// this declaration order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum AdaptiveConfidence {
-    High,
-    Medium,
-    Low,
+    High = 2,
+    Medium = 1,
+    Low = 0,
 }
 
 /// The runner's current training-load state, sourced from the already-computed
