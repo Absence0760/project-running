@@ -1231,6 +1231,11 @@ mod tests {
                 flash_store::TIMER_RECORD_OFFSET,
                 crate::timers::TIMER_RECORD_LEN,
             ),
+            (
+                "race_config",
+                flash_store::RACE_CONFIG_RECORD_OFFSET,
+                crate::race_config::RACE_CONFIG_RECORD_LEN,
+            ),
         ] {
             let start = config + at as u32;
             assert!(
