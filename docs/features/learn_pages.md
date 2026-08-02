@@ -1,6 +1,6 @@
 # Learn / guides public content pages — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** Shipped web 2026-06-19 (prose localization completed 2026-06-20). Specced 2026-06-15; the plan below was executed substantially as written, so it now reads as the design record rather than a to-do. On disk: `apps/web/src/routes/learn/+page.svelte`, `learn/[slug]/`, `learn/category/[category]/`, the content under `apps/web/src/lib/learn/guides/` (eight guides × six locales), and the `guides.ts` / `guides_index.ts` / `learn_meta.ts` helpers with their unit tests. **[learn.md](learn.md) is the living reference** for the shipped surface — read that first; this file is kept for the rationale (content-in-repo vs CMS, prerender/SEO shape, IA). Web-only, no twin. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
 
 Handoff target: a fresh Claude Code session that has not seen this analysis. Everything below is grounded in the actual repo (paths verified June 2026). Follow it literally; cite the real patterns it points at rather than improvising generic SvelteKit.
 

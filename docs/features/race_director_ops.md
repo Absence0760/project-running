@@ -1,13 +1,37 @@
 # Race-director operations — offline aid-station check-in → live results
 
-> **STATUS: building.** The data foundation is shipped (migration
-> `20270201_001`): both tables, both RPCs, RLS + the column-lock, and the shared
-> `checkpoint_projection` helper. P1 schema + offline volunteer check-in, P2
-> organiser live-results / cutoff board (web), P3 weigh-in (Art 9, built
-> fail-closed per decisions §150), and P4 public results are landing on top of
-> it. Web canonical; mobile mirrors; iOS twin byte-identical. Read
+> **STATUS: P1–P4 all shipped; P3 is code-complete behind a fail-closed flag.**
+> The data foundation landed in migration `20270201_001` (both tables, both
+> RPCs, RLS + the column-lock, health retention in `20270317_001`) and the four
+> slices are on top of it:
+>
+> - **P1 — offline volunteer check-in (shipped, mobile):**
+>   `apps/mobile_android/lib/screens/checkpoint_checkin_screen.dart` +
+>   `apps/mobile_android/lib/local_crossings_store.dart` (byte-identical iOS
+>   twin). pgTAP in `apps/backend/supabase/tests/checkpoint_crossings_test.sql`.
+> - **P2 — organiser live-results / cutoff board (shipped, web):**
+>   `apps/web/src/routes/clubs/[slug]/events/[id]/board/+page.svelte` over the
+>   `checkpoint_board` + `checkpoint_projection` helpers, including DNF marking
+>   behind a `ConfirmDialog`. Web-only per decisions §24.
+> - **P3 — weigh-in / medical (Art 9) — code-complete, fail-closed:** the whole
+>   surface exists (`_WeighInSheet` on the mobile check-in screen, the weigh-in
+>   column + entry dialog on the web board, `CheckpointManager.svelte`'s
+>   `requires_weigh_in` toggle) but is hidden unless the flag is explicitly on —
+>   `PUBLIC_WEIGH_IN_ENABLED` on web (`apps/web/src/lib/runs/weigh_in_flag.ts`)
+>   and `WEIGH_IN_GATE` in mobile dotenv. Both default OFF, and the DB enforces
+>   the same gate independently (`requires_weigh_in` AND `p_health_consent`).
+>   **Prod enablement is an owner + CISO + counsel deploy-checklist sign-off —
+>   that is the only thing outstanding here, not code** (decisions §150).
+> - **P4 — public results (shipped, web):**
+>   `apps/web/src/routes/share/event/[id]/results/+page.svelte` — account-
+>   optional finisher list + per-checkpoint splits, per event visibility, and it
+>   reads only the non-health columns the grant matrix exposes.
+>
+> Genuinely unbuilt: a mobile mirror of the P2 organiser board (web-canonical by
+> design) and any richer post-race reporting. Read
 > [CLAUDE.md](../../CLAUDE.md) + [apps/backend/CLAUDE.md](../../apps/backend/CLAUDE.md)
-> for conventions.
+> for conventions. The P1–P4 design notes below are kept as the record of what
+> was built.
 
 ## What shipped (data foundation — migration `20270201_001`)
 

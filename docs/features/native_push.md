@@ -1,6 +1,25 @@
 # Native push (FCM / APNs) — implementation plan
 
-> **Status:** Planned — specced 2026-06-15, not yet built. This is an implementation handoff plan, not a description of shipped behaviour. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** Built 2026-06-19, **gated on operator credentials.** Specced
+> 2026-06-15; the plan below was executed as written, so it now doubles as the
+> design record for shipped code. On disk: migration
+> `apps/backend/supabase/migrations/20270212_001_native_push_channel.sql`, the
+> worker handler `apps/job_worker/internal/handler_native_push.go` + the
+> `apps/job_worker/internal/nativepush/` sender (`fcm.go` + `apns.go`), the
+> `device_tokens` CRUD on `packages/api_client/lib/src/api_client.dart`, and the
+> mobile bridge `apps/mobile_android/lib/push_messaging_bridge.dart` +
+> `firebase_push_messaging.dart` (byte-identical iOS twin).
+>
+> **The credential gate is real and still open.** Going live needs the worker
+> env (`FCM_SERVICE_ACCOUNT_JSON` + `FCM_PROJECT_ID` for Android,
+> `APNS_KEY_P8` + `APNS_KEY_ID` + `APNS_TEAM_ID` + `APNS_TOPIC` for iOS) plus the
+> per-app config files (`google-services.json` / `GoogleService-Info.plist`).
+> Unset → `nativepush.NewSender` returns `(nil, nil)`, `Worker.NativePush` stays
+> nil, and `handleNativePush` finishes each job **without** stamping
+> `native_push_sent_at`, so the rows stay pending for a later credentialed
+> deploy. Provisioning those credentials is the only remaining step.
+>
+> Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
 
 ## Goal & user value
 Deliver the last device-delivery leg: a push notification to a **locked phone**
@@ -311,20 +330,22 @@ this explicitly so the implementer doesn't manufacture a pair.
 5. Docs sweep:
    `git commit -- docs/features/email.md docs/product/roadmap.md docs/product/parity.md docs/backend/settings.md docs/architecture/decisions.md apps/mobile_android/CLAUDE.md apps/mobile_ios/CLAUDE.md`
 
-## Open questions / decisions owed by the user
-1. **Route iOS through FCM (one transport, depends on Firebase for Apple too) or
-   direct APNs HTTP/2 (`.p8`, no Google dependency for Apple)?** Plan keeps both
-   transports behind one interface; pick one to wire first.
-2. **Firebase Admin Go SDK vs. hand-rolled FCM HTTP v1 + `golang-jwt`?** The
-   web_push package chose stdlib + `golang-jwt` (no third-party). Recommend the
-   same for consistency + smaller dep surface; confirm.
-3. **One "Push" channel for browser + native (reuse `push_notifications`,
-   recommended) vs. a separate `native_push_notifications` pref?** Plan reuses
-   the existing pref. Confirm.
-4. **Credentials** — who provisions the Firebase project + APNs key, and on what
-   timeline? (This is the only thing blocking go-live.)
+## Open questions — resolved as built (2026-06-19)
+1. **Route iOS through FCM or direct APNs HTTP/2?** *Both, as the plan proposed*
+   — `nativepush.Sender` routes on `DeviceToken.Platform` (`android` → FCM,
+   `ios` → APNs) and either leaf may be nil. A platform with no configured
+   transport returns `ErrPlatformNotConfigured`, which the handler treats as
+   "leave that device pending", so the credential gate is per-platform.
+2. **Firebase Admin Go SDK vs. hand-rolled FCM HTTP v1 + `golang-jwt`?**
+   *Hand-rolled*, matching `internal/webpush` — stdlib plus the already-present
+   `golang-jwt`, no Firebase Admin SDK.
+3. **One "Push" channel for browser + native, or a separate pref?** *One* —
+   `handler_native_push.go` reuses the existing `push_notifications` pref gate,
+   with the per-device `is_notifications_enabled` flag filtering the fan-out.
+4. **Credentials** — **still open.** Who provisions the Firebase project + APNs
+   key, and on what timeline? This is the only thing blocking go-live.
 
-## Sequencing for the implementer
+## Sequencing for the implementer (executed as written)
 1. Write the migration mirroring `20261219_001` (verify the live `jobs_kind_chk`
    allowlist first), apply locally (`cd apps/backend && supabase migration up`),
    run **both** codegen commands, write the pgtap tests (commit 1).

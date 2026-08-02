@@ -175,7 +175,7 @@ The app supports creating clubs **and** events on Android. `clubs_screen.dart` c
 
 ## Deferred (Phase 4+)
 
-- **Notifications / realtime** — feed refreshes on page load; no push, no websocket subscriptions. Phase 4.
-- **Member roster on Android** — shows count only in Phase 3. Full list with avatars is a polish task.
+- ~~**Notifications / realtime** — feed refreshes on page load; no push, no websocket subscriptions.~~ **Shipped.** Realtime: `postgres_changes` subscriptions on `club_posts` / event tables drive live refresh on web (`/clubs/[slug]` `subscribeRealtime`, `/clubs/[slug]/events/[id]`) and mobile (`social_service.dart` `club-<id>` / `event-<id>` channels). Notifications: the `notifications` kind allowlist carries `event_rsvp`, `event_cancel`, `club_post`, and `event_reminder`, fanned out to the in-app bell, email, web push, and native push (the last gated on FCM/APNs credentials — see [native_push.md](native_push.md)).
+- **Member roster on Android** — still count-only. `club_detail_screen.dart` `_buildMembersTab` renders the admin pending-request queue plus a member *count* line; the full list with avatars remains a polish task.
 - **Deeper thread nesting** — replies are one level deep in v2. `parent_post_id` doesn't block deeper threads at the schema level, but the UI and fetchers don't surface them. Easy to grow later.
-- **Per-instance edits / cancellations** — Phase 2 recurrence is pattern-only. A cancelled single occurrence or a per-instance time override would need an `event_exceptions` table.
+- ~~**Per-instance cancellations**~~ — **Shipped** in migration `20261019_001_event_instance_cancellation.sql`: an `event_exceptions` table (`(event_id, instance_start)` PK + `cancelled_by` / `reason` / `cancelled_at` audit), the instance picker filtering cancelled occurrences and blocking RSVPs, and an attendee fan-out on the `event_cancel` notification kind. Reinstating is an organiser-only DELETE of the exception row. **Still deferred:** a per-instance *time / detail override* — recurrence is otherwise pattern-only, and `event_exceptions` carries no override columns.
