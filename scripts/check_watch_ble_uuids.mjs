@@ -17,8 +17,9 @@
 // name→name pairing below lives here; every UUID is read from a file.
 //
 // Run: `node scripts/check_watch_ble_uuids.mjs`
-// CI:  a lightweight standalone step (no toolchain, no deps) — the
-//      parity-matrix job is the natural neighbour.
+// CI:  the `watch-ble-uuids` job in .github/workflows/ci.yml, which is in the
+//      `CI gate` aggregator's `needs:` list — a guard nothing runs enforces
+//      nothing, which is what this script was for its first day.
 // Unit tests: `node --test scripts/check_watch_ble_uuids.test.mjs`
 
 import { readFileSync } from 'node:fs';

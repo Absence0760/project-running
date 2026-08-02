@@ -541,9 +541,10 @@ mod imp {
     /// The manifest changes when a run finishes, is evicted, or is fully pulled;
     /// rebuilding it on every 1 Hz tick instead meant a `manifest_at` + encode +
     /// SoftDevice value-set per second for the whole time a phone was connected,
-    /// whether or not it ever read the characteristic. `built_gen` starts at
-    /// `None` per connection, so a fresh link always publishes once before its
-    /// first read.
+    /// whether or not it ever read the characteristic. The decision itself is
+    /// [`ble_sync::manifest_needs_rebuild`], host-tested there like every other
+    /// choice this transport makes — including that a `None` `built_gen` (a
+    /// fresh link) always publishes once before its first read.
     ///
     /// The one thing this trades away is the header's uptime anchor: it is the
     /// value at the last rebuild, not at the last tick, so within a connection
@@ -565,7 +566,7 @@ mod imp {
         let (gen, entries) = {
             let guard = store.lock().await;
             let gen = guard.manifest_gen();
-            if *built_gen == Some(gen) {
+            if !ble_sync::manifest_needs_rebuild(*built_gen, gen) {
                 return None;
             }
             (gen, guard.manifest_at(uptime_s))

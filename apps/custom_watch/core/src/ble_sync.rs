@@ -46,6 +46,19 @@ pub fn encode_manifest(entries: &[ManifestEntry], watch_uptime_s: u32) -> Vec<u8
     buf
 }
 
+/// Whether the published `run_manifest` value must be rebuilt: either nothing
+/// has been published on this connection yet (`built_gen` is `None`), or the
+/// store's generation counter has moved since the published value was built.
+///
+/// Equality, never ordering. The counter is bumped with `wrapping_add`, so a
+/// `store_gen > built` test would stop rebuilding the moment it passed
+/// `u32::MAX` and leave a phone reading a list of runs that no longer exist —
+/// and the counter deliberately says only *that* something moved, never how
+/// far, so ordering is not information it carries.
+pub fn manifest_needs_rebuild(built_gen: Option<u32>, store_gen: u32) -> bool {
+    built_gen != Some(store_gen)
+}
+
 /// Depth of the per-connection `run_chunk` request queue the `app/` task runs
 /// the phone's pulls through.
 ///
@@ -197,6 +210,43 @@ mod tests {
             buf.len(),
             "the declared count accounts for exactly the bytes written"
         );
+    }
+
+    #[test]
+    fn a_fresh_connection_always_publishes_before_its_first_read() {
+        // `built_gen` starts at None per connection, so a phone that connects to
+        // a store nothing has moved since boot still gets a value published
+        // rather than reading whatever the last connection left behind.
+        assert!(manifest_needs_rebuild(None, 0));
+        assert!(manifest_needs_rebuild(None, 7));
+    }
+
+    #[test]
+    fn an_unmoved_generation_republishes_nothing() {
+        // The whole point of the counter: a connected phone must not cost a
+        // manifest_at + encode + SoftDevice value-set on every 1 Hz tick.
+        for gen in [0, 1, 9_999, u32::MAX] {
+            assert!(!manifest_needs_rebuild(Some(gen), gen));
+        }
+    }
+
+    #[test]
+    fn any_move_of_the_generation_rebuilds() {
+        assert!(manifest_needs_rebuild(Some(4), 5));
+        // Backwards too: only the store bumps this counter, but a predicate that
+        // trusted the direction would be the wrapping bug below in disguise.
+        assert!(manifest_needs_rebuild(Some(5), 4));
+    }
+
+    #[test]
+    fn the_generation_wrapping_still_rebuilds() {
+        // `bump_manifest_gen` is a wrapping_add. An ordering test would go
+        // permanently quiet here, leaving the phone reading a list of runs that
+        // no longer exist for the rest of the connection.
+        let before = u32::MAX;
+        let after = before.wrapping_add(1);
+        assert_eq!(after, 0);
+        assert!(manifest_needs_rebuild(Some(before), after));
     }
 
     #[test]
