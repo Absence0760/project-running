@@ -4583,7 +4583,7 @@ export const en = {
 	"learn.ctaNutrition": "Track your nutrition",
 	"learn.ctaAiCoach": "Talk to the AI coach",
 	"learn.ctaClubs": "Find a club to run with",
-	"learn.ctaRacing": "Find a club or event",
+	"learn.ctaRacing": "Browse the race calendar",
 	"learn.ctaExplore": "Explore routes near you",
 	// Achievements / badges (BadgeGrid + profile + feed + share)
 	"badges.section.title": "Achievements",
