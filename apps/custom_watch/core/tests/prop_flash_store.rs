@@ -8,10 +8,14 @@ mod support;
 use proptest::prelude::*;
 use proptest::sample::Index;
 use support::check;
-use watch_core::flash_plan::{plan_checkpoint_write, plan_slot_write};
+use watch_core::flash_plan::{
+    live_config_page, plan_checkpoint_write, plan_config_write, plan_slot_write,
+};
 use watch_core::flash_store::{
-    chunk_len, decode_config, encode_config, recover_slot, BondRecord, RecoveredRun, SlotDir,
-    BOND_RECORD_LEN, CONFIG_RECORD_LEN, MAX_POINTS_PER_RUN, SLOT_COUNT, SLOT_LEN,
+    chunk_len, decode_config, decode_config_seal, encode_config, encode_config_seal, recover_slot,
+    BondRecord, RecoveredRun, SlotDir, BOND_RECORD_LEN, CONFIG_LEN, CONFIG_PAGE_COUNT,
+    CONFIG_RECORD_LEN, CONFIG_SEAL_LEN, CONFIG_SEAL_OFFSET, MAX_POINTS_PER_RUN, SLOT_COUNT,
+    SLOT_LEN,
 };
 use watch_core::run_store::{
     blob_len, point_count, RunWriter, TrackPoint, FOOTER_LEN, HEADER_LEN, POINT_LEN,
@@ -77,6 +81,7 @@ fn no_flash_decoder_panics_on_arbitrary_bytes() {
         prop::collection::vec(any::<u8>(), 0..=(HEADER_LEN + 24 * POINT_LEN + FOOTER_LEN)),
         |bytes| {
             let _ = decode_config(&bytes);
+            let _ = decode_config_seal(&bytes);
             let _ = BondRecord::decode(&bytes);
             let _ = recover_slot(&bytes);
             Ok(())
@@ -89,14 +94,50 @@ fn an_erased_or_zeroed_page_reads_as_no_saved_state() {
     check(64, 0usize..=SLOT_LEN, |len| {
         let erased = vec![0xFFu8; len];
         prop_assert_eq!(decode_config(&erased), None);
+        prop_assert_eq!(decode_config_seal(&erased), None);
         prop_assert_eq!(BondRecord::decode(&erased), None);
         prop_assert_eq!(recover_slot(&erased), None);
         let zeroed = vec![0u8; len];
         prop_assert_eq!(decode_config(&zeroed), None);
+        prop_assert_eq!(decode_config_seal(&zeroed), None);
         prop_assert_eq!(BondRecord::decode(&zeroed), None);
         prop_assert_eq!(recover_slot(&zeroed), None);
         Ok(())
     });
+}
+
+#[test]
+fn the_page_seal_round_trips_and_rejects_every_truncation() {
+    check(256, (any::<u32>(), any::<Index>()), |(generation, idx)| {
+        let rec = encode_config_seal(generation);
+        prop_assert_eq!(decode_config_seal(&rec), Some(generation));
+        let cut = idx.index(CONFIG_SEAL_LEN);
+        prop_assert_eq!(
+            decode_config_seal(&rec[..cut]),
+            None,
+            "prefix of {} bytes",
+            cut
+        );
+        Ok(())
+    });
+}
+
+#[test]
+fn a_single_byte_corruption_of_the_page_seal_is_always_caught() {
+    // A seal that survives corruption is a half-rewritten page read as a whole
+    // one — the failure the second page exists to prevent, arriving by another
+    // door.
+    check(
+        512,
+        (any::<u32>(), any::<Index>(), 1u8..=u8::MAX),
+        |(generation, idx, mask)| {
+            let mut rec = encode_config_seal(generation);
+            let at = idx.index(CONFIG_SEAL_LEN);
+            rec[at] ^= mask;
+            prop_assert_eq!(decode_config_seal(&rec), None, "flip at byte {}", at);
+            Ok(())
+        },
+    );
 }
 
 #[test]
@@ -397,6 +438,155 @@ fn a_live_run_never_becomes_a_pending_partial_however_it_is_written() {
         }
         Ok(())
     });
+}
+
+/// How far a config-page rewrite got before power was lost.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tear {
+    None,
+    InErase,
+    BeforeSeal,
+}
+
+/// One config rewrite: the settings it means to persist (stood for by a single
+/// distinguishing byte, since the seven records on the page are written and torn
+/// together) and where it died.
+#[derive(Clone, Copy, Debug)]
+struct ConfigOp {
+    tear: Tear,
+}
+
+fn a_config_op() -> impl Strategy<Value = ConfigOp> {
+    prop_oneof![
+        3 => Just(Tear::None),
+        1 => Just(Tear::InErase),
+        1 => Just(Tear::BeforeSeal),
+    ]
+    .prop_map(|tear| ConfigOp { tear })
+}
+
+/// A generation for the page found already on flash at boot, weighted onto the
+/// roll so the wrap is exercised rather than left to chance.
+fn a_start_generation() -> impl Strategy<Value = u32> {
+    prop_oneof![
+        1 => Just(0u32),
+        1 => Just(u32::MAX),
+        1 => Just(u32::MAX - 1),
+        1 => any::<u32>(),
+    ]
+}
+
+/// Both config pages as raw flash, and the exact sequence
+/// `run_flash::rewrite_config_page` performs: erase the page the plan names,
+/// write the records, seal it last.
+struct ConfigFlash {
+    pages: [[u8; CONFIG_LEN]; CONFIG_PAGE_COUNT],
+}
+
+/// The run region's base, so the planner's page addresses are the real ones
+/// rather than an underflow away from zero. Only the page index and generation
+/// are asserted on here — the addresses are the flash_plan suite's subject.
+const REGION_BASE: u32 = 0x000F_C000;
+
+impl ConfigFlash {
+    fn erased() -> Self {
+        Self {
+            pages: [[0xFF; CONFIG_LEN]; CONFIG_PAGE_COUNT],
+        }
+    }
+
+    fn seals(&self) -> [Option<u32>; CONFIG_PAGE_COUNT] {
+        let mut seals = [None; CONFIG_PAGE_COUNT];
+        for (page, seal) in seals.iter_mut().enumerate() {
+            *seal = decode_config_seal(&self.pages[page][CONFIG_SEAL_OFFSET..]);
+        }
+        seals
+    }
+
+    /// What a boot reads: the mode byte off whichever page is live, `None` when
+    /// neither is sealed.
+    fn read(&self) -> Option<u8> {
+        let (page, _) = live_config_page(self.seals())?;
+        decode_config(&self.pages[page]).map(|(mode, _, _)| mode)
+    }
+
+    fn rewrite(&mut self, mode: u8, tear: Tear) -> usize {
+        let plan = plan_config_write(REGION_BASE, self.seals());
+        let page = &mut self.pages[plan.page];
+        page.fill(0xFF);
+        if tear != Tear::InErase {
+            let rec = encode_config(mode, 0, 0);
+            page[..rec.len()].copy_from_slice(&rec);
+            if tear != Tear::BeforeSeal {
+                let seal = encode_config_seal(plan.generation);
+                page[CONFIG_SEAL_OFFSET..].copy_from_slice(&seal);
+            }
+        }
+        plan.page
+    }
+}
+
+#[test]
+fn a_torn_config_rewrite_never_costs_the_settings_the_runner_already_had() {
+    // The §451 page-level defect, over arbitrary interleavings of rewrites and
+    // brown-outs: a read must return the newest config whose write actually
+    // COMPLETED and whose page has not been erased since — never a half-written
+    // one, never a config nobody wrote, and never nothing when flash still holds
+    // a sealed page. The seeded start generation carries the wrap.
+    check(
+        512,
+        (
+            a_start_generation(),
+            prop::collection::vec(a_config_op(), 0..24),
+        ),
+        |(start_generation, ops)| {
+            let mut flash = ConfigFlash::erased();
+            // Flash as found at boot: page 0 sealed by an earlier firmware run,
+            // page 1 erased. Mode 0 stands for the settings already on the
+            // watch.
+            flash.pages[0][..CONFIG_RECORD_LEN].copy_from_slice(&encode_config(0, 0, 0));
+            flash.pages[0][CONFIG_SEAL_OFFSET..]
+                .copy_from_slice(&encode_config_seal(start_generation));
+            // Per page: (write ordinal, mode byte) of the last COMPLETED write
+            // still physically there, cleared by any erase of that page.
+            let mut durable: [Option<(usize, u8)>; CONFIG_PAGE_COUNT] = [None; CONFIG_PAGE_COUNT];
+            durable[0] = Some((0, 0));
+
+            for (i, op) in ops.into_iter().enumerate() {
+                let ordinal = i + 1;
+                // Modes 1.. are unique per write, so a read can be traced to the
+                // exact rewrite that produced it.
+                let mode = ordinal as u8;
+                let live_before = live_config_page(flash.seals()).map(|(page, _)| page);
+
+                let written = flash.rewrite(mode, op.tear);
+
+                prop_assert_ne!(
+                    Some(written),
+                    live_before,
+                    "write {} erased the live page — the 85 ms window is back on \
+                     the only copy of every record",
+                    ordinal
+                );
+                durable[written] = (op.tear == Tear::None).then_some((ordinal, mode));
+
+                let expected = durable
+                    .iter()
+                    .flatten()
+                    .max_by_key(|(ordinal, _)| *ordinal)
+                    .map(|(_, mode)| *mode);
+                prop_assert_eq!(
+                    flash.read(),
+                    expected,
+                    "after write {} ({:?}) the live config is not the newest one \
+                     durably on flash",
+                    ordinal,
+                    op.tear
+                );
+            }
+            Ok(())
+        },
+    );
 }
 
 #[test]

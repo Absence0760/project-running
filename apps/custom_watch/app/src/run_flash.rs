@@ -27,6 +27,15 @@
 //! simpler and keeps flash idle during recording; tier-2's megabyte QSPI tracks
 //! will stream incrementally instead.
 //!
+//! **Config pages ping-pong.** The settings records share a page, so the one
+//! erase in front of a rewrite used to put every one of them — GNSS mode, BLE
+//! bond, waypoints, ICE card, composed screens, timer, race config — inside the
+//! same 85 ms brown-out window. There are now two pages: a rewrite takes the one
+//! that is NOT live and seals it only after every record has landed
+//! ([`watch_core::flash_plan::plan_config_write`]), so an interrupted rewrite
+//! costs the write and leaves the previous page whole. Reads resolve the live
+//! page first ([`RunStore::live_config_base`]).
+//!
 //! **Flash backend split.** The default (no-SoftDevice) build pokes the NVMC
 //! controller directly through embassy-nrf's blocking `Nvmc`. On the `ble`
 //! build the S140 SoftDevice must arbitrate all flash access — direct NVMC
@@ -80,14 +89,15 @@ pub const REGION_OFFSET: u32 = (nvmc::FLASH_SIZE - flash_store::REGION_LEN) as u
 
 const _: () = assert!(REGION_OFFSET.is_multiple_of(SLOT_LEN as u32));
 
-/// Absolute flash offset of the persisted-config page: one erase page
+/// Absolute flash offset of the persisted-config region: the two erase pages
 /// immediately BELOW the run-store region. Sitting below the run slots (not
 /// above) keeps [`REGION_OFFSET`] and every run-slot offset byte-identical, so a
 /// config write can never disturb a stored run. Both `memory.x` and
-/// `memory-ble.x` reserve this page alongside the run-store region.
-pub const CONFIG_OFFSET: u32 = REGION_OFFSET - flash_store::CONFIG_LEN as u32;
+/// `memory-ble.x` reserve these pages alongside the run-store region.
+pub const CONFIG_REGION_OFFSET: u32 = REGION_OFFSET - flash_store::CONFIG_REGION_LEN as u32;
 
-const _: () = assert!(CONFIG_OFFSET.is_multiple_of(flash_store::CONFIG_LEN as u32));
+const _: () = assert!(CONFIG_REGION_OFFSET.is_multiple_of(flash_store::CONFIG_LEN as u32));
+const _: () = assert!(CONFIG_REGION_OFFSET == flash_store::config_page_offset(REGION_OFFSET, 0));
 
 /// nRF52840 NVMC `READY` register (base 0x4001E000, offset 0x400). Bit 0 set
 /// means the controller is present and idle — the probe for a real NVMC vs the
@@ -248,7 +258,7 @@ impl RunStore {
     /// allow. A commit or a checkpoint erases exactly one slot
     /// (`SLOT_LEN` == `PAGE_SIZE` == 4 KiB) and so keeps its single 85 ms stall,
     /// irreducibly; the win here is [`factory_erase`](Self::factory_erase)'s
-    /// five pages, which no longer monopolise the CPU for 425 ms at once.
+    /// six pages, which no longer monopolise the CPU for 510 ms at once.
     ///
     /// The bounds + alignment guard is embassy-nrf's own, hoisted: `Nvmc::erase`
     /// rejects a bad range before touching flash, and erasing page-by-page must
@@ -343,16 +353,51 @@ impl RunStore {
         self.dir.next_run_seq()
     }
 
-    /// Read the raw persisted config record — `(gnss_mode_byte, flags,
-    /// profile_byte)` — or `None` when flash is unavailable (sim), unreadable,
-    /// or the config page is erased/corrupt. Best-effort / L4: a read error
-    /// only `warn!`s and reads as "no saved config".
-    fn read_config_bytes(&mut self) -> Option<(u8, u8, u8)> {
+    /// Each config page's seal generation, `None` for a page that is erased,
+    /// corrupt, or was interrupted before its seal landed. Best-effort / L4: a
+    /// read error on one page only `warn!`s and reads as unsealed, so the other
+    /// page still answers.
+    fn read_config_seals(&mut self) -> [Option<u32>; flash_store::CONFIG_PAGE_COUNT] {
+        let mut seals = [None; flash_store::CONFIG_PAGE_COUNT];
+        for (page, seal) in seals.iter_mut().enumerate() {
+            let mut buf = [0u8; flash_store::CONFIG_SEAL_LEN];
+            let at = flash_store::config_page_offset(REGION_OFFSET, page)
+                + flash_store::CONFIG_SEAL_OFFSET as u32;
+            if let Err(e) = self.flash.read(at, &mut buf) {
+                warn!("run_flash: config seal {=usize} read failed {:?}", page, e);
+                continue;
+            }
+            *seal = flash_store::decode_config_seal(&buf);
+        }
+        seals
+    }
+
+    /// Absolute base of the config page a read must trust, or `None` when flash
+    /// is unavailable (sim) or neither page is sealed — the caller then boots on
+    /// its defaults, which is what an unwritten watch already gets.
+    ///
+    /// Every record reader below starts here rather than at a fixed address:
+    /// which page holds the current settings moves with each rewrite, and a
+    /// reader that assumed one would hand back the settings from before the last
+    /// change. Two 16-byte reads of memory-mapped flash, on paths that run at
+    /// boot and at a settings edit.
+    fn live_config_base(&mut self) -> Option<u32> {
         if !self.available {
             return None;
         }
+        let seals = self.read_config_seals();
+        flash_plan::live_config_page(seals)
+            .map(|(page, _)| flash_store::config_page_offset(REGION_OFFSET, page))
+    }
+
+    /// Read the raw persisted config record — `(gnss_mode_byte, flags,
+    /// profile_byte)` — or `None` when flash is unavailable (sim), unreadable,
+    /// or the live config page is erased/corrupt. Best-effort / L4: a read error
+    /// only `warn!`s and reads as "no saved config".
+    fn read_config_bytes(&mut self) -> Option<(u8, u8, u8)> {
+        let base = self.live_config_base()?;
         let mut buf = [0u8; flash_store::CONFIG_RECORD_LEN];
-        if let Err(e) = self.flash.read(CONFIG_OFFSET, &mut buf) {
+        if let Err(e) = self.flash.read(base, &mut buf) {
             warn!("run_flash: config read failed {:?}", e);
             return None;
         }
@@ -407,11 +452,9 @@ impl RunStore {
     /// erased / corrupt — the watch then simply re-pairs (fail-closed, same
     /// rule as [`read_gnss_mode`](Self::read_gnss_mode)).
     pub fn read_bond(&mut self) -> Option<flash_store::BondRecord> {
-        if !self.available {
-            return None;
-        }
+        let base = self.live_config_base()?;
         let mut buf = [0u8; flash_store::BOND_RECORD_LEN];
-        let at = CONFIG_OFFSET + flash_store::BOND_RECORD_OFFSET as u32;
+        let at = base + flash_store::BOND_RECORD_OFFSET as u32;
         if let Err(e) = self.flash.read(at, &mut buf) {
             warn!("run_flash: bond read failed {:?}", e);
             return None;
@@ -534,11 +577,9 @@ impl RunStore {
     /// then starts with an empty store (fail-closed, same rule as
     /// [`read_bond`](Self::read_bond)).
     pub fn read_waypoints(&mut self) -> Option<waypoints::Waypoints> {
-        if !self.available {
-            return None;
-        }
+        let base = self.live_config_base()?;
         let mut buf = [0u8; waypoints::MAX_WPT1_LEN];
-        let at = CONFIG_OFFSET + flash_store::WAYPOINT_RECORD_OFFSET as u32;
+        let at = base + flash_store::WAYPOINT_RECORD_OFFSET as u32;
         if let Err(e) = self.flash.read(at, &mut buf) {
             warn!("run_flash: waypoint read failed {:?}", e);
             return None;
@@ -565,11 +606,9 @@ impl RunStore {
     /// byte the face cannot render — a responder is shown nothing rather than
     /// a garbled medical line (fail-closed, and the same gate the wire uses).
     pub fn read_ice(&mut self) -> Option<ice::IceCard> {
-        if !self.available {
-            return None;
-        }
+        let base = self.live_config_base()?;
         let mut buf = [0u8; ice::ICE1_RECORD_LEN];
-        let at = CONFIG_OFFSET + flash_store::ICE_RECORD_OFFSET as u32;
+        let at = base + flash_store::ICE_RECORD_OFFSET as u32;
         if let Err(e) = self.flash.read(at, &mut buf) {
             warn!("run_flash: ice read failed {:?}", e);
             return None;
@@ -601,11 +640,9 @@ impl RunStore {
     /// then starts with the 37 built-in pages and nothing else, which is the
     /// L4 answer (fail-closed, and the same whole-frame rule the wire uses).
     pub fn read_screens(&mut self) -> Option<screens::Screens> {
-        if !self.available {
-            return None;
-        }
+        let base = self.live_config_base()?;
         let mut buf = [0u8; screens::MAX_SCR1_LEN];
-        let at = CONFIG_OFFSET + flash_store::SCREENS_RECORD_OFFSET as u32;
+        let at = base + flash_store::SCREENS_RECORD_OFFSET as u32;
         if let Err(e) = self.flash.read(at, &mut buf) {
             warn!("run_flash: screens read failed {:?}", e);
             return None;
@@ -644,11 +681,9 @@ impl RunStore {
     /// ones a fix arriving seconds later could have measured exactly. The button
     /// task holds the record and calls `Timer::from_record` once it has a stamp.
     pub fn read_timer(&mut self) -> Option<timers::TimerRecord> {
-        if !self.available {
-            return None;
-        }
+        let base = self.live_config_base()?;
         let mut buf = [0u8; timers::TIMER_RECORD_LEN];
-        let at = CONFIG_OFFSET + flash_store::TIMER_RECORD_OFFSET as u32;
+        let at = base + flash_store::TIMER_RECORD_OFFSET as u32;
         if let Err(e) = self.flash.read(at, &mut buf) {
             warn!("run_flash: timer read failed {:?}", e);
             return None;
@@ -692,11 +727,9 @@ impl RunStore {
     /// meets exactly the guard a pushed one would — there is no second, staler
     /// copy of any field's plausibility rule.
     pub fn read_race_config(&mut self) -> Option<WatchSettings> {
-        if !self.available {
-            return None;
-        }
+        let base = self.live_config_base()?;
         let mut buf = [0u8; race_config::RACE_CONFIG_RECORD_LEN];
-        let at = CONFIG_OFFSET + flash_store::RACE_CONFIG_RECORD_OFFSET as u32;
+        let at = base + flash_store::RACE_CONFIG_RECORD_OFFSET as u32;
         if let Err(e) = self.flash.read(at, &mut buf) {
             warn!("run_flash: race config read failed {:?}", e);
             return None;
@@ -724,9 +757,13 @@ impl RunStore {
         }
     }
 
-    /// Wipe every byte of flash this store owns — the config page and all four
-    /// run slots — and forget the directory that indexed them (§378). Returns
-    /// whether the erase actually reached flash.
+    /// Wipe every byte of flash this store owns — both config pages and all
+    /// four run slots — and forget the directory that indexed them (§378).
+    /// Returns whether the erase actually reached flash.
+    ///
+    /// **Both** config pages, not only the live one: the superseded page still
+    /// holds a full previous copy of every record — the bond's long-term key
+    /// included — until the next rewrite lands on it.
     ///
     /// **This erases bytes, not entries.** [`SlotDir::forget`] would satisfy
     /// every reader in this firmware while leaving each blob's coordinates and
@@ -775,8 +812,8 @@ impl RunStore {
         true
     }
 
-    /// Every record the shared config page currently holds, so a writer can
-    /// change one and hand the rest back untouched.
+    /// Every record the live config page currently holds, so a writer can
+    /// change one and hand the rest back untouched — onto the other page.
     fn read_config_page(&mut self) -> ConfigPage {
         ConfigPage {
             config: self.read_config_bytes(),
@@ -790,10 +827,20 @@ impl RunStore {
     }
 
     /// Erase + rewrite the config page with whichever records are present.
-    /// One erase clears the WHOLE page — every record on it — so a writer
-    /// reads the page ([`read_config_page`](Self::read_config_page)), changes
-    /// the one field it owns, and hands the rest straight back. Returns
+    /// One erase clears a WHOLE page — every record on it — so a writer
+    /// reads the live page ([`read_config_page`](Self::read_config_page)),
+    /// changes the one field it owns, and hands the rest straight back. Returns
     /// whether the rewrite fully succeeded.
+    ///
+    /// **The erase never lands on the live page.**
+    /// [`flash_plan::plan_config_write`] targets the other one and stamps it a
+    /// generation later, and the seal that makes it live is the LAST word
+    /// written — so a brown-out anywhere in the 85 ms erase or the writes behind
+    /// it leaves an unsealed page that the next boot's
+    /// [`live_config_base`](Self::live_config_base) skips whole, and the runner
+    /// keeps the settings they had. Before this the same window took the GNSS
+    /// mode, the bond, the waypoints, the ICE card, the screens, the timer and
+    /// the race config together.
     ///
     /// Takes the records as a struct rather than as N same-shaped `Option`
     /// arguments: four positional `Option`s is exactly the shape a caller can
@@ -803,9 +850,10 @@ impl RunStore {
         if !self.available {
             return false;
         }
-        let start = CONFIG_OFFSET;
-        let end = start + flash_store::CONFIG_LEN as u32;
-        if let Err(e) = self.flash_erase(start, end).await {
+        let seals = self.read_config_seals();
+        let plan = flash_plan::plan_config_write(REGION_OFFSET, seals);
+        let start = plan.erase_from;
+        if let Err(e) = self.flash_erase(plan.erase_from, plan.erase_to).await {
             warn!("run_flash: config erase failed {:?}", e);
             return false;
         }
@@ -868,6 +916,19 @@ impl RunStore {
                 return false;
             }
         }
+        // Last, and only once every record above is down: this word is what
+        // makes the page live. An early return above leaves it unwritten, so a
+        // partly-rewritten page is never read as a config.
+        let seal = flash_store::encode_config_seal(plan.generation);
+        let at = start + flash_store::CONFIG_SEAL_OFFSET as u32;
+        if let Err(e) = self.flash_write(at, &seal).await {
+            warn!("run_flash: config seal write failed {:?}", e);
+            return false;
+        }
+        debug!(
+            "run_flash: config page {=usize} sealed at generation {=u32}",
+            plan.page, plan.generation
+        );
         true
     }
 

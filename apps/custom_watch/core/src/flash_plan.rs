@@ -4,8 +4,9 @@
 //! [`crate::flash_store`] owns the slot layout and the in-RAM [`SlotDir`]; this
 //! module owns the arithmetic the driver wraps around it: which slot a commit or
 //! a mid-run checkpoint lands in and the exact erase + write range that implies,
-//! where a phone chunk request reads from, whether that read hands the phone the
-//! last of the blob, and rebuilding the directory from flash at boot.
+//! which of the two config pages is live and which one the next settings write
+//! takes, where a phone chunk request reads from, whether that read hands the
+//! phone the last of the blob, and rebuilding the directory from flash at boot.
 //!
 //! Nothing here touches a flash handle — the driver feeds bytes in through
 //! [`SlotReader`] — so the reboot-recovery scan and every offset are host-tested
@@ -22,7 +23,9 @@
 //! slot. The real fix for the cramped budget is tier-2's external QSPI, same as
 //! for [`flash_store::MAX_POINTS_PER_RUN`].
 
-use crate::flash_store::{self, chunk_len, RecoveredRun, SlotDir, SLOT_COUNT, SLOT_LEN};
+use crate::flash_store::{
+    self, chunk_len, RecoveredRun, SlotDir, CONFIG_PAGE_COUNT, SLOT_COUNT, SLOT_LEN,
+};
 
 /// The flash operation one run blob implies: erase the whole slot, then write
 /// the blob at its base. Erasing the *whole* slot is what stops a stale tail of
@@ -159,16 +162,90 @@ pub fn chunk_completes_run(dir: &SlotDir, run_seq: u32, next_offset: u32) -> boo
         .is_some_and(|(_, size)| next_offset >= size)
 }
 
-/// The flash range a factory erase (§378) covers: the config page and every run
-/// slot, as one contiguous span.
+/// Which config page a read must trust and the generation it carries, given
+/// each page's decoded seal generation ([`flash_store::decode_config_seal`],
+/// `None` for a page that is erased, corrupt, or was interrupted before its seal
+/// landed). `None` when neither page is sealed: the caller then boots on its
+/// defaults, which is what an unwritten watch already gets.
 ///
-/// **It really is one span.** The config page sits immediately BELOW the run
-/// region (`app/src/run_flash::CONFIG_OFFSET` = `REGION_OFFSET - CONFIG_LEN`),
-/// so there is no gap between them and nothing else of the watch's inside them
-/// — which is why the erase can be a single range rather than a list of records
-/// a future record could be left off. Everything personal the device stores is
-/// in here: the run blobs (coordinates + bpm), the waypoints, the ICE card, the
-/// BLE bond's long-term and identity-resolution keys, and the config.
+/// **Successor, not "greater than".** A rewrite always stamps the live
+/// generation plus one onto the OTHER page, so whenever both pages are sealed
+/// their generations differ by exactly one — and the newer is identified by
+/// asking which is the other's immediate successor. That is an equality test on
+/// a wrapping difference, so the counter rolling `u32::MAX -> 0` is decided
+/// correctly with no epoch, no signed half-space convention, and no window a
+/// long-lived watch could age out of. A `>` here would read the wrap backwards
+/// and hand a race the settings of the run before it.
+///
+/// **Neither one the other's successor** is a pair this writer cannot produce.
+/// It resolves to page 0 rather than to "no live page": the next write would
+/// then stamp page 1 with page 0's generation plus one and restore the
+/// invariant, whereas answering `None` would send that write to page 0 at
+/// generation 0 — leaving the same undecidable pair, forever, with the runner's
+/// settings silently never persisting again. Page 0's records are CRC-valid
+/// bytes this firmware really did write; a stale config beats no config and
+/// beats a store that cannot heal.
+pub fn live_config_page(seals: [Option<u32>; CONFIG_PAGE_COUNT]) -> Option<(usize, u32)> {
+    match (seals[0], seals[1]) {
+        (None, None) => None,
+        (Some(a), None) => Some((0, a)),
+        (None, Some(b)) => Some((1, b)),
+        (Some(a), Some(b)) if b == a.wrapping_add(1) => Some((1, b)),
+        (Some(a), Some(_)) => Some((0, a)),
+    }
+}
+
+/// The flash operation one config rewrite implies: erase the whole target page,
+/// write every record at its offset from the base, and stamp the generation into
+/// the page seal LAST.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConfigWrite {
+    pub page: usize,
+    pub generation: u32,
+    /// Erase start, and the base every record offset is measured from.
+    pub erase_from: u32,
+    /// Erase end, exclusive.
+    pub erase_to: u32,
+}
+
+/// Plan the next config rewrite: the page that is NOT live, stamped with the
+/// live generation plus one.
+///
+/// Taking the page that is not live is the whole mechanism — the 85 ms erase
+/// only ever lands on the copy nothing is reading, so a brown-out inside it
+/// costs the rewrite and not the settings. With no live page at all (a factory
+/// erase, or a watch that has never been written) it starts at page 0,
+/// generation 0.
+pub fn plan_config_write(
+    region_offset: u32,
+    seals: [Option<u32>; CONFIG_PAGE_COUNT],
+) -> ConfigWrite {
+    let (page, generation) = match live_config_page(seals) {
+        Some((live, generation)) => ((live + 1) % CONFIG_PAGE_COUNT, generation.wrapping_add(1)),
+        None => (0, 0),
+    };
+    let erase_from = flash_store::config_page_offset(region_offset, page);
+    ConfigWrite {
+        page,
+        generation,
+        erase_from,
+        erase_to: erase_from + flash_store::CONFIG_LEN as u32,
+    }
+}
+
+/// The flash range a factory erase (§378) covers: both config pages and every
+/// run slot, as one contiguous span.
+///
+/// **It really is one span.** The config region sits immediately BELOW the run
+/// region (`app/src/run_flash::CONFIG_REGION_OFFSET` = `REGION_OFFSET -
+/// CONFIG_REGION_LEN`) and its pages abut each other, so there is no gap
+/// anywhere in the range and nothing else of the watch's inside it — which is
+/// why the erase can be a single range rather than a list of records a future
+/// record could be left off. Everything personal the device stores is in here:
+/// the run blobs (coordinates + bpm), the waypoints, the ICE card, the BLE
+/// bond's long-term and identity-resolution keys, and the config — **on both
+/// pages**, since the superseded page still holds a full previous copy of every
+/// record until it is next written.
 ///
 /// **This erases bytes, not directory entries.** [`SlotDir::forget`] drops a
 /// slot's entry and leaves its bytes for the next reservation to overwrite,
@@ -178,7 +255,7 @@ pub fn chunk_completes_run(dir: &SlotDir, run_seq: u32, next_offset: u32) -> boo
 /// firmware's own reader would have skipped.
 pub const fn plan_factory_erase(region_offset: u32) -> (u32, u32) {
     (
-        region_offset - flash_store::CONFIG_LEN as u32,
+        region_offset - flash_store::CONFIG_REGION_LEN as u32,
         region_offset + flash_store::REGION_LEN as u32,
     )
 }
@@ -1183,6 +1260,206 @@ mod tests {
         assert!(chunk_completes_run(&dir, 7, cursor));
     }
 
+    /// How far a config rewrite got before the battery gave out.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Tear {
+        /// The whole sequence landed, seal included.
+        None,
+        /// Power lost inside the 85 ms page erase: the target page is blank.
+        InErase,
+        /// Power lost after the records were written but before the seal.
+        BeforeSeal,
+    }
+
+    /// The two config pages as bytes, plus the exact erase → records → seal
+    /// sequence `run_flash::rewrite_config_page` performs against real flash.
+    /// One record (`CFG1`) stands for the seven that share the page: they are
+    /// written and torn together, so one is enough to say which page a read got.
+    struct FakeConfig {
+        bytes: [u8; flash_store::CONFIG_REGION_LEN],
+    }
+
+    impl FakeConfig {
+        fn erased() -> Self {
+            Self {
+                bytes: [0xFF; flash_store::CONFIG_REGION_LEN],
+            }
+        }
+
+        fn at(&self, abs: u32) -> usize {
+            (abs - flash_store::config_page_offset(BASE, 0)) as usize
+        }
+
+        fn seals(&self) -> [Option<u32>; CONFIG_PAGE_COUNT] {
+            let mut seals = [None; CONFIG_PAGE_COUNT];
+            for (page, seal) in seals.iter_mut().enumerate() {
+                let at = self.at(flash_store::config_page_offset(BASE, page))
+                    + flash_store::CONFIG_SEAL_OFFSET;
+                *seal = flash_store::decode_config_seal(&self.bytes[at..]);
+            }
+            seals
+        }
+
+        /// What a boot would read: the `CFG1` mode byte off whichever page
+        /// `live_config_page` names, or `None` when neither is sealed.
+        fn live_mode(&self) -> Option<u8> {
+            let (page, _) = live_config_page(self.seals())?;
+            let at = self.at(flash_store::config_page_offset(BASE, page));
+            flash_store::decode_config(&self.bytes[at..]).map(|(mode, _, _)| mode)
+        }
+
+        fn rewrite(&mut self, mode: u8, tear: Tear) -> ConfigWrite {
+            let plan = plan_config_write(BASE, self.seals());
+            let (from, to) = (self.at(plan.erase_from), self.at(plan.erase_to));
+            self.bytes[from..to].fill(0xFF);
+            if tear == Tear::InErase {
+                return plan;
+            }
+            let rec = flash_store::encode_config(mode, 0, 0);
+            self.bytes[from..from + rec.len()].copy_from_slice(&rec);
+            if tear == Tear::BeforeSeal {
+                return plan;
+            }
+            let seal = flash_store::encode_config_seal(plan.generation);
+            let at = from + flash_store::CONFIG_SEAL_OFFSET;
+            self.bytes[at..at + seal.len()].copy_from_slice(&seal);
+            plan
+        }
+    }
+
+    #[test]
+    fn an_unwritten_config_region_reads_as_no_config_and_starts_at_page_zero() {
+        let flash = FakeConfig::erased();
+        assert_eq!(live_config_page(flash.seals()), None);
+        assert_eq!(flash.live_mode(), None);
+        let plan = plan_config_write(BASE, flash.seals());
+        assert_eq!(plan.page, 0);
+        assert_eq!(plan.generation, 0);
+        assert_eq!(plan.erase_from, flash_store::config_page_offset(BASE, 0));
+        assert_eq!(
+            plan.erase_to,
+            plan.erase_from + flash_store::CONFIG_LEN as u32
+        );
+    }
+
+    #[test]
+    fn successive_rewrites_alternate_pages_and_the_read_follows_them() {
+        let mut flash = FakeConfig::erased();
+        for (i, mode) in [3u8, 5, 7, 11, 13].into_iter().enumerate() {
+            let plan = flash.rewrite(mode, Tear::None);
+            assert_eq!(
+                plan.page,
+                i % CONFIG_PAGE_COUNT,
+                "write {i} took a page out of turn"
+            );
+            assert_eq!(plan.generation, i as u32);
+            assert_eq!(
+                flash.live_mode(),
+                Some(mode),
+                "write {i} did not become the live config"
+            );
+        }
+    }
+
+    #[test]
+    fn a_brownout_inside_the_erase_leaves_the_previous_config_whole() {
+        // The §451 defect this exists for: one erase used to blank the only copy
+        // of every record on the page at once.
+        let mut flash = FakeConfig::erased();
+        flash.rewrite(3, Tear::None);
+        let plan = flash.rewrite(9, Tear::InErase);
+        assert_eq!(plan.page, 1, "the erase must not land on the live page");
+        assert_eq!(flash.live_mode(), Some(3));
+        // And the next attempt still works, on the same page.
+        assert_eq!(flash.rewrite(9, Tear::None).page, 1);
+        assert_eq!(flash.live_mode(), Some(9));
+    }
+
+    #[test]
+    fn a_brownout_before_the_seal_leaves_the_previous_config_whole() {
+        // The records landed but the last word did not, so the page holds a
+        // complete-looking `CFG1` that must NOT be read: the other records on it
+        // may be half-written, and the seal is the only thing that says so.
+        let mut flash = FakeConfig::erased();
+        flash.rewrite(3, Tear::None);
+        let plan = flash.rewrite(9, Tear::BeforeSeal);
+        assert_eq!(plan.page, 1);
+        assert_eq!(flash.seals()[1], None, "an unsealed page is not live");
+        assert_eq!(flash.live_mode(), Some(3));
+    }
+
+    #[test]
+    fn repeated_tears_never_erode_the_last_good_config() {
+        let mut flash = FakeConfig::erased();
+        flash.rewrite(3, Tear::None);
+        for tear in [
+            Tear::InErase,
+            Tear::BeforeSeal,
+            Tear::InErase,
+            Tear::BeforeSeal,
+        ] {
+            flash.rewrite(9, tear);
+            assert_eq!(flash.live_mode(), Some(3), "a torn rewrite took the config");
+        }
+    }
+
+    #[test]
+    fn the_generation_wrap_names_the_newer_page() {
+        // Ordering by `>` would read this backwards and hand a race the settings
+        // from before the wrap. The successor test does not: 0 is MAX's.
+        assert_eq!(
+            live_config_page([Some(u32::MAX), Some(0)]),
+            Some((1, 0)),
+            "page 1 at generation 0 succeeds page 0 at u32::MAX"
+        );
+        assert_eq!(
+            live_config_page([Some(0), Some(u32::MAX)]),
+            Some((0, 0)),
+            "and the same pair the other way round"
+        );
+        // And the counter keeps ping-ponging across the roll rather than
+        // sticking: the plan off each state stamps the next generation.
+        assert_eq!(
+            plan_config_write(BASE, [Some(u32::MAX), Some(0)]).generation,
+            1
+        );
+        assert_eq!(
+            plan_config_write(BASE, [Some(u32::MAX - 1), Some(u32::MAX)]).generation,
+            0
+        );
+    }
+
+    #[test]
+    fn only_one_sealed_page_is_live_whatever_generation_it_carries() {
+        for g in [0, 1, 7, u32::MAX] {
+            assert_eq!(live_config_page([Some(g), None]), Some((0, g)));
+            assert_eq!(live_config_page([None, Some(g)]), Some((1, g)));
+            assert_eq!(plan_config_write(BASE, [Some(g), None]).page, 1);
+            assert_eq!(plan_config_write(BASE, [None, Some(g)]).page, 0);
+        }
+    }
+
+    #[test]
+    fn a_pair_neither_of_which_succeeds_the_other_still_reads_and_heals() {
+        // Not a state this writer can produce — it always stamps live + 1 onto
+        // the other page. Answering "no live config" would be unrecoverable:
+        // the next write would go to page 0 at generation 0 and leave the same
+        // undecidable pair, so the runner's settings would silently never
+        // persist again. Page 0 wins, and one write restores the invariant.
+        let ambiguous = [Some(100u32), Some(5000u32)];
+        assert_eq!(live_config_page(ambiguous), Some((0, 100)));
+        let plan = plan_config_write(BASE, ambiguous);
+        assert_eq!(plan.page, 1);
+        assert_eq!(plan.generation, 101);
+        assert_eq!(
+            live_config_page([Some(100), Some(101)]),
+            Some((1, 101)),
+            "and the pair is decidable again"
+        );
+        // Two pages sealed at the same generation resolve the same way.
+        assert_eq!(live_config_page([Some(42), Some(42)]), Some((0, 42)));
+    }
+
     #[test]
     fn a_factory_erase_covers_every_byte_the_store_ever_writes() {
         // The claim a wipe stands on: not "the records we remembered to list"
@@ -1191,8 +1468,8 @@ mod tests {
         // of the arithmetic, so a record added at a new offset — or a page
         // layout that grew — fails here rather than surviving an erase.
         let (from, to) = plan_factory_erase(BASE);
-        let config = BASE - flash_store::CONFIG_LEN as u32;
-        assert_eq!(from, config, "the erase starts at the config page");
+        let config = BASE - flash_store::CONFIG_REGION_LEN as u32;
+        assert_eq!(from, config, "the erase starts at the first config page");
         assert_eq!(
             to,
             BASE + REGION_LEN as u32,
@@ -1200,48 +1477,61 @@ mod tests {
         );
         assert_eq!(
             to - from,
-            (flash_store::CONFIG_LEN + REGION_LEN) as u32,
-            "one contiguous span — the config page abuts the run region, so a \
-             wipe needs no second range and can leave no gap between them"
+            (flash_store::CONFIG_REGION_LEN + REGION_LEN) as u32,
+            "one contiguous span — the config pages abut each other and the run \
+             region, so a wipe needs no second range and can leave no gap"
         );
-        for (name, at, len) in [
-            ("config", 0, flash_store::CONFIG_RECORD_LEN),
-            (
-                "bond",
-                flash_store::BOND_RECORD_OFFSET,
-                flash_store::BOND_RECORD_LEN,
-            ),
-            (
-                "waypoints",
-                flash_store::WAYPOINT_RECORD_OFFSET,
-                crate::waypoints::MAX_WPT1_LEN,
-            ),
-            (
-                "ice",
-                flash_store::ICE_RECORD_OFFSET,
-                crate::ice::ICE1_RECORD_LEN,
-            ),
-            (
-                "screens",
-                flash_store::SCREENS_RECORD_OFFSET,
-                crate::screens::MAX_SCR1_LEN,
-            ),
-            (
-                "timer",
-                flash_store::TIMER_RECORD_OFFSET,
-                crate::timers::TIMER_RECORD_LEN,
-            ),
-            (
-                "race_config",
-                flash_store::RACE_CONFIG_RECORD_OFFSET,
-                crate::race_config::RACE_CONFIG_RECORD_LEN,
-            ),
-        ] {
-            let start = config + at as u32;
-            assert!(
-                start >= from && start + len as u32 <= to,
-                "the {name} record is outside the factory-erase range"
-            );
+        // Every record, on EVERY config page: the superseded page still holds a
+        // full previous copy of all of them (the bond's long-term key included)
+        // until the next rewrite lands on it, so a wipe that took only the live
+        // page would leave the last-but-one of everything readable by a probe.
+        for page in 0..flash_store::CONFIG_PAGE_COUNT {
+            let base = flash_store::config_page_offset(BASE, page);
+            for (name, at, len) in [
+                ("config", 0, flash_store::CONFIG_RECORD_LEN),
+                (
+                    "bond",
+                    flash_store::BOND_RECORD_OFFSET,
+                    flash_store::BOND_RECORD_LEN,
+                ),
+                (
+                    "waypoints",
+                    flash_store::WAYPOINT_RECORD_OFFSET,
+                    crate::waypoints::MAX_WPT1_LEN,
+                ),
+                (
+                    "ice",
+                    flash_store::ICE_RECORD_OFFSET,
+                    crate::ice::ICE1_RECORD_LEN,
+                ),
+                (
+                    "screens",
+                    flash_store::SCREENS_RECORD_OFFSET,
+                    crate::screens::MAX_SCR1_LEN,
+                ),
+                (
+                    "timer",
+                    flash_store::TIMER_RECORD_OFFSET,
+                    crate::timers::TIMER_RECORD_LEN,
+                ),
+                (
+                    "race_config",
+                    flash_store::RACE_CONFIG_RECORD_OFFSET,
+                    crate::race_config::RACE_CONFIG_RECORD_LEN,
+                ),
+                (
+                    "page seal",
+                    flash_store::CONFIG_SEAL_OFFSET,
+                    flash_store::CONFIG_SEAL_LEN,
+                ),
+            ] {
+                let start = base + at as u32;
+                assert!(
+                    start >= from && start + len as u32 <= to,
+                    "the {name} record on config page {page} is outside the \
+                     factory-erase range"
+                );
+            }
         }
         for slot in 0..SLOT_COUNT {
             let start = flash_store::slot_offset(BASE, slot);
