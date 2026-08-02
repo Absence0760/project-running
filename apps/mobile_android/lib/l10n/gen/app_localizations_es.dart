@@ -10724,6 +10724,23 @@ class AppLocalizationsEs extends AppLocalizations {
   String get roadbookStartTime => 'Hora de salida';
 
   @override
+  String get roadbookPlanTitle => 'Plan de carrera';
+
+  @override
+  String get roadbookPlanExplain =>
+      'El reloj calcula con esto las horas de llegada y los cortes. Define una hora de salida para poder enviar también los cortes indicados como hora del día.';
+
+  @override
+  String get roadbookPlanCancel => 'Cancelar';
+
+  @override
+  String get roadbookPlanSend => 'Enviar';
+
+  @override
+  String get roadbookPlanGoalInvalid =>
+      'Introduce un tiempo objetivo como 4:30:00';
+
+  @override
   String get roadbookEffort => 'Esfuerzo';
 
   @override

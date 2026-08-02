@@ -10748,6 +10748,22 @@ class AppLocalizationsFr extends AppLocalizations {
   String get roadbookStartTime => 'Heure de départ';
 
   @override
+  String get roadbookPlanTitle => 'Plan de course';
+
+  @override
+  String get roadbookPlanExplain =>
+      'La montre en déduit les heures d\'arrivée et les barrières horaires. Définis une heure de départ pour envoyer aussi les barrières exprimées en heure de la journée.';
+
+  @override
+  String get roadbookPlanCancel => 'Annuler';
+
+  @override
+  String get roadbookPlanSend => 'Envoyer';
+
+  @override
+  String get roadbookPlanGoalInvalid => 'Saisis un temps visé comme 4:30:00';
+
+  @override
   String get roadbookEffort => 'Effort';
 
   @override

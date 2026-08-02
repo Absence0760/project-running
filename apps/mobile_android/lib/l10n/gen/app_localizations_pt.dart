@@ -10718,6 +10718,23 @@ class AppLocalizationsPt extends AppLocalizations {
   String get roadbookStartTime => 'Horário de largada';
 
   @override
+  String get roadbookPlanTitle => 'Plano de prova';
+
+  @override
+  String get roadbookPlanExplain =>
+      'O relógio calcula a partir disto as horas de chegada e os cortes. Define uma hora de partida para enviar também os cortes indicados como hora do dia.';
+
+  @override
+  String get roadbookPlanCancel => 'Cancelar';
+
+  @override
+  String get roadbookPlanSend => 'Enviar';
+
+  @override
+  String get roadbookPlanGoalInvalid =>
+      'Introduz um tempo objetivo como 4:30:00';
+
+  @override
   String get roadbookEffort => 'Esforço';
 
   @override
@@ -22906,6 +22923,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get roadbookStartTime => 'Horário de largada';
+
+  @override
+  String get roadbookPlanTitle => 'Plano de prova';
+
+  @override
+  String get roadbookPlanExplain =>
+      'O relógio calcula com isso os horários de chegada e os cortes. Defina um horário de largada para enviar também os cortes indicados como hora do dia.';
+
+  @override
+  String get roadbookPlanCancel => 'Cancelar';
+
+  @override
+  String get roadbookPlanSend => 'Enviar';
+
+  @override
+  String get roadbookPlanGoalInvalid => 'Digite um tempo alvo como 4:30:00';
 
   @override
   String get roadbookEffort => 'Esforço';

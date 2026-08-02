@@ -10613,6 +10613,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roadbookStartTime => 'Start time';
 
   @override
+  String get roadbookPlanTitle => 'Race plan';
+
+  @override
+  String get roadbookPlanExplain =>
+      'The watch builds its arrival and cut-off times from these. Set a start time so cut-offs given as a time of day can be sent too.';
+
+  @override
+  String get roadbookPlanCancel => 'Cancel';
+
+  @override
+  String get roadbookPlanSend => 'Send';
+
+  @override
+  String get roadbookPlanGoalInvalid => 'Enter a goal time like 4:30:00';
+
+  @override
   String get roadbookEffort => 'Effort';
 
   @override

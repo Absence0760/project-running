@@ -13977,6 +13977,26 @@
   "@roadbookStartTime": {
     "description": "Start time field label"
   },
+  "roadbookPlanTitle": "Race plan",
+  "@roadbookPlanTitle": {
+    "description": "Title of the sheet asking for the goal time and race start before a schedule is sent to the watch"
+  },
+  "roadbookPlanExplain": "The watch builds its arrival and cut-off times from these. Set a start time so cut-offs given as a time of day can be sent too.",
+  "@roadbookPlanExplain": {
+    "description": "Explains why the goal time and start clock are being asked for"
+  },
+  "roadbookPlanCancel": "Cancel",
+  "@roadbookPlanCancel": {
+    "description": "Dismiss the race-plan sheet without sending a schedule"
+  },
+  "roadbookPlanSend": "Send",
+  "@roadbookPlanSend": {
+    "description": "Confirm the race plan and send the schedule"
+  },
+  "roadbookPlanGoalInvalid": "Enter a goal time like 4:30:00",
+  "@roadbookPlanGoalInvalid": {
+    "description": "Validation error when the goal time cannot be parsed"
+  },
   "roadbookEffort": "Effort",
   "@roadbookEffort": {
     "description": "Effort pacing model"

@@ -10208,6 +10208,22 @@ class AppLocalizationsJa extends AppLocalizations {
   String get roadbookStartTime => 'スタート時刻';
 
   @override
+  String get roadbookPlanTitle => 'レースプラン';
+
+  @override
+  String get roadbookPlanExplain =>
+      '時計はこれをもとに到達予想時刻と関門時刻を計算します。時刻で指定された関門も送るには、スタート時刻を設定してください。';
+
+  @override
+  String get roadbookPlanCancel => 'キャンセル';
+
+  @override
+  String get roadbookPlanSend => '送信';
+
+  @override
+  String get roadbookPlanGoalInvalid => '4:30:00 のような目標タイムを入力してください';
+
+  @override
   String get roadbookEffort => '強度ベース';
 
   @override

@@ -10735,6 +10735,22 @@ class AppLocalizationsDe extends AppLocalizations {
   String get roadbookStartTime => 'Startzeit';
 
   @override
+  String get roadbookPlanTitle => 'Rennplan';
+
+  @override
+  String get roadbookPlanExplain =>
+      'Die Uhr berechnet daraus Ankunfts- und Cut-off-Zeiten. Lege eine Startzeit fest, damit auch Cut-offs mit Tageszeit übertragen werden.';
+
+  @override
+  String get roadbookPlanCancel => 'Abbrechen';
+
+  @override
+  String get roadbookPlanSend => 'Senden';
+
+  @override
+  String get roadbookPlanGoalInvalid => 'Gib eine Zielzeit wie 4:30:00 ein';
+
+  @override
   String get roadbookEffort => 'Aufwand';
 
   @override
