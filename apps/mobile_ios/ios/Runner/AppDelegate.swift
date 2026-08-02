@@ -8,16 +8,20 @@ import workmanager_apple
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Register the background-sync task with BGTaskScheduler before launch
-    // completes. The Dart side (`background_sync.dart`) calls
-    // `Workmanager().registerPeriodicTask(...)`, which submits a
-    // BGAppRefreshTaskRequest; iOS aborts the process (SIGABRT, "submission
-    // without registration") if the identifier wasn't registered here first.
-    // Identifier must match `backgroundSyncTaskName` in Dart and the lone
-    // entry in Info.plist's BGTaskSchedulerPermittedIdentifiers.
-    WorkmanagerPlugin.registerPeriodicTask(
-      withIdentifier: "com.threkir.backgroundSync",
-      frequency: NSNumber(value: 3600)
+    // Register the background-sync launch handler before launch completes.
+    // BGTaskScheduler only delivers a task whose handler was registered
+    // during didFinishLaunching, and this app adopts UIScene — Flutter
+    // registers plugins during scene connection, after this returns — so the
+    // plugin cannot do it for us and the call has to be here.
+    //
+    // Must be the BGProcessingTask registrar, not the periodic one: the Dart
+    // side submits a BGProcessingTaskRequest (see `registerBackgroundSync`),
+    // and the handler dispatches on the delivered task's type. Registering
+    // the wrong type leaves the request unhandled. Identifier must match
+    // `backgroundSyncTaskName` in Dart and the lone entry in Info.plist's
+    // BGTaskSchedulerPermittedIdentifiers.
+    WorkmanagerPlugin.registerBGProcessingTask(
+      withIdentifier: "com.threkir.backgroundSync"
     )
 
     // Keep the on-device GPS/HR run cache out of iCloud / iTunes backups.
