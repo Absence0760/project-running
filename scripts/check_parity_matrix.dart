@@ -85,9 +85,16 @@ void main(List<String> args) {
     // identical Dart codebase with mobile_android (decisions § 39).
     // iOS can be equal-or-less than Android (the gap is Mac-build
     // runtime verification) but never strictly ahead.
+    // `N/A` is exempt: it means the capability cannot apply to Android at
+    // all (pairing an Apple Watch), not that it is unbuilt there. The Dart
+    // stays byte-identical — the bridge ships on both twins and dispatches
+    // on `defaultTargetPlatform` — so § 39 is not violated by a row the
+    // hardware decides. `✗` and `Partial` still fail, which is the drift
+    // this gate exists to catch; see the mirror-image Wear OS push row,
+    // where iOS carries the `N/A`.
     final android = row.platformCells[0];
     final ios = row.platformCells[1];
-    if (ios == '✓' && android != '✓') {
+    if (ios == '✓' && android != '✓' && android != 'N/A') {
       issues.add(_Issue(
         row.lineNumber,
         row.feature,
