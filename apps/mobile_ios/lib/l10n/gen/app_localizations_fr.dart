@@ -657,7 +657,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Démarre automatiquement un partage en direct au début d\'une course sur ce téléphone. La course en cours est visible par toute personne ayant le lien.';
+      'Démarre automatiquement un partage en direct au début d\'une course sur ce téléphone. La course en cours est visible par toute personne ayant le lien ; à la fin de la course, elle retrouve votre visibilité par défaut.';
 
   @override
   String get safetyOffRouteTitle => 'Alerte hors itinéraire';
@@ -1162,6 +1162,19 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get runLiveShareStopped => 'Partage en direct arrêté';
+
+  @override
+  String get runLiveShareEndedTitle => 'Partage en direct terminé';
+
+  @override
+  String get runLiveShareEndedBody =>
+      'Le lien en direct n\'est plus mis à jour. Garder la course enregistrée publique pour que toute personne ayant le lien puisse la voir ? Sinon, elle suit votre visibilité par défaut.';
+
+  @override
+  String get runLiveShareKeepPublic => 'Garder publique';
+
+  @override
+  String get runLiveShareKeepPrivate => 'Garder privée';
 
   @override
   String get runTrainingPlans => 'Plans d\'entraînement';

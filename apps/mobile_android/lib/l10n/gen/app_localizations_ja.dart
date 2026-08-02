@@ -635,7 +635,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'この端末でランを開始すると自動的にライブ共有を開始します。進行中のランはリンクを知っている人なら誰でも見られます。';
+      'この端末でランを開始すると自動的にライブ共有を開始します。進行中のランはリンクを知っている人なら誰でも見られます。ランが終了すると、既定の公開設定に戻ります。';
 
   @override
   String get safetyOffRouteTitle => 'ルート逸脱アラート';
@@ -1110,6 +1110,19 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runLiveShareStopped => 'ライブ共有を停止しました';
+
+  @override
+  String get runLiveShareEndedTitle => 'ライブ共有が終了しました';
+
+  @override
+  String get runLiveShareEndedBody =>
+      'ライブリンクの更新は停止しました。保存したランを公開のままにして、リンクを知っている人が見られるようにしますか？公開しない場合は既定の公開設定に従います。';
+
+  @override
+  String get runLiveShareKeepPublic => '公開のままにする';
+
+  @override
+  String get runLiveShareKeepPrivate => '非公開にする';
 
   @override
   String get runTrainingPlans => 'トレーニングプラン';

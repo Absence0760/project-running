@@ -909,6 +909,38 @@ void main() {
               'in source order — that would mean the call site is back '
               'to flipping is_public ahead of the consent dialog.');
     });
+
+    test('run_screen keeps makeRunPublic behind the post-live-share dialog',
+        () {
+      // Reason (issue #664): the live-broadcast stop path used to call
+      // makeRunPublic unconditionally, so a runner who shared a live
+      // link FOR SAFETY (incl. the Settings → Safety auto-live-share
+      // pref) had every such run left permanently public with no
+      // consent step — bypassing exactly the dialog the guard above
+      // pins on run_detail. The fix confines makeRunPublic to
+      // _resolvePostLiveVisibility, downstream of the keep-public
+      // AlertDialog whose affirmative action is the ONLY path to it.
+      final source =
+          File('lib/screens/run_screen.dart').readAsStringSync();
+      expect(source, contains('_resolvePostLiveVisibility'),
+          reason: 'the stop path must resolve post-live visibility '
+              'explicitly rather than re-asserting is_public.');
+      expect(source, contains('runLiveShareEndedTitle'),
+          reason: 'the keep-public dialog is the consent surface; pin '
+              'its localized title key.');
+      final dialogIdx = source.indexOf('runLiveShareEndedTitle');
+      final makePublicIdx = source.indexOf('api!.makeRunPublic');
+      expect(makePublicIdx, greaterThanOrEqualTo(0),
+          reason: 'the explicit keep-public choice still calls '
+              'makeRunPublic (inside _resolvePostLiveVisibility).');
+      expect(makePublicIdx > dialogIdx, isTrue,
+          reason: 'api.makeRunPublic must sit AFTER the keep-public '
+              'dialog in _resolvePostLiveVisibility — earlier means the '
+              'unconditional stop-path flip is back.');
+      expect(source.contains('api2.makeRunPublic'), isFalse,
+          reason: 'the wind-down block must not re-grow its own '
+              'makeRunPublic call outside the dialog gate.');
+    });
   });
 
   group('run-detail map survives ListView scroll', () {
@@ -3793,6 +3825,7 @@ void main() {
           'fetchRoutesIntersectingTrack',
           'saveRun',
           'makeRunPublic',
+          'makeRunPrivate',
           'concludeLiveBroadcast',
           'fetchPlanForWorkout',
           'fetchActiveOverview',

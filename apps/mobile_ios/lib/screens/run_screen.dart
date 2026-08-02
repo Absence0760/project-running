@@ -480,6 +480,11 @@ class _RunScreenState extends State<RunScreen> {
   // failed transiently and the auto-live-share pref is off — otherwise a
   // shared link would stay permanently dead (persona-woman safety finding).
   bool _liveShareRequested = false;
+  // A live broadcast was begun for this run id (the is_public=true stub
+  // exists server-side), whether or not it is still active at stop. The
+  // stop path uses it to resolve the saved run's visibility — the live
+  // window's public opt-in must not silently outlive the run (issue #664).
+  bool _liveBroadcastBegun = false;
   // Drives the persistent live-share indicator on the recording chrome
   // (issue #613). Flipped true once the broadcaster is attached and false
   // only when the broadcast is torn down (run finish, or an explicit
@@ -1335,10 +1340,12 @@ class _RunScreenState extends State<RunScreen> {
 
   /// Pre-create the parent runs row + flip the broadcaster on so the
   /// first ping after _begin() lands successfully. The runs row is
-  /// marked is_public=true (the opt-in to sharing — either the user's
-  /// "Share live link" tap or the auto_live_share device pref);
-  /// saveRun on stop preserves it via a follow-up makeRunPublic call
-  /// in _stop. Skipped on anonymous sessions — only signed-in users
+  /// marked is_public=true (the opt-in to the LIVE window — either the
+  /// user's "Share live link" tap or the auto_live_share device pref);
+  /// that opt-in ends with the run: _stop resolves the saved run's
+  /// visibility via _resolvePostLiveVisibility, so it follows the
+  /// runner's default unless they explicitly keep it public (issue
+  /// #664). Skipped on anonymous sessions — only signed-in users
   /// can broadcast. Returns whether the broadcaster is attached.
   Future<bool> _startLiveBroadcast() async {
     final api = widget.apiClient;
@@ -1372,6 +1379,7 @@ class _RunScreenState extends State<RunScreen> {
           )
           .timeout(kBackendLoadTimeout);
       _liveBroadcaster!.attach(_runId!);
+      _liveBroadcastBegun = true;
       _liveShareActive.value = true;
       return true;
     } catch (e) {
@@ -3045,9 +3053,10 @@ class _RunScreenState extends State<RunScreen> {
         // is_public=true at insert time so the user doesn't have to
         // tap "share" on every run. `followers` / `private` /
         // unknown → leave is_public null (the legacy default; reads
-        // as "not public" everywhere). The live-broadcast path below
-        // still re-asserts is_public=true via makeRunPublic so an
-        // explicit broadcast wins over a private default.
+        // as "not public" everywhere). A live broadcast does NOT
+        // override this: the live window's public opt-in ends with
+        // the run, and keeping the saved run public is an explicit
+        // post-stop choice (_resolvePostLiveVisibility, issue #664).
         //
         // `.timeout` so a hung backend (Supabase down, edge function
         // misconfigured) doesn\'t leave the user stuck on the finish
@@ -3072,27 +3081,24 @@ class _RunScreenState extends State<RunScreen> {
       if (mounted) setState(() => _syncError = _l10n.runSavedOffline);
     }
 
-    // Live broadcast wind-down. Three things to do, all best-effort:
-    //   1. Re-assert is_public=true on the saved run (saveRun's upsert
-    //      writes is_public=null, which clobbers the stub's true value).
-    //   2. Stamp runs.concluded_at so the spectator page shows a real
+    // Live broadcast wind-down. Two things to do, both best-effort:
+    //   1. Stamp runs.concluded_at so the spectator page shows a real
     //      conclusion instead of inferring "finished" from ping absence.
-    //      The pings are LEFT for the 48h retention cron so a spectator
-    //      who reloads right after the stop still sees the frozen trace.
-    //   3. Detach the broadcaster so a stray late-arriving snapshot
+    //      Stamped while the stub is still readable so an open
+    //      spectator's ~15s poll can flip to the conclusion card.
+    //   2. Detach the broadcaster so a stray late-arriving snapshot
     //      doesn't try to ping a concluded run id.
     // This is the ONLY teardown of the broadcast — navigating away or
     // minimizing keeps it live (the run screen is a keep-alive tab), so a
     // shared link stays valid until the run actually finishes here.
+    // The saved run's visibility is resolved separately below
+    // (_resolvePostLiveVisibility) — the live window's public opt-in
+    // must not silently outlive the run (issue #664).
     final lb = _liveBroadcaster;
-    if (lb != null && lb.isActive) {
+    final broadcasterActiveAtStop = lb != null && lb.isActive;
+    if (broadcasterActiveAtStop) {
       final api2 = widget.apiClient;
       if (api2 != null && api2.userId != null) {
-        try {
-          await api2.makeRunPublic(run.id).timeout(kBackendLoadTimeout);
-        } catch (e) {
-          debugPrint('makeRunPublic after live broadcast failed: $e');
-        }
         try {
           await api2.concludeLiveBroadcast(run.id).timeout(kBackendLoadTimeout);
         } catch (e) {
@@ -3105,12 +3111,89 @@ class _RunScreenState extends State<RunScreen> {
 
     // If this run was hosting a live race, submit the finisher time so
     // the leaderboard updates without the user having to remember to.
-    if (!mounted) return;
-    await widget.raceController?.submitResult(
-      runId: run.id,
-      durationS: run.duration.inSeconds,
-      distanceM: run.distanceMetres,
+    if (mounted) {
+      await widget.raceController?.submitResult(
+        runId: run.id,
+        durationS: run.duration.inSeconds,
+        distanceM: run.distanceMetres,
+      );
+    }
+
+    await _resolvePostLiveVisibility(
+      run.id,
+      broadcasterActiveAtStop: broadcasterActiveAtStop,
     );
+  }
+
+  /// Post-stop visibility resolution for a run that had a live broadcast
+  /// (issue #664). beginLiveBroadcast's stub is is_public=true — the
+  /// opt-in to the LIVE window only. Left alone, that flip silently
+  /// outlives the run (saveRun's upsert clears it on success, but a
+  /// failed cloud save leaves the public stub, and the old stop path
+  /// re-asserted it unconditionally), bypassing the deliberate consent
+  /// flow run_detail's _confirmMakePublic implements. So: the saved run
+  /// follows the runner's default visibility, and keeping it public is
+  /// an explicit choice —
+  ///   - default already public → nothing to resolve;
+  ///   - broadcast still active at stop → AlertDialog: keep public
+  ///     (makeRunPublic) or keep private (makeRunPrivate, also the
+  ///     dismiss/fail-closed direction);
+  ///   - broadcast stopped mid-run → no dialog (the runner already ended
+  ///     the share); quietly assert makeRunPrivate so a failed cloud
+  ///     save can't leave the stub public.
+  /// Auxiliary to the save (L4): the run is already persisted locally,
+  /// and a failed flip is disclosed via banner, never rethrown.
+  Future<void> _resolvePostLiveVisibility(
+    String runId, {
+    required bool broadcasterActiveAtStop,
+  }) async {
+    final api = widget.apiClient;
+    final action = postLiveVisibilityActionOnStop(
+      broadcastBegun: _liveBroadcastBegun,
+      broadcasterActiveAtStop: broadcasterActiveAtStop,
+      defaultPublic: widget.preferences.newRunsArePublic,
+      signedIn: api != null && api.userId != null,
+    );
+    _liveBroadcastBegun = false;
+    if (action == PostLiveVisibilityAction.none) return;
+
+    var keepPublic = false;
+    if (action == PostLiveVisibilityAction.prompt && mounted) {
+      keepPublic = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              key: const ValueKey('live-share-keep-public-dialog'),
+              title: Text(_l10n.runLiveShareEndedTitle),
+              content: Text(_l10n.runLiveShareEndedBody),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(_l10n.runLiveShareKeepPrivate),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(_l10n.runLiveShareKeepPublic),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+    }
+
+    try {
+      if (keepPublic) {
+        await api!.makeRunPublic(runId).timeout(kBackendLoadTimeout);
+      } else {
+        await api!.makeRunPrivate(runId).timeout(kBackendLoadTimeout);
+      }
+    } catch (e) {
+      debugPrint('post-live visibility update failed: $e');
+      if (mounted) {
+        _showTopBanner(keepPublic
+            ? _l10n.runDetailMakePublicFailed(friendlyError(_l10n, e))
+            : _l10n.runDetailMakePrivateFailed(friendlyError(_l10n, e)));
+      }
+    }
   }
 
   Future<void> _confirmDiscardMidRun() async {
@@ -3162,6 +3245,7 @@ class _RunScreenState extends State<RunScreen> {
     // a sticky flag would silently re-broadcast a fresh run the runner
     // never chose to share.
     _liveShareRequested = false;
+    _liveBroadcastBegun = false;
     _liveShareActive.value = false;
     _pedometerRetries = 0;
     _gpsLost = false;
@@ -5219,6 +5303,37 @@ bool shouldStartBroadcastOnRunStart({
   required bool broadcasterActive,
 }) =>
     (autoLiveShareEnabled || liveShareRequested) && !broadcasterActive;
+
+/// What the stop path owes the saved run's visibility after a live share
+/// (issue #664). The live window's is_public=true opt-in ends with the run:
+/// never a silent permanent public flip.
+enum PostLiveVisibilityAction {
+  /// Nothing to resolve — no broadcast was begun, signed out, or the
+  /// runner's default is already public (the save honoured it).
+  none,
+
+  /// The broadcast was live at stop: ask, and only an explicit choice
+  /// keeps the run public.
+  prompt,
+
+  /// The runner already ended the share mid-run: no dialog, quietly
+  /// assert the not-public default (covers the failed-cloud-save stub).
+  revertToDefault,
+}
+
+@visibleForTesting
+PostLiveVisibilityAction postLiveVisibilityActionOnStop({
+  required bool broadcastBegun,
+  required bool broadcasterActiveAtStop,
+  required bool defaultPublic,
+  required bool signedIn,
+}) {
+  if (!broadcastBegun || !signedIn) return PostLiveVisibilityAction.none;
+  if (defaultPublic) return PostLiveVisibilityAction.none;
+  return broadcasterActiveAtStop
+      ? PostLiveVisibilityAction.prompt
+      : PostLiveVisibilityAction.revertToDefault;
+}
 
 String _formatKm(double metres) =>
     formatFixed(metres / 1000, 2, activeLocaleTag);
