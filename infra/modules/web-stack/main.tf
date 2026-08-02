@@ -562,6 +562,30 @@ resource "aws_lambda_permission" "cloudfront_invoke" {
   }
 }
 
+# AWS's OAC-for-Lambda contract requires TWO grants: `InvokeFunctionUrl`
+# above AND plain `lambda:InvokeFunction`. With only the first, the
+# Function URL rejects every CloudFront-signed request with 403 BEFORE
+# invocation — and the distribution's SPA error fallback rewrites that
+# 403 into the shell at 200, so the surface looks healthy while the
+# Lambda never runs. Direct admin sigv4 probes still succeed (operator
+# identity policies carry both actions), which is why the config reviews
+# as correct without this resource. Issue #590; empirically proven
+# 2026-07-21 by a temporary additive grant on share-run.
+# `function_url_auth_type` is only valid on InvokeFunctionUrl grants, so
+# it's omitted here.
+resource "aws_lambda_permission" "cloudfront_invoke_function" {
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.coach.function_name
+  qualifier     = aws_lambda_alias.live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Share-run Lambda (persona-hunt Casual #4 + round-5 very-social) ───
 #
 # Per-request SSR handler for /share/run/<id> (HTML) + /og/run/<id>.png
@@ -678,6 +702,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_run" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_run" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareRun"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_run.function_name
+  qualifier     = aws_lambda_alias.share_run_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true
@@ -808,6 +847,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_route" {
   }
 }
 
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_route" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareRoute"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_route.function_name
+  qualifier     = aws_lambda_alias.share_route_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Share-recap Lambda (Year-in-Running "Wrapped" share parity) ───
 #
 # Per-request SSR handler for /recap/share/<id> (HTML + OG tags) +
@@ -920,6 +974,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_recap" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_recap" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareRecap"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_recap.function_name
+  qualifier     = aws_lambda_alias.share_recap_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true
@@ -1046,6 +1115,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_badge" {
   }
 }
 
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_badge" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareBadge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_badge.function_name
+  qualifier     = aws_lambda_alias.share_badge_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── Shared entity-SSR Lambda (/share/{event,profile,club,race}) ───
 #
 # One HTML-only Lambda serving the four public entity share paths (see
@@ -1141,6 +1225,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_entity" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_share_entity" {
+  statement_id  = "AllowCloudFrontInvokeFunctionShareEntity"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.share_entity.function_name
+  qualifier     = aws_lambda_alias.share_entity_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true
@@ -1259,6 +1358,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_generate_route" {
   }
 }
 
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_generate_route" {
+  statement_id  = "AllowCloudFrontInvokeFunctionGenerateRoute"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.generate_route.function_name
+  qualifier     = aws_lambda_alias.generate_route_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ─── osrm-proxy Lambda (route-builder waypoint snapping/routing) ───
 #
 # GET-only JSON proxy for /api/routes/osrm/* — the route builder's manual
@@ -1361,6 +1475,21 @@ resource "aws_lambda_permission" "cloudfront_invoke_osrm_proxy" {
   principal              = "cloudfront.amazonaws.com"
   source_arn             = aws_cloudfront_distribution.this.arn
   function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Second half of the two-grant OAC requirement — see
+# aws_lambda_permission.cloudfront_invoke_function (issue #590).
+resource "aws_lambda_permission" "cloudfront_invoke_function_osrm_proxy" {
+  statement_id  = "AllowCloudFrontInvokeFunctionOsrmProxy"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.osrm_proxy.function_name
+  qualifier     = aws_lambda_alias.osrm_proxy_live.name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.this.arn
 
   lifecycle {
     create_before_destroy = true
