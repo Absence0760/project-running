@@ -65,8 +65,10 @@ use watch_core::flash_store::{self, SlotDir, SLOT_COUNT, SLOT_LEN};
 use watch_core::gnss_mode::GnssMode;
 use watch_core::ice;
 use watch_core::profiles::ActivityProfile;
+use watch_core::race_config;
 use watch_core::run_store::ManifestEntry;
 use watch_core::screens;
+use watch_core::settings::WatchSettings;
 use watch_core::timers;
 use watch_core::waypoints;
 
@@ -143,6 +145,7 @@ struct ConfigPage {
     ice: Option<ice::IceCard>,
     screens: Option<screens::Screens>,
     timer: Option<timers::TimerRecord>,
+    race_config: Option<WatchSettings>,
 }
 
 impl RunStore {
@@ -678,6 +681,49 @@ impl RunStore {
         }
     }
 
+    /// Read the phone-pushed race configuration persisted by
+    /// [`persist_race_config`](Self::persist_race_config), or `None` when flash
+    /// is unavailable, unreadable, or the record is erased / corrupt — the watch
+    /// then boots with its own defaults, which is the fail-closed answer (same
+    /// rule as [`read_ice`](Self::read_ice)).
+    ///
+    /// Returns the settings frame rather than the applied values, deliberately:
+    /// the caller feeds it to `settings_apply::plan_apply`, so a restored value
+    /// meets exactly the guard a pushed one would — there is no second, staler
+    /// copy of any field's plausibility rule.
+    pub fn read_race_config(&mut self) -> Option<WatchSettings> {
+        if !self.available {
+            return None;
+        }
+        let mut buf = [0u8; race_config::RACE_CONFIG_RECORD_LEN];
+        let at = CONFIG_OFFSET + flash_store::RACE_CONFIG_RECORD_OFFSET as u32;
+        if let Err(e) = self.flash.read(at, &mut buf) {
+            warn!("run_flash: race config read failed {:?}", e);
+            return None;
+        }
+        race_config::decode(&buf)
+    }
+
+    /// Persist the accumulated phone-pushed race configuration so a brown-out
+    /// mid-race cannot silently hand the rest of it a watch with no pacer goal,
+    /// no HR ceiling, an altitude referenced to standard pressure and the
+    /// temperate default fuel cadence. Same best-effort / L4 rules and
+    /// carry-everything-forward page rewrite as
+    /// [`persist_gnss_mode`](Self::persist_gnss_mode).
+    ///
+    /// The caller must gate this on `race_config::record_differs`, and hand over
+    /// the whole accumulated config rather than one frame's delta: the page is
+    /// erased whole per write, so a per-FIELD call would erase it once per field
+    /// of a settings screen the runner filled in, and an ungated call would
+    /// erase it once per push whether or not anything changed.
+    pub async fn persist_race_config(&mut self, cfg: &WatchSettings) {
+        let mut page = self.read_config_page();
+        page.race_config = Some(*cfg);
+        if self.rewrite_config_page(&page).await {
+            info!("run_flash: persisted race config");
+        }
+    }
+
     /// Wipe every byte of flash this store owns — the config page and all four
     /// run slots — and forget the directory that indexed them (§378). Returns
     /// whether the erase actually reached flash.
@@ -739,6 +785,7 @@ impl RunStore {
             ice: self.read_ice(),
             screens: self.read_screens(),
             timer: self.read_timer(),
+            race_config: self.read_race_config(),
         }
     }
 
@@ -810,6 +857,14 @@ impl RunStore {
             let at = start + flash_store::TIMER_RECORD_OFFSET as u32;
             if let Err(e) = self.flash_write(at, &rec).await {
                 warn!("run_flash: timer write failed {:?}", e);
+                return false;
+            }
+        }
+        if let Some(c) = page.race_config.as_ref() {
+            let rec = race_config::encode(c);
+            let at = start + flash_store::RACE_CONFIG_RECORD_OFFSET as u32;
+            if let Err(e) = self.flash_write(at, &rec).await {
+                warn!("run_flash: race config write failed {:?}", e);
                 return false;
             }
         }

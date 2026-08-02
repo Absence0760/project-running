@@ -53,6 +53,7 @@ use watch_core::flash_store::SLOT_LEN;
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_duty::{self, HrSample};
 use watch_core::ice::IceCard;
+use watch_core::race_config;
 use watch_core::record::{RecordState, Recorder, Snapshot};
 use watch_core::record_cadence::{run_active, tick_interval_s, track_point, CheckpointMark};
 use watch_core::run_store::{
@@ -511,6 +512,34 @@ pub async fn run(store: &'static SharedStore) {
         info!("record: restored {=usize} waypoint(s)", w.len());
         recorder.set_waypoints(w);
     }
+    // Re-apply the phone-pushed race configuration the `RCF1` record holds: the
+    // pacer goal, HR-zone ceiling, QNH reference, fuel cadence and the rest of
+    // the `SET1` subset with no other persistent home. Until this existed, a
+    // brown-out on a cold battery at hour 30 handed the rest of a race a watch
+    // with none of it, and nothing on the wrist said so.
+    //
+    // Restored through `apply_settings` — the same fan-out a push takes — so
+    // every field meets exactly the guard it met on arrival, and a stored value
+    // an implausibility rule refuses is dropped rather than applied.
+    //
+    // Runs here, in the task's init, so it is strictly before the first drain of
+    // the settings queue at the top of the loop: a phone that pushes two seconds
+    // after boot is simply a later delta and wins, field by field, exactly as a
+    // second push wins over a first. The accumulator seeded here is what that
+    // push merges onto, so the fields it does not mention stay set.
+    let mut race_cfg: WatchSettings = store.lock().await.read_race_config().unwrap_or_default();
+    if race_cfg != WatchSettings::default() {
+        apply_settings(
+            &race_cfg,
+            &mut recorder,
+            &mut alerts,
+            &sea_level_tx,
+            &storm_threshold_tx,
+            &tz_offset_tx,
+            &ice_tx,
+        );
+        info!("record: restored pushed race config");
+    }
     // Seed with the initial idle snapshot so it is never published — consumers
     // treat "no RECORD value yet" as idle, which is exactly right.
     let mut last_published = recorder.snapshot();
@@ -872,6 +901,23 @@ pub async fn run(store: &'static SharedStore) {
                     store.lock().await.persist_auto_lap(trigger).await;
                     persisted_auto_lap = Some(trigger);
                 }
+            }
+            // And the same rule for everything else the push configures that has
+            // no persistent home of its own — the pacer goal, HR ceiling, QNH,
+            // fuel cadence and the rest of `race_config::persistable`. Folded
+            // into the accumulated config first, because a frame is a delta:
+            // storing the frame alone would erase whatever the runner set in an
+            // earlier push it did not mention.
+            //
+            // One write per FRAME, not per field: the config page is erased
+            // whole per write, so a per-field call would erase it once for every
+            // row of a settings screen. Gated on the RECORD's bytes rather than
+            // on `PartialEq`, because a pushed NaN QNH is never equal to itself
+            // and would otherwise re-erase the page on every repeated push.
+            let next = race_config::merged(&race_cfg, &s);
+            if race_config::record_differs(&race_cfg, &next) {
+                store.lock().await.persist_race_config(&next).await;
+                race_cfg = next;
             }
         }
 

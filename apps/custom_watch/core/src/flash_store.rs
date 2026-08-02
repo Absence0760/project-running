@@ -232,11 +232,29 @@ pub const SCREENS_RECORD_OFFSET: usize = 512;
 /// timer. The `WPT1` / `ICE1` / `SCR1` trade, for the same reason.
 pub const TIMER_RECORD_OFFSET: usize = 1024;
 
+/// Offset of the persisted race-config record ([`crate::race_config`] `RCF1`)
+/// within the config page — past the timer's extent, word-aligned, carried
+/// forward by the same shared-page rewrite. Everything a `SET1` push configures
+/// that has no other persistent home lived in RAM alone until this record: a
+/// brown-out at hour 30 handed the rest of a race a watch with no pacer goal, no
+/// HR ceiling, an altitude referenced to standard pressure and the temperate
+/// default fuel cadence.
+///
+/// Its own record rather than `CFG1` fields for the reason
+/// [`TIMER_RECORD_OFFSET`] already records: § 372 spent the flags byte's last
+/// free bit, and a [`CONFIG_VERSION`] bump makes every existing record decode as
+/// "no saved config" — costing the GNSS mode, profile, backyard arm and auto-lap
+/// rung the runner had set, to store a pacer goal.
+pub const RACE_CONFIG_RECORD_OFFSET: usize = 2048;
+
 const _: () = assert!(BOND_RECORD_OFFSET + BOND_RECORD_LEN <= WAYPOINT_RECORD_OFFSET);
 const _: () = assert!(WAYPOINT_RECORD_OFFSET + crate::waypoints::MAX_WPT1_LEN <= ICE_RECORD_OFFSET);
 const _: () = assert!(ICE_RECORD_OFFSET + crate::ice::ICE1_RECORD_LEN <= SCREENS_RECORD_OFFSET);
 const _: () = assert!(SCREENS_RECORD_OFFSET + crate::screens::MAX_SCR1_LEN <= TIMER_RECORD_OFFSET);
-const _: () = assert!(TIMER_RECORD_OFFSET + crate::timers::TIMER_RECORD_LEN <= CONFIG_LEN);
+const _: () =
+    assert!(TIMER_RECORD_OFFSET + crate::timers::TIMER_RECORD_LEN <= RACE_CONFIG_RECORD_OFFSET);
+const _: () =
+    assert!(RACE_CONFIG_RECORD_OFFSET + crate::race_config::RACE_CONFIG_RECORD_LEN <= CONFIG_LEN);
 
 /// `magic(4) | version(1) | enc_flags(1) | ediv(2) | rand(8) | ltk(16) |
 /// addr_flags(1) | addr(6) | irk(16) | pad(1) | crc32(4)` — 60 bytes, a

@@ -258,6 +258,10 @@
 //!   and [`page::Page::Timer`]: one instrument whose preset ladder starts at a
 //!   stopwatch, whose expiry counts UP past zero because nothing on this device
 //!   can notify anyone, and which raises no alarm (§ 375)
+//! - [`race_config`] — the `RCF1` config-page record that makes a phone-pushed
+//!   race configuration (pacer goal, HR ceiling, QNH, fuel cadence and the rest
+//!   of the `SET1` subset with no other home) survive a brown-out; the record's
+//!   body IS a `SET1` frame, so the restore path is the push path
 
 #![cfg_attr(not(test), no_std)]
 
@@ -327,6 +331,7 @@ pub mod plan_replan;
 pub mod pr_recency;
 pub mod privacy;
 pub mod profiles;
+pub mod race_config;
 pub mod race_day;
 pub mod race_phases;
 pub mod race_predictor;
