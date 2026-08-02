@@ -67,6 +67,7 @@ fn base_snapshot() -> Snapshot {
         hr_source: None,
         pace_band: None,
         zone_time_s: [0; 5],
+        cutoffs_loaded: false,
         cutoff: None,
         sleep: None,
         race_prediction: None,
@@ -557,6 +558,7 @@ fn preview_cutoff_eta_page() {
     // gets — 8 glyphs of the 16 px medium cell is 128 px of a 168 px panel.
     use watch_core::cutoff_eta::{CutoffEta, CutoffEtaStatus};
     let mut snap = base_snapshot();
+    snap.cutoffs_loaded = true;
     snap.cutoff = Some(CutoffEta {
         has_cutoff: true,
         distance_to_m: 8_400.0,
@@ -581,6 +583,7 @@ fn preview_sleep_station_page() {
     // the row that stops the number being read as an alarm clock.
     use watch_core::sleep_station::SleepBudget;
     let mut snap = base_snapshot();
+    snap.cutoffs_loaded = true;
     snap.sleep = Some(SleepBudget {
         status: watch_core::sleep_station::SleepStatus::Budget,
         budget_s: 35 * 60,

@@ -923,6 +923,7 @@ mod tests {
             hr_source: None,
             pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
+            cutoffs_loaded: false,
             cutoff: None,
             sleep: None,
             race_prediction: None,

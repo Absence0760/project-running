@@ -220,11 +220,23 @@ const SLOT0_BAND_ROWS: usize = face::TALL_HERO_BAND_ROWS;
 /// So a non-numeral value falls back to the doubled text face, exactly as
 /// [`hero_band`] already does for a page's own hero off its `numeral` flag.
 /// This is the same decision, made for the slots that do not ride that path.
+///
+/// **And a value the tall face cannot fit steps down to the medium one**, which
+/// is [`hero_band`]'s other half: `draw_bignum_hero` drops the glyphs past the
+/// right edge, so a 100-hour `100:00:00` elapsed draws as `100:00:` and a
+/// `+999:59:59` cut-off margin as `+999:5` — a wrong number rendered as
+/// confidently as a right one. A composed screen (§ 364) is runner-authored, so
+/// any metric can land in any slot and no per-slot value range can be assumed.
+/// The budget is the value alone: a non-lead slot draws no unit beside it (only
+/// slot 0's reaches [`hero_unit_cell`]), and the medium face's two cells per
+/// glyph fit every value the catalogue can spell.
 pub fn slot_band(nominal: HeroBand, value: &str) -> HeroBand {
-    if numeral_hero(value) {
-        nominal
-    } else {
+    if !numeral_hero(value) {
         HeroBand::TextHero
+    } else if nominal == HeroBand::BigNumHero && !tall_hero_fits(value, None) {
+        HeroBand::MedNumHero
+    } else {
+        nominal
     }
 }
 
@@ -669,6 +681,45 @@ mod tests {
         assert!(tall_hero_fits("1000.0", None));
         assert!(!tall_hero_fits("1000.0", Some("KM")));
         assert!(tall_hero_fits("42.20", Some("KM")));
+    }
+
+    /// A composed screen's non-lead slots take the same width gate the hero
+    /// band takes, because the primitive underneath is the same one.
+    ///
+    /// `hero_band` had the rule and `slot_band` did not, so an over-wide value
+    /// stayed in the tall face and `draw_bignum_hero` dropped the glyphs past
+    /// the right edge — a truncated number rendered as confidently as a whole
+    /// one. Slot 0 was covered because it rides `hero_band`; slots 1+ were the
+    /// hole, and a runner-authored screen (§ 364) can seat any metric in any of
+    /// them.
+    #[test]
+    fn a_slot_too_wide_for_the_tall_face_steps_down_rather_than_losing_digits() {
+        // A hundred-hour elapsed and an hour-scale cut-off margin: the two
+        // widest things the catalogue spells, and what the driver would render
+        // of each.
+        for over in ["100:00:00", "999:59:59", "+999:59:59", "+10:05:30"] {
+            assert!(!tall_hero_fits(over, None), "{over}");
+            assert_eq!(
+                slot_band(HeroBand::BigNumHero, over),
+                HeroBand::MedNumHero,
+                "{over} would lose its last glyphs in the tall face"
+            );
+            // The medium face is half the width per glyph, so the step down
+            // always shows the value whole.
+            assert!(over.len() * NUMERAL_MED_CELLS <= face::COLS, "{over}");
+        }
+        // A value that fits keeps the size it asked for, and a medium nominal
+        // is never promoted by this rule.
+        assert_eq!(
+            slot_band(HeroBand::BigNumHero, "42.20"),
+            HeroBand::BigNumHero
+        );
+        assert_eq!(
+            slot_band(HeroBand::MedNumHero, "100:00:00"),
+            HeroBand::MedNumHero
+        );
+        // Non-numeral still wins outright, at any width.
+        assert_eq!(slot_band(HeroBand::BigNumHero, "SYNC"), HeroBand::TextHero);
     }
 
     #[test]
