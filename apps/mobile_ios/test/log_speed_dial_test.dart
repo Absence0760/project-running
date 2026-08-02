@@ -24,7 +24,7 @@ Widget _harness(void Function(BuildContext) onOpen) {
 
 void main() {
   group('showLogSpeedDial', () {
-    testWidgets('fans the three icon-only actions and resolves the picked one',
+    testWidgets('fans the three labelled actions and resolves the picked one',
         (tester) async {
       LogAction? result;
       await tester.pumpWidget(_harness((context) async {
@@ -33,18 +33,73 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      // Icon-only buttons — label lives on the Tooltip / Semantics, not as
-      // visible text.
       expect(find.byTooltip('Log run'), findsOneWidget);
       expect(find.byTooltip('Log lift'), findsOneWidget);
       expect(find.byTooltip('Log food'), findsOneWidget);
-      expect(find.text('Log run'), findsNothing);
 
       await tester.tap(find.byTooltip('Log lift'));
       await tester.pumpAndSettle();
       expect(result, LogAction.lift);
       // The overlay is torn down once a pick is made.
       expect(find.byTooltip('Log lift'), findsNothing);
+    });
+
+    testWidgets('each fan item renders its label as visible text',
+        (tester) async {
+      await tester.pumpWidget(_harness((context) {
+        showLogSpeedDial(context: context);
+      }));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      // The whole point of #664: the fan is discoverable without a
+      // long-press, so the localized label is on screen beside the glyph.
+      for (final label in ['Log run', 'Log lift', 'Log food']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      // Each label sits under its own icon, not floating elsewhere.
+      expect(
+        tester.getTopLeft(find.text('Log run')).dy,
+        greaterThan(tester.getTopLeft(find.byIcon(Icons.directions_run)).dy),
+      );
+    });
+
+    testWidgets('the label does not shrink the icon below the 48dp floor',
+        (tester) async {
+      await tester.pumpWidget(_harness((context) {
+        showLogSpeedDial(context: context);
+      }));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      for (final icon in [
+        Icons.directions_run,
+        Icons.fitness_center,
+        Icons.restaurant,
+      ]) {
+        final size = tester.getSize(
+          find.ancestor(of: find.byIcon(icon), matching: find.byType(InkWell)),
+        );
+        expect(size.width, greaterThanOrEqualTo(48));
+        expect(size.height, greaterThanOrEqualTo(48));
+      }
+    });
+
+    testWidgets('the arc keeps the top item\'s label clear of the side icons',
+        (tester) async {
+      await tester.pumpWidget(_harness((context) {
+        showLogSpeedDial(context: context, recent: LogAction.food);
+      }));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      // The top-centre label hangs level with the two lower icons, so the
+      // arc radius has to buy horizontal clearance or they collide.
+      final topLabel = tester.getRect(find.text('Log food'));
+      for (final icon in [Icons.directions_run, Icons.fitness_center]) {
+        final side = tester.getRect(find.byIcon(icon));
+        expect(topLabel.overlaps(side), isFalse);
+      }
     });
 
     testWidgets('tapping the scrim dismisses and resolves null', (tester) async {
