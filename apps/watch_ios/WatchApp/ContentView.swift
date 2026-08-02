@@ -13,7 +13,9 @@ struct ContentView: View {
                 case .idle:
                     PreRunView(
                         workoutManager: workoutManager,
-                        queuedCount: connectivity.queuedCount
+                        queuedCount: connectivity.queuedCount,
+                        armedRoute: connectivity.armedRoute,
+                        onClearRoute: connectivity.clearArmedRoute
                     )
                 case .recovering:
                     RecoveryView(workoutManager: workoutManager, onRecover: recoverRun, onDiscard: discardRecovery)
@@ -185,6 +187,8 @@ private func pacePresets() -> [(label: String, secondsPerKm: Double)] {
 struct PreRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
     let queuedCount: Int
+    let armedRoute: ArmedRoute?
+    let onClearRoute: () -> Void
     @State private var selectedPaceIndex: Int? = nil
 
     var body: some View {
@@ -197,6 +201,26 @@ struct PreRunView: View {
                     Text("\(queuedCount) run queued to sync")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                }
+
+                if let route = armedRoute {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Route")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(route.name)
+                            .font(.caption)
+                            .foregroundColor(AppTheme.lilac)
+                        Text(RunFormat.distance(
+                            metres: route.distanceMetres, fractionDigits: 2))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Button("Clear route") { onClearRoute() }
+                            .font(.caption2)
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Removes the route your iPhone sent, so the next run is unguided")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -281,6 +305,10 @@ struct RunningView: View {
                 }
             }
 
+            if let navigator = workoutManager.routeNavigator {
+                RouteGuidanceView(navigator: navigator)
+            }
+
             Text("\(workoutManager.trackPointCount) GPS pts")
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -299,6 +327,54 @@ struct RunningView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.error)
                 .accessibilityHint("Ends the run and opens the summary")
+            }
+        }
+    }
+}
+
+// MARK: - Route Guidance
+
+/// Off-route state and distance-remaining for the route the phone armed.
+/// Rendered only when a route is loaded — an unguided run shows nothing here.
+///
+/// Deliberately two short lines at most: the elapsed / distance / pace / HR
+/// block above it is what a runner glances at, and a wrist has no room for a
+/// guidance panel that pushes the stop button off screen.
+struct RouteGuidanceView: View {
+    @ObservedObject var navigator: RouteNavigator
+
+    var body: some View {
+        VStack(spacing: 2) {
+            switch RouteGuidance.status(
+                isOffRoute: navigator.isOffRoute,
+                deviationMetres: navigator.deviationMetres
+            ) {
+            case .offRoute:
+                Label {
+                    if let deviation = RouteGuidance.deviationText(
+                        metres: navigator.deviationMetres) {
+                        Text("Off route · \(deviation)")
+                    } else {
+                        Text("Off route")
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                .font(.caption)
+                .foregroundColor(AppTheme.error)
+            case .unknown:
+                Text("Route position unknown")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            case .onRoute:
+                EmptyView()
+            }
+
+            if let remaining = RouteGuidance.remainingText(
+                metres: navigator.remainingMetres) {
+                Text("\(remaining) to go")
+                    .font(.caption2)
+                    .foregroundColor(AppTheme.lilac)
             }
         }
     }

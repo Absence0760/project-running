@@ -71,7 +71,18 @@ To verify pairing: in the watch simulator, you should see the watch face. If it 
 
 ### Route navigation
 
-The detection engine in `RouteNavigator.swift` is implemented and unit-tested (`RouteNavigatorTests.swift`): nearest-perpendicular-foot projection onto the route polyline (the web `route_geometry.ts` / `route_snap.ts` math), deviation + distance-remaining, the cross-platform 40 m / 20 m off-route hysteresis, and a `WKInterfaceDevice` haptic on the off-route rising edge. There is **no UI or route source wired to it yet** — no phone-side push of a route to the watch and no screen consuming the published values — so it isn't manually testable end-to-end; exercise it via `xcodebuild test` (`-only-testing:WatchAppTests/RouteNavigatorTests`). See `reviews/watch-ios/gap-analysis.md` items M3 (route preview) and M4 (mini-map) for the planned surface.
+End to end: pick a route on the iPhone, follow it on the wrist.
+
+1. Both simulators running and paired, with the Flutter app (`apps/mobile_ios`) launched on the iPhone at least once so its `WCSession` is activated.
+2. On the iPhone, open a saved route → **share icon → Send to Apple Watch**. The row only appears when the phone reports a paired watch with the app installed; if it's missing, launch the WatchApp on the watch simulator once and reopen the route.
+3. Expect a banner: "Route sent to Apple Watch (N points)", or "…thinned from M points to N to fit" on a route over the 512-point budget. A route with fewer than two positions is refused outright with "This route has too few points to follow on Apple Watch" — nothing is queued.
+4. On the watch, `PreRunView` now shows **Route**, the route name, and its total distance, with a **Clear route** button. The push is `transferUserInfo`, so it may take a few seconds and it survives the watch app being closed — background delivery is normal.
+5. Start a run. Under the stat row the run screen shows **X.XX km to go**, counting down as you move along the line.
+6. Drive the simulated location off the route by more than 40 m (iOS simulator → **Features → Location → Custom Location**): the line turns into a red **Off route · N m** warning. Come back inside 20 m and it clears. On a physical watch the transition also fires one `WKInterfaceDevice` haptic (haptics are no-ops in the simulator).
+7. Feed the watch a location it can't project (or arm a degenerate route) and the screen reads **Route position unknown** rather than silently claiming you're on route.
+8. Tap **Clear route** on `PreRunView` — the next run records with no guidance block at all.
+
+Unit coverage for the pieces, runnable without a paired pair: `xcodebuild test … -only-testing:WatchAppTests/RouteNavigatorTests -only-testing:WatchAppTests/ArmedRouteTests -only-testing:WatchAppTests/RouteGuidanceTests`. A live position marker / mini-map is still unbuilt — see `reviews/watch-ios/gap-analysis.md` item M4.
 
 ### Pause / resume
 
