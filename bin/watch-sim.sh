@@ -212,37 +212,51 @@ else
 	step "Starting Renode (headless)"
 	RENODE_FLAGS+=(--disable-xwt --hide-analyzers)
 fi
-renode "${RENODE_FLAGS[@]}" -e "$RENODE_CMDS" >"$RENODE_LOG" 2>&1 &
-RENODE_PID=$!
+# Launch + wait for the pty symlink, whose appearance means the emulation
+# script ran to completion. Generous timeout: the first run in a Renode
+# process also compiles the C# display model, which adds several seconds.
+# Returns 0 on a booted machine, 1 on an early exit, 2 on a boot that never
+# produced the pty.
+start_renode() {
+	renode "${RENODE_FLAGS[@]}" -e "$RENODE_CMDS" >"$RENODE_LOG" 2>&1 &
+	RENODE_PID=$!
+	for _ in $(seq 1 150); do
+		[[ -e "$GPS_PTY" ]] && return 0
+		kill -0 "$RENODE_PID" 2>/dev/null || return 1
+		sleep 0.2
+	done
+	return 2
+}
 
-# The pty symlink appearing means the emulation script ran to completion.
-# Generous timeout: the first run in a Renode process also compiles the C#
-# display model, which adds several seconds — and the --gui UI-less fallback
-# spends one boot discovering the build before its headless relaunch, so the
-# budget covers two.
-for _ in $(seq 1 300); do
-	[[ -e "$GPS_PTY" ]] && break
-	if ! kill -0 "$RENODE_PID" 2>/dev/null; then
-		if [[ "$GUI" == 1 && "$GUI_VIEWER" == 0 ]] && grep -q "Couldn't start UI" "$RENODE_LOG" 2>/dev/null; then
-			# This Renode build has no working UI (the macOS arm64 .NET build:
-			# renode/renode#886) — it fell back to a stdin console monitor,
-			# which read the backgrounded process's closed stdin as `quit`.
-			# Deliver what --gui promised anyway: relaunch headless and put
-			# the live window up via bin/watch-view.sh once the monitor is up.
-			step "This Renode build cannot start its UI (renode/renode#886) — relaunching headless with the bin/watch-view.sh live window"
-			GUI_VIEWER=1
-			RENODE_FLAGS+=(--disable-xwt --hide-analyzers)
-			RENODE_CMDS="${RENODE_CMDS%"; showAnalyzer sysbus.spi3.display"}"
-			renode "${RENODE_FLAGS[@]}" -e "$RENODE_CMDS" >"$RENODE_LOG" 2>&1 &
-			RENODE_PID=$!
-			continue
-		fi
-		tail -n 30 "$RENODE_LOG" >&2
-		fatal "Renode exited during startup — full log: $RENODE_LOG"
-	fi
-	sleep 0.2
-done
-[[ -e "$GPS_PTY" ]] || fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them). If ss -tlnp 'sport = :$PHONE_PORT' shows a holder, a stale sim instance grabbed the phone port after the preflight check."
+start_renode && BOOT=0 || BOOT=$?
+
+# A UI-less Renode build (the macOS arm64 .NET build: renode/renode#886)
+# prints `Couldn't start UI` and falls back to a stdin console monitor, which
+# reads this backgrounded launch's closed stdin as `quit`. Crucially the
+# emulation script may still RUN TO COMPLETION first — the pty existing does
+# not mean a window is up — so the log line decides the fallback, never the
+# exit timing. (A first version keyed on the process dying inside the wait
+# loop, and lost the race: the machine survived just long enough to win the
+# pty check, then died window-less during streaming.) Deliver what --gui
+# promised anyway: relaunch headless and put the live window up via
+# bin/watch-view.sh once the monitor is up.
+if [[ "$GUI" == 1 ]] && grep -q "Couldn't start UI" "$RENODE_LOG" 2>/dev/null; then
+	step "This Renode build cannot start its UI (renode/renode#886) — relaunching headless with the bin/watch-view.sh live window"
+	kill "$RENODE_PID" 2>/dev/null || true
+	wait "$RENODE_PID" 2>/dev/null || true
+	rm -f "$GPS_PTY"
+	GUI_VIEWER=1
+	RENODE_FLAGS+=(--disable-xwt --hide-analyzers)
+	RENODE_CMDS="${RENODE_CMDS%"; showAnalyzer sysbus.spi3.display"}"
+	start_renode && BOOT=0 || BOOT=$?
+fi
+
+if [[ "$BOOT" == 1 ]]; then
+	tail -n 30 "$RENODE_LOG" >&2
+	fatal "Renode exited during startup — full log: $RENODE_LOG"
+elif [[ "$BOOT" == 2 ]]; then
+	fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them). If ss -tlnp 'sport = :$PHONE_PORT' shows a holder, a stale sim instance grabbed the phone port after the preflight check."
+fi
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"
 ok "Renode up — log: $RENODE_LOG, monitor: bin/watch-monitor.sh (ncat localhost $MONITOR_PORT)"
