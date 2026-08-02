@@ -73,17 +73,12 @@ Driven by frontmatter `cta.feature`, mapped to a route + i18n label in `categori
 | `nutrition` | `/nutrition` | shipped |
 | `ai-coach` | `/coach` | shipped |
 | `clubs` | `/social?tab=clubs` | shipped |
-| `racing` | `/social?tab=clubs` | **stale interim — the race calendar HAS shipped; repoint to `/races`** |
+| `racing` | `/races` | shipped |
 | `explore` | `/routes?tab=explore` | shipped |
 
 All targets are auth-gated app routes; an anon reader who clicks is sent through the layout auth guard to `/login?return_to=...`, the intended acquisition funnel. Every guide also shows a "Create a free account" → `/login?signup=1` button.
 
-### Race-calendar dependency — resolved, repoint still owed
-
-The race calendar **shipped** (`apps/web/src/routes/races/+page.svelte`, migration `20270214_001`, see [race_calendar.md](race_calendar.md)), so the premise for the interim CTA is gone. Two things still point at the old world and should be repointed in one change:
-
-- `CTA_TARGETS`' `racing` entry in `apps/web/src/lib/learn/categories.ts` still routes to `/social?tab=clubs`, and its doc comment still asserts "there is no public race-calendar feature shipped yet". Repoint to `/races` and delete the comment.
-- The **"your first race"** guide (`your-first-race.md`, all six locales) flags the missing calendar in its body; that paragraph should go with it.
+Every route in that table is resolved against the SvelteKit route tree on disk by `categories.test.ts`, so a CTA pointing at a page that does not exist fails CI. A prose promise to repoint a CTA "when X ships" cannot fail, which is how `racing` outlived its own caveat.
 
 ## Localization
 
