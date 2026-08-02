@@ -11,11 +11,14 @@ import kotlin.math.roundToInt
 ///
 /// Divergence from the phone/web call site: those pass the runner's
 /// `user_profiles.gender` to apply the ~5% female calibration. The
-/// watch reads only `user_settings.prefs` (not the profile row), so it
-/// computes the unmodified curve. The run-detail pages recompute with
-/// gender when the run is viewed there, so the only place the watch's
-/// estimate is the final word is its own PostRun summary — a few kcal of
-/// drift on a glanceable figure. See docs/architecture/decisions.md § 77.
+/// watch computes the unmodified curve, and that is a deliberate
+/// choice, not a missing feature — `gender` is Art 9 special-category
+/// data behind explicit `health_data_consent_at` and deny-by-default
+/// RLS, so shipping it to another device class to shift an ephemeral,
+/// never-persisted glanceable number by ~5% fails data minimisation
+/// (GDPR Art 5(1)(c)). Don't plumb it into the prefs bag for this.
+/// The run-detail pages recompute with gender once the run syncs, and
+/// they own the authoritative figure. See decisions.md § 77.
 object RunCalories {
     /// Per-activity energy cost (kcal per kg per km). Mirrors
     /// ACTIVITY_KCAL_PER_KG_PER_KM in calories.ts. The watch only

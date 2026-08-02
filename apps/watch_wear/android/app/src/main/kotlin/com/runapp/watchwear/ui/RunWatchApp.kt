@@ -236,6 +236,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                 Stage.PostRun -> PostRunScreen(
                     summary = state.lastRunSummary,
                     bodyWeightKg = state.bodyWeightKg,
+                    showCalories = state.showCalories,
                     preferredUnit = state.preferredUnit,
                     synced = state.thisRunSynced,
                     syncing = state.syncing,
@@ -1634,6 +1635,7 @@ private fun HoldToStopButton(
 private fun PostRunScreen(
     summary: com.runapp.watchwear.FinishedSummary?,
     bodyWeightKg: Double?,
+    showCalories: Boolean,
     preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     synced: Boolean,
     syncing: Boolean,
@@ -1697,14 +1699,21 @@ private fun PostRunScreen(
                 // Calorie estimate (persona samsung #34). Same 1 kcal/kg/km
                 // ladder the phone/web run-detail uses, so the figure here
                 // matches what the synced run shows there (modulo the
-                // gender calibration the watch can't read — see RunCalories).
-                run {
+                // gender calibration the watch deliberately can't read —
+                // see RunCalories). Gated on the universal `show_calories`
+                // opt-out, and labelled "(est)" when no body weight is set
+                // so the 70 kg fallback never reads as a measured figure —
+                // both mirroring web's /runs/[id] cell.
+                if (showCalories) {
                     val kcal = com.runapp.watchwear.recording.RunCalories.estimate(
                         summary.distanceM, bodyWeightKg, summary.activityType,
                     )
                     if (kcal > 0) {
                         Text(
-                            stringResource(R.string.kcal, kcal),
+                            stringResource(
+                                if (bodyWeightKg != null) R.string.kcal else R.string.kcal_est,
+                                kcal,
+                            ),
                             style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                             color = DuskPalette.haze,
                         )

@@ -88,6 +88,23 @@ class UniversalSettingsTest {
     }
 
     @Test
+    fun `show_calories hides the wrist figure only on an explicit false`() {
+        // The pref is a harm-reduction opt-out for weight-conscious
+        // runners, so an explicit false must reach the wrist too — not
+        // just web + phone run-detail.
+        assertEquals(false, parseUniversalSettings("""[{"prefs":{"show_calories":false}}]""")?.showCalories)
+        // Negative control: everything else leaves the default (on)
+        // intact, mirroring web's `!== false`. If the parse were
+        // inverted or defaulted-off, these would flip.
+        assertEquals(true, parseUniversalSettings("""[{"prefs":{"show_calories":true}}]""")?.showCalories)
+        assertEquals(true, parseUniversalSettings("""[{"prefs":{"default_activity_type":"run"}}]""")?.showCalories)
+        assertEquals(true, parseUniversalSettings("""[{"prefs":{"show_calories":"nonsense"}}]""")?.showCalories)
+        assertEquals(true, parseUniversalSettings("""[{"prefs":{}}]""")?.showCalories)
+        // No settings row at all → default on.
+        assertEquals(true, parseUniversalSettings("""[]""")?.showCalories)
+    }
+
+    @Test
     fun `walk hike cycle all accepted`() {
         for (kind in listOf("walk", "hike", "cycle")) {
             val out = parseUniversalSettings("""[{"prefs":{"default_activity_type":"$kind"}}]""")
