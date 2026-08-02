@@ -530,6 +530,8 @@ export const en = {
 	"planDetail.adaptiveOnTrack": "Your recent weeks are on track — no adjustment needed.",
 	"planDetail.adaptiveNoSafeChange": "You've drifted from plan recently, but there's no safe adjustment to make right now.",
 	"planDetail.adaptiveFitnessHeld": "Held back — you're carrying fatigue right now, so adding volume isn't advised.",
+	"planDetail.replanDeload": "{from} → {to} — deload while you recover",
+	"planDetail.adaptiveReasonDeload": "carrying deep fatigue",
 	"planDetail.adaptiveReasonUnder": "under your plan for multiple weeks",
 	"planDetail.adaptiveReasonOver": "over your plan for multiple weeks",
 	"planDetail.adaptiveConfidenceHigh": "high confidence",
