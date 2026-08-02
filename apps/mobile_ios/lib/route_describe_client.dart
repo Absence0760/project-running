@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'payload_hash.dart';
 import 'route_description.dart';
 
 /// Network glue for the route-detail "Describe this route" affordance.
@@ -75,6 +76,9 @@ Future<AiDescriptionResult> requestAiDescription(
       final r = await c.postUrl(uri);
       r.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
       r.headers.set('x-supabase-authorization', 'Bearer $t');
+      // CloudFront's Lambda OAC can't hash the body itself — the client
+      // supplies the sigv4 payload hash or the Function URL 403s (#590).
+      r.headers.set('x-amz-content-sha256', payloadSha256Hex(body));
       r.add(utf8.encode(body));
       return await r.close();
     } catch (_) {
