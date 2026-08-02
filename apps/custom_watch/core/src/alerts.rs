@@ -1366,6 +1366,7 @@ mod tests {
             last_lap: None,
             auto_lap: crate::auto_lap::AUTO_LAP_DEFAULT,
             zone_cutoffs: zone_cutoffs_from_max_hr(DEFAULT_MAX_HR_BPM),
+            hr_source: None,
             zone_ceiling: None,
             pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
