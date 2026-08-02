@@ -1283,9 +1283,11 @@ pub fn metric_unfed(
         // says something without a digit in it.
         Metric::WorkoutRemaining => snap.workout.is_none().then_some(Unfed::NotSynced),
         Metric::RacePrediction => snap.race_prediction.is_none().then_some(Unfed::NeedOneKm),
-        // Two distinct absences the page already separates: no course pushed at
-        // all, versus a course whose cut-offs are all behind the runner.
+        // Three distinct absences the page already separates: no course pushed
+        // at all, a course whose cut-offs are loaded but which the runner has
+        // not been fixed onto yet, and one whose cut-offs are all behind them.
         Metric::CutoffMargin => match snap.cutoff {
+            None if snap.cutoffs_loaded => Some(Unfed::AwaitingFix),
             None => Some(Unfed::NotSynced),
             Some(c) => c.margin_s.is_none().then_some(Unfed::NoCutoffAhead),
         },
@@ -1377,6 +1379,7 @@ pub fn metric_unfed(
         // again by which term went missing, because "keep running" and "wait
         // for the sky" are different instructions.
         Metric::SleepBudget => match snap.sleep {
+            None if snap.cutoffs_loaded => Some(Unfed::AwaitingFix),
             None => Some(Unfed::NotSynced),
             Some(s) => match s.status {
                 SleepStatus::Budget | SleepStatus::NoBudget => None,
@@ -2885,7 +2888,18 @@ fn cutoff_glance(
     let mut rows: [Row; ROWS] = Default::default();
 
     match snap.cutoff {
-        None => write_unfed(&mut rows, Page::CutoffEta, "CUTOFF", Unfed::NotSynced),
+        // Two absences with different remedies: no cut-offs pushed is the
+        // phone's to fix, cut-offs with no course position is the sky's.
+        None => write_unfed(
+            &mut rows,
+            Page::CutoffEta,
+            "CUTOFF",
+            if snap.cutoffs_loaded {
+                Unfed::AwaitingFix
+            } else {
+                Unfed::NotSynced
+            },
+        ),
         Some(eta) if !eta.has_cutoff => {
             write_unfed(&mut rows, Page::CutoffEta, "CUTOFF", Unfed::NoCutoffAhead)
         }
@@ -2960,7 +2974,18 @@ fn sleep_glance(
     let mut rows: [Row; ROWS] = Default::default();
 
     match snap.sleep {
-        None => write_unfed(&mut rows, Page::SleepStation, "SLEEP", Unfed::NotSynced),
+        // Same split the cut-off page draws, for the same reason — the budget is
+        // that page's margin and cannot be more certain than it.
+        None => write_unfed(
+            &mut rows,
+            Page::SleepStation,
+            "SLEEP",
+            if snap.cutoffs_loaded {
+                Unfed::AwaitingFix
+            } else {
+                Unfed::NotSynced
+            },
+        ),
         Some(s) if s.status == SleepStatus::NoCutoff => {
             write_unfed(&mut rows, Page::SleepStation, "SLEEP", Unfed::NoCutoffAhead)
         }
@@ -5108,6 +5133,7 @@ mod tests {
             hr_source: None,
             pace_band: None,
             zone_time_s: [0; ZONE_COUNT],
+            cutoffs_loaded: false,
             cutoff: None,
             sleep: None,
             race_prediction: None,
@@ -6296,7 +6322,8 @@ mod tests {
         }
     }
 
-    /// Every value a slot can hold is drawn in a face that can spell it.
+    /// Every value a slot can hold is drawn in a face that can spell it **and
+    /// fit it**.
     ///
     /// This is the seam the two halves of § 364 meet at, and it drew a blank
     /// panel in the simulator before it was closed. A placement asks for a
@@ -6307,15 +6334,21 @@ mod tests {
     /// settled workout step holds `DONE`, so this is the common case, not the
     /// edge one.
     ///
-    /// [`crate::ui_frame::slot_band`] is the fallback; this is what says it is
-    /// applied to everything a slot can actually contain.
+    /// The width half is the same failure one step along: a value the tall face
+    /// *can* spell but cannot fit loses the glyphs past the right edge, and a
+    /// truncated number reads exactly like a whole one. Both halves are
+    /// [`crate::ui_frame::slot_band`]'s; this is what says they are applied to
+    /// everything a slot can actually contain.
     #[test]
     fn every_value_a_slot_can_hold_lands_in_a_face_that_can_draw_it() {
-        use crate::ui_frame::{numeral_hero, slot_band, HeroBand};
+        use crate::ui_frame::{numeral_hero, slot_band, tall_hero_fits, HeroBand};
         let drawable = |band: HeroBand, v: &str| match band {
             // Both numeral primitives index a glyph table that stops at the
             // numeral set; anything else is skipped and leaves no pixels.
-            HeroBand::BigNumHero | HeroBand::MedNumHero => numeral_hero(v),
+            HeroBand::BigNumHero => numeral_hero(v) && tall_hero_fits(v, None),
+            HeroBand::MedNumHero => {
+                numeral_hero(v) && v.len() * crate::ui_frame::NUMERAL_MED_CELLS <= COLS
+            }
             // The doubled text face draws the whole ASCII font.
             HeroBand::TextHero => true,
             other => panic!("a slot must not resolve to {other:?}"),
@@ -6359,6 +6392,29 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The over-wide slot value is reachable, not hypothetical: a 200-mile race
+    /// runs past 100 hours, and a Duo's second slot is a full-size numeral face.
+    #[test]
+    fn a_hundred_hour_elapsed_on_a_duos_second_slot_steps_down_instead_of_truncating() {
+        use crate::screens::{Layout, Screen};
+        use crate::ui_frame::{slot_band, slot_placements, tall_hero_fits, HeroBand};
+
+        let mut rec = snapshot(RecordState::Recording, 386_000.0);
+        rec.elapsed_s = 100 * 3_600;
+        let screen = Screen::new(Layout::Duo, &[Metric::Distance, Metric::Elapsed]).unwrap();
+        let slots = screen_slots(&screen, Some(&fix()), None, &rec, None, 42, None);
+        assert_eq!(slots[1].value.as_str(), "100:00:00");
+
+        let at = slot_placements(Layout::Duo)[1];
+        assert_eq!(at.band, HeroBand::BigNumHero);
+        assert!(!tall_hero_fits(slots[1].value.as_str(), None));
+        assert_eq!(
+            slot_band(at.band, slots[1].value.as_str()),
+            HeroBand::MedNumHero,
+            "the tall face would have rendered `100:00:`"
+        );
     }
 
     /// The five tokens are distinct.
@@ -9983,6 +10039,65 @@ mod tests {
         );
         assert_eq!(rows[3], header("CUTOFF  BEHIND", "REC"));
         assert_eq!(rows[6].as_str(), "NEED --");
+    }
+
+    /// Cut-offs loaded but no position projected onto the course is the sky's
+    /// absence, not the phone's — and it must never resolve to a verdict, which
+    /// is what reading the course START as the position used to produce.
+    #[test]
+    fn cutoff_and_sleep_await_a_fix_rather_than_ask_for_a_sync_they_already_have() {
+        let mut rec = snapshot(RecordState::Recording, 500.0);
+        rec.cutoffs_loaded = true;
+        rec.cutoff = None;
+        rec.sleep = None;
+
+        let rows = page_rows(
+            Page::CutoffEta,
+            Some(&fix()),
+            None,
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        );
+        assert_eq!(rows[3], header("CUTOFF", "REC"));
+        assert_eq!(rows[4].as_str(), "AWAITING FIX");
+        // A `Sensor`-class absence carries no remedy line: there is nothing to
+        // do but keep the sky in view.
+        assert_eq!(rows[5].as_str(), "");
+
+        let rows = sleep_rows(&rec);
+        assert_eq!(rows[3], header("SLEEP", "REC"));
+        assert_eq!(rows[4].as_str(), "AWAITING FIX");
+        assert!(!rows[3].as_str().contains("MISSED"));
+
+        // A composed screen's slot says the same thing in one word.
+        assert_eq!(
+            metric_unfed(
+                Metric::CutoffMargin,
+                Some(&fix()),
+                None,
+                &rec,
+                None,
+                42,
+                None
+            ),
+            Some(Unfed::AwaitingFix)
+        );
+        assert_eq!(
+            metric_unfed(
+                Metric::SleepBudget,
+                Some(&fix()),
+                None,
+                &rec,
+                None,
+                42,
+                None
+            ),
+            Some(Unfed::AwaitingFix)
+        );
     }
 
     fn sleep_rows(rec: &Snapshot) -> [Row; ROWS] {
