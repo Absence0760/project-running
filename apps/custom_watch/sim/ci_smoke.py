@@ -467,6 +467,7 @@ MENU_ROWS = (
     "HideEmpty",
     "Profile",
     "Backyard",
+    "PairPhone",
     "Erase",
     "QnhRezero",
     "Ice",

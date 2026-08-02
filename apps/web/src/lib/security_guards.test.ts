@@ -1111,6 +1111,52 @@ test('RouteBuilder sends the generate JWT in `x-supabase-authorization`, not `Au
 	);
 });
 
+test('every web POST through a CloudFront Lambda behavior sends the sigv4 payload hash', () => {
+	// Reason: OAC-signed Lambda Function URLs reject unsigned payloads and
+	// CloudFront cannot hash a body it streams through, so the CLIENT must
+	// send `x-amz-content-sha256` on any request that carries a body —
+	// without it every POST 403s at the origin and the SPA error fallback
+	// masks the failure as a 200 shell (issue #590 defect 3). GET surfaces
+	// (share/OG, osrm-proxy) carry no body and are exempt.
+	for (const path of [
+		'src/lib/components/CoachChat.svelte',
+		'src/lib/components/RouteBuilder.svelte',
+		'src/lib/routes/route_describe_client.ts',
+		'src/lib/routes/route_request_client.ts',
+	]) {
+		const source = read(path);
+		assert.match(
+			source,
+			/['"]x-amz-content-sha256['"]/,
+			`${path} POSTs through a CloudFront Lambda behavior and must send x-amz-content-sha256 (payloadSha256Hex over the exact body).`,
+		);
+		assert.match(
+			source,
+			/payloadSha256Hex/,
+			`${path} must compute the payload hash via payloadSha256Hex so the digest always matches the posted bytes.`,
+		);
+	}
+});
+
+test('mobile POST seams to the CloudFront Lambda behaviors send the sigv4 payload hash', () => {
+	// Reason: same OAC unsigned-payload rejection as the web seams — the
+	// mobile clients POST to https://threkir.com/api/coach* through the
+	// same distribution, so they need the same header (issue #590).
+	for (const path of [
+		'../mobile_android/lib/screens/coach_screen.dart',
+		'../mobile_ios/lib/screens/coach_screen.dart',
+		'../mobile_android/lib/route_describe_client.dart',
+		'../mobile_ios/lib/route_describe_client.dart',
+	]) {
+		const source = read(path);
+		assert.match(
+			source,
+			/['"]x-amz-content-sha256['"]/,
+			`${path} POSTs through a CloudFront Lambda behavior and must send x-amz-content-sha256.`,
+		);
+	}
+});
+
 test('AWS Budgets carries all three thresholds (50% ACTUAL, 100% ACTUAL, 100% FORECASTED)', () => {
 	// Reason: the FORECASTED notification is the only one that catches
 	// a runaway DURING the month — the two ACTUAL notifications fire

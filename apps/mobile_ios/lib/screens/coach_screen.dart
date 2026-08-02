@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../backend_timeout.dart';
 import '../auth_error.dart';
+import '../payload_hash.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -493,6 +494,10 @@ class _CoachScreenState extends State<CoachScreen> {
           // Function URL. The SvelteKit dev wrapper accepts the same
           // header for parity. See apps/web/lambda/coach/src/index.ts.
           r.headers.set('x-supabase-authorization', 'Bearer $t');
+          // CloudFront's Lambda OAC can't hash the body itself — the
+          // client supplies the sigv4 payload hash or the Function URL
+          // 403s (#590).
+          r.headers.set('x-amz-content-sha256', payloadSha256Hex(body));
           r.add(utf8.encode(body));
           return await r.close();
         } catch (_) {

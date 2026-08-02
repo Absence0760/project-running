@@ -3,6 +3,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { renderCoachMarkdown } from '$lib/coach/markdown';
 	import { supabase } from '$lib/core/supabase';
+	import { payloadSha256Hex } from '$lib/util/payload_hash';
 	import { TABLES } from '$lib/core/schema';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -470,19 +471,24 @@
 					role: m.role,
 					content: m.content,
 				}));
+				const body = JSON.stringify({
+					messages: payloadMessages,
+					plan_id: planId,
+					recent_runs_limit: runsLimit,
+					mode: opts.mode,
+					anchor_message_id: opts.anchorId ?? null,
+				});
 				return fetch('/api/coach', {
 					method: 'POST',
 					headers: {
 						'content-type': 'application/json',
 						'X-Supabase-Authorization': `Bearer ${token}`,
+						// CloudFront's Lambda OAC can't hash the body itself — the
+						// client supplies the sigv4 payload hash or the Function URL
+						// 403s (#590).
+						'x-amz-content-sha256': await payloadSha256Hex(body),
 					},
-					body: JSON.stringify({
-						messages: payloadMessages,
-						plan_id: planId,
-						recent_runs_limit: runsLimit,
-						mode: opts.mode,
-						anchor_message_id: opts.anchorId ?? null,
-					}),
+					body,
 				});
 			}
 

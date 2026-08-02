@@ -7,24 +7,16 @@ import { USER_A } from '../fixtures/users';
 /**
  * Workout structured-interval edit (web).
  *
- * The audit found that `plans/workout-detail.spec.ts` +
- * `plans/workout-runner-surfaces.spec.ts` pin the read-side of a
- * structured workout (warmup + repeats + steady + cooldown rows) and
- * the unlink confirm dialog, but no test exercises the WRITE side —
- * creating or editing the interval structure (warmup distance, rep
- * count, recovery distance, pace target).
- *
- * Current state of the WorkoutEditor (apps/web/src/lib/components/
- * WorkoutEditor.svelte): the modal exposes kind / distance / pace /
- * tolerance / zone / notes fields, but NO UI to add or remove an
- * interval, change the rep count, set the recovery distance, or
- * tweak the rep pace target. The structure column is only ever
- * cleared (kind→rest, kind→easy/long/recovery sets `structure: null`)
- * or left untouched (`structure: undefined`).
- *
- * Until a structure-editor UI lands, this saga can't pass — there's
- * nothing for the test to drive. Tracked here as a single `test.skip`
- * with the canonical TODO so the gap stays visible.
+ * `plans/workout-detail.spec.ts` + `plans/workout-runner-surfaces.spec.ts`
+ * pin the read-side of a structured workout (warmup + repeats + steady +
+ * cooldown rows) and the unlink confirm dialog; this file exercises the
+ * WRITE side. The WorkoutEditor (apps/web/src/lib/components/
+ * WorkoutEditor.svelte) hosts a structure block (`fieldset.structure`)
+ * with warmup/cooldown distances and a repeats sub-fieldset (count,
+ * rep distance, rep pace, recovery distance) — the first test drives it
+ * end-to-end and asserts the structure jsonb round-trips. The second
+ * pins the clearing contract: flipping kind to an unstructured kind
+ * sends `structure: null` so a stale payload can't outlive its kind.
  */
 
 const SYDNEY_HALF_PLAN_ID = 'a1a1eada-aaaa-0000-0000-000000000001';

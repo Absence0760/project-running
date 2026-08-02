@@ -148,7 +148,7 @@ WatchApp/
 ├── WorkoutManager.swift           # HealthKit + GPS + run lifecycle
 ├── HealthKitManager.swift         # Heart rate sensor
 ├── CheckpointStore.swift          # 15s crash checkpoint + recovery
-├── RouteNavigator.swift           # Off-route detection (stub — not wired)
+├── RouteNavigator.swift           # Off-route detection engine (geometry + 40/20 m hysteresis + transition haptic; unit-tested, no UI wired yet)
 └── WatchConnectivityManager.swift # Sync with iPhone
 ```
 

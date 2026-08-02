@@ -19,6 +19,7 @@
 	import { nearestInsertIndex } from '$lib/routes/insert_index';
 	import type { RoutePreference } from '$lib/routes/generate/graphhopper';
 	import { supabase } from '$lib/core/supabase';
+	import { payloadSha256Hex } from '$lib/util/payload_hash';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { searchPlaces } from '$lib/routes/geocoding';
@@ -1358,15 +1359,20 @@
 		if (routeVersion !== startVersion) return false;
 		let res: Response;
 		try {
+			const body = JSON.stringify(
+				preference ? { start, targetDistanceM, preference } : { start, targetDistanceM },
+			);
 			res = await fetch('/api/routes/generate', {
 				method: 'POST',
 				headers: {
 					'content-type': 'application/json',
 					...(token ? { 'X-Supabase-Authorization': `Bearer ${token}` } : {}),
+					// CloudFront's Lambda OAC can't hash the body itself — the
+					// client supplies the sigv4 payload hash or the Function URL
+					// 403s (#590).
+					'x-amz-content-sha256': await payloadSha256Hex(body),
 				},
-				body: JSON.stringify(
-					preference ? { start, targetDistanceM, preference } : { start, targetDistanceM },
-				),
+				body,
 			});
 		} catch {
 			return false;

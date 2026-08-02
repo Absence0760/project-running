@@ -12,6 +12,7 @@
 // mirroring CoachChat + route_describe_client.
 
 import { supabase } from '../core/supabase';
+import { payloadSha256Hex } from '../util/payload_hash';
 import type { RouteConstraints } from './route_request/constraints';
 
 export type { RouteConstraints } from './route_request/constraints';
@@ -57,12 +58,16 @@ export async function requestRouteConstraints(
 		request,
 		location_label: locationLabel ?? null,
 	});
+	// CloudFront's Lambda OAC can't hash the body itself — the client
+	// supplies the sigv4 payload hash or the Function URL 403s (#590).
+	const bodyHash = await payloadSha256Hex(body);
 	const post = (token: string) =>
 		fetch('/api/coach/route-request', {
 			method: 'POST',
 			headers: {
 				'content-type': 'application/json',
 				'X-Supabase-Authorization': `Bearer ${token}`,
+				'x-amz-content-sha256': bodyHash,
 			},
 			body,
 		});

@@ -22,6 +22,9 @@ dependencies:
   ui_kit:
     path: ../../packages/ui_kit
   supabase_flutter: ^2.16.0
+  # Direct dep for the x-amz-content-sha256 payload hash (payload_hash.dart)
+  # — don't lean on supabase_flutter's transitive copy.
+  crypto: ^3.0.3
   geolocator: ^14.0.0
   path_provider: ^2.1.0
   flutter_dotenv: ^6.0.0

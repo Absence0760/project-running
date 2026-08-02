@@ -6,7 +6,7 @@ anywhere. Sources of truth: `watch_core::button` (press grammar),
 `watch_core::page` (cycle order, §286), `watch_core::page_grid` (the grid
 modal, §288/§289/§333), `watch_core::record` (run states), `watch_core::face`
 (what each surface renders), `watch_core::settings_menu` (the idle menu, §351), `watch_core::erase` (the
-§378 factory-erase guard),
+§378 factory-erase guard), `watch_core::pairing` (the §432 pair-window guard + gate),
 `watch_core::screens` (what a composed data screen holds, §364). Every edge below is host-tested; the flows are
 sim-verified (see `apps/custom_watch/local_testing.md` for the macros).
 
@@ -31,7 +31,7 @@ stateDiagram-v2
     Grid: one screenful of enabled pages + cursor
     Menu: Settings menu (modal, §351)
     Menu: GNSS mode / hide empty / profile
-    Menu: backyard / erase / re-zero / medical ID
+    Menu: backyard / pair phone / erase / re-zero / medical ID
     Tmr: Timer (modal, §375)
     Tmr: countdown / stopwatch, one ladder
 
@@ -57,6 +57,8 @@ stateDiagram-v2
     Menu --> Ice: BTN1 on MEDICAL ID — show + close
     Menu --> Menu: BTN1 on FACTORY ERASE — arm ("ERASE ALL? B1", 4 s; title names "N RUNS NOT SYNCED" if any)
     Menu --> Menu: BTN1 x2 — wipe (§378); the menu stays open on factory values
+    Menu --> Menu: BTN1 on PAIR PHONE — arm ("PAIR NEW? B1", 4 s); BTN1 x2 — open the 90 s window (§432)
+    Menu --> Menu: BTN5 on an open PAIR PHONE window — close it early
     Menu --> Menu: any other press, or 4 s — cancel the arm
     Menu --> Idle: 30 s inactivity — auto-close
     Idle --> Run: BTN1 — start run
@@ -219,7 +221,7 @@ to the case:
 - **BTN4** — **exit**, on the §81 BACK slot, where every five-button watch
   puts it.
 
-Seven items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
+Eight items at tier 1: **GNSS MODE**, **HIDE EMPTY** (the §284 filter; the
 full per-page mask stays a phone surface), **PROFILE** (§353 — the Run →
 Trail → Ultra → Hike ladder, right toward the longer / more-battery
 activities, clamped; selecting a rung *applies* its preset — a curated page
@@ -228,8 +230,15 @@ cycle ride, and the row shows the last-applied profile, `--` until one is
 ever chosen), **BACKYARD** (§372 — right=ON / left=OFF, the HIDE EMPTY
 grammar; arming it puts the `YARD` page in the cycle and re-points the
 auto-lap from 1 km onto the corral bell, which is why it is idle-only: a run
-has to be wholly inside the mode or wholly outside it), **FACTORY ERASE**
-(§378 — the wearer's own wipe, and the one row that is *guarded*: right arms
+has to be wholly inside the mode or wholly outside it), **PAIR PHONE**
+(§432 — the wearer's way to hand a bonded watch to a NEW phone without the
+FACTORY ERASE below it: right arms (`PAIR NEW? B1`) and a second right
+inside the same 4 s guard window opens a **90 s pairing window**, during
+which — and only during which — a bonded watch accepts a replacement bond;
+the row reads `PAIRING OPEN 90S` while open, left closes the window early,
+a formed bond closes it instantly, and the window survives the menu closing
+because the wearer opens it and then walks away to the phone), **FACTORY
+ERASE** (§378 — the wearer's own wipe, guarded on the same idiom: right arms
 it and a second right inside the stop guard's own 4 s window fires, with any
 other press cancelling; see below), **RE-ZERO ALTITUDE**
 (right fires the idle hold's request and closes; the idle banner answers),
@@ -249,8 +258,8 @@ action row that **stays open**, because the menu is its own confirmation: the
 rows above it redraw at their factory values (`GNSS PERF 1 FIX/1S`,
 `PROFILE --`, `BACKYARD OFF`) on the screen the runner pressed from.
 
-**The §351 cost bound has now survived a sixth AND a seventh row, and both
-amendments are worth stating precisely.** The original wording said a sixth
+**The §351 cost bound has now survived a sixth, a seventh AND an eighth row,
+and the amendments are worth stating precisely.** The original wording said a sixth
 item would break the "≤ 2 cursor steps, so ≤ 4 presses" bound. It does not,
 because the row went in at index 3 — the ring's far point — and a 6-ring's
 step distances from the cursor's home are `[0,1,2,3,2,1]` against the
@@ -265,33 +274,47 @@ row's cost". That was wrong, and §378 records why: it assumed appending.** A
 wrapping ring's cursor distance to index `k` is `min(k, n-k)`, so a 6-ring has
 **one** far seat at 3 while a 7-ring has **two** — `[0,1,2,3,3,2,1]`. The
 seventh row takes the *second* far seat and displaces nobody. §378's FACTORY
-ERASE went in at **index 4**, and every pre-existing row keeps its exact
-distance:
+ERASE went in at **index 4**, and every pre-existing row kept its exact
+distance.
 
-| Row | 6-ring index / steps | 7-ring index / steps |
-|---|---|---|
-| GNSS MODE | 0 / 0 | 0 / 0 |
-| HIDE EMPTY | 1 / 1 | 1 / 1 |
-| PROFILE | 2 / 2 | 2 / 2 |
-| BACKYARD | 3 / **3** | 3 / **3** |
-| FACTORY ERASE | — | 4 / **3** |
-| RE-ZERO ALTITUDE | 4 / 2 | 5 / 2 |
-| MEDICAL ID | 5 / 1 | 6 / 1 |
+**§432's eighth row (PAIR PHONE) ran the same arithmetic one ring wider: an
+8-ring has exactly one true far seat — `[0,1,2,3,4,3,2,1]` — and inserting
+there (index 4) is the only zero-tax placement.** Every pre-existing row
+keeps its exact distance again:
 
-Appending at index 6 is the one placement that would have cost anything
-(RE-ZERO 2→3, MEDICAL ID 1→2) — and it is also the *cheapest* seat on a
-wrapping ring, one BTN2 press from home, which is exactly wrong for a wipe. A
-test computes both rings from `ITEMS` and fails on a reorder that taxes a
-mid-race row.
+| Row | 6-ring index / steps | 7-ring index / steps | 8-ring index / steps |
+|---|---|---|---|
+| GNSS MODE | 0 / 0 | 0 / 0 | 0 / 0 |
+| HIDE EMPTY | 1 / 1 | 1 / 1 | 1 / 1 |
+| PROFILE | 2 / 2 | 2 / 2 | 2 / 2 |
+| BACKYARD | 3 / **3** | 3 / **3** | 3 / **3** |
+| PAIR PHONE | — | — | 4 / **4** |
+| FACTORY ERASE | — | 4 / **3** | 5 / **3** |
+| RE-ZERO ALTITUDE | 4 / 2 | 5 / 2 | 6 / 2 |
+| MEDICAL ID | 5 / 1 | 6 / 1 | 7 / 1 |
+
+Appending at the tail is still the one placement that would have cost
+anything — and it is also the *cheapest* seat on a wrapping ring, one BTN2
+press from home, which is exactly wrong for a wipe or for the row that opens
+the bond gate. The far seat's 4 steps belong to the row a runner touches
+once per *phone*, and the hardest-to-reach seat is precisely where a
+security door belongs. A test computes the rings from `ITEMS` and fails on a
+reorder that taxes a mid-race row.
 
 **The layout, though, really did have to change, and it spends the last
 slack.** Six rows under two chrome rows and a blank spacer filled the 9-row
 panel exactly (a test pins `MENU_TOP_ROW + MENU_ITEMS == ROWS`). §378 moves
 `MENU_TOP_ROW` 3 → 2 and the spacer is gone; the list stays legible because
 every item row is indented two cells behind its cursor marker while the title
-is flush left, so the indentation does the separating the blank row did. An
-**eighth** row has nothing left to reclaim and needs §333's row-scrolling
-window ported from the grid.
+is flush left, so the indentation does the separating the blank row did. The
+**eighth** row (§432) had nothing left to reclaim, so the menu body is now
+§333's row-scrolling window ported from the grid — seven visible rows, the
+smallest scroll that keeps the cursor on screen, never past the tail (the
+pinned facts became `MENU_TOP_ROW + MENU_VISIBLE == ROWS` and
+`MENU_ITEMS == MENU_VISIBLE + 1`). At the top of the list MEDICAL ID waits
+one cursor step below the fold; on its row the window slides one and GNSS
+MODE leaves the top — the cursor is on screen always, exactly the grid's
+grammar.
 
 The menu's key map deliberately diverges from the grid's (BTN3/BTN4 cursor,
 `B1 GO`, `B2 EXIT`): the grid walks the *horizontal* page ring, so its cursor
@@ -389,7 +412,9 @@ no-chord grammar.
 | Change any mid-race setting via the menu | ≤ 4 (open + ≤ 2 cursor steps + 1 edit press); exit is free (30 s) or 1 (BTN4) | — |
 | Arm / disarm backyard mode (§372) | 5 (open + 3 cursor steps + 1 edit press) | the ring's first far seat — every other row kept its exact cost, and this is the row a runner touches once per race rather than once per hour |
 | Factory-erase the watch (§378) | **6** (open + 3 cursor steps + arm + confirm) | **deliberately +1**, and deliberately on the ring's *second* far seat: the stop guard's trade at the larger stake — one extra press against a fried runner at hour 60 wiping their race with a fumble. Adding it cost no existing row a press (table above) |
-| Cancel an armed erase (§378) | 0 — any other press, or 4 s of nothing | yes; there is no dedicated cancel key because every key already is one |
+| Open a re-pair window (§432) | **7** (open + 4 cursor steps + arm + confirm) | **deliberately +1** for the same guard, and deliberately on the 8-ring's one TRUE far seat: a fumbled press that opened 90 s of radio-range bond replacement is exactly the accident the gate exists to prevent, and this is the row a runner touches once per *phone*. Adding it cost no existing row a press (table above) |
+| Close an open pairing window early (§432) | 6 (open + 4 cursor steps + left), or 0 — 90 s of nothing closes it | unguarded on purpose: shutting a security door needs no ceremony |
+| Cancel an armed erase or pair arm (§378/§432) | 0 — any other press, or 4 s of nothing | yes; there is no dedicated cancel key because every key already is one |
 | Open the timer (§375) | 1 tap (idle BTN2) | yes — on the last key that was dead |
 | Start / stop / reset a timer once open | 1 tap each (BTN1, BTN1, BTN5) | yes |
 | Set a countdown to a given rung | 1 tap per rung (BTN2 up / BTN3 down), worst 10 to cross the clamped 11-rung ladder | **above the floor, deliberately** — §351's no-wrap rule costs the antipodal rung; a wrapping ladder would halve it and let one press teleport 90 min ↔ stopwatch |
