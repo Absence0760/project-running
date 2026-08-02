@@ -4,6 +4,8 @@
 //! `N` receivers and returns `None` past that, so `N` tracks the live
 //! subscriber count — bump it when a new consumer subscribes.
 
+use core::sync::atomic::{AtomicU32, Ordering};
+
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::watch::Watch;
@@ -18,6 +20,7 @@ use watch_core::gnss_signal::SignalSample;
 use watch_core::hr_duty::HrSample;
 use watch_core::ice::IceCard;
 use watch_core::page::Page;
+use watch_core::pairing;
 use watch_core::profiles::ActivityProfile;
 use watch_core::record::{RouteElevView, Snapshot};
 use watch_core::roadbook_store::PushedRoadbook;
@@ -353,3 +356,29 @@ pub static UNSYNCED_RUNS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
 /// fresh GPS, no barometer); the `ui` task shows it as a transient idle-face
 /// banner. One receiver (the `ui` task).
 pub static QNH_REZERO: Watch<CriticalSectionRawMutex, (RezeroStatus, u32), 1> = Watch::new();
+
+/// Uptime second the wearer-armed §432 BLE pairing window closes at
+/// (`pairing::WINDOW_CLOSED` = closed). An atomic rather than a `Watch`
+/// because its consumer is the `ble` task's `SecurityHandler`, whose
+/// callbacks run in the SoftDevice event context and can neither await nor
+/// hold a receiver. The `button` task opens it from the menu's PAIR PHONE
+/// row and closes it on a left press; the bonder closes it the moment a bond
+/// forms; the deadline closes it by comparison. A reboot zeroes it —
+/// fail-closed.
+static PAIRING_WINDOW_UNTIL_S: AtomicU32 = AtomicU32::new(pairing::WINDOW_CLOSED);
+
+pub fn open_pairing_window(now_s: u32) {
+    PAIRING_WINDOW_UNTIL_S.store(pairing::window_deadline(now_s), Ordering::Relaxed);
+}
+
+pub fn close_pairing_window() {
+    PAIRING_WINDOW_UNTIL_S.store(pairing::WINDOW_CLOSED, Ordering::Relaxed);
+}
+
+pub fn pairing_window_remaining_s(now_s: u32) -> Option<u32> {
+    pairing::window_remaining_s(PAIRING_WINDOW_UNTIL_S.load(Ordering::Relaxed), now_s)
+}
+
+pub fn pairing_window_open(now_s: u32) -> bool {
+    pairing_window_remaining_s(now_s).is_some()
+}

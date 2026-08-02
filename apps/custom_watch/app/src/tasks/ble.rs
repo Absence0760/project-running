@@ -67,14 +67,22 @@
 //! settings / course / workout, and — `on_bonded` overwriting the peer
 //! unconditionally — leave the owner's own phone unable to reconnect. A
 //! bonded watch now refuses the pairing outright ([`Bonder`]'s `can_bond` +
-//! `request_mitm_protection`) and drops the central that asked for it.
+//! `request_mitm_protection`) and drops the central that asked for it —
+//! **unless the wearer has opened the §432 pairing window** (the settings
+//! menu's guarded PAIR PHONE row, `watch_core::pairing`), the deliberate
+//! re-pair path for a lost or dead phone that §378's FACTORY ERASE used to
+//! be the only answer to. The window is 90 s, closes the moment a bond
+//! forms, and lives in an atomic deadline (`state::PAIRING_WINDOW_UNTIL_S`)
+//! because these callbacks run in the SoftDevice event context and can
+//! neither await nor hold a `Watch` receiver; a reboot zeroes it, so the
+//! gate fails closed.
 //!
-//! What remains out of scope is therefore the SETUP window, not the whole life
-//! of the device: an active in-range attacker present *before the owner pairs*
-//! — or after a `run_flash::RunStore::factory_erase`, which is the deliberate
-//! re-pair path for a lost phone — still wins a just-works MITM, because the
-//! tier-1 face has no passkey UI to raise the bar with. Accepted and
-//! documented, not hidden.
+//! What remains out of scope is therefore the WEARER-OPENED windows, not the
+//! whole life of the device: an active in-range attacker present during
+//! first-time setup or during an open §432 window still wins a just-works
+//! MITM, because the tier-1 face has no passkey UI to raise the bar with.
+//! Accepted and documented, not hidden — the window turns a standing
+//! exposure into 90 wearer-chosen seconds.
 
 #[cfg(not(feature = "ble"))]
 #[embassy_executor::task]
@@ -115,6 +123,7 @@ mod imp {
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::flash_store::BondRecord;
     use watch_core::link;
+    use watch_core::pairing;
     use watch_core::roadbook_store::{self, RoadbookAssembler, RoadbookPush, ROADBOOK_CHUNK_CAP};
     use watch_core::run_store::ChunkRequest;
     use watch_core::screens::{Screens, MAX_SCR1_LEN};
@@ -298,9 +307,10 @@ mod imp {
     /// bond" is not a fleet-of-one nicety, it is a takeover — proximity alone
     /// would be enough to become the watch's phone and to lock the owner's out.
     /// Losing a phone still must not brick the watch, and the path for that is
-    /// FACTORY ERASE (§378, `run_flash::RunStore::factory_erase` clears the
-    /// `BND1` record along with everything else), which costs possession of the
-    /// watch instead of mere radio range.
+    /// the §432 pairing window (the settings menu's guarded PAIR PHONE row —
+    /// 90 s of wearer-sanctioned replacement, costing possession of the watch
+    /// instead of mere radio range), with FACTORY ERASE (§378) remaining the
+    /// scorched-earth fallback that also clears `BND1`.
     pub struct Bonder {
         peer: Cell<Option<Peer>>,
         sys_attrs: RefCell<heapless::Vec<u8, 64>>,
@@ -353,18 +363,23 @@ mod imp {
             IoCapabilities::None
         }
 
-        /// Only ever bond ONCE. Signals the refusal so [`run`] can drop the
-        /// central that asked — see the type doc for why a second bond is a
+        /// Bond only while [`pairing::may_bond`] says so: always before the
+        /// first bond, and afterwards only inside a wearer-opened §432
+        /// window. Signals the refusal so [`run`] can drop the central that
+        /// asked — see the type doc for why an unsanctioned second bond is a
         /// takeover rather than a re-pair.
         fn can_bond(&self, _conn: &Connection) -> bool {
-            let bonded = self.peer.get().is_some();
-            if bonded {
+            let now_s = Instant::now().as_secs() as u32;
+            let ok =
+                pairing::may_bond(self.peer.get().is_some(), state::pairing_window_open(now_s));
+            if !ok {
                 PAIRING_REFUSED.signal(());
             }
-            !bonded
+            ok
         }
 
-        /// Refuse the *pairing*, not merely the bond, once a bond exists.
+        /// Refuse the *pairing*, not merely the bond, whenever the bond would
+        /// be refused.
         ///
         /// `can_bond` returning false only clears the bonding bit: the pairing
         /// still completes, the link still reaches Mode 1 Level 2, and Level 2
@@ -375,10 +390,12 @@ mod imp {
         /// cannot satisfy, so the SoftDevice fails the pairing procedure on
         /// authentication requirements instead of completing it.
         ///
-        /// Asserted only once bonded: an unpaired watch must still pair with no
+        /// The exact negation of [`pairing::may_bond`], evaluated at the same
+        /// gate: an unpaired watch (and a §432 window) must still pair with no
         /// interaction, since there is no passkey face to interact with.
         fn request_mitm_protection(&self, _conn: &Connection) -> bool {
-            self.peer.get().is_some()
+            let now_s = Instant::now().as_secs() as u32;
+            !pairing::may_bond(self.peer.get().is_some(), state::pairing_window_open(now_s))
         }
 
         fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
@@ -393,6 +410,10 @@ mod imp {
             peer_id: IdentityKey,
         ) {
             info!("ble: bonded (ediv {=u16})", master_id.ediv);
+            // A §432 window is spent the moment it admits one bond — left
+            // open, the 90 s tail would invite a SECOND replacement behind
+            // the phone that just paired.
+            state::close_pairing_window();
             // Fresh bond, fresh CCCD state.
             self.sys_attrs.borrow_mut().clear();
             self.peer.set(Some(Peer {

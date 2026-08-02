@@ -34,6 +34,7 @@ use core::fmt::Write;
 use crate::erase::{erase_stake_row, ERASE_LEGEND_ARMED, ERASE_ROW, ERASE_ROW_ARMED};
 use crate::face::{Row, ROWS};
 use crate::gnss_mode::GnssMode;
+use crate::pairing::{pair_open_row, PAIR_LEGEND_ARMED, PAIR_ROW, PAIR_ROW_ARMED};
 use crate::profiles::ActivityProfile;
 
 /// Seconds of inactivity before an open menu closes itself back to the home
@@ -70,14 +71,27 @@ pub enum MenuItem {
     /// idle-only because arming it re-points the auto-lap onto the corral
     /// bell — a run has to be wholly inside the mode or wholly outside it.
     Backyard,
+    /// The BLE re-pair window (§432) — the wearer's way to hand a bonded
+    /// watch to a NEW phone without the FACTORY ERASE below it. Guarded like
+    /// the erase: right (BTN1) *arms* [`crate::pairing::PairGuard`] and only
+    /// a second right inside its window opens the 90 s pairing window; left
+    /// closes an open window early (the directional "off", unguarded —
+    /// closing a security door needs no ceremony). Seated at index 4, the
+    /// 8-ring's one true far seat: the eighth row's only zero-tax placement
+    /// (§378's arithmetic, one ring wider), and the hardest row for a
+    /// fumbling hand to land on — which a row that opens the bond gate
+    /// should be.
+    PairPhone,
     /// The factory erase (§378) — the wearer's own way to sanitise a watch they
     /// are about to lose, sell, or hand on, with no phone in reach. An action
     /// row like the two below it, but guarded: right (BTN1) *arms*
     /// [`crate::erase::EraseGuard`] and only a second right inside its window
-    /// wipes. Seated here, at the ring's second far point, for two reasons that
+    /// wipes. Went in at the 7-ring's second far point for two reasons that
     /// agree — it is the row a fumbling hand should be least likely to land on,
-    /// and index 4 is one of the only two seats a seventh row can take without
-    /// raising any existing row's cursor cost (§378).
+    /// and index 4 was one of the only two seats a seventh row could take
+    /// without raising any existing row's cursor cost (§378). §432's PairPhone
+    /// took that seat on the 8-ring; this row slid to index 5 at its exact old
+    /// cost of 3 steps.
     Erase,
     /// An action row: right (BTN1) fires the same request as the idle BTN3
     /// hold and closes the menu; the idle face's transient banner
@@ -92,26 +106,29 @@ pub enum MenuItem {
     Ice,
 }
 
-pub const MENU_ITEMS: usize = 7;
+pub const MENU_ITEMS: usize = 8;
 
 const ITEMS: [MenuItem; MENU_ITEMS] = [
     MenuItem::GnssMode,
     MenuItem::HideEmpty,
     MenuItem::Profile,
     MenuItem::Backyard,
+    MenuItem::PairPhone,
     MenuItem::Erase,
     MenuItem::QnhRezero,
     MenuItem::Ice,
 ];
 
 /// What the ui task needs to draw the menu: where the cursor is, and whether
-/// the erase row is armed. Travels as one value because both are modal state
-/// the button task owns and the composer only renders — publishing them
-/// separately would let the panel show an armed legend over an un-armed row.
+/// either guarded row is armed. Travels as one value because all of it is
+/// modal state the button task owns and the composer only renders —
+/// publishing them separately would let the panel show an armed legend over
+/// an un-armed row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MenuView {
     pub cursor: u8,
     pub erase_armed: bool,
+    pub pair_armed: bool,
 }
 
 /// The open menu: a cursor over [`ITEMS`]. The button task owns it (like the
@@ -176,6 +193,14 @@ pub enum MenuEdit {
     /// Arm or disarm backyard-ultra mode (already different from the current
     /// value).
     SetBackyard(bool),
+    /// A right press on the PAIR PHONE row (§432). Not an answer, for the
+    /// erase row's reason verbatim: this module has no clock, so whether the
+    /// press arms or opens is [`crate::pairing::PairGuard`]'s call.
+    PairRow,
+    /// A left press on the PAIR PHONE row while its window is open: close it
+    /// now. Only offered while open — left on a closed row has no "off" to
+    /// mean, like every action row.
+    ClosePairing,
     /// A right press on the factory-erase row (§378). Deliberately *not* an
     /// answer — this module has no clock, and whether the press arms or wipes
     /// is [`crate::erase::EraseGuard`]'s call, exactly as BTN2's stop is
@@ -209,7 +234,9 @@ fn mode_left(mode: GnssMode) -> GnssMode {
 /// Resolve an edit press on `item` against the current values. Pure and
 /// host-tested; both task variants dispatch on the result. `profile` is the
 /// last-applied activity profile, `None` until one is ever chosen — a right
-/// press then starts the ladder at its first rung.
+/// press then starts the ladder at its first rung. `pairing_open` is whether
+/// a §432 window is currently open, so a left on the PAIR PHONE row closes
+/// exactly the state the runner just read, or nothing.
 pub fn edit(
     item: MenuItem,
     dir: ValueDir,
@@ -217,6 +244,7 @@ pub fn edit(
     hide_empty: bool,
     profile: Option<ActivityProfile>,
     backyard: bool,
+    pairing_open: bool,
 ) -> MenuEdit {
     match (item, dir) {
         (MenuItem::GnssMode, ValueDir::Right) => {
@@ -288,6 +316,18 @@ pub fn edit(
                 MenuEdit::Nothing
             }
         }
+        (MenuItem::PairPhone, ValueDir::Right) => MenuEdit::PairRow,
+        // The one action row whose left is NOT inert: an open window is a
+        // state, and left is its "off" side. On a closed row (or a merely
+        // armed one — the generic disarm-on-any-other-press rule covers the
+        // arm) left means nothing, like every other action row.
+        (MenuItem::PairPhone, ValueDir::Left) => {
+            if pairing_open {
+                MenuEdit::ClosePairing
+            } else {
+                MenuEdit::Nothing
+            }
+        }
         // Left is inert on every action row, and on this one that inertness is
         // load-bearing rather than incidental: the task disarms the guard on
         // every press that is not the confirming right, so BTN5 on an armed
@@ -316,7 +356,17 @@ pub fn edit(
 /// title row yields to [`erase_stake_row`] whenever the run store still holds
 /// runs the phone has not pulled (`unsynced_runs`), because those are the one
 /// thing the wipe destroys that nothing can re-push — a fully-synced store
-/// keeps the prompt byte-identical, so the stake line never cries wolf.
+/// keeps the prompt byte-identical, so the stake line never cries wolf. The
+/// §432 pair arm replaces the legend on the same rule (the two arms are
+/// mutually exclusive — any press off a row disarms it, so both can never
+/// stand at once).
+///
+/// Eight items over seven body rows since §432: the body is §333's
+/// row-scrolling window ported from the grid — the smallest scroll that keeps
+/// the cursor's row on screen, never past the tail ([`window_origin`]).
+/// `pairing_remaining_s` is the open §432 window's countdown (`None` =
+/// closed), read at render time so the row can never show an expired window
+/// as open.
 pub fn menu_rows(
     view: MenuView,
     mode: GnssMode,
@@ -324,10 +374,13 @@ pub fn menu_rows(
     profile: Option<ActivityProfile>,
     backyard: bool,
     unsynced_runs: u8,
+    pairing_remaining_s: Option<u32>,
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
     if view.erase_armed {
         let _ = rows[0].push_str(ERASE_LEGEND_ARMED);
+    } else if view.pair_armed {
+        let _ = rows[0].push_str(PAIR_LEGEND_ARMED);
     } else {
         let _ = write!(rows[0], "{:<14}B4 EXIT", "B5- B1+");
     }
@@ -341,8 +394,9 @@ pub fn menu_rows(
             let _ = rows[1].push_str("SETTINGS");
         }
     }
-    for (i, item) in ITEMS.iter().enumerate() {
-        let row = MENU_TOP_ROW + i;
+    let origin = window_origin(view.cursor);
+    for (i, item) in ITEMS.iter().enumerate().skip(origin).take(MENU_VISIBLE) {
+        let row = MENU_TOP_ROW + (i - origin);
         let marker = if view.cursor as usize == i { '>' } else { ' ' };
         let _ = rows[row].push(marker);
         let _ = rows[row].push(' ');
@@ -383,6 +437,15 @@ pub fn menu_rows(
                     if backyard { "ON" } else { "OFF" }
                 );
             }
+            MenuItem::PairPhone => {
+                if view.pair_armed {
+                    let _ = rows[row].push_str(PAIR_ROW_ARMED);
+                } else if let Some(remaining) = pairing_remaining_s {
+                    let _ = rows[row].push_str(pair_open_row(remaining).as_str());
+                } else {
+                    let _ = rows[row].push_str(PAIR_ROW);
+                }
+            }
             MenuItem::Erase => {
                 let _ = rows[row].push_str(if view.erase_armed {
                     ERASE_ROW_ARMED
@@ -404,13 +467,23 @@ pub fn menu_rows(
 /// First row of the item list, directly under the legend and title.
 ///
 /// It was row 3 until §378, with row 2 held blank so the title band read as
-/// chrome. Seven rows spend that blank: `MENU_TOP_ROW + MENU_ITEMS == ROWS` is
-/// pinned by a test, so the spacer was the last slack in the layout and an
-/// eighth row needs §333's row-scrolling window rather than another reclaimed
-/// line. The list is still legible without it — every item row is indented two
-/// cells behind its cursor marker and the title is flush left, so the
-/// indentation does the separating the blank row did.
+/// chrome. Seven rows spent that blank — the layout's last slack — and §432's
+/// eighth row therefore rides §333's row-scrolling window instead of another
+/// reclaimed line. The list is still legible without the spacer — every item
+/// row is indented two cells behind its cursor marker and the title is flush
+/// left, so the indentation does the separating the blank row did.
 const MENU_TOP_ROW: usize = 2;
+
+/// Items one screenful of menu shows.
+const MENU_VISIBLE: usize = ROWS - MENU_TOP_ROW;
+
+/// First item the body window shows — §333's grammar verbatim: the smallest
+/// scroll that keeps the cursor's row on screen, never past the tail.
+fn window_origin(cursor: u8) -> usize {
+    (cursor as usize)
+        .saturating_sub(MENU_VISIBLE - 1)
+        .min(MENU_ITEMS - MENU_VISIBLE)
+}
 
 #[cfg(test)]
 mod tests {
@@ -418,8 +491,9 @@ mod tests {
     use crate::face::COLS;
 
     /// The pre-§372 arities, so every case written before the BACKYARD row
-    /// keeps reading as exactly what it pins. Backyard mode is off in all of
-    /// them; the cases that exercise it call `super::` directly.
+    /// keeps reading as exactly what it pins. Backyard mode is off and the
+    /// §432 pairing window closed in all of them; the cases that exercise
+    /// either call `super::` directly.
     fn edit(
         item: MenuItem,
         dir: ValueDir,
@@ -427,7 +501,7 @@ mod tests {
         hide_empty: bool,
         profile: Option<ActivityProfile>,
     ) -> MenuEdit {
-        super::edit(item, dir, mode, hide_empty, profile, false)
+        super::edit(item, dir, mode, hide_empty, profile, false, false)
     }
 
     fn menu_rows(
@@ -436,7 +510,7 @@ mod tests {
         hide_empty: bool,
         profile: Option<ActivityProfile>,
     ) -> [Row; ROWS] {
-        super::menu_rows(view(cursor), mode, hide_empty, profile, false, 0)
+        super::menu_rows(view(cursor), mode, hide_empty, profile, false, 0, None)
     }
 
     /// An un-armed cursor — what every case written before §378's erase row
@@ -445,6 +519,7 @@ mod tests {
         MenuView {
             cursor,
             erase_armed: false,
+            pair_armed: false,
         }
     }
 
@@ -469,6 +544,8 @@ mod tests {
         assert_eq!(m.item(), MenuItem::Profile);
         m.down();
         assert_eq!(m.item(), MenuItem::Backyard);
+        m.down();
+        assert_eq!(m.item(), MenuItem::PairPhone);
         m.down();
         assert_eq!(m.item(), MenuItem::Erase);
         m.down();
@@ -651,14 +728,33 @@ mod tests {
         assert_eq!(rows[3].as_str(), "  HIDE EMPTY ON");
         assert_eq!(rows[4].as_str(), "  PROFILE --");
         assert_eq!(rows[5].as_str(), "  BACKYARD OFF");
-        assert_eq!(rows[6].as_str(), "  FACTORY ERASE");
-        assert_eq!(rows[7].as_str(), "  RE-ZERO ALTITUDE");
-        assert_eq!(rows[8].as_str(), "  MEDICAL ID");
+        assert_eq!(rows[6].as_str(), "  PAIR PHONE");
+        assert_eq!(rows[7].as_str(), "  FACTORY ERASE");
+        assert_eq!(rows[8].as_str(), "  RE-ZERO ALTITUDE");
         let rows = menu_rows(1, GnssMode::Expedition, false, Some(ActivityProfile::Ultra));
         // 21 cells exactly — the widest this row gets, so it also pins the fit.
         assert_eq!(rows[2].as_str(), "  GNSS EXP  1 FIX/60S");
         assert_eq!(rows[3].as_str(), "> HIDE EMPTY OFF");
         assert_eq!(rows[4].as_str(), "  PROFILE ULTRA");
+    }
+
+    #[test]
+    fn the_body_window_scrolls_to_the_cursor_and_never_hides_it() {
+        // §333's grammar on the menu: eight items, seven body rows. At the
+        // top the window rests at the head and MEDICAL ID waits below the
+        // fold; on the last row the window slides one, GNSS MODE leaves the
+        // top, and the cursor is on screen — always.
+        let rows = menu_rows(6, GnssMode::Performance, true, None);
+        assert_eq!(rows[2].as_str(), "  GNSS PERF 1 FIX/1S");
+        assert_eq!(rows[8].as_str(), "> RE-ZERO ALTITUDE");
+        let rows = menu_rows(7, GnssMode::Performance, true, None);
+        assert_eq!(rows[2].as_str(), "  HIDE EMPTY ON");
+        assert_eq!(rows[8].as_str(), "> MEDICAL ID");
+        for cursor in 0..MENU_ITEMS as u8 {
+            let rows = menu_rows(cursor, GnssMode::Performance, true, None);
+            let marked = rows.iter().filter(|r| r.starts_with('>')).count();
+            assert_eq!(marked, 1, "cursor {cursor} fell out of the window");
+        }
     }
 
     #[test]
@@ -678,25 +774,26 @@ mod tests {
         // way past; the legend row is the whole width of the panel and it is
         // where §337 says a changed press meaning has to be read.
         let armed = MenuView {
-            cursor: 4,
+            cursor: 5,
             erase_armed: true,
+            pair_armed: false,
         };
-        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false, 0);
+        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false, 0, None);
         assert_eq!(rows[0].as_str(), "B1 ERASE    B4 CANCEL");
-        assert_eq!(rows[6].as_str(), "> ERASE ALL? B1");
+        assert_eq!(rows[7].as_str(), "> ERASE ALL? B1");
         // Nothing else moves: the runner reads the rest of the menu unchanged,
         // so the arm reads as one row's state and not as a new screen. With
         // nothing unsynced this pins the whole armed prompt byte-for-byte —
         // the stake line may only ever exist when there is a stake.
-        let resting = super::menu_rows(view(4), GnssMode::Performance, true, None, false, 0);
+        let resting = super::menu_rows(view(5), GnssMode::Performance, true, None, false, 0, None);
         assert_eq!(rows[1], resting[1]);
         assert_eq!(rows[1].as_str(), "SETTINGS");
         for row in 2..ROWS {
-            if row != 6 {
+            if row != 7 {
                 assert_eq!(rows[row], resting[row], "row {row} moved under the arm");
             }
         }
-        assert_eq!(resting[6].as_str(), "> FACTORY ERASE");
+        assert_eq!(resting[7].as_str(), "> FACTORY ERASE");
     }
 
     #[test]
@@ -707,18 +804,19 @@ mod tests {
         // while armed — the resting menu is not a warning surface — and every
         // other row stays exactly as the count-free arm renders it.
         let armed = MenuView {
-            cursor: 4,
+            cursor: 5,
             erase_armed: true,
+            pair_armed: false,
         };
-        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false, 3);
+        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false, 3, None);
         assert_eq!(rows[0].as_str(), "B1 ERASE    B4 CANCEL");
         assert_eq!(rows[1].as_str(), "3 RUNS NOT SYNCED");
-        assert_eq!(rows[6].as_str(), "> ERASE ALL? B1");
-        let quiet = super::menu_rows(armed, GnssMode::Performance, true, None, false, 0);
+        assert_eq!(rows[7].as_str(), "> ERASE ALL? B1");
+        let quiet = super::menu_rows(armed, GnssMode::Performance, true, None, false, 0, None);
         for row in 2..ROWS {
             assert_eq!(rows[row], quiet[row], "row {row} moved under the stake");
         }
-        let resting = super::menu_rows(view(4), GnssMode::Performance, true, None, false, 3);
+        let resting = super::menu_rows(view(5), GnssMode::Performance, true, None, false, 3, None);
         assert_eq!(
             resting[1].as_str(),
             "SETTINGS",
@@ -727,18 +825,21 @@ mod tests {
     }
 
     #[test]
-    fn the_erase_row_sits_where_no_existing_row_pays_for_it() {
+    fn the_guarded_rows_sit_where_no_existing_row_pays_for_them() {
         // §378's press-cost argument, pinned rather than restated: on a
-        // wrapping ring the cursor distance to index k is min(k, n - k), and
-        // the seventh row went in at one of the only two seats where every
-        // pre-existing row keeps its exact distance. Computed here from the
-        // ITEMS array, so a reorder that quietly taxes a mid-race row fails.
+        // wrapping ring the cursor distance to index k is min(k, n - k). The
+        // seventh row (§378's erase) took the 7-ring's second far seat; the
+        // eighth (§432's pair) takes the 8-ring's one TRUE far seat — the
+        // only zero-tax placement left, and the hardest row to land on by
+        // accident. Computed here from the ITEMS array, so a reorder that
+        // quietly taxes a mid-race row fails.
         let steps = |n: usize, k: usize| k.min(n - k);
         let before = [
             MenuItem::GnssMode,
             MenuItem::HideEmpty,
             MenuItem::Profile,
             MenuItem::Backyard,
+            MenuItem::Erase,
             MenuItem::QnhRezero,
             MenuItem::Ice,
         ];
@@ -747,9 +848,19 @@ mod tests {
             assert_eq!(
                 steps(MENU_ITEMS, now),
                 steps(before.len(), was),
-                "{item:?} costs more cursor steps than it did at six rows"
+                "{item:?} costs more cursor steps than it did at seven rows"
             );
         }
+        let pair = ITEMS
+            .iter()
+            .position(|i| *i == MenuItem::PairPhone)
+            .expect("the pair row exists");
+        assert_eq!(
+            steps(MENU_ITEMS, pair),
+            4,
+            "the pair row belongs on the ring's far seat — the hardest row \
+             to land on by accident"
+        );
         let erase = ITEMS
             .iter()
             .position(|i| *i == MenuItem::Erase)
@@ -757,8 +868,7 @@ mod tests {
         assert_eq!(
             steps(MENU_ITEMS, erase),
             3,
-            "the erase belongs on the ring's far seat — the hardest row to \
-             land on by accident"
+            "the erase kept its 7-ring cost"
         );
         // Every mid-race row (one the runner reaches for during a run) still
         // costs open + steps + edit <= 4, which is §351's real budget.
@@ -769,6 +879,74 @@ mod tests {
                 "{item:?} broke the ≤ 4 bound"
             );
         }
+    }
+
+    #[test]
+    fn the_pair_row_arms_on_right_and_left_only_closes_an_open_window() {
+        // Right is the guarded arm/open path — like the erase, the module
+        // reports which row the press landed on and `pairing::PairGuard`
+        // decides. Left is the one action-row left that means something: the
+        // "off" side of an OPEN window, and nothing at all when it is closed
+        // (there is no off to press for).
+        let e = |dir, open| {
+            super::edit(
+                MenuItem::PairPhone,
+                dir,
+                GnssMode::Performance,
+                true,
+                None,
+                false,
+                open,
+            )
+        };
+        assert_eq!(e(ValueDir::Right, false), MenuEdit::PairRow);
+        assert_eq!(e(ValueDir::Right, true), MenuEdit::PairRow);
+        assert_eq!(e(ValueDir::Left, true), MenuEdit::ClosePairing);
+        assert_eq!(e(ValueDir::Left, false), MenuEdit::Nothing);
+    }
+
+    #[test]
+    fn an_armed_pair_replaces_the_legend_and_names_the_key_that_opens() {
+        // §378's rule at the other guarded row: both named presses change
+        // meaning while armed, so the whole chrome row changes with them.
+        let armed = MenuView {
+            cursor: 4,
+            erase_armed: false,
+            pair_armed: true,
+        };
+        let rows = super::menu_rows(armed, GnssMode::Performance, true, None, false, 0, None);
+        assert_eq!(rows[0].as_str(), "B1 PAIR     B4 CANCEL");
+        assert_eq!(rows[6].as_str(), "> PAIR NEW? B1");
+        // Nothing else moves — the arm reads as one row's state, and the
+        // title never carries the erase's stake line for a pair arm: nothing
+        // a re-pair does destroys a run.
+        let resting = super::menu_rows(view(4), GnssMode::Performance, true, None, false, 3, None);
+        assert_eq!(rows[1].as_str(), "SETTINGS");
+        for row in 2..ROWS {
+            if row != 6 {
+                assert_eq!(rows[row], resting[row], "row {row} moved under the arm");
+            }
+        }
+        assert_eq!(resting[6].as_str(), "> PAIR PHONE");
+    }
+
+    #[test]
+    fn an_open_window_reads_its_countdown_on_the_row() {
+        // The countdown is the state, read at render time — so an expired
+        // window (the caller passes None) drops straight back to the resting
+        // text and the row can never advertise a door that is shut.
+        let rows = super::menu_rows(
+            view(4),
+            GnssMode::Performance,
+            true,
+            None,
+            false,
+            0,
+            Some(88),
+        );
+        assert_eq!(rows[6].as_str(), "> PAIRING OPEN 88S");
+        let rows = super::menu_rows(view(4), GnssMode::Performance, true, None, false, 0, None);
+        assert_eq!(rows[6].as_str(), "> PAIR PHONE");
     }
 
     #[test]
@@ -784,41 +962,57 @@ mod tests {
                 true,
                 None,
                 on,
+                false,
             )
         };
         assert_eq!(e(ValueDir::Right, false), MenuEdit::SetBackyard(true));
         assert_eq!(e(ValueDir::Right, true), MenuEdit::Nothing);
         assert_eq!(e(ValueDir::Left, true), MenuEdit::SetBackyard(false));
         assert_eq!(e(ValueDir::Left, false), MenuEdit::Nothing);
-        let rows = super::menu_rows(view(3), GnssMode::Performance, true, None, true, 0);
+        let rows = super::menu_rows(view(3), GnssMode::Performance, true, None, true, 0, None);
         assert_eq!(rows[5].as_str(), "> BACKYARD ON");
     }
 
     #[test]
     fn every_menu_row_fits_the_body_it_is_drawn_into() {
-        // Seven rows now sit directly under the two chrome rows — §378 spent
-        // the blank spacer that used to separate them, and the last item still
-        // lands on the final row, so an EIGHTH needs §333's scrolling window
-        // rather than another line to reclaim.
-        for armed in [false, true] {
-            for unsynced in [0, 4] {
-                let rows = super::menu_rows(
-                    MenuView {
-                        cursor: 0,
-                        erase_armed: armed,
-                    },
-                    GnssMode::Expedition,
-                    false,
-                    Some(ActivityProfile::Ultra),
-                    true,
-                    unsynced,
-                );
-                for row in rows.iter() {
-                    assert!(row.len() <= COLS, "menu row too wide: {row:?}");
+        // Eight items over the seven rows under the two chrome rows — §378
+        // spent the blank spacer, §432 spent the last whole-list layout, so
+        // the body is now §333's scrolling window and the pinned fact is the
+        // window's size, not the list's.
+        for erase_armed in [false, true] {
+            for pair_armed in [false, true] {
+                for unsynced in [0, 4] {
+                    for pairing in [None, Some(90), Some(1)] {
+                        let rows = super::menu_rows(
+                            MenuView {
+                                cursor: 0,
+                                erase_armed,
+                                pair_armed,
+                            },
+                            GnssMode::Expedition,
+                            false,
+                            Some(ActivityProfile::Ultra),
+                            true,
+                            unsynced,
+                            pairing,
+                        );
+                        for row in rows.iter() {
+                            assert!(row.len() <= COLS, "menu row too wide: {row:?}");
+                        }
+                    }
                 }
             }
         }
-        assert_eq!(MENU_TOP_ROW + MENU_ITEMS, ROWS, "the list fills the body");
+        assert_eq!(
+            MENU_TOP_ROW + MENU_VISIBLE,
+            ROWS,
+            "the window fills the body"
+        );
+        assert_eq!(
+            MENU_ITEMS,
+            MENU_VISIBLE + 1,
+            "one item past a screenful — the smallest window the list needs"
+        );
     }
 
     #[test]

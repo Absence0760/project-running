@@ -645,8 +645,11 @@ pub async fn screen_task(
         if let Some(view) = menu.filter(|_| !face::run_view(rec.as_ref())) {
             let hide = rec.as_ref().map(|s| s.hide_empty_pages).unwrap_or(true);
             let yard = rec.as_ref().is_some_and(|s| s.backyard.is_some());
+            // Read at render time so the PAIR PHONE row's countdown tracks the
+            // shared deadline and an expired window can never render as open.
+            let pairing = state::pairing_window_remaining_s(uptime_s);
             for (row, text) in
-                settings_menu::menu_rows(view, mode, hide, profile, yard, unsynced_runs)
+                settings_menu::menu_rows(view, mode, hide, profile, yard, unsynced_runs, pairing)
                     .iter()
                     .enumerate()
             {
