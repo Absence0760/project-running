@@ -517,6 +517,8 @@ export const messages = {
 	"planDetail.adaptiveOnTrack": "直近の週は計画どおりです。調整は不要です。",
 	"planDetail.adaptiveNoSafeChange": "最近は計画から外れていますが、今は安全に調整できる変更がありません。",
 	"planDetail.adaptiveFitnessHeld": "保留しました — 現在疲労がたまっているため、走行量を増やすのはおすすめしません。",
+	"planDetail.replanDeload": "{from} → {to} — 回復中のため負荷を軽減",
+	"planDetail.adaptiveReasonDeload": "深い疲労を抱えている",
 	"planDetail.adaptiveReasonUnder": "数週間にわたって計画を下回っています",
 	"planDetail.adaptiveReasonOver": "数週間にわたって計画を上回っています",
 	"planDetail.adaptiveConfidenceHigh": "高い確信度",

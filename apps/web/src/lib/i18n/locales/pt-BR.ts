@@ -521,6 +521,8 @@ export const messages = {
 	"planDetail.adaptiveOnTrack": "Suas últimas semanas estão dentro do plano — nenhum ajuste necessário.",
 	"planDetail.adaptiveNoSafeChange": "Você se desviou do plano recentemente, mas não há um ajuste seguro a fazer agora.",
 	"planDetail.adaptiveFitnessHeld": "Pausado — você está acumulando fadiga agora, então aumentar o volume não é recomendado.",
+	"planDetail.replanDeload": "{from} → {to} — redução de carga enquanto você se recupera",
+	"planDetail.adaptiveReasonDeload": "com fadiga profunda",
 	"planDetail.adaptiveReasonUnder": "abaixo do seu plano por várias semanas",
 	"planDetail.adaptiveReasonOver": "acima do seu plano por várias semanas",
 	"planDetail.adaptiveConfidenceHigh": "confiança alta",
