@@ -161,6 +161,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     heartRate: widget.heartRate,
                     treadmill: widget.treadmill,
                     preferences: widget.preferences,
+                    settingsSync: widget.settingsSync,
                   )),
             ),
             _tab(
