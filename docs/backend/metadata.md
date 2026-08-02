@@ -6,6 +6,17 @@ The `runs.metadata` column is `jsonb` — a schema-less bag that any client can 
 
 **Dart side:** key names are mirrored as `MetadataKeys.*` constants in `packages/core_models/lib/src/metadata_keys.dart` (and bucket names as `StorageBuckets.*`). Prefer the constant over a bare string literal in Dart so a typo is a compile error; `metadata_registry_test.dart` resolves `MetadataKeys.*` back to the wire key, so a key referenced only through the constant is still checked against this registry. When you add a key here, add the matching constant (see [decisions.md § 124](../architecture/decisions.md)).
 
+**Enforced on every writing platform.** Each client carries a source-level guard that scans its own sources and fails on a key with no row below, so an unregistered key can't reach `main` from any of them:
+
+| Platform | Guard |
+|---|---|
+| Dart (mobile) | `apps/mobile_android/test/metadata_registry_test.dart` |
+| TypeScript (web) | `apps/web/src/lib/metadata_registry_guard.test.ts` |
+| Kotlin (watch_wear) | `apps/watch_wear/android/app/src/test/kotlin/com/runapp/watchwear/MetadataRegistryTest.kt` |
+| Swift (watch_ios) | `apps/watch_ios/WatchAppTests/MetadataRegistryTests.swift` |
+
+All four parse the key column of the tables below with the same regex, so they can't disagree about what "registered" means. Each has an exemption set for a `metadata` identifier that genuinely isn't `runs.metadata` — the watchOS one exempts the run **columns** (`id`, `started_at`, `duration_s`, `distance_m`, `source`) that ride the `WCSession.transferFile(_:metadata:)` transport envelope alongside the real metadata keys. Weakening a guard to make a key pass is never the fix; add the row here instead.
+
 ---
 
 ## Key registry

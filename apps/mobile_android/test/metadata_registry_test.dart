@@ -7,10 +7,12 @@
 // the registry and the code from diverging silently — if you add a key in
 // Dart without adding a row to `docs/backend/metadata.md`, CI fails here.
 //
-// Scope: Dart-only. Equivalent tests should exist for TypeScript (web),
-// Kotlin (watch_wear), and Swift (watch_ios) — tracked as a TODO so the
-// cross-platform story is symmetrical. Today the registry itself is the
-// coordination point for those platforms.
+// Scope: Dart, and no longer alone — the TypeScript
+// (`apps/web/src/lib/metadata_registry_guard.test.ts`), Kotlin
+// (`apps/watch_wear/.../MetadataRegistryTest.kt`) and Swift
+// (`apps/watch_ios/WatchAppTests/MetadataRegistryTests.swift`) twins parse
+// this same registry with the same regex, so every writing platform fails
+// on an unregistered key.
 
 import 'dart:io';
 
