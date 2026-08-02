@@ -505,6 +505,14 @@ resource "aws_lambda_alias" "live" {
 
   # CI retargets this alias on every deploy. Same rationale as
   # ignore_changes on the function itself.
+  #
+  # Consequence (issue #590 defect 2, same for all eight aliases in
+  # this module): an env-only `terraform apply` publishes a fresh
+  # version (`publish = true`) carrying the new env, but the alias —
+  # and the Function URL, which targets the alias — keeps serving the
+  # old version with its FROZEN env snapshot. After any secret / env
+  # rotation apply, run `bin/lambda-alias-sync.sh <env>` (or cut a
+  # release) so the rotation actually reaches the serving path.
   lifecycle {
     ignore_changes = [function_version]
   }
