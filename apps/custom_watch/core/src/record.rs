@@ -765,8 +765,16 @@ pub struct Snapshot {
     pub band: Option<DistanceBand>,
     /// The active gear's wear verdict, or `None` when no gear is synced.
     pub gear: Option<GearWear>,
+    /// Whether a roadbook is loaded and a run is under way — the presence bit
+    /// for the Roadbook page, kept apart from the window below for the reason
+    /// [`Snapshot::cutoffs_loaded`] is: no roadbook pushed is the phone's to
+    /// fix, an unprojected position is the sky's.
+    pub roadbook_loaded: bool,
     /// The upcoming-checkpoint window of the loaded roadbook, or `None` when no
-    /// roadbook is loaded.
+    /// roadbook is loaded **or no position has been projected onto the course**
+    /// — the window is picked by distance-along-course, and the start line is
+    /// not a stand-in for an unknown position (§ 449). Read alongside
+    /// [`Snapshot::roadbook_loaded`] to tell those apart.
     pub roadbook: Option<RoadbookView>,
     /// The fuelling headline — the loaded roadbook's plan, or the runner's own
     /// drink/eat cadence when no roadbook is loaded. `None` only while idle.
@@ -2499,6 +2507,7 @@ impl Recorder {
                 band_for_distance(self.distance_m)
             },
             gear: self.gear_snapshot(),
+            roadbook_loaded: self.state != RecordState::Idle && !self.roadbook_legs.is_empty(),
             roadbook: self.roadbook_snapshot(),
             fuel: self.fuel_snapshot(),
             training_paces: self.training_paces_snapshot(),
@@ -2589,7 +2598,11 @@ impl Recorder {
         // the cycle until the first fix would renumber every page behind it.
         set(Page::CutoffEta, s.cutoffs_loaded);
         set(Page::SleepStation, s.cutoffs_loaded);
-        set(Page::Roadbook, s.roadbook.is_some());
+        // Keyed on the legs, not on the projection, for the reason the two
+        // cut-off pages above are: a runner not yet fixed onto the course still
+        // has a roadbook, and a page that left the cycle until the first fix
+        // would renumber every page behind it.
+        set(Page::Roadbook, s.roadbook_loaded);
         set(Page::Fuel, s.fuel.is_some());
         set(Page::Nav, self.course_loaded);
         set(Page::GearWear, s.gear.is_some());
@@ -2773,12 +2786,21 @@ impl Recorder {
     }
 
     /// The upcoming-checkpoint window from the current route position. `None`
-    /// with no roadbook loaded or while idle.
+    /// with no roadbook loaded, while idle, or before a position has been
+    /// projected onto the course.
+    ///
+    /// That last refusal is [`cutoff_snapshot`](Recorder::cutoff_snapshot)'s
+    /// (§ 449): the window is selected by distance-along-course, so reading an
+    /// absent position as the start line shows a runner at km 180 the course's
+    /// *first* checkpoints, with their plan-time cut-off flags. A **stale**
+    /// position still projects — the last known position names the right
+    /// checkpoints — and [`Snapshot::roadbook_loaded`] keeps "never pushed"
+    /// apart from "no position yet".
     fn roadbook_snapshot(&self) -> Option<RoadbookView> {
         if self.state == RecordState::Idle || self.roadbook_legs.is_empty() {
             return None;
         }
-        let pos = self.route_along_m.unwrap_or(0.0);
+        let pos = self.route_along_m?;
         let mut upcoming = [RoadbookLegView::default(); ROADBOOK_WINDOW];
         let mut len = 0;
         for leg in self.roadbook_legs.iter() {
@@ -2812,13 +2834,22 @@ impl Recorder {
     /// a pushed course while [`crate::alerts`] was reminding the runner to drink
     /// and eat the whole time, off these same rates — so the one page named
     /// FUEL could not say what the fuelling plan was.
+    ///
+    /// A loaded roadbook with **no projected position** takes that same
+    /// fallback. There is no next aid to carry to without one, and the start
+    /// line is not a stand-in for an unknown position (§ 449) — a runner at km
+    /// 180 would be handed the start-line carry. The cadence answer needs no
+    /// position, is true whatever the sky is doing, and is the plan the drink /
+    /// eat reminders are running on regardless; an empty state here would
+    /// repeat the very defect the cadence basis was added to fix.
     fn fuel_snapshot(&self) -> Option<FuelView> {
         if self.state == RecordState::Idle {
             return None;
         }
-        if self.roadbook_legs.is_empty() {
-            return Some(self.cadence_fuel_snapshot());
-        }
+        let pos = match (self.roadbook_legs.is_empty(), self.route_along_m) {
+            (false, Some(pos)) => pos,
+            _ => return Some(self.cadence_fuel_snapshot()),
+        };
         // Reconstruct the aid services from the pushed refill flag; static
         // slices satisfy `FuelLegInput`'s borrow without owning storage.
         const REFILL: &[&str] = &["water"];
@@ -2848,7 +2879,6 @@ impl Recorder {
         };
         // The carry set at the last aid at/behind us is what we're carrying now;
         // before the first aid, the start's carry.
-        let pos = self.route_along_m.unwrap_or(0.0);
         let mut carry = None;
         for (i, leg) in self.roadbook_legs.iter().enumerate() {
             if leg.cum_dist_m > pos {
@@ -4780,7 +4810,28 @@ mod tests {
             },
         ]);
         r.start(0);
-        // No position yet → the window starts at the first checkpoint.
+        // No position yet: the window is selected by distance-along-course, so
+        // the start line is not a stand-in for it (§ 449) — a runner at km 180
+        // was being shown the course's FIRST checkpoints with their plan-time
+        // cut-off flags. The presence bit keeps that apart from "never pushed".
+        let s = r.snapshot();
+        assert!(
+            s.roadbook_loaded,
+            "the roadbook is pushed and a run is live"
+        );
+        assert!(s.roadbook.is_none(), "no position, no checkpoint window");
+        // ...and the page stays in the cycle regardless, keyed on the legs:
+        // dropping out until the first fix would renumber every page behind it.
+        assert_ne!(s.pages_mask & Page::Roadbook.bit(), 0);
+        // The Fuel page takes the same refusal by falling back to the cadence,
+        // which needs no position, rather than to the start-line carry.
+        let f = s.fuel.expect("a run can always state its fuelling");
+        assert!(
+            matches!(f.basis, FuelBasis::Cadence { .. }),
+            "no position means no next aid to carry to"
+        );
+        // Fixed onto the course at its start: the whole schedule is ahead.
+        r.set_route_position(Some(0.0));
         let rb = r.snapshot().roadbook.expect("roadbook active");
         assert_eq!(rb.total, 3);
         assert_eq!(rb.upcoming_len, 3);

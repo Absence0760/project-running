@@ -722,6 +722,49 @@ mod tests {
         assert_eq!(slot_band(HeroBand::BigNumHero, "SYNC"), HeroBand::TextHero);
     }
 
+    /// A composed screen's LEAD slot draws in the face its own placement asks
+    /// for.
+    ///
+    /// [`hero_band`] takes slot 0's face from [`face::tall_hero`], which is
+    /// derived from [`face::body_top_row`] — and a composed screen used to
+    /// reserve no body band, so that answered `MedNumHero` while
+    /// [`slot_placements`] had already seated slot 0 in the 32x48 face over
+    /// rows 0-2. A Duo therefore drew its **lead** value at half the size of
+    /// the value beneath it, inverting the hierarchy the layout exists to
+    /// state, and `no_layout_overruns_the_panel_or_eats_the_gps_row` was
+    /// reserving three rows for a value drawn in two.
+    #[test]
+    fn a_composed_screens_lead_slot_draws_in_the_face_its_placement_asks_for() {
+        use crate::screens::Layout;
+        for page in [Page::Screen1, Page::Screen2, Page::Screen3, Page::Screen4] {
+            assert_eq!(
+                face::body_top_row(page),
+                face::TALL_HERO_BAND_ROWS,
+                "{page:?}"
+            );
+            assert_eq!(
+                hero_band(numeral_frame(page)),
+                HeroBand::BigNumHero,
+                "{page:?}"
+            );
+        }
+        for layout in [Layout::Single, Layout::Duo, Layout::Trio] {
+            let places = slot_placements(layout);
+            assert_eq!(
+                hero_band(numeral_frame(Page::Screen1)),
+                places[0].band,
+                "{layout:?}: the hero pipeline and the placement disagree about slot 0"
+            );
+            // ...and the label row the placement names is the one the face
+            // writes the label and the state tag on.
+            assert_eq!(places[0].label_row, face::body_top_row(Page::Screen1));
+        }
+        // The Duo's whole claim — "both values in the 32x48 face" — needs the
+        // two slots to resolve to the same band, which is what failed.
+        let duo = slot_placements(Layout::Duo);
+        assert_eq!(duo[1].band, hero_band(numeral_frame(Page::Screen1)));
+    }
+
     #[test]
     fn a_unit_is_drawn_only_beside_a_number_that_is_there() {
         assert!(hero_has_value("32.40"));
