@@ -72,9 +72,39 @@
       }
     }
   },
+  "recapMonthShareHeadline": "My {period} in running:",
+  "@recapMonthShareHeadline": {
+    "description": "First line of the shared month-in-running recap summary",
+    "placeholders": {
+      "period": {
+        "type": "Object"
+      }
+    }
+  },
+  "recapMonthShareSubject": "{period} recap",
+  "@recapMonthShareSubject": {
+    "description": "OS share-sheet subject for the month-in-running recap",
+    "placeholders": {
+      "period": {
+        "type": "Object"
+      }
+    }
+  },
   "recapTitle": "Year in running",
   "@recapTitle": {
     "description": "App bar title for the year-in-running recap screen"
+  },
+  "recapMonthTitle": "Month in running",
+  "@recapMonthTitle": {
+    "description": "App bar title for the month-in-running recap screen"
+  },
+  "recapPeriodYear": "Year",
+  "@recapPeriodYear": {
+    "description": "Toggle label selecting the annual recap"
+  },
+  "recapPeriodMonth": "Month",
+  "@recapPeriodMonth": {
+    "description": "Toggle label selecting the monthly recap"
   },
   "recapShareTooltip": "Share recap",
   "@recapShareTooltip": {
@@ -96,20 +126,28 @@
   "@recapNextYear": {
     "description": "Tooltip for the next-year chevron on the recap screen"
   },
-  "recapNoRunsForYear": "No runs to recap for {year}.",
-  "@recapNoRunsForYear": {
-    "description": "Empty-state shown for a year outside the valid range",
+  "recapPrevMonth": "Previous month",
+  "@recapPrevMonth": {
+    "description": "Tooltip for the previous-month chevron on the recap screen"
+  },
+  "recapNextMonth": "Next month",
+  "@recapNextMonth": {
+    "description": "Tooltip for the next-month chevron on the recap screen"
+  },
+  "recapNoRunsForPeriod": "No runs to recap for {period}.",
+  "@recapNoRunsForPeriod": {
+    "description": "Empty-state shown for a recap period outside the valid range",
     "placeholders": {
-      "year": {
+      "period": {
         "type": "Object"
       }
     }
   },
-  "recapNoRunsYet": "No runs in {year} yet. Log one to see your recap.",
-  "@recapNoRunsYet": {
-    "description": "Empty-state shown when no runs exist for the selected year",
+  "recapNoRunsYetInPeriod": "No runs in {period} yet. Log one to see your recap.",
+  "@recapNoRunsYetInPeriod": {
+    "description": "Empty-state shown when no runs exist for the selected recap period",
     "placeholders": {
-      "year": {
+      "period": {
         "type": "Object"
       }
     }

@@ -52,7 +52,26 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String recapMonthShareHeadline(Object period) {
+    return '$periodのランニング:';
+  }
+
+  @override
+  String recapMonthShareSubject(Object period) {
+    return '$periodの振り返り';
+  }
+
+  @override
   String get recapTitle => 'ランニングの1年';
+
+  @override
+  String get recapMonthTitle => 'ランニングの1か月';
+
+  @override
+  String get recapPeriodYear => '年';
+
+  @override
+  String get recapPeriodMonth => '月';
 
   @override
   String get recapShareTooltip => '振り返りを共有';
@@ -70,13 +89,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get recapNextYear => '次の年';
 
   @override
-  String recapNoRunsForYear(Object year) {
-    return '$year年は振り返るランがありません。';
+  String get recapPrevMonth => '前の月';
+
+  @override
+  String get recapNextMonth => '次の月';
+
+  @override
+  String recapNoRunsForPeriod(Object period) {
+    return '$periodは振り返るランがありません。';
   }
 
   @override
-  String recapNoRunsYet(Object year) {
-    return '$year年はまだランがありません。記録すると振り返りが表示されます。';
+  String recapNoRunsYetInPeriod(Object period) {
+    return '$periodはまだランがありません。記録すると振り返りが表示されます。';
   }
 
   @override

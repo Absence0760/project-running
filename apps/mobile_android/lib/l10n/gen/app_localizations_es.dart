@@ -54,7 +54,26 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String recapMonthShareHeadline(Object period) {
+    return 'Mi $period corriendo:';
+  }
+
+  @override
+  String recapMonthShareSubject(Object period) {
+    return 'Resumen de $period';
+  }
+
+  @override
   String get recapTitle => 'Resumen del año';
+
+  @override
+  String get recapMonthTitle => 'Resumen del mes';
+
+  @override
+  String get recapPeriodYear => 'Año';
+
+  @override
+  String get recapPeriodMonth => 'Mes';
 
   @override
   String get recapShareTooltip => 'Compartir resumen';
@@ -73,13 +92,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recapNextYear => 'Año siguiente';
 
   @override
-  String recapNoRunsForYear(Object year) {
-    return 'No hay carreras para resumir en $year.';
+  String get recapPrevMonth => 'Mes anterior';
+
+  @override
+  String get recapNextMonth => 'Mes siguiente';
+
+  @override
+  String recapNoRunsForPeriod(Object period) {
+    return 'No hay carreras para resumir en $period.';
   }
 
   @override
-  String recapNoRunsYet(Object year) {
-    return 'Aún no hay carreras en $year. Registra una para ver tu resumen.';
+  String recapNoRunsYetInPeriod(Object period) {
+    return 'Aún no hay carreras en $period. Registra una para ver tu resumen.';
   }
 
   @override
