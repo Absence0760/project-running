@@ -1,4 +1,5 @@
 import type * as GeoJSON from 'geojson';
+import { unwrapLonDeg } from './geo';
 /// Pure aggregation for the personal run-track heatmap (`/runs/heatmap`,
 /// persona-hunt finding #53 — privacy / strava-migration). Flattens many
 /// of the runner's own GPS tracks into weighted grid cells: repeated
@@ -75,10 +76,17 @@ export function buildHeatCells(
 
 /// Bounding box of a set of cells as MapLibre's
 /// `[[west, south], [east, north]]`. Null when there's nothing to fit.
+///
+/// Longitudes are expressed on the first cell's side of the antimeridian, so
+/// a runner whose tracks straddle 180° gets a box spanning their own streets
+/// rather than the 359.9° a raw min/max reads (which fits the whole planet).
+/// East may therefore sit outside [-180, 180]; MapLibre reads that as the
+/// adjacent world copy, which is exactly the intent.
 export function heatBounds(
 	cells: ReadonlyArray<HeatCell>,
 ): [[number, number], [number, number]] | null {
 	if (cells.length === 0) return null;
+	const refLng = cells[0].lng;
 	let minLat = Infinity,
 		minLng = Infinity,
 		maxLat = -Infinity,
@@ -86,8 +94,9 @@ export function heatBounds(
 	for (const c of cells) {
 		if (c.lat < minLat) minLat = c.lat;
 		if (c.lat > maxLat) maxLat = c.lat;
-		if (c.lng < minLng) minLng = c.lng;
-		if (c.lng > maxLng) maxLng = c.lng;
+		const lng = unwrapLonDeg(refLng, c.lng);
+		if (lng < minLng) minLng = lng;
+		if (lng > maxLng) maxLng = lng;
 	}
 	return [
 		[minLng, minLat],
