@@ -1,0 +1,48 @@
+/// Per-cue voice toggles — the `voice_cue_types` settings-bag key.
+///
+/// The map is sparse by design: an id ABSENT from it is ON. That keeps a
+/// newly-added cue type audible without a migration, and it means a client
+/// that has never heard of an id must not write a value for it. Reads
+/// therefore fail open and writes MERGE rather than replace, so an older
+/// build editing one toggle can't erase the runner's choice for a cue it
+/// doesn't know about.
+///
+/// The ids are a wire contract shared with the Dart `VoiceCue` class in
+/// `apps/mobile_*/lib/preferences.dart` (which is what actually speaks the
+/// cues — recording is mobile-only). `voice_cues.test.ts` pins them against
+/// that file so the two can't drift.
+
+export const VOICE_CUE_IDS = [
+	'splits',
+	'start_finish',
+	'off_route',
+	'pace_alerts',
+	'workout_steps',
+	'cutoff_catch_up',
+	'marker_targets',
+	'phase_transitions',
+] as const;
+
+export type VoiceCueId = (typeof VOICE_CUE_IDS)[number];
+
+export type VoiceCueMap = Record<string, boolean>;
+
+/// Coerce the opaque jsonb value into a boolean map, dropping anything that
+/// isn't a boolean. A malformed bag can only ever lose a suppression, never
+/// silence a cue the runner never turned off.
+export function readVoiceCueMap(raw: unknown): VoiceCueMap {
+	if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return {};
+	const out: VoiceCueMap = {};
+	for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+		if (typeof value === 'boolean') out[id] = value;
+	}
+	return out;
+}
+
+export function isVoiceCueEnabled(map: VoiceCueMap, id: string): boolean {
+	return map[id] ?? true;
+}
+
+export function setVoiceCueEnabled(map: VoiceCueMap, id: string, on: boolean): VoiceCueMap {
+	return { ...map, [id]: on };
+}
