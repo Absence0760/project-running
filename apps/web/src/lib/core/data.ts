@@ -138,6 +138,13 @@ export interface FetchRunsOptions {
 	 * they've never run anywhere.
 	 */
 	throwOnError?: boolean;
+	/**
+	 * PostgREST select list. Defaults to `*`. A caller that reads only a
+	 * handful of columns should narrow — `*` ships the `metadata` jsonb bag
+	 * on every row, which is what made the unbounded history scan expensive
+	 * in the first place (#332).
+	 */
+	columns?: string;
 }
 
 export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
@@ -150,7 +157,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	const build = () =>
 		supabase
 			.from(TABLES.runs)
-			.select('*')
+			.select(opts?.columns ?? '*')
 			.eq('user_id', userId)
 			.order('started_at', { ascending: false });
 
@@ -283,6 +290,21 @@ export async function fetchRunAllTimeStats(): Promise<{
 				? 0
 				: longestRes.data[0].distance_m ?? 0,
 	};
+}
+
+/// Exactly the columns `PeriodSummary` reads. The period drilldown has to
+/// ship every row — it lists them — so the saving is per-row width, not row
+/// count: no `metadata` jsonb bag, no elevation, no DNF flag.
+export const PERIOD_SUMMARY_RUN_COLUMNS = 'id, started_at, distance_m, duration_s, source';
+
+/// Complete run history for a `PeriodSummary`, column-narrowed to the five
+/// values it renders. Both drilldown entry points use it: the standalone
+/// /dashboard/period route, and the dashboard modal's lazy load when the
+/// requested period reaches past `DASHBOARD_RUNS_WINDOW_DAYS`. Throws on a
+/// fetch error so the caller can show a retry rather than a total that is
+/// silently short.
+export async function fetchRunsForPeriodSummary(): Promise<Run[]> {
+	return fetchRuns({ columns: PERIOD_SUMMARY_RUN_COLUMNS, throwOnError: true });
 }
 
 /// Supplementary counts for the Year-in-Running recap that can't be

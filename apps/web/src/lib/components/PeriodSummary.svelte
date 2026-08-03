@@ -5,15 +5,22 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatISO } from '$lib/training/training';
 	import { m } from '$lib/i18n/store.svelte';
+	import { periodNeedsFullHistory, type PeriodType } from '$lib/core/dashboard_runs';
 	import type { Run } from '$lib/types';
-
-	type PeriodType = 'week' | 'month' | 'all';
 
 	interface Props {
 		runs: Run[];
 		initialType?: PeriodType;
 		initialDate?: Date;
 		onPeriodChange?: (type: PeriodType, date: Date) => void;
+		/**
+		 * Earliest instant `runs` is guaranteed to cover. `null` (the
+		 * default) means it is the complete history. A caller that passes a
+		 * bounded set must also pass `loadFullHistory`, or a period reaching
+		 * past the bound would silently roll up a truncated total.
+		 */
+		coveredFrom?: Date | null;
+		loadFullHistory?: () => Promise<Run[]>;
 	}
 
 	let {
@@ -21,6 +28,8 @@
 		initialType = 'week',
 		initialDate,
 		onPeriodChange,
+		coveredFrom = null,
+		loadFullHistory,
 	}: Props = $props();
 
 	// `type` and `anchor` are seeded from the props once, then mutated
@@ -88,15 +97,51 @@
 		return d.toLocaleDateString(activeFormatLocale(), { month: 'long', year: 'numeric' });
 	}
 
+	let fullRuns = $state<Run[] | null>(null);
+	let loadingFullHistory = $state(false);
+	let fullHistoryFailed = $state(false);
+
+	let needsFullHistory = $derived(periodNeedsFullHistory(type, startDate, coveredFrom));
+
+	async function ensureFullHistory() {
+		if (fullRuns != null || loadingFullHistory) return;
+		// A bounded prop set with no loader is caller misuse; say so rather
+		// than sitting on a spinner or falling back to the bounded total.
+		if (!loadFullHistory) {
+			fullHistoryFailed = true;
+			return;
+		}
+		loadingFullHistory = true;
+		fullHistoryFailed = false;
+		try {
+			fullRuns = await loadFullHistory();
+		} catch (_) {
+			fullHistoryFailed = true;
+		} finally {
+			loadingFullHistory = false;
+		}
+	}
+
+	$effect(() => {
+		if (needsFullHistory && fullRuns == null && !fullHistoryFailed) void ensureFullHistory();
+	});
+
+	// A period that reaches past the prop's bound must never be rolled up
+	// from the bounded set — an "all time" total short by everything older
+	// than the window is worse than an honest loading / retry state.
+	let sourceRuns = $derived(needsFullHistory ? fullRuns : runs);
+	let pending = $derived(sourceRuns == null && !fullHistoryFailed);
+
 	let periodRuns = $derived.by(() => {
+		const src = sourceRuns ?? [];
 		if (type === 'all') {
-			return [...runs].sort(
+			return [...src].sort(
 				(a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
 			);
 		}
 		const start = startDate.getTime();
 		const end = periodEnd(startDate, type).getTime();
-		return runs.filter((r) => {
+		return src.filter((r) => {
 			const t = new Date(r.started_at).getTime();
 			return t >= start && t <= end;
 		});
@@ -183,7 +228,7 @@
 		</button>
 	</div>
 
-	<div class="stats">
+	<div class="stats" aria-busy={pending}>
 		<div class="stat-card">
 			<span class="stat-label">{m('periodSummary.distance')}</span>
 			<span class="stat-value">
@@ -198,7 +243,7 @@
 		</div>
 		<div class="stat-card">
 			<span class="stat-label">{m('periodSummary.runs')}</span>
-			<span class="stat-value">{stats.count}</span>
+			<span class="stat-value">{pending ? '—' : stats.count}</span>
 		</div>
 		<div class="stat-card">
 			<span class="stat-label">{m('periodSummary.avgPace')}</span>
@@ -210,8 +255,24 @@
 		</div>
 	</div>
 
+	{#if pending}
+		<p class="muted" role="status">{m('periodSummary.loadingHistory')}</p>
+	{:else if fullHistoryFailed}
+		<p class="load-error" role="alert">
+			{m('periodSummary.historyFailed')}
+			<button class="btn btn-secondary btn-sm" type="button" onclick={ensureFullHistory}>
+				{m('periodSummary.retry')}
+			</button>
+		</p>
+	{/if}
+
 	<div class="actions">
-		<button class="btn btn-secondary" onclick={handleShare} type="button">
+		<button
+			class="btn btn-secondary"
+			onclick={handleShare}
+			type="button"
+			disabled={pending || fullHistoryFailed}
+		>
 			<span class="material-symbols">share</span>
 			{m('periodSummary.shareSummary')}
 		</button>
@@ -227,7 +288,11 @@
 						: 'periodSummary.runsAllTime',
 			)}
 		</h3>
-		{#if periodRuns.length === 0}
+		{#if pending}
+			<p class="muted">{m('periodSummary.loadingHistory')}</p>
+		{:else if fullHistoryFailed}
+			<p class="muted">{m('periodSummary.historyFailed')}</p>
+		{:else if periodRuns.length === 0}
 			<p class="muted">
 				{m(
 					type === 'week'
@@ -394,5 +459,13 @@
 		text-align: center;
 	}
 	.muted { color: var(--color-text-tertiary); margin: 0; }
+	.load-error {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+		margin: 0;
+		color: var(--color-danger);
+	}
 	.material-symbols { font-family: 'Material Symbols Outlined'; }
 </style>

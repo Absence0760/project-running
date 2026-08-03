@@ -20,3 +20,25 @@ export function dashboardRunsWindowStart(now: Date): Date {
 	start.setDate(start.getDate() - DASHBOARD_RUNS_WINDOW_DAYS);
 	return start;
 }
+
+export type PeriodType = 'week' | 'month' | 'all';
+
+/// Whether a `PeriodSummary` period can be answered from a bounded run set.
+///
+/// The window above exists for the dashboard's recency cards, but the same
+/// runs were also handed to the period drilldown — which offers an "all
+/// time" tab and unbounded Previous/Next paging. A roll-up labelled "all
+/// time" computed over ~2 years silently under-reports a deep history
+/// (issue #664): the modal's totals disagreed with the lifetime aggregate
+/// on the very stat card that opened it. `coveredFrom` is the earliest
+/// instant the caller's run set is guaranteed to cover; `null` means the
+/// caller already holds the complete history and never needs a re-fetch.
+export function periodNeedsFullHistory(
+	type: PeriodType,
+	periodStart: Date,
+	coveredFrom: Date | null,
+): boolean {
+	if (coveredFrom == null) return false;
+	if (type === 'all') return true;
+	return periodStart.getTime() < coveredFrom.getTime();
+}
