@@ -111,4 +111,27 @@ void main() {
     final b = snapToPolyline((lng: -0.105, lat: 51.503), line);
     expect(a, b);
   });
+
+  test('a point past the antimeridian snaps onto the line, not away from it',
+      () {
+    const across = <List<double>>[
+      [179.98, 0],
+      [-179.96, 0],
+    ];
+    // 1 km north of the line, a third of the way along it.
+    final r = snapToPolyline((lng: -179.99, lat: 0.009), across)!;
+    expect(r.lng, closeTo(-179.99, 1e-6));
+    expect(r.offsetM, closeTo(1000, 20));
+    expect(r.alongM, closeTo(3335.8, 5));
+  });
+
+  test('a snapped point on a leg across the line wraps back into range', () {
+    const across = <List<double>>[
+      [179.99, 0],
+      [-179.97, 0],
+    ];
+    final r = snapToPolyline((lng: -179.99, lat: 0), across)!;
+    expect(r.lng >= -180 && r.lng < 180, isTrue, reason: 'lng ${r.lng}');
+    expect(r.lng, closeTo(-179.99, 1e-9));
+  });
 }
