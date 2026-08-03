@@ -261,6 +261,44 @@ mod tests {
     }
 
     #[test]
+    fn a_course_across_the_antimeridian_windows_and_marks_the_runner() {
+        // A long course straddling 180 deg, the runner a hair east of the line.
+        // The whole-course box used to span 359-odd degrees, which is a long
+        // way past either window half-span, so the fit always auto-zoomed — and
+        // then the window's own corners crossed the line too, putting the
+        // runner off the panel and showing no marker at all on the one page
+        // that exists to say where they are.
+        let c = Course::from_points(&[
+            pt(-16.8, 179.9),
+            pt(-16.9, 179.98),
+            pt(-17.0, -179.94),
+            pt(-17.1, -179.9),
+        ])
+        .unwrap();
+        let runner = (-17.0, -179.94);
+        let (_, windowed) = nav_fit(&c, Some(runner), GEOM.w_px, GEOM.h_px);
+        assert!(windowed, "a 0.2 deg course is wider than a window");
+        let panel = nav_panel(&c, Some(runner), GEOM);
+        let (mx, my) = panel.marker.expect("the runner is the window centre");
+        assert!((mx - GEOM.w_px as i32 / 2).abs() <= 1, "marker x {}", mx);
+        assert!(
+            (my - GEOM.top_px - GEOM.h_px as i32 / 2).abs() <= 1,
+            "marker y {}",
+            my
+        );
+        // A whole-course overview of a straddling course fits its own width.
+        let small = Course::from_points(&[pt(-16.8, 179.999), pt(-16.801, -179.999)]).unwrap();
+        let (fit, windowed) = nav_fit(
+            &small,
+            Some((-16.8005, 180.0 - 360.0)),
+            GEOM.w_px,
+            GEOM.h_px,
+        );
+        assert!(!windowed, "0.002 deg fits inside one window");
+        assert!(marker_px(&fit, -16.8005, -180.0, GEOM).is_some());
+    }
+
+    #[test]
     fn the_marker_is_drawn_for_a_runner_on_the_panel() {
         let c = short_course();
         let (fit, _) = nav_fit(&c, Some((40.001, -105.001)), GEOM.w_px, GEOM.h_px);

@@ -17,6 +17,15 @@
 //! collapsing onto the outbound leg on the return — it is NOT part of the
 //! `snapToPolyline` parity port; the plain `project` math is left untouched.
 //!
+//! Two further watch-local departures from the port. The per-segment frame and
+//! the panel fit take their longitude differences through [`crate::geo`], so a
+//! course straddling 180 deg projects onto itself instead of ~40,000 km away —
+//! the web original has the same defect and is not fixed here (its own bug, its
+//! own lockstep). And [`Course::is_loop`] closes the along-axis into a circle on
+//! a course whose ends meet, which web has no concept of at all. Both are
+//! additive: on a course that neither straddles the line nor closes, every
+//! value is what the port produced, bit for bit.
+//!
 //! [`PanelFit`] is the display half kept host-testable: it fits the course's
 //! bounding box into a pixel panel (longitude scaled by cos(mid-latitude), the
 //! same correction `track_projection.ts` applies so a square loop renders
@@ -25,6 +34,7 @@
 
 use heapless::Vec;
 
+use crate::geo::{lon_delta_deg, unwrap_lon_deg, wrap_lon_deg};
 use crate::grade_adjusted_pace::haversine_metres;
 
 /// Fixed course capacity: 256 points x 16 B = 4 KiB of RAM for the polyline
@@ -58,6 +68,41 @@ const R_M: f64 = 6_371_000.0;
 /// gap outweighing the along difference) still wins outright.
 const ALONG_FWD_BIAS_PER_M: f64 = 0.05;
 const ALONG_BACK_BIAS_PER_M: f64 = 0.5;
+
+/// Ceiling on what the forward-progress bias is ever worth, in metres of
+/// equivalent perpendicular offset ([`Course::along_bias_m`] saturates strictly
+/// below it).
+///
+/// The bias exists to break a tie between candidates the geometry cannot
+/// separate; charged on the raw along-gap it instead grew without bound, so a
+/// stale anchor could outrank kilometres of perpendicular offset and pick a
+/// segment the runner is nowhere near — reporting that segment's offset and
+/// latching `! OFF CRS` on it. Bounding it at the re-arm radius makes that
+/// impossible by construction: no candidate more than this far off the nearest
+/// one can win, so a runner within [`OFF_COURSE_REARM_M`] of the line is never
+/// reported past [`OFF_COURSE_THRESHOLD_M`] off it.
+const MAX_ALONG_BIAS_M: f64 = OFF_COURSE_REARM_M;
+
+/// Tie-break weight on the *unwrapped* along-gap, in metres of equivalent
+/// offset per metre of gap.
+///
+/// A closed course's two ends are the same place, so at the shared start/finish
+/// vertex the wrapped gap cannot separate `along = 0` from `along = total_m`:
+/// both sit the same distance from the anchor and carry the same perpendicular
+/// offset. Nor can the segment order — the earlier representative is the honest
+/// one when a run *starts* on the line, the later one when a lap *finishes* on
+/// it. This settles the pair in favour of continuity with the last reading, at
+/// a weight far below anything the geometry can notice: a whole 100 km lap of
+/// unwrapped gap buys 10 cm of offset.
+const ALONG_CONTINUITY_PER_M: f64 = 1e-6;
+
+/// A course whose ends sit within this of each other is closed, and its
+/// along-axis is a circle rather than a line ([`Course::is_loop`]).
+///
+/// The off-course threshold is the honest cut: inside it, a runner standing at
+/// the finish also projects on-course at the start, so the two ends are one
+/// place as far as anything downstream can tell.
+pub const LOOP_CLOSURE_M: f64 = OFF_COURSE_THRESHOLD_M;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CoursePoint {
@@ -129,15 +174,23 @@ pub struct Course {
     seg_cos_lat: Vec<f64, MAX_COURSE_POINTS>,
     total_m: f64,
     bounds: CourseBounds,
+    is_loop: bool,
 }
 
 /// A course is one of the largest structures the firmware holds, and it is held
 /// more than once at a time — the `COURSE` watch plus the `nav` and `ui` tasks'
-/// own copies — so every byte added here costs that multiple. This is the same
-/// 8,784 B on the host and on `thumbv7em-none-eabihf` (f64 alignment absorbs the
-/// length fields' padding on both). Adding a field is allowed; doing it without
-/// noticing the RAM it multiplies into is not, so the figure is pinned.
+/// own copies — so every byte added here costs that multiple. Adding a field is
+/// allowed; doing it without noticing the RAM it multiplies into is not, so the
+/// figure is pinned on both targets.
+///
+/// The two now differ, and in the device's favour: `heapless::Vec`'s length is a
+/// 4-byte `usize` on `thumbv7em-none-eabihf` against 8 on the host, so the three
+/// of them leave padding holes that `is_loop` drops into for free. It costs the
+/// watch nothing and the host 8 B.
+#[cfg(target_pointer_width = "32")]
 const _: () = assert!(core::mem::size_of::<Course>() == 8784);
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(core::mem::size_of::<Course>() == 8792);
 
 impl Course {
     /// `None` when the polyline is too short to follow (< 2 points) or over
@@ -184,9 +237,16 @@ impl Course {
         for p in points {
             min_lat = min_lat.min(p.lat_deg);
             max_lat = max_lat.max(p.lat_deg);
-            min_lon = min_lon.min(p.lon_deg);
-            max_lon = max_lon.max(p.lon_deg);
+            // Unwrapped onto the first point's side of the antimeridian, so a
+            // course straddling it spans its own width rather than 359-odd
+            // degrees — which would collapse the panel fit's scale and draw the
+            // whole course as a dot. Identity for a course that doesn't.
+            let lon = unwrap_lon_deg(points[0].lon_deg, p.lon_deg);
+            min_lon = min_lon.min(lon);
+            max_lon = max_lon.max(lon);
         }
+        let first = points[0];
+        let last = points[points.len() - 1];
         Some(Self {
             points: v,
             elev_m: e,
@@ -194,7 +254,16 @@ impl Course {
             seg_cos_lat,
             total_m,
             bounds: CourseBounds::of(min_lat, max_lat, min_lon, max_lon),
+            is_loop: haversine_metres(first.lat_deg, first.lon_deg, last.lat_deg, last.lon_deg)
+                <= LOOP_CLOSURE_M,
         })
+    }
+
+    /// Whether the course closes on itself ([`LOOP_CLOSURE_M`]) — a lap, a
+    /// backyard-ultra loop, an out-and-back. Its along-axis wraps, so the
+    /// second traversal restarts at zero instead of running past the total.
+    pub fn is_loop(&self) -> bool {
+        self.is_loop
     }
 
     pub fn points(&self) -> &[CoursePoint] {
@@ -246,6 +315,10 @@ impl Course {
     /// still reported. Watch-local; NOT part of the `snapToPolyline` parity
     /// port. The off-course offset and snapped point are unchanged; only which
     /// overlapping segment (and thus the along-distance) is chosen differs.
+    ///
+    /// On a closed course ([`Course::is_loop`]) "forward" wraps: the second
+    /// traversal restarts at zero rather than reading a lap ahead of itself.
+    /// See [`Course::along_bias_m`] for what the bias may and may not buy.
     pub fn project_from(
         &self,
         lat_deg: f64,
@@ -274,11 +347,15 @@ impl Course {
 
             // Local planar frame: metres east/north of segment start `a`, with
             // longitude scaled by cos(lat) so a degree of lon matches a degree
-            // of lat in ground distance.
+            // of lat in ground distance. Both longitude deltas take the short
+            // way round the antimeridian ([`crate::geo`]) — a plain subtraction
+            // reads a 0.04 deg hop across the line as 359.96 deg the other way,
+            // which puts the whole frame ~40,000 km out.
             let cos_lat = self.seg_cos_lat[i];
-            let bx = to_rad(b.lon_deg - a.lon_deg) * R_M * cos_lat;
+            let b_east_deg = lon_delta_deg(a.lon_deg, b.lon_deg);
+            let bx = to_rad(b_east_deg) * R_M * cos_lat;
             let by = to_rad(b.lat_deg - a.lat_deg) * R_M;
-            let px = to_rad(lon_deg - a.lon_deg) * R_M * cos_lat;
+            let px = to_rad(lon_delta_deg(a.lon_deg, lon_deg)) * R_M * cos_lat;
             let py = to_rad(lat_deg - a.lat_deg) * R_M;
 
             let len_sq = bx * bx + by * by;
@@ -290,7 +367,7 @@ impl Course {
             };
 
             let s_lat = a.lat_deg + (b.lat_deg - a.lat_deg) * t;
-            let s_lon = a.lon_deg + (b.lon_deg - a.lon_deg) * t;
+            let s_lon = wrap_lon_deg(a.lon_deg + b_east_deg * t);
             // Perpendicular offset in the same planar frame: the fix minus the
             // foot `t * (bx, by)`. A great-circle distance here would be no more
             // accurate — the foot point was only ever located by this same
@@ -302,16 +379,13 @@ impl Course {
 
             // Unbiased (`prev_along_m` is `None`): pure nearest offset, the
             // strict `<` keeping the earlier segment on a tie — the exact
-            // `snapToPolyline` contract. Biased: add a small forward / large
-            // backward charge on how far this candidate's along-distance sits
-            // from the last one, so an equal-offset retrace overlap resolves to
-            // the segment the runner is actually on instead of snapping onto
-            // the outbound leg, while a clearly-closer segment still wins.
+            // `snapToPolyline` contract. Biased: charge the candidate for its
+            // distance from the last along-distance, so an equal-offset retrace
+            // overlap resolves to the segment the runner is actually on instead
+            // of snapping onto the outbound leg, while a clearly-closer segment
+            // still wins.
             let cost = match prev_along_m {
-                Some(prev) => {
-                    off + ALONG_FWD_BIAS_PER_M * (along - prev).max(0.0)
-                        + ALONG_BACK_BIAS_PER_M * (prev - along).max(0.0)
-                }
+                Some(prev) => off + self.along_bias_m(along, prev),
                 None => off,
             };
 
@@ -329,6 +403,49 @@ impl Course {
             cumulative += seg_len;
         }
         best
+    }
+
+    /// What the forward-progress bias charges a candidate sitting at `along_m`
+    /// when the last reported along-distance was `prev_along_m`, in metres of
+    /// equivalent perpendicular offset.
+    ///
+    /// The gap is measured on the course's own topology: on a closed course
+    /// ([`Course::is_loop`]) the along-axis is a circle, so it is taken the
+    /// short way round. Without that, every traversal after the first reports
+    /// the runner a lap ahead — the anchor still reads the full loop length
+    /// while the runner is metres into the next lap, and a backward charge of
+    /// `ALONG_BACK_BIAS_PER_M * total_m` buys the finish segment most of the
+    /// lap. On a backyard ultra (the same loop, every hour, for days) that
+    /// pinned `along_m` a lap ahead and reported the runner's distance from
+    /// the corral as perpendicular offset, latching `! OFF CRS`, for kilometres
+    /// of every single lap.
+    ///
+    /// The charge then saturates strictly below [`MAX_ALONG_BIAS_M`] rather
+    /// than growing without bound, so no anchor — stale, wrapped, or merely
+    /// separated by a long GNSS dropout — can buy a candidate that far off the
+    /// nearest one. It is strictly increasing, so it orders two candidates
+    /// exactly as the raw product did: what is bounded is the bias's authority
+    /// over the geometry, not its direction.
+    ///
+    /// [`ALONG_CONTINUITY_PER_M`] then settles the one pair the circle leaves
+    /// indistinguishable — the two ends of a loop's along-axis at their shared
+    /// vertex.
+    fn along_bias_m(&self, along_m: f64, prev_along_m: f64) -> f64 {
+        let unwrapped = along_m - prev_along_m;
+        let mut gap = unwrapped;
+        if self.is_loop {
+            if gap > self.total_m / 2.0 {
+                gap -= self.total_m;
+            } else if gap < -self.total_m / 2.0 {
+                gap += self.total_m;
+            }
+        }
+        let raw = if gap >= 0.0 {
+            ALONG_FWD_BIAS_PER_M * gap
+        } else {
+            ALONG_BACK_BIAS_PER_M * -gap
+        };
+        raw / (1.0 + raw / MAX_ALONG_BIAS_M) + ALONG_CONTINUITY_PER_M * libm::fabs(unwrapped)
     }
 }
 
@@ -459,7 +576,7 @@ impl PanelFit {
     /// inside the panel by construction; an off-course runner's marker can
     /// fall outside — the caller clamps (or clips) as its surface needs.
     pub fn to_px(&self, lat_deg: f64, lon_deg: f64) -> (i32, i32) {
-        let x = (lon_deg - self.min_lon) * self.cos_mid_lat * self.scale + self.x_off;
+        let x = lon_delta_deg(self.min_lon, lon_deg) * self.cos_mid_lat * self.scale + self.x_off;
         let y = (self.lat_range - (lat_deg - self.min_lat)) * self.scale + self.y_off;
         (libm::round(x) as i32, libm::round(y) as i32)
     }
@@ -545,6 +662,234 @@ mod tests {
             en_pt(0.0, 30.0),
         ])
         .unwrap()
+    }
+
+    /// A Big's-format backyard-ultra loop: 4.167 mi (6,706 m) as a closed
+    /// square, the same one sent off every hour for days.
+    fn backyard_loop() -> Course {
+        let side = 6_706.0 / 4.0;
+        Course::from_points(&[
+            en_pt(0.0, 0.0),
+            en_pt(side, 0.0),
+            en_pt(side, side),
+            en_pt(0.0, side),
+            en_pt(0.0, 0.0),
+        ])
+        .unwrap()
+    }
+
+    /// Walk the polyline itself in `per_seg` sub-steps, threading each
+    /// along-distance into the next projection the way the nav task does, and
+    /// return the projections in order.
+    fn walk(c: &Course, start_along_m: f64, per_seg: usize) -> std::vec::Vec<Projection> {
+        let mut prev = start_along_m;
+        let mut out = std::vec::Vec::new();
+        let pts: std::vec::Vec<CoursePoint> = c.points().to_vec();
+        for w in pts.windows(2) {
+            for s in 0..per_seg {
+                let f = s as f64 / per_seg as f64;
+                let lat = w[0].lat_deg + (w[1].lat_deg - w[0].lat_deg) * f;
+                let lon = w[0].lon_deg + (w[1].lon_deg - w[0].lon_deg) * f;
+                let p = c.project_from(lat, lon, prev).unwrap();
+                prev = p.along_m;
+                out.push(p);
+            }
+        }
+        let last = pts[pts.len() - 1];
+        out.push(c.project_from(last.lat_deg, last.lon_deg, prev).unwrap());
+        out
+    }
+
+    /// A course straddling 180 deg — Taveuni, Fiji, where the line runs through
+    /// the island. Two ~4.3 km legs, the second crossing.
+    fn across_the_antimeridian() -> Course {
+        Course::from_points(&[pt(-16.8, 179.95), pt(-16.8, 179.99), pt(-16.8, -179.97)]).unwrap()
+    }
+
+    #[test]
+    fn a_course_across_the_antimeridian_projects_onto_its_own_line() {
+        // Every one of these fixes is standing ON the course. The per-segment
+        // planar frame used to difference the longitudes plainly, reading the
+        // 0.04 deg hop across the line as 359.96 deg the other way, so a runner
+        // on the far side read 532 m off at the crossing and 3,087 m off a
+        // kilometre past it — a permanent `! OFF CRS` on the course itself.
+        let c = across_the_antimeridian();
+        let total = c.total_m();
+        assert!((total - 8_515.9).abs() < 1.0, "total {}", total);
+        let mut prev = 0.0;
+        for lon in [
+            179.96,
+            179.98,
+            179.99,
+            179.995,
+            180.0 - 360.0,
+            -179.99,
+            -179.97,
+        ] {
+            let p = c.project(-16.8, lon).unwrap();
+            assert!(p.off_m < 1.0, "lon {} read {} m off the line", lon, p.off_m);
+            assert!(p.along_m >= prev, "along went back at lon {}", lon);
+            prev = p.along_m;
+        }
+        assert!((prev - total).abs() < 1.0, "ended at {} of {}", prev, total);
+        // The snapped point is a real longitude, not one that ran past 180.
+        let snapped = c.project(-16.8, 179.995).unwrap();
+        assert!(snapped.lon_deg.abs() <= 180.0, "lon {}", snapped.lon_deg);
+    }
+
+    #[test]
+    fn a_fix_beside_a_course_across_the_antimeridian_reads_its_true_offset() {
+        let c = across_the_antimeridian();
+        // ~1.1 km north of the line, a hair past the crossing.
+        let p = c.project(-16.79, -179.999).unwrap();
+        assert!(
+            (p.off_m - 1_111.9).abs() < 5.0,
+            "off {} beside the crossing",
+            p.off_m
+        );
+        // And a course that does NOT straddle, with the runner across the line
+        // from it: 0.02 deg away, which used to read as 38,310 km.
+        let east = Course::from_points(&[pt(-16.8, 179.90), pt(-16.8, 179.99)]).unwrap();
+        let far = east.project(-16.8, -179.99).unwrap();
+        assert!(
+            (far.off_m - 2_129.0).abs() < 5.0,
+            "off {} across the line",
+            far.off_m
+        );
+    }
+
+    #[test]
+    fn a_course_across_the_antimeridian_fits_its_own_width_not_the_globe() {
+        // The bounding box is built on the first point's side of the line, so
+        // the span is the course's 0.08 deg rather than 359.92 — which would
+        // have collapsed the fit's scale and drawn the whole course as a dot.
+        let c = across_the_antimeridian();
+        let b = c.bounds();
+        assert!(
+            (b.max_lon - b.min_lon - 0.08).abs() < 1e-9,
+            "span {}",
+            b.max_lon - b.min_lon
+        );
+        let f = PanelFit::fit(&c, 168, 96);
+        let (x0, _) = f.to_px(-16.8, 179.95);
+        let (xmid, _) = f.to_px(-16.8, 179.99);
+        let (x1, _) = f.to_px(-16.8, -179.97);
+        assert_eq!(x0, PANEL_MARGIN_PX as i32);
+        assert_eq!(x1, 168 - 1 - PANEL_MARGIN_PX as i32);
+        assert!(x0 < xmid && xmid < x1, "{} {} {}", x0, xmid, x1);
+    }
+
+    #[test]
+    fn a_closed_course_is_a_loop_and_a_point_to_point_one_is_not() {
+        assert!(backyard_loop().is_loop());
+        assert!(out_and_back().is_loop());
+        assert!(!line().is_loop());
+        // Ends 30 m apart still close: a runner standing at either projects
+        // on-course at the other.
+        assert!(separated_out_and_back().is_loop());
+    }
+
+    #[test]
+    fn a_second_traversal_of_a_loop_restarts_along_distance_instead_of_reading_a_lap_ahead() {
+        // The backyard-ultra case. Lap one leaves the anchor at the full loop
+        // length; lap two starts metres from the corral. Charged on the raw
+        // along-gap the finish segment stayed cheapest for kilometres, so
+        // `along_m` read a lap ahead and `off_m` reported the runner's distance
+        // from the corral — 1,676 m at the first corner — latching `! OFF CRS`
+        // on a runner who never left the course.
+        let c = backyard_loop();
+        let total = c.total_m();
+        let lap1 = walk(&c, 0.0, 20);
+        let end = lap1.last().unwrap().along_m;
+        assert!(end > total - 1.0, "lap 1 ended at {} of {}", end, total);
+
+        let lap2 = walk(&c, end, 20);
+        for (i, p) in lap2.iter().enumerate() {
+            assert!(
+                p.off_m < OFF_COURSE_THRESHOLD_M,
+                "step {} reported {} m off a course it is standing on",
+                i,
+                p.off_m
+            );
+        }
+        // A tenth of the way round, along-distance reads a tenth of the loop —
+        // not the whole of it.
+        let tenth = &lap2[lap2.len() / 10];
+        assert!(
+            (tenth.along_m - total / 10.0).abs() < total / 20.0,
+            "along {} of {} a tenth into lap 2",
+            tenth.along_m,
+            total
+        );
+    }
+
+    #[test]
+    fn a_run_that_starts_on_a_loops_line_reads_zero_not_a_full_lap() {
+        // The other end of the same ambiguity: at the shared start/finish
+        // vertex both `0` and `total_m` are the same place and the same gap
+        // from a zero anchor. Continuity with the last reading is what picks.
+        let c = backyard_loop();
+        let start = c.points()[0];
+        let first = c.project_from(start.lat_deg, start.lon_deg, 0.0).unwrap();
+        assert!(first.along_m < 1.0, "started at {} m along", first.along_m);
+        let finish = c
+            .project_from(start.lat_deg, start.lon_deg, 6_700.0)
+            .unwrap();
+        assert!(
+            finish.along_m > c.total_m() - 1.0,
+            "finished at {} m along",
+            finish.along_m
+        );
+    }
+
+    #[test]
+    fn the_bias_can_never_report_a_runner_on_the_line_as_off_course() {
+        // The bound MAX_ALONG_BIAS_M buys: whatever the anchor says, a
+        // candidate that far off the nearest one cannot win, so a runner on the
+        // course is never handed a segment past the off-course threshold. Swept
+        // over anchors from nowhere near the truth to a full lap out.
+        let courses = [backyard_loop(), out_and_back(), lollipop(), line()];
+        for c in &courses {
+            let total = c.total_m();
+            for k in 0..=20 {
+                let prev = total * k as f64 / 20.0;
+                for p in walk(c, prev, 6) {
+                    assert!(
+                        p.off_m < OFF_COURSE_THRESHOLD_M,
+                        "anchor {} reported {} m off",
+                        prev,
+                        p.off_m
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_long_gnss_dropout_cannot_buy_a_segment_the_runner_has_left() {
+        // The same unbounded charge, forwards. A 3 km out-and-back on a divided
+        // path, its return leg 60 m north of the outbound one, so the two are
+        // told apart by offset alone. The runner loses GNSS in a canyon and
+        // reappears 3 km later on the return leg: the forward charge for that
+        // progress used to come to 150 m of equivalent offset, which bought the
+        // outbound leg 60 m away — reporting the runner 3 km back and, at 60 m
+        // off, latching `! OFF CRS` on a leg they had left half an hour ago.
+        let c = Course::from_points(&[
+            en_pt(0.0, 0.0),
+            en_pt(3_000.0, 0.0),
+            en_pt(3_000.0, 60.0),
+            en_pt(0.0, 60.0),
+        ])
+        .unwrap();
+        assert!(!c.is_loop(), "the ends are 60 m apart");
+        let back = en_pt(1_500.0, 60.0);
+        let p = c.project_from(back.lat_deg, back.lon_deg, 1_500.0).unwrap();
+        assert!(p.off_m < 1.0, "off {}", p.off_m);
+        assert!(
+            (p.along_m - 4_560.0).abs() < 5.0,
+            "along {} after the dropout",
+            p.along_m
+        );
     }
 
     #[test]
@@ -1103,16 +1448,22 @@ mod tests {
                 4.00200531711490441e1,
                 -1.04998113028763157e2,
             ),
+            // Repinned when the bias was bounded at MAX_ALONG_BIAS_M: it used
+            // to buy segment 51 — 18 m further off — for 39 m of along-
+            // distance, and reported the runner 51.4 m off a course they were
+            // 33.4 m from, which is over the off-course threshold. A bias that
+            // can do that is a bias that can invent an excursion, so the
+            // biased answer here is now the unbiased one.
             (
                 40.0201,
                 -104.9985,
                 Some(2500.0),
-                51,
-                0.0,
-                2.44956186941022452e3,
-                5.13558597239446613e1,
-                4.00204000000000022e1,
-                -1.04998041464434621e2,
+                50,
+                1.32927872605171443e-1,
+                2.41051774326015129e3,
+                3.33614906450876347e1,
+                4.00200531711490441e1,
+                -1.04998113028763157e2,
             ),
             (
                 40.0998,
@@ -1136,16 +1487,20 @@ mod tests {
                 4.01015813476363832e1,
                 -1.04999232768080134e2,
             ),
+            // Repinned with the row above: the old weighting decided this one
+            // by 0.01 m of cost, taking the vertex at the end of segment 187
+            // (57.572 m off) over the foot on 188 (57.299 m off) to gain 5.6 m
+            // of along-distance. Bounded, the nearer foot wins.
             (
                 40.0755,
                 -104.9993,
                 Some(8000.0),
-                187,
-                1.0,
-                9.01068955132118754e3,
-                5.75716938489244470e1,
-                4.00752000000000024e1,
-                -1.04999851469108833e2,
+                188,
+                1.09220120695894250e-1,
+                9.01628929274550100e3,
+                5.72988000064919940e1,
+                4.00752436880482800e1,
+                -1.04999884204428260e2,
             ),
             (
                 41.0,

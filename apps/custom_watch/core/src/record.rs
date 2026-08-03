@@ -29,6 +29,7 @@ use crate::fuel_plan::{
     DEFAULT_FLUID_PER_HOUR_ML, GEL_CARBS_G, SIP_FLUID_ML,
 };
 use crate::gear_wear::{gear_wear, GearWear};
+use crate::geo::lon_delta_deg;
 use crate::grade_adjusted_pace::GapEstimator;
 use crate::guided_runs::{cues_due, find_guided_run, is_guided_run_valid, GuidedRun};
 use crate::hr_zones::{
@@ -3127,10 +3128,15 @@ impl Recorder {
 /// flat [`METRES_PER_DEGREE_LAT`] everywhere, a model error of metres per
 /// kilometre — six orders larger than anything the working precision
 /// contributes.
+///
+/// The longitude delta goes through [`crate::geo`] first — identity for any hop
+/// inside a hemisphere, and the difference between a 3 m step and a 40,000 km
+/// one for a hop across the antimeridian, which would otherwise fail the
+/// implausible-jump gate and re-anchor mid-stride.
 fn segment_distance_m(a: &Fix, b: &Fix) -> f64 {
     let m_per_deg_lon = METRES_PER_DEGREE_LAT as f32 * libm::cosf((a.lat_deg as f32).to_radians());
     let dy = ((b.lat_deg - a.lat_deg) * METRES_PER_DEGREE_LAT) as f32;
-    let dx = (b.lon_deg - a.lon_deg) as f32 * m_per_deg_lon;
+    let dx = lon_delta_deg(a.lon_deg, b.lon_deg) as f32 * m_per_deg_lon;
     libm::sqrtf(dx * dx + dy * dy) as f64
 }
 
@@ -3715,6 +3721,28 @@ mod tests {
         assert_eq!(s.state, RecordState::Recording);
         assert_eq!(s.distance_m, 0.0);
         assert_eq!(s.elapsed_s, 0);
+    }
+
+    #[test]
+    fn a_stride_across_the_antimeridian_is_a_stride_not_a_teleport() {
+        // Running east across 180 deg. The per-segment planar frame differenced
+        // the two longitudes plainly, so a 4 m step read as ~40,000 km: past
+        // the implausible-jump cap, so the step credited nothing and the
+        // recorder re-anchored mid-stride on a runner who did nothing unusual.
+        let lat: f64 = -16.8;
+        let per_m = 1.0 / (METRES_PER_DEGREE_LAT * libm::cos(lat.to_radians()));
+        let mut r = Recorder::new();
+        r.start(0);
+        r.on_fix(&fix(lat, 180.0 - 4.0 * per_m, 4.0, 0));
+        r.on_fix(&fix(lat, -180.0 + 0.0 * per_m, 4.0, 1));
+        r.on_fix(&fix(lat, -180.0 + 4.0 * per_m, 4.0, 2));
+        let s = r.snapshot();
+        assert!(
+            (s.distance_m - 8.0).abs() < 0.2,
+            "distance {} across the line",
+            s.distance_m
+        );
+        assert_eq!(s.moving_s, 2, "no fix was rejected as a teleport");
     }
 
     #[test]
