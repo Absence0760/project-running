@@ -7,6 +7,7 @@ import 'dart:math' as math;
 
 import 'package:latlong2/latlong.dart';
 
+import 'geo.dart' show lonDeltaDeg, wrapLonDeg;
 import 'run_stats.dart' show haversineMetres;
 
 /// Two endpoints closer than this are treated as the same point — the
@@ -120,7 +121,7 @@ List<LatLng> generateLoopWaypoints({
       final angle = radialSeedRad + (i / numPoints) * math.pi * 2;
       out.add(LatLng(
         start.latitude + math.sin(angle) * radiusDeg,
-        start.longitude + (math.cos(angle) * radiusDeg) / cosLat,
+        wrapLonDeg(start.longitude + (math.cos(angle) * radiusDeg) / cosLat),
       ));
     }
     out.add(LatLng(start.latitude, start.longitude));
@@ -136,7 +137,7 @@ List<LatLng> generateLoopWaypoints({
         math.max(directDist, 1),
   );
   final dLat = e.latitude - start.latitude;
-  final dLng = e.longitude - start.longitude;
+  final dLng = lonDeltaDeg(start.longitude, e.longitude);
   final perpLat = -dLng * curveAmount * 0.4;
   final perpLng = dLat * curveAmount * 0.4;
 
@@ -146,7 +147,7 @@ List<LatLng> generateLoopWaypoints({
     final curveFactor = math.sin(t * math.pi);
     out.add(LatLng(
       start.latitude + dLat * t + perpLat * curveFactor,
-      start.longitude + dLng * t + perpLng * curveFactor,
+      wrapLonDeg(start.longitude + dLng * t + perpLng * curveFactor),
     ));
   }
   out.add(LatLng(e.latitude, e.longitude));

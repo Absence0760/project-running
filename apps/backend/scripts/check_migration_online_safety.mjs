@@ -37,7 +37,10 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // 20270430: public_runs view redefinition only (watch_workout denylist entry)
 // — no constraint, no guarded-table DDL; the scanner passed it with zero
 // violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270430';
+// 20270501: run_streaks_for_user() RPC only (create function + grant/revoke)
+// — no table DDL of any kind; the scanner passed it with zero violations
+// before this bump.
+export const GRANDFATHER_CUTOFF = '20270501';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

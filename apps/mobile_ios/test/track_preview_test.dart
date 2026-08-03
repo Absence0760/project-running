@@ -45,6 +45,27 @@ void main() {
         isTrue,
       );
     });
+
+    test('rejects a stationary jitter cluster on the antimeridian', () {
+      // ~2 m of jitter straddling 180°. The raw min/max span read 359.99°
+      // (~40,000 km), so the gate passed exactly the standing-still case
+      // it exists to catch and the thumbnail drew the meaningless dot.
+      expect(
+        isTrackRenderable([
+          _w(0, 179.999992),
+          _w(0, -179.999992),
+          _w(0.000009, 179.999995),
+        ]),
+        isFalse,
+      );
+    });
+
+    test('accepts a genuine run crossing the antimeridian', () {
+      expect(
+        isTrackRenderable([_w(0, 179.9995), _w(0, -179.9995)]),
+        isTrue,
+      );
+    });
   });
 
   group('projectTrack — cos(midLat) longitude correction', () {

@@ -5636,6 +5636,13 @@ export type Database = {
           run_id: string
         }[]
       }
+      run_streaks_for_user: {
+        Args: { p_source?: string; p_tz?: string }
+        Returns: {
+          best_streak: number
+          current_streak: number
+        }[]
+      }
       search_clubs: {
         Args: {
           p_center_lat?: number

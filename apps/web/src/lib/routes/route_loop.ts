@@ -4,6 +4,7 @@
 // degenerate inputs) can be unit-tested without spinning up a map.
 
 import type { TrackPoint } from '../types';
+import { lonDeltaDeg, wrapLonDeg } from './geo';
 import { haversineM } from './routing_quality';
 
 /// Two endpoints closer than this are treated as the same point —
@@ -98,7 +99,7 @@ export function generateLoopWaypoints(args: LoopWaypointArgs): TrackPoint[] {
 			const angle = radialSeedRad + (i / numPoints) * Math.PI * 2;
 			out.push({
 				lat: start.lat + Math.sin(angle) * radiusDeg,
-				lng: start.lng + (Math.cos(angle) * radiusDeg) / cosLat,
+				lng: wrapLonDeg(start.lng + (Math.cos(angle) * radiusDeg) / cosLat),
 			});
 		}
 		out.push({ lat: start.lat, lng: start.lng });
@@ -114,7 +115,7 @@ export function generateLoopWaypoints(args: LoopWaypointArgs): TrackPoint[] {
 		(targetDistanceM * scaleFactor - directDist) / Math.max(directDist, 1),
 	);
 	const dLat = e.lat - start.lat;
-	const dLng = e.lng - start.lng;
+	const dLng = lonDeltaDeg(start.lng, e.lng);
 	const perpLat = -dLng * curveAmount * 0.4;
 	const perpLng = dLat * curveAmount * 0.4;
 
@@ -124,7 +125,7 @@ export function generateLoopWaypoints(args: LoopWaypointArgs): TrackPoint[] {
 		const curveFactor = Math.sin(t * Math.PI);
 		out.push({
 			lat: start.lat + dLat * t + perpLat * curveFactor,
-			lng: start.lng + dLng * t + perpLng * curveFactor,
+			lng: wrapLonDeg(start.lng + dLng * t + perpLng * curveFactor),
 		});
 	}
 	out.push({ lat: e.lat, lng: e.lng });

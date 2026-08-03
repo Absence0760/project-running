@@ -328,6 +328,53 @@ void main() {
       expect(prefs.voiceCueEnabled(VoiceCue.offRoute), isFalse);
     });
 
+    test('a universal voice_feedback_enabled reaches the recorder', () async {
+      // Web's master spoken-cues toggle can only write the universal bag —
+      // the browser is its own device row and never records — so the choice
+      // is dead unless the universal overlay reads the key too.
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyUniversal({SettingsKeys.voiceFeedbackEnabled: false});
+
+      expect(prefs.audioCues, isFalse);
+    });
+
+    test('a device voice_feedback_enabled overrides the universal one',
+        () async {
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyUniversal({SettingsKeys.voiceFeedbackEnabled: false});
+      svc.debugApplyDevice({SettingsKeys.voiceFeedbackEnabled: true});
+
+      expect(prefs.audioCues, isTrue);
+    });
+
+    test('voice_feedback_enabled absent in both bags keeps the local default',
+        () async {
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyUniversal(const {});
+      svc.debugApplyDevice(const {});
+
+      expect(prefs.audioCues, isTrue);
+    });
+
+    test('non-bool universal voice_feedback_enabled is dropped, not coerced',
+        () async {
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyUniversal({SettingsKeys.voiceFeedbackEnabled: 'yes'});
+      expect(prefs.audioCues, isTrue);
+
+      await prefs.setAudioCues(false);
+      svc.debugApplyUniversal({SettingsKeys.voiceFeedbackEnabled: 1});
+      expect(prefs.audioCues, isFalse);
+    });
+
     test('voice_cue_types merge keeps locally-toggled ids the bag omits',
         () async {
       final prefs = await freshPrefs();

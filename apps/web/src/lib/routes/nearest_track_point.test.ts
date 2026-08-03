@@ -118,6 +118,54 @@ test('taps far outside the bbox still return the brute-force nearest', () => {
 	}
 });
 
+test('a track straddling the antimeridian gets a real grid frame, not a 359.9° one', () => {
+	// 0.1° of track crossing 180°. The raw min/max span read as ~359.9°,
+	// which made the cells ~2.8° wide — the whole track landed in the two
+	// edge columns and every tap degenerated to a near-linear scan.
+	const coords: Coord[] = [];
+	const n = 25000;
+	for (let i = 0; i < n; i++) {
+		const t = i / n;
+		const lng = 179.95 + t * 0.1;
+		coords.push([lng > 180 ? lng - 360 : lng, 38 + Math.sin(t * 20) * 0.05]);
+	}
+	const idx = buildTrackIndex(coords);
+	const grid = idx.grid;
+	assert.notEqual(grid, null);
+	assert.ok(
+		grid !== null && grid.cellLng < 0.01,
+		`grid frame is degenerate: cellLng ${grid?.cellLng}`
+	);
+	const r = rng(11);
+	for (let k = 0; k < 300; k++) {
+		let lng = 179.9 + r() * 0.3;
+		if (lng > 180) lng -= 360;
+		const lat = 37.9 + r() * 0.25;
+		assert.equal(nearestIndex(idx, lng, lat), bruteForce(coords, lng, lat), `tap ${lng},${lat}`);
+	}
+});
+
+test('a tap beside the antimeridian resolves the true nearest vertex across the line', () => {
+	// The lone vertex just west of 180° is ~53 m from the tap; the decoy on
+	// the tap's own side is ~430 m. Under the raw frame the two sat 127
+	// grid columns apart, and the ring search stopped on the decoy before
+	// ever reaching the far column — a genuinely wrong answer, not just a
+	// slow one.
+	const coords: Coord[] = [];
+	for (let i = 0; i <= 20000; i++) {
+		coords.push([-179.9 + (i % 1000) * 0.0001, 38 + Math.floor(i / 1000) * 0.005]);
+	}
+	const decoyIdx = coords.length;
+	coords.push([-179.995, 38.05]);
+	const trueIdx = coords.length;
+	coords.push([179.9995, 38.05]);
+	const idx = buildTrackIndex(coords);
+	assert.notEqual(idx.grid, null);
+	assert.equal(bruteForce(coords, -179.9999, 38.05), trueIdx);
+	assert.equal(nearestIndex(idx, -179.9999, 38.05), trueIdx);
+	assert.notEqual(nearestIndex(idx, -179.9999, 38.05), decoyIdx);
+});
+
 test('degenerate collinear track falls back cleanly', () => {
 	// All-same latitude, many points — the lat axis is zero-span.
 	const coords: Coord[] = [];

@@ -91,7 +91,7 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 - [ ] **Audio-coached runs** (#9, ~3-4 wk) — pre-recorded workout library + TTS-narrated pace cues. Audio CDN strategy + voice-talent budget needed.
 - [ ] **Race calendar + results import** (#10, ~2 wk) — event discovery + entry links + auto-match results on record. Gated on the RunSignUp key above.
 - [ ] **Advanced analytics polish** (#11, ~2 wk) — no new tables; richer dashboard breakdowns + race-time predictor over what VDOT / training-load already ship. **Race-time predictor shipped** (2026-06-20): the multi-distance `race_predictor` TS↔Dart parity pair (`predictRaceLadder` — recency-weighted Riegel anchor, per-rung confidence reusing `predictionConfidence`) + the `RacePredictorCard` on web `/dashboard` AND the mobile `widgets/race_predictor_card.dart` on the Home dashboard (5K/10K/Half/Marathon ladder, self-hiding on the qualifying-run gate, both platforms). **Consistency card shipped** (2026-07-11): the web-only `training/consistency.ts` pure helper (`computeConsistency` — active weeks out of the last 12, current + best active-week streak with an in-progress-week grace, and a steady/variable weekly-volume CoV) + the self-hiding `ConsistencyCard` on web `/dashboard` (< 2 active weeks → hidden), scoped to `filteredRuns` so the source/activity-type filter carries through. 16 unit tests + a Playwright surface test. Web-only (no Dart twin, deliberately off the parity list). Remaining ideas: easy/hard intensity distribution, week/month trend deltas.
-- [ ] **Dashboard best-streak sub-label is windowed, not all-time — needs a SQL aggregate (a migration).** Not #332, which is a *closed* perf bug (`/dashboard` fetched the entire history with `select('*')` on every paint); this is the under-report its fix left behind. `/dashboard` loads runs via the bounded `fetchRunsForDashboard()` (~2-year window, column-narrowed); the headline **Total runs** + **Longest run** cards stay exact via the `fetchRunAllTimeStats()` aggregate, and the **PeriodSummary drilldown** was closed in 2026-08 by `periodNeedsFullHistory` + the column-narrowed `fetchRunsForPeriodSummary()` ([decisions § 470](../architecture/decisions.md)). What remains is the **best-streak sub-label** (`dash.streakBestOne/Other` / `dash.streakAllTimeBest`), computed by `computeRunStreaks(filteredRuns)` over the window — so a runner whose best streak ended more than ~2 years ago sees a lower number, and one whose streak spans the boundary sees it truncated to its in-window part. It is on the paint path, so neither a wider fetch nor a lazy load is acceptable. Durable fix: a `run_streaks_for_user()` SQL aggregate returning `(current, best)` from a gaps-and-islands over `(user_id, started_at)` — one row, one round trip — mirroring `gym_exercise_records` and reusing the CTE already inside `award_achievements_for_user`, but bucketing by **local** day to match the display-side helper rather than the awarder's UTC-date shortcut. Needs a migration. Best-streak is also source-filter-scoped on this surface, so decide whether the RPC takes a source filter or the card stops claiming "all-time" under a filter.
+- [x] **Dashboard best-streak sub-label is windowed, not all-time.** Closed 2026-08-03 ([decisions § 471](../architecture/decisions.md)) — the last surviving half of the #332 follow-up (§ 470 closed the PeriodSummary drilldown). The `run_streaks_for_user(p_tz, p_source)` gaps-and-islands aggregate (migration `20270501_001`) serves `(current, best)` in one row on the paint path, bucketed by the runner's **local** day (client passes its IANA zone, matching `computeRunStreaks` rather than the awarder's UTC shortcut) and taking the dashboard's source filter so the sub-label's all-time claim stays true under a filter. Web `fetchRunStreaks` returns null — never zeros — on failure, and `streak_card.ts#streakCardState` then suppresses the numeric best claim instead of presenting the windowed number as all-time. 12 pgtap tests (pre-window island, 23:30-local/UTC-date edge, grace day, source filter, owner scoping) + 8 helper unit tests + source guards.
 - [ ] **Premium billing extensions** (#12, ~1-2 wk) — Stripe Checkout + customer portal + paywall enforcement across web + mobile.
 - [ ] **Treadmill BLE FTMS — live run-screen wiring** (#13, ~3-5 d, mobile-only) — the parser + model + pairing tile + `RunRecorder.setTreadmillSample` recorder seam all ship and are tested; remaining is the live run-screen wiring (a mode toggle that subscribes the belt stream and calls `setTreadmillSample` during recording, threading a shared `BleTreadmill` through `RunApp` → `run_screen`). Pure UI wiring on a proven seam; needs hardware-in-the-loop testing. Spec in `integrations.md § Treadmills (BLE FTMS)`.
 - [ ] **Route-design preferences (scenic / elevation-aware / cul-de-sac half)** — the avoid-highways / prefer-residential half shipped (a "Quiet roads" toggle on `/routes/new` → GraphHopper `custom_model`). Remaining (~2-3 d, needs v3): scenic/park-adjacency, elevation-aware, cul-de-sac mode, and the multi-objective post-hoc ranking — the half that needs the graph search where we own the edges + scoring. Web-only (route generation is web-canonical). Design in [graph_cycle_loop_generation.md § Extension](../features/graph_cycle_loop_generation.md).
@@ -187,24 +187,35 @@ pruned so the reasoning stays next to the finding it answers.
 
 [decisions.md § 468](../architecture/decisions.md) routed every planar frame in
 the five TS↔Dart route helpers named by issue #664 through the shared
-`geo` longitude normalisation. Four more sites still difference two raw
-longitudes to produce a planar value. None is a lockstep pair, each is a
-separate behaviour change with its own test surface, and folding them into
-§ 468 would have broken its "no existing pinned value moves" bar:
+`geo` longitude normalisation. Four more sites still differenced two raw
+longitudes to produce a planar value. **ALL FOUR RESOLVED 2026-08-03**
+([decisions.md § 473](../architecture/decisions.md)), each as its own
+behaviour change with its own pinning tests, and — per § 468's bar — with
+no existing pinned value moved:
 
-- [ ] **`apps/web/src/lib/routes/routing_quality.ts`** (lines ~86/88) — the
-  perpendicular-offset frame for grading an OSRM result against the tapped
-  waypoints. Web-only, no Dart twin.
-- [ ] **`apps/web/src/lib/routes/nearest_track_point.ts`** (lines ~70/118/136) —
-  the spatial grid is built from a raw `maxLng - minLng` span, so a track
-  crossing 180° degenerates to a single column. Web-only.
-- [ ] **`apps/web/src/lib/routes/route_loop.ts`** (line ~117) — the synthetic
-  perpendicular curve for a point-to-point generated route. Web-only.
-- [ ] **`apps/web/src/lib/components/RunTrackPreview.svelte`** (`isTrackMeaningful`,
-  line ~175) — the 5 m "is this track worth drawing" bbox diagonal. Its Dart
-  counterpart `isTrackRenderable` in `widgets/track_preview.dart` has the same
-  span. Failure mode is benign (a track across the line always reads as
-  meaningful), which is why it is last.
+- [x] **`apps/web/src/lib/routes/routing_quality.ts`** — the perpendicular-offset
+  frame now takes its deltas through `lonDeltaDeg`. The raw frame read a
+  waypoint just across the line as ~40,000 km off the snapped path (a spurious
+  deviation warning on every antimeridian route) and a point ON a crossing
+  segment as ~87 m off it. Web-only, as surveyed.
+- [x] **`apps/web/src/lib/routes/nearest_track_point.ts`** — the spatial grid
+  now unwraps longitudes onto the first coordinate's side. Worse than the
+  degenerate-column the survey described: the broken frame also made the
+  ring-termination bound unsound, so a tap beside the line could return the
+  WRONG vertex (a ~430 m same-side decoy over the true ~53 m neighbour across
+  the line), pinned by a deterministic test. Web-only, as surveyed.
+- [x] **`apps/web/src/lib/routes/route_loop.ts`** — the synthetic-curve delta is
+  folded and every emitted longitude wrapped back into range (the loop branch
+  too — a radial ring seeded beside the line used to emit lng > 180). The
+  survey's "web-only" was WRONG: `route_loop.dart` declares lockstep in its own
+  header and carried the same defect — on mobile a debug build crashed outright
+  on latlong2's longitude-range assert. Fixed on web + both mobile twins.
+- [x] **`RunTrackPreview.svelte`'s 5 m span** — extracted to `isTrackRenderable`
+  in `routes/track_projection.ts` (the Dart twin's name and placement beside
+  `projectTrack`) and unwrapped on both platforms alongside the Dart
+  `isTrackRenderable`. The survey's "benign" was backwards in the one case the
+  gate exists for: ~2 m of stationary jitter AT the line read as a 359.99° span
+  and PASSED the gate, drawing exactly the meaningless dot it suppresses.
 
-Everything trigonometric is unaffected and needs no work: `sin`/`cos` are
+Everything trigonometric is unaffected and needed no work: `sin`/`cos` are
 periodic, so haversine distances and great-circle bearings were always right.

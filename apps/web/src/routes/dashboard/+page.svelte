@@ -6,6 +6,7 @@
 	import {
 		fetchRunsForDashboard,
 		fetchRunAllTimeStats,
+		fetchRunStreaks,
 		fetchRunsForPeriodSummary,
 		fetchWeeklyMileage,
 		fetchPersonalRecords,
@@ -23,7 +24,8 @@
 		isReturningFromLayoff,
 		isReturningFromGap,
 	} from '$lib/training/fitness';
-	import { computeRunStreaks } from '$lib/runs/streaks';
+	import { computeRunStreaks, type RunStreaks } from '$lib/runs/streaks';
+	import { streakCardState } from '$lib/runs/streak_card';
 	import { ageGradeForRun, formatAgeGradePercent } from '$lib/runs/age_grade';
 	import { coachEnabled } from '$lib/coach/coach_flag';
 
@@ -798,10 +800,32 @@
 	/// yesterday is intact. Filtered runs feed in so the user's
 	/// activity-type filter on the dashboard scopes the streak too —
 	/// "run streak" view shows running-only, "walk" shows walks, etc.
+	/// Windowed to ~2 years like every recency card — the all-time
+	/// figures come from `allTimeStreaks` below.
 	let runStreaks = $derived.by(() => {
 		const starts = filteredRuns.map((r) => new Date(r.started_at));
 		return computeRunStreaks(starts, now);
 	});
+
+	// All-time streaks from the run_streaks_for_user aggregate, re-fetched
+	// per source filter so the sub-label's "all-time" claim stays true under
+	// a filter (decisions §471). Null while loading or after a failed RPC —
+	// streakCardState then suppresses the numeric best claim rather than
+	// presenting the windowed figure as all-time (§470's fail-closed rule).
+	let allTimeStreaks = $state<RunStreaks | null>(null);
+	let streakReq = 0;
+	$effect(() => {
+		const src = sourceFilter;
+		const uid = auth.user?.id;
+		allTimeStreaks = null;
+		if (!uid) return;
+		const req = ++streakReq;
+		fetchRunStreaks(src === 'all' ? null : src).then((s) => {
+			if (req === streakReq) allTimeStreaks = s;
+		});
+	});
+
+	let streakCard = $derived(streakCardState(allTimeStreaks, runStreaks));
 
 	/// Readiness-to-run score (0–100) derived from the live fitness
 	/// snapshot. Sleep + resting-HR inputs aren't piped yet (Health
@@ -1174,22 +1198,22 @@
 				</span>
 				<span class="stat-sub">{m('dash.average')}</span>
 			</div>
-			<div class="stat-card" class:streak-active={runStreaks.current > 0}>
+			<div class="stat-card" class:streak-active={streakCard.current > 0}>
 				<span class="stat-label">{m('dash.statStreak')}</span>
 				<span class="stat-value">
-					{runStreaks.current}
-					<span class="stat-unit">{runStreaks.current === 1 ? m('dash.dayUnit') : m('dash.daysUnit')}</span>
+					{streakCard.current}
+					<span class="stat-unit">{streakCard.current === 1 ? m('dash.dayUnit') : m('dash.daysUnit')}</span>
 				</span>
 				<span class="stat-sub">
-					{#if runStreaks.best > runStreaks.current}
-						{runStreaks.best === 1
-							? m('dash.streakBestOne', { n: runStreaks.best })
-							: m('dash.streakBestOther', { n: runStreaks.best })}
-					{:else if runStreaks.current > 0}
+					{#if streakCard.sub.kind === 'best'}
+						{streakCard.sub.n === 1
+							? m('dash.streakBestOne', { n: streakCard.sub.n })
+							: m('dash.streakBestOther', { n: streakCard.sub.n })}
+					{:else if streakCard.sub.kind === 'allTimeBest'}
 						{m('dash.streakAllTimeBest')}
-					{:else if runStreaks.best > 0}
+					{:else if streakCard.sub.kind === 'restart'}
 						{m('dash.streakRunToRestart')}
-					{:else}
+					{:else if streakCard.sub.kind === 'start'}
 						{m('dash.streakRunToStart')}
 					{/if}
 				</span>

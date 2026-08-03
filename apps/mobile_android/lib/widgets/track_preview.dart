@@ -458,18 +458,24 @@ List<Offset> projectTrack(List<Waypoint> points, double vbW, double vbH,
 }
 
 /// True iff the track's bounding-box diagonal is large enough to be
-/// worth drawing at thumbnail scale. Mirrors `isMoving` in
-/// `RunTrackPreview.svelte` — catches GPS jitter from a runner standing
-/// still without throwing away genuinely tiny laps.
+/// worth drawing at thumbnail scale — catches GPS jitter from a runner
+/// standing still without throwing away genuinely tiny laps.
+/// Longitudes are unwrapped onto the first fix's side of the
+/// antimeridian first: a raw min/max reads a stationary jitter cluster
+/// AT the line as a 359.99° span, defeating the gate for exactly the
+/// case it exists to catch. Mirrors `isTrackRenderable` in web's
+/// `routes/track_projection.ts` — keep in lockstep.
 bool isTrackRenderable(List<Waypoint> track) {
   if (track.length < 2) return false;
+  final refLng = track.first.lng;
   double minLat = track.first.lat, maxLat = track.first.lat;
-  double minLng = track.first.lng, maxLng = track.first.lng;
+  double minLng = refLng, maxLng = refLng;
   for (final p in track) {
     if (p.lat < minLat) minLat = p.lat;
     if (p.lat > maxLat) maxLat = p.lat;
-    if (p.lng < minLng) minLng = p.lng;
-    if (p.lng > maxLng) maxLng = p.lng;
+    final lng = unwrapLonDeg(refLng, p.lng);
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
   }
   final dLatM = (maxLat - minLat) * 111320;
   final dLngM = (maxLng - minLng) * 111320 * cos(minLat * pi / 180);

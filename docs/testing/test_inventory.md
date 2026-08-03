@@ -237,13 +237,13 @@ Comprehensive coverage for `StravaImporter.importFromZip`. Complements the small
 
 **Metadata + compression (3 tests):** `imported_from`/`strava_activity_type`/`title`/`activity_type`/`imported_at` populate, blank activity name falls back to "Strava import", `.gpx.gz` is decompressed before parsing.
 
-### `apps/mobile_android/test/settings_sync_test.dart` — 32 tests
+### `apps/mobile_android/test/settings_sync_test.dart` — 36 tests
 
 Covers the universal-bag and device-bag overlay logic on `SettingsSyncService` via two new `@visibleForTesting` delegates (`debugApplyUniversal`, `debugApplyDevice`). The applied-bag flow is the substantive logic — `pushX` / `updateX` are passthroughs to `SettingsService` which needs Supabase to test. Uses a real `Preferences` instance backed by `SharedPreferences.setMockInitialValues({})`.
 
 **Universal bag (17 tests):** `preferred_unit` ("mi" → `useMiles=true`, "km" → false, integer-typed value ignored), `default_activity_type` (string updates local default, empty string rejected), `weekly_mileage_goal_m` (seeds a weekly distance goal when none exists, does NOT replace an existing one — the dashboard editor wins on edit, zero / negative values ignored), body weight, fueling rates, `privacy_default`, empty bag is a no-op, unknown keys ignored.
 
-**Device bag (10 tests):** `voice_feedback_enabled` flips `audioCues`, `voice_feedback_interval_km` maps to `splitIntervalMetres` for both double and integer-typed values, non-bool `voice_feedback_enabled` is ignored, `keep_screen_on` round-trips, empty device bag is a no-op, and the `voice_cue_types` map overlay — absent ids stay on, a locally-toggled id the bag omits survives the merge, a **universal** map reaches the recorder (the web settings page can only write that bag), and a device entry overrides the universal one per cue ([decisions.md § 469](../architecture/decisions.md)).
+**Device bag (14 tests):** `voice_feedback_enabled` flips `audioCues`, `voice_feedback_interval_km` maps to `splitIntervalMetres` for both double and integer-typed values, non-bool `voice_feedback_enabled` is ignored, `keep_screen_on` round-trips, empty device bag is a no-op, and the `voice_cue_types` map overlay — absent ids stay on, a locally-toggled id the bag omits survives the merge, a **universal** map reaches the recorder (the web settings page can only write that bag), and a device entry overrides the universal one per cue ([decisions.md § 469](../architecture/decisions.md)). The master gate mirrors that shape since its own `UD` promotion ([decisions.md § 472](../architecture/decisions.md)): a **universal** `voice_feedback_enabled` reaches the recorder, a device value overrides the universal one, absent in both bags keeps the local default (on), and a non-bool universal value is dropped in both directions — never coerced on the recording stack's master cue gate.
 
 **Initial state (2 tests):** `synced` is false and `service` is null before `onSignedIn`, every `pushX` / `updateX` is a no-op while settings is null (so a UI handler can safely call them before sign-in).
 

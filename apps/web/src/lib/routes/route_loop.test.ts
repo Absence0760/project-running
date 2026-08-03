@@ -115,6 +115,42 @@ test('point-to-point — distinct end > NEAR_POINT_M gets a curved interior', ()
 	assert.notEqual(cross, 0);
 });
 
+test('point-to-point across the antimeridian keeps the curve local', () => {
+	// ~1.9 km apart, across 180°. The raw longitude delta read -359.98°,
+	// which flung the interior waypoints thousands of km away (and the
+	// perpendicular offset with them).
+	const start = { lat: 38.9, lng: 179.99 };
+	const end = { lat: 38.9, lng: -179.99 };
+	const wps = generateLoopWaypoints({ start, end, targetDistanceM: 5000 });
+	assert.equal(wps[0].lng, start.lng);
+	assert.equal(wps[wps.length - 1].lng, end.lng);
+	for (const w of wps) {
+		assert.ok(w.lng >= -180 && w.lng <= 180, `out-of-range lng ${w.lng}`);
+		const d = haversineM(start, w);
+		assert.ok(d < 10_000, `waypoint flung ${Math.round(d)}m from start`);
+	}
+});
+
+test('a loop seeded beside the antimeridian emits in-range longitudes', () => {
+	const start = { lat: 38.9, lng: 179.9999 };
+	const wps = generateLoopWaypoints({
+		start,
+		targetDistanceM: 5000,
+		radialSeedRad: 0,
+	});
+	const expectedRadiusM = (5000 * DEFAULT_SCALE_FACTOR) / (2 * Math.PI);
+	for (const w of wps) {
+		assert.ok(w.lng >= -180 && w.lng <= 180, `out-of-range lng ${w.lng}`);
+	}
+	for (let i = 1; i < wps.length - 1; i++) {
+		const d = haversineM(start, wps[i]);
+		assert.ok(
+			Math.abs(d - expectedRadiusM) < expectedRadiusM * 0.05,
+			`waypoint ${i} expected ~${expectedRadiusM}m, got ${d}m`,
+		);
+	}
+});
+
 test('isWithinAcceptBand — within tolerance', () => {
 	assert.equal(isWithinAcceptBand(5000, 5000), true);
 	assert.equal(isWithinAcceptBand(5000, 4500), true); // ratio 1.111

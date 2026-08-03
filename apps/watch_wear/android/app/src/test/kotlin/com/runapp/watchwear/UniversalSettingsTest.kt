@@ -51,8 +51,9 @@ class UniversalSettingsTest {
         // Other prefs present but no default_activity_type. Same
         // outcome as no key at all — and same for privacy_default
         // when only the other field is set. (Pick a key the wrist
-        // doesn't consume — `voice_feedback_enabled` is device-scoped
-        // so it never lands on `UniversalSettings`.)
+        // doesn't consume — `voice_feedback_enabled` is a phone/web
+        // pref with no wrist reader, so it never lands on
+        // `UniversalSettings`.)
         val out = parseUniversalSettings(
             """[{"prefs":{"voice_feedback_enabled":true}}]""",
         )

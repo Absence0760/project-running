@@ -63,3 +63,34 @@ export function projectTrack(
 	}
 	return out;
 }
+
+/// True iff the track's bounding-box diagonal exceeds ~5 m — i.e. it is
+/// worth drawing at thumbnail scale. A runner who hits Start + Stop
+/// indoors uploads a non-empty array of near-identical fixes; without
+/// this gate the thumbnail projects them all onto a single pixel and
+/// renders a meaningless dot. The few-metre threshold rejects GPS
+/// jitter without throwing away genuinely tiny laps. Longitudes are
+/// unwrapped onto the first fix's side of the antimeridian first — a
+/// raw min/max reads a jitter cluster AT the line as a 359.99° span,
+/// which defeated the gate for exactly the stationary case it exists
+/// to catch. Mirrors `isTrackRenderable` in
+/// `apps/mobile_android/lib/widgets/track_preview.dart` — keep in
+/// lockstep.
+export function isTrackRenderable(track: TrackPoint[]): boolean {
+	if (!track || track.length < 2) return false;
+	const refLng = track[0].lng;
+	let minLat = track[0].lat;
+	let maxLat = track[0].lat;
+	let minLng = refLng;
+	let maxLng = refLng;
+	for (const p of track) {
+		if (p.lat < minLat) minLat = p.lat;
+		if (p.lat > maxLat) maxLat = p.lat;
+		const lng = unwrapLonDeg(refLng, p.lng);
+		if (lng < minLng) minLng = lng;
+		if (lng > maxLng) maxLng = lng;
+	}
+	const dLatM = (maxLat - minLat) * 111_320;
+	const dLngM = (maxLng - minLng) * 111_320 * Math.cos((minLat * Math.PI) / 180);
+	return Math.hypot(dLatM, dLngM) > 5;
+}

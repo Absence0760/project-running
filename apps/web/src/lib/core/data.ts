@@ -292,6 +292,38 @@ export async function fetchRunAllTimeStats(): Promise<{
 	};
 }
 
+/// All-time current + best run streak for the dashboard streak card, from
+/// the `run_streaks_for_user` gaps-and-islands aggregate (migration
+/// 20270501_001, decisions § 471) — one row, one round trip, so the
+/// paint-path card never needs the pre-window history the ~2-year
+/// `fetchRunsForDashboard` window drops. The RPC buckets by the LOCAL day
+/// the display-side `computeRunStreaks` helper uses, so the browser's IANA
+/// zone is passed; `source` mirrors the dashboard's source-filter chips so
+/// the sub-label's all-time claim stays true under a filter. Returns null —
+/// never zeros — on any failure: unlike `fetchRunAllTimeStats`' degrade-to-0
+/// (a lifetime card showing 0 is visibly broken), a zeroed streak is
+/// indistinguishable from a truthful one, so the caller must suppress the
+/// all-time claim instead (streak_card.ts).
+export async function fetchRunStreaks(
+	source?: RunSource | null,
+): Promise<{ current: number; best: number } | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	let tz = 'UTC';
+	try {
+		tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+	} catch {
+		/* keep UTC */
+	}
+	const { data, error } = await supabase.rpc('run_streaks_for_user', {
+		p_tz: tz,
+		...(source ? { p_source: source } : {}),
+	});
+	const row = data?.[0];
+	if (error || !row) return null;
+	return { current: row.current_streak ?? 0, best: row.best_streak ?? 0 };
+}
+
 /// Exactly the columns `PeriodSummary` reads. The period drilldown has to
 /// ship every row — it lists them — so the saving is per-row width, not row
 /// count: no `metadata` jsonb bag, no elevation, no DNF flag.
