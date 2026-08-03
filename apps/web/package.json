@@ -18,19 +18,19 @@
 	},
 	"devDependencies": {
 		"@iconify-json/material-symbols": "1.2.87",
-		"@playwright/test": "^1.62.0",
+		"@playwright/test": "^1.62.1",
 		"@sveltejs/adapter-static": "3.0.10",
-		"@sveltejs/kit": "2.70.1",
+		"@sveltejs/kit": "2.70.2",
 		"@sveltejs/vite-plugin-svelte": "7.2.0",
 		"@types/aws-lambda": "8.10.162",
 		"@types/geojson": "^7946.0.16",
-		"@types/node": "^26.1.1",
+		"@types/node": "^26.1.2",
 		"esbuild": "0.28.1",
 		"mdsvex": "^0.12.8",
 		"normalize.css": "8.0.1",
 		"oauth2-mock-server": "9.1.0",
 		"svelte": "5.56.8",
-		"svelte-check": "4.7.3",
+		"svelte-check": "4.7.4",
 		"typescript": "6.0.3",
 		"unplugin-icons": "23.0.1",
 		"vite": "8.2.0"
@@ -39,16 +39,16 @@
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.115.0",
 		"@resvg/resvg-js": "^2.6.2",
-		"@sentry/sveltekit": "^10.68.0",
-		"@supabase/ssr": "^0.12.3",
+		"@sentry/sveltekit": "^10.69.0",
+		"@supabase/ssr": "^0.12.4",
 		"@supabase/supabase-js": "^2.110.8",
 		"@zip.js/zip.js": "^2.8.34",
 		"fit-file-parser": "^4.1.0",
 		"html-to-image": "^1.11.13",
-		"isomorphic-dompurify": "^3.19.0",
+		"isomorphic-dompurify": "^3.20.0",
 		"jszip": "^3.10.1",
-		"maplibre-gl": "^6.0.0",
+		"maplibre-gl": "^6.1.0",
 		"marked": "^18.0.7",
-		"material-symbols": "^0.45.9"
+		"material-symbols": "^0.45.10"
 	}
 }
