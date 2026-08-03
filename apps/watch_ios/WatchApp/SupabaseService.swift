@@ -79,14 +79,19 @@ actor SupabaseService {
     /// Insert a finished run into the `runs` table. The GPS trace is uploaded
     /// as a gzipped JSON object to the `runs` Storage bucket; the row stores
     /// only the object path in `track_url`.
-    func syncRun(_ run: WorkoutManager.FinishedRun) async throws {
+    ///
+    /// `trackJSONURL` is the file `WorkoutManager.writeTrackJSON()` streamed —
+    /// the same artefact the phone path hands to `WCSession.transferFile` —
+    /// mapped rather than read resident so this path doesn't reintroduce a
+    /// whole-track allocation.
+    func syncRun(_ run: WorkoutManager.FinishedRun, trackJSONURL: URL) async throws {
         guard let token = accessToken, let userId = userId else {
             throw SupabaseError.notAuthenticated
         }
 
         let objectPath = "\(userId)/\(run.id).json.gz"
 
-        let trackJson = try JSONEncoder().encode(run.track)
+        let trackJson = try Data(contentsOf: trackJSONURL, options: .mappedIfSafe)
         let gzipped = try gzip(trackJson)
         try await uploadTrack(path: objectPath, body: gzipped, token: token)
 
@@ -239,10 +244,10 @@ private func crc32(_ data: Data) -> UInt32 {
 /// Convenience for the DEBUG fallback: sign in with the seed user and sync
 /// the finished run directly to the local Supabase instance, bypassing the
 /// phone. Used when the watch simulator is running alone.
-func syncRunDirectDebug(_ run: WorkoutManager.FinishedRun) async throws {
+func syncRunDirectDebug(_ run: WorkoutManager.FinishedRun, trackJSONURL: URL) async throws {
     if await !SupabaseService.shared.isAuthenticated {
         _ = try await SupabaseService.shared.signIn(email: "runner@test.com", password: "testtest")
     }
-    try await SupabaseService.shared.syncRun(run)
+    try await SupabaseService.shared.syncRun(run, trackJSONURL: trackJSONURL)
 }
 #endif

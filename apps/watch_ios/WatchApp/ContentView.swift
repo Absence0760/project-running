@@ -96,9 +96,16 @@ struct ContentView: View {
         #if DEBUG
         guard let run = workoutManager.finishedRun else { return }
         syncError = nil
+        let fileURL: URL
+        do {
+            fileURL = try workoutManager.writeTrackJSON()
+        } catch {
+            syncError = error.localizedDescription
+            return
+        }
         Task {
             do {
-                try await syncRunDirectDebug(run)
+                try await syncRunDirectDebug(run, trackJSONURL: fileURL)
                 await MainActor.run {
                     thisRunSynced = true
                     connectivity.transferState = .completed
@@ -501,7 +508,7 @@ struct PostRunView: View {
                         if let bpm = workoutManager.finishedRun?.averageBPM {
                             Label("\(Int(bpm.rounded())) bpm", systemImage: "heart.fill")
                         } else {
-                            Label("\(workoutManager.finishedRun?.track.count ?? workoutManager.trackPointCount) pts", systemImage: "mappin.and.ellipse")
+                            Label("\(workoutManager.finishedRun?.trackPointCount ?? workoutManager.trackPointCount) pts", systemImage: "mappin.and.ellipse")
                         }
                     }
                     .font(.caption)
