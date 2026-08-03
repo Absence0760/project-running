@@ -180,8 +180,8 @@ class SyncService with WidgetsBindingObserver {
     // unsynced" badge would be stuck forever. Runs without the tag
     // (legacy, or saved when no provider was wired) adopt to the
     // current user. See `docs/architecture/decisions.md § 67`.
-    final unsynced = filterRunsForCurrentUser(allUnsynced, api.userId);
-    final skippedForeignOwner = allUnsynced.length - unsynced.length;
+    final unsyncedForOwner = filterRunsForCurrentUser(allUnsynced, api.userId);
+    final skippedForeignOwner = allUnsynced.length - unsyncedForOwner.length;
     if (skippedForeignOwner > 0) {
       debugPrint(
         'SyncService: skipping $skippedForeignOwner runs owned by a '
@@ -193,8 +193,19 @@ class SyncService with WidgetsBindingObserver {
     // user. Without this, on a shared device with User A's queued
     // deletes in the store + User B signed in, every sync trigger
     // would walk into _drainPendingDeletes just to no-op.
-    final hasPendingDeletes =
-        runStore.pendingRemoteDeletesForUser(api.userId).isNotEmpty;
+    final pendingDeleteIds = runStore.pendingRemoteDeletesForUser(api.userId);
+    final hasPendingDeletes = pendingDeleteIds.isNotEmpty;
+    // A run queued for deletion is never pushed, even if it was never
+    // synced. Without this, a run deleted offline before its first
+    // push (never-synced + queued for pending-delete in the same
+    // window) gets its full track uploaded — recreating the row the
+    // user just asked to delete — and only THEN removed by the delete
+    // drain below. If the delete step fails right after (partial-cycle
+    // failure), the recreated row is left on the server until a later
+    // cycle's drain catches up. See issue #675.
+    final unsynced = unsyncedForOwner
+        .where((r) => !pendingDeleteIds.contains(r.id))
+        .toList();
     final unsyncedRoutes = routeStore?.unsyncedRoutes ?? const [];
     if (unsynced.isEmpty &&
         !hasPendingDeletes &&

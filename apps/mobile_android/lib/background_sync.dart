@@ -70,14 +70,21 @@ Future<void> runBackgroundSyncCycle(
   LocalRouteStore routeStore,
 ) async {
   final allUnsynced = store.unsyncedRuns;
-  final unsynced = filterRunsForCurrentUser(allUnsynced, api.userId);
-  final skippedForeignOwner = allUnsynced.length - unsynced.length;
+  final unsyncedForOwner = filterRunsForCurrentUser(allUnsynced, api.userId);
+  final skippedForeignOwner = allUnsynced.length - unsyncedForOwner.length;
   if (skippedForeignOwner > 0) {
     debugPrint(
       'Background sync: skipping $skippedForeignOwner runs owned by a '
       'different user (signed in as ${api.userId})',
     );
   }
+  // Never push a run that's queued for deletion, even if it was never
+  // synced — otherwise the push recreates the row the user just asked
+  // to delete before the drain below removes it. See issue #675.
+  final pendingDeleteIds = store.pendingRemoteDeletesForUser(api.userId);
+  final unsynced = unsyncedForOwner
+      .where((r) => !pendingDeleteIds.contains(r.id))
+      .toList();
   if (unsynced.isNotEmpty) {
     try {
       final failed = await api.saveRunsBatch(unsynced);

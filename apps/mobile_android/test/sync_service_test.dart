@@ -379,6 +379,51 @@ void main() {
       expect(store.pendingRemoteDeleteIds, isEmpty);
     });
 
+    test(
+        'a never-synced run queued for delete is never pushed — only '
+        'deleted (issue #675)', () async {
+      // Deleted offline before its first push ever ran: never synced
+      // AND queued for pending-delete in the same window. The push
+      // must skip it entirely so its track is never uploaded — a
+      // partial-cycle failure right after an upload would otherwise
+      // leave the run re-created on the server despite the user
+      // having deleted it locally.
+      await store.save(makeRun('r-never-synced'));
+      await store.markPendingRemoteDelete('r-never-synced');
+
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(api.saveBatchCallCount, 0,
+          reason: 'a run queued for deletion must never be uploaded, '
+              'even when it was never synced');
+      expect(api.deletedIds, ['r-never-synced']);
+      expect(store.runs, isEmpty);
+      expect(store.pendingRemoteDeleteIds, isEmpty);
+    });
+
+    test(
+        'a never-synced run queued for delete alongside an unrelated '
+        'unsynced run: only the queued one is skipped (issue #675)',
+        () async {
+      await store.save(makeRun('r-keep'));
+      await store.save(makeRun('r-delete-me'));
+      await store.markPendingRemoteDelete('r-delete-me');
+
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(api.saveBatchCallCount, 1);
+      expect(api.savedBatchIds.first, ['r-keep'],
+          reason: 'only the run NOT queued for delete gets pushed');
+      expect(api.deletedIds, ['r-delete-me']);
+      expect(store.runs.map((r) => r.id).toList(), ['r-keep']);
+    });
+
     test('reentrant call while a sync is in flight is dropped', () async {
       await store.save(makeRun('r-1'));
       final api = _FakeApiClient();

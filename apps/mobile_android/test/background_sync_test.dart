@@ -189,6 +189,27 @@ void main() {
     });
   });
 
+  group('runBackgroundSyncCycle — never-synced + queued for delete '
+      '(issue #675)', () {
+    test('a run deleted offline before its first push is never uploaded',
+        () async {
+      await store.save(_runForOwner('r-never-synced', 'user-a'));
+      await store.markPendingRemoteDelete('r-never-synced',
+          ownerUserId: 'user-a');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+
+      await runBackgroundSyncCycle(api, store, routeStore);
+
+      expect(api.saveBatchCallCount, 0,
+          reason: 'the background cycle must never push a run that is '
+              'already queued for deletion, even if it was never synced');
+      expect(api.deletedIds, ['r-never-synced']);
+      expect(store.runs, isEmpty);
+      expect(store.pendingRemoteDeleteIds, isEmpty);
+    });
+  });
+
   group('runBackgroundSyncCycle — guard clauses', () {
     test('empty queue is a no-op (no API call)', () async {
       final api = _FakeApiClient()..fakeUserId = 'user-a';
