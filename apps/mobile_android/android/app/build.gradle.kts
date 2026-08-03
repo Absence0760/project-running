@@ -89,7 +89,7 @@ dependencies {
     // classpath. Keep this version in lockstep with the plugin's
     // (health-13.3.1/android/build.gradle) — two versions on one runtime
     // classpath is a Gradle conflict resolution away from a surprise.
-    implementation("androidx.health.connect:connect-client:1.2.0-alpha02")
+    implementation("androidx.health.connect:connect-client:1.2.0-alpha04")
 
     // JUnit for pure-JVM unit tests on the native Kotlin bridges
     // (WearRoutesBridge / WearAuthBridge / RunNotificationBridge).
