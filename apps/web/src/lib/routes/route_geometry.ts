@@ -5,6 +5,8 @@
  * platforms. Add to the parity-pair list in CLAUDE.md if you grow
  * this module.
  */
+import { lonDeltaDeg, wrapLonDeg } from './geo';
+
 export interface RouteWaypoint {
 	lat: number;
 	lng: number;
@@ -51,7 +53,7 @@ export function interpolateAlongRoute(
 			const localT = Math.min(1, Math.max(0, (target - seen) / segLen));
 			return {
 				lat: a.lat + (b.lat - a.lat) * localT,
-				lng: a.lng + (b.lng - a.lng) * localT,
+				lng: wrapLonDeg(a.lng + lonDeltaDeg(a.lng, b.lng) * localT),
 				elevation_m: lerpNullable(
 					a.elevation_m ?? null,
 					b.elevation_m ?? null,
@@ -90,9 +92,9 @@ export function distanceAlongRoute(
 		const cosLat = Math.cos(a.lat * deg);
 		const ax = 0;
 		const ay = 0;
-		const bx = (b.lng - a.lng) * cosLat * rPerDeg;
+		const bx = lonDeltaDeg(a.lng, b.lng) * cosLat * rPerDeg;
 		const by = (b.lat - a.lat) * rPerDeg;
-		const px = (point.lng - a.lng) * cosLat * rPerDeg;
+		const px = lonDeltaDeg(a.lng, point.lng) * cosLat * rPerDeg;
 		const py = (point.lat - a.lat) * rPerDeg;
 		const abx = bx - ax;
 		const aby = by - ay;

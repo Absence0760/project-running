@@ -429,4 +429,28 @@ void main() {
       expect(p.lng, closeTo(0, 1e-6));
     });
   });
+
+  group('the antimeridian', () {
+    test('interpolateAlongRoute — a leg across the line stays on the leg', () {
+      final wps = [wp(0, 179.99), wp(0, -179.97)];
+      final out = interpolateAlongRoute(wps, 0.5)!;
+      // The midpoint of a 0.04° leg anchored at 179.99 is 180.01, which
+      // wraps to -179.99 — not 0.01, half a world away.
+      expect(out.lng, closeTo(-179.99, 1e-9));
+      expect(out.lat, 0);
+    });
+
+    test('distanceAlongRoute — a point past the line projects onto the leg',
+        () {
+      final wps = [wp(0, 179.98), wp(0, -179.96)];
+      final total = polylineLengthMetres(wps);
+      final along = distanceAlongRoute((lat: 0.0, lng: -179.99), wps)!;
+      expect(along, closeTo(total / 2, 1));
+    });
+
+    test('polylineLengthMetres — a course across the line spans 0.06°', () {
+      final wps = [wp(0, 179.98), wp(0, -179.96)];
+      expect(polylineLengthMetres(wps), closeTo(6671.7, 1));
+    });
+  });
 }
