@@ -165,6 +165,16 @@
 //!     all-clear shown after the runner drifted off again is a lie the Nav
 //!     page would contradict.
 //!
+//! A queued alert waits [`ALERT_QUIET_S`] after the banner in front of it
+//! expires before it takes the slot. The re-queue rule above means the queue
+//! can stay non-empty for a long stretch of a race, and without the gap the
+//! expiry and the next promotion are the same instant — the hero band never
+//! comes back, and a runner holding three owed reminders reads inverse-video
+//! banners instead of their distance and pace for as long as the arms keep
+//! arriving. The gap holds the *queue* only: an arm that calls
+//! [`take_slot`](AlertEngine::take_slot) still displaces whatever is up the
+//! moment its event happens.
+//!
 //! The order the arms are *evaluated* in [`AlertEngine::on_update`] is
 //! load-bearing, not cosmetic. Each arm refuses a higher rung by inspecting the
 //! slot, and the slot can only hold what has already run — so an arm evaluated
@@ -200,6 +210,24 @@ pub const EAT_INTERVAL_MOVING_S: u32 = 1500;
 
 /// How long a raised alert stays on screen.
 pub const ALERT_TTL_S: u32 = 8;
+
+/// The shortest stretch of bare page between one banner expiring and a queued
+/// one taking the slot.
+///
+/// Without it the two are the same instant: the expiry and the promotion both
+/// happen inside one [`AlertEngine::on_update`], so a runner holding two owed
+/// reminders gets `! DRINK` for eight seconds, `! EAT` for eight, `! DRINK`
+/// again — an unbroken inverse-video band over the two hero rows, which on a
+/// 168x96 1-bit panel is the distance and the pace. The re-queue rule (§214)
+/// means a reminder is never dropped, so the queue can stay non-empty for as
+/// long as the arms keep arriving and the numbers never come back. A banner is
+/// designed as a transient; this is what makes it one.
+///
+/// Three seconds is a glance — long enough to read the hero band the banner
+/// was covering, short enough that an owed warning is not meaningfully later
+/// than the eight seconds it was already going to wait behind the banner in
+/// front of it.
+pub const ALERT_QUIET_S: u32 = 3;
 
 /// Minimum seconds between two zone-alert fires, so a BPM flapping across the
 /// ceiling boundary (re-arming on each dip) can't re-fire every second.
@@ -498,6 +526,14 @@ pub struct AlertEngine {
     storm_armed: bool,
     /// The on-screen alert and the uptime it was raised at.
     active: Option<(Alert, u32)>,
+    /// The uptime a queued alert may next take the slot at — set to
+    /// `expiry + ALERT_QUIET_S` whenever a banner runs out its TTL, so the
+    /// promotion at the tail of [`Self::on_update`] cannot happen in the same
+    /// call as the expiry. Gates the QUEUE only: an event alert
+    /// ([`Self::take_slot`] — a zone excursion, a corral whistle, a workout
+    /// edge, a waypoint answer) still takes the slot the instant it happens,
+    /// because those are worth nothing shown three seconds late.
+    quiet_until_s: u32,
     pending_drink: bool,
     pending_eat: bool,
     /// A raised storm waiting for the slot. Like [`Self::storm_armed`] and
@@ -606,6 +642,7 @@ impl AlertEngine {
             storm_alert: false,
             storm_armed: true,
             active: None,
+            quiet_until_s: 0,
             pending_drink: false,
             pending_eat: false,
             pending_storm: false,
@@ -754,6 +791,13 @@ impl AlertEngine {
         if let Some((_, raised_at)) = self.active {
             if uptime_s.saturating_sub(raised_at) >= ALERT_TTL_S {
                 self.active = None;
+                // Anchored on when the banner's TTL actually ran out, not on
+                // when this call noticed: the record task's tick coarsens with
+                // the run state, and a paused runner must not owe a longer
+                // silence than a running one.
+                self.quiet_until_s = raised_at
+                    .saturating_add(ALERT_TTL_S)
+                    .saturating_add(ALERT_QUIET_S);
             }
         }
 
@@ -1117,7 +1161,7 @@ impl AlertEngine {
             self.next_drink_at_moving_s = snap.moving_s + self.drink_interval_s;
         }
 
-        if self.active.is_none() {
+        if self.active.is_none() && uptime_s >= self.quiet_until_s {
             if self.pending_off_course {
                 self.pending_off_course = false;
                 self.active = Some((Alert::OffCourse, uptime_s));
@@ -1163,6 +1207,11 @@ impl AlertEngine {
     /// storm banner it may be displacing (a superseded milestone / pace /
     /// workout banner is simply gone — §214's re-queue rule is fuel's, and
     /// § 376 extends it to the one warning that never comes round again).
+    ///
+    /// Deliberately not gated on [`ALERT_QUIET_S`]: every caller here is an
+    /// event the runner is being told about *as it happens*, and one shown
+    /// three seconds late is a lie about when it happened. The gap holds the
+    /// queue, not the world.
     fn take_slot(&mut self, alert: Alert, uptime_s: u32) {
         match self.active {
             Some((Alert::Drink, _)) => self.pending_drink = true,
@@ -1182,6 +1231,7 @@ impl AlertEngine {
     /// survives — it is settings, not run state.
     fn reset(&mut self) {
         self.active = None;
+        self.quiet_until_s = 0;
         self.pending_drink = false;
         self.pending_eat = false;
         self.zone_armed = true;
@@ -1593,6 +1643,71 @@ mod tests {
     }
 
     #[test]
+    fn a_queued_alert_waits_the_quiet_gap_and_the_page_is_bare_through_it() {
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(300, 300);
+        assert_eq!(e.on_update(&rec(300), None, 300), Some(Alert::Eat));
+        // Every second from the TTL expiry to the end of the gap: the queued
+        // drink is owed and the slot stays empty anyway.
+        for t in 300 + ALERT_TTL_S..300 + ALERT_TTL_S + ALERT_QUIET_S {
+            assert_eq!(e.on_update(&rec(t), None, t), None, "banner at t={t}");
+        }
+        let promote = 300 + ALERT_TTL_S + ALERT_QUIET_S;
+        assert_eq!(
+            e.on_update(&rec(promote), None, promote),
+            Some(Alert::Drink)
+        );
+    }
+
+    #[test]
+    fn an_always_full_queue_still_frees_the_slot_once_per_banner() {
+        // The contract sim/ci_smoke.py's quiet-window acquisition rests on: a
+        // 1 Hz feed with something owed at every expiry still reports an empty
+        // slot within ALERT_TTL_S + ALERT_QUIET_S of any banner. Before the
+        // gap, the expiry and the next promotion happened inside one call, so
+        // `on_update` never returned None, the record task never logged
+        // `record: alert cleared`, and both the runner's hero band and the
+        // harness's baseline dump waited on a transition that could not come.
+        let mut e = AlertEngine::new();
+        e.set_fuel_intervals(9, 11);
+        e.set_distance_interval(Some(DISTANCE_INTERVAL_MIN_M));
+        e.set_time_interval(Some(TIME_INTERVAL_MIN_S));
+        let mut last_free = 0;
+        let mut worst = 0;
+        for t in 1..600u32 {
+            let mut s = rec(t);
+            s.distance_m = f64::from(t) * 4.0;
+            if e.on_update(&s, None, t).is_none() {
+                last_free = t;
+            }
+            worst = worst.max(t - last_free);
+        }
+        assert!(
+            worst <= ALERT_TTL_S + ALERT_QUIET_S,
+            "the slot stayed occupied for {worst}s, past the \
+             {}s the engine promises",
+            ALERT_TTL_S + ALERT_QUIET_S
+        );
+    }
+
+    #[test]
+    fn an_event_alert_still_takes_the_slot_inside_the_quiet_gap() {
+        // The gap holds the queue, not the world: a zone excursion mid-gap is
+        // news now, and a banner three seconds late is a lie about when it
+        // happened.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        e.set_fuel_intervals(300, 300);
+        assert_eq!(e.on_update(&rec(300), None, 300), Some(Alert::Eat));
+        let mid = 300 + ALERT_TTL_S + 1;
+        assert!(mid < 300 + ALERT_TTL_S + ALERT_QUIET_S);
+        assert_eq!(
+            e.on_update(&rec(mid), Some(160), mid),
+            Some(Alert::ZoneAbove(4))
+        );
+    }
+
+    #[test]
     fn reminders_repeat_each_interval() {
         let mut e = AlertEngine::new();
         e.set_fuel_intervals(300, 1_000_000);
@@ -1622,8 +1737,9 @@ mod tests {
         e.set_fuel_intervals(300, 300);
         // Both come due on the same update: eat wins the single slot.
         assert_eq!(e.on_update(&rec(300), None, 300), Some(Alert::Eat));
-        // The drink reminder was queued, not dropped — it shows after the TTL.
-        let after = 300 + ALERT_TTL_S;
+        // The drink reminder was queued, not dropped — it shows after the TTL
+        // plus the quiet gap the page gets back in between.
+        let after = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&rec(after), None, after), Some(Alert::Drink));
     }
 
@@ -1716,7 +1832,7 @@ mod tests {
             Some(Alert::ZoneAbove(4))
         );
         // The superseded drink reminder comes back after the zone TTL.
-        let after = 902 + ALERT_TTL_S;
+        let after = 902 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&rec(after), Some(150), after),
             Some(Alert::Drink)
@@ -1822,7 +1938,7 @@ mod tests {
             Some(Alert::ZoneAbove(4))
         );
         // The superseded eat is re-queued, not dropped — it returns post-TTL.
-        let after = 302 + ALERT_TTL_S;
+        let after = 302 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&rec(after), Some(150), after), Some(Alert::Eat));
     }
 
@@ -1839,9 +1955,9 @@ mod tests {
             Some(Alert::ZoneAbove(4))
         );
         // Zone clears: eat-before-drink holds across the re-queue.
-        let a = 301 + ALERT_TTL_S;
+        let a = 301 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&rec(a), Some(150), a), Some(Alert::Eat));
-        let b = a + ALERT_TTL_S;
+        let b = a + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&rec(b), Some(150), b), Some(Alert::Drink));
     }
 
@@ -1851,8 +1967,11 @@ mod tests {
         e.set_fuel_intervals(8, 16);
         assert_eq!(e.on_update(&rec(8), None, 8), Some(Alert::Drink));
         // At moving == 16 the drink's TTL expires on the very tick eat comes
-        // due; the expiring alert must not block the newly-queued one.
-        assert_eq!(e.on_update(&rec(16), None, 16), Some(Alert::Eat));
+        // due. The expiry hands the page back for the quiet gap rather than to
+        // the newly-queued reminder — which is held, not swallowed.
+        assert_eq!(e.on_update(&rec(16), None, 16), None);
+        let after = 16 + ALERT_QUIET_S;
+        assert_eq!(e.on_update(&rec(after), None, after), Some(Alert::Eat));
     }
 
     #[test]
@@ -1889,7 +2008,7 @@ mod tests {
             e.on_update(&dist(1_000.0, 301), None, 301),
             Some(Alert::Distance(1_000))
         );
-        let t = 301 + ALERT_TTL_S;
+        let t = 301 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&dist(1_500.0, t), None, t), None);
         assert_eq!(
             e.on_update(&dist(2_000.0, t + 1), None, t + 1),
@@ -1908,7 +2027,7 @@ mod tests {
         );
         // A threshold re-based off the fire (the fuel arms' rule) would push the
         // next milestone out to 2009 m and drift a little further every time.
-        let t = 300 + ALERT_TTL_S;
+        let t = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&dist(2_000.0, t), None, t),
             Some(Alert::Distance(2_000))
@@ -1924,7 +2043,7 @@ mod tests {
             Some(Alert::Distance(3_000))
         );
         // The skipped 1 km / 2 km milestones do not queue up behind it.
-        let t = 300 + ALERT_TTL_S;
+        let t = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&dist(3_600.0, t), None, t), None);
         assert_eq!(
             e.on_update(&dist(4_000.0, t + 1), None, t + 1),
@@ -2211,7 +2330,7 @@ mod tests {
             Some(Alert::PaceFast)
         );
         // The superseded reminder comes back after the pace TTL, not lost.
-        let after = 902 + ALERT_TTL_S;
+        let after = 902 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&paced(360, after), None, after),
             Some(Alert::Drink)
@@ -2229,7 +2348,7 @@ mod tests {
         );
         // Unlike fuel, the milestone is gone rather than owed: nothing surfaces
         // when the slot frees, and the next one is measured from 2 km.
-        let t = 900 + ALERT_TTL_S;
+        let t = 900 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&dist(1_500.0, t), None, t), None);
         assert_eq!(
             e.on_update(&dist(2_000.0, t + 1), None, t + 1),
@@ -2579,11 +2698,8 @@ mod tests {
         let fired = e.on_update(&rec_workout(wv(1, 0, false), 901), None, 901);
         assert!(matches!(fired, Some(Alert::WorkoutStep { .. })));
         // Once the step banner expires the displaced reminder returns.
-        let requeued = e.on_update(
-            &rec_workout(wv(1, 0, false), 901 + ALERT_TTL_S),
-            None,
-            901 + ALERT_TTL_S,
-        );
+        let back = 901 + ALERT_TTL_S + ALERT_QUIET_S;
+        let requeued = e.on_update(&rec_workout(wv(1, 0, false), back), None, back);
         assert_eq!(requeued, Some(Alert::Drink));
     }
 
@@ -2738,7 +2854,7 @@ mod tests {
             e.on_update(
                 &backyard_snap(RecordState::Recording, 1, 3),
                 None,
-                2 + ALERT_TTL_S
+                2 + ALERT_TTL_S + ALERT_QUIET_S
             ),
             Some(Alert::Eat)
         );
@@ -2973,12 +3089,12 @@ mod tests {
             e.on_update(&stormy(StormTrend::Storm, 300), None, 300),
             Some(Alert::Storm)
         );
-        let a = 300 + ALERT_TTL_S;
+        let a = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&stormy(StormTrend::Storm, a), None, a),
             Some(Alert::Eat)
         );
-        let b = a + ALERT_TTL_S;
+        let b = a + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&stormy(StormTrend::Storm, b), None, b),
             Some(Alert::Drink)
@@ -3000,7 +3116,7 @@ mod tests {
             e.on_update(&stormy(StormTrend::Storm, 12), Some(160), 12),
             Some(Alert::ZoneAbove(4))
         );
-        let after = 12 + ALERT_TTL_S;
+        let after = 12 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&stormy(StormTrend::Storm, after), Some(150), after),
             Some(Alert::Storm),
@@ -3121,7 +3237,7 @@ mod tests {
         );
         // A stale fix is the watch losing sight of the runner, not the runner
         // catching up — Unknown must not re-arm.
-        let mut t = 10 + ALERT_TTL_S;
+        let mut t = 10 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&cut(CutoffEtaStatus::Unknown, t), None, t),
             None
@@ -3138,7 +3254,7 @@ mod tests {
                 e.on_update(&cut(CutoffEtaStatus::Behind, t), None, t),
                 Some(Alert::CutoffBehind)
             );
-            t += ALERT_TTL_S;
+            t += ALERT_TTL_S + ALERT_QUIET_S;
         }
     }
 
@@ -3150,7 +3266,7 @@ mod tests {
             e.on_update(&cut(CutoffEtaStatus::Behind, 300), None, 300),
             Some(Alert::CutoffBehind)
         );
-        let a = 300 + ALERT_TTL_S;
+        let a = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&cut(CutoffEtaStatus::Behind, a), None, a),
             Some(Alert::Eat)
@@ -3171,7 +3287,7 @@ mod tests {
             e.on_update(&cut(CutoffEtaStatus::Behind, 12), Some(160), 12),
             Some(Alert::ZoneAbove(4))
         );
-        let after = 12 + ALERT_TTL_S;
+        let after = 12 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&cut(CutoffEtaStatus::Behind, after), Some(150), after),
             Some(Alert::CutoffBehind),
@@ -3256,7 +3372,7 @@ mod tests {
             e.on_update(&off(Some(true), 10), None, 10),
             Some(Alert::OffCourse)
         );
-        let t = 10 + ALERT_TTL_S;
+        let t = 10 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&off(Some(false), t), None, t),
             Some(Alert::BackOnCourse)
@@ -3276,7 +3392,7 @@ mod tests {
             e.on_update(&off(Some(true), 10), None, 10),
             Some(Alert::OffCourse)
         );
-        let mut t = 10 + ALERT_TTL_S;
+        let mut t = 10 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&off(None, t), None, t), None);
         t += 1;
         assert_eq!(e.on_update(&off(Some(false), t), None, t), None);
@@ -3299,7 +3415,7 @@ mod tests {
             e.on_update(&off(Some(true), 12), Some(160), 12),
             Some(Alert::ZoneAbove(4))
         );
-        let after = 12 + ALERT_TTL_S;
+        let after = 12 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&off(Some(true), after), Some(150), after),
             Some(Alert::OffCourse),
@@ -3318,7 +3434,7 @@ mod tests {
             ..off(Some(true), 10)
         };
         assert_eq!(e.on_update(&both, None, 10), Some(Alert::OffCourse));
-        let t = 10 + ALERT_TTL_S;
+        let t = 10 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&both, None, t), Some(Alert::CutoffBehind));
     }
 
@@ -3442,7 +3558,7 @@ mod tests {
             e.on_update(&marked(1, 0, 301), None, 301),
             Some(Alert::WaypointMarked)
         );
-        let t = 301 + ALERT_TTL_S;
+        let t = 301 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&marked(1, 0, t), None, t),
             Some(Alert::Drink),
@@ -3502,7 +3618,7 @@ mod tests {
         );
         assert_eq!(banner(Alert::SignalLost).as_str(), "! GPS LOST");
         // A void that persists is a state, not a second event.
-        let mut t = 11 + ALERT_TTL_S;
+        let mut t = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&voided(true, t), None, t), None);
         t += 1;
         assert_eq!(
@@ -3582,7 +3698,7 @@ mod tests {
         assert_eq!(e.on_update(&lost(1, 11), None, 11), Some(Alert::RunLost));
         assert_eq!(banner(Alert::RunLost).as_str(), "! RUN LOST");
         // A steady counter is not news — the loss already happened.
-        let t = 11 + ALERT_TTL_S;
+        let t = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&lost(1, t), None, t), None);
         // Two evictions in one run are two losses; each is announced.
         assert_eq!(
@@ -3641,7 +3757,7 @@ mod tests {
             e.on_update(&lost(1, 11), Some(160), 11),
             Some(Alert::ZoneAbove(4))
         );
-        let after = 11 + ALERT_TTL_S;
+        let after = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&lost(1, after), Some(150), after),
             Some(Alert::RunLost),
@@ -3662,13 +3778,13 @@ mod tests {
             ..stormy(StormTrend::Storm, 300)
         };
         assert_eq!(e.on_update(&both, None, 300), Some(Alert::Storm));
-        let t = 300 + ALERT_TTL_S;
+        let t = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         let hold = Snapshot {
             run_lost_seq: 1,
             ..stormy(StormTrend::Storm, t)
         };
         assert_eq!(e.on_update(&hold, None, t), Some(Alert::RunLost));
-        let t = t + ALERT_TTL_S;
+        let t = t + ALERT_TTL_S + ALERT_QUIET_S;
         let hold = Snapshot {
             run_lost_seq: 1,
             ..stormy(StormTrend::Storm, t)
@@ -3689,7 +3805,7 @@ mod tests {
             "! CRS FAIL"
         );
         // A steady counter is not news; the next failed retry is.
-        let t = 11 + ALERT_TTL_S;
+        let t = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&rejected(1, t), None, t), None);
         assert_eq!(
             e.on_update(&rejected(2, t + 1), None, t + 1),
@@ -3766,7 +3882,7 @@ mod tests {
             e.on_update(&pushed(PushKind::Roadbook, 2, false, 12), Some(160), 12),
             Some(Alert::ZoneAbove(4))
         );
-        let after = 11 + ALERT_TTL_S;
+        let after = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(
                 &pushed(PushKind::Roadbook, 2, false, after),
@@ -3789,7 +3905,7 @@ mod tests {
             ..rejected(1, 11)
         };
         assert_eq!(e.on_update(&both, None, 11), Some(Alert::CutoffBehind));
-        let t = 11 + ALERT_TTL_S;
+        let t = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         let hold = Snapshot {
             cutoff: cut(CutoffEtaStatus::Behind, t).cutoff,
             ..rejected(1, t)
@@ -3814,7 +3930,7 @@ mod tests {
             e.on_update(&both, None, 300),
             Some(Alert::PushRejected(PushKind::Course))
         );
-        let t = 300 + ALERT_TTL_S;
+        let t = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         let hold = Snapshot {
             push_outcome: rejected(1, t).push_outcome,
             ..stormy(StormTrend::Storm, t)
@@ -3831,7 +3947,7 @@ mod tests {
             e.on_update(&rejected(1, 11), Some(160), 11),
             Some(Alert::ZoneAbove(4))
         );
-        let after = 11 + ALERT_TTL_S;
+        let after = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&rejected(1, after), Some(150), after),
             Some(Alert::PushRejected(PushKind::Course)),
@@ -3877,7 +3993,7 @@ mod tests {
         assert_eq!(banner(Alert::TrackThinned).as_str(), "! TRK RES");
         // A steady factor is not news — the resolution already dropped, and
         // the Distance page carries it from here.
-        let t = 11 + ALERT_TTL_S;
+        let t = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&thinned(2, t), None, t), None);
         // The next halving is a new fact and gets its own banner: the record
         // is coarser again, and each doubling costs about as long as the run so
@@ -3915,7 +4031,7 @@ mod tests {
             ..lost(1, 11)
         };
         assert_eq!(e.on_update(&both, None, 11), Some(Alert::RunLost));
-        let t = 11 + ALERT_TTL_S;
+        let t = 11 + ALERT_TTL_S + ALERT_QUIET_S;
         let hold = Snapshot {
             track_thinning: 2,
             ..lost(1, t)
@@ -3935,7 +4051,7 @@ mod tests {
             e.on_update(&thinned(2, 300), None, 300),
             Some(Alert::TrackThinned)
         );
-        let t = 300 + ALERT_TTL_S;
+        let t = 300 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(e.on_update(&thinned(2, t), None, t), Some(Alert::Eat));
     }
 
@@ -3956,7 +4072,7 @@ mod tests {
             e.on_update(&thinned(2, 12), Some(160), 12),
             Some(Alert::ZoneAbove(4))
         );
-        let t = 12 + ALERT_TTL_S;
+        let t = 12 + ALERT_TTL_S + ALERT_QUIET_S;
         assert_eq!(
             e.on_update(&thinned(2, t), Some(150), t),
             Some(Alert::TrackThinned),

@@ -536,8 +536,11 @@ jobs:
       - name: Install defmt-print (decodes the RTT stream against the ELF)
         run: command -v defmt-print || cargo install defmt-print --locked --version '^1.1'
       # Built here rather than left to the launcher so a compile failure is
-      # distinguishable from a sim failure. Must match bin/watch-sim.sh's own
-      # invocation exactly, or the launcher rebuilds it.
+      # distinguishable from a sim failure. It does NOT save the launcher a
+      # build: each scenario boots only the rails it asserts on
+      # (ci_smoke.py's SCENARIO_ARMED_RAILS, decisions.md § 465), so no single
+      # feature set is the one every session wants. What this buys is a named
+      # red step when the widest sim set stops compiling.
       - name: Build the sim feature set
         working-directory: apps/custom_watch
         run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink
@@ -666,8 +669,11 @@ jobs:
       - name: Install defmt-print (decodes the RTT stream against the ELF)
         run: command -v defmt-print || cargo install defmt-print --locked --version '^1.1'
       # Built here rather than left to the launcher so a compile failure is
-      # distinguishable from a sim failure. Must match bin/watch-sim.sh's own
-      # invocation exactly, or the launcher rebuilds it.
+      # distinguishable from a sim failure. It does NOT save the launcher a
+      # build: each scenario boots only the rails it asserts on
+      # (ci_smoke.py's SCENARIO_ARMED_RAILS, decisions.md § 465), so no single
+      # feature set is the one every session wants. What this buys is a named
+      # red step when the widest sim set stops compiling.
       - name: Build the sim feature set
         working-directory: apps/custom_watch
         run: cargo build --release --bin app --features sim-autostart,sim-alerts,sim-buttons,sim-course,sim-workout,dev-blink

@@ -43,9 +43,8 @@ whole emulator. Both cover a rail that had no assertion at all:
 shortened cadences under `sim-autostart` (drink 30 s / eat 45 s of moving time,
 a 100 m distance arm, a 60 s elapsed arm, and a 5:00-5:20/km band the ~5:33/km
 bench_jog fixture sits outside), so this asserts what that arming makes
-inevitable and nothing more — see `scenario_alerts`. Boots `--no-course`: the
-§380/§381 course-driven arms would otherwise hold the slot through the opening
-quiet window the baseline dump depends on.
+inevitable and nothing more — see `scenario_alerts`. The only scenario that
+boots the `alerts` rail: every other one sheds it, per `SCENARIO_ARMED_RAILS`.
 
 `pages` — the paged glance cycle. Walks the cycle right with `runMacro $btn4`
 (§350: the lower-right key pages right) and, for each page of interest, waits
@@ -96,8 +95,13 @@ each) and what `--scenario all` now does too. `alerts` and `pages` shared a boot
 until 2026-07-29 on the grounds that neither disturbed the other; `alerts` in
 fact consumed the quiet window `pages` needs, because past ~100 s the sim's
 overlapping alert cadences never let a banner expire with nothing behind it and
-`record: alert cleared` stops firing — see `plan_sessions`. Each session gets
-its own phone port (`--phone-port` + session index) because watch.resc binds
+`record: alert cleared` stopped firing — see `plan_sessions`. The engine now
+guarantees that gap (`watch_core::alerts::ALERT_QUIET_S`, decisions.md § 465)
+and each scenario boots only the rails it asserts on (`SCENARIO_ARMED_RAILS`),
+so a quiet window is a recurring resource rather than something one scenario
+can spend on another's behalf; the boots stay separate all the same, because a
+rail set is a property of the BUILD. Each session gets its own phone port
+(`--phone-port` + session index) because watch.resc binds
 that port at a FIXED number and watch-sim.sh aborts if it is still held — a
 sequential re-launch must not race the previous Renode's teardown. `--budget` is
 a cap on the WHOLE process, shared across sessions, so a per-scenario invocation
@@ -144,6 +148,26 @@ from contextlib import contextmanager
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def rust_const(relative_path, name):
+    """Read a `pub const NAME: u32 = N;` out of the firmware source.
+
+    For the handful of numbers here that are a CONTRACT with the firmware
+    rather than a harness choice. A copy of one of those would drift silently:
+    a deliberate change to how long a banner holds the slot would come back
+    weeks later as a mystery timeout in a scenario that never mentions alerts.
+    """
+    source = (REPO_ROOT / relative_path).read_text()
+    m = re.search(rf"^pub const {name}: u32 = (\d+);", source, re.MULTILINE)
+    if m is None:
+        raise RuntimeError(
+            f"{relative_path} no longer declares `pub const {name}: u32` — this "
+            "harness reads it rather than copying it, so the constant has to be "
+            "found or the contract it pins is unenforced"
+        )
+    return int(m.group(1))
+
 
 MIN_DISTANCE_M = 20.0
 MIN_DARK_PIXELS = 200
@@ -230,69 +254,96 @@ SCENARIO_FIXTURES = {
     "storm": "bench_jog",
 }
 
-# Extra `bin/watch-sim.sh` flags a scenario needs to boot the firmware it
-# asserts against: the composed data screens (§364) seat immediately after
-# the Dashboard, so building them into every session would shift the page
-# walk `pages` and `terrain` assert on; `idle` needs the run never to start;
-# `workout` and `storm` need the alert slot to themselves; and `alerts`
-# needs a course-free opening window for its quiet baseline.
-SCENARIO_LAUNCHER_ARGS = {
-    # `--no-alerts` as well: the shortened sim fuel cadences overlap into a
-    # continuous banner past ~100 s, and a banner OWNS the hero band — it would
-    # cover slot 0 of every screen and make the render assertions below vacuous.
-    # The same reason `bin/watch-shots.sh` boots that way.
-    "screens": ("--screens", "--no-alerts"),
-    # The whole point of this one: no `sim-autostart`, so the watch stays on the
-    # idle faces instead of paging a run view. `--no-workout` keeps the boot
-    # exactly what it was when the demo workout rode `sim-autostart` (before
-    # `sim-workout` split out): nothing here records, so an armed workout could
-    # only ever be noise.
-    "idle": ("--no-autostart", "--no-workout"),
-    # `--no-alerts` drops the sim's shortened fuel / distance / time / pace
-    # arms, leaving the hardware defaults (900 s drink, 1500 s eat of MOVING
-    # time) — an order of magnitude past this scenario's ~180 s of run. The
-    # workout's own edges are unconditional (they ride `sim-workout`, which the
-    # launcher keeps on by default, not `sim-alerts`), so what is left in the
-    # alert slot is exactly and only the
-    # workout rail. That is what makes the COUNTING assertion possible: "one
-    # end-of-step warning across the plan, and one only" is a claim about the
-    # `ENDING_MIN_STEP_*` gate solely while nothing else can take the slot.
-    # It also keeps a fuel banner off the two Workout page dumps, which a
-    # banner would otherwise own (it covers the hero band). Arbitration between
-    # a workout banner and a fuel one is `alerts`' surface, not this one's.
-    # `--no-course` beside it since the §380/§381 cutoff + off-course arms:
-    # those alert on DATA PRESENCE (the canned course's legs and cutoff
-    # schedule), not on a sim setter, so `--no-alerts` cannot silence them —
-    # and bench_jog leaves the course each lap, so an OffCourse banner
-    # ping-pongs with the workout edges (each displacement re-queues it) and
-    # the slot never reads `cleared` inside `wait_for_no_alert`'s window.
-    "workout": ("--no-alerts", "--no-course"),
-    # `--storm` compresses the § 376 trend window from three hours to 60 s, so a
-    # front is readable inside a scenario's budget, and arms the banner through
-    # the same setter a phone push feeds. `--no-alerts` for the same reason
-    # `workout` takes it: the COUNT assertion below is a claim about the storm
-    # arm's once-per-front hysteresis, and it only means that while nothing else
-    # can take the single banner slot.
-    # `--no-course` for the same §380/§381 reason as `workout` — this is the
-    # scenario that caught it: the OffCourse / workout-edge handoff chain
-    # never let the slot clear before the Storm page dump.
-    # `--no-workout` closed the remaining leak (CI run 30709260463): the demo
-    # workout's step banners are alerts too, each one displaces the storm
-    # banner, and a displaced storm RE-QUEUES (§376 — no later reminder
-    # exists), so the slot went banner-to-banner — Storm at 79 s,
-    # WorkoutEnding at 86 s, Storm again at 94 s, WorkoutStep at 96 s, Storm
-    # again at 104 s — and neither the once-per-front COUNT below nor
-    # `wait_for_no_alert` could hold. With every non-storm arm unarmed, one
-    # front is one banner and the TTL clear is deterministic.
-    "storm": ("--storm", "--no-alerts", "--no-course", "--no-workout"),
-    # `--no-course` for the same §380/§381 reason — the off-course arm rides
-    # data presence, so it fires within the opening quiet window and the
-    # baseline dump never lands on a bannerless frame. This scenario keeps
-    # `sim-alerts` (the fuel / distance / time / pace arms ARE its subject);
-    # none of its assertions read the course, and the course-driven kinds are
-    # host-tested (`core/src/alerts.rs`), not sim-asserted.
-    "alerts": ("--no-course",),
+# The sim's optional rails, and the `bin/watch-sim.sh` flag that switches each
+# OFF. Every one of them ends up in the single alert slot: `sim-alerts` is the
+# shortened fuel / distance / time / pace cadences, `sim-workout` the §354 step
+# / ending / done edges, and `sim-course` the §380 cutoff and §381 off-course
+# arms — those last two ride DATA PRESENCE (the canned breadcrumb's legs and
+# cutoff schedule), so no setter silences them and dropping the course is the
+# only way to unarm them.
+SCENARIO_RAILS = {
+    "alerts": "--no-alerts",
+    "workout": "--no-workout",
+    "course": "--no-course",
 }
+
+# What each scenario needs armed. Everything NOT listed here is switched off for
+# that scenario, which is the contract rather than an optimisation: a scenario
+# asserts against one rail and every other armed rail is a second writer to the
+# slot its assertions read.
+#
+# Three per-scenario patches (b2901442a, cad5fd1e9, b7acc95ab) each turned one
+# rail off for one scenario after CI caught it, and each left the next scenario
+# to be caught the same way — `terrain` and `pages` had never been through the
+# cycle at all and so still booted with all three. Declaring the need instead of
+# the exclusions inverts the default: a rail added to `SCENARIO_RAILS` above is
+# off everywhere until the scenario that asserts on it names it here. See
+# decisions.md § 465.
+#
+# `course` appears twice as a DATA need rather than an alert one: `pages` walks
+# to RouteElev, whose presence bit is the sim course's per-point elevation, and
+# `terrain` reads the climb crest off the same pushed profile. Both therefore
+# keep the two course-driven alert arms, which is exactly the case the engine's
+# own quiet-window guarantee has to cover (`watch_core::alerts::ALERT_QUIET_S`)
+# — it is not something a launcher flag can arrange away.
+SCENARIO_ARMED_RAILS = {
+    # The v4 flush assertion: the stop has to write the demo workout's
+    # planned-vs-actual trail into the blob (§356), which needs one armed.
+    "smoke": ("workout",),
+    # The fuel / distance / time / pace arms ARE this scenario's subject.
+    "alerts": ("alerts",),
+    "pages": ("course",),
+    "terrain": ("course",),
+    "dropout": (),
+    "screens": (),
+    "idle": (),
+    # "one end-of-step warning across the plan, and one only" is a claim about
+    # the `ENDING_MIN_STEP_*` gate, and it only means that while nothing else
+    # can take the slot.
+    "workout": ("workout",),
+    # Same shape: the once-per-front COUNT assertion is a claim about the § 376
+    # hysteresis, not about which arm won a contested slot.
+    "storm": (),
+}
+
+# Flags that are not a rail switch. `--screens` seeds the composed data screens
+# (§364), which seat immediately after the Dashboard and would shift the page
+# walk `pages` and `terrain` assert on; `--no-autostart` is the whole point of
+# `idle` (the run never starts, so the idle faces are reachable); `--storm`
+# compresses the § 376 trend window from three hours to 60 s and arms the banner
+# through the same setter a phone push feeds, so a front is readable inside a
+# scenario's budget.
+SCENARIO_EXTRA_ARGS = {
+    "screens": ("--screens",),
+    "idle": ("--no-autostart",),
+    "storm": ("--storm",),
+}
+
+
+def launcher_args(scenario):
+    """The `bin/watch-sim.sh` flags a scenario boots with.
+
+    Derived, not listed: the exclusions are whatever `SCENARIO_ARMED_RAILS`
+    does not ask for, so adding a rail cannot quietly arm it in eight scenarios
+    that never mention it.
+    """
+    if scenario not in SCENARIO_ARMED_RAILS:
+        raise SmokeFailure(
+            f"{scenario} has no SCENARIO_ARMED_RAILS entry — a scenario has to "
+            "say which rails it asserts on, even if the answer is none, or the "
+            "boot it gets is nobody's decision"
+        )
+    armed = SCENARIO_ARMED_RAILS[scenario]
+    unknown = set(armed) - set(SCENARIO_RAILS)
+    if unknown:
+        raise SmokeFailure(
+            f"{scenario} asks for rails {sorted(unknown)}, which SCENARIO_RAILS "
+            "does not know how to switch"
+        )
+    return SCENARIO_EXTRA_ARGS.get(scenario, ()) + tuple(
+        flag for rail, flag in SCENARIO_RAILS.items() if rail not in armed
+    )
+
 
 # The pages the walk has to reach and render. Two always-available heroes
 # (Distance / Pace, the generated-numeral pages), plus the pages the recent
@@ -629,7 +680,6 @@ WORKOUT_LAP_TIMEOUT = 10
 
 ALERT_ANY = re.compile(r"record: alert (\S+)")
 ALERT_RAISED = re.compile(r"record: alert (?!cleared\b)(\S+)")
-ALERT_CLEARED = re.compile(r"record: alert cleared")
 FUEL_ALERT = re.compile(r"record: alert (Drink|Eat)\b")
 # The arms the sim added on top of fuel. Asserted as a disjunction, not one by
 # one: Distance and Time are DROPPED (not queued) when the single display slot
@@ -640,7 +690,34 @@ ALERT_BANNER_ATTEMPTS = 4
 # The quiet baseline is sampled too, for the same repaint-lag reason the banner
 # side retries — see `scenario_alerts`.
 ALERT_QUIET_ATTEMPTS = 3
-ALERT_CLEAR_TIMEOUT = 30
+# How many quiet windows a dump may be attempted in before the panel is called
+# unreadable. Bounded rather than open, and small: the engine guarantees the
+# next window (see `wait_for_no_alert`), so more than a couple of misses is a
+# repaint that never lands rather than bad luck.
+QUIET_DUMP_ATTEMPTS = 3
+
+# The quiet-window contract, read off the engine that makes it. A banner holds
+# the slot for ALERT_TTL_S, and a queued alert may not take it for ALERT_QUIET_S
+# after that expiry — so the slot is observably empty within their sum of any
+# raise, whatever else is owed. Both are the firmware's numbers; see
+# decisions.md § 465.
+ALERTS_RS = "apps/custom_watch/core/src/alerts.rs"
+ALERT_TTL_S = rust_const(ALERTS_RS, "ALERT_TTL_S")
+ALERT_QUIET_S = rust_const(ALERTS_RS, "ALERT_QUIET_S")
+# The margin over that sum, in the same firmware seconds. The record task samples
+# the expiry on its own tick (1 s while recording, coarser when paused), and the
+# engine's guarantee is about when the slot empties, not about when a task
+# notices — so this covers a few sampling periods and nothing more.
+ALERT_CLEAR_SLACK_S = 5
+# How long a wait for the empty slot may go on with the decoder producing no
+# firmware clock at all. NOT the deadline the clear is judged against: that one
+# is in firmware seconds below, because the schedule being waited on is the
+# firmware's and Renode's virtual clock runs at a ratio to wall time that swings
+# with host load — a wall-clock bound on a virtual-clock event says nothing
+# about whether the firmware missed its promise. On a loaded 2-core runner it
+# says only that the runner was busy, which is how this wait went red on `main`
+# twice in eight runs (§ 465). The session `--budget` remains the outer cap.
+ALERT_CLEAR_STALL_S = 120
 
 # How much extra ink an alert banner has to put on the panel over the same page
 # with no banner. The banner is a solid inverse-video band across the two hero
@@ -1222,22 +1299,102 @@ def latest_alert(tail):
     return latest
 
 
+def firmware_clock_s(tail):
+    """The newest virtual timestamp the decoder has produced, or None.
+
+    defmt-print heads every decoded line with the firmware's own uptime. That
+    is the clock the alert engine schedules on; wall time is the clock Renode
+    trades against host load.
+    """
+    tail.poll()
+    for line in reversed(tail.lines):
+        m = LINE_STAMP.match(line)
+        if m:
+            return float(m.group(1))
+    return None
+
+
 def wait_for_no_alert(sim):
     """Hold until no alert banner is on screen.
 
     A banner replaces the hero band, so a page dump taken under one is a dump of
     the banner, not of the page — the page assertions would still pass and would
     mean less.
+
+    What makes the wait terminate is a promise the engine makes and this reads
+    off it: a banner holds the slot for `ALERT_TTL_S`, and a queued alert may
+    not take it for `ALERT_QUIET_S` after that expiry, so `record: alert
+    cleared` — the record task's Some -> None transition — is due within their
+    sum of any raise no matter how much is owed behind it. Before that gap
+    existed the expiry and the next promotion happened inside one
+    `AlertEngine::on_update`, so a slot with anything queued behind it went
+    banner-to-banner, the transition never fired, and this wait was betting on
+    the scenario's arms being sparse rather than on a guarantee (decisions.md
+    § 465).
+
+    Measured in the FIRMWARE's seconds, off the decoded stream's own stamps.
+    The promise is in firmware time and Renode's virtual clock runs at a ratio
+    to wall time that swings with host load, so a wall-clock deadline here
+    reports a busy CI runner as a broken alert engine — which is how this went
+    red on `main` twice in eight runs. `WORKOUT_SKIP_MAX_GAP_S` and `dropout`'s
+    void already measure their gaps this way for the same reason.
     """
     if latest_alert(sim.tail) in (None, "cleared"):
         return
-    mark = sim.tail.mark()
-    sim.wait(
-        ALERT_CLEARED,
-        ALERT_CLEAR_TIMEOUT,
-        "the active alert banner to clear at its TTL ('record: alert cleared') so "
-        "the next dump is of the page and not of the banner",
-        start=mark,
+    started_at = firmware_clock_s(sim.tail)
+    budget = ALERT_TTL_S + ALERT_QUIET_S + ALERT_CLEAR_SLACK_S
+    stall_deadline = time.monotonic() + ALERT_CLEAR_STALL_S
+    while True:
+        sim.alive()
+        if latest_alert(sim.tail) in (None, "cleared"):
+            return
+        now = firmware_clock_s(sim.tail)
+        if now is not None and started_at is not None:
+            if now - started_at > budget:
+                raise SmokeFailure(
+                    f"the alert slot was still occupied {now - started_at:.0f}s of "
+                    f"FIRMWARE time after the wait began, past the {budget}s "
+                    f"`watch_core::alerts` promises (ALERT_TTL_S {ALERT_TTL_S} + "
+                    f"ALERT_QUIET_S {ALERT_QUIET_S} + {ALERT_CLEAR_SLACK_S}s of "
+                    "sampling slack) — a banner expiring must hand the page back "
+                    "before the next queued one takes the slot, so this is the "
+                    "engine's quiet-window guarantee failing, not a slow runner. "
+                    f"Last alert line: {latest_alert(sim.tail)}"
+                )
+            stall_deadline = time.monotonic() + ALERT_CLEAR_STALL_S
+        elif time.monotonic() >= stall_deadline:
+            raise SmokeFailure(
+                f"no decoded line carried a firmware timestamp in "
+                f"{ALERT_CLEAR_STALL_S}s of wall time — the defmt stream stalled, "
+                "so the wait for an empty alert slot has no clock to judge"
+            )
+        time.sleep(0.25)
+
+
+def dump_quiet(sim, name, what):
+    """A panel frame with no alert banner on it.
+
+    The one acquisition every page assertion here shares. Waiting for the slot
+    to empty is not enough on its own: `record: alert` is the RECORD task's
+    line and the banner is painted by the screen task, so an alert raised while
+    the DumpFrame is in flight lands on the frame after the wait said the panel
+    was clear. Re-read the slot once the frame is on disk and take the next
+    window if it moved — the engine guarantees there is one.
+    """
+    for attempt in range(1, QUIET_DUMP_ATTEMPTS + 1):
+        wait_for_no_alert(sim)
+        shot = sim.dump(name, what)
+        if latest_alert(sim.tail) in (None, "cleared"):
+            return shot
+        announce(
+            f"an alert took the slot while {name} was landing — waiting for the "
+            f"next quiet window (attempt {attempt}/{QUIET_DUMP_ATTEMPTS})"
+        )
+    raise SmokeFailure(
+        f"no quiet window held long enough to dump {what} in "
+        f"{QUIET_DUMP_ATTEMPTS} attempts — every frame landed with an alert back "
+        "on the slot, so there is no dump of the PAGE to assert against, only of "
+        "a banner"
     )
 
 
@@ -1390,7 +1547,7 @@ def scenario_smoke(sim):
         connected_at_s,
     )
 
-    panel = sim.dump("frame.ppm", "a panel frame dump")
+    panel = dump_quiet(sim, "frame.ppm", "a panel frame dump")
     assert_rendered(panel, "a rendered face")
     passed(
         f"run face rendered on the {panel.width}x{panel.height} panel "
@@ -1438,9 +1595,10 @@ def scenario_smoke(sim):
         f"{stored.group(3)} after the two-press BTN2 guard"
     )
 
-    # The sim demo workout is always armed under sim-autostart, so the stop
-    # must have flushed its planned-vs-actual trail into the blob before the
-    # commit (run-store v4, decisions §356) — the summary log is the tell.
+    # This scenario boots the `workout` rail (SCENARIO_ARMED_RAILS) for exactly
+    # this assertion: the stop must have flushed the demo workout's
+    # planned-vs-actual trail into the blob before the commit (run-store v4,
+    # decisions §356) — the summary log is the tell.
     workout_stored = sim.tail.search(
         re.compile(r"record: run \d+ workout results stored \((\d+) planned steps\)")
     )
@@ -1484,54 +1642,29 @@ def scenario_alerts(sim):
     # with one. The banner is a solid inverse-video band over the two hero rows,
     # so it has to add far more ink than the hero it replaces.
     #
-    # The baseline is taken FIRST, in the run's opening quiet window, because
-    # that is the only stretch in which the alert slot going idle is something
-    # the sim's arming makes INEVITABLE rather than something to race for.
-    # `record: alert cleared` is logged solely on the record task's Some -> None
-    # transition, so a slot handed straight from one alert to the next never
-    # emits it; once the sim's cadences overlap (30 s drink / 45 s eat / 60 s
-    # time / 100 m distance / the workout's own step alerts) the chain is
-    # unbroken and the line stops firing altogether — the regime this module's
-    # header already describes. Sampling AFTER waiting on two arbitrary alerts
-    # therefore demanded a guarantee the alert engine does not make, and lost
-    # whenever the second arm to fire was a late one: a run whose arms landed
-    # Drink then Distance never saw another clear inside the timeout.
+    # Taken through `dump_quiet` like every other page dump here, which is the
+    # whole of what the baseline needs: the engine guarantees the slot goes
+    # empty within ALERT_TTL_S + ALERT_QUIET_S of any raise, so a quiet window
+    # is a recurring resource rather than the run's opening stretch, and the
+    # helper re-reads the slot once the frame is on disk. This used to bet on
+    # the opening window specifically — the only stretch that was quiet by
+    # construction back when a queued alert took the slot in the same
+    # `on_update` its predecessor expired in, and the bet lost whenever a
+    # course-driven arm fired inside it (§ 465).
     #
-    # The opening window is different in kind. The armed workout raises its
-    # warm-up step within a millisecond of the first fix, that single alert is
-    # the only thing holding the slot, and the earliest competing cadence is
-    # 30 s of MOVING time — so its TTL expiry is due with nothing behind it and
-    # leaves a wide bannerless stretch after it. That is the one `cleared` the
-    # scenario can count on, so it is the one the baseline is taken against.
-    #
-    # Both halves of the pair still race the PANEL the same way, and the
-    # baseline is the half that fails silently: the record task's line leads the
-    # screen task's repaint, so a dump can still carry the banner it is meant to
-    # be the baseline for. Sample a few times and keep the LOWEST — a stale
+    # Sampled a few times and the LOWEST kept, which is a different race: the
+    # record task's line leads the screen task's repaint, so a frame the slot
+    # says is clear can still carry the banner one repaint behind. A stale
     # quiet frame can only ever read too inky, never too clean, so the minimum
-    # is the one that cannot be the lagging one. Sampling stops early if a new
-    # alert takes the slot mid-window, so a late sample cannot quietly inflate
-    # the baseline and blunt the delta the banner assertion below demands.
-    wait_for_no_alert(sim)
+    # is the one that cannot be the lagging one.
     quiet = None
     for attempt in range(1, ALERT_QUIET_ATTEMPTS + 1):
-        if latest_alert(sim.tail) not in (None, "cleared"):
-            break
-        shot = sim.dump(
-            f"alert-quiet-{attempt}.ppm", "a panel frame with no alert on screen"
+        shot = dump_quiet(
+            sim, f"alert-quiet-{attempt}.ppm", "a panel frame with no alert on screen"
         )
-        if latest_alert(sim.tail) not in (None, "cleared"):
-            break
         assert_rendered(shot, "the run face between alerts")
         if quiet is None or shot.dark < quiet.dark:
             quiet = shot
-    if quiet is None:
-        raise SmokeFailure(
-            "no panel frame could be dumped in the run's opening quiet window — "
-            "an alert took the slot again between the first one clearing and the "
-            "first dump landing, so there is no baseline to measure a banner's "
-            "ink against"
-        )
     announce(f"quiet baseline: {quiet.dark} dark pixels (lowest of {ALERT_QUIET_ATTEMPTS})")
 
     fuel = sim.wait(
@@ -1669,8 +1802,9 @@ def scenario_pages(sim):
             else:
                 lap.append(page)
         if page in PAGES_OF_INTEREST and page not in dumps:
-            wait_for_no_alert(sim)
-            dumps[page] = sim.dump(f"page-{page}.ppm", f"the {page} page's panel frame")
+            dumps[page] = dump_quiet(
+                sim, f"page-{page}.ppm", f"the {page} page's panel frame"
+            )
             assert_rendered(dumps[page], f"the {page} page")
             announce(f"{page} rendered ({dumps[page].dark} dark pixels)")
 
@@ -1902,8 +2036,9 @@ def scenario_terrain(sim):
         page = press_page(sim, "$btn4", f"BTN4 press {presses}")
         walk.append(page)
         if page in TERRAIN_PAGES and page not in dumps:
-            wait_for_no_alert(sim)
-            dumps[page] = sim.dump(f"page-{page}.ppm", f"the {page} page's panel frame")
+            dumps[page] = dump_quiet(
+                sim, f"page-{page}.ppm", f"the {page} page's panel frame"
+            )
             assert_rendered(dumps[page], f"the {page} page")
             announce(f"{page} rendered ({dumps[page].dark} dark pixels)")
 
@@ -2207,7 +2342,7 @@ def scenario_screens(sim):
                 "screens are not seated immediately after the Dashboard, so a "
                 "runner's own screen is not one press from home"
             )
-        panel = sim.dump(f"page-{expected}.ppm", f"the {expected} panel dump")
+        panel = dump_quiet(sim, f"page-{expected}.ppm", f"the {expected} panel dump")
         if panel.dark == 0:
             raise SmokeFailure(f"{expected} rendered a blank panel")
         dumps[expected] = panel
@@ -2869,8 +3004,9 @@ def scenario_workout(sim):
             "is reading the wrong field. That failure is silent on the wrist: "
             "an absent page is indistinguishable from a page with no data"
         )
-    wait_for_no_alert(sim)
-    active = sim.dump("page-Workout-active.ppm", "the Workout page under a live workout")
+    active = dump_quiet(
+        sim, "page-Workout-active.ppm", "the Workout page under a live workout"
+    )
     assert_rendered(active, "the Workout page")
     passed(
         f"the Workout page is in the BTN4 cycle and renders "
@@ -3008,8 +3144,9 @@ def scenario_workout(sim):
         f"{len(WORKOUT_PLAN)}-step plan"
     )
 
-    wait_for_no_alert(sim)
-    done = sim.dump("page-Workout-done.ppm", "the Workout page after the workout completed")
+    done = dump_quiet(
+        sim, "page-Workout-done.ppm", "the Workout page after the workout completed"
+    )
     assert_rendered(done, "the Workout page's completed state")
     if done.data == active.data:
         raise SmokeFailure(
@@ -3243,7 +3380,6 @@ def scenario_storm(sim):
 
     # The page. Its presence bit is "a reduced pressure can be stated", which
     # every step above has already proved the watch had.
-    wait_for_no_alert(sim)
     walk = []
     presses = 0
     frame = None
@@ -3252,8 +3388,7 @@ def scenario_storm(sim):
         page = press_page(sim, "$btn4", f"BTN4 press {presses}")
         walk.append(page)
         if page == "Storm":
-            wait_for_no_alert(sim)
-            frame = sim.dump("page-Storm.ppm", "the Storm page's panel frame")
+            frame = dump_quiet(sim, "page-Storm.ppm", "the Storm page's panel frame")
             assert_rendered(frame, "the Storm page")
     if frame is None:
         raise SmokeFailure(
@@ -3312,9 +3447,9 @@ def plan_sessions(selected, fixture_override=None):
 
     `smoke` and `workout` additionally have to be alone — each stops the run the
     others need in progress — `terrain` and `dropout` are each on a different
-    fixture and a boot has exactly one, and `screens`, `idle` and `workout` each
-    need their own launcher flags (`SCENARIO_LAUNCHER_ARGS`), which are a
-    property of the BUILD a session boots and so cannot be shared either.
+    fixture and a boot has exactly one, and every scenario boots only the rails
+    it asserts on (`launcher_args`), which are a property of the BUILD a session
+    boots and so cannot be shared either.
 
     Each session carries its scenario's own fixture. An explicit `--fixture`
     overrides every one of them, which is how a manual session points an
@@ -3351,7 +3486,7 @@ def run(args):
                 deadline,
                 args.phone_port + index,
                 fixture,
-                launcher_args=SCENARIO_LAUNCHER_ARGS.get(names[0], ()),
+                launcher_args=launcher_args(names[0]),
             ) as sim:
                 for name in names:
                     print(f"\n--- scenario {name} ---", flush=True)
