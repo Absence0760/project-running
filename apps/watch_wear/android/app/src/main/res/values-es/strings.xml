@@ -106,13 +106,19 @@
     <string name="cd_discard_unsaved_run">Descartar carrera sin guardar</string>
 
     <string name="tts_run_started">Carrera iniciada</string>
-    <plurals name="tts_split_unit">
+    <plurals name="tts_split_unit_km">
         <item quantity="one">%1$d kilómetro</item>
         <item quantity="other">%1$d kilómetros</item>
     </plurals>
-    <string name="tts_pace_tail">Ritmo %1$d minutos %2$d segundos por kilómetro</string>
+    <plurals name="tts_split_unit_mi">
+        <item quantity="one">%1$d milla</item>
+        <item quantity="other">%1$d millas</item>
+    </plurals>
+    <string name="tts_pace_tail_km">Ritmo %1$d minutos %2$d segundos por kilómetro</string>
+    <string name="tts_pace_tail_mi">Ritmo %1$d minutos %2$d segundos por milla</string>
     <string name="tts_split_phrase">%1$s. %2$s</string>
-    <string name="tts_run_complete">Carrera completada. %1$s kilómetros en %2$d minutos.</string>
+    <string name="tts_run_complete_km">Carrera completada. %1$s kilómetros en %2$d minutos.</string>
+    <string name="tts_run_complete_mi">Carrera completada. %1$s millas en %2$d minutos.</string>
     <string name="tts_pace_alert_fast">Acelera el ritmo</string>
     <string name="tts_pace_alert_slow">Reduce la velocidad</string>
 </resources>

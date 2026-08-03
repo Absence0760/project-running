@@ -105,12 +105,17 @@
     <string name="cd_discard_unsaved_run">未保存のランを破棄</string>
 
     <string name="tts_run_started">ランを開始しました</string>
-    <plurals name="tts_split_unit">
+    <plurals name="tts_split_unit_km">
         <item quantity="other">%1$dキロメートル</item>
     </plurals>
-    <string name="tts_pace_tail">ペース、1キロメートルあたり%1$d分%2$d秒</string>
+    <plurals name="tts_split_unit_mi">
+        <item quantity="other">%1$dマイル</item>
+    </plurals>
+    <string name="tts_pace_tail_km">ペース、1キロメートルあたり%1$d分%2$d秒</string>
+    <string name="tts_pace_tail_mi">ペース、1マイルあたり%1$d分%2$d秒</string>
     <string name="tts_split_phrase">%1$s。%2$s</string>
-    <string name="tts_run_complete">ラン完了。%2$d分で%1$sキロメートル。</string>
+    <string name="tts_run_complete_km">ラン完了。%2$d分で%1$sキロメートル。</string>
+    <string name="tts_run_complete_mi">ラン完了。%2$d分で%1$sマイル。</string>
     <string name="tts_pace_alert_fast">ペースを上げましょう</string>
     <string name="tts_pace_alert_slow">ペースを落としましょう</string>
 </resources>

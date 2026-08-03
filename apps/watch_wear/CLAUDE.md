@@ -480,11 +480,15 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
 - **TTS audio cues.** `recording/TtsAnnouncer.kt` wraps
   `android.speech.tts.TextToSpeech` with an async init + flush-queued
   speak. `RunRecordingService` announces "Run started" on begin,
-  a split on each completed kilometre ("1 kilometre. Pace 5 minutes
-  30 seconds per kilometre" — same phrasing as Android's
+  a split on each completed unit of the runner's `preferred_unit`
+  ("1 kilometre. Pace 5 minutes 30 seconds per kilometre" / "1 mile.
+  Pace 8 minutes 2 seconds per mile" — same phrasing as Android's
   `audio_cues.dart`), pace-drift nudges from `firePaceAlert`, and a
-  finish summary in `stopRecording`. Gated on `BuildConfig.ENABLE_TTS`
-  (defaults on; set `DISABLE_TTS=true` in `.env.local` to silence).
+  finish summary in `stopRecording`. Both the cadence and the wording
+  follow the unit: the trigger is `completedSplits(distance, unit)` and
+  each phrase has a `_km` / `_mi` resource (`decisions.md § 467`). Gated
+  on `BuildConfig.ENABLE_TTS` (defaults on; set `DISABLE_TTS=true` in
+  `.env.local` to silence).
 - **Target-pace picker + haptic pace alerts.** Pre-run **Pace** chip
   cycles `off / 4:00 / 4:30 / 5:00 / 5:30 / 6:00 / 6:30 / 7:00 /km` via
   `RunViewModel.cycleTargetPace`. `start()` passes the value through
@@ -538,17 +542,20 @@ is the platform norm on a tiny screen).
   active-run tile (carried on `RecordingRepository.Metrics`, stamped at
   `startRecording`). The unit words ("km" / "mi") are locale-invariant and
   live in `R.string.distance_km` / `distance_mi` (+ `_to_go`, `pace_per_*`).
-  Time digits (`mm:ss`, pace) are pinned to `Locale.ROOT`. **TTS still
-  announces km splits** regardless of the pref (the optional mile-TTS variant
-  is deferred — see `docs/product/followups.md`).
+  Time digits (`mm:ss`, pace) are pinned to `Locale.ROOT`. The same file also
+  decides the **split cadence** — `splitIntervalMetres` / `completedSplits` —
+  so the spoken cue lands on the runner's own unit rather than on a hardcoded
+  kilometre (`decisions.md § 467`).
 - **TTS**: `recording/TtsAnnouncer.kt` sets the engine language to
   `Locale.getDefault()` (best-effort — falls back to the engine default voice
   if voice data is missing) and assembles spoken phrases from `tts_*` resources
-  / the `tts_split_unit` plural. Same dialect as the mobile
-  `apps/mobile_android/lib/l10n/app_*.arb` so a runner carrying both devices
-  hears identical cues. `recording/TtsPhrases.kt` keeps only the pure numeric
-  decomposition (`paceMinSec`, `finishMinutes`, `finishDistanceSpoken` — the
-  spoken distance uses a period decimal so no engine reads "comma").
+  / the `tts_split_unit_km` / `tts_split_unit_mi` plurals. Same dialect as the
+  mobile `apps/mobile_android/lib/l10n/app_*.arb` so a runner carrying both
+  devices hears identical cues. Every unit-bearing phrase exists as a
+  `_km` / `_mi` pair and the announcer picks by `DistanceUnit`; `TtsPhrases.kt`
+  keeps only the pure numeric decomposition (`paceMinSec` / `paceMinSecFor`,
+  `finishMinutes`, `finishDistanceSpoken` — the spoken distance uses a period
+  decimal so no engine reads "comma").
 - **Tests**: `L10nResourceParityTest` (Wear-OS analogue of the mobile
   `l10n_parity_test`) asserts every `values-xx` declares exactly the default
   key set, no empty values, and matching format-arg sets. `UnitFormatTest`

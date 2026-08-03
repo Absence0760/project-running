@@ -138,14 +138,23 @@
          with a period decimal (locale-independent) so engines don't read a
          comma as "comma". -->
     <string name="tts_run_started">Run started</string>
-    <plurals name="tts_split_unit">
+    <!-- The runner's preferred_unit picks the _km or _mi variant of each
+         spoken phrase: a miles runner is told at each MILE, in miles, at a
+         per-mile pace. -->
+    <plurals name="tts_split_unit_km">
         <item quantity="one">%1$d kilometre</item>
         <item quantity="other">%1$d kilometres</item>
     </plurals>
-    <string name="tts_pace_tail">Pace %1$d minutes %2$d seconds per kilometre</string>
+    <plurals name="tts_split_unit_mi">
+        <item quantity="one">%1$d mile</item>
+        <item quantity="other">%1$d miles</item>
+    </plurals>
+    <string name="tts_pace_tail_km">Pace %1$d minutes %2$d seconds per kilometre</string>
+    <string name="tts_pace_tail_mi">Pace %1$d minutes %2$d seconds per mile</string>
     <!-- "%1$s. %2$s" — split unit phrase + pace tail (tail may be empty). -->
     <string name="tts_split_phrase">%1$s. %2$s</string>
-    <string name="tts_run_complete">Run complete. %1$s kilometres in %2$d minutes.</string>
+    <string name="tts_run_complete_km">Run complete. %1$s kilometres in %2$d minutes.</string>
+    <string name="tts_run_complete_mi">Run complete. %1$s miles in %2$d minutes.</string>
     <string name="tts_pace_alert_fast">Pick up the pace</string>
     <string name="tts_pace_alert_slow">Slow down</string>
 </resources>

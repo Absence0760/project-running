@@ -77,10 +77,18 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let startedAt: Date
         let durationSeconds: Int
         let distanceMetres: Double
-        let track: [TrackPoint]
+        /// The run's NDJSON track file. The trace is carried as a path, not
+        /// as an array: a 100-hour ultra is ~360k points, and a resident
+        /// array of them (plus the encode that follows) is what made the old
+        /// finish path an OOM risk. Every consumer streams from here.
+        let trackFileURL: URL
+        let trackPointCount: Int
         let averageBPM: Double?
     }
 
+    /// A track point in the wire shape the phone, web and mobile clients
+    /// read — distinct from the on-disk `TrackPointRecord` only in that `ts`
+    /// is nullable there. Produced one at a time by `writeTrackJSON()`.
     struct TrackPoint: Codable {
         let lat: Double
         let lng: Double
@@ -88,16 +96,73 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let ts: String?
     }
 
+    /// Bytes buffered before `writeTrackJSON` flushes to the output handle.
+    private static let trackJSONFlushBytes = 64 * 1024
+
     /// Write the finished run's track to a JSON file in the app's caches
     /// directory and return the URL, suitable for `WCSession.transferFile`.
     /// The phone gzips + uploads to Supabase Storage on receipt.
+    ///
+    /// Streams NDJSON line → wire point → output handle, so the peak is one
+    /// buffer rather than the whole track plus its encoding. Assembled in a
+    /// `.tmp` sibling and renamed, which keeps the all-or-nothing guarantee
+    /// the previous `Data.write(options: .atomic)` gave.
     func writeTrackJSON() throws -> URL {
         guard let run = finishedRun else {
             throw NSError(domain: "WorkoutManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "No finished run"])
         }
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let url = caches.appendingPathComponent("\(run.id).json")
-        try JSONEncoder().encode(run.track).write(to: url, options: .atomic)
+        let tmp = caches.appendingPathComponent("\(run.id).json.tmp")
+
+        try? FileManager.default.removeItem(at: tmp)
+        guard FileManager.default.createFile(atPath: tmp.path, contents: nil) else {
+            throw NSError(
+                domain: "WorkoutManager",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Could not create \(tmp.lastPathComponent)"]
+            )
+        }
+        let out = try FileHandle(forWritingTo: tmp)
+        let encoder = JSONEncoder()
+        let comma = Data(",".utf8)
+        var buffer = Data("[".utf8)
+        var wroteAny = false
+        var failure: Error?
+
+        CheckpointStore.forEachTrackPoint(in: run.trackFileURL) { record in
+            guard failure == nil else { return }
+            let point = TrackPoint(lat: record.lat, lng: record.lng, ele: record.ele, ts: record.ts)
+            guard let encoded = try? encoder.encode(point) else { return }
+            if wroteAny { buffer.append(comma) }
+            buffer.append(encoded)
+            wroteAny = true
+            guard buffer.count >= WorkoutManager.trackJSONFlushBytes else { return }
+            do {
+                try out.write(contentsOf: buffer)
+                buffer.removeAll(keepingCapacity: true)
+            } catch {
+                failure = error
+            }
+        }
+
+        if failure == nil {
+            do {
+                buffer.append(Data("]".utf8))
+                try out.write(contentsOf: buffer)
+                try out.synchronize()
+            } catch {
+                failure = error
+            }
+        }
+        try? out.close()
+
+        if let failure {
+            try? FileManager.default.removeItem(at: tmp)
+            throw failure
+        }
+        try? FileManager.default.removeItem(at: url)
+        try FileManager.default.moveItem(at: tmp, to: url)
         return url
     }
 
@@ -140,6 +205,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
         let store = CheckpointStore(runId: runId)
         checkpointStore = store
+        CheckpointStore.purgeTrackFiles(except: store.trackFileURL)
 
         locationManager.requestWhenInUseAuthorization()
         locationManager.allowsBackgroundLocationUpdates = true
@@ -198,15 +264,17 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         locationManager.stopUpdatingLocation()
         healthKit.stopWorkout()
 
-        // The in-memory `track` is a bounded rolling window, so the full
-        // run is read back from the streamed NDJSON file. Close the append
-        // handle first to flush every fix to disk, read, then clear.
+        // The in-memory `track` is a bounded rolling window and the full run
+        // stays on disk — nothing here materialises it. Close the append
+        // handle so every fix is flushed, then hand the finished run the
+        // file; `writeTrackJSON` streams from it at sync time.
         let store = checkpointStore
         store?.closeAppendHandle()
-        let trackPoints = (store?.loadTrackPoints() ?? []).map { p in
-            TrackPoint(lat: p.lat, lng: p.lng, ele: p.ele, ts: p.ts)
-        }
-        store?.clear()
+        // Only the metadata checkpoint is dropped: leaving it would offer
+        // "Recover unsaved run?" for a run the user has just finished. The
+        // NDJSON survives until reset(), because it IS the finished run's
+        // payload.
+        CheckpointStore.clearStatic()
         checkpointStore = nil
 
         let duration = Int(elapsedSeconds)
@@ -215,12 +283,14 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         // start() — the same id the checkpoint and the on-disk track file
         // are keyed under — instead of minting a fresh one here, which
         // previously orphaned the streamed track from the run row.
+        let runId = currentRunId ?? UUID().uuidString.lowercased()
         finishedRun = FinishedRun(
-            id: currentRunId ?? UUID().uuidString.lowercased(),
+            id: runId,
             startedAt: startDate ?? Date(),
             durationSeconds: duration,
             distanceMetres: distanceMetres,
-            track: trackPoints,
+            trackFileURL: store?.trackFileURL ?? CheckpointStore.trackFile(runId: runId),
+            trackPointCount: trackPointCount,
             averageBPM: healthKit.averageBPM
         )
 
@@ -232,6 +302,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         checkpointTimer?.invalidate()
         checkpointTimer = nil
         checkpointStore?.closeAppendHandle()
+        // The finished run's NDJSON is its payload and outlived stop(); back
+        // at idle nothing can still want it.
+        if let trackFileURL = finishedRun?.trackFileURL {
+            try? FileManager.default.removeItem(at: trackFileURL)
+        }
         track = []
         trackPointCount = 0
         distanceMetres = 0
@@ -375,17 +450,18 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func recoverRun() -> FinishedRun? {
         guard let cp = CheckpointStore.peekCheckpoint() else { return nil }
         let store = CheckpointStore(runId: cp.id)
-        let pts = store.loadTrackPoints()
-        let trackPoints = pts.map { p in
-            TrackPoint(lat: p.lat, lng: p.lng, ele: p.ele, ts: p.ts)
-        }
-        trackPointCount = trackPoints.count
+        // Counted off the file rather than taken from `cp.trackPointCount`:
+        // fixes appended since the last 15 s checkpoint are on disk but not
+        // in the checkpoint's own figure.
+        let count = store.countTrackPoints()
+        trackPointCount = count
         return FinishedRun(
             id: cp.id,
             startedAt: cp.startedAt,
             durationSeconds: Int(cp.activeDurationSeconds),
             distanceMetres: cp.distanceMetres,
-            track: trackPoints,
+            trackFileURL: store.trackFileURL,
+            trackPointCount: count,
             // Restored from the checkpoint so a recovered run keeps its
             // heart-rate summary instead of dropping to "— bpm".
             averageBPM: cp.averageBPM

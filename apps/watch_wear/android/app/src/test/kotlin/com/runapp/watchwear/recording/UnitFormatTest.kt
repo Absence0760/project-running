@@ -113,4 +113,46 @@ class UnitFormatTest {
         // 6:00/km → 579.36 s/mi.
         assertEquals(579.36384, paceSecPerUnit(360.0, DistanceUnit.MI), 1e-4)
     }
+
+    // ───────────── Split cadence ─────────────
+
+    @Test
+    fun `splitIntervalMetres follows the runner unit`() {
+        assertEquals(1_000.0, splitIntervalMetres(DistanceUnit.KM), 1e-9)
+        assertEquals(METRES_PER_MILE, splitIntervalMetres(DistanceUnit.MI), 1e-9)
+    }
+
+    @Test
+    fun `completedSplits counts whole kilometres for a km runner`() {
+        assertEquals(0, completedSplits(999.9, DistanceUnit.KM))
+        assertEquals(1, completedSplits(1_000.0, DistanceUnit.KM))
+        assertEquals(5, completedSplits(5_123.0, DistanceUnit.KM))
+    }
+
+    @Test
+    fun `completedSplits counts whole miles for a mi runner`() {
+        // The regression: a mi-mode runner used to be cued at 1000 m. One
+        // mile has not been covered there, so the count must still be 0.
+        assertEquals(0, completedSplits(1_000.0, DistanceUnit.MI))
+        assertEquals(1, completedSplits(METRES_PER_MILE, DistanceUnit.MI))
+        assertEquals(3, completedSplits(5_123.0, DistanceUnit.MI))
+    }
+
+    @Test
+    fun `a 5k fires five km cues but only three mile cues`() {
+        // Walk the distance a metre at a time and count the transitions —
+        // the exact trigger the recording service runs per GPS fix.
+        var km = 0
+        var mi = 0
+        var lastKm = 0
+        var lastMi = 0
+        for (metres in 1..5_000) {
+            val k = completedSplits(metres.toDouble(), DistanceUnit.KM)
+            if (k > lastKm) { lastKm = k; km++ }
+            val m = completedSplits(metres.toDouble(), DistanceUnit.MI)
+            if (m > lastMi) { lastMi = m; mi++ }
+        }
+        assertEquals(5, km)
+        assertEquals(3, mi)
+    }
 }
