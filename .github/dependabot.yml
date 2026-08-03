@@ -283,6 +283,20 @@ updates:
       # flutter/flutter#181557 closes; keep settings.gradle.kts in lockstep.
       - dependency-name: "com.android.application"
         versions: [">= 9"]
+      # Held behind the SAME wall as the AGP pin above, and it has to be, or
+      # the two pins contradict each other. connect-client 1.2.0-alpha04
+      # declares `requires AGP >= 9.1.0` and `compile against API >= 37` in its
+      # AAR metadata, so `:app:checkReleaseAarMetadata` fails the APK smoke
+      # build outright (PR #684, run 30789381005) — this app is on AGP 8.13.2
+      # with `compileSdk = flutter.compileSdkVersion` (36), and the entry above
+      # is the reason it cannot simply move. Nothing in this repo can satisfy
+      # it: bumping AGP is exactly what flutter/flutter#181557 blocks.
+      # Pinned at the working alpha02 rather than at alpha03 because alpha03's
+      # own floor is untested here and the lift condition is the same either
+      # way — when the AGP pin above lifts, re-evaluate this one WITH it and
+      # take the newest version whose metadata the new toolchain satisfies.
+      - dependency-name: "androidx.health.connect:connect-client"
+        versions: ["> 1.2.0-alpha02"]
 
   # ---------------------------------------------------------------------------
   # terraform — infra stacks
