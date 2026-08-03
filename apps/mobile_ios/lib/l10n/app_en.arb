@@ -458,6 +458,20 @@
   "@importHealthDescriptionAndroid": {
     "description": "Android body copy explaining what is imported from Health Connect and the no-track caveat"
   },
+  "importHealthRoutesWithheld": "{count, plural, one{1 imported activity has a GPS map Threkir isn't allowed to read.} other{{count} imported activities have GPS maps Threkir isn't allowed to read.}} Health Connect keeps a workout's route behind its own permission.",
+  "@importHealthRoutesWithheld": {
+    "description": "Offer shown after a Health Connect import found routes it was refused",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "importHealthRoutesAllowButton": "Allow map import",
+  "importHealthRoutesRequesting": "Asking Health Connect for map access...",
+  "importHealthRoutesDenied": "Map access not granted. Imports stay summary-only — you can change this in Health Connect at any time.",
+  "importHealthRoutesAdding": "Adding maps to imported activities...",
+  "importHealthRoutesAdded": "{count, plural, =0{No maps could be added.} one{Added a map to 1 activity.} other{Added maps to {count} activities.}}",
+  "@importHealthRoutesAdded": {
+    "description": "Status after backfilling maps onto already-imported activities",
+    "placeholders": {"count": {"type": "int"}}
+  },
   "peopleFollowFailedBanner": "Could not update follow: {error}",
   "@peopleFollowFailedBanner": {
     "description": "Error banner when toggling follow on a person fails",
@@ -15626,5 +15640,25 @@
   "watchMetricBackyardBell": "Bell countdown",
   "watchMetricStormDelta": "Storm trend",
   "watchMetricGap": "Grade-adjusted pace",
-  "watchMetricFluid": "Fluid"
+  "watchMetricFluid": "Fluid",
+  "watchLiveTitle": "Follow watch run",
+  "watchLiveTileSubtitle": "Relay your custom watch's position to a live link",
+  "watchLiveIntro": "While this screen is open your phone relays the watch's position to spectators about once a second. Keep the phone with you and in Bluetooth range — leaving this screen ends the relay.",
+  "watchLiveStateOff": "Not connected",
+  "watchLiveStateConnecting": "Connecting",
+  "watchLiveStateLive": "Live",
+  "watchLiveStateGap": "Gap",
+  "watchLiveStateLost": "Gave up",
+  "watchLiveDetailOff": "Nothing is being sent.",
+  "watchLiveDetailSearching": "Looking for your watch…",
+  "watchLiveDetailAwaitingFix": "Connected — waiting for the watch's first position.",
+  "watchLiveDetailGap": "spectators see the last position as delayed, not current",
+  "watchLiveDetailLost": "Your watch is off or out of range. Nothing new is being sent.",
+  "watchLiveStart": "Start relay",
+  "watchLiveStop": "Stop relay",
+  "watchLiveRetry": "Try again",
+  "watchLiveShare": "Share live link",
+  "watchLiveStartFailed": "Couldn't start the live broadcast — nothing is being shared.",
+  "watchLiveSyncAction": "Sync runs from watch",
+  "watchLiveSyncSubtitle": "Pulls recorded runs off the watch. The relay pauses while it runs."
 }

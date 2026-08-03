@@ -453,6 +453,9 @@ MENU_CLOSED = re.compile(r"button: settings menu closed \(([\w ]+)\)")
 # the ladder is ordered by projected battery hours, so an edit right has to
 # move the fix interval and the estimate the same way.
 GNSS_MODE_SET = re.compile(r"button: gnss mode -> (\w+) \(fix interval (\d+)s, ~(\d+)h\)")
+# The flash driver's own line for a completed config rewrite: which of the two
+# config pages it sealed, and at which generation.
+CONFIG_SEALED = re.compile(r"run_flash: config page (\d+) sealed at generation (\d+)")
 # The ui task's idle face, the BTN4 walk's observable (§291 + §358).
 IDLE_VIEW = re.compile(r"ui: idle (\w+)")
 # `face::IdleView` in BTN4 order, starting from the boot face. Hard-coded for
@@ -490,6 +493,12 @@ MENU_STEP_TIMEOUT = 10
 # so this survives a rung being renamed but not one being added, which is the
 # right sensitivity: a fourth rung should make someone re-read this scenario.
 GNSS_LADDER_RUNGS = 3
+# How long a config-page rewrite has to reach flash after the button task has
+# logged the edit that triggered it. The write itself is one page erase (85 ms
+# on silicon, instant under Renode's swallowed ERASEPAGE) plus a handful of
+# word writes, so this is scheduling headroom on a loaded emulator, not a
+# measurement of the flash.
+CONFIG_SEAL_TIMEOUT = 20
 
 # The §376 storm rail. The tracker's own defmt line, which is the only thing
 # that can speak to a NUMBER — a page dump proves a frame was drawn, never that
@@ -2445,6 +2454,61 @@ def scenario_idle(sim):
         f"the GNSS row edits both ways and stays ordered: left to the end, then "
         f"{' -> '.join(m for m, _, _ in edits)} on the way back "
         f"(now {interval_s}s fixes, ~{hours}h projected)"
+    )
+
+    # Every rung above rewrote the flash config page, and the page ping-pongs:
+    # each rewrite must land on the OTHER page at the next generation, or the
+    # 85 ms erase is back on the only copy of the GNSS mode, the bond, the
+    # waypoints, the ICE card, the screens, the timer and the race config at
+    # once. Read off the driver's own seal line, which is emitted only after
+    # every record on the page is down.
+    #
+    # What this does NOT show is the mechanism WORKING. Renode's flash is plain
+    # memory behind an NVMC model that swallows `ERASEPAGE` (see the factory-
+    # erase note in this scenario's docstring), so a torn erase cannot be staged
+    # here at all — that a brown-out mid-rewrite leaves the previous page
+    # readable is a bench item. This is the alternation happening on a device.
+    #
+    # The seal line trails the `gnss mode ->` line each `press_menu` above waited
+    # on — the button task logs the rung, then writes the page — so the last
+    # edit's write is still in flight here. Wait for one seal per rung change
+    # rather than sampling once: a sample that caught only the first would read
+    # as a firmware that stopped persisting.
+    deadline = time.monotonic() + CONFIG_SEAL_TIMEOUT
+    while True:
+        seals = [
+            (int(m.group(1)), int(m.group(2)))
+            for _, m in stamped(sim.tail, CONFIG_SEALED)
+        ]
+        if len(seals) >= len(edits):
+            break
+        sim.alive()
+        if time.monotonic() >= deadline:
+            raise SmokeFailure(
+                f"{len(seals)} config-page seal(s) landed within "
+                f"{CONFIG_SEAL_TIMEOUT:.0f}s for {len(edits)} GNSS rung change(s) "
+                "('run_flash: config page N sealed at generation G') — every rung "
+                "change persists, so a short count means the edits never reached "
+                "flash"
+            )
+        time.sleep(0.5)
+    for (prev_page, prev_gen), (page, gen) in itertools.pairwise(seals):
+        if page == prev_page:
+            raise SmokeFailure(
+                f"two consecutive config rewrites both took page {page} — the "
+                "erase landed on the live page, so a brown-out inside it takes "
+                "every record with it, which is the whole reason there are two"
+            )
+        if gen != prev_gen + 1:
+            raise SmokeFailure(
+                f"config page {page} sealed at generation {gen} after page "
+                f"{prev_page} sealed at {prev_gen} — the generations must be "
+                "consecutive, or the boot selector cannot tell which page is "
+                "the newer by asking which succeeds the other"
+            )
+    passed(
+        f"the config page ping-pongs across the ladder's writes: "
+        f"{' -> '.join(f'p{p}@g{g}' for p, g in seals)}"
     )
 
     why = press_menu(sim, "$btn4", "BTN4 to exit the menu", MENU_CLOSED).group(1)

@@ -557,6 +557,42 @@ abstract class AppLocalizations {
   /// **'Reads workout summaries (date, distance, duration, type) from the last year. GPS routes are not exposed by Health Connect — runs imported this way won\'t have a map trace.'**
   String get importHealthDescriptionAndroid;
 
+  /// Offer shown after a Health Connect import found routes it was refused
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 imported activity has a GPS map Threkir isn\'t allowed to read.} other{{count} imported activities have GPS maps Threkir isn\'t allowed to read.}} Health Connect keeps a workout\'s route behind its own permission.'**
+  String importHealthRoutesWithheld(int count);
+
+  /// No description provided for @importHealthRoutesAllowButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow map import'**
+  String get importHealthRoutesAllowButton;
+
+  /// No description provided for @importHealthRoutesRequesting.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking Health Connect for map access...'**
+  String get importHealthRoutesRequesting;
+
+  /// No description provided for @importHealthRoutesDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Map access not granted. Imports stay summary-only — you can change this in Health Connect at any time.'**
+  String get importHealthRoutesDenied;
+
+  /// No description provided for @importHealthRoutesAdding.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding maps to imported activities...'**
+  String get importHealthRoutesAdding;
+
+  /// Status after backfilling maps onto already-imported activities
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No maps could be added.} one{Added a map to 1 activity.} other{Added maps to {count} activities.}}'**
+  String importHealthRoutesAdded(int count);
+
   /// Error banner when toggling follow on a person fails
   ///
   /// In en, this message translates to:
@@ -20443,6 +20479,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fluid'**
   String get watchMetricFluid;
+
+  /// No description provided for @watchLiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow watch run'**
+  String get watchLiveTitle;
+
+  /// No description provided for @watchLiveTileSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Relay your custom watch\'s position to a live link'**
+  String get watchLiveTileSubtitle;
+
+  /// No description provided for @watchLiveIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'While this screen is open your phone relays the watch\'s position to spectators about once a second. Keep the phone with you and in Bluetooth range — leaving this screen ends the relay.'**
+  String get watchLiveIntro;
+
+  /// No description provided for @watchLiveStateOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get watchLiveStateOff;
+
+  /// No description provided for @watchLiveStateConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get watchLiveStateConnecting;
+
+  /// No description provided for @watchLiveStateLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get watchLiveStateLive;
+
+  /// No description provided for @watchLiveStateGap.
+  ///
+  /// In en, this message translates to:
+  /// **'Gap'**
+  String get watchLiveStateGap;
+
+  /// No description provided for @watchLiveStateLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Gave up'**
+  String get watchLiveStateLost;
+
+  /// No description provided for @watchLiveDetailOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is being sent.'**
+  String get watchLiveDetailOff;
+
+  /// No description provided for @watchLiveDetailSearching.
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for your watch…'**
+  String get watchLiveDetailSearching;
+
+  /// No description provided for @watchLiveDetailAwaitingFix.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected — waiting for the watch\'s first position.'**
+  String get watchLiveDetailAwaitingFix;
+
+  /// No description provided for @watchLiveDetailGap.
+  ///
+  /// In en, this message translates to:
+  /// **'spectators see the last position as delayed, not current'**
+  String get watchLiveDetailGap;
+
+  /// No description provided for @watchLiveDetailLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Your watch is off or out of range. Nothing new is being sent.'**
+  String get watchLiveDetailLost;
+
+  /// No description provided for @watchLiveStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start relay'**
+  String get watchLiveStart;
+
+  /// No description provided for @watchLiveStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop relay'**
+  String get watchLiveStop;
+
+  /// No description provided for @watchLiveRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get watchLiveRetry;
+
+  /// No description provided for @watchLiveShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share live link'**
+  String get watchLiveShare;
+
+  /// No description provided for @watchLiveStartFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t start the live broadcast — nothing is being shared.'**
+  String get watchLiveStartFailed;
+
+  /// No description provided for @watchLiveSyncAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync runs from watch'**
+  String get watchLiveSyncAction;
+
+  /// No description provided for @watchLiveSyncSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pulls recorded runs off the watch. The relay pauses while it runs.'**
+  String get watchLiveSyncSubtitle;
 }
 
 class _AppLocalizationsDelegate

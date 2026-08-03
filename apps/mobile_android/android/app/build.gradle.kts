@@ -83,6 +83,14 @@ dependencies {
     // RunNotificationBridge live under androidx.core:core, which geolocator
     // already pulls in transitively at 1.16.0 — no explicit dep needed.
 
+    // Health Connect client, for HealthRoutePermissionBridge's
+    // READ_EXERCISE_ROUTES request. The `health` plugin depends on the same
+    // artifact, but as `implementation`, which keeps it off our compile
+    // classpath. Keep this version in lockstep with the plugin's
+    // (health-13.3.1/android/build.gradle) — two versions on one runtime
+    // classpath is a Gradle conflict resolution away from a surprise.
+    implementation("androidx.health.connect:connect-client:1.2.0-alpha02")
+
     // JUnit for pure-JVM unit tests on the native Kotlin bridges
     // (WearRoutesBridge / WearAuthBridge / RunNotificationBridge).
     // The bridges' platform-channel + Wearable Data Layer surfaces

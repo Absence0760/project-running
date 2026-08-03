@@ -298,6 +298,45 @@ class AppLocalizationsEs extends AppLocalizations {
       'Lee los resúmenes de entrenamiento (fecha, distancia, duración, tipo) del último año. Health Connect no expone las rutas GPS — las carreras importadas así no tendrán trazado en el mapa.';
 
   @override
+  String importHealthRoutesWithheld(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count actividades importadas tienen mapas GPS que Threkir no puede leer.',
+      one: '1 actividad importada tiene un mapa GPS que Threkir no puede leer.',
+    );
+    return '$_temp0 Health Connect protege la ruta de un entrenamiento con un permiso aparte.';
+  }
+
+  @override
+  String get importHealthRoutesAllowButton => 'Permitir importar mapas';
+
+  @override
+  String get importHealthRoutesRequesting =>
+      'Solicitando acceso a los mapas a Health Connect...';
+
+  @override
+  String get importHealthRoutesDenied =>
+      'Acceso a los mapas no concedido. Las importaciones seguirán sin mapa; puedes cambiarlo en Health Connect cuando quieras.';
+
+  @override
+  String get importHealthRoutesAdding =>
+      'Añadiendo mapas a las actividades importadas...';
+
+  @override
+  String importHealthRoutesAdded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Se añadieron mapas a $count actividades.',
+      one: 'Se añadió un mapa a 1 actividad.',
+      zero: 'No se pudo añadir ningún mapa.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String peopleFollowFailedBanner(Object error) {
     return 'No se pudo actualizar el seguimiento: $error';
   }
@@ -12215,4 +12254,71 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get watchMetricFluid => 'Líquido';
+
+  @override
+  String get watchLiveTitle => 'Seguir carrera del reloj';
+
+  @override
+  String get watchLiveTileSubtitle =>
+      'Retransmite la posición de tu reloj propio a un enlace en directo';
+
+  @override
+  String get watchLiveIntro =>
+      'Mientras esta pantalla esté abierta, tu teléfono retransmite la posición del reloj a los espectadores aproximadamente una vez por segundo. Lleva el teléfono contigo y dentro del alcance del Bluetooth: al salir de esta pantalla se detiene la retransmisión.';
+
+  @override
+  String get watchLiveStateOff => 'Sin conexión';
+
+  @override
+  String get watchLiveStateConnecting => 'Conectando';
+
+  @override
+  String get watchLiveStateLive => 'En directo';
+
+  @override
+  String get watchLiveStateGap => 'Hueco';
+
+  @override
+  String get watchLiveStateLost => 'Se abandonó';
+
+  @override
+  String get watchLiveDetailOff => 'No se está enviando nada.';
+
+  @override
+  String get watchLiveDetailSearching => 'Buscando tu reloj…';
+
+  @override
+  String get watchLiveDetailAwaitingFix =>
+      'Conectado: esperando la primera posición del reloj.';
+
+  @override
+  String get watchLiveDetailGap =>
+      'los espectadores ven la última posición como retrasada, no como actual';
+
+  @override
+  String get watchLiveDetailLost =>
+      'Tu reloj está apagado o fuera de alcance. No se envía nada nuevo.';
+
+  @override
+  String get watchLiveStart => 'Iniciar retransmisión';
+
+  @override
+  String get watchLiveStop => 'Detener retransmisión';
+
+  @override
+  String get watchLiveRetry => 'Reintentar';
+
+  @override
+  String get watchLiveShare => 'Compartir enlace en directo';
+
+  @override
+  String get watchLiveStartFailed =>
+      'No se pudo iniciar la emisión en directo: no se está compartiendo nada.';
+
+  @override
+  String get watchLiveSyncAction => 'Sincronizar carreras del reloj';
+
+  @override
+  String get watchLiveSyncSubtitle =>
+      'Descarga las carreras grabadas del reloj. La retransmisión se pausa mientras tanto.';
 }

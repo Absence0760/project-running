@@ -291,6 +291,40 @@ class AppLocalizationsJa extends AppLocalizations {
       '過去1年間のワークアウト概要（日付、距離、時間、種類）を読み込みます。GPS ルートは Health Connect から公開されないため、この方法でインポートしたランには地図のトレースがありません。';
 
   @override
+  String importHealthRoutesWithheld(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'インポートしたアクティビティ$count件に、Threkirが読み取りを許可されていないGPS地図があります。',
+    );
+    return '${_temp0}Health Connectはワークアウトのルートを別の権限で保護しています。';
+  }
+
+  @override
+  String get importHealthRoutesAllowButton => '地図のインポートを許可';
+
+  @override
+  String get importHealthRoutesRequesting => 'Health Connectに地図へのアクセスを要求中...';
+
+  @override
+  String get importHealthRoutesDenied =>
+      '地図へのアクセスは許可されませんでした。インポートは概要のみのままです。Health Connectでいつでも変更できます。';
+
+  @override
+  String get importHealthRoutesAdding => 'インポートしたアクティビティに地図を追加中...';
+
+  @override
+  String importHealthRoutesAdded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件のアクティビティに地図を追加しました。',
+      zero: '地図を追加できませんでした。',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String peopleFollowFailedBanner(Object error) {
     return 'フォローを更新できませんでした: $error';
   }
@@ -11651,4 +11685,65 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get watchMetricFluid => '水分';
+
+  @override
+  String get watchLiveTitle => 'ウォッチのランを共有';
+
+  @override
+  String get watchLiveTileSubtitle => '自作ウォッチの位置をライブリンクに中継します';
+
+  @override
+  String get watchLiveIntro =>
+      'この画面を開いている間、スマートフォンはウォッチの位置を約1秒ごとに観戦者へ中継します。スマートフォンを身につけ、Bluetooth の通信圏内に保ってください。この画面を離れると中継は終了します。';
+
+  @override
+  String get watchLiveStateOff => '未接続';
+
+  @override
+  String get watchLiveStateConnecting => '接続中';
+
+  @override
+  String get watchLiveStateLive => 'ライブ';
+
+  @override
+  String get watchLiveStateGap => '中断';
+
+  @override
+  String get watchLiveStateLost => '接続を断念';
+
+  @override
+  String get watchLiveDetailOff => '何も送信していません。';
+
+  @override
+  String get watchLiveDetailSearching => 'ウォッチを探しています…';
+
+  @override
+  String get watchLiveDetailAwaitingFix => '接続済み — ウォッチの最初の位置を待っています。';
+
+  @override
+  String get watchLiveDetailGap => '観戦者には最後の位置が現在地ではなく遅延として表示されます';
+
+  @override
+  String get watchLiveDetailLost => 'ウォッチの電源が切れているか、通信圏外です。新しい位置は送信されていません。';
+
+  @override
+  String get watchLiveStart => '中継を開始';
+
+  @override
+  String get watchLiveStop => '中継を停止';
+
+  @override
+  String get watchLiveRetry => '再試行';
+
+  @override
+  String get watchLiveShare => 'ライブリンクを共有';
+
+  @override
+  String get watchLiveStartFailed => 'ライブ配信を開始できませんでした — 何も共有されていません。';
+
+  @override
+  String get watchLiveSyncAction => 'ウォッチのランを同期';
+
+  @override
+  String get watchLiveSyncSubtitle => 'ウォッチに記録されたランを取り込みます。その間、中継は一時停止します。';
 }

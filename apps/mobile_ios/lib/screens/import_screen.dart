@@ -73,6 +73,10 @@ class _ImportScreenState extends State<ImportScreen> {
   int _imported = 0;
   int _total = 0;
   List<String> _errors = [];
+  // Sessions the last Health Connect import found a route for but wasn't
+  // allowed to read. Drives the route-permission offer — the runner is never
+  // shown it speculatively, only once there are maps behind it.
+  Set<String> _withheldRouteIds = const {};
 
   String get _healthLabel => healthLabelFor(isIOS: Platform.isIOS);
 
@@ -99,16 +103,23 @@ class _ImportScreenState extends State<ImportScreen> {
       await _maybeSeedBodyWeight();
 
       setState(() => _status = l10n.importHealthReadingWorkouts);
-      final runs = await HealthConnectImporter.fetchWorkouts();
+      final imported = await HealthConnectImporter.fetchWorkouts();
+      final runs = imported.runs;
       // Health Connect only releases a workout's route when the exercise-route
       // permission is granted, so an import can land with maps or without.
       // Only claim there are no tracks when there genuinely are none —
       // otherwise the note contradicts the maps the user can see (#37, #664).
+      // The note asserts the source has no route data at all, so it is also
+      // withheld when we know it does and was simply refused: the offer below
+      // says the true thing instead.
       await _saveImportedRuns(
         runs,
         label: _healthLabel,
-        noGpsNote: runs.every((r) => r.track.isEmpty),
+        noGpsNote: runs.every((r) => r.track.isEmpty) &&
+            imported.withheldSessionIds.isEmpty,
       );
+      if (!mounted) return;
+      setState(() => _withheldRouteIds = imported.withheldSessionIds);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -116,6 +127,92 @@ class _ImportScreenState extends State<ImportScreen> {
         _status = l10n.importHealthFailed(_healthLabel, e);
       });
     }
+  }
+
+  /// Ask Health Connect for the exercise-route grant, then fill the maps in.
+  ///
+  /// Reached only by tapping the offer that appears once an import has found
+  /// routes it wasn't allowed to read — the second permission sheet is
+  /// something the runner asks for, never something that happens because they
+  /// tapped "import". Refusal is a normal outcome: the offer goes away and
+  /// every already-imported run stays exactly as it is, summary-only.
+  Future<void> _allowRouteImport() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _busy = true;
+      _status = l10n.importHealthRoutesRequesting;
+      _errors = [];
+    });
+
+    final granted =
+        await requestHealthRoutePermission(isAndroid: Platform.isAndroid);
+    if (!mounted) return;
+    if (!granted) {
+      setState(() {
+        _busy = false;
+        _withheldRouteIds = const {};
+        _status = l10n.importHealthRoutesDenied;
+      });
+      return;
+    }
+
+    setState(() => _status = l10n.importHealthRoutesAdding);
+    try {
+      final filled = await _backfillHealthConnectTracks();
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _withheldRouteIds = const {};
+        _status = l10n.importHealthRoutesAdded(filled);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _withheldRouteIds = const {};
+        _status = l10n.importHealthFailed(_healthLabel, e);
+      });
+    }
+  }
+
+  /// Re-read the routes now that Health Connect will release them and write
+  /// them onto the runs already imported without one. A plain re-import can't
+  /// do this: `isCrossSourceDuplicate` treats Health Connect as an aggregator
+  /// and skips every workout already in the store, so the tracks would never
+  /// land. Returns how many runs gained a map.
+  Future<int> _backfillHealthConnectTracks() async {
+    final routes = await HealthConnectImporter.fetchRoutes();
+    if (routes.tracks.isEmpty) return 0;
+
+    // Hydrate only the runs a released route can actually fill — the summary
+    // index carries source + external_id, so the whole history is filtered
+    // before touching disk.
+    final candidates = <Run>[];
+    for (final summary in widget.runStore.summaryRuns) {
+      final sessionId = HealthConnectImporter.sessionIdOf(summary);
+      if (sessionId == null || !routes.tracks.containsKey(sessionId)) continue;
+      final full = await widget.runStore.runById(summary.id);
+      if (full != null) candidates.add(full);
+    }
+
+    final filled =
+        HealthConnectImporter.runsWithBackfilledTracks(candidates, routes.tracks);
+    for (final run in filled) {
+      await widget.runStore.save(run);
+    }
+
+    final api = widget.apiClient;
+    if (filled.isNotEmpty && api != null && api.userId != null) {
+      try {
+        final failed = await api.saveRunsBatch(filled);
+        await widget.runStore.markManySynced(
+          filled.where((r) => !failed.contains(r.id)).map((r) => r.id),
+        );
+      } catch (e) {
+        debugPrint('Route backfill cloud push failed: $e');
+      }
+    }
+    return filled.length;
   }
 
   /// Seed `body_weight_kg` from Health Connect when the user hasn't set
@@ -466,6 +563,25 @@ class _ImportScreenState extends State<ImportScreen> {
                       label: Text(l10n.importHealthButton(_healthLabel)),
                     ),
                   ),
+                  if (_withheldRouteIds.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.importHealthRoutesWithheld(_withheldRouteIds.length),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _busy ? null : _allowRouteImport,
+                        icon: const Icon(Icons.map_outlined),
+                        label: Text(l10n.importHealthRoutesAllowButton),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -5,12 +5,14 @@
  * slice of the bottom of RAM, so the application is linked above both.
  *
  *   FLASH: app starts at 0x00027000 (156 KiB), the S140 7.3.0 code region,
- *          and ends 16 KiB + 4 KiB below the top: the same top-of-flash
+ *          and ends 16 KiB + 8 KiB below the top: the same top-of-flash
  *          run-store region memory.x reserves (watch_core::flash_store::
- *          REGION_LEN) at absolute 0xFC000, plus the 4 KiB persisted-config
- *          page (watch_core::flash_store::CONFIG_LEN) one page below it at
- *          0xFB000. Both sit above the SoftDevice-relative app; the run-store
- *          region base is unchanged by the config page below it.
+ *          REGION_LEN) at absolute 0xFC000, plus the two 4 KiB persisted-config
+ *          pages (watch_core::flash_store::CONFIG_REGION_LEN) below it at
+ *          0xFA000 and 0xFB000. All sit above the SoftDevice-relative app,
+ *          which ends at 0xFA000 — the SoftDevice occupies the BOTTOM of flash,
+ *          so the extra page comes out of the app's own span, not out of it.
+ *          The run-store region base is unchanged by the config pages below it.
  *   RAM  : app starts 31 KiB up. This RAM reservation is the SoftDevice's
  *          *maximum* footprint for our connection config; the actual required
  *          start address is printed by `Softdevice::enable` at boot
@@ -29,8 +31,8 @@
 MEMORY
 {
   /* NOTE 1 K = 1 KiBi = 1024 bytes */
-  FLASH     : ORIGIN = 0x00000000 + 156K, LENGTH = 1024K - 156K - 16K - 4K
-  CONFIG    : ORIGIN = 0x00000000 + 1024K - 16K - 4K, LENGTH = 4K
+  FLASH     : ORIGIN = 0x00000000 + 156K, LENGTH = 1024K - 156K - 16K - 8K
+  CONFIG    : ORIGIN = 0x00000000 + 1024K - 16K - 8K, LENGTH = 8K
   RUN_STORE : ORIGIN = 0x00000000 + 1024K - 16K, LENGTH = 16K
   RAM       : ORIGIN = 0x20000000 + 31K,  LENGTH = 256K - 31K
 }

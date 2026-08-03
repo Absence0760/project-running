@@ -88,11 +88,15 @@ void main() {
   // parameter), add an integration test here covering the prefix.
   group('HealthConnectImporter external_id prefix', () {
     test('externalId format constant is namespaced', () {
-      // Read the source file and assert the fixed line is present.
+      // Read the source file and assert the fixed line is present. The prefix
+      // is a named constant because `sessionIdOf` reads it back out for the
+      // route backfill — a literal in two places is a drift waiting to
+      // happen — so the guard pins the constant AND its one use.
       final source = File(
         'lib/health_connect_importer.dart',
       ).readAsStringSync();
-      expect(source, contains("'healthconnect:\${point.uuid}'"));
+      expect(source, contains("_externalIdPrefix = 'healthconnect:'"));
+      expect(source, contains("'\$_externalIdPrefix\${point.uuid}'"));
     });
 
     test('id is derived from the stable external_id, not a fresh uuid (#361)',

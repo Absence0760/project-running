@@ -14,6 +14,10 @@
 //! run's successive flash writes **ping-pong** between two slots so the erase
 //! window can never take the last good copy with it.
 //!
+//! The [`CONFIG_PAGE_COUNT`] settings pages below the run region ping-pong on
+//! the same principle, sequenced by the [`encode_config_seal`] generation the
+//! rewrite stamps last — see [`crate::flash_plan::plan_config_write`].
+//!
 //! Everything in this module is pure arithmetic plus a small in-RAM directory,
 //! so it is `cargo test`-able on the host; the actual flash reads / erases /
 //! writes live in the `app/` crate over embassy-nrf's NVMC.
@@ -47,13 +51,38 @@ pub const fn slot_offset(region_offset: u32, slot: usize) -> u32 {
     region_offset + (slot as u32) * (SLOT_LEN as u32)
 }
 
-/// One nRF52840 erase page reserved for the tiny persisted-config record, sat
-/// immediately BELOW the run-store region (its absolute offset is one page under
-/// [`crate::run_flash::REGION_OFFSET`] — see `app/src/run_flash::CONFIG_OFFSET`).
-/// A dedicated page keeps a config rewrite — a single page erase — from ever
-/// touching a run slot, and leaves every run-store slot offset undisturbed.
-/// MUST match the config carve-out in BOTH `app/memory.x` and `app/memory-ble.x`.
+/// One nRF52840 erase page holding the persisted-config records, sat BELOW the
+/// run-store region. A dedicated page keeps a config rewrite — a single page
+/// erase — from ever touching a run slot, and leaves every run-store slot offset
+/// undisturbed.
 pub const CONFIG_LEN: usize = SLOT_LEN;
+
+/// How many config pages the region holds. Two, so a rewrite writes the page
+/// that is NOT live and a brown-out inside the 85 ms erase leaves the previous
+/// page whole — the run store's ping-pong, applied to the settings the runner
+/// set rather than to the run they recorded.
+///
+/// **The successor rule below assumes exactly two.** With three or more, two
+/// live-looking pages could hold generations two or more apart and
+/// [`crate::flash_plan::live_config_page`] could no longer decide between them
+/// by asking which is the other's immediate successor.
+pub const CONFIG_PAGE_COUNT: usize = 2;
+
+const _: () = assert!(CONFIG_PAGE_COUNT == 2);
+
+/// Total reserved config region, immediately BELOW the run-store region (its
+/// base is [`crate::run_flash::REGION_OFFSET`] less this — see
+/// `app/src/run_flash::CONFIG_REGION_OFFSET`). MUST match the config carve-out
+/// in BOTH `app/memory.x` and `app/memory-ble.x`.
+pub const CONFIG_REGION_LEN: usize = CONFIG_LEN * CONFIG_PAGE_COUNT;
+
+/// Absolute flash offset of config `page` within a store whose run region begins
+/// at `region_offset`. The config region sits directly beneath the run region,
+/// so a page's address is fixed by the run region's — [`slot_offset`]'s rule,
+/// counting the other way.
+pub const fn config_page_offset(region_offset: u32, page: usize) -> u32 {
+    region_offset - CONFIG_REGION_LEN as u32 + (page as u32) * (CONFIG_LEN as u32)
+}
 
 /// Length of the fixed config record written at the base of the config page. A
 /// multiple of the NVMC 4-byte write word, so it commits in one write.
@@ -247,14 +276,71 @@ pub const TIMER_RECORD_OFFSET: usize = 1024;
 /// rung the runner had set, to store a pacer goal.
 pub const RACE_CONFIG_RECORD_OFFSET: usize = 2048;
 
+/// `magic(4) | version(1) | reserved(3) | generation(4) | crc32(4)` — the seal
+/// that makes a config page live. A multiple of the NVMC 4-byte write word.
+pub const CONFIG_SEAL_LEN: usize = 16;
+
+/// Offset of the page seal — the page's last word, deliberately: the rewrite
+/// writes it AFTER every record, so a page interrupted anywhere before that
+/// final write carries no seal at all and is skipped whole by
+/// [`crate::flash_plan::live_config_page`]. That is what stops a half-rewritten
+/// page being read as a config the runner never had, and it is the only ordering
+/// constraint the scheme needs: each record already carries its own CRC, so the
+/// seal does not have to re-cover their bytes, only to say "all of them landed".
+pub const CONFIG_SEAL_OFFSET: usize = CONFIG_LEN - CONFIG_SEAL_LEN;
+
+pub const CONFIG_SEAL_VERSION: u8 = 1;
+
+const CONFIG_SEAL_MAGIC: [u8; 4] = *b"PGN1";
+
+/// Encode a config page's seal at `generation`.
+pub fn encode_config_seal(generation: u32) -> [u8; CONFIG_SEAL_LEN] {
+    let mut b = [0u8; CONFIG_SEAL_LEN];
+    b[0..4].copy_from_slice(&CONFIG_SEAL_MAGIC);
+    b[4] = CONFIG_SEAL_VERSION;
+    // b[5..8] reserved, zero, CRC-covered.
+    b[8..12].copy_from_slice(&generation.to_le_bytes());
+    let crc = crc32(&b[0..CONFIG_SEAL_LEN - 4]);
+    b[CONFIG_SEAL_LEN - 4..].copy_from_slice(&crc.to_le_bytes());
+    b
+}
+
+/// The generation a config page's seal carries, or `None` when the bytes are
+/// short, erased, mis-magicked, of an unknown version, or fail the CRC — every
+/// one of which means the page is not live (fail-closed, [`decode_config`]'s
+/// rule). A page interrupted mid-rewrite lands here.
+pub fn decode_config_seal(bytes: &[u8]) -> Option<u32> {
+    if bytes.len() < CONFIG_SEAL_LEN
+        || bytes[0..4] != CONFIG_SEAL_MAGIC
+        || bytes[4] != CONFIG_SEAL_VERSION
+    {
+        return None;
+    }
+    let stored = u32::from_le_bytes([
+        bytes[CONFIG_SEAL_LEN - 4],
+        bytes[CONFIG_SEAL_LEN - 3],
+        bytes[CONFIG_SEAL_LEN - 2],
+        bytes[CONFIG_SEAL_LEN - 1],
+    ]);
+    if crc32(&bytes[0..CONFIG_SEAL_LEN - 4]) != stored {
+        return None;
+    }
+    Some(u32::from_le_bytes([
+        bytes[8], bytes[9], bytes[10], bytes[11],
+    ]))
+}
+
 const _: () = assert!(BOND_RECORD_OFFSET + BOND_RECORD_LEN <= WAYPOINT_RECORD_OFFSET);
 const _: () = assert!(WAYPOINT_RECORD_OFFSET + crate::waypoints::MAX_WPT1_LEN <= ICE_RECORD_OFFSET);
 const _: () = assert!(ICE_RECORD_OFFSET + crate::ice::ICE1_RECORD_LEN <= SCREENS_RECORD_OFFSET);
 const _: () = assert!(SCREENS_RECORD_OFFSET + crate::screens::MAX_SCR1_LEN <= TIMER_RECORD_OFFSET);
 const _: () =
     assert!(TIMER_RECORD_OFFSET + crate::timers::TIMER_RECORD_LEN <= RACE_CONFIG_RECORD_OFFSET);
-const _: () =
-    assert!(RACE_CONFIG_RECORD_OFFSET + crate::race_config::RACE_CONFIG_RECORD_LEN <= CONFIG_LEN);
+const _: () = assert!(
+    RACE_CONFIG_RECORD_OFFSET + crate::race_config::RACE_CONFIG_RECORD_LEN <= CONFIG_SEAL_OFFSET
+);
+const _: () = assert!(CONFIG_SEAL_OFFSET + CONFIG_SEAL_LEN <= CONFIG_LEN);
+const _: () = assert!(CONFIG_SEAL_LEN.is_multiple_of(4));
 
 /// `magic(4) | version(1) | enc_flags(1) | ediv(2) | rand(8) | ltk(16) |
 /// addr_flags(1) | addr(6) | irk(16) | pad(1) | crc32(4)` — 60 bytes, a
@@ -1672,6 +1758,7 @@ mod tests {
         let mut rec = [0u8; crate::screens::MAX_SCR1_LEN];
         let n = set.encode(&mut rec).unwrap();
         page[SCREENS_RECORD_OFFSET..SCREENS_RECORD_OFFSET + n].copy_from_slice(&rec[..n]);
+        page[CONFIG_SEAL_OFFSET..].copy_from_slice(&encode_config_seal(9));
 
         assert_eq!(decode_config(&page), Some((1, 0, 0)));
         assert_eq!(
@@ -1679,6 +1766,113 @@ mod tests {
             Some(a_bond())
         );
         assert_eq!(Screens::decode(&page[SCREENS_RECORD_OFFSET..]), Some(set));
+        assert_eq!(decode_config_seal(&page[CONFIG_SEAL_OFFSET..]), Some(9));
+    }
+
+    /// The seal is what makes a page live, so every way it can fail to decode is
+    /// a way a half-rewritten page is refused. An erased page is the one that
+    /// matters most: a rewrite interrupted between the erase and this last word
+    /// leaves exactly that.
+    #[test]
+    fn the_page_seal_round_trips_and_fails_closed() {
+        let rec = encode_config_seal(0x1234_5678);
+        assert_eq!(decode_config_seal(&rec), Some(0x1234_5678));
+        assert_eq!(decode_config_seal(&encode_config_seal(0)), Some(0));
+        assert_eq!(
+            decode_config_seal(&encode_config_seal(u32::MAX)),
+            Some(u32::MAX)
+        );
+
+        assert_eq!(
+            decode_config_seal(&[0xFFu8; CONFIG_SEAL_LEN]),
+            None,
+            "an erased page carries no seal"
+        );
+        assert_eq!(decode_config_seal(&[0u8; CONFIG_SEAL_LEN]), None, "zeroed");
+        assert_eq!(
+            decode_config_seal(&rec[..CONFIG_SEAL_LEN - 1]),
+            None,
+            "short"
+        );
+
+        let mut newer = rec;
+        newer[4] = CONFIG_SEAL_VERSION + 1;
+        assert_eq!(decode_config_seal(&newer), None, "unknown version");
+
+        for at in 0..CONFIG_SEAL_LEN {
+            let mut flipped = rec;
+            flipped[at] ^= 0x01;
+            assert_eq!(
+                decode_config_seal(&flipped),
+                None,
+                "a torn seal must not read as live (byte {at})"
+            );
+        }
+    }
+
+    /// The seal sits at the page's last word, past every record — so a page can
+    /// hold its full record set and the seal at once, and no record's extent can
+    /// reach it. The const asserts prove the arithmetic; this proves it against
+    /// the real lengths a populated page carries.
+    #[test]
+    fn the_page_seal_clears_every_record_on_the_page() {
+        assert_eq!(CONFIG_SEAL_OFFSET, CONFIG_LEN - CONFIG_SEAL_LEN);
+        for (name, at, len) in [
+            ("config", 0, CONFIG_RECORD_LEN),
+            ("bond", BOND_RECORD_OFFSET, BOND_RECORD_LEN),
+            (
+                "waypoints",
+                WAYPOINT_RECORD_OFFSET,
+                crate::waypoints::MAX_WPT1_LEN,
+            ),
+            ("ice", ICE_RECORD_OFFSET, crate::ice::ICE1_RECORD_LEN),
+            (
+                "screens",
+                SCREENS_RECORD_OFFSET,
+                crate::screens::MAX_SCR1_LEN,
+            ),
+            (
+                "timer",
+                TIMER_RECORD_OFFSET,
+                crate::timers::TIMER_RECORD_LEN,
+            ),
+            (
+                "race_config",
+                RACE_CONFIG_RECORD_OFFSET,
+                crate::race_config::RACE_CONFIG_RECORD_LEN,
+            ),
+        ] {
+            assert!(
+                at + len <= CONFIG_SEAL_OFFSET,
+                "the {name} record runs into the page seal"
+            );
+        }
+    }
+
+    /// The two pages are adjacent, page-aligned, and sit directly beneath the
+    /// run region — so a config write can never reach a run slot and the factory
+    /// erase can stay one contiguous range.
+    #[test]
+    fn the_config_pages_tile_the_region_below_the_run_slots() {
+        const BASE: u32 = 0xFC000;
+        assert_eq!(CONFIG_REGION_LEN, CONFIG_LEN * CONFIG_PAGE_COUNT);
+        for page in 0..CONFIG_PAGE_COUNT {
+            let at = config_page_offset(BASE, page);
+            assert_eq!(
+                at,
+                BASE - CONFIG_REGION_LEN as u32 + (page * CONFIG_LEN) as u32
+            );
+            assert_eq!(at % SLOT_LEN as u32, 0, "page {page} is not erase-aligned");
+            assert!(
+                at + CONFIG_LEN as u32 <= BASE,
+                "page {page} overlaps a run slot"
+            );
+        }
+        assert_eq!(
+            config_page_offset(BASE, CONFIG_PAGE_COUNT - 1) + CONFIG_LEN as u32,
+            BASE,
+            "the last config page abuts the run region"
+        );
     }
 
     /// An erased page hands back no screens rather than a set of zero-byte

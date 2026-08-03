@@ -15,9 +15,11 @@ import '../l10n/gen/app_localizations.dart';
 import '../parkrun_regions.dart';
 import '../preferences.dart';
 import '../race_service.dart';
+import '../settings_sync.dart';
 import '../strava.dart';
 import '../widgets/top_banner.dart';
 import 'races_screen.dart';
+import 'watch_live_screen.dart';
 
 class SettingsIntegrationsScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -25,12 +27,18 @@ class SettingsIntegrationsScreen extends StatefulWidget {
   final BleTreadmill treadmill;
   final Preferences preferences;
 
+  /// Threaded through to [WatchLiveScreen] so the live relay can read the
+  /// runner's privacy zones before a watch position leaves the device
+  /// (decisions §33).
+  final SettingsSyncService? settingsSync;
+
   const SettingsIntegrationsScreen({
     super.key,
     required this.apiClient,
     required this.heartRate,
     required this.treadmill,
     required this.preferences,
+    this.settingsSync,
   });
 
   @override
@@ -420,6 +428,21 @@ class _SettingsIntegrationsScreenState
             HeartRateMonitorTile(heartRate: widget.heartRate),
             const Divider(),
             TreadmillTile(treadmill: widget.treadmill),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.watch_outlined),
+              title: Text(l10n.watchLiveTitle),
+              subtitle: Text(l10n.watchLiveTileSubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => WatchLiveScreen(
+                    apiClient: widget.apiClient,
+                    settingsSync: widget.settingsSync,
+                  ),
+                ),
+              ),
+            ),
             if (Platform.isAndroid) ...[
               const Divider(),
               SwitchListTile(
