@@ -51,8 +51,13 @@ byte-behaviour-identical; registered in the root `CLAUDE.md` parity list,
   (`buildRecapShareSvg`, 1080² SVG) → rasterised client-side via
   `lib/share/svg_to_png.ts` → OS share sheet / download. Pass a `periodLabel`
   for the monthly kicker.
-- **Mobile:** `RecapScreen` (from the dashboard), annual only; the Dart monthly
-  builder ships but a monthly mobile screen is a platform-additive follow-up.
+- **Mobile:** `RecapScreen` (from the dashboard). Web's two routes collapse into
+  one screen: a Year / Month `SegmentedButton` picks the engine, and the
+  chevrons below it step by year or by calendar month (`DateTime` normalises the
+  year rollover), with the next chevron disabled on the current period. The
+  share sheet swaps its headline + subject for the month label, and publishing
+  sends `period_kind='month'` / `period_key='YYYY-MM'` so a month published from
+  the phone refreshes the same link the web month page would.
 
 ## Public share snapshot (the virality piece)
 
