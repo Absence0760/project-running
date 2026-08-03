@@ -365,20 +365,24 @@ fn a_push_outcome() -> impl Strategy<Value = PushOutcome> {
 
 #[test]
 fn a_push_outcome_round_trips_and_fails_closed() {
-    check(256, (a_push_outcome(), any::<Index>(), 1u8..=255), |(outcome, at, delta)| {
-        let bytes = outcome.encode();
-        prop_assert_eq!(PushOutcome::decode(&bytes), Some(outcome));
-        // Unlike its CRC-sealed siblings this record has no checksum — it
-        // rides one encrypted ATT read, not a chunked write — so the property
-        // is the weaker but sufficient one: a corrupted byte may fail to
-        // decode, but if it decodes it decodes to what the bytes now say, and
-        // a corrupted MAGIC never decodes at all.
-        let corrupt = corrupted(&bytes, at.index(bytes.len()), delta);
-        if at.index(bytes.len()) < 4 {
-            prop_assert_eq!(PushOutcome::decode(&corrupt), None, "a foreign magic");
-        }
-        Ok(())
-    });
+    check(
+        256,
+        (a_push_outcome(), any::<Index>(), 1u8..=255),
+        |(outcome, at, delta)| {
+            let bytes = outcome.encode();
+            prop_assert_eq!(PushOutcome::decode(&bytes), Some(outcome));
+            // Unlike its CRC-sealed siblings this record has no checksum — it
+            // rides one encrypted ATT read, not a chunked write — so the property
+            // is the weaker but sufficient one: a corrupted byte may fail to
+            // decode, but if it decodes it decodes to what the bytes now say, and
+            // a corrupted MAGIC never decodes at all.
+            let corrupt = corrupted(&bytes, at.index(bytes.len()), delta);
+            if at.index(bytes.len()) < 4 {
+                prop_assert_eq!(PushOutcome::decode(&corrupt), None, "a foreign magic");
+            }
+            Ok(())
+        },
+    );
 }
 
 #[test]

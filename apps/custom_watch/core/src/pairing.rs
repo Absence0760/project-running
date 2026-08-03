@@ -400,7 +400,10 @@ mod tests {
         // again — which is what makes an erase a usable hand-on.
         let cell: BondCell<u8> = BondCell::new();
         cell.set(Some(7), 2);
-        assert!(!may_bond(cell.is_live(2), false), "a live bond is protected");
+        assert!(
+            !may_bond(cell.is_live(2), false),
+            "a live bond is protected"
+        );
         assert!(may_bond(cell.is_live(3), false), "an erased one is not");
     }
 

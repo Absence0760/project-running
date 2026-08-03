@@ -3768,7 +3768,11 @@ mod tests {
         );
         let after = 11 + ALERT_TTL_S;
         assert_eq!(
-            e.on_update(&pushed(PushKind::Roadbook, 2, false, after), Some(150), after),
+            e.on_update(
+                &pushed(PushKind::Roadbook, 2, false, after),
+                Some(150),
+                after
+            ),
             Some(Alert::PushRejected(PushKind::Roadbook))
         );
     }
