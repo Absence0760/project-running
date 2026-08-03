@@ -43,12 +43,17 @@ function setConsentAccepted() {
 	);
 }
 
-async function modalStatValue(page: Page, label: string): Promise<string> {
+// Asserts rather than snapshotting: the all-time tab shows an em dash while
+// its lazily-loaded history resolves, so the read has to retry until settled.
+async function expectModalStat(
+	page: Page,
+	label: string,
+	expected: string | RegExp
+): Promise<void> {
 	const card = page
 		.locator('.modal .stats .stat-card')
 		.filter({ has: page.locator('.stat-label', { hasText: new RegExp(`^${label}$`) }) });
-	await expect(card).toBeVisible({ timeout: 15_000 });
-	return ((await card.locator('.stat-value').textContent()) ?? '').trim();
+	await expect(card.locator('.stat-value')).toHaveText(expected, { timeout: 15_000 });
 }
 
 test.describe('dashboard all-time drilldown vs the fetch window', () => {
@@ -56,9 +61,12 @@ test.describe('dashboard all-time drilldown vs the fetch window', () => {
 
 	test.beforeAll(async () => {
 		[user] = await createSagaUsers(1, { displayNames: ['Deep History Runner'] });
+		// Stamped at "now" rather than N days back: the week tab below windows
+		// Monday->Sunday, so any fixed offset lands in the PREVIOUS week
+		// whenever the suite runs early in one (it ran on a Monday and did).
 		await insertRun({
 			user_id: user.id,
-			started_at: new Date(Date.now() - 2 * DAY_MS).toISOString(),
+			started_at: new Date().toISOString(),
 			distance_m: RECENT_RUN.distance_m,
 			duration_s: RECENT_RUN.duration_s,
 		});
@@ -101,8 +109,8 @@ test.describe('dashboard all-time drilldown vs the fetch window', () => {
 			await expect(modal).toBeVisible({ timeout: 10_000 });
 			await expect(modal.locator('.type-toggle .toggle-btn.active')).toHaveText('all time');
 
-			expect(await modalStatValue(page, 'Runs')).toBe(String(allCount));
-			expect(await modalStatValue(page, 'Distance')).toBe(kmLabel(allDistance));
+			await expectModalStat(page, 'Runs', String(allCount));
+			await expectModalStat(page, 'Distance', kmLabel(allDistance));
 			// The out-of-window run is listed, not merely counted.
 			await expect(
 				modal.locator('.run-list .run-row .run-dist', {
@@ -136,8 +144,8 @@ test.describe('dashboard all-time drilldown vs the fetch window', () => {
 			await expect(modal.getByRole('button', { name: 'Week' })).toBeVisible({
 				timeout: 10_000
 			});
-			expect(await modalStatValue(page, 'Runs')).toBe('1');
-			expect(await modalStatValue(page, 'Distance')).toBe(kmLabel(RECENT_RUN.distance_m));
+			await expectModalStat(page, 'Runs', '1');
+			await expectModalStat(page, 'Distance', kmLabel(RECENT_RUN.distance_m));
 		} finally {
 			await ctx.close();
 		}
