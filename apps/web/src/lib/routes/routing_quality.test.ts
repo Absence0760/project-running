@@ -55,6 +55,48 @@ test('pointToSegmentDistanceM clamps to endpoints (no negative projection)', () 
 	);
 });
 
+test('pointToSegmentDistanceM survives a segment straddling the antimeridian', () => {
+	// A 0.002°-wide segment crossing 180°. The raw longitude subtraction
+	// read its planar frame as 359.998° wide, so a point ON the segment at
+	// the meridian projected before the start and scored ~87 m off it.
+	const a = { lng: 179.999, lat: 38.9 };
+	const b = { lng: -179.999, lat: 38.9 };
+	const onLine = { lng: 180, lat: 38.9 };
+	assert.ok(pointToSegmentDistanceM(onLine, a, b) < 1);
+	const offsetDeg = 100 / 111320;
+	const north = { lng: 180, lat: 38.9 + offsetDeg };
+	const d = pointToSegmentDistanceM(north, a, b);
+	assert.ok(d > 90 && d < 110, `expected ~100m, got ${d.toFixed(1)}m`);
+});
+
+test('validateRouteQuality does not fire a spurious warning for a route across the antimeridian', () => {
+	// The waypoint sits ~50 m past the end of a polyline that stays just
+	// west of the line. The raw frame read that 50 m as a whole turn
+	// (~40,000 km) and fired the deviation warning on every such route.
+	const A = { lat: 38.9, lng: 179.999 };
+	const B = { lat: 38.9, lng: -179.9999 };
+	const segs: RoutedSegment[] = [
+		{
+			from: A,
+			to: B,
+			polyline: [
+				[179.999, 38.9],
+				[179.9995, 38.9],
+			],
+			distanceM: haversineM(A, B),
+		},
+	];
+	const q = validateRouteQuality(segs);
+	assert.ok(
+		q.maxWaypointDeviationM > 40 && q.maxWaypointDeviationM < 60,
+		`expected the true ~50m deviation, got ${q.maxWaypointDeviationM}`,
+	);
+	// The detour ratio is haversine-based (periodic, immune) — pin that it
+	// stays ~1 rather than arguing immunity in a commit message.
+	assert.ok(q.worstSegmentDetourRatio < 1.01);
+	assert.equal(qualityWarning(q), null);
+});
+
 test('closestPointDistanceM finds the nearest edge across a multi-segment polyline', () => {
 	// Three-segment polyline forming an L shape.
 	const polyline: [number, number][] = [

@@ -16,6 +16,7 @@
 // load-bearing numbers.
 
 import type { TrackPoint } from '../types';
+import { lonDeltaDeg } from './geo';
 
 /// One OSRM-routed segment between two consecutive waypoints. The
 /// polyline is `[[lng, lat], ...]` (OSRM's GeoJSON convention) and
@@ -83,9 +84,9 @@ export function pointToSegmentDistanceM(
 	// ≈ 111_320 m; 1 degree longitude ≈ 111_320 * cos(lat) m.
 	const ax = 0;
 	const ay = 0;
-	const bx = (b.lng - a.lng) * 111320 * cosLat;
+	const bx = lonDeltaDeg(a.lng, b.lng) * 111320 * cosLat;
 	const by = (b.lat - a.lat) * 111320;
-	const px = (p.lng - a.lng) * 111320 * cosLat;
+	const px = lonDeltaDeg(a.lng, p.lng) * 111320 * cosLat;
 	const py = (p.lat - a.lat) * 111320;
 
 	const dx = bx - ax;
