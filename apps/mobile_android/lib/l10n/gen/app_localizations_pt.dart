@@ -54,7 +54,26 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String recapMonthShareHeadline(Object period) {
+    return 'O meu $period na corrida:';
+  }
+
+  @override
+  String recapMonthShareSubject(Object period) {
+    return 'Retrospectiva $period';
+  }
+
+  @override
   String get recapTitle => 'Ano na corrida';
+
+  @override
+  String get recapMonthTitle => 'Mês na corrida';
+
+  @override
+  String get recapPeriodYear => 'Ano';
+
+  @override
+  String get recapPeriodMonth => 'Mês';
 
   @override
   String get recapShareTooltip => 'Compartilhar retrospectiva';
@@ -73,13 +92,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recapNextYear => 'Próximo ano';
 
   @override
-  String recapNoRunsForYear(Object year) {
-    return 'Nenhuma corrida para a retrospectiva de $year.';
+  String get recapPrevMonth => 'Mês anterior';
+
+  @override
+  String get recapNextMonth => 'Próximo mês';
+
+  @override
+  String recapNoRunsForPeriod(Object period) {
+    return 'Nenhuma corrida para a retrospectiva de $period.';
   }
 
   @override
-  String recapNoRunsYet(Object year) {
-    return 'Ainda não há corridas em $year. Registre uma para ver sua retrospectiva.';
+  String recapNoRunsYetInPeriod(Object period) {
+    return 'Ainda não há corridas em $period. Registre uma para ver sua retrospectiva.';
   }
 
   @override
@@ -12381,7 +12406,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String recapMonthShareHeadline(Object period) {
+    return 'Meu $period na corrida:';
+  }
+
+  @override
+  String recapMonthShareSubject(Object period) {
+    return 'Retrospectiva $period';
+  }
+
+  @override
   String get recapTitle => 'Ano na corrida';
+
+  @override
+  String get recapMonthTitle => 'Mês na corrida';
+
+  @override
+  String get recapPeriodYear => 'Ano';
+
+  @override
+  String get recapPeriodMonth => 'Mês';
 
   @override
   String get recapShareTooltip => 'Compartilhar retrospectiva';
@@ -12400,13 +12444,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get recapNextYear => 'Próximo ano';
 
   @override
-  String recapNoRunsForYear(Object year) {
-    return 'Nenhuma corrida para a retrospectiva de $year.';
+  String get recapPrevMonth => 'Mês anterior';
+
+  @override
+  String get recapNextMonth => 'Próximo mês';
+
+  @override
+  String recapNoRunsForPeriod(Object period) {
+    return 'Nenhuma corrida para a retrospectiva de $period.';
   }
 
   @override
-  String recapNoRunsYet(Object year) {
-    return 'Ainda não há corridas em $year. Registre uma para ver sua retrospectiva.';
+  String recapNoRunsYetInPeriod(Object period) {
+    return 'Ainda não há corridas em $period. Registre uma para ver sua retrospectiva.';
   }
 
   @override

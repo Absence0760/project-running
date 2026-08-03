@@ -54,7 +54,26 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String recapMonthShareHeadline(Object period) {
+    return 'Mein $period beim Laufen:';
+  }
+
+  @override
+  String recapMonthShareSubject(Object period) {
+    return 'Rückblick $period';
+  }
+
+  @override
   String get recapTitle => 'Laufjahr';
+
+  @override
+  String get recapMonthTitle => 'Laufmonat';
+
+  @override
+  String get recapPeriodYear => 'Jahr';
+
+  @override
+  String get recapPeriodMonth => 'Monat';
 
   @override
   String get recapShareTooltip => 'Rückblick teilen';
@@ -73,13 +92,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get recapNextYear => 'Nächstes Jahr';
 
   @override
-  String recapNoRunsForYear(Object year) {
-    return 'Keine Läufe für den Rückblick $year.';
+  String get recapPrevMonth => 'Vorheriger Monat';
+
+  @override
+  String get recapNextMonth => 'Nächster Monat';
+
+  @override
+  String recapNoRunsForPeriod(Object period) {
+    return 'Keine Läufe für den Rückblick $period.';
   }
 
   @override
-  String recapNoRunsYet(Object year) {
-    return 'Noch keine Läufe in $year. Zeichne einen auf, um deinen Rückblick zu sehen.';
+  String recapNoRunsYetInPeriod(Object period) {
+    return 'Noch keine Läufe in $period. Zeichne einen auf, um deinen Rückblick zu sehen.';
   }
 
   @override
