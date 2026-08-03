@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { en } from '../../../lib/i18n/locales/en';
+import { VOICE_CUE_IDS } from '../../../lib/settings/voice_cues';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const page = readFileSync(resolve(__dirname, '+page.svelte'), 'utf-8');
@@ -42,4 +43,18 @@ test('the toast keys exist in the en catalogue with the right placeholder', () =
 	assert.equal(en['prefs.saveFailed'], "Couldn't save: {error}");
 	assert.ok(en['prefs.telemetryEnabledToast']);
 	assert.ok(en['prefs.telemetryDisabledToast']);
+});
+
+test('every voice cue toggle names a label + hint key that exists in en', () => {
+	// `Record<VoiceCueId, …>` already makes a missing cue a compile error;
+	// this pins the other half — that the MessageKeys it names resolve to
+	// real, non-empty catalogue entries rather than an untranslated blank.
+	const enRecord = en as Record<string, string>;
+	const labels = page.match(/const VOICE_CUE_LABELS[\s\S]*?\n\t\};/);
+	assert.ok(labels, 'VOICE_CUE_LABELS not found on the preferences page');
+	const keys = [...labels[0].matchAll(/'(prefs\.cue\.[\w.]+)'/g)].map((mt) => mt[1]);
+	assert.equal(keys.length, VOICE_CUE_IDS.length * 2);
+	for (const key of keys) {
+		assert.ok(enRecord[key]?.trim(), `Missing en catalogue entry ${key}`);
+	}
 });

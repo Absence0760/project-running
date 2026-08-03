@@ -37,6 +37,15 @@
 		type WeightGoal,
 	} from '$lib/nutrition/nutrition_targets';
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
+	import {
+		VOICE_CUE_IDS,
+		isVoiceCueEnabled,
+		readVoiceCueMap,
+		setVoiceCueEnabled,
+		type VoiceCueId,
+		type VoiceCueMap,
+	} from '$lib/settings/voice_cues';
+	import type { MessageKey } from '$lib/i18n/messages';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -95,6 +104,28 @@
 	// not 1 km. audit-findings 2026-05-30 Medium [regional].
 	const KM_PER_MI = 1.609344;
 	let voiceFeedbackIntervalKm = $state('1.0');
+	// Sparse map of cue id -> bool; an absent id is ON (voice_cues.ts).
+	let voiceCueTypes = $state<VoiceCueMap>({});
+	// Keyed by VoiceCueId so the compiler refuses a cue id with no label —
+	// a missing row would be a cue the runner can never turn off.
+	const VOICE_CUE_LABELS: Record<VoiceCueId, { label: MessageKey; hint: MessageKey }> = {
+		splits: { label: 'prefs.cue.splits', hint: 'prefs.cue.splitsHint' },
+		start_finish: { label: 'prefs.cue.startFinish', hint: 'prefs.cue.startFinishHint' },
+		off_route: { label: 'prefs.cue.offRoute', hint: 'prefs.cue.offRouteHint' },
+		pace_alerts: { label: 'prefs.cue.paceAlerts', hint: 'prefs.cue.paceAlertsHint' },
+		workout_steps: { label: 'prefs.cue.workoutSteps', hint: 'prefs.cue.workoutStepsHint' },
+		cutoff_catch_up: { label: 'prefs.cue.cutoffCatchUp', hint: 'prefs.cue.cutoffCatchUpHint' },
+		marker_targets: { label: 'prefs.cue.markerTargets', hint: 'prefs.cue.markerTargetsHint' },
+		phase_transitions: {
+			label: 'prefs.cue.phaseTransitions',
+			hint: 'prefs.cue.phaseTransitionsHint',
+		},
+	};
+
+	function toggleVoiceCue(id: VoiceCueId, on: boolean) {
+		voiceCueTypes = setVoiceCueEnabled(voiceCueTypes, id, on);
+		autoSave({ voice_cue_types: voiceCueTypes });
+	}
 	// Persona-hunt Round 3 finding Woman #2. Default true for back-
 	// compat — every existing account stays findable until they
 	// actively opt out via this toggle. The `search_user_profiles`
@@ -393,6 +424,7 @@
 			voiceFeedbackIntervalKm = (
 				effective<number>(settings, 'voice_feedback_interval_km', 1.0) ?? 1.0
 			).toString();
+			voiceCueTypes = readVoiceCueMap(effective<unknown>(settings, 'voice_cue_types'));
 			discoverableInSearch = effective(settings, 'discoverable_in_search', true) ?? true;
 			discoverableNearby = effective(settings, 'discoverable_nearby', false) ?? false;
 			if (NEARBY_RUNNERS_ENABLED) {
@@ -778,6 +810,24 @@
 							onblur={() => autoSave({ voice_feedback_interval_km: parseFloat(voiceFeedbackIntervalKm) || 1.0 })}
 						/>
 					</label>
+					<fieldset class="cue-list" data-testid="voice-cue-types">
+						<legend class="label-text">{m('prefs.voiceCueTypes')}</legend>
+						<p class="section-hint">{m('prefs.voiceCueTypesHint')}</p>
+						{#each VOICE_CUE_IDS as cueId (cueId)}
+							<label class="checkbox-row">
+								<input
+									type="checkbox"
+									data-testid="voice-cue-{cueId}"
+									checked={isVoiceCueEnabled(voiceCueTypes, cueId)}
+									onchange={(e) => toggleVoiceCue(cueId, e.currentTarget.checked)}
+								/>
+								<span>
+									{m(VOICE_CUE_LABELS[cueId].label)}
+									<span class="hint">{m(VOICE_CUE_LABELS[cueId].hint)}</span>
+								</span>
+							</label>
+						{/each}
+					</fieldset>
 				{/if}
 				<label id="weekly-mileage-goal">
 					<span class="label-text">{m('prefs.weeklyMileageGoal')}</span>
@@ -1362,6 +1412,18 @@
 		margin-top: 0.2rem;
 	}
 	.label-text { display: block; font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: var(--space-xs); }
+	.cue-list {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-md);
+		margin: 0;
+		min-inline-size: 0;
+	}
+	.cue-list .section-hint { margin-bottom: var(--space-xs); font-size: 0.8rem; }
 	.nearby-area { margin-top: var(--space-sm); }
 	.nearby-area .hint { display: block; font-size: 0.78rem; color: var(--color-text-secondary); margin: 0 0 var(--space-xs); }
 	.nearby-area-row { display: flex; flex-wrap: wrap; gap: var(--space-sm); align-items: center; }
