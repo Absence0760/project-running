@@ -118,6 +118,33 @@ void main() {
       expect(projectTrack(const [], 100, 100), isEmpty);
       expect(projectTrack([_w(0, 0)], 100, 100), isEmpty);
     });
+
+    test('a track across the antimeridian fits its own width', () {
+      // A 0.01° x 0.01° box straddling the line. Its longitudes span
+      // 0.01°, not the 359.99° a raw min/max reads, so the fit is the
+      // same one the identical box a degree west of the line gets.
+      final across = [
+        _w(0, 179.995),
+        _w(0.01, 179.995),
+        _w(0.01, -179.995),
+        _w(0, -179.995),
+      ];
+      final west = [
+        _w(0, 178.995),
+        _w(0.01, 178.995),
+        _w(0.01, 179.005),
+        _w(0, 179.005),
+      ];
+      final a = projectTrack(across, 100, 100);
+      final w = projectTrack(west, 100, 100);
+      expect(a, hasLength(4));
+      for (var i = 0; i < a.length; i++) {
+        expect(a[i].dx, closeTo(w[i].dx, 1e-6));
+        expect(a[i].dy, closeTo(w[i].dy, 1e-6));
+      }
+      // And the box actually uses the panel rather than collapsing to a dot.
+      expect((a[2].dx - a[0].dx).abs(), greaterThan(50));
+    });
   });
 
   group('TrackPreview — map-backed render path (static MapTiler PNG)', () {

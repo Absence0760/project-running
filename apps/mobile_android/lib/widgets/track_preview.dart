@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../geo.dart' show unwrapLonDeg;
 import '../route_simplify.dart' show simplifyTrack;
 
 /// Compact static thumbnail of a GPS track. Mirrors
@@ -425,13 +426,18 @@ class _TrackPreviewPainter extends CustomPainter {
 List<Offset> projectTrack(List<Waypoint> points, double vbW, double vbH,
     {double pad = 4}) {
   if (points.length < 2) return const [];
+  // Longitudes are expressed on the first point's side of the antimeridian,
+  // so a track that crosses it spans its own width instead of ~360° (which
+  // collapsed the fitted scale to a dot). Identity inside a hemisphere.
+  final refLng = points.first.lng;
   double minLat = points.first.lat, maxLat = points.first.lat;
-  double minLng = points.first.lng, maxLng = points.first.lng;
+  double minLng = refLng, maxLng = refLng;
   for (final p in points) {
     if (p.lat < minLat) minLat = p.lat;
     if (p.lat > maxLat) maxLat = p.lat;
-    if (p.lng < minLng) minLng = p.lng;
-    if (p.lng > maxLng) maxLng = p.lng;
+    final lng = unwrapLonDeg(refLng, p.lng);
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
   }
   final midLat = (minLat + maxLat) / 2;
   final lngScale = cos(midLat * pi / 180).abs();
@@ -445,7 +451,7 @@ List<Offset> projectTrack(List<Waypoint> points, double vbW, double vbH,
   return [
     for (final p in points)
       Offset(
-        offX + (p.lng - minLng) * lngScale * scale,
+        offX + (unwrapLonDeg(refLng, p.lng) - minLng) * lngScale * scale,
         offY + (maxLat - p.lat) * scale,
       ),
   ];
