@@ -58,7 +58,7 @@ src/
     settings/settings.ts     # `loadSettings()` + `effective<T>()` helpers over user_settings + user_device_settings. Now offline-first via settings_cache.ts (cache-first read, write-through, drain-on-refresh pending queue, sign-out drop). Mirrors mobile SettingsService — decisions §72 / §79.
     settings/settings_cache.ts  # `LocalStoragePrefsCache` + `InMemoryPrefsCache` (test seam) + pure `applyPrefsChanges`. User- + device-scoped keys (`settings_cache_universal_<userId>`, `..._device_<userId>_<deviceId>`, `..._pending_<userId>_<deviceId>`). 40-test contract in `settings_cache.test.ts`.
     settings/theme.ts        # light/dark/auto theme toggle, persisted in localStorage
-    settings/voice_cues.ts   # `voice_cue_types` bag key: the cue id list + sparse-map read/merge helpers (absent id = ON). Backs the per-cue toggles on /settings/preferences. Ids are a wire contract with the Dart `VoiceCue` class — voice_cues.test.ts reads preferences.dart and fails on drift. Decisions §295 + §468.
+    settings/voice_cues.ts   # `voice_cue_types` bag key: the cue id list + sparse-map read/merge helpers (absent id = ON). Backs the per-cue toggles on /settings/preferences. Ids are a wire contract with the Dart `VoiceCue` class — voice_cues.test.ts reads preferences.dart and fails on drift. Decisions §295 + §469.
     training/training.ts     # VDOT, Riegel, plan generator, week phasing, predictionConfidence (race-predictor data-quality grade)
     training/training.test.ts  # node:test suite for the training engine — `npx tsx --test`
     training/plan_adherence.ts  # pure weeklyDrift (>20% over/under plan) + missedWorkoutAdvice (make-up/skip a missed long run). Web-first; mounted on /plans/[id]. 11 unit tests.

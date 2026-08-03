@@ -126,7 +126,7 @@ The 1-second elapsed-time timer inside `begin()` emits snapshots unconditionally
       transition cue (race_phases plan built at _begin). Every cue type is
       individually toggleable via the voice_cue_types map (settings.md) —
       editable here or on web /settings/preferences, which writes the
-      universal bag so the choice reaches this phone (decisions.md § 468);
+      universal bag so the choice reaches this phone (decisions.md § 469);
       the pace alert speaks the correction amount and, under an active
       phase plan, re-anchors to the phase's target pace
     - Every 10s: _saveInProgress writes current state to runs/in_progress.json
