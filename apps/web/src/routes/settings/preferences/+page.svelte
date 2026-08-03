@@ -39,6 +39,7 @@
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import {
 		VOICE_CUE_IDS,
+		VOICE_FEEDBACK_ENABLED_DEFAULT,
 		isVoiceCueEnabled,
 		readVoiceCueMap,
 		setVoiceCueEnabled,
@@ -95,7 +96,7 @@
 	// the weekly digest. Opting into one is never consent to the other.
 	let emailLifecycleDrip = $state(false);
 	let stravaAutoShare = $state(false);
-	let voiceFeedbackEnabled = $state(false);
+	let voiceFeedbackEnabled = $state(VOICE_FEEDBACK_ENABLED_DEFAULT);
 	// 'full' (default) speaks every cue; 'minimal' drops the chatty in-rep
 	// progress + pace-drift nudges on the recording clients (round-5 older).
 	let voiceFeedbackVerbosity = $state('full');
@@ -418,7 +419,9 @@
 			emailWeeklyDigest = effective<string>(settings, 'email_weekly_digest', 'off') === 'on';
 			emailLifecycleDrip = effective<string>(settings, 'email_lifecycle_drip', 'off') === 'on';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
-			voiceFeedbackEnabled = effective(settings, 'voice_feedback_enabled', false) ?? false;
+			voiceFeedbackEnabled =
+				effective(settings, 'voice_feedback_enabled', VOICE_FEEDBACK_ENABLED_DEFAULT) ??
+				VOICE_FEEDBACK_ENABLED_DEFAULT;
 			voiceFeedbackVerbosity =
 				effective<string>(settings, 'voice_feedback_verbosity', 'full') ?? 'full';
 			voiceFeedbackIntervalKm = (
