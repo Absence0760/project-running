@@ -29,9 +29,11 @@ inked pixels; whether the glyphs are the right glyphs is a host-test claim
 
 A frame under an alert banner is rejected and re-shot, detected on the captured
 pixels (the banner is a solid inverse-video band over the two hero rows) rather
-than by waiting for `record: alert cleared` — past roughly 100 s the sim's
-shortened cadences go banner-to-banner and that line stops arriving, which is
-exactly when a 30-screen walk is still running.
+than by waiting for `record: alert cleared`. Both sessions boot `--no-alerts`
+and the engine now guarantees a gap between banners (decisions § 465), so the
+re-shoot loop has windows to wait in — but the log says what the RECORD task
+believes and this walk's subject is what reached the PANEL, which is a frame
+caught one repaint behind the line.
 
 The PNGs are the panel only (168x144, no bezel) and pure 1-bit black/white —
 `DumpFrame`'s own output, unretouched, so they are honest about what the glass
@@ -107,9 +109,10 @@ def png_from_ppm(ppm: Path, png: Path):
 # An alert banner is a solid inverse-video band across the two hero rows
 # (168x32), so a bannered frame inks far more of that band than any hero
 # numeral can. Measured on the captured pixels rather than inferred from the
-# log: `ci_smoke.wait_for_no_alert` waits for `record: alert cleared`, and the
-# sim's shortened cadences go banner-to-banner past roughly 100 s so that line
-# stops arriving — which is exactly when a 30-screen walk is still running.
+# log, and it stays that way now that the engine guarantees a quiet gap
+# (`watch_core::alerts::ALERT_QUIET_S`): the log says what the RECORD task
+# believes, and this walk's subject is what reached the PANEL — a frame caught
+# one repaint behind a cleared banner is exactly the case a log read cannot see.
 HERO_BAND_ROWS = 2
 CELL_H = 16
 BANNER_INK_FRACTION = 0.5
