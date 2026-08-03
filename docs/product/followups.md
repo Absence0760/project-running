@@ -187,24 +187,35 @@ pruned so the reasoning stays next to the finding it answers.
 
 [decisions.md § 468](../architecture/decisions.md) routed every planar frame in
 the five TS↔Dart route helpers named by issue #664 through the shared
-`geo` longitude normalisation. Four more sites still difference two raw
-longitudes to produce a planar value. None is a lockstep pair, each is a
-separate behaviour change with its own test surface, and folding them into
-§ 468 would have broken its "no existing pinned value moves" bar:
+`geo` longitude normalisation. Four more sites still differenced two raw
+longitudes to produce a planar value. **ALL FOUR RESOLVED 2026-08-03**
+([decisions.md § 473](../architecture/decisions.md)), each as its own
+behaviour change with its own pinning tests, and — per § 468's bar — with
+no existing pinned value moved:
 
-- [ ] **`apps/web/src/lib/routes/routing_quality.ts`** (lines ~86/88) — the
-  perpendicular-offset frame for grading an OSRM result against the tapped
-  waypoints. Web-only, no Dart twin.
-- [ ] **`apps/web/src/lib/routes/nearest_track_point.ts`** (lines ~70/118/136) —
-  the spatial grid is built from a raw `maxLng - minLng` span, so a track
-  crossing 180° degenerates to a single column. Web-only.
-- [ ] **`apps/web/src/lib/routes/route_loop.ts`** (line ~117) — the synthetic
-  perpendicular curve for a point-to-point generated route. Web-only.
-- [ ] **`apps/web/src/lib/components/RunTrackPreview.svelte`** (`isTrackMeaningful`,
-  line ~175) — the 5 m "is this track worth drawing" bbox diagonal. Its Dart
-  counterpart `isTrackRenderable` in `widgets/track_preview.dart` has the same
-  span. Failure mode is benign (a track across the line always reads as
-  meaningful), which is why it is last.
+- [x] **`apps/web/src/lib/routes/routing_quality.ts`** — the perpendicular-offset
+  frame now takes its deltas through `lonDeltaDeg`. The raw frame read a
+  waypoint just across the line as ~40,000 km off the snapped path (a spurious
+  deviation warning on every antimeridian route) and a point ON a crossing
+  segment as ~87 m off it. Web-only, as surveyed.
+- [x] **`apps/web/src/lib/routes/nearest_track_point.ts`** — the spatial grid
+  now unwraps longitudes onto the first coordinate's side. Worse than the
+  degenerate-column the survey described: the broken frame also made the
+  ring-termination bound unsound, so a tap beside the line could return the
+  WRONG vertex (a ~430 m same-side decoy over the true ~53 m neighbour across
+  the line), pinned by a deterministic test. Web-only, as surveyed.
+- [x] **`apps/web/src/lib/routes/route_loop.ts`** — the synthetic-curve delta is
+  folded and every emitted longitude wrapped back into range (the loop branch
+  too — a radial ring seeded beside the line used to emit lng > 180). The
+  survey's "web-only" was WRONG: `route_loop.dart` declares lockstep in its own
+  header and carried the same defect — on mobile a debug build crashed outright
+  on latlong2's longitude-range assert. Fixed on web + both mobile twins.
+- [x] **`RunTrackPreview.svelte`'s 5 m span** — extracted to `isTrackRenderable`
+  in `routes/track_projection.ts` (the Dart twin's name and placement beside
+  `projectTrack`) and unwrapped on both platforms alongside the Dart
+  `isTrackRenderable`. The survey's "benign" was backwards in the one case the
+  gate exists for: ~2 m of stationary jitter AT the line read as a 359.99° span
+  and PASSED the gate, drawing exactly the meaningless dot it suppresses.
 
-Everything trigonometric is unaffected and needs no work: `sin`/`cos` are
+Everything trigonometric is unaffected and needed no work: `sin`/`cos` are
 periodic, so haversine distances and great-circle bearings were always right.
