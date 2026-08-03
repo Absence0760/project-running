@@ -4,6 +4,8 @@
 // start/end, NaN target). Keeping the test surface in sync with
 // the web side means a regression on either platform fails loud.
 
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -151,6 +153,57 @@ void main() {
         end.longitude,
       );
       expect(pathLen, greaterThan(directDist));
+    });
+
+    test('point-to-point across the antimeridian keeps the curve local', () {
+      // ~1.9 km apart, across 180°. The raw longitude delta read
+      // -359.98°, which flung the interior waypoints thousands of km
+      // away (and, in a debug build, tripped LatLng's range assert).
+      const p2pStart = LatLng(38.9, 179.99);
+      const p2pEnd = LatLng(38.9, -179.99);
+      final wps = generateLoopWaypoints(
+        start: p2pStart,
+        end: p2pEnd,
+        targetDistanceMetres: 5000,
+      );
+      expect(wps.first.longitude, p2pStart.longitude);
+      expect(wps.last.longitude, p2pEnd.longitude);
+      for (final w in wps) {
+        expect(w.longitude, inInclusiveRange(-180, 180));
+        final d = haversineMetres(
+          p2pStart.latitude,
+          p2pStart.longitude,
+          w.latitude,
+          w.longitude,
+        );
+        expect(d, lessThan(10000), reason: 'waypoint flung ${d.round()}m');
+      }
+    });
+
+    test('a loop seeded beside the antimeridian emits in-range longitudes', () {
+      const loopStart = LatLng(38.9, 179.9999);
+      final wps = generateLoopWaypoints(
+        start: loopStart,
+        targetDistanceMetres: 5000,
+        radialSeedRad: 0,
+      );
+      final expectedRadiusM = (5000 * kDefaultScaleFactor) / (2 * math.pi);
+      for (final w in wps) {
+        expect(w.longitude, inInclusiveRange(-180, 180));
+      }
+      for (var i = 1; i < wps.length - 1; i++) {
+        final d = haversineMetres(
+          loopStart.latitude,
+          loopStart.longitude,
+          wps[i].latitude,
+          wps[i].longitude,
+        );
+        expect(
+          (d - expectedRadiusM).abs(),
+          lessThan(expectedRadiusM * 0.05),
+          reason: 'waypoint $i expected ~${expectedRadiusM}m, got ${d}m',
+        );
+      }
     });
   });
 
