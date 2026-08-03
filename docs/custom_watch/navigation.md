@@ -109,6 +109,14 @@ mode is armed the auto-lap fires on the corral bell instead of at 1 km, so a
 runner who marks nothing still gets one lap per hour and the loop count
 cannot silently merge two loops into one.
 
+**Nothing resets the along-course position, by design (§463).** A press is not
+what tells the nav projector a new lap began — a course whose ends meet has a
+*circular* along-axis, so the second traversal restarts at zero on its own,
+whether the runner lapped, marked nothing, or stopped and restarted the run at
+the line. That is deliberate: every button- or state-shaped reset event is only
+ever a proxy for the runner passing the point where the axis wraps, and each one
+of them misses a case the others catch.
+
 ## The page cycle (§286 order, §284 filter)
 
 The paging pair walks this ring the way it is drawn — the ring renders
