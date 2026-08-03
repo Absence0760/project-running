@@ -101,12 +101,20 @@ function setConsentAccepted() {
 
 // The PeriodSummary modal's four stat cards in DOM order: Distance, Time,
 // Runs, Avg pace (PeriodSummary.svelte `.stats > .stat-card` order).
-async function modalStatValue(page: Page, label: string): Promise<string> {
+//
+// This asserts rather than returning a snapshot: the all-time tab is fed a
+// lazily-loaded full history (decisions §468), so a one-shot textContent()
+// read can catch the em-dash the card shows while that resolves. toHaveText
+// retries until the value settles.
+async function expectModalStat(
+	page: Page,
+	label: string,
+	expected: string | RegExp
+): Promise<void> {
 	const card = page
 		.locator('.modal .stats .stat-card')
 		.filter({ has: page.locator('.stat-label', { hasText: new RegExp(`^${label}$`) }) });
-	await expect(card).toBeVisible({ timeout: 10_000 });
-	return ((await card.locator('.stat-value').textContent()) ?? '').trim();
+	await expect(card.locator('.stat-value')).toHaveText(expected, { timeout: 15_000 });
 }
 
 test.describe('dashboard drilldown journey', () => {
@@ -224,13 +232,13 @@ test.describe('dashboard drilldown journey', () => {
 				).toHaveText('Week');
 
 				// The four computed stat cards reflect THIS WEEK's three runs.
-				expect(await modalStatValue(page, 'Distance')).toBe(kmLabel(weekDistance));
+				await expectModalStat(page, 'Distance', kmLabel(weekDistance));
 				// formatDuration(8100) = 2:15:00 (H:MM:SS).
-				expect(await modalStatValue(page, 'Time')).toBe('2:15:00');
-				expect(await modalStatValue(page, 'Runs')).toBe(String(weekCount));
+				await expectModalStat(page, 'Time', '2:15:00');
+				await expectModalStat(page, 'Runs', String(weekCount));
 				// Avg pace is rendered with a /km suffix; just assert it's a
 				// real m:ss value, not the empty-state em dash.
-				expect(await modalStatValue(page, 'Avg pace')).toMatch(/^\d{1,2}:\d{2} \/km$/);
+				await expectModalStat(page, 'Avg pace', /^\d{1,2}:\d{2} \/km$/);
 
 				// The run list inside the modal lists exactly this week's runs.
 				await expect(modal.locator('.run-list .run-row')).toHaveCount(weekCount);
@@ -249,8 +257,8 @@ test.describe('dashboard drilldown journey', () => {
 
 				// All-time distance = week runs + the older run.
 				const allDistance = weekDistance + OLDER_RUN.distance_m; // 39_000
-				expect(await modalStatValue(page, 'Distance')).toBe(kmLabel(allDistance));
-				expect(await modalStatValue(page, 'Runs')).toBe(String(allCount));
+				await expectModalStat(page, 'Distance', kmLabel(allDistance));
+				await expectModalStat(page, 'Runs', String(allCount));
 				// And the list now carries all four runs — the toggle drove the
 				// derivation, not just the heading.
 				await expect(modal.locator('.run-list .run-row')).toHaveCount(allCount);
@@ -276,12 +284,10 @@ test.describe('dashboard drilldown journey', () => {
 					modal.locator('.type-toggle .toggle-btn.active')
 				).toHaveText('all time');
 
-				expect(await modalStatValue(page, 'Runs')).toBe(String(allCount));
+				await expectModalStat(page, 'Runs', String(allCount));
 				// All-time distance again = 39 km; the longest single run (14 km)
 				// shows up in the run list as a row.
-				expect(await modalStatValue(page, 'Distance')).toBe(
-					kmLabel(weekDistance + OLDER_RUN.distance_m)
-				);
+				await expectModalStat(page, 'Distance', kmLabel(weekDistance + OLDER_RUN.distance_m));
 				await expect(
 					modal.locator('.run-list .run-row .run-dist', {
 						hasText: kmLabel(longestAllMetres),
