@@ -384,6 +384,65 @@ mod tests {
     }
 
     #[test]
+    fn walking_a_loop_course_twice_never_fires_a_second_lap_alert() {
+        // The backyard-ultra path end to end: the same 6.7 km loop twice
+        // without a course push between them, feeding each fix's along-distance
+        // back in as the next anchor exactly as the nav task does. The anchor
+        // ends lap one at the full loop length and lap two starts at the
+        // corral, which used to put the whole first half of every lap on the
+        // finish segment — `! OFF CRS` latched, `along_m` a lap ahead, and
+        // every route-position consumer (cut-off ETA, roadbook, fuel, sleep
+        // station) computing from the far end of the course.
+        let side = 6_706.0 / 4.0;
+        let deg = |m: f64| m / (111_320.0 * libm::cos(40.015 * core::f64::consts::PI / 180.0));
+        let corner = |e: f64, n: f64| CoursePoint {
+            lat_deg: 40.015 + n / 110_574.0,
+            lon_deg: -105.2705 + deg(e),
+        };
+        let course = Course::from_points(&[
+            corner(0.0, 0.0),
+            corner(side, 0.0),
+            corner(side, side),
+            corner(0.0, side),
+            corner(0.0, 0.0),
+        ])
+        .unwrap();
+        assert!(course.is_loop());
+        let cues = course_cues(&course);
+        let mut alert = OffCourseAlert::new();
+        let mut prev: Option<f64> = None;
+        let mut laps_seen = 0;
+        for lap in 0..2 {
+            let pts: Vec<CoursePoint, 8> = Vec::from_slice(course.points()).unwrap();
+            for w in pts.windows(2) {
+                for s in 0..20 {
+                    let f = s as f64 / 20.0;
+                    let lat = w[0].lat_deg + (w[1].lat_deg - w[0].lat_deg) * f;
+                    let lon = w[0].lon_deg + (w[1].lon_deg - w[0].lon_deg) * f;
+                    let out = project_fix(&course, &mut alert, prev, &cues, lat, lon).unwrap();
+                    assert!(
+                        !out.went_off_course && !out.status.alerting,
+                        "lap {} alerted at {} m off",
+                        lap,
+                        out.status.off_m
+                    );
+                    prev = Some(out.status.along_m);
+                }
+            }
+            laps_seen += 1;
+        }
+        assert_eq!(laps_seen, 2);
+        // Ends where it started, a quarter of the way from the last corner
+        // round to the line — not a lap's worth of along-distance past it.
+        let along = prev.unwrap();
+        assert!(
+            along <= course.total_m(),
+            "along {} ran past the loop",
+            along
+        );
+    }
+
+    #[test]
     fn an_off_course_fix_carries_the_bearing_back_toward_the_course() {
         // A fix due EAST of the course's north-south leg (near its top, so
         // that leg — not the east-west one below — is nearest): the way back
