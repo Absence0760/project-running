@@ -182,3 +182,29 @@ pruned so the reasoning stays next to the finding it answers.
 - [x] **`exercise_history` truncates reps before the Epley estimate.** RESOLVED 2026-07-25. The Dart twin now passes `reps` through unmodified, matching the TS twin and the non-truncation contract `gym_prs` declares (`estimatedOneRepMax` already takes a `num`). A 5.5-rep set at 100 kg scores 118.3 on both sides instead of 116.7 on one. Pinned by a mirror test each (14 apiece).
 - [x] **`LocalRunStore._readSyncedIdsSidecar` fails open to "everything unsynced".** RESOLVED 2026-07-25 ([decisions.md § 299](../architecture/decisions.md)). A damaged sidecar is now distinguished from an absent one and resolves through a fixed authority order (sidecar → `index.json`'s cached flag → the legacy per-run flag, the last only when no sidecar ever existed). Deliberately **not** the route store's presumed-synced default: for runs a skipped upload can strand the only copy of a recorded run, so they re-upload instead. Fixing it surfaced the ordering bug underneath — the slow-path repair called `_persistSyncedIds()` before `_summaries` was rebuilt, and that prunes against `_summaries`, so every recovered id was dropped and an empty sidecar written; the legacy migration path had therefore never worked. Pinned across five corruption shapes + the no-index and legacy-migration paths.
 - [x] **`hydration`'s exercise add-on has no upper clamp.** RESOLVED 2026-07-25 ([decisions.md § 300](../architecture/decisions.md)). The add-on now stops scaling at 240 exercise minutes (1.92 L), so a 12 h ultra no longer asks for ~8.2 L and a 24 h effort ~14 L. Shipped rather than parked because a ceiling is the conservative direction — the unbounded term extrapolated a daily-baseline heuristic far past its range and printed a hyponatremia risk as a goal, and long-effort fluid is already modelled per leg by `fuel_plan`. **The specific cap is a product call the owner can tune**; a per-athlete sweat rate is the better long-term answer. Twin-pinned (11 tests each).
+
+## Antimeridian planar frames outside the parity pairs (2026-08-03)
+
+[decisions.md § 468](../architecture/decisions.md) routed every planar frame in
+the five TS↔Dart route helpers named by issue #664 through the shared
+`geo` longitude normalisation. Four more sites still difference two raw
+longitudes to produce a planar value. None is a lockstep pair, each is a
+separate behaviour change with its own test surface, and folding them into
+§ 468 would have broken its "no existing pinned value moves" bar:
+
+- [ ] **`apps/web/src/lib/routes/routing_quality.ts`** (lines ~86/88) — the
+  perpendicular-offset frame for grading an OSRM result against the tapped
+  waypoints. Web-only, no Dart twin.
+- [ ] **`apps/web/src/lib/routes/nearest_track_point.ts`** (lines ~70/118/136) —
+  the spatial grid is built from a raw `maxLng - minLng` span, so a track
+  crossing 180° degenerates to a single column. Web-only.
+- [ ] **`apps/web/src/lib/routes/route_loop.ts`** (line ~117) — the synthetic
+  perpendicular curve for a point-to-point generated route. Web-only.
+- [ ] **`apps/web/src/lib/components/RunTrackPreview.svelte`** (`isTrackMeaningful`,
+  line ~175) — the 5 m "is this track worth drawing" bbox diagonal. Its Dart
+  counterpart `isTrackRenderable` in `widgets/track_preview.dart` has the same
+  span. Failure mode is benign (a track across the line always reads as
+  meaningful), which is why it is last.
+
+Everything trigonometric is unaffected and needs no work: `sin`/`cos` are
+periodic, so haversine distances and great-circle bearings were always right.
