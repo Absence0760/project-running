@@ -445,6 +445,7 @@ class LocalRouteStore extends ChangeNotifier {
     final prevOwner = existed ? _pendingRemoteDeletes[routeId] : null;
     if (existed && prevOwner == ownerUserId) return;
     _pendingRemoteDeletes[routeId] = ownerUserId;
+    _clearedRemoteDeletes.remove(routeId);
     await _persistPendingRemoteDeletes();
     notifyListeners();
   }
@@ -461,6 +462,7 @@ class LocalRouteStore extends ChangeNotifier {
       final prevOwner = existed ? _pendingRemoteDeletes[id] : null;
       if (!existed || prevOwner != ownerUserId) {
         _pendingRemoteDeletes[id] = ownerUserId;
+        _clearedRemoteDeletes.remove(id);
         changed = true;
       }
     }
@@ -478,29 +480,60 @@ class LocalRouteStore extends ChangeNotifier {
     // which would silently skip the persistence + notify for those.
     if (!_pendingRemoteDeletes.containsKey(routeId)) return;
     _pendingRemoteDeletes.remove(routeId);
+    _clearedRemoteDeletes.add(routeId);
     await _persistPendingRemoteDeletes();
     notifyListeners();
   }
 
+  /// Ids this process has cleared from [_pendingRemoteDeletes] since its
+  /// last successful sidecar write. Needed because the merge can't read a
+  /// removal out of absence — see [_persistPendingRemoteDeletes]. Mirrors
+  /// `LocalRunStore._clearedRemoteDeletes` (decisions.md § 303).
+  final Set<String> _clearedRemoteDeletes = <String>{};
+
+  /// Merge, never replace, under the cross-process sidecar lock — see
+  /// decisions.md § 303. This sidecar was added after § 303 landed and
+  /// originally used a whole-map overwrite; extended here to the same
+  /// read-merge-write-under-lock shape the run store's equivalent sidecar
+  /// and this store's other three sidecars already use, for the same
+  /// reason: `background_sync.dart` runs a second `LocalRouteStore` over
+  /// this directory, and a dropped entry here is a route delete that never
+  /// retries.
+  ///
+  /// Additions always win; removals travel via [_clearedRemoteDeletes]
+  /// rather than by absence, because absence can't distinguish "I cleared
+  /// this" from "the other instance queued this while I was running".
   Future<void> _persistPendingRemoteDeletes() async {
-    try {
-      if (_pendingRemoteDeletes.isEmpty &&
-          _pendingRemoteDeletesFile.existsSync()) {
-        await _pendingRemoteDeletesFile.delete();
-        return;
+    await _withSidecarLock(_pendingRemoteDeletesFilename, () async {
+      final disk =
+          await _readPendingRemoteDeletes() ?? const <String, String?>{};
+      final merged = <String, String?>{
+        for (final e in disk.entries)
+          if (!_clearedRemoteDeletes.contains(e.key)) e.key: e.value,
+      }..addAll(_pendingRemoteDeletes);
+      try {
+        if (merged.isEmpty) {
+          if (_pendingRemoteDeletesFile.existsSync()) {
+            await _pendingRemoteDeletesFile.delete();
+          }
+          _clearedRemoteDeletes.clear();
+          return;
+        }
+        await writeJsonAtomic(_pendingRemoteDeletesFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'deletes': merged,
+        });
+        _clearedRemoteDeletes.clear();
+      } catch (e) {
+        debugPrint(
+            'Failed to persist pending_remote_route_deletes sidecar: $e');
       }
-      await writeJsonAtomic(_pendingRemoteDeletesFile, {
-        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
-        'deletes': _pendingRemoteDeletes,
-      });
-    } catch (e) {
-      debugPrint(
-          'Failed to persist pending_remote_route_deletes sidecar: $e');
-    }
+    });
   }
 
   Future<void> _loadPendingRemoteDeletes() async {
     _pendingRemoteDeletes.clear();
+    _clearedRemoteDeletes.clear();
     final loaded = await _readPendingRemoteDeletes();
     if (loaded != null) _pendingRemoteDeletes.addAll(loaded);
   }

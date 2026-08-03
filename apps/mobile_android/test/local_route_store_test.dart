@@ -745,6 +745,31 @@ void main() {
       expect(stale.existsSync(), isFalse);
       expect(fresh.existsSync(), isTrue);
     });
+
+    // Issue #674 added this sidecar after H2 shipped; it started as an
+    // unlocked whole-file replace like the other three used to be. Mirrors
+    // `LocalRunStore`'s "a background drain cannot wipe a remote-delete
+    // queued in the foreground" coverage.
+    test('a background drain cannot wipe a route delete queued in the '
+        'foreground', () async {
+      final foreground = LocalRouteStore();
+      await foreground.init(overrideDirectory: tempDir);
+      final background = LocalRouteStore();
+      await background.init(overrideDirectory: tempDir);
+
+      await foreground.markPendingRemoteDelete('orphan-fg', ownerUserId: 'u1');
+      // The background store queues and drains its own delete. Its map is
+      // now empty — and an empty map used to delete the whole file.
+      await background.markPendingRemoteDelete('orphan-bg', ownerUserId: 'u1');
+      await background.clearPendingRemoteDelete('orphan-bg');
+
+      final reloaded = LocalRouteStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.pendingRemoteDeleteIds, contains('orphan-fg'),
+          reason: 'a queued remote delete is unrecoverable if it is lost');
+      expect(reloaded.pendingRemoteDeleteIds, isNot(contains('orphan-bg')),
+          reason: 'the background drain\'s own clear must still stick');
+    });
   });
 
   group('lazy init resilience — _ensureDir', () {
@@ -1034,4 +1059,5 @@ void main() {
       expect(store.pendingRemoteDeleteIds, {'queued-1'});
     });
   });
+
 }
