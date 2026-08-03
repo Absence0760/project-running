@@ -357,20 +357,20 @@ mod imp {
     /// instead of mere radio range), with FACTORY ERASE (§378) remaining the
     /// scorched-earth fallback that also clears `BND1`.
     pub struct Bonder {
-        peer: Cell<Option<Peer>>,
-        /// The `state::bond_erase_gen()` `peer` was stored under. A FACTORY
-        /// ERASE bumps that counter, so a stale generation here means the
-        /// wearer wiped this bond and the keys below must stop being served —
-        /// the firmware never reboots, so nothing else would retire them.
-        peer_gen: Cell<u32>,
+        /// The one remembered phone, behind the erase-generation check that
+        /// retires it. A [`pairing::BondCell`] rather than a bare `Cell`
+        /// because the check is not optional and a call site that skipped it
+        /// served a wiped owner's keys twice before the type existed — the
+        /// FACTORY ERASE bumps the generation and the firmware never reboots,
+        /// so nothing else would retire them.
+        peer: pairing::BondCell<Peer>,
         sys_attrs: RefCell<heapless::Vec<u8, 64>>,
     }
 
     impl Default for Bonder {
         fn default() -> Self {
             Bonder {
-                peer: Cell::new(None),
-                peer_gen: Cell::new(0),
+                peer: pairing::BondCell::new(),
                 sys_attrs: RefCell::new(heapless::Vec::new()),
             }
         }
@@ -378,18 +378,18 @@ mod imp {
 
     impl Bonder {
         /// The stored peer, or `None` once a factory erase has retired it.
-        /// Every read of `peer` goes through here — reading the field directly
-        /// is what let an erased watch keep serving the previous owner.
         fn live_peer(&self) -> Option<Peer> {
-            pairing::bond_is_live(self.peer_gen.get(), state::bond_erase_gen())
-                .then(|| self.peer.get())
-                .flatten()
+            self.peer.live(state::bond_erase_gen())
+        }
+
+        /// Whether a live bond is held.
+        fn is_bonded(&self) -> bool {
+            self.peer.is_live(state::bond_erase_gen())
         }
 
         /// Adopt `peer` as of the current erase generation.
         fn set_peer(&self, peer: Option<Peer>) {
-            self.peer.set(peer);
-            self.peer_gen.set(state::bond_erase_gen());
+            self.peer.set(peer, state::bond_erase_gen());
         }
     }
 
@@ -438,10 +438,7 @@ mod imp {
         /// takeover rather than a re-pair.
         fn can_bond(&self, _conn: &Connection) -> bool {
             let now_s = Instant::now().as_secs() as u32;
-            let ok = pairing::may_bond(
-                self.live_peer().is_some(),
-                state::pairing_window_open(now_s),
-            );
+            let ok = pairing::may_bond(self.is_bonded(), state::pairing_window_open(now_s));
             if !ok {
                 PAIRING_REFUSED.signal(());
             }
@@ -465,10 +462,7 @@ mod imp {
         /// interaction, since there is no passkey face to interact with.
         fn request_mitm_protection(&self, _conn: &Connection) -> bool {
             let now_s = Instant::now().as_secs() as u32;
-            !pairing::may_bond(
-                self.live_peer().is_some(),
-                state::pairing_window_open(now_s),
-            )
+            !pairing::may_bond(self.is_bonded(), state::pairing_window_open(now_s))
         }
 
         fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
@@ -522,8 +516,7 @@ mod imp {
         fn load_sys_attrs(&self, conn: &Connection) {
             let attrs = self.sys_attrs.borrow();
             let attrs = if self
-                .peer
-                .get()
+                .live_peer()
                 .map(|peer| peer.peer_id.is_match(conn.peer_address()))
                 .unwrap_or(false)
             {
