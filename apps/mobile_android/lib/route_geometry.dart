@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:core_models/core_models.dart' show Waypoint;
 
+import 'geo.dart' show lonDeltaDeg, wrapLonDeg;
 import 'run_stats.dart' show haversineMetres;
 
 /// Pure geometry helpers for displaying a planned polyline. Lifted
@@ -55,7 +56,7 @@ Waypoint? interpolateAlongRoute(
       final localT = ((target - seen) / segLen).clamp(0.0, 1.0);
       return Waypoint(
         lat: a.lat + (b.lat - a.lat) * localT,
-        lng: a.lng + (b.lng - a.lng) * localT,
+        lng: wrapLonDeg(a.lng + lonDeltaDeg(a.lng, b.lng) * localT),
         elevationMetres: _lerpNullable(
           a.elevationMetres,
           b.elevationMetres,
@@ -91,9 +92,9 @@ double? distanceAlongRoute(
     final b = waypoints[i];
     final segLen = haversineMetres(a.lat, a.lng, b.lat, b.lng);
     final cosLat = cos(a.lat * deg);
-    final bx = (b.lng - a.lng) * cosLat * rPerDeg;
+    final bx = lonDeltaDeg(a.lng, b.lng) * cosLat * rPerDeg;
     final by = (b.lat - a.lat) * rPerDeg;
-    final px = (point.lng - a.lng) * cosLat * rPerDeg;
+    final px = lonDeltaDeg(a.lng, point.lng) * cosLat * rPerDeg;
     final py = (point.lat - a.lat) * rPerDeg;
     final abLenSq = bx * bx + by * by;
     final t = abLenSq <= 0

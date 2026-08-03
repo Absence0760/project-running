@@ -203,6 +203,7 @@ class SettingsSyncService extends ChangeNotifier {
     if (vfv is String && vfv.isNotEmpty && vfv != preferences.voiceFeedbackVerbosity) {
       preferences.setVoiceFeedbackVerbosity(vfv);
     }
+    _applyVoiceCueTypes(prefs);
     // Body weight in kg — drives the run-detail calorie estimate.
     // null / non-positive clears the local cache so the calorie path
     // falls through to its documented 70 kg default.
@@ -282,13 +283,7 @@ class SettingsSyncService extends ChangeNotifier {
         preferences.setSplitIntervalMetres(metres);
       }
     }
-    final cues = prefs[SettingsKeys.voiceCueTypes];
-    if (cues is Map) {
-      preferences.applyVoiceCueTypes(<String, bool>{
-        for (final e in cues.entries)
-          if (e.value is bool) e.key.toString(): e.value as bool,
-      });
-    }
+    _applyVoiceCueTypes(prefs);
     final keep = prefs[SettingsKeys.keepScreenOn];
     if (keep is bool && keep != preferences.keepScreenOn) {
       preferences.setKeepScreenOn(keep);
@@ -297,6 +292,21 @@ class SettingsSyncService extends ChangeNotifier {
     if (dim is bool && dim != preferences.dimScreenWhileRecording) {
       preferences.setDimScreenWhileRecording(dim);
     }
+  }
+
+  /// `voice_cue_types` is a UD key, so it is read from BOTH bags: web's
+  /// settings page can only write the universal one (a browser is its own
+  /// device and never records), while this phone's own toggles write the
+  /// device one. [onSignedIn] applies universal first and device second, and
+  /// the merge is entry-by-entry, so a device value overrides the universal
+  /// one per cue while ids only the universal bag names still land.
+  void _applyVoiceCueTypes(Map<String, dynamic> prefs) {
+    final cues = prefs[SettingsKeys.voiceCueTypes];
+    if (cues is! Map) return;
+    preferences.applyVoiceCueTypes(<String, bool>{
+      for (final e in cues.entries)
+        if (e.value is bool) e.key.toString(): e.value as bool,
+    });
   }
 
   /// Push the user's race-fueling intake rates to the universal bag so they

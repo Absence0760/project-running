@@ -22,6 +22,8 @@ import { strict as assert } from 'node:assert';
 import {
 	DASHBOARD_RUNS_WINDOW_DAYS,
 	dashboardRunsWindowStart,
+	periodNeedsFullHistory,
+	type PeriodType,
 } from './dashboard_runs';
 import { computeRunStreaks } from '../runs/streaks';
 import { computeTrainingLoadSeries } from '../training/training_load';
@@ -156,4 +158,95 @@ test('isReturningFromGap runs on the windowed set without error', () => {
 		'boolean',
 		'isReturningFromGap must return a boolean on the windowed set',
 	);
+});
+
+// ── The window's cost: an "all time" roll-up must not come from it ──
+//
+// #332's fix bounded the dashboard fetch, then handed the SAME bounded set
+// to the period drilldown — which offers an "all time" tab and unbounded
+// Previous paging. So the modal opened by the exact "Longest run / all
+// time" stat card reported totals short by everything older than the
+// window (issue #664). `periodNeedsFullHistory` is the contract that
+// routes such a period to the real history instead.
+
+/// The roll-up PeriodSummary renders for the 'all' tab.
+function allTimeStats(runs: Run[]) {
+	return {
+		distance: runs.reduce((s, r) => s + r.distance_m, 0),
+		duration: runs.reduce((s, r) => s + r.duration_s, 0),
+		count: runs.length,
+		longest: runs.length ? Math.max(...runs.map((r) => r.distance_m)) : 0,
+	};
+}
+
+/// What PeriodSummary computes over, given the prop set plus the loader.
+function sourceRunsFor(
+	type: PeriodType,
+	periodStart: Date,
+	propRuns: Run[],
+	coveredFrom: Date | null,
+	fullHistory: Run[],
+): Run[] {
+	return periodNeedsFullHistory(type, periodStart, coveredFrom) ? fullHistory : propRuns;
+}
+
+test('periodNeedsFullHistory: a complete-history caller never re-fetches', () => {
+	// The standalone /dashboard/period route already holds every run.
+	assert.equal(periodNeedsFullHistory('all', NOW, null), false);
+	assert.equal(periodNeedsFullHistory('week', new Date('1999-01-04T00:00:00Z'), null), false);
+});
+
+test('periodNeedsFullHistory: an all-time tab can never be served by a bounded set', () => {
+	assert.equal(periodNeedsFullHistory('all', NOW, dashboardRunsWindowStart(NOW)), true);
+});
+
+test('periodNeedsFullHistory: week/month only reach out when they predate the bound', () => {
+	const cutoff = dashboardRunsWindowStart(NOW);
+	const inside = new Date(cutoff.getTime() + 30 * DAY_MS);
+	const outside = new Date(cutoff.getTime() - DAY_MS);
+	assert.equal(periodNeedsFullHistory('week', inside, cutoff), false);
+	assert.equal(periodNeedsFullHistory('month', inside, cutoff), false);
+	assert.equal(periodNeedsFullHistory('week', outside, cutoff), true);
+	assert.equal(periodNeedsFullHistory('month', outside, cutoff), true);
+	// The boundary itself is covered — the fetch filters `started_at >= cutoff`.
+	assert.equal(periodNeedsFullHistory('week', new Date(cutoff.getTime()), cutoff), false);
+});
+
+test('the all-time roll-up matches the lifetime aggregate, not the ~2-year window', () => {
+	const full = buildHistory();
+	const win = windowed(full);
+	const cutoff = dashboardRunsWindowStart(NOW);
+
+	// The under-report the window introduced, quantified: ~135 runs sit
+	// outside it and the runner's longest run is one of them.
+	const windowedRollUp = allTimeStats(win);
+	const truth = allTimeStats(full);
+	assert.ok(
+		windowedRollUp.count < truth.count,
+		'fixture sanity: the window drops runs from the all-time count',
+	);
+	assert.equal(truth.longest, 42_195, 'fixture sanity: the lifetime longest is the deep marathon');
+	assert.ok(
+		windowedRollUp.longest < truth.longest,
+		'fixture sanity: the window cannot see the lifetime longest run',
+	);
+
+	// Routed through the contract, the all-time tab computes over the real
+	// history — count, distance, duration and longest all match.
+	assert.deepEqual(allTimeStats(sourceRunsFor('all', NOW, win, cutoff, full)), truth);
+});
+
+test('a month older than the window is rolled up from the real history', () => {
+	const full = buildHistory();
+	const win = windowed(full);
+	const cutoff = dashboardRunsWindowStart(NOW);
+	// Paging Previous past the bound used to hand back an empty month.
+	const monthStart = new Date(Date.UTC(2024, 6, 1));
+	const monthEnd = new Date(Date.UTC(2024, 7, 1)).getTime();
+	assert.ok(monthStart.getTime() < cutoff.getTime(), 'fixture sanity: month predates the window');
+	const inMonth = sourceRunsFor('month', monthStart, win, cutoff, full).filter((r) => {
+		const t = new Date(r.started_at).getTime();
+		return t >= monthStart.getTime() && t < monthEnd;
+	});
+	assert.ok(inMonth.length > 0, 'a month inside the runner history must not roll up empty');
 });

@@ -6,6 +6,7 @@
 	import {
 		fetchRunsForDashboard,
 		fetchRunAllTimeStats,
+		fetchRunsForPeriodSummary,
 		fetchWeeklyMileage,
 		fetchPersonalRecords,
 		fetchActivePlanOverview,
@@ -14,6 +15,7 @@
 		insertFitnessSnapshot,
 		type FitnessSnapshotRow,
 	} from '$lib/core/data';
+	import { dashboardRunsWindowStart } from '$lib/core/dashboard_runs';
 	import {
 		computeSnapshot,
 		recoveryAdvice,
@@ -371,6 +373,17 @@
 	/// open the same `<PeriodSummary>` component that the standalone
 	/// /dashboard/period/... page uses, so deep-linking still works.
 	let periodModal = $state<{ type: 'week' | 'month' | 'all'; date: Date } | null>(null);
+
+	/// `runs` above only reaches back `DASHBOARD_RUNS_WINDOW_DAYS`, so the
+	/// drilldown's all-time tab (and Previous-paging past the bound) needs
+	/// the real history. Fetched on demand, column-narrowed, and filtered
+	/// the same way `filteredRuns` is so the modal agrees with the card
+	/// that opened it.
+	const periodRunsCoveredFrom = dashboardRunsWindowStart(new Date());
+	async function loadFullRunHistory(): Promise<Run[]> {
+		const all = await fetchRunsForPeriodSummary();
+		return sourceFilter === 'all' ? all : all.filter((r) => r.source === sourceFilter);
+	}
 
 	function openNewGoal() {
 		editingGoal = {
@@ -1731,6 +1744,8 @@
 			runs={filteredRuns}
 			initialType={periodModal.type}
 			initialDate={periodModal.date}
+			coveredFrom={periodRunsCoveredFrom}
+			loadFullHistory={loadFullRunHistory}
 		/>
 	{/if}
 </Modal>

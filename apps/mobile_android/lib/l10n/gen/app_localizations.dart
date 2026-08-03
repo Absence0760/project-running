@@ -173,11 +173,41 @@ abstract class AppLocalizations {
   /// **'{year} recap'**
   String recapShareSubject(Object year);
 
+  /// First line of the shared month-in-running recap summary
+  ///
+  /// In en, this message translates to:
+  /// **'My {period} in running:'**
+  String recapMonthShareHeadline(Object period);
+
+  /// OS share-sheet subject for the month-in-running recap
+  ///
+  /// In en, this message translates to:
+  /// **'{period} recap'**
+  String recapMonthShareSubject(Object period);
+
   /// App bar title for the year-in-running recap screen
   ///
   /// In en, this message translates to:
   /// **'Year in running'**
   String get recapTitle;
+
+  /// App bar title for the month-in-running recap screen
+  ///
+  /// In en, this message translates to:
+  /// **'Month in running'**
+  String get recapMonthTitle;
+
+  /// Toggle label selecting the annual recap
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get recapPeriodYear;
+
+  /// Toggle label selecting the monthly recap
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get recapPeriodMonth;
 
   /// Tooltip for the share-recap icon button
   ///
@@ -209,17 +239,29 @@ abstract class AppLocalizations {
   /// **'Next year'**
   String get recapNextYear;
 
-  /// Empty-state shown for a year outside the valid range
+  /// Tooltip for the previous-month chevron on the recap screen
   ///
   /// In en, this message translates to:
-  /// **'No runs to recap for {year}.'**
-  String recapNoRunsForYear(Object year);
+  /// **'Previous month'**
+  String get recapPrevMonth;
 
-  /// Empty-state shown when no runs exist for the selected year
+  /// Tooltip for the next-month chevron on the recap screen
   ///
   /// In en, this message translates to:
-  /// **'No runs in {year} yet. Log one to see your recap.'**
-  String recapNoRunsYet(Object year);
+  /// **'Next month'**
+  String get recapNextMonth;
+
+  /// Empty-state shown for a recap period outside the valid range
+  ///
+  /// In en, this message translates to:
+  /// **'No runs to recap for {period}.'**
+  String recapNoRunsForPeriod(Object period);
+
+  /// Empty-state shown when no runs exist for the selected recap period
+  ///
+  /// In en, this message translates to:
+  /// **'No runs in {period} yet. Log one to see your recap.'**
+  String recapNoRunsYetInPeriod(Object period);
 
   /// Subtitle under the hero distance giving the run count
   ///

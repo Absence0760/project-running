@@ -124,7 +124,9 @@ The 1-second elapsed-time timer inside `begin()` emits snapshots unconditionally
       target cue (ahead/behind plan when distance-along-route crosses a
       marker carrying meta.target_elapsed_s), and the race-strategy phase
       transition cue (race_phases plan built at _begin). Every cue type is
-      individually toggleable via the voice_cue_types map (settings.md);
+      individually toggleable via the voice_cue_types map (settings.md) —
+      editable here or on web /settings/preferences, which writes the
+      universal bag so the choice reaches this phone (decisions.md § 469);
       the pace alert speaks the correction amount and, under an active
       phase plan, re-anchors to the phase's target pace
     - Every 10s: _saveInProgress writes current state to runs/in_progress.json

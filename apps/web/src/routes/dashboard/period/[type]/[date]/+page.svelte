@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { fetchRuns } from '$lib/core/data';
+	import { fetchRunsForPeriodSummary } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { formatISO } from '$lib/training/training';
 	import { m } from '$lib/i18n/store.svelte';
@@ -43,6 +43,7 @@
 
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
+	let loadFailed = $state(false);
 
 	let cameFromDashboard = $state(false);
 	afterNavigate(({ from }) => {
@@ -60,11 +61,15 @@
 	onMount(async () => {
 		// Wait for the auth store to hydrate before the user-scoped fetch —
 		// on a cold load (this page is built to be bookmarked / shared, per
-		// the tagline) auth.user.id is null on first paint, so fetchRuns()
+		// the tagline) auth.user.id is null on first paint, so the fetch
 		// would return [] and every period stat would render "—". Same
 		// pattern the dashboard / coach / plans routes use (auth_ready.ts).
 		await auth.ready();
-		runs = await fetchRuns();
+		try {
+			runs = await fetchRunsForPeriodSummary();
+		} catch (_) {
+			loadFailed = true;
+		}
 		loading = false;
 	});
 
@@ -101,6 +106,8 @@
 			<span class="skel skel-block"></span>
 		</div>
 		<p class="sr-only" role="status">{m('period.loading')}</p>
+	{:else if loadFailed}
+		<p class="load-error" role="alert">{m('periodSummary.historyFailed')}</p>
 	{:else}
 		<PeriodSummary
 			{runs}
@@ -113,6 +120,8 @@
 
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); }
+
+	.load-error { margin: 0; color: var(--color-danger); }
 
 	.back {
 		display: inline-flex;

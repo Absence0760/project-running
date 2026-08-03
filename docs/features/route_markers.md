@@ -107,9 +107,11 @@ roadbook, GPX export, live cut-off ETA).
     the form) projects every placement + drag onto the nearest point of the
     course so a marker sticks to the line. The snap is render-only: `position_m`
     is still derived server-side from `routes.geom`. Pure projection in
-    `routes/route_snap.ts` (`snapToPolyline`, 10 unit tests) with a byte-identical
-    Dart twin `route_snap.dart` (10 mirror tests each); the perpendicular
-    foot on the closest segment, not the nearest vertex.
+    `routes/route_snap.ts` (`snapToPolyline`, 12 unit tests) with a byte-identical
+    Dart twin `route_snap.dart` (12 mirror tests each); the perpendicular
+    foot on the closest segment, not the nearest vertex. The projection frame
+    takes its longitude deltas through `routes/geo.ts` so a course near 180 deg
+    snaps onto itself rather than ~40,000 km away (decisions §468).
   - **Drag to move** — saved pins render as draggable DOM markers (a coloured
     dot + label, `grab`/`grabbing` cursor). Dragging one persists the new
     position immediately ("Marker moved." toast); the marker being edited
@@ -146,7 +148,7 @@ roadbook, GPX export, live cut-off ETA).
   kind carries), `sortMarkers` (schedule order), `parseCutoff`, and the
   `AID_SERVICES` vocabulary. `route_snap.ts` ↔ `route_snap.dart` (parity pair):
   `snapToPolyline` projects a point onto the nearest on-line foot + its
-  along-route distance preview, 10 mirror tests each.
+  along-route distance preview, 12 mirror tests each.
 
 ## Consumers
 

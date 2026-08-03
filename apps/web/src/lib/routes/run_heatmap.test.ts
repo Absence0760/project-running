@@ -104,6 +104,21 @@ test('heatBounds spans the cell extent as [[w,s],[e,n]]', () => {
 	assert.ok(w <= e && s <= n);
 });
 
+test('heatBounds spans the short way round the antimeridian', () => {
+	const cells = buildHeatCells([
+		[
+			{ lat: 0, lng: 179.995 },
+			{ lat: 0.01, lng: -179.995 },
+		],
+	]);
+	const [[w, s], [e, n]] = heatBounds(cells)!;
+	assert.ok(w <= e && s <= n);
+	// The runner's own streets — ~0.01°, not the 359.99° a raw min/max reads.
+	assert.ok(e - w < 0.05, `span ${e - w}`);
+	// East deliberately carries past 180 rather than jumping to -179.
+	assert.ok(e > 180, `east ${e}`);
+});
+
 test('invalid gridDeg falls back to the default', () => {
 	const track = [{ lat: 1, lng: 1 }];
 	assert.deepEqual(buildHeatCells([track], 0), buildHeatCells([track], DEFAULT_GRID_DEG));

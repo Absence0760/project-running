@@ -10,6 +10,8 @@
 /// aggregation (`buildHeatCells` / `heatBounds`) is shared here.
 library;
 
+import 'geo.dart' show unwrapLonDeg;
+
 class HeatLatLng {
   final double lat;
   final double lng;
@@ -80,8 +82,15 @@ List<HeatCell> buildHeatCells(
 
 /// Bounding box of a set of cells as `[[west, south], [east, north]]`.
 /// Null when there's nothing to fit.
+///
+/// Longitudes are expressed on the first cell's side of the antimeridian, so
+/// a runner whose tracks straddle 180° gets a box spanning their own streets
+/// rather than the 359.9° a raw min/max reads (which fits the whole planet).
+/// East may therefore sit outside [-180, 180]; that is the adjacent world
+/// copy, which is exactly the intent.
 List<List<double>>? heatBounds(List<HeatCell> cells) {
   if (cells.isEmpty) return null;
+  final refLng = cells.first.lng;
   var minLat = double.infinity;
   var minLng = double.infinity;
   var maxLat = double.negativeInfinity;
@@ -89,8 +98,9 @@ List<List<double>>? heatBounds(List<HeatCell> cells) {
   for (final c in cells) {
     if (c.lat < minLat) minLat = c.lat;
     if (c.lat > maxLat) maxLat = c.lat;
-    if (c.lng < minLng) minLng = c.lng;
-    if (c.lng > maxLng) maxLng = c.lng;
+    final lng = unwrapLonDeg(refLng, c.lng);
+    if (lng < minLng) minLng = lng;
+    if (lng > maxLng) maxLng = lng;
   }
   return [
     [minLng, minLat],

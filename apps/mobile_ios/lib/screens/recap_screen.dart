@@ -3,26 +3,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../recap.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
-/// Year-in-running recap. Mobile mirror of web `/recap/[year]`.
-/// Reads runs from the local store + the LocalRunStore's already-
-/// fetched cache (no extra Supabase round-trip) and builds the
-/// hero numbers via `buildYearInRunningRecap`. Includes a share
-/// CTA that hands a one-line summary to the OS share sheet, plus a
-/// "Publish & share link" action (when `api` is wired) that freezes a
-/// public snapshot via the web `public_recaps` table and shares the
-/// web /recap/share/[id] link — the device OS-share-sheet is the
-/// mobile-additive part; the page it links to is web-canonical.
+/// Which calendar window the recap covers.
+enum RecapPeriod { year, month }
+
+/// Year-in-running / month-in-running recap. Mobile mirror of web
+/// `/recap/[year]` and `/recap/[year]/[month]` — the two web routes collapse
+/// into one screen here with a period toggle, matching how
+/// `period_summary_screen` already lets one surface walk week / month /
+/// all-time.
+///
+/// Reads runs from the local store (no extra Supabase round-trip) and builds
+/// the hero numbers via `buildYearInRunningRecap` / `buildMonthInRunningRecap`.
+/// Includes a share CTA that hands a one-line summary to the OS share sheet,
+/// plus a "Publish & share link" action (when `api` is wired) that freezes a
+/// public snapshot via the web `public_recaps` table and shares the web
+/// /recap/share/[id] link — the device OS-share-sheet is the mobile-additive
+/// part; the page it links to is web-canonical.
 class RecapScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final Preferences preferences;
   final int? year;
+
+  /// 1-based. When set the screen opens on the monthly recap.
+  final int? month;
 
   /// Optional — when wired, enables the "Publish & share link" action.
   final ApiClient? api;
@@ -32,6 +44,7 @@ class RecapScreen extends StatefulWidget {
     required this.runStore,
     required this.preferences,
     this.year,
+    this.month,
     this.api,
   });
 
@@ -40,17 +53,79 @@ class RecapScreen extends StatefulWidget {
 }
 
 class _RecapScreenState extends State<RecapScreen> {
+  late RecapPeriod _period;
   late int _year;
+  late int _month;
   bool _publishing = false;
 
   @override
   void initState() {
     super.initState();
-    _year = widget.year ?? DateTime.now().year;
+    final now = DateTime.now();
+    _year = widget.year ?? now.year;
+    _month = widget.month ?? now.month;
+    _period = widget.month == null ? RecapPeriod.year : RecapPeriod.month;
+    widget.runStore.addListener(_onChanged);
+    widget.preferences.addListener(_onChanged);
   }
 
-  void _shiftYear(int delta) {
-    setState(() => _year = _year + delta);
+  @override
+  void dispose() {
+    widget.runStore.removeListener(_onChanged);
+    widget.preferences.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  YearInRunningRecap _buildRecap() {
+    // Reads the full-history index (distance / duration / elevation_m /
+    // activity_type) — no track, so the lightweight summaries are exact and
+    // stay correct once `runs` becomes a resident window.
+    final runs = widget.runStore.summaryRuns;
+    return _period == RecapPeriod.year
+        ? buildYearInRunningRecap(runs, _year)
+        : buildMonthInRunningRecap(runs, _year, _month);
+  }
+
+  bool get _outOfRange => _year < 2000 || _year > DateTime.now().year + 1;
+
+  bool get _atLatestPeriod {
+    final now = DateTime.now();
+    if (_period == RecapPeriod.year) return _year >= now.year;
+    return _year > now.year || (_year == now.year && _month >= now.month);
+  }
+
+  String _periodLabel(String localeTag) => _period == RecapPeriod.year
+      ? '$_year'
+      : '${formatMonthName(DateTime(_year, _month), localeTag)} $_year';
+
+  /// `public_recaps.period_kind` / `period_key` — the same wire pair the web
+  /// routes upsert on, so a recap published from either client refreshes the
+  /// one share link instead of minting a second.
+  String get _periodKind => _period == RecapPeriod.year ? 'year' : 'month';
+
+  String get _periodKey => _period == RecapPeriod.year
+      ? '$_year'
+      : '$_year-${_month.toString().padLeft(2, '0')}';
+
+  void _shiftPeriod(int delta) {
+    setState(() {
+      if (_period == RecapPeriod.year) {
+        _year += delta;
+        return;
+      }
+      // DateTime normalises a month of 0 or 13 into the adjacent year.
+      final shifted = DateTime(_year, _month + delta);
+      _year = shifted.year;
+      _month = shifted.month;
+    });
+  }
+
+  void _selectPeriod(RecapPeriod period) {
+    if (period != _period) setState(() => _period = period);
   }
 
   String get _webBase {
@@ -58,7 +133,7 @@ class _RecapScreenState extends State<RecapScreen> {
     return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
   }
 
-  Future<void> _publishAndShare(YearInRunningRecap recap) async {
+  Future<void> _publishAndShare(YearInRunningRecap recap, String label) async {
     final api = widget.api;
     if (api == null || _publishing) return;
     if (!await ensureSignedIn(context, viewerId: api.userId, api: api)) {
@@ -69,8 +144,8 @@ class _RecapScreenState extends State<RecapScreen> {
     setState(() => _publishing = true);
     try {
       final id = await api.publishRecap(
-        periodKind: 'year',
-        periodKey: '${recap.year}',
+        periodKind: _periodKind,
+        periodKey: _periodKey,
         snapshot: recapSnapshotJson(recap),
       );
       if (!mounted) return;
@@ -81,7 +156,7 @@ class _RecapScreenState extends State<RecapScreen> {
       await SharePlus.instance.share(
         ShareParams(
           text: '$_webBase/recap/share/$id',
-          subject: l10n.recapShareSubject(recap.year),
+          subject: _shareSubject(l10n, label),
         ),
       );
     } catch (e) {
@@ -92,11 +167,18 @@ class _RecapScreenState extends State<RecapScreen> {
     }
   }
 
-  Future<void> _share(YearInRunningRecap recap) async {
+  String _shareSubject(AppLocalizations l10n, String label) =>
+      _period == RecapPeriod.year
+          ? l10n.recapShareSubject(_year)
+          : l10n.recapMonthShareSubject(label);
+
+  Future<void> _share(YearInRunningRecap recap, String label) async {
     final l10n = AppLocalizations.of(context);
     final total = UnitFormat.distance(recap.totalDistanceM, widget.preferences.unit);
     final lines = <String>[
-      l10n.recapShareHeadline(recap.year),
+      _period == RecapPeriod.year
+          ? l10n.recapShareHeadline(_year)
+          : l10n.recapMonthShareHeadline(label),
       l10n.recapShareTotals(total, recap.runCount),
       if (recap.longestRunM > 0)
         l10n.recapShareLongestRun(
@@ -105,8 +187,7 @@ class _RecapScreenState extends State<RecapScreen> {
         l10n.recapShareBestStreak(recap.bestStreakDays),
     ];
     await SharePlus.instance.share(
-      ShareParams(
-          text: lines.join('\n'), subject: l10n.recapShareSubject(recap.year)),
+      ShareParams(text: lines.join('\n'), subject: _shareSubject(l10n, label)),
     );
   }
 
@@ -115,15 +196,15 @@ class _RecapScreenState extends State<RecapScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final unit = widget.preferences.unit;
-    // Reads the full-history index (distance / duration / elevation_m /
-    // activity_type) — no track, so the lightweight summaries are exact and
-    // stay correct once `runs` becomes a resident window.
-    final recap = buildYearInRunningRecap(widget.runStore.summaryRuns, _year);
-    final earliestPossible = _year < 2000 || _year > DateTime.now().year + 1;
+    final localeTag = localeToTag(Localizations.localeOf(context));
+    final label = _periodLabel(localeTag);
+    final recap = _buildRecap();
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.recapTitle),
+        title: Text(_period == RecapPeriod.year
+            ? l10n.recapTitle
+            : l10n.recapMonthTitle),
         actions: [
           if (widget.api != null)
             IconButton(
@@ -137,12 +218,13 @@ class _RecapScreenState extends State<RecapScreen> {
               tooltip: l10n.recapPublishAndShare,
               onPressed: recap.runCount == 0 || _publishing
                   ? null
-                  : () => _publishAndShare(recap),
+                  : () => _publishAndShare(recap, label),
             ),
           IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: l10n.recapShareTooltip,
-            onPressed: recap.runCount == 0 ? null : () => _share(recap),
+            onPressed:
+                recap.runCount == 0 ? null : () => _share(recap, label),
           ),
         ],
       ),
@@ -150,32 +232,49 @@ class _RecapScreenState extends State<RecapScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Year switcher
+            Center(
+              child: SegmentedButton<RecapPeriod>(
+                segments: [
+                  ButtonSegment(
+                      value: RecapPeriod.year,
+                      label: Text(l10n.recapPeriodYear)),
+                  ButtonSegment(
+                      value: RecapPeriod.month,
+                      label: Text(l10n.recapPeriodMonth)),
+                ],
+                selected: {_period},
+                onSelectionChanged: (s) => _selectPeriod(s.first),
+                showSelectedIcon: false,
+              ),
+            ),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
-                  tooltip: l10n.recapPrevYear,
-                  onPressed: () => _shiftYear(-1),
+                  tooltip: _period == RecapPeriod.year
+                      ? l10n.recapPrevYear
+                      : l10n.recapPrevMonth,
+                  onPressed: () => _shiftPeriod(-1),
                   icon: const Icon(Icons.chevron_left),
                 ),
-                Text('$_year', style: theme.textTheme.headlineMedium),
+                Text(label, style: theme.textTheme.headlineMedium),
                 IconButton(
-                  tooltip: l10n.recapNextYear,
-                  onPressed: _year >= DateTime.now().year
-                      ? null
-                      : () => _shiftYear(1),
+                  tooltip: _period == RecapPeriod.year
+                      ? l10n.recapNextYear
+                      : l10n.recapNextMonth,
+                  onPressed: _atLatestPeriod ? null : () => _shiftPeriod(1),
                   icon: const Icon(Icons.chevron_right),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            if (earliestPossible) ...[
+            if (_outOfRange) ...[
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(
-                    l10n.recapNoRunsForYear(_year),
+                    l10n.recapNoRunsForPeriod(label),
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
@@ -185,7 +284,7 @@ class _RecapScreenState extends State<RecapScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(
-                    l10n.recapNoRunsYet(_year),
+                    l10n.recapNoRunsYetInPeriod(label),
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart';
 
+import 'geo.dart' show unwrapLonDeg;
+
 /// Simplify a polyline using the Ramer–Douglas–Peucker algorithm. Returns
 /// a subset of [points] that preserves the shape within [epsilonMetres] of
 /// perpendicular distance from the straight-line segments. Used to turn a
@@ -146,14 +148,17 @@ double _perpDistanceMetres(Waypoint point, Waypoint a, Waypoint b) {
   final latRad = a.lat * math.pi / 180;
   final cosLat = math.cos(latRad);
 
-  double x(Waypoint w) => w.lng * math.pi / 180 * cosLat * r;
+  double x(double lngDeg) => lngDeg * math.pi / 180 * cosLat * r;
   double y(Waypoint w) => w.lat * math.pi / 180 * r;
 
-  final ax = x(a);
+  // The frame is absolute, so [b] and [point] are expressed on [a]'s side of
+  // the antimeridian before they enter it. Within a hemisphere the unwrap
+  // returns each longitude unchanged, bit for bit.
+  final ax = x(a.lng);
   final ay = y(a);
-  final bx = x(b);
+  final bx = x(unwrapLonDeg(a.lng, b.lng));
   final by = y(b);
-  final px = x(point);
+  final px = x(unwrapLonDeg(a.lng, point.lng));
   final py = y(point);
 
   final dx = bx - ax;

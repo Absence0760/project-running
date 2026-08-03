@@ -100,6 +100,19 @@ void main() {
     expect(w <= e && s <= n, isTrue);
   });
 
+  test('heatBounds spans the short way round the antimeridian', () {
+    final cells = buildHeatCells([
+      [const HeatLatLng(0, 179.995), const HeatLatLng(0.01, -179.995)],
+    ]);
+    final b = heatBounds(cells)!;
+    final w = b[0][0], s = b[0][1], e = b[1][0], n = b[1][1];
+    expect(w <= e && s <= n, isTrue);
+    // The runner's own streets — ~0.01°, not the 359.99° a raw min/max reads.
+    expect(e - w, lessThan(0.05));
+    // East deliberately carries past 180 rather than jumping to -179.
+    expect(e, greaterThan(180));
+  });
+
   test('invalid gridDeg falls back to the default', () {
     final track = [const HeatLatLng(1, 1)];
     expect(

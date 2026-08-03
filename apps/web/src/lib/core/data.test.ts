@@ -92,6 +92,74 @@ test('fetchRunAllTimeStats uses a HEAD count + single-row max, ships no run payl
 	);
 });
 
+test('the period drilldown never rolls up an all-time total from the dashboard window', () => {
+	// Reason: #332's fix bounded /dashboard's run fetch, then passed the same
+	// bounded set to <PeriodSummary> — which has an "all time" tab and
+	// unbounded Previous paging. The all-time modal opened by the "Longest
+	// run / all time" card therefore reported totals short by everything
+	// older than the window, disagreeing with the card that opened it
+	// (issue #664). The component must consult periodNeedsFullHistory, and
+	// the dashboard must hand it both the bound and a full-history loader.
+	const component = read('src/lib/components/PeriodSummary.svelte');
+	assert.match(
+		component,
+		/periodNeedsFullHistory\(/,
+		'PeriodSummary must decide via periodNeedsFullHistory whether the prop set can answer the period.',
+	);
+	const page = read('src/routes/dashboard/+page.svelte');
+	const usage = page.slice(page.indexOf('<PeriodSummary'));
+	assert.match(
+		usage,
+		/coveredFrom=/,
+		'/dashboard must tell PeriodSummary how far back its windowed run set reaches.',
+	);
+	assert.match(
+		usage,
+		/loadFullHistory=/,
+		'/dashboard must give PeriodSummary a full-history loader for periods past the window.',
+	);
+});
+
+test('fetchRunsForPeriodSummary ships the whole history column-narrowed, and surfaces failure', () => {
+	// Reason: the drilldown lists every run, so it genuinely needs every row
+	// — the saving is per-row width. `select('*')` here would ship the
+	// metadata jsonb bag over a lifetime of runs, which is exactly the #332
+	// scan. It must also throw rather than degrade to [], or a fetch failure
+	// renders as a silently-short total (issue #664).
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchRunsForPeriodSummary');
+	assert.ok(start >= 0, 'Could not locate fetchRunsForPeriodSummary — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/columns:\s*PERIOD_SUMMARY_RUN_COLUMNS/,
+		'fetchRunsForPeriodSummary must column-narrow via PERIOD_SUMMARY_RUN_COLUMNS.',
+	);
+	assert.match(
+		body,
+		/throwOnError:\s*true/,
+		'a failed history fetch must throw, not degrade to an incomplete total.',
+	);
+	assert.doesNotMatch(
+		source.slice(source.indexOf('PERIOD_SUMMARY_RUN_COLUMNS =')).split('\n')[0],
+		/\*/,
+		'PERIOD_SUMMARY_RUN_COLUMNS must be an explicit column list, never `*`.',
+	);
+	// The standalone deep-link route shares the narrowed reader.
+	const route = read('src/routes/dashboard/period/[type]/[date]/+page.svelte');
+	assert.match(
+		route,
+		/fetchRunsForPeriodSummary\(\)/,
+		'/dashboard/period must use the narrowed history reader, not the select(*) fetchRuns().',
+	);
+	assert.doesNotMatch(
+		route,
+		/\bfetchRuns\(\)/,
+		'/dashboard/period must not call the unbounded select(*) fetchRuns().',
+	);
+});
+
 test('fetchRouteById clips waypoints for non-owner club members (RLS is not the boundary)', () => {
 	// Reason: RLS lets an active club member SELECT the base `routes`
 	// row, which carries the unclipped polyline + geom + start_point. The

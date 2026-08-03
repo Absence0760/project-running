@@ -20,6 +20,8 @@
  * or drag yet).
  */
 
+import { lonDeltaDeg, wrapLonDeg } from './geo';
+
 export interface SnapResult {
 	/** Snapped longitude — on the polyline. */
 	lng: number;
@@ -78,9 +80,9 @@ export function snapToPolyline(
 		const cosLat = Math.cos(toRad(aLat));
 		const ax = 0;
 		const ay = 0;
-		const bx = toRad(bLng - aLng) * R * cosLat;
+		const bx = toRad(lonDeltaDeg(aLng, bLng)) * R * cosLat;
 		const by = toRad(bLat - aLat) * R;
-		const px = toRad(point.lng - aLng) * R * cosLat;
+		const px = toRad(lonDeltaDeg(aLng, point.lng)) * R * cosLat;
 		const py = toRad(point.lat - aLat) * R;
 
 		const dx = bx - ax;
@@ -89,7 +91,7 @@ export function snapToPolyline(
 		// Degenerate (duplicate) vertices → treat as the start point.
 		const t = lenSq > 0 ? Math.max(0, Math.min(1, (px * dx + py * dy) / lenSq)) : 0;
 
-		const sLng = aLng + (bLng - aLng) * t;
+		const sLng = wrapLonDeg(aLng + lonDeltaDeg(aLng, bLng) * t);
 		const sLat = aLat + (bLat - aLat) * t;
 		const offset = haversine(point.lng, point.lat, sLng, sLat);
 

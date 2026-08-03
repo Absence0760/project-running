@@ -96,3 +96,27 @@ test('snapped point is bit-stable for the same input (idempotent)', () => {
 	const b = snapToPolyline({ lng: -0.105, lat: 51.503 }, LINE);
 	assert.deepEqual(a, b);
 });
+
+test('a point past the antimeridian snaps onto the line, not away from it', () => {
+	const line: [number, number][] = [
+		[179.98, 0],
+		[-179.96, 0]
+	];
+	// 1 km north of the line, a third of the way along it.
+	const r = snapToPolyline({ lng: -179.99, lat: 0.009 }, line);
+	assert.ok(r);
+	assert.ok(Math.abs(r!.lng - -179.99) < 1e-6, `lng ${r!.lng}`);
+	assert.ok(Math.abs(r!.offsetM - 1000) < 20, `offset ${r!.offsetM}`);
+	assert.ok(Math.abs(r!.alongM - 3335.8) < 5, `along ${r!.alongM}`);
+});
+
+test('a snapped point on a leg across the line wraps back into range', () => {
+	const line: [number, number][] = [
+		[179.99, 0],
+		[-179.97, 0]
+	];
+	const r = snapToPolyline({ lng: -179.99, lat: 0 }, line);
+	assert.ok(r);
+	assert.ok(r!.lng >= -180 && r!.lng < 180, `lng ${r!.lng}`);
+	assert.ok(Math.abs(r!.lng - -179.99) < 1e-9, `lng ${r!.lng}`);
+});

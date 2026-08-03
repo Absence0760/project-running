@@ -14,8 +14,9 @@ import { resolve } from 'node:path';
  *  2. The TS↔Dart parity-pair source paths recorded in the
  *     shared-library-syncer agent actually exist — a move/rename that doesn't
  *     update the agent (or vice versa) is the exact drift this caught.
- *  3. The unit-test glob recurses into subfolders. A non-recursive
- *     `src/lib/*.test.ts` silently skips every subfolder suite.
+ *  3. The unit-test glob covers every suite under src/. A non-recursive
+ *     `src/lib/*.test.ts` silently skips every subfolder suite, and a
+ *     lib-only `src/lib/**` silently skipped the route-level source guards.
  */
 
 const libRoot = import.meta.dirname;
@@ -64,14 +65,17 @@ test('every TS parity-pair source path in shared-library-syncer.md exists on dis
 	);
 });
 
-test('the unit-test glob recurses into lib subfolders', () => {
-	const RECURSIVE = 'src/lib/**/*.test.ts';
+test('the unit-test glob covers every suite under src', () => {
+	// Anything narrower silently skips suites rather than failing: a
+	// non-recursive `src/lib/*.test.ts` dropped every subfolder, and
+	// `src/lib/**` dropped the route-level source guards under src/routes.
+	const RECURSIVE = 'src/**/*.test.ts';
 
 	const pkg = JSON.parse(readFileSync(resolve(webRoot, 'package.json'), 'utf-8'));
 	assert.ok(
 		(pkg.scripts?.['test:unit'] ?? '').includes(RECURSIVE),
-		`package.json "test:unit" must use the recursive glob '${RECURSIVE}' or subfolder ` +
-			`suites are silently skipped (got: ${pkg.scripts?.['test:unit']}).`,
+		`package.json "test:unit" must use the recursive glob '${RECURSIVE}' or suites ` +
+			`outside it are silently skipped (got: ${pkg.scripts?.['test:unit']}).`,
 	);
 
 	const ci = readFileSync(resolve(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf-8');

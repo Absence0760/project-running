@@ -334,3 +334,26 @@ test('markerPointAtDistance — a negative distance clamps to the start', () => 
 	assert.ok(out);
 	assert.ok(Math.abs(out!.lng - 0) < 1e-9);
 });
+
+test('interpolateAlongRoute — a leg across the antimeridian stays on the leg', () => {
+	const wps = [wp(0, 179.99), wp(0, -179.97)];
+	const out = interpolateAlongRoute(wps, 0.5);
+	assert.ok(out);
+	// The midpoint of a 0.04° leg anchored at 179.99 is 180.01, which wraps
+	// to -179.99 — not 0.01, half a world away.
+	assert.ok(Math.abs(out!.lng - -179.99) < 1e-9, `got ${out!.lng}`);
+	assert.equal(out!.lat, 0);
+});
+
+test('distanceAlongRoute — a point past the antimeridian projects onto the leg', () => {
+	const wps = [wp(0, 179.98), wp(0, -179.96)];
+	const total = polylineLengthMetres(wps);
+	const along = distanceAlongRoute({ lat: 0, lng: -179.99 }, wps);
+	assert.ok(along !== null);
+	assert.ok(Math.abs(along! - total / 2) < 1, `got ${along} of ${total}`);
+});
+
+test('polylineLengthMetres — a course across the antimeridian spans 0.06°, not 359.94°', () => {
+	const wps = [wp(0, 179.98), wp(0, -179.96)];
+	assert.ok(Math.abs(polylineLengthMetres(wps) - 6671.7) < 1);
+});
