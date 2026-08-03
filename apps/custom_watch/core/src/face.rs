@@ -5199,7 +5199,7 @@ mod tests {
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
             run_lost_seq: 0,
-            course_reject_seq: 0,
+            push_outcome: crate::ble_sync::PushOutcome::DEFAULT,
             timer: None,
             storm: None,
             track_thinning: 1,

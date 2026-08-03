@@ -28,6 +28,7 @@
 use defmt::*;
 use embassy_nrf::uarte::{UarteRxWithIdle, UarteTx};
 use embassy_time::{with_timeout, Duration, Instant, Ticker};
+use watch_core::ble_sync::PushKind;
 use watch_core::link;
 use watch_core::settings::MAX_SETTINGS_LEN;
 use watch_core::settings_frame::{SettingsFramer, SettingsPush, FRAME_GAP_MS};
@@ -156,16 +157,31 @@ pub async fn settings_rx(mut rx: UarteRxWithIdle<'static>) {
                 warn!("phone: uart read error {:?}", e);
                 framer.reset();
             }
+            // Every non-empty outcome funnels through `state::note_push`, the
+            // same seam the radio task's five characteristics use — the sim's
+            // UART transport refuses a settings push exactly as the radio
+            // does, and the wearer must be told either way. `Empty` is not an
+            // outcome: no frame arrived, so nothing was refused.
             Err(_) => match framer.on_gap() {
                 SettingsPush::Empty => {}
-                SettingsPush::Oversize => warn!("phone: oversize settings push discarded"),
+                SettingsPush::Oversize => {
+                    warn!("phone: oversize settings push discarded");
+                    state::note_push(PushKind::Settings, false);
+                }
                 SettingsPush::Rejected { len } => {
-                    warn!("phone: settings frame rejected ({=usize} bytes)", len)
+                    warn!("phone: settings frame rejected ({=usize} bytes)", len);
+                    state::note_push(PushKind::Settings, false);
                 }
                 SettingsPush::Applied { settings, len } => {
                     info!("phone: settings frame applied ({=usize} bytes)", len);
-                    if state::SETTINGS.try_send(settings).is_err() {
-                        warn!("phone: settings queue full, push refused");
+                    match state::SETTINGS.try_send(settings) {
+                        Ok(()) => {
+                            state::note_push(PushKind::Settings, true);
+                        }
+                        Err(_) => {
+                            warn!("phone: settings queue full, push refused");
+                            state::note_push(PushKind::Settings, false);
+                        }
                     }
                 }
             },

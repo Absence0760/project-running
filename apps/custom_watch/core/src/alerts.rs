@@ -183,6 +183,7 @@
 
 use core::fmt::Write;
 
+use crate::ble_sync::PushKind;
 use crate::cutoff_eta::CutoffEtaStatus;
 use crate::hr_zones;
 use crate::record::{RecordState, Snapshot};
@@ -319,12 +320,17 @@ pub enum Alert {
     /// to carry — the run's coordinates and heart rates are gone forever,
     /// and the banner's whole job is to say so instead of softening it.
     RunLost,
-    /// The ble task rejected a course push ([`Snapshot::course_reject_seq`])
-    /// — the course on the watch is STILL THE OLD ONE. The label conveys
-    /// rejection, not vague error: the runner's phone said "sent", and the
-    /// next fork is where believing it gets expensive. A successful re-push
-    /// needs no banner of its own — the Nav page re-announces the course.
-    CourseRejected,
+    /// The radio task refused a phone push ([`Snapshot::push_outcome`]) — the
+    /// value on the watch is STILL THE OLD ONE, whichever of the five it was.
+    /// The label conveys rejection, not vague error: the runner's phone said
+    /// "sent", and the next fork (or the next interval, or the next cut-off)
+    /// is where believing it gets expensive. Carries the kind because the five
+    /// pushes fail independently and "something didn't land" is not actionable
+    /// — a refused course and a refused roadbook want different re-pushes. An
+    /// accepted push needs no banner of its own: the pages re-announce what
+    /// they hold, and a confirmation banner would teach runners to wait for
+    /// one that failure also never showed.
+    PushRejected(PushKind),
     /// The flash slot filled and [`Snapshot::track_thinning`] rose: the staged
     /// track was thinned in place, so the whole run is still recorded but at a
     /// coarser resolution than the runner was last told. Carries nothing — the
@@ -421,9 +427,10 @@ pub fn banner(alert: Alert) -> Banner {
         // word must not soften it.
         Alert::RunLost => write!(b, "! RUN LOST"),
         // FAIL, not a vague error word: the push was rejected and the watch
-        // kept the old course. CRS is the course wire frame's own
-        // abbreviation, as on the OFF CRS banner.
-        Alert::CourseRejected => write!(b, "! CRS FAIL"),
+        // kept the old value. The kind is its wire frame's own abbreviation,
+        // as CRS is on the OFF CRS banner — and all five are three letters, so
+        // the phrase fills the ten-cell band exactly whichever push failed.
+        Alert::PushRejected(kind) => write!(b, "! {} FAIL", kind.abbrev()),
         // TRK, not TRACK: `! TRACK RES` is eleven glyphs against the band's
         // ten, and abbreviating the noun to keep the phrase's shape is what
         // `! OFF CRS` already does.
@@ -537,14 +544,16 @@ pub struct AlertEngine {
     /// Cleared by [`Self::reset`]: between runs the idle surfaces own the
     /// story.
     pending_run_lost: bool,
-    /// The last [`Snapshot::course_reject_seq`] seen, same `None`-baseline: a
-    /// push that failed while the watch sat idle must not replay mid-race.
-    last_course_reject_seq: Option<u8>,
-    /// A raised course-rejection warning waiting for the slot. Re-queued when
-    /// displaced — there is no later reminder, and the runner is navigating a
-    /// course they believe was replaced. Cleared by [`Self::reset`] with the
-    /// cutoff pair's run-scoped reasoning.
-    pending_course_reject: bool,
+    /// The last [`Snapshot::push_outcome`] sequence seen, same `None`-baseline:
+    /// a push that resolved while the watch sat idle must not replay mid-race.
+    /// The sequence moves on an ACCEPTED push too, which this adopts in
+    /// silence — only a refusal raises anything.
+    last_push_seq: Option<u8>,
+    /// A raised push-rejection warning waiting for the slot, and which push it
+    /// was. Re-queued when displaced — there is no later reminder, and the
+    /// runner is running against a value they believe was replaced. Cleared by
+    /// [`Self::reset`] with the cutoff pair's run-scoped reasoning.
+    pending_push_reject: Option<PushKind>,
     /// Whether the last sample said the fixes had dried up — the edge
     /// detector for the GPS LOST / GPS BACK pair. Plain, not tri-state:
     /// unlike the nav projection, `signal_lost` is always meaningful during
@@ -608,8 +617,8 @@ impl AlertEngine {
             last_waypoint_refuse_seq: None,
             last_run_lost_seq: None,
             pending_run_lost: false,
-            last_course_reject_seq: None,
-            pending_course_reject: false,
+            last_push_seq: None,
+            pending_push_reject: None,
             was_signal_lost: false,
             last_track_thinning: 1,
             pending_track_thinned: false,
@@ -930,13 +939,18 @@ impl AlertEngine {
             }
         }
 
-        // The run-lost and course-rejection counters, on the waypoint pair's
+        // The run-lost and push-verdict counters, on the waypoint pair's
         // seam: a wrapping seq the app bumps, edge-detected here, with the
         // first sample of a run adopting the counter so pre-run history can't
         // replay at the start line. Both set pending flags rather than taking
         // the slot — the precedence chain at the tail places them in the
         // re-queued class, so neither can be swallowed by a busy slot the way
         // the defmt warns they replace were swallowed by the missing cable.
+        //
+        // The push seam carries a KIND as well as a seq because all five
+        // phone→watch pushes share it, and it moves on acceptance too — which
+        // is adopted silently here, so only the phone's half of the record
+        // reads a successful push.
         match self.last_run_lost_seq {
             None => self.last_run_lost_seq = Some(snap.run_lost_seq),
             Some(last) if snap.run_lost_seq != last => {
@@ -945,11 +959,13 @@ impl AlertEngine {
             }
             Some(_) => {}
         }
-        match self.last_course_reject_seq {
-            None => self.last_course_reject_seq = Some(snap.course_reject_seq),
-            Some(last) if snap.course_reject_seq != last => {
-                self.last_course_reject_seq = Some(snap.course_reject_seq);
-                self.pending_course_reject = true;
+        match self.last_push_seq {
+            None => self.last_push_seq = Some(snap.push_outcome.seq),
+            Some(last) if snap.push_outcome.seq != last => {
+                self.last_push_seq = Some(snap.push_outcome.seq);
+                if !snap.push_outcome.accepted {
+                    self.pending_push_reject = Some(snap.push_outcome.kind);
+                }
             }
             Some(_) => {}
         }
@@ -1108,9 +1124,8 @@ impl AlertEngine {
             } else if self.pending_cutoff {
                 self.pending_cutoff = false;
                 self.active = Some((Alert::CutoffBehind, uptime_s));
-            } else if self.pending_course_reject {
-                self.pending_course_reject = false;
-                self.active = Some((Alert::CourseRejected, uptime_s));
+            } else if let Some(kind) = self.pending_push_reject.take() {
+                self.active = Some((Alert::PushRejected(kind), uptime_s));
             } else if self.pending_storm {
                 self.pending_storm = false;
                 self.active = Some((Alert::Storm, uptime_s));
@@ -1156,7 +1171,7 @@ impl AlertEngine {
             Some((Alert::CutoffBehind, _)) => self.pending_cutoff = true,
             Some((Alert::OffCourse, _)) => self.pending_off_course = true,
             Some((Alert::RunLost, _)) => self.pending_run_lost = true,
-            Some((Alert::CourseRejected, _)) => self.pending_course_reject = true,
+            Some((Alert::PushRejected(kind), _)) => self.pending_push_reject = Some(kind),
             Some((Alert::TrackThinned, _)) => self.pending_track_thinned = true,
             _ => {}
         }
@@ -1187,8 +1202,8 @@ impl AlertEngine {
         self.last_waypoint_refuse_seq = None;
         self.last_run_lost_seq = None;
         self.pending_run_lost = false;
-        self.last_course_reject_seq = None;
-        self.pending_course_reject = false;
+        self.last_push_seq = None;
+        self.pending_push_reject = None;
         self.was_signal_lost = false;
         self.last_track_thinning = 1;
         self.pending_track_thinned = false;
@@ -1283,7 +1298,7 @@ impl FuelOverdueTracker {
                 | Alert::SignalLost
                 | Alert::SignalBack
                 | Alert::RunLost
-                | Alert::CourseRejected
+                | Alert::PushRejected(_)
                 | Alert::TrackThinned,
             )
             | None => {}
@@ -1344,6 +1359,7 @@ impl FuelAckDwell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ble_sync::PushOutcome;
     use crate::hr_zones::{zone_cutoffs_from_max_hr, DEFAULT_MAX_HR_BPM, ZONE_COUNT};
 
     fn snap(state: RecordState, moving_s: u32) -> Snapshot {
@@ -1411,7 +1427,7 @@ mod tests {
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
             run_lost_seq: 0,
-            course_reject_seq: 0,
+            push_outcome: PushOutcome::DEFAULT,
             timer: None,
             storm: None,
             track_thinning: 1,
@@ -3544,11 +3560,19 @@ mod tests {
         }
     }
 
-    fn rejected(seq: u8, moving_s: u32) -> Snapshot {
+    fn pushed(kind: PushKind, seq: u8, accepted: bool, moving_s: u32) -> Snapshot {
         Snapshot {
-            course_reject_seq: seq,
+            push_outcome: PushOutcome {
+                seq,
+                kind,
+                accepted,
+            },
             ..rec(moving_s)
         }
+    }
+
+    fn rejected(seq: u8, moving_s: u32) -> Snapshot {
+        pushed(PushKind::Course, seq, false, moving_s)
     }
 
     #[test]
@@ -3574,8 +3598,7 @@ mod tests {
         let mut e = AlertEngine::new();
         let pre = Snapshot {
             run_lost_seq: 3,
-            course_reject_seq: 7,
-            ..rec(10)
+            ..rejected(7, 10)
         };
         assert_eq!(e.on_update(&pre, None, 10), None);
         let t = 10 + ALERT_TTL_S;
@@ -3583,8 +3606,7 @@ mod tests {
             e.on_update(
                 &Snapshot {
                     run_lost_seq: 3,
-                    course_reject_seq: 7,
-                    ..rec(t)
+                    ..rejected(7, t)
                 },
                 None,
                 t
@@ -3660,15 +3682,94 @@ mod tests {
         assert_eq!(e.on_update(&rejected(0, 10), None, 10), None);
         assert_eq!(
             e.on_update(&rejected(1, 11), None, 11),
-            Some(Alert::CourseRejected)
+            Some(Alert::PushRejected(PushKind::Course))
         );
-        assert_eq!(banner(Alert::CourseRejected).as_str(), "! CRS FAIL");
+        assert_eq!(
+            banner(Alert::PushRejected(PushKind::Course)).as_str(),
+            "! CRS FAIL"
+        );
         // A steady counter is not news; the next failed retry is.
         let t = 11 + ALERT_TTL_S;
         assert_eq!(e.on_update(&rejected(1, t), None, t), None);
         assert_eq!(
             e.on_update(&rejected(2, t + 1), None, t + 1),
-            Some(Alert::CourseRejected)
+            Some(Alert::PushRejected(PushKind::Course))
+        );
+    }
+
+    #[test]
+    fn every_refused_push_reaches_the_wrist_naming_its_own_frame() {
+        // The defect this seam closed: only `course` had a banner, so a
+        // refused workout / roadbook / screens / settings push left the OLD
+        // value armed with nothing but a `warn!` down a cable no runner
+        // carries. Each kind must both fire AND say which push it was — "one
+        // of your pushes failed" is not something a runner can act on.
+        for (kind, expected) in [
+            (PushKind::Settings, "! SET FAIL"),
+            (PushKind::Course, "! CRS FAIL"),
+            (PushKind::Workout, "! WKT FAIL"),
+            (PushKind::Screens, "! SCR FAIL"),
+            (PushKind::Roadbook, "! RBK FAIL"),
+        ] {
+            let mut e = AlertEngine::new();
+            assert_eq!(e.on_update(&pushed(kind, 0, false, 10), None, 10), None);
+            assert_eq!(
+                e.on_update(&pushed(kind, 1, false, 11), None, 11),
+                Some(Alert::PushRejected(kind)),
+                "{expected} never fired"
+            );
+            assert_eq!(banner(Alert::PushRejected(kind)).as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn an_accepted_push_is_adopted_in_silence_and_still_baselines_the_next() {
+        // The sequence moves on acceptance too — the phone needs a positive
+        // answer, or an unmoved counter would be indistinguishable from a
+        // watch that never replied. The wrist must stay quiet for it (§400's
+        // rule: a confirmation banner teaches runners to wait for one that
+        // failure also never showed), AND the adoption must leave the engine
+        // able to catch the very next refusal.
+        let mut e = AlertEngine::new();
+        assert_eq!(
+            e.on_update(&pushed(PushKind::Roadbook, 4, true, 10), None, 10),
+            None
+        );
+        assert_eq!(
+            e.on_update(&pushed(PushKind::Roadbook, 5, true, 11), None, 11),
+            None,
+            "an accepted push is not news"
+        );
+        assert_eq!(
+            e.on_update(&pushed(PushKind::Roadbook, 6, false, 12), None, 12),
+            Some(Alert::PushRejected(PushKind::Roadbook))
+        );
+    }
+
+    #[test]
+    fn a_second_rejection_of_a_different_push_replaces_the_queued_kind() {
+        // One slot, one pending kind. A workout refusal queued behind a zone
+        // banner then followed by a roadbook refusal must show the ROADBOOK —
+        // the newer truth, and the one whose re-push is still owed. Showing
+        // the stale kind would send the runner to re-push the wrong thing.
+        let mut e = AlertEngine::new();
+        e.set_zone_ceiling(Some(3));
+        assert_eq!(
+            e.on_update(&pushed(PushKind::Workout, 0, false, 10), None, 10),
+            None
+        );
+        assert_eq!(
+            e.on_update(&pushed(PushKind::Workout, 1, false, 11), Some(160), 11),
+            Some(Alert::ZoneAbove(4))
+        );
+        assert_eq!(
+            e.on_update(&pushed(PushKind::Roadbook, 2, false, 12), Some(160), 12),
+            Some(Alert::ZoneAbove(4))
+        );
+        let after = 11 + ALERT_TTL_S;
+        assert_eq!(
+            e.on_update(&pushed(PushKind::Roadbook, 2, false, after), Some(150), after),
+            Some(Alert::PushRejected(PushKind::Roadbook))
         );
     }
 
@@ -3680,18 +3781,19 @@ mod tests {
         let mut e = AlertEngine::new();
         assert_eq!(e.on_update(&rejected(0, 10), None, 10), None);
         let both = Snapshot {
-            course_reject_seq: 1,
             cutoff: cut(CutoffEtaStatus::Behind, 11).cutoff,
-            ..rec(11)
+            ..rejected(1, 11)
         };
         assert_eq!(e.on_update(&both, None, 11), Some(Alert::CutoffBehind));
         let t = 11 + ALERT_TTL_S;
         let hold = Snapshot {
-            course_reject_seq: 1,
             cutoff: cut(CutoffEtaStatus::Behind, t).cutoff,
-            ..rec(t)
+            ..rejected(1, t)
         };
-        assert_eq!(e.on_update(&hold, None, t), Some(Alert::CourseRejected));
+        assert_eq!(
+            e.on_update(&hold, None, t),
+            Some(Alert::PushRejected(PushKind::Course))
+        );
     }
 
     #[test]
@@ -3701,13 +3803,16 @@ mod tests {
         e.set_fuel_intervals(300, 300);
         assert_eq!(e.on_update(&rejected(0, 10), None, 10), None);
         let both = Snapshot {
-            course_reject_seq: 1,
+            push_outcome: rejected(1, 300).push_outcome,
             ..stormy(StormTrend::Storm, 300)
         };
-        assert_eq!(e.on_update(&both, None, 300), Some(Alert::CourseRejected));
+        assert_eq!(
+            e.on_update(&both, None, 300),
+            Some(Alert::PushRejected(PushKind::Course))
+        );
         let t = 300 + ALERT_TTL_S;
         let hold = Snapshot {
-            course_reject_seq: 1,
+            push_outcome: rejected(1, t).push_outcome,
             ..stormy(StormTrend::Storm, t)
         };
         assert_eq!(e.on_update(&hold, None, t), Some(Alert::Storm));
@@ -3725,7 +3830,7 @@ mod tests {
         let after = 11 + ALERT_TTL_S;
         assert_eq!(
             e.on_update(&rejected(1, after), Some(150), after),
-            Some(Alert::CourseRejected),
+            Some(Alert::PushRejected(PushKind::Course)),
             "the displaced rejection came back"
         );
     }
@@ -3740,8 +3845,7 @@ mod tests {
         assert_eq!(e.on_update(&rec(10), None, 10), None);
         let both = Snapshot {
             run_lost_seq: 1,
-            course_reject_seq: 1,
-            ..rec(11)
+            ..rejected(1, 11)
         };
         assert_eq!(e.on_update(&both, Some(160), 11), Some(Alert::ZoneAbove(4)));
         assert_eq!(

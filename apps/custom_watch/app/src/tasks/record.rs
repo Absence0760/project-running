@@ -419,10 +419,10 @@ pub async fn run(store: &'static SharedStore) {
     let mut persisted_auto_lap = store.lock().await.read_auto_lap();
     // §372: a backyard armed before a brown-out is still a backyard after it.
     let mut backyard_rx = unwrap!(state::BACKYARD.receiver());
-    // The ble task's rejected-course-push counter, mirrored into the snapshot
-    // so the alert engine can raise `! CRS FAIL` — the recorder carries it,
+    // The transport tasks' last push verdict, mirrored into the snapshot so
+    // the alert engine can raise `! <KIND> FAIL` — the recorder carries it,
     // the engine interprets it.
-    let mut course_reject_rx = unwrap!(state::COURSE_REJECTS.receiver());
+    let mut push_outcome_rx = unwrap!(state::PUSH_OUTCOME.receiver());
     // The ICE card the flash record already holds — published straight away so
     // the idle face has it before any phone connects, and kept as the
     // comparison so a repeated push never re-erases the config page.
@@ -804,12 +804,12 @@ pub async fn run(store: &'static SharedStore) {
             recorder.set_route_elev(profile);
         }
 
-        // A rejected course push (the ble task's counter). Mirrored, not
+        // The last resolved phone push (any of the five). Mirrored, not
         // interpreted: the alert engine edge-detects the seq off the snapshot
         // with the waypoint pair's run-start baselining, so a push that
-        // failed while the watch sat idle never replays mid-race.
-        if let Some(seq) = course_reject_rx.try_changed() {
-            recorder.set_course_reject_seq(seq);
+        // resolved while the watch sat idle never replays mid-race.
+        if let Some(outcome) = push_outcome_rx.try_changed() {
+            recorder.set_push_outcome(outcome);
         }
 
         // A pushed structured workout (the ble task's WKT1 decode) arms the

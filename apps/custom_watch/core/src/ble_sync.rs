@@ -96,6 +96,118 @@ pub fn parse_push_chunk(bytes: &[u8]) -> Option<(usize, &[u8])> {
     ))
 }
 
+/// Which phone→watch push an outcome belongs to — the five latest-value
+/// characteristics, all of which leave the PREVIOUS value armed when a push is
+/// refused.
+///
+/// The discriminants are on the wire ([`PushOutcome::encode`]), so a value may
+/// be appended but never renumbered, exactly as the characteristic UUIDs may
+/// be extended but never reordered (§ 410).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum PushKind {
+    #[default]
+    Settings = 0,
+    Course = 1,
+    Workout = 2,
+    Screens = 3,
+    Roadbook = 4,
+}
+
+impl PushKind {
+    /// The wire frame's own three-letter tag — `SET1`, `CRS1`, `WKT1`, `SCR1`,
+    /// `RBK1` less the version digit. The banner renders it, so the wearer
+    /// reads the same abbreviation the phone's push button and the firmware's
+    /// frame magic use.
+    pub const fn abbrev(self) -> &'static str {
+        match self {
+            PushKind::Settings => "SET",
+            PushKind::Course => "CRS",
+            PushKind::Workout => "WKT",
+            PushKind::Screens => "SCR",
+            PushKind::Roadbook => "RBK",
+        }
+    }
+
+    const fn from_wire(byte: u8) -> Option<Self> {
+        match byte {
+            0 => Some(PushKind::Settings),
+            1 => Some(PushKind::Course),
+            2 => Some(PushKind::Workout),
+            3 => Some(PushKind::Screens),
+            4 => Some(PushKind::Roadbook),
+            _ => None,
+        }
+    }
+}
+
+/// Bytes of the `push_status` characteristic value: `PSH1` magic, the wrapping
+/// sequence, the kind, and whether the push was taken.
+pub const PUSH_STATUS_LEN: usize = 7;
+
+const PUSH_STATUS_MAGIC: [u8; 4] = *b"PSH1";
+
+/// The verdict on the last phone→watch push the watch resolved — the ONE
+/// record both surfaces read.
+///
+/// The wearer's surface edge-detects [`Self::seq`] and raises `! <KIND> FAIL`
+/// when [`Self::accepted`] is false; the phone reads the encoded form off the
+/// `push_status` characteristic to learn whether its "sent" was true. The
+/// sequence bumps on an ACCEPTED push too, because a counter that moved only
+/// on failure is indistinguishable, from the phone, from a watch that never
+/// answered at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct PushOutcome {
+    /// Wrapping, and deliberately says only *that* a push resolved, never how
+    /// many — [`manifest_needs_rebuild`]'s reasoning at the other counter.
+    pub seq: u8,
+    pub kind: PushKind,
+    pub accepted: bool,
+}
+
+impl PushOutcome {
+    /// Nothing resolved yet — what a watch reads out before its first push,
+    /// and what a recorder holds until the radio task mirrors one in. The
+    /// `accepted: false` is NOT a verdict: both readers compare [`Self::seq`]
+    /// against a baseline first, and an unmoved seq means "no answer", never
+    /// "refused".
+    pub const DEFAULT: Self = PushOutcome {
+        seq: 0,
+        kind: PushKind::Settings,
+        accepted: false,
+    };
+
+    pub fn encode(&self) -> [u8; PUSH_STATUS_LEN] {
+        let mut out = [0u8; PUSH_STATUS_LEN];
+        out[..4].copy_from_slice(&PUSH_STATUS_MAGIC);
+        out[4] = self.seq;
+        out[5] = self.kind as u8;
+        out[6] = u8::from(self.accepted);
+        out
+    }
+
+    /// Fail-closed: a short read, a foreign magic, an unknown kind, or a
+    /// verdict byte that is neither 0 nor 1 all decode to `None`. The phone
+    /// treats `None` as *unconfirmed*, never as accepted — a watch whose
+    /// firmware predates this characteristic must not read as a success.
+    pub fn decode(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < PUSH_STATUS_LEN || bytes[..4] != PUSH_STATUS_MAGIC {
+            return None;
+        }
+        let accepted = match bytes[6] {
+            0 => false,
+            1 => true,
+            _ => return None,
+        };
+        Some(PushOutcome {
+            seq: bytes[4],
+            kind: PushKind::from_wire(bytes[5])?,
+            accepted,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,6 +475,92 @@ mod tests {
             Some((0xFFFF, &[][..])),
             "the largest offset with an empty payload still parses"
         );
+    }
+
+    const EVERY_KIND: [PushKind; 5] = [
+        PushKind::Settings,
+        PushKind::Course,
+        PushKind::Workout,
+        PushKind::Screens,
+        PushKind::Roadbook,
+    ];
+
+    #[test]
+    fn every_push_outcome_round_trips() {
+        for kind in EVERY_KIND {
+            for accepted in [false, true] {
+                for seq in [0u8, 1, 200, u8::MAX] {
+                    let outcome = PushOutcome {
+                        seq,
+                        kind,
+                        accepted,
+                    };
+                    let bytes = outcome.encode();
+                    assert_eq!(bytes.len(), PUSH_STATUS_LEN);
+                    assert_eq!(PushOutcome::decode(&bytes), Some(outcome));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_push_status_read_that_is_not_one_fails_closed() {
+        // Every way the phone can read something that is not this watch's
+        // verdict — a firmware without the characteristic answering short, a
+        // foreign frame, a kind this build does not know, a verdict byte that
+        // is neither yes nor no. None of them may decode, because the phone
+        // treats an undecodable read as UNCONFIRMED and a decoded one as the
+        // truth about whether its push landed.
+        let good = PushOutcome {
+            seq: 9,
+            kind: PushKind::Roadbook,
+            accepted: true,
+        }
+        .encode();
+        for len in 0..PUSH_STATUS_LEN {
+            assert_eq!(PushOutcome::decode(&good[..len]), None, "{len}-byte read");
+        }
+        let mut foreign = good;
+        foreign[..4].copy_from_slice(b"CRS1");
+        assert_eq!(PushOutcome::decode(&foreign), None);
+        let mut unknown_kind = good;
+        unknown_kind[5] = 5;
+        assert_eq!(PushOutcome::decode(&unknown_kind), None);
+        let mut bad_verdict = good;
+        bad_verdict[6] = 2;
+        assert_eq!(PushOutcome::decode(&bad_verdict), None);
+    }
+
+    #[test]
+    fn the_kind_discriminants_are_the_wire_and_never_move() {
+        // Renumbering these silently re-labels every banner and every phone
+        // verdict — the § 410 failure one layer down, and just as invisible
+        // without hardware.
+        assert_eq!(PushKind::Settings as u8, 0);
+        assert_eq!(PushKind::Course as u8, 1);
+        assert_eq!(PushKind::Workout as u8, 2);
+        assert_eq!(PushKind::Screens as u8, 3);
+        assert_eq!(PushKind::Roadbook as u8, 4);
+        for kind in EVERY_KIND {
+            assert_eq!(PushKind::from_wire(kind as u8), Some(kind));
+        }
+        assert_eq!(PushKind::from_wire(5), None);
+        assert_eq!(PushKind::from_wire(u8::MAX), None);
+    }
+
+    #[test]
+    fn every_kind_abbreviates_to_its_own_frame_tag() {
+        // The wearer's banner and the phone's frame magic must name the same
+        // thing: a rejected RBK1 push cannot read as CRS.
+        let mut seen: Vec<&str, 5> = Vec::new();
+        for kind in EVERY_KIND {
+            let tag = kind.abbrev();
+            assert_eq!(tag.len(), 3, "{tag}");
+            assert!(!seen.contains(&tag), "duplicate abbreviation {tag}");
+            let _ = seen.push(tag);
+        }
+        assert_eq!(PushKind::Course.abbrev(), "CRS");
+        assert_eq!(PushKind::Roadbook.abbrev(), "RBK");
     }
 
     #[test]
