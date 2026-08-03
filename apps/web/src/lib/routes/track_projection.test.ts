@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { projectTrack } from './track_projection';
+import { isTrackRenderable, projectTrack } from './track_projection';
 import type { TrackPoint } from '../types';
 
 /// Mirror of `apps/mobile_android/test/track_preview_test.dart`'s
@@ -98,4 +98,52 @@ test('a track across the antimeridian fits its own width, not the whole world', 
 	}
 	// And the box actually uses the panel rather than collapsing to a dot.
 	assert.ok(Math.abs(a[2].x - a[0].x) > 50, `span ${Math.abs(a[2].x - a[0].x)}`);
+});
+
+test('isTrackRenderable rejects empty, single-point, and sub-5 m jitter tracks', () => {
+	assert.equal(isTrackRenderable([]), false);
+	assert.equal(isTrackRenderable([{ lat: 51.5074, lng: -0.1278 }]), false);
+	// ~1 m diagonal — GPS noise from a stationary device.
+	assert.equal(
+		isTrackRenderable([
+			{ lat: 51.5074, lng: -0.1278 },
+			{ lat: 51.5074009, lng: -0.1278009 },
+		]),
+		false,
+	);
+});
+
+test('isTrackRenderable accepts a tiny but genuine lap', () => {
+	// ~14 m diagonal — small but real.
+	assert.equal(
+		isTrackRenderable([
+			{ lat: 51.5074, lng: -0.1278 },
+			{ lat: 51.50749, lng: -0.12781 },
+		]),
+		true,
+	);
+});
+
+test('isTrackRenderable rejects a stationary jitter cluster on the antimeridian', () => {
+	// ~2 m of jitter straddling 180°. The raw min/max span read 359.99°
+	// (~40,000 km), so the gate passed exactly the standing-still case it
+	// exists to catch and the thumbnail drew the meaningless dot.
+	assert.equal(
+		isTrackRenderable([
+			{ lat: 0, lng: 179.999992 },
+			{ lat: 0, lng: -179.999992 },
+			{ lat: 0.000009, lng: 179.999995 },
+		]),
+		false,
+	);
+});
+
+test('isTrackRenderable accepts a genuine run crossing the antimeridian', () => {
+	assert.equal(
+		isTrackRenderable([
+			{ lat: 0, lng: 179.9995 },
+			{ lat: 0, lng: -179.9995 },
+		]),
+		true,
+	);
 });

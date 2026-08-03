@@ -32,6 +32,7 @@
 	import { isTrackOwner } from '$lib/runs/track_ownership';
 	import { consent } from '$lib/settings/consent.svelte';
 	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/routes/static_map';
+	import { isTrackRenderable } from '$lib/routes/track_projection';
 
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
@@ -144,36 +145,13 @@
 			// equivalent to an empty track. Wear OS / iOS recorders log
 			// every fix the OS produces, so a runner who hits Start +
 			// Stop indoors (or a watch emulator with a static location)
-			// uploads a non-empty array of identical points. The SVG
-			// thumbnail would otherwise project them all onto a single
-			// pixel and render a meaningless red dot.
-			const renderable = isMoving(track) ? track : [];
+			// uploads a non-empty array of identical points.
+			const renderable = isTrackRenderable(track) ? track : [];
 			cacheSet(cacheKey, renderable);
 			points = renderable;
 		} catch (_) {
 			cacheSet(cacheKey, null);
 		}
-	}
-
-	/// True iff the track's bounding-box diagonal is large enough to be
-	/// worth drawing at thumbnail scale. A few-metre threshold catches
-	/// GPS jitter from a runner standing still without throwing away
-	/// genuinely tiny laps. Pure haversine on the bounding box rather
-	/// than a full path-length integration — the SVG only needs the
-	/// extent, not the distance run.
-	function isMoving(track: TrackPoint[]): boolean {
-		if (!track || track.length < 2) return false;
-		let minLat = track[0].lat, maxLat = track[0].lat;
-		let minLng = track[0].lng, maxLng = track[0].lng;
-		for (const p of track) {
-			if (p.lat < minLat) minLat = p.lat;
-			else if (p.lat > maxLat) maxLat = p.lat;
-			if (p.lng < minLng) minLng = p.lng;
-			else if (p.lng > maxLng) maxLng = p.lng;
-		}
-		const dLatM = (maxLat - minLat) * 111_320;
-		const dLngM = (maxLng - minLng) * 111_320 * Math.cos((minLat * Math.PI) / 180);
-		return Math.hypot(dLatM, dLngM) > 5;
 	}
 </script>
 
