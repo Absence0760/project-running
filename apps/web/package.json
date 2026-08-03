@@ -17,7 +17,7 @@
 		"test:e2e:sso": "svelte-kit sync && playwright test --config=tests-e2e/playwright.sso.config.ts"
 	},
 	"devDependencies": {
-		"@iconify-json/material-symbols": "1.2.87",
+		"@iconify-json/material-symbols": "1.2.88",
 		"@playwright/test": "^1.62.1",
 		"@sveltejs/adapter-static": "3.0.10",
 		"@sveltejs/kit": "2.70.2",
@@ -45,7 +45,7 @@
 		"@zip.js/zip.js": "^2.8.34",
 		"fit-file-parser": "^4.1.0",
 		"html-to-image": "^1.11.13",
-		"isomorphic-dompurify": "^3.20.0",
+		"isomorphic-dompurify": "^3.21.0",
 		"jszip": "^3.10.1",
 		"maplibre-gl": "^6.1.0",
 		"marked": "^18.0.7",
