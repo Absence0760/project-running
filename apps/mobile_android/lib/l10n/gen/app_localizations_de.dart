@@ -2829,6 +2829,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Diese Route hat zu wenige Punkte, um ihr auf der Uhr zu folgen';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'Die Uhr hat die Übertragung abgelehnt und behält, was sie bereits hatte. Bitte erneut versuchen.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'Strecke konnte nicht an die Uhr gesendet werden: $error';
   }

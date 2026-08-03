@@ -2652,6 +2652,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailWatchCourseTooShort => 'このルートは地点が少なすぎてウォッチでたどれません';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      '時計が送信を拒否し、以前の内容をそのまま保持しました。もう一度お試しください。';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'コースをウォッチに送信できませんでした: $error';
   }

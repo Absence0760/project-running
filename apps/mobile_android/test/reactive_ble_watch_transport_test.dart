@@ -19,6 +19,7 @@ import '../lib/reactive_ble_watch_transport.dart';
 ///   ..e6  workout       write
 ///   ..e7  screens       write
 ///   ..e8  roadbook      write
+///   ..e9  push_status   read
 const _service = 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _runManifest = 'd1f6a7e2-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _runChunk = 'd1f6a7e3-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
@@ -27,6 +28,7 @@ const _course = 'd1f6a7e5-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _workout = 'd1f6a7e6-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _screens = 'd1f6a7e7-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _roadbook = 'd1f6a7e8-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
+const _pushStatus = 'd1f6a7e9-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 
 /// The `frame` characteristic: the per-second live-status notify, claimed by
 /// [ReactiveBleWatchFrameSource] on its own connection rather than by the
@@ -73,6 +75,11 @@ void main() {
       expect(ReactiveBleWatchTransport.roadbookCharUuid.toString(), _roadbook);
     });
 
+    test('push verdicts read from ..e9', () {
+      expect(
+          ReactiveBleWatchTransport.pushStatusCharUuid.toString(), _pushStatus);
+    });
+
     test('the status link reads frames from ..e1', () {
       expect(ReactiveBleWatchFrameSource.frameCharUuid.toString(), _frame);
     });
@@ -87,8 +94,9 @@ void main() {
         ReactiveBleWatchTransport.workoutCharUuid.toString(),
         ReactiveBleWatchTransport.screensCharUuid.toString(),
         ReactiveBleWatchTransport.roadbookCharUuid.toString(),
+        ReactiveBleWatchTransport.pushStatusCharUuid.toString(),
       };
-      expect(uuids, hasLength(8));
+      expect(uuids, hasLength(9));
     });
   });
 }

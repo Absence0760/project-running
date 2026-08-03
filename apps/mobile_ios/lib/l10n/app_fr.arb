@@ -767,6 +767,7 @@
   "routeDetailWatchCourseSent": "Parcours envoyé à la montre ({points} points)",
   "routeDetailWatchCourseSimplified": "Parcours envoyé à la montre — réduit de {source} à {points} points pour tenir",
   "routeDetailWatchCourseTooShort": "Cet itinéraire a trop peu de points pour être suivi sur la montre",
+  "routeDetailWatchPushRejected": "La montre a refusé l'envoi et a conservé ce qu'elle avait déjà. Réessayez.",
   "routeDetailWatchCourseFailed": "Impossible d'envoyer le parcours à la montre : {error}",
   "routeDetailSendToAppleWatch": "Envoyer à l'Apple Watch",
   "routeDetailAppleWatchRouteSent": "Itinéraire envoyé à l'Apple Watch ({points} points)",

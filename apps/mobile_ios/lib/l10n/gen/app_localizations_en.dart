@@ -2798,6 +2798,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This route has too few points to follow on the watch';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'The watch refused the push and kept what it already had. Try again.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'Couldn\'t send the course to the watch: $error';
   }

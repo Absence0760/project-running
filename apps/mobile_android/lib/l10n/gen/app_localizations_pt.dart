@@ -2818,6 +2818,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Esta rota tem pontos de menos para ser seguida no relógio';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'O relógio recusou o envio e manteve o que já tinha. Tente novamente.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'Não foi possível enviar o percurso para o relógio: $error';
   }
@@ -15138,6 +15142,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get routeDetailWatchCourseTooShort =>
       'Esta rota tem pontos de menos para ser seguida no relógio';
+
+  @override
+  String get routeDetailWatchPushRejected =>
+      'O relógio recusou o envio e manteve o que já tinha. Tente novamente.';
 
   @override
   String routeDetailWatchCourseFailed(String error) {

@@ -767,6 +767,7 @@
   "routeDetailWatchCourseSent": "コースをウォッチに送信しました（{points}地点）",
   "routeDetailWatchCourseSimplified": "コースをウォッチに送信しました — 収まるように{source}地点から{points}地点に間引きました",
   "routeDetailWatchCourseTooShort": "このルートは地点が少なすぎてウォッチでたどれません",
+  "routeDetailWatchPushRejected": "時計が送信を拒否し、以前の内容をそのまま保持しました。もう一度お試しください。",
   "routeDetailWatchCourseFailed": "コースをウォッチに送信できませんでした: {error}",
   "routeDetailSendToAppleWatch": "Apple Watchに送信",
   "routeDetailAppleWatchRouteSent": "ルートをApple Watchに送信しました（{points}地点）",

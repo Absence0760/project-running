@@ -18,6 +18,7 @@
 
 use crate::auto_lap::{AutoLap, AUTO_LAP_DEFAULT};
 use crate::backyard::{Backyard, BackyardView};
+use crate::ble_sync::PushOutcome;
 use crate::climb::{crest_ahead, ClimbDetector, ClimbView};
 use crate::cutoff_eta::{next_cutoff_eta, CutoffEta, CutoffLeg};
 use crate::distance_bands::{band_for_distance, DistanceBand};
@@ -892,13 +893,14 @@ pub struct Snapshot {
     /// else on earth, and until this counter its destruction reached only a
     /// `warn!` down a debug cable no runner carries.
     pub run_lost_seq: u8,
-    /// Wrapping count of course pushes the watch REJECTED (bad chunk, failed
-    /// CRC, undecodable frame), mirrored from the ble task
-    /// ([`Recorder::set_course_reject_seq`]) — the alert engine edge-detects
-    /// it into the `! CRS FAIL` banner, because a phone that re-pushed a
-    /// corrected course mid-race got a defmt warn while the runner kept
-    /// navigating the stale course believing it updated.
-    pub course_reject_seq: u8,
+    /// The verdict on the last phone→watch push the radio task resolved,
+    /// mirrored from it ([`Recorder::set_push_outcome`]) — the alert engine
+    /// edge-detects the wrapping seq and raises `! <KIND> FAIL` for a refused
+    /// one. All five push characteristics are latest-value, so a refused push
+    /// leaves the PREVIOUS course / workout / roadbook / screens / settings
+    /// armed while the runner's phone said "sent"; before this seam four of
+    /// the five reached only a `warn!` down a debug cable no runner carries.
+    pub push_outcome: PushOutcome,
     /// The runner's countdown / stopwatch reading ([`crate::timers`], §375), or
     /// `None` while nothing is armed. Fed in from the task that owns the
     /// instrument rather than derived here — the timer outlives runs, so the
@@ -1265,13 +1267,13 @@ pub struct Recorder {
     waypoints: Waypoints,
     waypoint_mark_seq: u8,
     waypoint_refuse_seq: u8,
-    /// Wrapping counts for the two banners whose events happen outside this
-    /// module — a flash eviction taking an unsynced run, and the ble task
-    /// rejecting a course push. Recorder-lifetime like the waypoint seqs
-    /// (never cleared by a run boundary): the alert engine baselines them at
-    /// each run start, so pre-run history cannot replay at the start line.
+    /// State for the two banners whose events happen outside this module — a
+    /// flash eviction taking an unsynced run, and the radio task resolving a
+    /// phone push. Recorder-lifetime like the waypoint seqs (never cleared by
+    /// a run boundary): the alert engine baselines them at each run start, so
+    /// pre-run history cannot replay at the start line.
     run_lost_seq: u8,
-    course_reject_seq: u8,
+    push_outcome: PushOutcome,
     /// The runner's pushed fuel cadences (`SET1`), seconds of moving time per
     /// sip / gel — the same values the alert engine runs on, mirrored here so
     /// the Fuel page's carry-out math describes THIS runner's plan rather
@@ -1366,7 +1368,7 @@ impl Recorder {
             waypoint_mark_seq: 0,
             waypoint_refuse_seq: 0,
             run_lost_seq: 0,
-            course_reject_seq: 0,
+            push_outcome: PushOutcome::DEFAULT,
             fuel_drink_interval_s: None,
             fuel_eat_interval_s: None,
         }
@@ -1471,12 +1473,12 @@ impl Recorder {
         self.run_lost_seq = self.run_lost_seq.wrapping_add(1);
     }
 
-    /// Mirror the ble task's wrapping rejected-course-push counter
-    /// ([`Snapshot::course_reject_seq`]). The recorder never interprets it —
-    /// it is carried so the alert engine, which reads only snapshots, can
-    /// edge-detect the rejection into the `! CRS FAIL` banner.
-    pub fn set_course_reject_seq(&mut self, seq: u8) {
-        self.course_reject_seq = seq;
+    /// Mirror the radio task's last push verdict
+    /// ([`Snapshot::push_outcome`]). The recorder never interprets it — it is
+    /// carried so the alert engine, which reads only snapshots, can
+    /// edge-detect a refusal into its `! <KIND> FAIL` banner.
+    pub fn set_push_outcome(&mut self, outcome: PushOutcome) {
+        self.push_outcome = outcome;
     }
 
     /// Restore the marks persisted in flash (the app's boot path). Whole-store
@@ -2544,7 +2546,7 @@ impl Recorder {
             waypoint_mark_seq: self.waypoint_mark_seq,
             waypoint_refuse_seq: self.waypoint_refuse_seq,
             run_lost_seq: self.run_lost_seq,
-            course_reject_seq: self.course_reject_seq,
+            push_outcome: self.push_outcome,
             timer: self.timer,
             track_thinning: self.track_thinning,
             pages_mask: 0,

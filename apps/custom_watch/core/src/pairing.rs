@@ -26,6 +26,7 @@
 //! `Watch` receiver — and a reboot zeroes the atomic, so the gate fails
 //! closed.
 
+use core::cell::Cell;
 use core::fmt::Write;
 
 use crate::button::STOP_CONFIRM_WINDOW_S;
@@ -104,6 +105,63 @@ pub fn window_remaining_s(until_s: u32, now_s: u32) -> Option<u32> {
 /// unbonded watch and restores first-time-setup pairing with no window.
 pub fn bond_is_live(bonded_at_gen: u32, current_gen: u32) -> bool {
     bonded_at_gen == current_gen
+}
+
+/// A stored bond together with the erase generation it was formed under, held
+/// so that [`bond_is_live`] **cannot be skipped**.
+///
+/// The predicate above is the whole gate, and a caller that reads the peer
+/// without consulting it serves an erased owner's keys. That had already
+/// happened twice — once as the round-3 bond defect this predicate was written
+/// for, and again in `load_sys_attrs`, which read the field directly while the
+/// accessor beside it documented that nothing may (issue #664) — so the fix is
+/// not a third careful call site but a type with no way to get the peer out
+/// except through the check. Both fields are private to this module; the app's
+/// `Bonder` holds one of these and supplies `current_gen` from its atomic.
+///
+/// Generic over the peer because the SoftDevice key types live in the `app`
+/// crate and must not be dragged into this `no_std` core — `Copy` is all this
+/// needs, and it is what a `Cell` requires anyway.
+pub struct BondCell<P: Copy> {
+    peer: Cell<Option<P>>,
+    formed_at_gen: Cell<u32>,
+}
+
+impl<P: Copy> BondCell<P> {
+    pub const fn new() -> Self {
+        BondCell {
+            peer: Cell::new(None),
+            formed_at_gen: Cell::new(0),
+        }
+    }
+
+    /// The stored peer, or `None` once a factory erase has retired it. The
+    /// ONLY way out.
+    pub fn live(&self, current_gen: u32) -> Option<P> {
+        bond_is_live(self.formed_at_gen.get(), current_gen)
+            .then(|| self.peer.get())
+            .flatten()
+    }
+
+    /// Whether a live bond is held — [`Self::live`] for callers that need only
+    /// the question, so `Copy`-ing a peer out to test it for `None` is not the
+    /// idiom that spreads.
+    pub fn is_live(&self, current_gen: u32) -> bool {
+        self.live(current_gen).is_some()
+    }
+
+    /// Adopt `peer` as of `current_gen`. Storing the generation is not
+    /// optional — it is the same write.
+    pub fn set(&self, peer: Option<P>, current_gen: u32) {
+        self.peer.set(peer);
+        self.formed_at_gen.set(current_gen);
+    }
+}
+
+impl<P: Copy> Default for BondCell<P> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn may_bond(bonded: bool, window_open: bool) -> bool {
@@ -295,6 +353,58 @@ mod tests {
         let live_after_erase = bond_is_live(3, 4);
         assert!(!live_after_erase);
         assert!(may_bond(live_after_erase, false));
+    }
+
+    #[test]
+    fn a_bond_cell_serves_nothing_once_the_erase_generation_moves() {
+        // The invariant the type exists to make unskippable: after an erase
+        // the keys are still in RAM (the firmware never reboots), and every
+        // reader must see them as gone.
+        let cell: BondCell<u8> = BondCell::new();
+        assert_eq!(cell.live(0), None, "a fresh cell holds nothing");
+        cell.set(Some(42), 0);
+        assert_eq!(cell.live(0), Some(42));
+        assert!(cell.is_live(0));
+        assert_eq!(cell.live(1), None, "an erase retires it");
+        assert!(!cell.is_live(1));
+    }
+
+    #[test]
+    fn a_bond_cell_re_pairs_into_the_current_generation() {
+        // Setting stores the generation in the SAME write, so a re-pair after
+        // an erase is live again — and erasable again in turn. A caller that
+        // could set the peer without the generation is exactly the bug the
+        // type removes.
+        let cell: BondCell<u8> = BondCell::new();
+        cell.set(Some(1), 0);
+        assert_eq!(cell.live(3), None);
+        cell.set(Some(2), 3);
+        assert_eq!(cell.live(3), Some(2));
+        assert_eq!(cell.live(4), None);
+    }
+
+    #[test]
+    fn clearing_a_bond_cell_serves_nothing_at_any_generation() {
+        let cell: BondCell<u8> = BondCell::new();
+        cell.set(Some(9), 5);
+        cell.set(None, 5);
+        for gen in [0, 5, 6, u32::MAX] {
+            assert_eq!(cell.live(gen), None);
+        }
+    }
+
+    #[test]
+    fn a_bond_cell_feeds_may_bond_the_same_answer_it_serves_keys_on() {
+        // The two consumers must never disagree: if the keys are dead, the
+        // watch must ALSO read as unbonded so first-time-setup pairing works
+        // again — which is what makes an erase a usable hand-on.
+        let cell: BondCell<u8> = BondCell::new();
+        cell.set(Some(7), 2);
+        assert!(
+            !may_bond(cell.is_live(2), false),
+            "a live bond is protected"
+        );
+        assert!(may_bond(cell.is_live(3), false), "an erased one is not");
     }
 
     #[test]

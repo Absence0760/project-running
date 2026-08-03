@@ -767,6 +767,7 @@
   "routeDetailWatchCourseSent": "Percurso enviado para o relógio ({points} pontos)",
   "routeDetailWatchCourseSimplified": "Percurso enviado para o relógio — reduzido de {source} para {points} pontos para caber",
   "routeDetailWatchCourseTooShort": "Esta rota tem pontos de menos para ser seguida no relógio",
+  "routeDetailWatchPushRejected": "O relógio recusou o envio e manteve o que já tinha. Tente novamente.",
   "routeDetailWatchCourseFailed": "Não foi possível enviar o percurso para o relógio: {error}",
   "routeDetailSendToAppleWatch": "Enviar para o Apple Watch",
   "routeDetailAppleWatchRouteSent": "Rota enviada para o Apple Watch ({points} pontos)",

@@ -29,6 +29,8 @@ class _FakeTransport implements WatchBleTransport {
   @override
   Future<List<int>> readManifest() async => const [];
   @override
+  Future<List<int>> readPushStatus() async => const [];
+  @override
   Future<void> writeChunkRequest(List<int> request) async {}
   @override
   Future<void> writeSettings(List<int> frame) async {}

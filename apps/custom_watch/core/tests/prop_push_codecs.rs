@@ -18,6 +18,7 @@ use proptest::prelude::*;
 use proptest::sample::Index;
 use support::check;
 use watch_core::alerts::{PACE_BAND_MAX_S_PER_KM, PACE_BAND_MIN_S_PER_KM};
+use watch_core::ble_sync::{PushKind, PushOutcome, PUSH_STATUS_LEN};
 use watch_core::face::Metric;
 use watch_core::ice::{
     decode_record, IceCard, ICE1_MAGIC, ICE1_RECORD_LEN, ICE1_VERSION, ICE_BLOOD_LEN, ICE_FIELD_LEN,
@@ -334,6 +335,63 @@ fn screens_decode_never_panics_on_arbitrary_bytes() {
         prop::collection::vec(any::<u8>(), 0..=MAX_SCR1_LEN),
         |bytes| {
             let _ = Screens::decode(&bytes);
+            Ok(())
+        },
+    );
+}
+
+/// The `PSH1` push verdict — the one record in this family the WATCH writes and
+/// the PHONE decodes, so its fail-closed direction is the mirror of the others:
+/// what must never happen is arbitrary bytes reading as a verdict, because the
+/// phone reports "sent" off exactly this.
+fn a_push_outcome() -> impl Strategy<Value = PushOutcome> {
+    (
+        any::<u8>(),
+        prop::sample::select(vec![
+            PushKind::Settings,
+            PushKind::Course,
+            PushKind::Workout,
+            PushKind::Screens,
+            PushKind::Roadbook,
+        ]),
+        any::<bool>(),
+    )
+        .prop_map(|(seq, kind, accepted)| PushOutcome {
+            seq,
+            kind,
+            accepted,
+        })
+}
+
+#[test]
+fn a_push_outcome_round_trips_and_fails_closed() {
+    check(
+        256,
+        (a_push_outcome(), any::<Index>(), 1u8..=255),
+        |(outcome, at, delta)| {
+            let bytes = outcome.encode();
+            prop_assert_eq!(PushOutcome::decode(&bytes), Some(outcome));
+            // Unlike its CRC-sealed siblings this record has no checksum — it
+            // rides one encrypted ATT read, not a chunked write — so the property
+            // is the weaker but sufficient one: a corrupted byte may fail to
+            // decode, but if it decodes it decodes to what the bytes now say, and
+            // a corrupted MAGIC never decodes at all.
+            let corrupt = corrupted(&bytes, at.index(bytes.len()), delta);
+            if at.index(bytes.len()) < 4 {
+                prop_assert_eq!(PushOutcome::decode(&corrupt), None, "a foreign magic");
+            }
+            Ok(())
+        },
+    );
+}
+
+#[test]
+fn push_outcome_decode_never_panics_on_arbitrary_bytes() {
+    check(
+        512,
+        prop::collection::vec(any::<u8>(), 0..=PUSH_STATUS_LEN + 4),
+        |bytes| {
+            let _ = PushOutcome::decode(&bytes);
             Ok(())
         },
     );

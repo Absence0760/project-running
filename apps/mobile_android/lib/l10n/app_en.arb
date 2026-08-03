@@ -3730,6 +3730,7 @@
   "@routeDetailWatchCourseTooShort": {
     "description": "Banner when a route cannot be sent to the watch because it has fewer than two positions"
   },
+  "routeDetailWatchPushRejected": "The watch refused the push and kept what it already had. Try again.",
   "routeDetailWatchCourseFailed": "Couldn't send the course to the watch: {error}",
   "@routeDetailWatchCourseFailed": {
     "placeholders": {

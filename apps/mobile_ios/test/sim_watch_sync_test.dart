@@ -9,6 +9,7 @@ import '../lib/sim_watch_sync.dart';
 import '../lib/watch_course.dart';
 import '../lib/watch_ingest_queue.dart';
 import '../lib/watch_roadbook.dart';
+import '../lib/watch_screens.dart';
 import '../lib/watch_settings.dart';
 import '../lib/watch_workout.dart';
 
@@ -206,6 +207,20 @@ class FakeWatchTransport implements WatchBleTransport {
 
   @override
   Future<List<int>> readManifest() async => manifest;
+
+  /// The verdict the watch answers `push_status` reads with, newest first.
+  /// Empty means the firmware has none to give — an unconfirmed push.
+  List<List<int>> pushStatusReads = const [];
+  int pushStatusReadCount = 0;
+
+  @override
+  Future<List<int>> readPushStatus() async {
+    final at = pushStatusReadCount++;
+    if (at >= pushStatusReads.length) {
+      return pushStatusReads.isEmpty ? const [] : pushStatusReads.last;
+    }
+    return pushStatusReads[at];
+  }
 
   @override
   Future<void> writeChunkRequest(List<int> request) async {
@@ -1064,6 +1079,170 @@ void main() {
       );
       expect(transport.disconnectCount, 1,
           reason: 'the finally must release the radio');
+    });
+  });
+
+  group('push verdicts (push_status)', () {
+    List<int> psh1(int seq, WatchPushKind kind, {required bool accepted}) => [
+          ...'PSH1'.codeUnits,
+          seq,
+          WatchPushKind.values.indexOf(kind),
+          accepted ? 1 : 0,
+        ];
+
+    List<CoursePoint> points() => const [
+          CoursePoint(40.0158083, -105.2705),
+          CoursePoint(40.015, -105.2705),
+        ];
+    List<WorkoutStep> steps() => const [
+          WorkoutStep(
+            kind: WorkoutStepKind.warmup,
+            targetDistanceMetres: 800,
+            targetPaceSecPerKm: 360,
+            toleranceSecPerKm: 10,
+            label: 'w',
+          ),
+        ];
+    WatchRoadbookCheckpoint cp() => const WatchRoadbookCheckpoint(
+          cumDistanceM: 5000.0,
+          legDistanceM: 5000,
+          projectedElapsedSec: 1800,
+          cutoff: WatchCutoffStatus.safe,
+          isRefill: false,
+        );
+
+    /// Every push, with the call that drives it — so a new push characteristic
+    /// cannot be added without a verdict path.
+    final everyPush = <WatchPushKind, Future<void> Function(WatchSyncClient)>{
+      WatchPushKind.settings: (c) => c.pushSettings(const WatchSettings(
+            maxHr: 190,
+            pacer: (distanceM: 42195, timeS: 14400),
+            gear: (baselineM: 500000.0, targetM: 800000.0),
+            zoneCeiling: 3,
+          )),
+      WatchPushKind.course: (c) =>
+          c.pushCourse(chunkCourse(encodeCourse(points()))),
+      WatchPushKind.workout: (c) =>
+          c.pushWorkout(chunkWorkout(encodeWorkoutSteps(steps()))),
+      WatchPushKind.screens: (c) => c.pushScreens(encodeWatchScreens(const [])),
+      WatchPushKind.roadbook: (c) =>
+          c.pushRoadbook(chunkRoadbook(encodeRoadbook([cp()], const []))),
+    };
+
+    WatchSyncClient clientFor(FakeWatchTransport t) => WatchSyncClient(
+          transport: t,
+          onRun: (_) async {},
+          pushConfirmInterval: Duration.zero,
+        );
+
+    test('a refused push throws instead of reporting sent', () async {
+      // The defect: an ATT write-with-response is the SoftDevice's answer,
+      // not the firmware's, so all five of these completed as successes while
+      // the watch kept the OLD value.
+      for (final entry in everyPush.entries) {
+        final transport = FakeWatchTransport(blob: const [], manifest: const [])
+          ..pushStatusReads = [
+            psh1(4, entry.key, accepted: true),
+            psh1(5, entry.key, accepted: false),
+          ];
+        await expectLater(
+          entry.value(clientFor(transport)),
+          throwsA(isA<WatchPushRejected>()
+              .having((e) => e.kind, 'kind', entry.key)),
+          reason: '${entry.key.name} reported success on a refusal',
+        );
+        expect(transport.disconnectCount, 1,
+            reason: 'the finally must still release the radio');
+      }
+    });
+
+    test('an accepted push completes', () async {
+      for (final entry in everyPush.entries) {
+        final transport = FakeWatchTransport(blob: const [], manifest: const [])
+          ..pushStatusReads = [
+            psh1(4, entry.key, accepted: false),
+            psh1(5, entry.key, accepted: true),
+          ];
+        await entry.value(clientFor(transport));
+        expect(transport.disconnectCount, 1);
+      }
+    });
+
+    test('a watch with no verdict to give leaves the push unconfirmed',
+        () async {
+      // Firmware predating the characteristic, or a read that failed: the
+      // push must complete as it always did. This path has never run on
+      // hardware, so it must not be able to turn a working push into a
+      // reported failure.
+      final transport = FakeWatchTransport(blob: const [], manifest: const []);
+      await clientFor(transport).pushCourse(chunkCourse(encodeCourse(points())));
+      expect(transport.courseWrites, isNotEmpty);
+    });
+
+    test('an unmoved sequence never invents a rejection', () async {
+      // The watch's LAST verdict may well be a refusal from an earlier push.
+      // Only a MOVED sequence is this push's answer; a stale one that read as
+      // a rejection would send the runner to re-push what is already loaded.
+      final transport = FakeWatchTransport(blob: const [], manifest: const [])
+        ..pushStatusReads = [psh1(9, WatchPushKind.course, accepted: false)];
+      await clientFor(transport).pushCourse(chunkCourse(encodeCourse(points())));
+      expect(transport.courseWrites, isNotEmpty);
+    });
+
+    test("another push's refusal is not this push's verdict", () async {
+      final transport = FakeWatchTransport(blob: const [], manifest: const [])
+        ..pushStatusReads = [
+          psh1(1, WatchPushKind.course, accepted: true),
+          psh1(2, WatchPushKind.settings, accepted: false),
+        ];
+      await clientFor(transport).pushCourse(chunkCourse(encodeCourse(points())));
+      expect(transport.courseWrites, isNotEmpty);
+    });
+
+    test('the first read after a write may still be the previous verdict',
+        () async {
+      // A read is a separate ATT transaction and the SoftDevice can answer it
+      // before the firmware's handler has run, so confirmation polls.
+      final transport = FakeWatchTransport(blob: const [], manifest: const [])
+        ..pushStatusReads = [
+          psh1(7, WatchPushKind.course, accepted: true),
+          psh1(7, WatchPushKind.course, accepted: true),
+          psh1(7, WatchPushKind.course, accepted: true),
+          psh1(8, WatchPushKind.course, accepted: false),
+        ];
+      await expectLater(
+        clientFor(transport).pushCourse(chunkCourse(encodeCourse(points()))),
+        throwsA(isA<WatchPushRejected>()),
+      );
+    });
+
+    test('decodePushStatus fails closed on anything that is not a verdict', () {
+      final good = psh1(3, WatchPushKind.roadbook, accepted: true);
+      expect(decodePushStatus(good)?.seq, 3);
+      expect(decodePushStatus(good)?.kind, WatchPushKind.roadbook);
+      expect(decodePushStatus(good)?.accepted, isTrue);
+
+      expect(decodePushStatus(const []), isNull);
+      expect(decodePushStatus(good.sublist(0, good.length - 1)), isNull,
+          reason: 'a short read is not a verdict');
+      expect(decodePushStatus([...'CRS1'.codeUnits, ...good.sublist(4)]), isNull,
+          reason: 'a foreign magic is not a verdict');
+      final unknownKind = [...good]..[5] = WatchPushKind.values.length;
+      expect(decodePushStatus(unknownKind), isNull);
+      final badVerdict = [...good]..[6] = 2;
+      expect(decodePushStatus(badVerdict), isNull);
+    });
+
+    test('the kind indices are the firmware wire discriminants', () {
+      // watch_core::ble_sync::PushKind — append only, never reorder. A shift
+      // here relabels every banner and every verdict, invisibly (§ 410).
+      expect(WatchPushKind.values.map((k) => k.index).toList(),
+          [0, 1, 2, 3, 4]);
+      expect(WatchPushKind.settings.index, 0);
+      expect(WatchPushKind.course.index, 1);
+      expect(WatchPushKind.workout.index, 2);
+      expect(WatchPushKind.screens.index, 3);
+      expect(WatchPushKind.roadbook.index, 4);
     });
   });
 }

@@ -4715,6 +4715,12 @@ abstract class AppLocalizations {
   /// **'This route has too few points to follow on the watch'**
   String get routeDetailWatchCourseTooShort;
 
+  /// No description provided for @routeDetailWatchPushRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The watch refused the push and kept what it already had. Try again.'**
+  String get routeDetailWatchPushRejected;
+
   /// Banner when the BLE course push to the watch fails
   ///
   /// In en, this message translates to:
