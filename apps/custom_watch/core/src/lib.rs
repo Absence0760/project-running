@@ -299,6 +299,7 @@ pub mod flash_store;
 pub mod fuel_plan;
 pub mod gauge;
 pub mod gear_wear;
+pub mod geo;
 pub mod gnss_cadence;
 pub mod gnss_mode;
 pub mod gnss_power;

@@ -17,6 +17,15 @@
 //! collapsing onto the outbound leg on the return — it is NOT part of the
 //! `snapToPolyline` parity port; the plain `project` math is left untouched.
 //!
+//! Two further watch-local departures from the port. The per-segment frame and
+//! the panel fit take their longitude differences through [`crate::geo`], so a
+//! course straddling 180 deg projects onto itself instead of ~40,000 km away —
+//! the web original has the same defect and is not fixed here (its own bug, its
+//! own lockstep). And [`Course::is_loop`] closes the along-axis into a circle on
+//! a course whose ends meet, which web has no concept of at all. Both are
+//! additive: on a course that neither straddles the line nor closes, every
+//! value is what the port produced, bit for bit.
+//!
 //! [`PanelFit`] is the display half kept host-testable: it fits the course's
 //! bounding box into a pixel panel (longitude scaled by cos(mid-latitude), the
 //! same correction `track_projection.ts` applies so a square loop renders
@@ -25,6 +34,7 @@
 
 use heapless::Vec;
 
+use crate::geo::{lon_delta_deg, unwrap_lon_deg, wrap_lon_deg};
 use crate::grade_adjusted_pace::haversine_metres;
 
 /// Fixed course capacity: 256 points x 16 B = 4 KiB of RAM for the polyline
@@ -227,8 +237,13 @@ impl Course {
         for p in points {
             min_lat = min_lat.min(p.lat_deg);
             max_lat = max_lat.max(p.lat_deg);
-            min_lon = min_lon.min(p.lon_deg);
-            max_lon = max_lon.max(p.lon_deg);
+            // Unwrapped onto the first point's side of the antimeridian, so a
+            // course straddling it spans its own width rather than 359-odd
+            // degrees — which would collapse the panel fit's scale and draw the
+            // whole course as a dot. Identity for a course that doesn't.
+            let lon = unwrap_lon_deg(points[0].lon_deg, p.lon_deg);
+            min_lon = min_lon.min(lon);
+            max_lon = max_lon.max(lon);
         }
         let first = points[0];
         let last = points[points.len() - 1];
@@ -332,11 +347,15 @@ impl Course {
 
             // Local planar frame: metres east/north of segment start `a`, with
             // longitude scaled by cos(lat) so a degree of lon matches a degree
-            // of lat in ground distance.
+            // of lat in ground distance. Both longitude deltas take the short
+            // way round the antimeridian ([`crate::geo`]) — a plain subtraction
+            // reads a 0.04 deg hop across the line as 359.96 deg the other way,
+            // which puts the whole frame ~40,000 km out.
             let cos_lat = self.seg_cos_lat[i];
-            let bx = to_rad(b.lon_deg - a.lon_deg) * R_M * cos_lat;
+            let b_east_deg = lon_delta_deg(a.lon_deg, b.lon_deg);
+            let bx = to_rad(b_east_deg) * R_M * cos_lat;
             let by = to_rad(b.lat_deg - a.lat_deg) * R_M;
-            let px = to_rad(lon_deg - a.lon_deg) * R_M * cos_lat;
+            let px = to_rad(lon_delta_deg(a.lon_deg, lon_deg)) * R_M * cos_lat;
             let py = to_rad(lat_deg - a.lat_deg) * R_M;
 
             let len_sq = bx * bx + by * by;
@@ -348,7 +367,7 @@ impl Course {
             };
 
             let s_lat = a.lat_deg + (b.lat_deg - a.lat_deg) * t;
-            let s_lon = a.lon_deg + (b.lon_deg - a.lon_deg) * t;
+            let s_lon = wrap_lon_deg(a.lon_deg + b_east_deg * t);
             // Perpendicular offset in the same planar frame: the fix minus the
             // foot `t * (bx, by)`. A great-circle distance here would be no more
             // accurate — the foot point was only ever located by this same
@@ -557,7 +576,7 @@ impl PanelFit {
     /// inside the panel by construction; an off-course runner's marker can
     /// fall outside — the caller clamps (or clips) as its surface needs.
     pub fn to_px(&self, lat_deg: f64, lon_deg: f64) -> (i32, i32) {
-        let x = (lon_deg - self.min_lon) * self.cos_mid_lat * self.scale + self.x_off;
+        let x = lon_delta_deg(self.min_lon, lon_deg) * self.cos_mid_lat * self.scale + self.x_off;
         let y = (self.lat_range - (lat_deg - self.min_lat)) * self.scale + self.y_off;
         (libm::round(x) as i32, libm::round(y) as i32)
     }
@@ -679,6 +698,85 @@ mod tests {
         let last = pts[pts.len() - 1];
         out.push(c.project_from(last.lat_deg, last.lon_deg, prev).unwrap());
         out
+    }
+
+    /// A course straddling 180 deg — Taveuni, Fiji, where the line runs through
+    /// the island. Two ~4.3 km legs, the second crossing.
+    fn across_the_antimeridian() -> Course {
+        Course::from_points(&[pt(-16.8, 179.95), pt(-16.8, 179.99), pt(-16.8, -179.97)]).unwrap()
+    }
+
+    #[test]
+    fn a_course_across_the_antimeridian_projects_onto_its_own_line() {
+        // Every one of these fixes is standing ON the course. The per-segment
+        // planar frame used to difference the longitudes plainly, reading the
+        // 0.04 deg hop across the line as 359.96 deg the other way, so a runner
+        // on the far side read 532 m off at the crossing and 3,087 m off a
+        // kilometre past it — a permanent `! OFF CRS` on the course itself.
+        let c = across_the_antimeridian();
+        let total = c.total_m();
+        assert!((total - 8_515.9).abs() < 1.0, "total {}", total);
+        let mut prev = 0.0;
+        for lon in [
+            179.96,
+            179.98,
+            179.99,
+            179.995,
+            180.0 - 360.0,
+            -179.99,
+            -179.97,
+        ] {
+            let p = c.project(-16.8, lon).unwrap();
+            assert!(p.off_m < 1.0, "lon {} read {} m off the line", lon, p.off_m);
+            assert!(p.along_m >= prev, "along went back at lon {}", lon);
+            prev = p.along_m;
+        }
+        assert!((prev - total).abs() < 1.0, "ended at {} of {}", prev, total);
+        // The snapped point is a real longitude, not one that ran past 180.
+        let snapped = c.project(-16.8, 179.995).unwrap();
+        assert!(snapped.lon_deg.abs() <= 180.0, "lon {}", snapped.lon_deg);
+    }
+
+    #[test]
+    fn a_fix_beside_a_course_across_the_antimeridian_reads_its_true_offset() {
+        let c = across_the_antimeridian();
+        // ~1.1 km north of the line, a hair past the crossing.
+        let p = c.project(-16.79, -179.999).unwrap();
+        assert!(
+            (p.off_m - 1_111.9).abs() < 5.0,
+            "off {} beside the crossing",
+            p.off_m
+        );
+        // And a course that does NOT straddle, with the runner across the line
+        // from it: 0.02 deg away, which used to read as 38,310 km.
+        let east = Course::from_points(&[pt(-16.8, 179.90), pt(-16.8, 179.99)]).unwrap();
+        let far = east.project(-16.8, -179.99).unwrap();
+        assert!(
+            (far.off_m - 2_129.0).abs() < 5.0,
+            "off {} across the line",
+            far.off_m
+        );
+    }
+
+    #[test]
+    fn a_course_across_the_antimeridian_fits_its_own_width_not_the_globe() {
+        // The bounding box is built on the first point's side of the line, so
+        // the span is the course's 0.08 deg rather than 359.92 — which would
+        // have collapsed the fit's scale and drawn the whole course as a dot.
+        let c = across_the_antimeridian();
+        let b = c.bounds();
+        assert!(
+            (b.max_lon - b.min_lon - 0.08).abs() < 1e-9,
+            "span {}",
+            b.max_lon - b.min_lon
+        );
+        let f = PanelFit::fit(&c, 168, 96);
+        let (x0, _) = f.to_px(-16.8, 179.95);
+        let (xmid, _) = f.to_px(-16.8, 179.99);
+        let (x1, _) = f.to_px(-16.8, -179.97);
+        assert_eq!(x0, PANEL_MARGIN_PX as i32);
+        assert_eq!(x1, 168 - 1 - PANEL_MARGIN_PX as i32);
+        assert!(x0 < xmid && xmid < x1, "{} {} {}", x0, xmid, x1);
     }
 
     #[test]

@@ -22,6 +22,7 @@
 //! ([`Trackback::set_fix_interval_s`]), because a heading cannot refresh faster
 //! than fixes arrive.
 
+use crate::geo::lon_delta_deg;
 use crate::grade_adjusted_pace::haversine_metres_f32;
 use crate::record::METRES_PER_DEGREE_LAT;
 use crate::route_simplify::{point_segment_distance, simplify_to_budget};
@@ -377,7 +378,7 @@ impl Trackback {
         self.current_lat_deg = lat_deg;
         self.current_lon_deg = lon_deg;
 
-        let e = ((lon_deg - origin.lon_deg) * origin.m_per_deg_lon) as f32;
+        let e = (lon_delta_deg(origin.lon_deg, lon_deg) * origin.m_per_deg_lon) as f32;
         let n = ((lat_deg - origin.lat_deg) * METRES_PER_DEGREE_LAT) as f32;
         let (last_e, last_n) = self.points[self.len - 1];
         let (de, dn) = (e - last_e, n - last_n);
@@ -461,7 +462,8 @@ impl Trackback {
         TrackbackView {
             points: self.points,
             len: self.len,
-            current_e_m: ((self.current_lon_deg - origin.lon_deg) * origin.m_per_deg_lon) as f32,
+            current_e_m: (lon_delta_deg(origin.lon_deg, self.current_lon_deg)
+                * origin.m_per_deg_lon) as f32,
             current_n_m: ((self.current_lat_deg - origin.lat_deg) * METRES_PER_DEGREE_LAT) as f32,
             distance_to_start_m: distance,
             bearing_to_start_deg: bearing,
@@ -524,6 +526,43 @@ mod tests {
         assert_eq!(v.points[0], (0.0, 0.0));
         assert_eq!(v.distance_to_start_m, 0.0);
         assert!(v.bearing_to_start_deg.is_none(), "at the start: no bearing");
+    }
+
+    #[test]
+    fn a_run_that_crosses_the_antimeridian_keeps_its_breadcrumb_frame() {
+        // Starting 100 m west of 180 deg and running east across it. The
+        // breadcrumb's local frame is metres east of the origin, and a plain
+        // longitude subtraction put every point past the line ~40,000 km west
+        // of the start — an unreadable thumbnail map and a `current_e_m` that
+        // no consumer could use. The great-circle distance and bearing were
+        // always right (`sin` and `cos` do not care where the line is), so the
+        // frame was the only thing wrong, and the only thing that changes.
+        let lat: f64 = -16.8;
+        let per_m = 1.0 / (METRES_PER_DEGREE_LAT * (lat.to_radians()).cos());
+        let start = 180.0 - 100.0 * per_m;
+        let mut tb = Trackback::new();
+        for i in 0..=40 {
+            let lon = start + i as f64 * 5.0 * per_m;
+            tb.on_point(lat, if lon > 180.0 { lon - 360.0 } else { lon }, i);
+        }
+        let v = tb.view();
+        assert!(
+            (v.current_e_m - 200.0).abs() < 2.0,
+            "east {} after crossing",
+            v.current_e_m
+        );
+        assert!(
+            (v.distance_to_start_m - 200.0).abs() < 2.0,
+            "distance {}",
+            v.distance_to_start_m
+        );
+        assert!(
+            v.points[..v.len]
+                .iter()
+                .all(|(e, _)| (0.0..=210.0).contains(e)),
+            "a breadcrumb point left the frame"
+        );
+        assert_eq!(v.bearing_sector(), Some(12), "the start is due west");
     }
 
     #[test]
