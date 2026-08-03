@@ -203,6 +203,7 @@ class SettingsSyncService extends ChangeNotifier {
     if (vfv is String && vfv.isNotEmpty && vfv != preferences.voiceFeedbackVerbosity) {
       preferences.setVoiceFeedbackVerbosity(vfv);
     }
+    _applyVoiceFeedbackEnabled(prefs);
     _applyVoiceCueTypes(prefs);
     // Body weight in kg — drives the run-detail calorie estimate.
     // null / non-positive clears the local cache so the calorie path
@@ -272,10 +273,7 @@ class SettingsSyncService extends ChangeNotifier {
   }
 
   void _applyDevice(Map<String, dynamic> prefs) {
-    final voice = prefs[SettingsKeys.voiceFeedbackEnabled];
-    if (voice is bool && voice != preferences.audioCues) {
-      preferences.setAudioCues(voice);
-    }
+    _applyVoiceFeedbackEnabled(prefs);
     final intervalKm = prefs[SettingsKeys.voiceFeedbackIntervalKm];
     if (intervalKm is num) {
       final metres = (intervalKm * 1000).round();
@@ -291,6 +289,21 @@ class SettingsSyncService extends ChangeNotifier {
     final dim = prefs[SettingsKeys.dimScreenWhileRecording];
     if (dim is bool && dim != preferences.dimScreenWhileRecording) {
       preferences.setDimScreenWhileRecording(dim);
+    }
+  }
+
+  /// `voice_feedback_enabled` is a UD key read from BOTH bags, same shape as
+  /// [_applyVoiceCueTypes]: web can only write the universal one, this
+  /// phone's own toggle writes the device one, and the universal-first
+  /// device-second apply order lets a per-phone choice win whenever the
+  /// device bag names the key. A non-bool value is dropped, never coerced —
+  /// this is the MASTER cue gate on the recording stack, so a corrupt bag
+  /// must neither silence cues nobody turned off nor un-mute an explicit
+  /// off; the phone's last local choice stands.
+  void _applyVoiceFeedbackEnabled(Map<String, dynamic> prefs) {
+    final voice = prefs[SettingsKeys.voiceFeedbackEnabled];
+    if (voice is bool && voice != preferences.audioCues) {
+      preferences.setAudioCues(voice);
     }
   }
 
