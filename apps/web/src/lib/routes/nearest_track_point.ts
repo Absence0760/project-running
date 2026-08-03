@@ -15,6 +15,8 @@
  * Dart twin.
  */
 
+import { unwrapLonDeg } from './geo';
+
 const EARTH_RADIUS_M = 6371000;
 const M_PER_DEG_LAT = 111320;
 
@@ -39,6 +41,11 @@ interface Grid {
 	cells: Map<number, number[]>;
 	cols: number;
 	rows: number;
+	/** Longitude frame reference — every longitude is unwrapped onto the
+	 *  first coordinate's side of the antimeridian before gridding, so a
+	 *  track straddling 180° gets a contiguous frame instead of a 359.9°
+	 *  span that both degenerates the cells and breaks the ring bound. */
+	refLng: number;
 	minLng: number;
 	minLat: number;
 	cellLng: number;
@@ -56,11 +63,13 @@ export interface TrackIndex {
 export function buildTrackIndex(coords: readonly [number, number][]): TrackIndex {
 	if (coords.length <= LINEAR_SCAN_MAX) return { coords, grid: null };
 
+	const refLng = coords[0][0];
 	let minLng = Infinity;
 	let maxLng = -Infinity;
 	let minLat = Infinity;
 	let maxLat = -Infinity;
-	for (const [lng, lat] of coords) {
+	for (const [rawLng, lat] of coords) {
+		const lng = unwrapLonDeg(refLng, rawLng);
 		if (lng < minLng) minLng = lng;
 		if (lng > maxLng) maxLng = lng;
 		if (lat < minLat) minLat = lat;
@@ -89,7 +98,16 @@ export function buildTrackIndex(coords: readonly [number, number][]): TrackIndex
 
 	const cells = new Map<number, number[]>();
 	for (let i = 0; i < coords.length; i++) {
-		const key = cellKey(coords[i][0], coords[i][1], minLng, minLat, cellLng, cellLat, cols, rows);
+		const key = cellKey(
+			unwrapLonDeg(refLng, coords[i][0]),
+			coords[i][1],
+			minLng,
+			minLat,
+			cellLng,
+			cellLat,
+			cols,
+			rows
+		);
 		const bucket = cells.get(key);
 		if (bucket) bucket.push(i);
 		else cells.set(key, [i]);
@@ -97,7 +115,7 @@ export function buildTrackIndex(coords: readonly [number, number][]): TrackIndex
 
 	return {
 		coords,
-		grid: { cells, cols, rows, minLng, minLat, cellLng, cellLat, minCellMetres },
+		grid: { cells, cols, rows, refLng, minLng, minLat, cellLng, cellLat, minCellMetres },
 	};
 }
 
@@ -132,8 +150,8 @@ export function nearestIndex(index: TrackIndex, lng: number, lat: number): numbe
 	if (!grid) return linearNearest(coords, lng, lat);
 
 	const q: [number, number] = [lng, lat];
-	const { cells, cols, rows, minLng, minLat, cellLng, cellLat, minCellMetres } = grid;
-	const cx = clamp(Math.floor((lng - minLng) / cellLng), 0, cols - 1);
+	const { cells, cols, rows, refLng, minLng, minLat, cellLng, cellLat, minCellMetres } = grid;
+	const cx = clamp(Math.floor((unwrapLonDeg(refLng, lng) - minLng) / cellLng), 0, cols - 1);
 	const cy = clamp(Math.floor((lat - minLat) / cellLat), 0, rows - 1);
 
 	let bestIdx = -1;
