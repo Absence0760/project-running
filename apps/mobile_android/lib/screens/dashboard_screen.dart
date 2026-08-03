@@ -6,6 +6,7 @@ import 'package:flutter/semantics.dart';
 import '../adaptive_width.dart';
 import '../age_grade.dart';
 import '../auth_change_aware.dart';
+import '../device_timezone.dart';
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
@@ -18,6 +19,7 @@ import '../nutrition_totals.dart' show sumMacros;
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
+import '../streak_card.dart';
 import '../streaks.dart';
 import '../training_load.dart';
 import '../training_service.dart';
@@ -139,6 +141,14 @@ class _DashboardScreenState extends State<DashboardScreen>
   /// simply doesn't render (graceful degrade).
   UserProfileRow? _viewerProfile;
 
+  /// All-time streaks from the `run_streaks_for_user` aggregate — the same
+  /// server row web's card reads, so a fresh install of a deep-history
+  /// account doesn't present the store's resident sliver as the all-time
+  /// truth (decisions § 471 / § 475). Null until resolved / offline /
+  /// signed out; the card then suppresses its all-time claim rather than
+  /// dressing the local figure up as one (`streak_card.dart`).
+  RunStreaks? _allTimeStreaks;
+
   @override
   void initState() {
     super.initState();
@@ -151,6 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     _hydrateModalities();
     _loadPersonalRecords();
     _loadViewerProfile();
+    _loadRunStreaks();
   }
 
   @override
@@ -168,12 +179,14 @@ class _DashboardScreenState extends State<DashboardScreen>
       _planOverview = null;
       _nutritionTargets = null;
       _viewerProfile = null;
+      _allTimeStreaks = null;
       _bestEffortCache.clear();
     });
     _refreshPlanOverview();
     _hydrateModalities();
     _loadPersonalRecords();
     _loadViewerProfile();
+    _loadRunStreaks();
   }
 
   /// Best-effort load of the server PB cache (L4 — a failure just leaves the
@@ -201,6 +214,23 @@ class _DashboardScreenState extends State<DashboardScreen>
     } catch (e) {
       debugPrint('dashboard: profile fetch failed: $e');
     }
+  }
+
+  /// Best-effort load of the server all-time streak aggregate (L4 — a
+  /// failure just leaves the claim-suppressed local fallback in place,
+  /// never a resident-window number dressed up as all-time). Signed-out
+  /// must not call the SECURITY INVOKER RPC at all. The device's IANA
+  /// zone rides along so the server buckets days exactly like the local
+  /// `computeRunStreaks` (`fetchRunStreaks` never throws; null keeps the
+  /// previous answer, which at mount is the suppressing null).
+  Future<void> _loadRunStreaks() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    final tz = await deviceIanaTimeZone();
+    final row = await api.fetchRunStreaks(tz: tz);
+    if (row == null || !mounted) return;
+    setState(() =>
+        _allTimeStreaks = RunStreaks(current: row.current, best: row.best));
   }
 
   /// Age grade (e.g. `72.4%`) for a timed best-effort PB, or null when the
@@ -802,7 +832,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       final streakCard = Card(
         child: Padding(
           padding: _kCardPadding,
-          child: _StreakRow(runs: runs),
+          child: _StreakRow(
+            key: const Key('dashboardStreakRow'),
+            runs: runs,
+            allTime: _allTimeStreaks,
+          ),
         ),
       );
       final mileageCard = MileageTrendCard(runs: runs, unit: unit, now: now);
@@ -1857,31 +1891,42 @@ class _PeriodStatCard extends StatelessWidget {
 
 /// Current + best run-streak card. Strava-style daily grace — a
 /// missing today doesn't break the streak if yesterday is intact.
-/// Pure compute via `lib/streaks.dart` so the helper can be
-/// unit-tested without a widget pump.
+/// Pure compute via `lib/streaks.dart`; the claim discipline lives in
+/// `lib/streak_card.dart` (decisions § 471 / § 475): [allTime] is the
+/// `run_streaks_for_user` row and drives both figures when present
+/// (folded with the local compute so an unsynced run is never walked
+/// back), while a null — loading, offline, signed out — suppresses the
+/// best/all-time sub-label entirely rather than presenting the store's
+/// resident sliver as the all-time truth.
 class _StreakRow extends StatelessWidget {
   final List<Run> runs;
-  const _StreakRow({required this.runs});
+  final RunStreaks? allTime;
+  const _StreakRow({super.key, required this.runs, required this.allTime});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final streaks = computeRunStreaks(
+    final windowed = computeRunStreaks(
       runs.map((r) => r.startedAt).toList(),
       DateTime.now(),
     );
-    final crown = streaks.current > 0;
+    final at = allTime;
+    final state = streakCardState(
+      at == null ? null : mergeAllTimeStreaks(at, windowed),
+      windowed,
+    );
+    final crown = state.current > 0;
     final color = crown ? const Color(0xFFF5B30A) : theme.colorScheme.outline;
-    final bestText = streaks.best > streaks.current
-        ? l10n.dashboardStreakBest(streaks.best)
-        : streaks.current > 0
-            ? l10n.dashboardStreakAllTimeBest
-            // Encourage rather than guilt a beginner with no current streak
-            // (new persona #26).
-            : streaks.best > 0
-                ? l10n.dashboardStreakRestart
-                : l10n.dashboardStreakStart;
+    final bestText = switch (state.sub) {
+      StreakSubKind.best => l10n.dashboardStreakBest(state.bestN!),
+      StreakSubKind.allTimeBest => l10n.dashboardStreakAllTimeBest,
+      // Encourage rather than guilt a beginner with no current streak
+      // (new persona #26).
+      StreakSubKind.restart => l10n.dashboardStreakRestart,
+      StreakSubKind.start => l10n.dashboardStreakStart,
+      StreakSubKind.none => null,
+    };
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
@@ -1895,7 +1940,7 @@ class _StreakRow extends StatelessWidget {
                 Icon(Icons.local_fire_department, color: color, size: 28),
                 const SizedBox(width: 6),
                 Text(
-                  '${streaks.current}',
+                  '${state.current}',
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: color,
@@ -1903,7 +1948,7 @@ class _StreakRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  streaks.current == 1
+                  state.current == 1
                       ? l10n.dashboardStreakDayUnit
                       : l10n.dashboardStreakDaysUnit,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1921,21 +1966,22 @@ class _StreakRow extends StatelessWidget {
             ),
           ],
         ),
-        Column(
-          children: [
-            Text(
-              bestText,
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              l10n.dashboardStreakHistory,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+        if (bestText != null)
+          Column(
+            children: [
+              Text(
+                bestText,
+                style: theme.textTheme.bodyMedium,
               ),
-            ),
-          ],
-        ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.dashboardStreakHistory,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }
