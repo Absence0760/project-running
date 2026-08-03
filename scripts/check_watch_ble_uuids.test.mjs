@@ -58,6 +58,7 @@ const ALIGNED_ROWS = [
 	['workout', U(6)],
 	['screens', U(7)],
 	['roadbook', U(8)],
+	['push_status', U(9)],
 ];
 const ALIGNED_CONSTS = [
 	['frameCharUuid', U(1)],
@@ -68,6 +69,7 @@ const ALIGNED_CONSTS = [
 	['workoutCharUuid', U(6)],
 	['screensCharUuid', U(7)],
 	['roadbookCharUuid', U(8)],
+	['pushStatusCharUuid', U(9)],
 ];
 
 const verdict = (rows, consts, pairs, unclaimed) =>
@@ -126,7 +128,7 @@ test('the § 410 one-row shift fails and names the characteristic misread', () =
 // constant misaimed at it is the § 410 shape all over again.
 test('an unclaimed firmware row the phone leaves alone passes', () => {
 	const { errors, warnings, ok } = verdict(
-		[...ALIGNED_ROWS, ['telemetry', U(9)]],
+		[...ALIGNED_ROWS, ['telemetry', U('a')]],
 		ALIGNED_CONSTS,
 		PAIRS,
 		['telemetry'],
@@ -138,8 +140,13 @@ test('an unclaimed firmware row the phone leaves alone passes', () => {
 
 test('an unclaimed firmware row a Dart constant points at fails', () => {
 	const { errors } = verdict(
-		[...ALIGNED_ROWS, ['telemetry', U(9)]],
-		[...ALIGNED_CONSTS.slice(0, 7), ['roadbookCharUuid', U(9)]],
+		[...ALIGNED_ROWS, ['telemetry', U('a')]],
+		// Named rather than sliced by index: the aligned table grows every time
+		// the watch does, and a positional edit here silently drops a pair from
+		// the fixture — which is the very failure the guard exists to catch.
+		ALIGNED_CONSTS.map(([n, u]) =>
+			n === 'roadbookCharUuid' ? [n, U('a')] : [n, u],
+		),
 		PAIRS,
 		['telemetry'],
 	);

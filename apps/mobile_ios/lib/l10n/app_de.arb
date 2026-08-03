@@ -767,6 +767,7 @@
   "routeDetailWatchCourseSent": "Strecke an die Uhr gesendet ({points} Punkte)",
   "routeDetailWatchCourseSimplified": "Strecke an die Uhr gesendet — von {source} auf {points} Punkte ausgedünnt",
   "routeDetailWatchCourseTooShort": "Diese Route hat zu wenige Punkte, um ihr auf der Uhr zu folgen",
+  "routeDetailWatchPushRejected": "Die Uhr hat die Übertragung abgelehnt und behält, was sie bereits hatte. Bitte erneut versuchen.",
   "routeDetailWatchCourseFailed": "Strecke konnte nicht an die Uhr gesendet werden: {error}",
   "routeDetailSendToAppleWatch": "An Apple Watch senden",
   "routeDetailAppleWatchRouteSent": "Route an die Apple Watch gesendet ({points} Punkte)",

@@ -36,6 +36,8 @@ class _FakeSyncTransport implements WatchBleTransport {
   @override
   Future<void> scan() async {}
   @override
+  Future<List<int>> readPushStatus() async => const [];
+  @override
   Future<void> disconnect() async {}
   @override
   Stream<List<int>> get chunkStream => _chunks.stream;

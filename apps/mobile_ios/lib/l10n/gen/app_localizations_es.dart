@@ -2821,6 +2821,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Esta ruta tiene muy pocos puntos para seguirla en el reloj';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'El reloj rechazó el envío y conservó lo que ya tenía. Inténtalo de nuevo.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'No se pudo enviar el recorrido al reloj: $error';
   }

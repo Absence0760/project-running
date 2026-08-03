@@ -2829,6 +2829,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Cet itinéraire a trop peu de points pour être suivi sur la montre';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'La montre a refusé l\'envoi et a conservé ce qu\'elle avait déjà. Réessayez.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'Impossible d\'envoyer le parcours à la montre : $error';
   }

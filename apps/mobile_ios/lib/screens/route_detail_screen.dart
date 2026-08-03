@@ -29,7 +29,8 @@ import '../route_gpx.dart';
 import '../roadbook.dart'
     show RoadbookMarker, RoadbookWaypoint, buildRoadbook;
 import '../sim_watch_link.dart' show maybeDevBackendUrl;
-import '../sim_watch_sync.dart' show WatchBleTransport, WatchSyncClient;
+import '../sim_watch_sync.dart'
+    show WatchBleTransport, WatchPushRejected, WatchSyncClient;
 import '../social_service.dart' show ClubView, SocialService;
 import '../tile_pack.dart' show TileBbox;
 import '../watch_course.dart';
@@ -1581,8 +1582,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           context, _watchPushMessage(l10n, course, points.length, schedule));
     } catch (e) {
       if (!mounted) return;
+      // A refusal is not a generic failure: the watch answered, and what it
+      // said is that it kept the course it had. `friendlyError` classifies
+      // AUTH failures, so routing this through it would report "something
+      // went wrong" for the one error whose cause is known exactly.
       showTopBanner(
-          context, l10n.routeDetailWatchCourseFailed(friendlyError(l10n, e)));
+          context,
+          e is WatchPushRejected
+              ? l10n.routeDetailWatchPushRejected
+              : l10n.routeDetailWatchCourseFailed(friendlyError(l10n, e)));
     } finally {
       if (mounted) setState(() => _watchPushBusy = false);
     }

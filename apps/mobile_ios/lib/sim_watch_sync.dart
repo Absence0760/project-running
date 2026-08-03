@@ -586,11 +586,80 @@ abstract class WatchBleTransport {
   /// past one ATT write.
   Future<void> writeRoadbook(List<int> chunk);
 
+  /// Read the watch's `PSH1` verdict on the last push it resolved
+  /// ([decodePushStatus]). A firmware that predates the characteristic has
+  /// nothing to read, so this may throw — callers treat that as
+  /// *unconfirmed*, never as accepted.
+  Future<List<int>> readPushStatus();
+
   /// Notifications carrying run-blob chunks, in request order.
   Stream<List<int>> get chunkStream;
 
   /// Tear down the connection. Safe to call more than once.
   Future<void> disconnect();
+}
+
+/// Which push a [WatchPushOutcome] belongs to. The indices are the firmware's
+/// wire discriminants (`watch_core::ble_sync::PushKind`) — append only, never
+/// reorder.
+enum WatchPushKind { settings, course, workout, screens, roadbook }
+
+/// The watch's verdict on the last push it resolved, off the `push_status`
+/// characteristic.
+///
+/// This exists because an ATT write-with-response proves only that the bytes
+/// arrived: the SoftDevice writes the attribute and answers before the
+/// firmware's handler decides whether to keep the value, so a push that failed
+/// CRC, arrived out of order or hit a full settings queue completed here as a
+/// success while the watch kept the OLD course / workout / schedule / screens /
+/// settings. See decisions.md § 464.
+class WatchPushOutcome {
+  /// Wrapping, and bumped on an accepted push too — a counter that moved only
+  /// on failure would be indistinguishable from a watch that never answered.
+  final int seq;
+  final WatchPushKind kind;
+  final bool accepted;
+
+  const WatchPushOutcome({
+    required this.seq,
+    required this.kind,
+    required this.accepted,
+  });
+}
+
+const int _pushStatusLen = 7;
+
+/// Decode a `push_status` read, or `null` if the bytes are not a verdict this
+/// client understands.
+///
+/// Fail-closed in the direction that matters: an unreadable answer is never
+/// an acceptance. A short value, a foreign magic, an unknown kind, or a
+/// verdict byte that is neither 0 nor 1 all yield `null`, which the push path
+/// reports as unconfirmed.
+WatchPushOutcome? decodePushStatus(List<int> bytes) {
+  if (bytes.length < _pushStatusLen) return null;
+  if (!_magicMatches(bytes, 0, 'PSH1')) return null;
+  final kind = bytes[5];
+  if (kind >= WatchPushKind.values.length) return null;
+  final accepted = bytes[6];
+  if (accepted > 1) return null;
+  return WatchPushOutcome(
+    seq: bytes[4],
+    kind: WatchPushKind.values[kind],
+    accepted: accepted == 1,
+  );
+}
+
+/// The watch refused a push and kept whatever it already had. Thrown by the
+/// `push*` methods so the caller's existing failure path fires instead of
+/// telling the runner it was sent.
+class WatchPushRejected implements Exception {
+  final WatchPushKind kind;
+
+  const WatchPushRejected(this.kind);
+
+  @override
+  String toString() => 'watch refused the ${kind.name} push';
 }
 
 class WatchSyncResult {
@@ -618,12 +687,55 @@ class WatchSyncClient {
   final int chunkSize;
   final Duration chunkTimeout;
 
+  /// How many times a push re-reads `push_status` waiting for the watch's
+  /// verdict, and how long it waits between reads.
+  ///
+  /// A read is a separate ATT transaction from the write, and the SoftDevice
+  /// can answer it out of the attribute table before the firmware's handler
+  /// has run — so the FIRST read after a write may still carry the previous
+  /// verdict. Polling the sequence is what makes that harmless. Exhausting
+  /// the attempts is *unconfirmed*, not failed: this path has never run on
+  /// hardware (no SoftDevice under Renode, § 210), so it must not be able to
+  /// turn a working push into a reported failure.
+  final int pushConfirmAttempts;
+  final Duration pushConfirmInterval;
+
   WatchSyncClient({
     required this.transport,
     required this.onRun,
     this.chunkSize = 180,
     this.chunkTimeout = const Duration(seconds: 15),
+    this.pushConfirmAttempts = 5,
+    this.pushConfirmInterval = const Duration(milliseconds: 100),
   });
+
+  Future<WatchPushOutcome?> _pushStatus() async {
+    try {
+      return decodePushStatus(await transport.readPushStatus());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Poll the watch's verdict on a push of [kind] that was issued after
+  /// [baseline] was read, and throw [WatchPushRejected] if it refused.
+  ///
+  /// A null [baseline] means the pre-push read did not land, and confirmation
+  /// is abandoned rather than guessed: without it a STALE rejection left over
+  /// from an earlier push would read as this push's verdict, which is the one
+  /// error worse than the silence being fixed — it would send a runner to
+  /// re-push something that is already loaded.
+  Future<void> _confirmPush(WatchPushKind kind, WatchPushOutcome? baseline) async {
+    if (baseline == null) return;
+    for (var attempt = 0; attempt < pushConfirmAttempts; attempt++) {
+      final outcome = await _pushStatus();
+      if (outcome != null && outcome.seq != baseline.seq && outcome.kind == kind) {
+        if (!outcome.accepted) throw WatchPushRejected(kind);
+        return;
+      }
+      await Future<void>.delayed(pushConfirmInterval);
+    }
+  }
 
   Future<WatchSyncResult> sync({
     void Function(int done, int total)? onProgress,
@@ -663,7 +775,9 @@ class WatchSyncClient {
   Future<void> pushSettings(WatchSettings settings) async {
     await transport.scan();
     try {
+      final baseline = await _pushStatus();
       await transport.writeSettings(settings.encode());
+      await _confirmPush(WatchPushKind.settings, baseline);
     } finally {
       await transport.disconnect();
     }
@@ -679,9 +793,11 @@ class WatchSyncClient {
   Future<void> pushWorkout(Iterable<List<int>> chunks) async {
     await transport.scan();
     try {
+      final baseline = await _pushStatus();
       for (final chunk in chunks) {
         await transport.writeWorkout(chunk);
       }
+      await _confirmPush(WatchPushKind.workout, baseline);
     } finally {
       await transport.disconnect();
     }
@@ -695,9 +811,11 @@ class WatchSyncClient {
   Future<void> pushCourse(Iterable<List<int>> chunks) async {
     await transport.scan();
     try {
+      final baseline = await _pushStatus();
       for (final chunk in chunks) {
         await transport.writeCourse(chunk);
       }
+      await _confirmPush(WatchPushKind.course, baseline);
     } finally {
       await transport.disconnect();
     }
@@ -713,7 +831,9 @@ class WatchSyncClient {
   Future<void> pushScreens(List<int> frame) async {
     await transport.scan();
     try {
+      final baseline = await _pushStatus();
       await transport.writeScreens(frame);
+      await _confirmPush(WatchPushKind.screens, baseline);
     } finally {
       await transport.disconnect();
     }
@@ -731,9 +851,11 @@ class WatchSyncClient {
   Future<void> pushRoadbook(Iterable<List<int>> chunks) async {
     await transport.scan();
     try {
+      final baseline = await _pushStatus();
       for (final chunk in chunks) {
         await transport.writeRoadbook(chunk);
       }
+      await _confirmPush(WatchPushKind.roadbook, baseline);
     } finally {
       await transport.disconnect();
     }
