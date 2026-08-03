@@ -6642,6 +6642,44 @@ class ApiClient {
         .toList();
   }
 
+  /// All-time `(current, best)` run-day streaks from the
+  /// `run_streaks_for_user` gaps-and-islands aggregate (migration
+  /// `20270501_001`) — the same one-row server read web's dashboard card
+  /// uses, so a fresh install of a deep-history account never presents a
+  /// best streak computed from the store's resident sliver as the all-time
+  /// truth (decisions § 471 / § 475). [tz] must be the device's IANA zone
+  /// name (`Europe/Berlin`), never an abbreviation or a fixed offset — the
+  /// server buckets days in it so its answer agrees with the on-device
+  /// `computeRunStreaks` about what "a day" is. [source] scopes both
+  /// figures when the calling surface is source-filtered.
+  ///
+  /// Mirrors web's `fetchRunStreaks`: returns null — never zeros — when
+  /// signed out or on any failure, because a zeroed or windowed streak is
+  /// indistinguishable from a truthful one; the caller must suppress the
+  /// all-time claim instead (`streak_card.dart`).
+  Future<({int current, int best})?> fetchRunStreaks({
+    required String tz,
+    String? source,
+  }) async {
+    if (userId == null) return null;
+    try {
+      final data = await _client.rpc('run_streaks_for_user', params: {
+        'p_tz': tz,
+        if (source != null) 'p_source': source,
+      });
+      final rows = (data as List?) ?? const <dynamic>[];
+      final row = rows.isEmpty ? null : rows.first as Map?;
+      if (row == null) return null;
+      return (
+        current: (row['current_streak'] as num?)?.toInt() ?? 0,
+        best: (row['best_streak'] as num?)?.toInt() ?? 0,
+      );
+    } catch (e) {
+      debugPrint('fetchRunStreaks failed: ${safeErrorLabel(e)}');
+      return null;
+    }
+  }
+
   /// Record the GDPR Art 9(2)(a) health-data consent for the signed-in user
   /// via the `grant_health_data_consent()` SECURITY DEFINER RPC — the only
   /// sanctioned writer of `health_data_consent_at` (first-stamp-wins,
