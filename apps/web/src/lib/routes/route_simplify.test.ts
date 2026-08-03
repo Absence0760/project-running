@@ -273,3 +273,39 @@ test('summarizeRouteFromTrack: cos(midLat) correction kicks in at high latitudes
 		`expected cos(60°) ≈ 0.5 ratio, got ${ratio}`,
 	);
 });
+
+test('simplifyTrack — a straight line across the antimeridian collapses to its endpoints', () => {
+	const line: LatLng[] = [
+		{ lat: 0, lng: 179.98 },
+		{ lat: 0, lng: 179.99 },
+		{ lat: 0, lng: -180 },
+		{ lat: 0, lng: -179.99 },
+		{ lat: 0, lng: -179.98 },
+	];
+	assert.deepEqual(simplifyTrack(line, 10), [line[0], line[4]]);
+});
+
+test('simplifyTrack — a real deviation across the antimeridian survives', () => {
+	// 50 m north of the chord, well clear of the 10 m tolerance.
+	const off = 50 / 111_194.93;
+	const line: LatLng[] = [
+		{ lat: 0, lng: 179.98 },
+		{ lat: off, lng: -179.99 },
+		{ lat: 0, lng: -179.96 },
+	];
+	assert.deepEqual(simplifyTrack(line, 10), line);
+});
+
+test('summarizeRouteFromTrack — a leg across the antimeridian measures 0.06°, not 359.94°', () => {
+	const out = summarizeRouteFromTrack(
+		[
+			{ lat: 0, lng: 179.98 },
+			{ lat: 0, lng: -179.96 },
+		],
+		10,
+	);
+	assert.ok(
+		Math.abs(out.distance_m - 6671.7) < 1,
+		`got ${out.distance_m}`,
+	);
+});

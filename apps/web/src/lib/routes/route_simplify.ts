@@ -9,6 +9,8 @@
  * sync. 10 m epsilon is a good default for running; tuning it tighter
  * keeps more turns, looser collapses more jitter.
  */
+import { lonDeltaDeg, unwrapLonDeg } from './geo';
+
 export interface LatLng {
 	lat: number;
 	lng: number;
@@ -60,14 +62,17 @@ function perpDistanceMetres(p: LatLng, a: LatLng, b: LatLng): number {
 	const r = 6_371_000;
 	const latRad = (a.lat * Math.PI) / 180;
 	const cosLat = Math.cos(latRad);
-	const x = (w: LatLng) => ((w.lng * Math.PI) / 180) * cosLat * r;
+	const x = (lngDeg: number) => ((lngDeg * Math.PI) / 180) * cosLat * r;
 	const y = (w: LatLng) => ((w.lat * Math.PI) / 180) * r;
 
-	const ax = x(a);
+	// The frame is absolute, so `b` and `p` are expressed on `a`'s side of the
+	// antimeridian before they enter it. Within a hemisphere the unwrap returns
+	// each longitude unchanged, bit for bit.
+	const ax = x(a.lng);
 	const ay = y(a);
-	const bx = x(b);
+	const bx = x(unwrapLonDeg(a.lng, b.lng));
 	const by = y(b);
-	const px = x(p);
+	const px = x(unwrapLonDeg(a.lng, p.lng));
 	const py = y(p);
 
 	const dx = bx - ax;
@@ -171,7 +176,7 @@ export function summarizeRouteFromTrack(
 		const a = simplified[i - 1];
 		const b = simplified[i];
 		const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-		const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+		const dLng = (lonDeltaDeg(a.lng, b.lng) * Math.PI) / 180;
 		const midLat = (((a.lat + b.lat) / 2) * Math.PI) / 180;
 		const x = dLng * Math.cos(midLat);
 		const y = dLat;

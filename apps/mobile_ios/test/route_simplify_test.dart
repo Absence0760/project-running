@@ -350,4 +350,27 @@ void main() {
       expect(simplifyToBudget([wp(0, 0)], maxPoints: 4), hasLength(1));
     });
   });
+
+  group('the antimeridian', () {
+    test('a straight line across the line collapses to its endpoints', () {
+      final line = [
+        wp(0, 179.98),
+        wp(0, 179.99),
+        wp(0, -180),
+        wp(0, -179.99),
+        wp(0, -179.98),
+      ];
+      final out = simplifyTrack(line, epsilonMetres: 10);
+      expect(out, hasLength(2));
+      expect(out.first.lng, 179.98);
+      expect(out.last.lng, -179.98);
+    });
+
+    test('a real deviation across the line survives', () {
+      // 50 m north of the chord, well clear of the 10 m tolerance.
+      final off = 50 / 111194.93;
+      final line = [wp(0, 179.98), wp(off, -179.99), wp(0, -179.96)];
+      expect(simplifyTrack(line, epsilonMetres: 10), hasLength(3));
+    });
+  });
 }
