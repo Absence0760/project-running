@@ -933,6 +933,7 @@ mod tests {
             load_trend: None,
             band: None,
             gear: None,
+            roadbook_loaded: false,
             roadbook: None,
             fuel: None,
             training_paces: None,

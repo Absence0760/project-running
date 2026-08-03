@@ -4,10 +4,12 @@
 // emulated nRF52840 and bridges its phone-link UART to a TCP socket
 // (default port 7788). The watch streams one newline-terminated JSON
 // status frame per second — schema v1, defined by `watch_core::link`
-// (apps/custom_watch/core/src/link.rs), which is also what the future BLE
-// GATT characteristic will carry. This client decodes that stream; it is
-// reachable only from the dev-gated Sim Watch screen (loopback-backend
-// gate, same rail as dev_auto_login.dart).
+// (apps/custom_watch/core/src/link.rs), which is byte-for-byte what the BLE
+// `frame` characteristic notifies. [SimWatchLink] is the dev half, reachable
+// only from the dev-gated Sim Watch screen (loopback-backend gate, same rail
+// as dev_auto_login.dart); [simWatchFrames] is shared with the radio path in
+// watch_status_link.dart, which is the whole point of one payload for both
+// transports.
 
 import 'dart:async';
 import 'dart:convert';

@@ -2617,22 +2617,136 @@ void main() {
       final file = File('ios/Runner/Info.plist');
       if (!file.existsSync()) return;
       final body = file.readAsStringSync();
-      // Workmanager (`registerPeriodicTask` in background_sync.dart)
-      // uses BGTaskScheduler under the hood on iOS 13+. Without the
-      // identifier listed in BGTaskSchedulerPermittedIdentifiers
-      // the task ID gets rejected at registration time.
+      // Workmanager uses BGTaskScheduler under the hood on iOS 13+.
+      // Without the identifier listed in
+      // BGTaskSchedulerPermittedIdentifiers the task ID gets rejected
+      // at registration time.
       expect(
         body,
         contains('com.threkir.backgroundSync'),
         reason: 'BGTaskSchedulerPermittedIdentifiers must include '
             'the Workmanager task ID (com.threkir.backgroundSync) '
-            'or the periodic sync job will not run on iOS.',
+            'or the background sync job will not run on iOS.',
       );
       expect(
         body,
         contains('<string>processing</string>'),
         reason: 'UIBackgroundModes must include `processing` so the '
             'BGTaskScheduler permitted-identifier above is honoured.',
+      );
+    });
+
+    test('iOS background sync submits the task type the plist authorises', () {
+      // Reason: iOS gates each BGTaskScheduler request type on a
+      // different UIBackgroundModes entry — BGAppRefreshTaskRequest on
+      // `fetch`, BGProcessingTaskRequest on `processing`. Submitting a
+      // type the plist doesn't authorise makes
+      // BGTaskScheduler.submit throw, and workmanager swallows that
+      // (`logInfo("Could not schedule ...")`), so background sync
+      // silently never runs. That was the state fixed here: the plist
+      // declared `processing` while Dart called registerPeriodicTask
+      // (BGAppRefreshTaskRequest) and AppDelegate registered the
+      // periodic handler. Pin all three to the processing task so the
+      // trio can't drift apart again.
+      final dart = File('lib/background_sync.dart').readAsStringSync();
+      final iosBranch = RegExp(
+        r'Platform\.isIOS[\s\S]{0,120}?Workmanager\(\)\.registerProcessingTask',
+      );
+      expect(
+        iosBranch.hasMatch(dart),
+        isTrue,
+        reason: 'background_sync.dart must call registerProcessingTask '
+            '(BGProcessingTaskRequest) on the Platform.isIOS branch. '
+            'registerPeriodicTask submits a BGAppRefreshTaskRequest, '
+            'which needs the `fetch` background mode the app '
+            'deliberately does not declare.',
+      );
+
+      final plist = File('ios/Runner/Info.plist');
+      final appDelegate = File('ios/Runner/AppDelegate.swift');
+      if (!plist.existsSync() || !appDelegate.existsSync()) return;
+
+      expect(
+        appDelegate.readAsStringSync(),
+        contains('WorkmanagerPlugin.registerBGProcessingTask'),
+        reason: 'AppDelegate must register the BGProcessingTask launch '
+            'handler. The handler dispatches on the delivered task '
+            'type, so registering the periodic (BGAppRefreshTask) '
+            'registrar leaves a submitted BGProcessingTaskRequest '
+            'unhandled. It must also happen during '
+            'didFinishLaunchingWithOptions — this app adopts UIScene, '
+            'so the plugin cannot register it in time itself.',
+      );
+      expect(
+        plist.readAsStringSync(),
+        contains('<string>processing</string>'),
+        reason: 'UIBackgroundModes must declare `processing` — it is '
+            'what authorises the BGProcessingTaskRequest above.',
+      );
+    });
+
+    test('background-sync task identifier agrees across Dart, plist, Swift',
+        () {
+      // Reason: the identifier is repeated as a bare string in three
+      // files that no compiler or type system links. A rename in one
+      // place produces no build error — the task simply stops being
+      // delivered, which is invisible until someone notices runs are
+      // not syncing. Parse the value out of each and compare, rather
+      // than asserting a hardcoded literal in three places (which
+      // would drift with them).
+      final dart = File('lib/background_sync.dart').readAsStringSync();
+      final dartId = RegExp(
+        r"""const\s+backgroundSyncTaskName\s*=\s*['"]([^'"]+)['"]""",
+      ).firstMatch(dart);
+      expect(
+        dartId,
+        isNotNull,
+        reason: 'background_sync.dart must declare a top-level '
+            'backgroundSyncTaskName string constant.',
+      );
+      final identifier = dartId!.group(1)!;
+
+      final plist = File('ios/Runner/Info.plist');
+      final appDelegate = File('ios/Runner/AppDelegate.swift');
+      if (!plist.existsSync() || !appDelegate.existsSync()) return;
+
+      final permitted = RegExp(
+        r'<key>BGTaskSchedulerPermittedIdentifiers</key>\s*<array>([\s\S]*?)</array>',
+      ).firstMatch(plist.readAsStringSync());
+      expect(
+        permitted,
+        isNotNull,
+        reason: 'Info.plist must declare a '
+            'BGTaskSchedulerPermittedIdentifiers array.',
+      );
+      final permittedIds = RegExp(r'<string>([^<]+)</string>')
+          .allMatches(permitted!.group(1)!)
+          .map((m) => m.group(1)!)
+          .toList();
+      expect(
+        permittedIds,
+        contains(identifier),
+        reason: 'BGTaskSchedulerPermittedIdentifiers must list the Dart '
+            'backgroundSyncTaskName ($identifier). iOS rejects a '
+            'submission whose identifier is not in this array.',
+      );
+
+      final swiftId = RegExp(
+        r'registerBGProcessingTask\(\s*withIdentifier:\s*"([^"]+)"',
+      ).firstMatch(appDelegate.readAsStringSync());
+      expect(
+        swiftId,
+        isNotNull,
+        reason: 'AppDelegate must register the BGProcessing task with a '
+            'literal identifier.',
+      );
+      expect(
+        swiftId!.group(1),
+        identifier,
+        reason: 'AppDelegate registers "${swiftId.group(1)}" but Dart '
+            'submits "$identifier". BGTaskScheduler matches the launch '
+            'handler to the request by identifier, so a mismatch means '
+            'the task is never delivered.',
       );
     });
 
@@ -2671,13 +2785,14 @@ void main() {
       if (!file.existsSync()) return;
       final body = file.readAsStringSync();
       // Reason: Apple App Review rejects binaries that declare a
-      // `UIBackgroundModes` capability the binary doesn't actually
-      // exercise — `fetch` requires a registered
-      // `application(_:performFetchWithCompletionHandler:)`, which
-      // none of the bundled plugins implements. The Workmanager
-      // background-sync task is a BGProcessingTask, not a fetch task,
-      // and is declared via the `processing` mode + the
-      // BGTaskSchedulerPermittedIdentifiers entry.
+      // `UIBackgroundModes` capability the binary doesn't exercise.
+      // `fetch` is what authorises a BGAppRefreshTaskRequest (and the
+      // legacy performFetchWithCompletionHandler: path); the
+      // background-sync task is a BGProcessingTask declared via the
+      // `processing` mode + the BGTaskSchedulerPermittedIdentifiers
+      // entry, so nothing here needs `fetch`. Keep this paired with
+      // the task-type guard above: dropping to `fetch` would mean
+      // switching the submitted request type too, not just the plist.
       // See audit/app-store-privacy 2026-05-25.
       expect(
         body.contains('<string>fetch</string>'),

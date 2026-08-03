@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -102,13 +104,38 @@ Future<void> runBackgroundSyncCycle(
   }
 }
 
+/// Arm the background drain. Neither platform promises the task ever runs —
+/// the foreground [SyncService] stays the primary drain and this is purely
+/// opportunistic.
+///
+/// iOS and Android take different task types because iOS gates each type on
+/// a matching `UIBackgroundModes` entry. A BGAppRefreshTask (what
+/// `registerPeriodicTask` submits on iOS) needs the `fetch` capability and
+/// gets ~30 s; draining a weekend of unsynced runs means uploading several
+/// gzipped GPS tracks, which overruns that and ignores the network
+/// constraint BGAppRefreshTaskRequest has no field for. A BGProcessingTask
+/// gets minutes, honours [Constraints.networkType] via
+/// `requiresNetworkConnectivity`, and runs while the device is idle — which
+/// is what a fully deferrable queue drain wants. It is also the capability
+/// the app already declares, so this needs no extra `UIBackgroundModes`
+/// entry. iOS delivers it at most once per submission, so it is re-armed on
+/// each launch; Android's periodic job re-fires on its own.
 void registerBackgroundSync() {
   Workmanager().initialize(callbackDispatcher);
-  Workmanager().registerPeriodicTask(
-    backgroundSyncTaskName,
-    backgroundSyncTaskName,
-    constraints: Constraints(networkType: NetworkType.connected),
-    frequency: const Duration(hours: 1),
-    existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
-  );
+  final registered = Platform.isIOS
+      ? Workmanager().registerProcessingTask(
+          backgroundSyncTaskName,
+          backgroundSyncTaskName,
+          constraints: Constraints(networkType: NetworkType.connected),
+        )
+      : Workmanager().registerPeriodicTask(
+          backgroundSyncTaskName,
+          backgroundSyncTaskName,
+          constraints: Constraints(networkType: NetworkType.connected),
+          frequency: const Duration(hours: 1),
+          existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+        );
+  registered.catchError((Object e) {
+    debugPrint('Background sync registration failed: $e');
+  });
 }

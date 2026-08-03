@@ -77,6 +77,7 @@ fn base_snapshot() -> Snapshot {
         load_trend: None,
         band: None,
         gear: None,
+        roadbook_loaded: false,
         roadbook: None,
         fuel: None,
         training_paces: None,
@@ -484,6 +485,113 @@ fn preview_distance_and_pace_bignum_heroes() {
         watch_core::statusbar::page_indicator(Page::Pace, u64::MAX),
     );
     show("pace glance: 6:20 in the numeral faces", &fb2);
+}
+
+/// The § 364 composed screens — the one family the preview sheet never showed,
+/// and the one whose lead slot was drawn in the wrong face.
+///
+/// `slot_placements` seats slot 0 in the 32x48 band at row 0 and labels it on
+/// row 3, exactly as a tall glance page does, but `hero_band` read that band off
+/// `face::body_top_row`, which a composed screen declared as 0 — so a Duo drew
+/// its LEAD value at half the size of the value beneath it. Rendering both
+/// layouts here is what makes that visible on the host rung rather than only
+/// under Renode, where a captured frame can arrive with a banner over the band.
+#[test]
+fn preview_composed_screens() {
+    use watch_core::screens::{Layout, Screen, Screens};
+    let snap = base_snapshot();
+    let screens = Screens::from_slice(&[
+        Screen::new(
+            Layout::Duo,
+            &[
+                watch_core::face::Metric::Distance,
+                watch_core::face::Metric::Elapsed,
+            ],
+        )
+        .unwrap(),
+        Screen::new(
+            Layout::Trio,
+            &[
+                watch_core::face::Metric::AvgPace,
+                watch_core::face::Metric::HeartRate,
+                watch_core::face::Metric::Distance,
+            ],
+        )
+        .unwrap(),
+    ])
+    .unwrap();
+
+    for (page, name) in [
+        (
+            Page::Screen1,
+            "composed screen: a Duo, both values in the 32x48 face",
+        ),
+        (
+            Page::Screen2,
+            "composed screen: a Trio, the tall lead over two medium rows",
+        ),
+    ] {
+        let mut fb = Framebuffer::new();
+        draw_screen(&mut fb, page, &snap, Some(150), &screens);
+        show(name, &fb);
+    }
+}
+
+// The composed-screen half of the ui task: slot 0 through the ordinary hero
+// pipeline, the slots under it at the placement's own band.
+fn draw_screen(
+    fb: &mut Framebuffer,
+    page: Page,
+    snap: &Snapshot,
+    hr: Option<u16>,
+    screens: &watch_core::screens::Screens,
+) {
+    let fix = sample_fix();
+    let rows = face::page_rows(
+        page,
+        Some(&fix),
+        hr,
+        Some(snap),
+        None,
+        NavView::NoCourse,
+        None,
+        100,
+        false,
+        GnssMode::default(),
+        IdleView::Home,
+        None,
+        None,
+        Some(screens),
+    );
+    for (r, row) in rows.iter().enumerate() {
+        fb.draw_text_row(r, row);
+    }
+    let render = face::screen_page_slots(
+        page,
+        Some(screens),
+        Some(&fix),
+        hr,
+        Some(snap),
+        None,
+        100,
+        None,
+    )
+    .expect("a composed screen renders");
+    let lead = &render.slots[0];
+    draw_hero(fb, page, Some(lead.value.as_str()), lead.unit);
+    for (slot, at) in render
+        .slots
+        .iter()
+        .zip(ui_frame::slot_placements(render.layout))
+        .skip(1)
+    {
+        let y = at.value_row * (HEIGHT / sharp_mip::TEXT_ROWS);
+        match ui_frame::slot_band(at.band, &slot.value) {
+            HeroBand::BigNumHero => fb.draw_bignum_hero(y, &slot.value),
+            HeroBand::MedNumHero => fb.draw_bignum_med_hero(y, &slot.value),
+            _ => fb.draw_text_2x(0, at.value_row, &slot.value),
+        }
+    }
 }
 
 #[test]

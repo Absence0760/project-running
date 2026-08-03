@@ -218,6 +218,46 @@ class ScreenWiringTest {
         )
     }
 
+    @Test fun `PostRunScreen gates the calorie line on the show_calories opt-out`() {
+        // `show_calories` is a universal harm-reduction opt-out (default
+        // on) for weight-conscious runners. Web /runs/[id] and mobile
+        // run_detail both hide their calorie cell when it's false; the
+        // wrist shipped ignoring it, so an opted-out runner still got a
+        // kcal figure after every run. Pin the gate + the state binding
+        // that feeds it, so a refactor can't silently un-gate it again.
+        val src = readRunWatchApp()
+        assertTrue(
+            "PostRunScreen no longer takes showCalories — the opt-out can't reach the calorie line.",
+            Regex("""fun\s+PostRunScreen\s*\([^)]*showCalories\s*:\s*Boolean""", RegexOption.DOT_MATCHES_ALL)
+                .containsMatchIn(src),
+        )
+        assertTrue(
+            "PostRunScreen calorie line is no longer gated on showCalories.",
+            Regex("""if\s*\(\s*showCalories\s*\)[\s\S]{0,400}?RunCalories\.estimate""").containsMatchIn(src),
+        )
+        assertTrue(
+            "showCalories no longer bound from RunViewModel state at the PostRun call site.",
+            src.contains("showCalories = state.showCalories"),
+        )
+    }
+
+    @Test fun `PostRunScreen marks the calorie figure estimated when no body weight is set`() {
+        // Without `body_weight_kg` the estimate rides a 70 kg median the
+        // runner never entered. Web distinguishes runDetail.caloriesLabel
+        // from caloriesEstLabel for exactly this; the wrist must not
+        // present the guess as measured.
+        val src = readRunWatchApp()
+        assertTrue(
+            "PostRunScreen no longer picks kcal_est when bodyWeightKg is null.",
+            Regex("""if\s*\(\s*bodyWeightKg\s*!=\s*null\s*\)\s*R\.string\.kcal\s+else\s+R\.string\.kcal_est""")
+                .containsMatchIn(src),
+        )
+        assertTrue(
+            "kcal_est missing from the default string catalogue.",
+            readDefaultStrings().contains("""name="kcal_est""""),
+        )
+    }
+
     // ───────────────────── Foreground-service tile-update wiring ─────────────────────
 
     @Test fun `RunRecordingService nudges the active-run tile on state transitions`() {

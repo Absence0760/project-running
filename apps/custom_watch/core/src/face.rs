@@ -365,13 +365,23 @@ pub const TALL_HERO_BAND_ROWS: usize = 3;
 /// — a page cannot claim three rows and then write into them.
 pub fn body_top_row(page: Page) -> usize {
     match page {
-        // The map panel owns rows 1..6 and the title rides row 0.
+        // The map panel owns rows 1..6 and the title rides row 0. The one page
+        // with no hero at all ([`hero_metric`] returns `None`), which is why it
+        // is the only page that may write into row 0.
         Page::Nav => 0,
-        // A composed screen owns every row: its layout, not this table, decides
-        // where each slot's value and label land, so it reserves no band for a
-        // body it does not have. Nav's rule, for Nav's reason.
-        Page::Screen1 | Page::Screen2 | Page::Screen3 | Page::Screen4 => 0,
-        Page::Distance
+        // A composed screen's lead slot IS the three-row hero: § 364 seats it at
+        // row 0 in the 32x48 face and labels it on row 3
+        // ([`crate::ui_frame::slot_placements`]), the same band and the same
+        // label row a tall glance page uses. It read 0 here — Nav's rule, for
+        // Nav's reason — and that answered the wrong question, because the band
+        // is decided from this table: a Duo drew its LEAD value at half the size
+        // of the value beneath it, and an unfed screen's label landed in the
+        // state tag's row and was refused whole.
+        Page::Screen1
+        | Page::Screen2
+        | Page::Screen3
+        | Page::Screen4
+        | Page::Distance
         | Page::Pace
         | Page::Lap
         | Page::GuidedRun
@@ -1295,7 +1305,10 @@ pub fn metric_unfed(
             .training_stress
             .is_none()
             .then_some(Unfed::NeedDistance),
+        // The same three absences the cut-off metric keeps apart, for the same
+        // reason: the checkpoint window is picked by distance-along-course.
         Metric::RoadbookNext => match snap.roadbook {
+            None if snap.roadbook_loaded => Some(Unfed::AwaitingFix),
             None => Some(Unfed::NotSynced),
             Some(rb) => (rb.upcoming_len == 0).then_some(Unfed::LastAidPassed),
         },
@@ -2192,31 +2205,33 @@ fn composed_screen(
 ) -> [Row; ROWS] {
     let mut rows: [Row; ROWS] = Default::default();
 
-    if tag_shown(tag, uptime_s, animate) {
-        write_tag(&mut rows[0], tag);
-    }
-
     // Unreachable in the ordinary cycle — `available_pages` only admits a
     // screen page the runner has composed — but a curated mask can pin a page
     // the runner is parked on, so this says what happened instead of drawing a
     // panel of nothing.
-    let Some(screen) = screens.and_then(|s| page.screen_index().and_then(|i| s.get(i))) else {
-        write_unfed(&mut rows, page, "SCREEN", Unfed::NotSynced);
-        write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
-        return rows;
-    };
-
-    let slots = screen_slots(screen, fix, hr_bpm, snap, tb, uptime_s, tz_offset_min);
-    for (slot, at) in slots
-        .iter()
-        .zip(crate::ui_frame::slot_placements(screen.layout))
-    {
-        if at.label_row >= GPS_ROW {
-            continue;
+    match screens.and_then(|s| page.screen_index().and_then(|i| s.get(i))) {
+        None => write_unfed(&mut rows, page, "SCREEN", Unfed::NotSynced),
+        Some(screen) => {
+            let slots = screen_slots(screen, fix, hr_bpm, snap, tb, uptime_s, tz_offset_min);
+            for (slot, at) in slots
+                .iter()
+                .zip(crate::ui_frame::slot_placements(screen.layout))
+            {
+                if at.label_row >= GPS_ROW {
+                    continue;
+                }
+                let _ = write!(rows[at.label_row], "{:>1$}", slot.label, {
+                    at.label_col + slot.label.len()
+                });
+            }
         }
-        let _ = write!(rows[at.label_row], "{:>1$}", slot.label, {
-            at.label_col + slot.label.len()
-        });
+    }
+
+    // Beside slot 0's label, not on row 0: the lead slot's 32x48 hero covers
+    // the whole band, and a tag under it is eaten by `apply_hero_clearance` the
+    // moment the value is wide — which a ten-hour elapsed already is.
+    if tag_shown(tag, uptime_s, animate) {
+        write_tag(&mut rows[body_top_row(page)], tag);
     }
 
     write_gps_row(&mut rows[GPS_ROW], fix, uptime_s, mode);
@@ -3172,7 +3187,9 @@ fn cutoff_flag(status: Option<CutoffStatus>) -> char {
 /// The roadbook glance: the total checkpoint count beside the label, then the
 /// next few checkpoints ahead of the current position — each its distance,
 /// projected arrival clock, and safe/tight/miss cutoff flag. The next
-/// checkpoint's distance rides the hero. Unfed until a roadbook is pushed.
+/// checkpoint's distance rides the hero. Unfed until a roadbook is pushed, and
+/// again until a position is projected onto the course — two absences with
+/// different remedies, the split the cut-off page draws (§ 449).
 #[allow(clippy::too_many_arguments)]
 fn roadbook_glance(
     fix: Option<&Fix>,
@@ -3189,7 +3206,16 @@ fn roadbook_glance(
     }
 
     match &snap.roadbook {
-        None => write_unfed(&mut rows, Page::Roadbook, "ROADBOOK", Unfed::NotSynced),
+        None => write_unfed(
+            &mut rows,
+            Page::Roadbook,
+            "ROADBOOK",
+            if snap.roadbook_loaded {
+                Unfed::AwaitingFix
+            } else {
+                Unfed::NotSynced
+            },
+        ),
         Some(rb) => {
             let _ = write!(rows[2], "{:<11}{} CP", "ROADBOOK", rb.total.min(99));
             for i in 0..(rb.upcoming_len as usize).min(rb.upcoming.len()) {
@@ -5143,6 +5169,7 @@ mod tests {
             load_trend: None,
             band: None,
             gear: None,
+            roadbook_loaded: false,
             roadbook: None,
             fuel: None,
             training_paces: None,
@@ -6232,9 +6259,51 @@ mod tests {
     /// A screen page the runner never composed says so, rather than drawing a
     /// panel of nothing. It is gated out of the cycle, but a curated mask can
     /// still park a runner on one.
+    ///
+    /// Walked over both phases of the `REC` blink, because the label and the
+    /// tag used to contend for row 0: `write_tag` filled the row to `COLS` and
+    /// heapless then refused the label whole, so on every even second the page
+    /// read `NOT SYNCED` with **nothing naming what** — and this test passed,
+    /// because it only ever checked the reason row.
     #[test]
     fn an_uncomposed_screen_page_says_it_was_never_pushed() {
         let fed = fed_snapshot();
+        for uptime_s in [42, 43] {
+            let rows = super::page_rows(
+                Page::Screen2,
+                Some(&fix()),
+                Some(152),
+                Some(&fed),
+                None,
+                NavView::NoCourse,
+                None,
+                uptime_s,
+                true,
+                GnssMode::default(),
+                IdleView::default(),
+                None,
+                None,
+                None,
+            );
+            // The label rides the band's own label row, beside the state tag,
+            // exactly as every other tall-hero page's unfed body does.
+            let labelled = rows[body_top_row(Page::Screen2)].as_str();
+            assert!(
+                labelled.starts_with("SCREEN"),
+                "nothing names the empty page at uptime {uptime_s}: {rows:?}"
+            );
+            assert_eq!(rows[UNFED_REASON_ROW].as_str(), Unfed::NotSynced.reason());
+            assert_eq!(
+                rows[UNFED_HINT_ROW].as_str(),
+                Unfed::NotSynced.hint().unwrap()
+            );
+            // Nothing rides the hero band the page now reserves.
+            for r in 0..body_top_row(Page::Screen2) {
+                assert_eq!(rows[r].as_str(), "", "row {r} at uptime {uptime_s}");
+            }
+        }
+        // On the blink's on-phase the tag lands beside the label rather than
+        // displacing it.
         let rows = super::page_rows(
             Page::Screen2,
             Some(&fix()),
@@ -6251,10 +6320,7 @@ mod tests {
             None,
             None,
         );
-        assert!(
-            rows.iter().any(|r| r.as_str() == Unfed::NotSynced.reason()),
-            "an unpushed screen page must say why it is empty: {rows:?}"
-        );
+        assert_eq!(rows[body_top_row(Page::Screen2)], header("SCREEN", "REC"));
         assert!(
             screen_page_slots(
                 Page::Screen2,
@@ -6269,6 +6335,65 @@ mod tests {
             .is_none(),
             "there is nothing to draw for a screen that was never pushed"
         );
+    }
+
+    /// A composed screen's text rows: one label per slot at the row its
+    /// placement names, the state tag beside the lead slot's label, and nothing
+    /// at all in the three rows the lead slot's 32x48 value covers.
+    ///
+    /// The tag rode row 0 until § 453 moved the lead slot into the tall band.
+    /// It could not stay: `apply_hero_clearance` blanks any band row the hero's
+    /// glyphs reach, and a ten-hour elapsed reaches 20 of the 21 cells — so the
+    /// runner would have lost `REC` / `AUTO` / `PAU` on exactly the runs long
+    /// enough to have composed a screen for.
+    #[test]
+    fn a_composed_screen_puts_its_tag_beside_the_lead_label_and_leaves_the_band_clear() {
+        use crate::screens::{Layout, Screen, Screens};
+        let mut rec = snapshot(RecordState::Recording, 15_000.0);
+        rec.elapsed_s = 12 * 3_600 + 34 * 60 + 56;
+        let screens =
+            Screens::from_slice(&[
+                Screen::new(Layout::Duo, &[Metric::Elapsed, Metric::Distance]).unwrap(),
+            ])
+            .unwrap();
+        let rows = super::page_rows(
+            Page::Screen1,
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+            GnssMode::default(),
+            IdleView::default(),
+            None,
+            None,
+            Some(&screens),
+        );
+        let places = crate::ui_frame::slot_placements(Layout::Duo);
+        assert_eq!(rows[places[0].label_row], header("TIME", "REC"));
+        assert_eq!(rows[places[1].label_row].as_str(), "DIST");
+        for r in 0..places[0].label_row {
+            assert_eq!(rows[r].as_str(), "", "row {r} rides the lead slot's band");
+        }
+        // The value that used to eat the tag: 20 of the 21 cells in the tall
+        // face, and it still fits, so it really is drawn there.
+        let render = screen_page_slots(
+            Page::Screen1,
+            Some(&screens),
+            Some(&fix()),
+            Some(152),
+            Some(&rec),
+            None,
+            42,
+            None,
+        )
+        .unwrap();
+        assert_eq!(render.slots[0].value.as_str(), "12:34:56");
+        assert!(crate::ui_frame::tall_hero_fits("12:34:56", None));
+        assert!(crate::ui_frame::tall_hero_cells("12:34:56") > COLS - (TAG_COLS + 1));
     }
 
     /// Every slot lands on the panel, none overlaps another, and the GPS row
@@ -6443,6 +6568,12 @@ mod tests {
     ///
     /// [`Page::Nav`] is the one exemption, and a structural one rather than a
     /// list entry: its `body_top_row` is 0, so it reserves no band to waste.
+    ///
+    /// A composed screen reserves the band and fills it from the *other* entry
+    /// point: its lead slot ([`screen_page_slots`]) rather than [`page_hero`],
+    /// which has no static metric to declare for a runner-authored page. Both
+    /// halves are asserted, so a screen page cannot reserve the band and leave
+    /// it empty either.
     #[test]
     fn every_page_that_reserves_a_hero_band_fills_it() {
         let fed = fed_snapshot();
@@ -6453,7 +6584,7 @@ mod tests {
                 let hero = page_hero(p, Some(152), Some(rec), Some(&nav_east(500, 6.0)));
                 assert_eq!(
                     hero.is_some(),
-                    body_top_row(p) > 0,
+                    body_top_row(p) > 0 && p.screen_index().is_none(),
                     "page {p:?} reserves {} rows for a hero and has {}",
                     body_top_row(p),
                     if hero.is_some() { "one" } else { "none" }
@@ -6463,6 +6594,28 @@ mod tests {
                     break;
                 }
             }
+
+            let screens = crate::screens::Screens::from_slice(&[crate::screens::Screen::new(
+                crate::screens::Layout::Duo,
+                &[Metric::Distance, Metric::Elapsed],
+            )
+            .unwrap()])
+            .unwrap();
+            let render = screen_page_slots(
+                Page::Screen1,
+                Some(&screens),
+                Some(&fix()),
+                Some(152),
+                Some(rec),
+                None,
+                42,
+                None,
+            )
+            .expect("a composed screen renders");
+            assert!(
+                !render.slots[0].value.is_empty(),
+                "a composed screen's lead slot fills the band it reserves"
+            );
         }
     }
 
@@ -10097,6 +10250,112 @@ mod tests {
                 None
             ),
             Some(Unfed::AwaitingFix)
+        );
+    }
+
+    fn roadbook_rows(rec: &Snapshot) -> [Row; ROWS] {
+        page_rows(
+            Page::Roadbook,
+            Some(&fix()),
+            None,
+            Some(rec),
+            None,
+            NavView::NoCourse,
+            None,
+            42,
+            true,
+        )
+    }
+
+    /// The roadbook glance had no content test at all: a page that names three
+    /// checkpoints, their projected arrivals and their cut-off flags was pinned
+    /// only by the width and hero sweeps that walk every page.
+    #[test]
+    fn roadbook_glance_lists_the_checkpoints_ahead_with_their_cutoff_flags() {
+        use crate::record::{RoadbookLegView, RoadbookView, ROADBOOK_WINDOW};
+        let leg = |cum_dist_m: f32, projected_elapsed_s: u32, cutoff| RoadbookLegView {
+            cum_dist_m,
+            projected_elapsed_s,
+            cutoff,
+        };
+        let mut upcoming = [RoadbookLegView::default(); ROADBOOK_WINDOW];
+        upcoming[0] = leg(5_000.0, 1_800, Some(CutoffStatus::Safe));
+        upcoming[1] = leg(42_195.0, 3 * 3600 + 30 * 60 + 5, Some(CutoffStatus::Tight));
+        upcoming[2] = leg(160_934.0, 40 * 3600, None);
+        let mut rec = snapshot(RecordState::Recording, 15_000.0);
+        rec.roadbook_loaded = true;
+        rec.roadbook = Some(RoadbookView {
+            total: 12,
+            upcoming,
+            upcoming_len: 3,
+        });
+
+        let rows = roadbook_rows(&rec);
+        assert_eq!(rows[0], header("", "REC"));
+        assert_eq!(rows[2].as_str(), "ROADBOOK   12 CP");
+        // Distance, projected arrival clock, then the one-glyph cut-off flag:
+        // blank safe, `!` tight, `.` for a checkpoint carrying no cut-off.
+        assert_eq!(rows[3].as_str(), "  5.00K 0:30:00  ");
+        assert_eq!(rows[4].as_str(), " 42.20K 3:30:05 !");
+        assert_eq!(rows[5].as_str(), "160.93K 40:00:00 .");
+        assert_eq!(rows[6].as_str(), "", "only the fed legs are drawn");
+        assert_eq!(rows[8].as_str(), "     8 SATS PERF");
+        // The next checkpoint's distance rides the hero.
+        assert_eq!(
+            page_hero(Page::Roadbook, None, Some(&rec), None)
+                .unwrap()
+                .as_str(),
+            "5.00"
+        );
+        only_the_gps_icon(Page::Roadbook, &rec, 42);
+    }
+
+    /// A pushed roadbook with no position projected onto the course is the
+    /// sky's absence, not the phone's — and it must never resolve to a
+    /// checkpoint, which is what reading the course START as the position used
+    /// to produce: a runner at km 180 read the course's first aid stations with
+    /// their plan-time flags.
+    #[test]
+    fn the_roadbook_awaits_a_fix_rather_than_ask_for_a_sync_it_already_has() {
+        let mut rec = snapshot(RecordState::Recording, 180_000.0);
+        rec.roadbook_loaded = true;
+        rec.roadbook = None;
+
+        let rows = roadbook_rows(&rec);
+        assert_eq!(rows[2].as_str(), "ROADBOOK");
+        assert_eq!(rows[4].as_str(), "AWAITING FIX");
+        // A `Sensor`-class absence carries no remedy line.
+        assert_eq!(rows[5].as_str(), "");
+        assert_eq!(
+            metric_unfed(
+                Metric::RoadbookNext,
+                Some(&fix()),
+                None,
+                &rec,
+                None,
+                42,
+                None
+            ),
+            Some(Unfed::AwaitingFix)
+        );
+
+        // Nothing pushed at all keeps the remedy the runner can act on.
+        let unpushed = snapshot(RecordState::Recording, 180_000.0);
+        let rows = roadbook_rows(&unpushed);
+        assert_eq!(rows[2].as_str(), "ROADBOOK");
+        assert_eq!(rows[4].as_str(), "NOT SYNCED");
+        assert_eq!(rows[5].as_str(), "SET VIA PHONE SYNC");
+        assert_eq!(
+            metric_unfed(
+                Metric::RoadbookNext,
+                Some(&fix()),
+                None,
+                &unpushed,
+                None,
+                42,
+                None
+            ),
+            Some(Unfed::NotSynced)
         );
     }
 

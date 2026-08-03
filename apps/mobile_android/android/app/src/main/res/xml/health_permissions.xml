@@ -12,6 +12,8 @@
     <permission name="android.permission.health.READ_EXERCISE" />
     <permission name="android.permission.health.READ_DISTANCE" />
     <permission name="android.permission.health.READ_HEART_RATE" />
+    <!-- GPS route attached to an imported workout (#664). -->
+    <permission name="android.permission.health.READ_EXERCISE_ROUTES" />
     <!-- Write recorded runs back to Health Connect (persona #36). -->
     <permission name="android.permission.health.WRITE_EXERCISE" />
     <permission name="android.permission.health.WRITE_DISTANCE" />

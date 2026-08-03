@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 
 import 'sim_watch_sync.dart';
+import 'watch_status_link.dart';
 
 /// Production [WatchBleTransport] over flutter_reactive_ble.
 ///
@@ -20,7 +21,8 @@ import 'sim_watch_sync.dart';
 /// workout, `..e7` screens, `..e8` roadbook. A chunk request and its reply share ONE
 /// characteristic (`..e3`): the phone writes the request there and the
 /// watch notifies the slice back on the same handle (decisions §211d), so
-/// [chunkCharUuid] serves both directions.
+/// [chunkCharUuid] serves both directions. `..e1` is claimed by
+/// [ReactiveBleWatchFrameSource] below, which holds its own connection.
 ///
 /// This class is untested by design — it only reaches the radio, which no
 /// unit test can drive. All decode/verify/reshape/orchestration logic
@@ -157,5 +159,139 @@ class ReactiveBleWatchTransport implements WatchBleTransport {
     await _scanSub?.cancel();
     _scanSub = null;
     _deviceId = null;
+  }
+}
+
+/// Production [WatchFrameSource]: a persistent subscription to the watch's
+/// live-status characteristic (`..e1`, read+notify), which the firmware
+/// notifies one `link::status_frame` per second on once a phone subscribes.
+///
+/// A SEPARATE connection from [ReactiveBleWatchTransport], which is the whole
+/// reason this is its own class. Run sync is a per-operation dance — scan,
+/// connect, pull, disconnect — while the status feed has to stay up for a
+/// whole run, so a `frameStream` hung off the transport would die every time a
+/// sync finished.
+///
+/// UNVERIFIED on hardware, and this is the part to check first: two
+/// simultaneous `connectToDevice` streams against the SAME watch is not
+/// something flutter_reactive_ble promises anywhere, and the BLE path cannot
+/// run in the Renode sim (no SoftDevice). Until a bench says otherwise, a
+/// caller driving both surfaces stops the status link ([WatchStatusLink.stop])
+/// before a run sync and arms a fresh one afterwards.
+///
+/// Untested by design, like [ReactiveBleWatchTransport] — it only reaches the
+/// radio. Decode, backoff, give-up and teardown live in [WatchStatusLink]
+/// behind [WatchFrameSource] and are tested there. [frameCharUuid] is the
+/// exception, pinned against the firmware table by
+/// `scripts/check_watch_ble_uuids.mjs`.
+class ReactiveBleWatchFrameSource implements WatchFrameSource {
+  static final Uuid frameCharUuid =
+      Uuid.parse('d1f6a7e1-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
+
+  ReactiveBleWatchFrameSource({
+    this.scanTimeout = const Duration(seconds: 20),
+    this.connectTimeout = const Duration(seconds: 15),
+  });
+
+  late final FlutterReactiveBle _ble = FlutterReactiveBle();
+
+  final Duration scanTimeout;
+  final Duration connectTimeout;
+
+  StreamSubscription<DiscoveredDevice>? _scanSub;
+  StreamSubscription<ConnectionStateUpdate>? _connectionSub;
+  StreamSubscription<List<int>>? _notifySub;
+  StreamController<List<int>>? _frames;
+
+  @override
+  Future<Stream<List<int>>> open() async {
+    try {
+      return await _open();
+    } catch (_) {
+      await close();
+      rethrow;
+    }
+  }
+
+  Future<Stream<List<int>>> _open() async {
+    final found = Completer<String>();
+    _scanSub = _ble.scanForDevices(
+      withServices: [ReactiveBleWatchTransport.serviceUuid],
+    ).listen(
+      (device) {
+        if (!found.isCompleted) found.complete(device.id);
+      },
+      onError: (Object e) {
+        if (!found.isCompleted) found.completeError(e);
+      },
+    );
+    final deviceId = await found.future.timeout(scanTimeout);
+    await _scanSub?.cancel();
+    _scanSub = null;
+
+    final char = QualifiedCharacteristic(
+      serviceId: ReactiveBleWatchTransport.serviceUuid,
+      characteristicId: frameCharUuid,
+      deviceId: deviceId,
+    );
+    // Frames are republished through a controller rather than handing the
+    // characteristic stream straight out, so a disconnect CLOSES the stream.
+    // A notify subscription that merely stops emitting reads the same as a
+    // stationary runner, which is the one thing the link must not conclude.
+    final frames = StreamController<List<int>>();
+    _frames = frames;
+
+    final connected = Completer<void>();
+    _connectionSub = _ble
+        .connectToDevice(id: deviceId, connectionTimeout: connectTimeout)
+        .listen(
+      (update) {
+        if (update.connectionState == DeviceConnectionState.connected) {
+          _notifySub ??= _ble.subscribeToCharacteristic(char).listen(
+            (bytes) {
+              // A notification can land between the disconnect event closing
+              // the controller and the platform cancelling the subscription.
+              if (!frames.isClosed) frames.add(bytes);
+            },
+            onError: (Object e) {
+              debugPrint('watch frame notify error: $e');
+              if (!frames.isClosed) frames.close();
+            },
+          );
+          if (!connected.isCompleted) connected.complete();
+        } else if (update.connectionState ==
+            DeviceConnectionState.disconnected) {
+          if (!connected.isCompleted) {
+            connected.completeError(
+              StateError('watch frame connect failed: ${update.failure}'),
+            );
+          } else if (!frames.isClosed) {
+            frames.close();
+          }
+        }
+      },
+      onError: (Object e) {
+        if (!connected.isCompleted) {
+          connected.completeError(e);
+        } else if (!frames.isClosed) {
+          frames.close();
+        }
+      },
+    );
+    await connected.future.timeout(connectTimeout);
+    return frames.stream;
+  }
+
+  @override
+  Future<void> close() async {
+    await _notifySub?.cancel();
+    _notifySub = null;
+    await _connectionSub?.cancel();
+    _connectionSub = null;
+    await _scanSub?.cancel();
+    _scanSub = null;
+    final frames = _frames;
+    _frames = null;
+    if (frames != null && !frames.isClosed) await frames.close();
   }
 }

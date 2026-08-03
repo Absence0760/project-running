@@ -89,7 +89,12 @@ class WatchLiveForwarder {
   String? get runId => _runId;
 
   /// Whether a frame stream is currently connected. Goes false when the
-  /// stream errors or closes, which is how a BLE drop surfaces.
+  /// stream errors or closes.
+  ///
+  /// Over BLE that means the watch is gone for good, not merely out of range
+  /// for a moment: [WatchStatusLink] holds the radio and reconnects behind
+  /// this, closing its stream only once it gives up. A transient drop is a
+  /// gap, and [linkFreshness] is what tells you about a gap.
   bool get linkUp => _linkUp;
 
   /// Freshness of the WATCH LINK — the age of the last frame admitted as a

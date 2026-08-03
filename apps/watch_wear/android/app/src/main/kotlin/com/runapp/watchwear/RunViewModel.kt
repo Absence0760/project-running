@@ -129,8 +129,12 @@ data class UiState(
     val hrZoneCutoffs: List<Int>? = null,
     /// Body weight (kg) from `user_settings.prefs.body_weight_kg`, for
     /// the PostRun calorie estimate (persona samsung #34). Null → the
-    /// shared 70 kg default applies.
+    /// shared 70 kg default applies, and the figure renders with the
+    /// "(est)" cue so the guess is never presented as measured.
     val bodyWeightKg: Double? = null,
+    /// Universal `show_calories` opt-out (default on). When false the
+    /// PostRun summary renders no calorie line at all.
+    val showCalories: Boolean = true,
     /// Distance-display unit resolved from `user_settings.prefs
     /// .preferred_unit`. Drives the distance / pace read-outs on the
     /// running + post-run screens and the route "to go" badge. Defaults
@@ -747,6 +751,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             _state.value = _state.value.copy(
                 hrZoneCutoffs = resolved,
                 bodyWeightKg = settings.bodyWeightKg,
+                showCalories = settings.showCalories,
                 preferredUnit = com.runapp.watchwear.recording.DistanceUnit
                     .fromPref(settings.preferredUnit),
             )

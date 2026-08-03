@@ -28,10 +28,10 @@ const _workout = 'd1f6a7e6-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _screens = 'd1f6a7e7-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 const _roadbook = 'd1f6a7e8-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 
-/// The `frame` characteristic: served by the firmware, but consumed on the
-/// phone by the status-frame decoder over the sim's TCP transport, not by
-/// this BLE class. Named here so the table above stays complete and a future
-/// reader can see the slot is deliberately unclaimed, not forgotten.
+/// The `frame` characteristic: the per-second live-status notify, claimed by
+/// [ReactiveBleWatchFrameSource] on its own connection rather than by the
+/// per-operation sync transport. It spent its life unclaimed here, which is
+/// why the manifest assertion below still names it explicitly.
 const _frame = 'd1f6a7e1-5b2c-4e9a-9c3d-1a2b3c4d5e6f';
 
 void main() {
@@ -73,8 +73,13 @@ void main() {
       expect(ReactiveBleWatchTransport.roadbookCharUuid.toString(), _roadbook);
     });
 
+    test('the status link reads frames from ..e1', () {
+      expect(ReactiveBleWatchFrameSource.frameCharUuid.toString(), _frame);
+    });
+
     test('every characteristic sits on a distinct handle', () {
       final uuids = <String>{
+        ReactiveBleWatchFrameSource.frameCharUuid.toString(),
         ReactiveBleWatchTransport.manifestCharUuid.toString(),
         ReactiveBleWatchTransport.chunkCharUuid.toString(),
         ReactiveBleWatchTransport.settingsCharUuid.toString(),
@@ -83,7 +88,7 @@ void main() {
         ReactiveBleWatchTransport.screensCharUuid.toString(),
         ReactiveBleWatchTransport.roadbookCharUuid.toString(),
       };
-      expect(uuids, hasLength(7));
+      expect(uuids, hasLength(8));
     });
   });
 }

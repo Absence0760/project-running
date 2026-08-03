@@ -13,6 +13,7 @@
     <string name="bpm_zone">%1$d bpm · Z%2$d</string>
     <string name="bpm_avg">%1$d bpm méd.</string>
     <string name="kcal">%1$d kcal</string>
+    <string name="kcal_est">%1$d kcal (est.)</string>
     <plurals name="steps">
         <item quantity="one">%1$d passo</item>
         <item quantity="other">%1$d passos</item>

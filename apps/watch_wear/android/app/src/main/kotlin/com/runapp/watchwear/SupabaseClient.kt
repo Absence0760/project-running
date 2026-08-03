@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
@@ -128,6 +129,14 @@ data class UniversalSettings(
     /// read-outs on the running + post-run screens, the route "to go"
     /// badge, and the active-run tile.
     val preferredUnit: String? = null,
+    /// Universal `show_calories` opt-out (default on). When false the
+    /// PostRun summary omits the calorie line entirely — the pref exists
+    /// so a weight-conscious runner can stop the app surfacing calorie
+    /// figures at all, so every surface that renders one must honour it,
+    /// not just run-detail on web + phone. Only an explicit `false`
+    /// hides it, mirroring web's `effective(..., 'show_calories', true)
+    /// !== false`; an absent or unparseable value leaves it on.
+    val showCalories: Boolean = true,
 )
 
 /// Allowed values for `default_activity_type`. Mirrors the CHECK
@@ -183,6 +192,7 @@ internal fun parseUniversalSettings(body: String?): UniversalSettings? {
                 ?.takeIf { it in 20.0..400.0 },
             preferredUnit = prefs["preferred_unit"]?.jsonPrimitive?.contentOrNull
                 ?.takeIf { it in UNIVERSAL_PREFERRED_UNITS },
+            showCalories = prefs["show_calories"]?.jsonPrimitive?.booleanOrNull != false,
         )
     } catch (_: Throwable) {
         null
