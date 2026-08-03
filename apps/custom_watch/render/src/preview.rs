@@ -107,7 +107,7 @@ fn base_snapshot() -> Snapshot {
         waypoint_mark_seq: 0,
         waypoint_refuse_seq: 0,
         run_lost_seq: 0,
-        course_reject_seq: 0,
+        push_outcome: watch_core::ble_sync::PushOutcome::DEFAULT,
         timer: None,
         storm: None,
         auto_lap: watch_core::auto_lap::AUTO_LAP_DEFAULT,

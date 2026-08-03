@@ -31,13 +31,29 @@ class _FakeCourseTransport implements WatchBleTransport {
   final courseWrites = <List<int>>[];
   final roadbookWrites = <List<int>>[];
   final bool failWrite;
+
+  /// The `PSH1` verdicts the watch answers `push_status` reads with, in order.
+  /// Empty is a watch with no verdict to give — the push stays unconfirmed.
+  final List<List<int>> pushStatusReads;
+  int pushStatusReadCount = 0;
   int scans = 0;
   int disconnects = 0;
 
-  _FakeCourseTransport({this.failWrite = false});
+  _FakeCourseTransport({
+    this.failWrite = false,
+    this.pushStatusReads = const [],
+  });
 
   @override
   Future<void> scan() async => scans++;
+  @override
+  Future<List<int>> readPushStatus() async {
+    final at = pushStatusReadCount++;
+    if (at >= pushStatusReads.length) {
+      return pushStatusReads.isEmpty ? const [] : pushStatusReads.last;
+    }
+    return pushStatusReads[at];
+  }
   @override
   Future<void> disconnect() async => disconnects++;
   @override
@@ -420,6 +436,25 @@ void main() {
       expect(find.textContaining("Couldn't send the course"), findsOneWidget);
       expect(find.textContaining('Course sent to the watch'), findsNothing);
       // The connection is still torn down on the failure path.
+      expect(transport.disconnects, 1);
+      await _drainBanner(tester);
+    });
+
+    testWidgets('a refused push is reported as refused, never as sent',
+        (tester) async {
+      // The ATT write succeeds — it always does, the SoftDevice answers before
+      // the firmware decides — so before the `push_status` verdict this said
+      // "Course sent to the watch" while the watch kept the old one.
+      final transport = _FakeCourseTransport(pushStatusReads: [
+        [...'PSH1'.codeUnits, 1, 1, 1],
+        [...'PSH1'.codeUnits, 2, 1, 0],
+      ]);
+      await _pump(tester, _route(waypoints: _loop(20)), transport: transport);
+      await _openShareMenu(tester);
+      await _sendToWatch(tester);
+
+      expect(find.textContaining('refused the push'), findsOneWidget);
+      expect(find.textContaining('Course sent to the watch'), findsNothing);
       expect(transport.disconnects, 1);
       await _drainBanner(tester);
     });

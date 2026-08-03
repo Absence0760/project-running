@@ -106,13 +106,19 @@
     <string name="cd_discard_unsaved_run">Nicht gespeicherten Lauf verwerfen</string>
 
     <string name="tts_run_started">Lauf gestartet</string>
-    <plurals name="tts_split_unit">
+    <plurals name="tts_split_unit_km">
         <item quantity="one">%1$d Kilometer</item>
         <item quantity="other">%1$d Kilometer</item>
     </plurals>
-    <string name="tts_pace_tail">Pace %1$d Minuten %2$d Sekunden pro Kilometer</string>
+    <plurals name="tts_split_unit_mi">
+        <item quantity="one">%1$d Meile</item>
+        <item quantity="other">%1$d Meilen</item>
+    </plurals>
+    <string name="tts_pace_tail_km">Pace %1$d Minuten %2$d Sekunden pro Kilometer</string>
+    <string name="tts_pace_tail_mi">Pace %1$d Minuten %2$d Sekunden pro Meile</string>
     <string name="tts_split_phrase">%1$s. %2$s</string>
-    <string name="tts_run_complete">Lauf beendet. %1$s Kilometer in %2$d Minuten.</string>
+    <string name="tts_run_complete_km">Lauf beendet. %1$s Kilometer in %2$d Minuten.</string>
+    <string name="tts_run_complete_mi">Lauf beendet. %1$s Meilen in %2$d Minuten.</string>
     <string name="tts_pace_alert_fast">Tempo erhöhen</string>
     <string name="tts_pace_alert_slow">Langsamer</string>
 </resources>

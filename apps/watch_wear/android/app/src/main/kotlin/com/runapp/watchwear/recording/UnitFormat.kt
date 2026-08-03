@@ -75,6 +75,22 @@ fun paceSecPerUnit(secPerKm: Double, unit: DistanceUnit): Double = when (unit) {
     DistanceUnit.MI -> secPerKm * (METRES_PER_MILE / 1000.0)
 }
 
+/// Metres between spoken split announcements for a runner on [unit].
+///
+/// A split is a landmark, not a raw distance: an imperial runner expects to
+/// be told when they pass a MILE. Mirrors the phone's
+/// `ActivityType.splitIntervalMetresFor` — the watch records runs only, so
+/// there's no cycling branch here.
+fun splitIntervalMetres(unit: DistanceUnit): Double = when (unit) {
+    DistanceUnit.KM -> 1000.0
+    DistanceUnit.MI -> METRES_PER_MILE
+}
+
+/// Count of whole splits banked at [distanceM] on [unit] — the number the
+/// split cue announces. Floors, so the cue fires as the unit is completed.
+fun completedSplits(distanceM: Double, unit: DistanceUnit): Int =
+    (distanceM / splitIntervalMetres(unit)).toInt()
+
 /// Format metres as a 2-decimal kilometre figure in [locale] — number
 /// only, no unit word. Retained for the km-only call sites (notification,
 /// recovery prompt) that don't take a unit. e.g. 5123.0 m → "5.12" (en).

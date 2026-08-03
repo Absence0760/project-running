@@ -2821,6 +2821,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Esta ruta tiene muy pocos puntos para seguirla en el reloj';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'El reloj rechazó el envío y conservó lo que ya tenía. Inténtalo de nuevo.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'No se pudo enviar el recorrido al reloj: $error';
   }
@@ -6303,6 +6307,13 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get proSubscribeSubtitleWeb =>
       'Abre el portal de suscripción en tu navegador. Se renueva automáticamente cada mes hasta su cancelación.';
+
+  @override
+  String get proComingSoonTitle => 'Pro: próximamente';
+
+  @override
+  String get proComingSoon =>
+      'Pro desbloquea el entrenador con IA: próximamente. Aún puedes apoyar la app más abajo.';
 
   @override
   String get proRegionalNote =>

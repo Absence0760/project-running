@@ -2652,6 +2652,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailWatchCourseTooShort => 'このルートは地点が少なすぎてウォッチでたどれません';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      '時計が送信を拒否し、以前の内容をそのまま保持しました。もう一度お試しください。';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'コースをウォッチに送信できませんでした: $error';
   }
@@ -5946,6 +5950,12 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get proSubscribeSubtitleWeb =>
       'ブラウザでサブスクリプションポータルを開きます。解約するまで毎月自動更新されます。';
+
+  @override
+  String get proComingSoonTitle => 'Pro — 近日公開';
+
+  @override
+  String get proComingSoon => 'Pro は AI コーチを解放します — 近日公開。下からアプリを支援することはできます。';
 
   @override
   String get proRegionalNote =>

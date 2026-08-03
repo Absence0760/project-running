@@ -1088,6 +1088,50 @@ test('/settings/upgrade gates the Get Pro CTA on a live perk (never sells a holl
 	assert.match(rgFlag, /PUBLIC_ROUTE_GEN_ENABLED/, 'route_gen_flag must read PUBLIC_ROUTE_GEN_ENABLED.');
 });
 
+test('/app-capabilities.json publishes the same two perk flags the storefront gates on', () => {
+	// Reason: the native clients have no server-rendered env, so they learn
+	// whether Pro is sellable by reading this prerendered manifest
+	// (decisions §466). It must derive from the SAME fail-closed gates the
+	// web card reads — a hand-rolled second source of truth would drift and
+	// let mobile sell a hollow Pro after web stopped. Mobile fails closed on
+	// a missing key, so dropping a field here disables selling rather than
+	// enabling it, but the flags must stay wired.
+	const manifest = read('src/routes/app-capabilities.json/+server.ts');
+	assert.match(
+		manifest,
+		/import \{ coachEnabled \} from '\$lib\/coach\/coach_flag'/,
+		'the capability manifest must derive `coach` from the shared coachEnabled() gate.',
+	);
+	assert.match(
+		manifest,
+		/import \{ routeGenEnabled \} from '\$lib\/routes\/route_gen_flag'/,
+		'the capability manifest must derive `route_gen` from the shared routeGenEnabled() gate.',
+	);
+	assert.match(
+		manifest,
+		/coach: coachEnabled\(\)[\s\S]*?route_gen: routeGenEnabled\(\)/,
+		'the manifest body must publish both flags under the `coach` / `route_gen` keys the mobile parser reads.',
+	);
+	assert.match(
+		manifest,
+		/export const prerender = true/,
+		'the manifest must be prerendered — adapter-static drops any endpoint that is not.',
+	);
+	// The release workflow must keep it off the immutable-asset sync, or a
+	// perk turned off would stay "on" in caches for a year.
+	const workflow = read('../../.github/workflows/release-web.yml');
+	assert.match(
+		workflow,
+		/--exclude "app-capabilities\.json"/,
+		'app-capabilities.json must be excluded from the year-long immutable S3 sync.',
+	);
+	assert.match(
+		workflow,
+		/--include "app-capabilities\.json"/,
+		'app-capabilities.json must ride the short-cache S3 sync so a disabled perk propagates.',
+	);
+});
+
 test('RouteBuilder sends the generate JWT in `x-supabase-authorization`, not `Authorization`', () => {
 	// Reason: same collision as the coach clients — the production Lambda
 	// Function URL is AWS_IAM-auth and CloudFront's OAC signs `Authorization`

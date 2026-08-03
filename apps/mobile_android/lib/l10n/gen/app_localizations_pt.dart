@@ -2818,6 +2818,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Esta rota tem pontos de menos para ser seguida no relógio';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'O relógio recusou o envio e manteve o que já tinha. Tente novamente.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'Não foi possível enviar o percurso para o relógio: $error';
   }
@@ -6302,6 +6306,13 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get proSubscribeSubtitleWeb =>
       'Abre o portal de assinatura no seu navegador. Renova automaticamente todo mês até ser cancelado.';
+
+  @override
+  String get proComingSoonTitle => 'Pro — em breve';
+
+  @override
+  String get proComingSoon =>
+      'O Pro desbloqueia o Coach de IA — em breve. Você ainda pode apoiar o app abaixo.';
 
   @override
   String get proRegionalNote =>
@@ -15133,6 +15144,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Esta rota tem pontos de menos para ser seguida no relógio';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'O relógio recusou o envio e manteve o que já tinha. Tente novamente.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'Não foi possível enviar o percurso para o relógio: $error';
   }
@@ -18616,6 +18631,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get proSubscribeSubtitleWeb =>
       'Abre o portal de assinatura no seu navegador. Renova automaticamente todo mês até ser cancelado.';
+
+  @override
+  String get proComingSoonTitle => 'Pro — em breve';
+
+  @override
+  String get proComingSoon =>
+      'O Pro desbloqueia o Coach de IA — em breve. Você ainda pode apoiar o app abaixo.';
 
   @override
   String get proRegionalNote =>

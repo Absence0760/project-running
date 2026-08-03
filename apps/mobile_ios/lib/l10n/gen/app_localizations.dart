@@ -4715,6 +4715,12 @@ abstract class AppLocalizations {
   /// **'This route has too few points to follow on the watch'**
   String get routeDetailWatchCourseTooShort;
 
+  /// No description provided for @routeDetailWatchPushRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The watch refused the push and kept what it already had. Try again.'**
+  String get routeDetailWatchPushRejected;
+
   /// Banner when the BLE course push to the watch fails
   ///
   /// In en, this message translates to:
@@ -10334,6 +10340,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Opens the subscription portal in your browser. Auto-renews monthly until cancelled.'**
   String get proSubscribeSubtitleWeb;
+
+  /// Pro tile title when the deploy has no live Pro perk to sell
+  ///
+  /// In en, this message translates to:
+  /// **'Pro — coming soon'**
+  String get proComingSoonTitle;
+
+  /// Pro tile subtitle shown instead of a purchase CTA when no Pro perk is live
+  ///
+  /// In en, this message translates to:
+  /// **'Pro unlocks the AI Coach — coming soon. You can still support the app below.'**
+  String get proComingSoon;
 
   /// Honesty note about billing currency and regional availability
   ///

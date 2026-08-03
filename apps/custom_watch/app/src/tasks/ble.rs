@@ -40,6 +40,17 @@
 //!   Fuel / SleepStation pages could only ever show the canned `sim-course`
 //!   schedule — the compute was built and host-tested, the wire was missing.
 //!
+//! All five of those pushes — settings, course, workout, screens, roadbook —
+//! answer on one more characteristic:
+//! - `push_status` (read): the `ble_sync::PushOutcome` verdict on the last
+//!   push the watch resolved. An ATT write response is the SoftDevice's, not
+//!   this task's — it is sent before the handler below runs — so without this
+//!   row the phone's "sent" said only that the bytes arrived, and a refused
+//!   settings / workout / screens / roadbook push left the OLD value armed
+//!   with nothing but a `warn!` down a cable no runner carries (issue #664,
+//!   decisions § 464). The wearer's half of the same seam is
+//!   `state::PUSH_OUTCOME` → the alert engine's `! <KIND> FAIL` banner.
+//!
 //! Also UNVERIFIED on hardware, but flash access IS SoftDevice-coordinated:
 //! on this build `run_flash`'s backend is `nrf_softdevice::Flash`, so every
 //! erase/write is arbitrated by the S140 (see the `run_flash` module doc's
@@ -119,7 +130,9 @@ mod imp {
         IdentityResolutionKey, MasterId, SecurityMode,
     };
     use nrf_softdevice::{raw, Softdevice};
-    use watch_core::ble_sync::{self, CHUNK_QUEUE_DEPTH, MANIFEST_CAP};
+    use watch_core::ble_sync::{
+        self, PushKind, PushOutcome, CHUNK_QUEUE_DEPTH, MANIFEST_CAP, PUSH_STATUS_LEN,
+    };
     use watch_core::course_store::{self, CourseAssembler, CoursePush, COURSE_CHUNK_CAP};
     use watch_core::flash_store::BondRecord;
     use watch_core::link;
@@ -243,6 +256,38 @@ mod imp {
             security = "justworks"
         )]
         roadbook: Vec<u8, ROADBOOK_CHUNK_CAP>,
+        /// The verdict on the last push the watch resolved, for the phone
+        /// (`ble_sync::PushOutcome`, the `PSH1` record). Read-only, and the
+        /// only row here that answers rather than accepts.
+        ///
+        /// It exists because an ATT write-with-response says nothing about
+        /// whether the watch KEPT the value: the SoftDevice writes the
+        /// attribute and answers the central before this task's handler ever
+        /// runs, so the phone's "sent" is a transport fact, never an
+        /// application one. That is how five characteristics could refuse a
+        /// push while the phone reported success.
+        ///
+        /// Read, not notify: a read is one request/response the phone drives
+        /// inside the connection it already opened to push, so there is no
+        /// subscribe-before-write ordering to get wrong on a path that can
+        /// never be simulated (§ 210). The phone samples the sequence before
+        /// its writes and polls it after; an unmoved sequence is
+        /// *unconfirmed*, never *accepted*.
+        #[characteristic(
+            uuid = "d1f6a7e9-5b2c-4e9a-9c3d-1a2b3c4d5e6f",
+            read,
+            security = "justworks"
+        )]
+        push_status: Vec<u8, PUSH_STATUS_LEN>,
+    }
+
+    /// The `push_status` characteristic value for `outcome`. The encode is
+    /// [`PushOutcome`]'s (host-tested there); this only lifts it into the
+    /// heapless `Vec` the generated setter takes.
+    fn push_status_value(outcome: &PushOutcome) -> Vec<u8, PUSH_STATUS_LEN> {
+        let mut v: Vec<u8, PUSH_STATUS_LEN> = Vec::new();
+        let _ = v.extend_from_slice(&outcome.encode());
+        v
     }
 
     #[nrf_softdevice::gatt_server]
@@ -312,20 +357,20 @@ mod imp {
     /// instead of mere radio range), with FACTORY ERASE (§378) remaining the
     /// scorched-earth fallback that also clears `BND1`.
     pub struct Bonder {
-        peer: Cell<Option<Peer>>,
-        /// The `state::bond_erase_gen()` `peer` was stored under. A FACTORY
-        /// ERASE bumps that counter, so a stale generation here means the
-        /// wearer wiped this bond and the keys below must stop being served —
-        /// the firmware never reboots, so nothing else would retire them.
-        peer_gen: Cell<u32>,
+        /// The one remembered phone, behind the erase-generation check that
+        /// retires it. A [`pairing::BondCell`] rather than a bare `Cell`
+        /// because the check is not optional and a call site that skipped it
+        /// served a wiped owner's keys twice before the type existed — the
+        /// FACTORY ERASE bumps the generation and the firmware never reboots,
+        /// so nothing else would retire them.
+        peer: pairing::BondCell<Peer>,
         sys_attrs: RefCell<heapless::Vec<u8, 64>>,
     }
 
     impl Default for Bonder {
         fn default() -> Self {
             Bonder {
-                peer: Cell::new(None),
-                peer_gen: Cell::new(0),
+                peer: pairing::BondCell::new(),
                 sys_attrs: RefCell::new(heapless::Vec::new()),
             }
         }
@@ -333,18 +378,18 @@ mod imp {
 
     impl Bonder {
         /// The stored peer, or `None` once a factory erase has retired it.
-        /// Every read of `peer` goes through here — reading the field directly
-        /// is what let an erased watch keep serving the previous owner.
         fn live_peer(&self) -> Option<Peer> {
-            pairing::bond_is_live(self.peer_gen.get(), state::bond_erase_gen())
-                .then(|| self.peer.get())
-                .flatten()
+            self.peer.live(state::bond_erase_gen())
+        }
+
+        /// Whether a live bond is held.
+        fn is_bonded(&self) -> bool {
+            self.peer.is_live(state::bond_erase_gen())
         }
 
         /// Adopt `peer` as of the current erase generation.
         fn set_peer(&self, peer: Option<Peer>) {
-            self.peer.set(peer);
-            self.peer_gen.set(state::bond_erase_gen());
+            self.peer.set(peer, state::bond_erase_gen());
         }
     }
 
@@ -393,10 +438,7 @@ mod imp {
         /// takeover rather than a re-pair.
         fn can_bond(&self, _conn: &Connection) -> bool {
             let now_s = Instant::now().as_secs() as u32;
-            let ok = pairing::may_bond(
-                self.live_peer().is_some(),
-                state::pairing_window_open(now_s),
-            );
+            let ok = pairing::may_bond(self.is_bonded(), state::pairing_window_open(now_s));
             if !ok {
                 PAIRING_REFUSED.signal(());
             }
@@ -420,10 +462,7 @@ mod imp {
         /// interaction, since there is no passkey face to interact with.
         fn request_mitm_protection(&self, _conn: &Connection) -> bool {
             let now_s = Instant::now().as_secs() as u32;
-            !pairing::may_bond(
-                self.live_peer().is_some(),
-                state::pairing_window_open(now_s),
-            )
+            !pairing::may_bond(self.is_bonded(), state::pairing_window_open(now_s))
         }
 
         fn on_security_update(&self, _conn: &Connection, security_mode: SecurityMode) {
@@ -477,8 +516,7 @@ mod imp {
         fn load_sys_attrs(&self, conn: &Connection) {
             let attrs = self.sys_attrs.borrow();
             let attrs = if self
-                .peer
-                .get()
+                .live_peer()
                 .map(|peer| peer.peer_id.is_match(conn.peer_address()))
                 .unwrap_or(false)
             {
@@ -629,13 +667,19 @@ mod imp {
         let mut fix_rx = unwrap!(state::FIX.receiver());
         let mut elev_rx = unwrap!(state::ELEVATION.receiver());
         let course_sender = state::COURSE.sender();
-        // Wrapping rejected-course-push counter (state::COURSE_REJECTS). A
-        // Cell because the GATT handler is a plain `Fn`; it outlives the
-        // connection loop so the seq stays monotonic across reconnects.
-        let course_reject_tx = state::COURSE_REJECTS.sender();
-        let course_rejects = Cell::new(0u8);
         let mut latest = None;
         let mut elev = None;
+
+        // Publish the pre-push verdict so a phone that reads `push_status`
+        // before ever pushing gets a well-formed `PSH1` at sequence 0 rather
+        // than an empty value — which its decoder would (correctly) refuse,
+        // and which would then read as "this firmware has no verdict to give".
+        if let Err(e) = server
+            .link
+            .push_status_set(&push_status_value(&PushOutcome::DEFAULT))
+        {
+            debug!("ble: push status init failed {:?}", e);
+        }
 
         // Re-arm the bonder with the bond persisted across the power cycle
         // (fail-closed: an erased/corrupt record just means re-pair).
@@ -715,13 +759,24 @@ mod imp {
             let course_asm: RefCell<CourseAssembler> = RefCell::new(CourseAssembler::new());
             let workout_asm: RefCell<WorkoutAssembler> = RefCell::new(WorkoutAssembler::new());
             let roadbook_asm: RefCell<RoadbookAssembler> = RefCell::new(RoadbookAssembler::new());
-            // Every way a course push can fail funnels through here, because
-            // each leaves state::COURSE holding the OLD course while the
-            // runner's phone just said "sent" — the warn! beside each site
-            // reaches a debug cable, this counter reaches the wrist.
-            let note_course_reject = || {
-                course_rejects.set(course_rejects.get().wrapping_add(1));
-                course_reject_tx.send(course_rejects.get());
+            // EVERY way a push resolves funnels through here — all five
+            // characteristics, accepted and refused alike. Each of the five is
+            // latest-value, so a refusal leaves the OLD course / workout /
+            // schedule / screens / settings armed while the runner's phone
+            // just said "sent": the `warn!` beside each site reaches a debug
+            // cable, this reaches the wrist (via `state::PUSH_OUTCOME` and the
+            // alert engine) and the phone (via the `push_status`
+            // characteristic this publishes).
+            //
+            // A plain `Fn`, like the Cell and Channel above, because that is
+            // what `gatt_server::run`'s handler is; the SoftDevice value-set
+            // is fallible and best-effort — a failed set only costs the phone
+            // its verdict, never the wearer's banner.
+            let note_push = |kind: PushKind, accepted: bool| {
+                let outcome = state::note_push(kind, accepted);
+                if let Err(e) = server.link.push_status_set(&push_status_value(&outcome)) {
+                    debug!("ble: push status set failed {:?}", e);
+                }
             };
 
             let gatt = gatt_server::run(&conn, server, |e| match e {
@@ -751,11 +806,21 @@ mod imp {
                     LinkServiceEvent::SettingsWrite(bytes) => match WatchSettings::decode(&bytes) {
                         Some(s) => {
                             info!("ble: settings push ({=usize} B)", bytes.len());
-                            if state::SETTINGS.try_send(s).is_err() {
-                                warn!("ble: settings queue full, push refused");
+                            // A full queue is a REFUSAL, not a delay: the
+                            // channel drops the newest, so the runner's
+                            // corrected zones / cadences never arrive at all.
+                            match state::SETTINGS.try_send(s) {
+                                Ok(()) => note_push(PushKind::Settings, true),
+                                Err(_) => {
+                                    warn!("ble: settings queue full, push refused");
+                                    note_push(PushKind::Settings, false);
+                                }
                             }
                         }
-                        None => warn!("ble: bad settings frame ({=usize} B)", bytes.len()),
+                        None => {
+                            warn!("ble: bad settings frame ({=usize} B)", bytes.len());
+                            note_push(PushKind::Settings, false);
+                        }
                     },
                     // Whole-frame fail-closed: a refused set leaves whatever
                     // the watch already had, which is the 37 built-in pages at
@@ -765,8 +830,12 @@ mod imp {
                         Some(set) => {
                             info!("ble: screens push ({=usize} screens)", set.len());
                             state::SCREENS.sender().send(Some(set));
+                            note_push(PushKind::Screens, true);
                         }
-                        None => warn!("ble: bad screens frame ({=usize} B)", bytes.len()),
+                        None => {
+                            warn!("ble: bad screens frame ({=usize} B)", bytes.len());
+                            note_push(PushKind::Screens, false);
+                        }
                     },
                     LinkServiceEvent::CourseWrite(bytes) => {
                         // Feed the reassembler; on completion decode + publish
@@ -783,22 +852,23 @@ mod imp {
                                         );
                                         course_sender.send(Some(course));
                                         asm.reset();
+                                        note_push(PushKind::Course, true);
                                     }
                                     None => {
                                         warn!("ble: course frame failed to decode");
                                         asm.reset();
-                                        note_course_reject();
+                                        note_push(PushKind::Course, false);
                                     }
                                 },
                                 CoursePush::More => {}
                                 CoursePush::Rejected => {
                                     warn!("ble: bad course chunk @ {=usize}", offset);
-                                    note_course_reject();
+                                    note_push(PushKind::Course, false);
                                 }
                             }
                         } else {
                             warn!("ble: short course chunk ({=usize} B)", bytes.len());
-                            note_course_reject();
+                            note_push(PushKind::Course, false);
                         }
                     }
                     LinkServiceEvent::WorkoutWrite(bytes) => {
@@ -810,19 +880,23 @@ mod imp {
                                         info!("ble: workout push complete ({} steps)", steps.len());
                                         state::WORKOUT.sender().send(Some(steps));
                                         asm.reset();
+                                        note_push(PushKind::Workout, true);
                                     }
                                     None => {
                                         warn!("ble: workout frame failed to decode");
                                         asm.reset();
+                                        note_push(PushKind::Workout, false);
                                     }
                                 },
                                 WorkoutPush::More => {}
                                 WorkoutPush::Rejected => {
-                                    warn!("ble: bad workout chunk @ {=usize}", offset)
+                                    warn!("ble: bad workout chunk @ {=usize}", offset);
+                                    note_push(PushKind::Workout, false);
                                 }
                             }
                         } else {
                             warn!("ble: short workout chunk ({=usize} B)", bytes.len());
+                            note_push(PushKind::Workout, false);
                         }
                     }
                     LinkServiceEvent::RoadbookWrite(bytes) => {
@@ -839,20 +913,24 @@ mod imp {
                                             );
                                             state::ROADBOOK.sender().send(Some(rb));
                                             asm.reset();
+                                            note_push(PushKind::Roadbook, true);
                                         }
                                         None => {
                                             warn!("ble: roadbook frame failed to decode");
                                             asm.reset();
+                                            note_push(PushKind::Roadbook, false);
                                         }
                                     }
                                 }
                                 RoadbookPush::More => {}
                                 RoadbookPush::Rejected => {
-                                    warn!("ble: bad roadbook chunk @ {=usize}", offset)
+                                    warn!("ble: bad roadbook chunk @ {=usize}", offset);
+                                    note_push(PushKind::Roadbook, false);
                                 }
                             }
                         } else {
                             warn!("ble: short roadbook chunk ({=usize} B)", bytes.len());
+                            note_push(PushKind::Roadbook, false);
                         }
                     }
                 },

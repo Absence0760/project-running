@@ -39,13 +39,17 @@
 #                                         # The course-driven alerts (§381 off-
 #                                         # course, §380 cutoff) arm on data
 #                                         # presence, not a setter, so this is
-#                                         # the only way a scenario gets a
-#                                         # quiet alert slot with a run going
+#                                         # the only way to unarm them
 #   bin/watch-sim.sh --no-workout         # drop the canned 5-step demo workout.
 #                                         # Its step banners (§354) are alerts
-#                                         # a setter cannot silence, so the
-#                                         # quiet-slot scenarios drop it the
-#                                         # same way they drop the course
+#                                         # a setter cannot silence either
+#
+# A scenario boots only the rails it asserts on and sheds the rest through these
+# three flags — sim/ci_smoke.py derives them from SCENARIO_ARMED_RAILS rather
+# than listing exclusions. That is about keeping ONE writer on the single alert
+# slot a scenario reads, not about finding a quiet window: since decisions.md
+# § 465 the engine itself guarantees the page comes back between banners
+# (watch_core::alerts::ALERT_QUIET_S), whatever is armed.
 #
 # The default GPS fixture is sim/nmea/bench_jog.nmea. Select another named
 # fixture from sim/nmea/ with --fixture <name> (or the NMEA_FIXTURE env var);

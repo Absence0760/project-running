@@ -84,6 +84,10 @@ class CheckpointStore {
     /// between checkpoints on a fast-sampling device.
     private static let fsyncEvery = 32
 
+    /// Bytes pulled per read in `forEachTrackPoint`. Peak read memory is one
+    /// of these plus a single partial line, whatever the length of the run.
+    private static let readChunkSize = 64 * 1024
+
     let trackFileURL: URL
 
     /// Held open for the lifetime of the run. Appending through one
@@ -94,8 +98,7 @@ class CheckpointStore {
     private var pointsSinceSync = 0
 
     init(runId: String) {
-        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("run_checkpoint", isDirectory: true)
+        let dir = CheckpointStore.checkpointDirectory
         // A failure here means every subsequent track append silently drops
         // (the file can't be created), so surface it rather than swallowing
         // with `try?` — matches the logging in `appendTrackPoints`.
@@ -106,7 +109,20 @@ class CheckpointStore {
             print("CheckpointStore: failed to create checkpoint dir \(dir.path): \(error)")
             #endif
         }
-        trackFileURL = dir.appendingPathComponent("\(runId).ndjson")
+        trackFileURL = CheckpointStore.trackFile(runId: runId)
+    }
+
+    private static var checkpointDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("run_checkpoint", isDirectory: true)
+    }
+
+    /// Where a run's NDJSON track lives, without touching the filesystem —
+    /// so a caller that only needs the path (a finished run's payload) does
+    /// not have to construct a store and create the directory as a side
+    /// effect.
+    static func trackFile(runId: String) -> URL {
+        checkpointDirectory.appendingPathComponent("\(runId).ndjson")
     }
 
     func write(checkpoint: RunCheckpoint) {
@@ -116,7 +132,7 @@ class CheckpointStore {
 
     /// Append GPS points as newline-delimited JSON. Each point is one
     /// self-contained line, so a crash mid-write can only ever truncate
-    /// the final partial line — which `loadTrackPoints` skips — and never
+    /// the final partial line — which `forEachTrackPoint` skips — and never
     /// corrupt an already-written point. Wrapped so a transient I/O
     /// failure degrades to "this batch isn't persisted" rather than
     /// killing the recording (layered-resilience: a checkpoint-write
@@ -168,7 +184,7 @@ class CheckpointStore {
     }
 
     /// Close the append handle, flushing to disk. Call before reading the
-    /// track back at stop/finish so `loadTrackPoints` sees every appended
+    /// track back at stop/finish so `forEachTrackPoint` sees every appended
     /// point.
     func closeAppendHandle() {
         guard let handle = appendHandle else { return }
@@ -184,18 +200,80 @@ class CheckpointStore {
         return try? Self.decoder.decode(RunCheckpoint.self, from: data)
     }
 
-    func loadTrackPoints() -> [TrackPointRecord] {
-        guard let raw = try? String(contentsOf: trackFileURL, encoding: .utf8) else { return [] }
-        Self.decoder.dateDecodingStrategy = .iso8601
-        return raw.split(separator: "\n", omittingEmptySubsequences: true).compactMap { line in
-            try? Self.decoder.decode(TrackPointRecord.self, from: Data(line.utf8))
+    /// Hand every decodable point in `fileURL` to `body`, one at a time.
+    ///
+    /// The read mirror of `appendTrackPoints`: neither side ever holds more
+    /// than a buffer. Materialising instead — `String(contentsOf:)` + `split`
+    /// + `compactMap` — costs the whole file, a per-line index array and the
+    /// decoded array simultaneously, which at the project's own 100 h /
+    /// ~360k-point target is ~73 MB before a single caller has done anything
+    /// with the result. See `decisions.md § 467`.
+    ///
+    /// A line that fails to decode is skipped. That is what preserves the
+    /// crash-durability guarantee: a crash mid-append can only truncate the
+    /// final line, and a truncated line simply doesn't decode.
+    static func forEachTrackPoint(in fileURL: URL, _ body: (TrackPointRecord) -> Void) {
+        guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return }
+        defer { try? handle.close() }
+        decoder.dateDecodingStrategy = .iso8601
+
+        var carry = Data()
+        while true {
+            // A nil chunk is EOF; a thrown read is a dead handle. Both end
+            // the walk with whatever was already yielded, matching the old
+            // reader's "unreadable file yields nothing extra" behaviour.
+            guard let chunk = try? handle.read(upToCount: readChunkSize), !chunk.isEmpty else { break }
+            carry.append(chunk)
+            var lineStart = carry.startIndex
+            while let newline = carry[lineStart...].firstIndex(of: 0x0A) {
+                emit(carry[lineStart..<newline], to: body)
+                lineStart = carry.index(after: newline)
+            }
+            carry = Data(carry[lineStart...])
         }
+        emit(carry, to: body)
+    }
+
+    private static func emit(_ line: Data, to body: (TrackPointRecord) -> Void) {
+        guard !line.isEmpty,
+              let point = try? decoder.decode(TrackPointRecord.self, from: Data(line)) else { return }
+        body(point)
+    }
+
+    func forEachTrackPoint(_ body: (TrackPointRecord) -> Void) {
+        CheckpointStore.forEachTrackPoint(in: trackFileURL, body)
+    }
+
+    /// Number of decodable points on disk. Streams — the count is never
+    /// derived from an array that had to exist first.
+    func countTrackPoints() -> Int {
+        var count = 0
+        forEachTrackPoint { _ in count += 1 }
+        return count
     }
 
     func clear() {
         closeAppendHandle()
         UserDefaults.standard.removeObject(forKey: Self.defaultsKey)
         try? FileManager.default.removeItem(at: trackFileURL)
+    }
+
+    /// Delete every track file except `keep`.
+    ///
+    /// The NDJSON now outlives the UserDefaults checkpoint — a finished run
+    /// streams its payload straight from the file, so `stop()` can no longer
+    /// delete it — which means a discarded recovery, or a process kill
+    /// between stop and reset, can strand one in Caches. Starting a new run
+    /// is the moment nothing can still want the old ones.
+    static func purgeTrackFiles(except keep: URL) {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: checkpointDirectory,
+            includingPropertiesForKeys: nil
+        ) else { return }
+        for url in entries
+        where url.pathExtension == "ndjson" && url.lastPathComponent != keep.lastPathComponent {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     static func peekCheckpoint() -> RunCheckpoint? {

@@ -2798,6 +2798,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'This route has too few points to follow on the watch';
 
   @override
+  String get routeDetailWatchPushRejected =>
+      'The watch refused the push and kept what it already had. Try again.';
+
+  @override
   String routeDetailWatchCourseFailed(String error) {
     return 'Couldn\'t send the course to the watch: $error';
   }
@@ -6237,6 +6241,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get proSubscribeSubtitleWeb =>
       'Opens the subscription portal in your browser. Auto-renews monthly until cancelled.';
+
+  @override
+  String get proComingSoonTitle => 'Pro — coming soon';
+
+  @override
+  String get proComingSoon =>
+      'Pro unlocks the AI Coach — coming soon. You can still support the app below.';
 
   @override
   String get proRegionalNote =>

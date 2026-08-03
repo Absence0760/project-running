@@ -6,8 +6,9 @@ import XCTest
 /// `recoverRun()` reconstructs a `FinishedRun` from a persisted checkpoint
 /// (metadata in UserDefaults) plus the streamed NDJSON track file — it must
 /// carry the SAME run id end-to-end (the id minted at start keys the
-/// checkpoint, the track file, and the recovered run) and must restore the
-/// average HR from the checkpoint rather than dropping it. `formattedElapsed`
+/// checkpoint, the track file, and the recovered run), point the recovered
+/// run at that file rather than materialising it, and restore the average HR
+/// from the checkpoint rather than dropping it. `formattedElapsed`
 /// is the watch's headline clock string; its h:mm:ss / mm:ss crossover is the
 /// elapsed equivalent the Wear OS twin pins in `ElapsedMathTest.kt`.
 final class WorkoutManagerRecoveryTests: XCTestCase {
@@ -45,9 +46,10 @@ final class WorkoutManagerRecoveryTests: XCTestCase {
         XCTAssertEqual(recovered?.id, id, "Recovered run must keep the checkpoint's id end-to-end")
         XCTAssertEqual(recovered?.distanceMetres ?? -1, 4321.0, accuracy: 0.0001)
         XCTAssertEqual(recovered?.durationSeconds, 1500)
-        XCTAssertEqual(recovered?.track.count, 2)
+        XCTAssertEqual(recovered?.trackFileURL, store.trackFileURL)
+        XCTAssertEqual(recovered?.trackPointCount, 2)
         XCTAssertEqual(recovered?.averageBPM, 148.0, "avg HR must survive recovery, not drop to nil")
-        XCTAssertEqual(wm.trackPointCount, 2, "trackPointCount is set from the recovered track")
+        XCTAssertEqual(wm.trackPointCount, 2, "trackPointCount is counted off the recovered track")
     }
 
     func testRecoverRunReturnsNilWithNoCheckpoint() {

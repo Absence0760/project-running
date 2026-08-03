@@ -73,9 +73,11 @@ class RunRecordingService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var trackWriter: TrackWriter? = null
     private var tts: TtsAnnouncer? = null
-    /// Highest kilometre we've already spoken a split for. `floor(dist/1000) > lastAnnouncedKm`
-    /// triggers an announcement. Resets to 0 at the start of each run.
-    private var lastAnnouncedKm = 0
+    /// Highest split we've already spoken. `completedSplits(dist, unit) >
+    /// lastAnnouncedSplit` triggers an announcement, so the cue lands on the
+    /// runner's own unit — a mi-mode runner is told at each mile, not at each
+    /// kilometre. Resets to 0 at the start of each run.
+    private var lastAnnouncedSplit = 0
     /// Rate-limit for pace alerts: do not re-fire within this window.
     /// Matches the 30 s gap used on Android.
     private var lastPaceAlertAtMs = 0L
@@ -209,7 +211,7 @@ class RunRecordingService : Service() {
         bpmSum = 0
         bpmCount = 0
         tickIndex = 0
-        lastAnnouncedKm = 0
+        lastAnnouncedSplit = 0
         lastPaceAlertAtMs = 0L
         routeWaypoints = parseRouteWaypoints(routeWaypointsJson)
         tts?.announceStart()
@@ -361,7 +363,7 @@ class RunRecordingService : Service() {
 
         val distanceAtFinish = RecordingRepository.metrics.value.distanceM
         val durationAtFinish = (activeElapsedMs() / 1000).toInt()
-        tts?.announceFinish(distanceAtFinish, durationAtFinish)
+        tts?.announceFinish(distanceAtFinish, durationAtFinish, preferredUnit)
 
         if (pausedSinceMs > 0) {
             pausedAccumulatedMs += System.currentTimeMillis() - pausedSinceMs
@@ -480,16 +482,16 @@ class RunRecordingService : Service() {
             )
         }
 
-        // TTS split: announce once per completed kilometre. Runs on the
-        // service's Default-dispatcher scope already — the TTS engine
-        // is thread-safe and a Flush-queued speak() replaces any
-        // in-flight utterance, so if two splits land in quick
-        // succession (shouldn't happen at running pace, but) only the
-        // more recent is spoken.
-        val currentKm = (newDistance / 1000.0).toInt()
-        if (currentKm > lastAnnouncedKm) {
-            lastAnnouncedKm = currentKm
-            tts?.announceSplit(currentKm, pace)
+        // TTS split: announce once per completed unit of the runner's
+        // `preferred_unit`. Runs on the service's Default-dispatcher scope
+        // already — the TTS engine is thread-safe and a Flush-queued speak()
+        // replaces any in-flight utterance, so if two splits land in quick
+        // succession (shouldn't happen at running pace, but) only the more
+        // recent is spoken.
+        val currentSplit = completedSplits(newDistance, preferredUnit)
+        if (currentSplit > lastAnnouncedSplit) {
+            lastAnnouncedSplit = currentSplit
+            tts?.announceSplit(currentSplit, pace, preferredUnit)
         }
 
         // Pace-drift alert. Only fires when:

@@ -55,6 +55,7 @@ export const PAIRS = [
 	{ firmware: 'workout', dart: 'workoutCharUuid' },
 	{ firmware: 'screens', dart: 'screensCharUuid' },
 	{ firmware: 'roadbook', dart: 'roadbookCharUuid' },
+	{ firmware: 'push_status', dart: 'pushStatusCharUuid' },
 ];
 
 // Firmware rows the Dart client is allowed to leave unclaimed. Each still has
@@ -62,7 +63,7 @@ export const PAIRS = [
 // up under some OTHER Dart constant is precisely the § 410 bug — the client
 // pointing at the wrong characteristic — so that IS a hard failure.
 //
-// Empty today: the phone consumes all eight characteristics. The rule stays
+// Empty today: the phone consumes all nine characteristics. The rule stays
 // because the watch is free to grow its table ahead of the phone, and the day
 // it does, listing the new row here silences the "no phone counterpart"
 // warning WITHOUT giving up the misaimed-constant check.

@@ -97,10 +97,17 @@ device check:
 3. Confirm the running-screen distance reads "… mi", pace reads "…/mi", the
    "to go" badge reads "… mi to go", PostRun shows "… mi", and the active-run
    tile shows miles. Flip the pref back to **km** and re-check.
+4. With **mi** set, run past 1.61 km with the volume up: the first spoken cue
+   must land at one *mile*, not at one kilometre, and read "1 mile. Pace
+   m minutes s seconds per mile". The finish summary must read miles too.
+   `completedSplits` / `paceMinSecFor` pin the arithmetic in
+   `UnitFormatTest` / `TtsPhrasesTest`; the wiring is pinned by
+   `TtsSplitUnitWiringTest`, but the audible read-out needs an ear.
 
 (Editing the unit on the wrist is intentionally not supported — settings stay
-on phone / web. TTS splits still announce kilometres regardless of the pref;
-the optional mile-TTS variant is deferred — see followups.md.)
+on phone / web. The unit is sampled once at run start, so flipping it on the
+phone mid-run does not change the cue until the next run — same stamping the
+active-run tile uses.)
 
 ### Offline queue behaviour
 

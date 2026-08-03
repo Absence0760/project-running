@@ -101,7 +101,9 @@ pub async fn run(boot_course: Option<&'static Course>) {
     // same way. Deliberately NOT reset on a course swap — see FixGate's docs.
     let mut gate = FixGate::new();
     // Forward-progress bias anchor (course::project_from); reset whenever the
-    // active course changes so along-distance restarts on a new route.
+    // active course changes so along-distance restarts on a new route. A lap of
+    // a loop course is deliberately NOT a reset event — the projector knows the
+    // along-axis wraps, so nothing here has to be told a new lap started.
     let mut prev_along: Option<f64> = None;
     // Turn cues for the ACTIVE course, recomputed on a course change so a
     // phone-pushed course drives the TurnCue page too.

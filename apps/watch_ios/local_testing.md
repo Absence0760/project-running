@@ -102,7 +102,16 @@ Unit coverage for the pieces, runnable without a paired pair: `xcodebuild test �
 1. Start a run on a physical watch
 2. Force-quit the WatchApp process (Digital Crown + drag up to close)
 3. Re-launch — a "Recover unsaved run?" prompt appears with distance + duration from the most recent 15s checkpoint
-4. Tap Recover to route into `PostRunView` with the recovered track, or Discard to clear the checkpoint
+4. Tap Recover to route into `PostRunView` with the recovered track, or Discard to clear the checkpoint. The point count on `PostRunView` is streamed off the NDJSON, not off the checkpoint's own figure, so it includes fixes appended since the last 15s snapshot
+5. Discard leaves the NDJSON in Caches (only the checkpoint is cleared); starting the next run sweeps it. Confirm `~/Library/Caches/.../run_checkpoint/` holds at most the live run's `.ndjson` after a discard-then-start
+
+### Track file lifetime at finish
+
+Since [decisions.md § 467](../../docs/architecture/decisions.md) the finished run's NDJSON *is* its payload — nothing holds the track in memory — so it survives `stop()` and is deleted at `reset()`:
+
+1. Record a short run and stop. `run_checkpoint/<id>.ndjson` must still exist, and re-launching must **not** offer "Recover unsaved run?"
+2. Tap Sync Run, then Next. The `.ndjson` must be gone
+3. Long-run smoke: record 30+ minutes, stop, sync. Watch memory in Instruments across the stop → Sync transition — the streaming read + streaming serialize should hold flat regardless of track length. This is the measurement the § 467 figures are *derived* rather than taken from
 
 ### GPS simulation on watch
 

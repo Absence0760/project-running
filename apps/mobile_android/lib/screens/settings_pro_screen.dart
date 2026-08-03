@@ -4,11 +4,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../pro_sellable.dart';
 import '../revenuecat.dart';
 import '../widgets/top_banner.dart';
 
 class SettingsProScreen extends StatefulWidget {
-  const SettingsProScreen({super.key});
+  /// Injection seam for the live-perk lookup so widget tests can drive
+  /// both storefront states without a network.
+  final Future<ProPerks> Function()? loadPerks;
+
+  const SettingsProScreen({super.key, this.loadPerks});
 
   @override
   State<SettingsProScreen> createState() => _SettingsProScreenState();
@@ -31,10 +36,23 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
   // two restore round-trips. Web guards its CTA with `disabled={purchasing}`.
   bool _proBusy = false;
 
+  // Which Pro perks this deploy can actually deliver. Null until the
+  // manifest resolves, and `sellable` reads false until then — the
+  // storefront must never offer a purchase it can't justify, so the
+  // teaser is what shows while we don't know (decisions §466).
+  ProPerks? _perks;
+
   @override
   void initState() {
     super.initState();
     _loadStorePrice();
+    _loadPerks();
+  }
+
+  Future<void> _loadPerks() async {
+    final perks = await (widget.loadPerks ?? fetchProPerks)();
+    if (!mounted) return;
+    setState(() => _perks = perks);
   }
 
   Future<void> _loadStorePrice() async {
@@ -69,6 +87,9 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
 
   Future<void> _startProCheckout(BuildContext context) async {
     if (_proBusy) return;
+    // Second gate behind the hidden CTA: no caller may reach checkout
+    // while the deploy has no live perk to sell.
+    if (!(_perks?.sellable ?? false)) return;
     setState(() => _proBusy = true);
     try {
       final supabase = Supabase.instance.client;
@@ -159,32 +180,43 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
     // only shows on the fallback.
     final priceLabel = _storePrice ?? _usdListPrice;
     final showRegionalNote = _storePrice == null;
+    // Mirrors web's proSellable branch: a purchase CTA only where a perk
+    // is live, else the coming-soon teaser with donations as the way to
+    // help. Unknown counts as not sellable.
+    final sellable = _perks?.sellable ?? false;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.proTitle)),
       body: SafeArea(
         child: ListView(
           children: [
-            ListTile(
-              leading: const Icon(Icons.workspace_premium_outlined),
-              title: Text(l10n.proSubscribeTitle(priceLabel)),
-              subtitle: Text(
-                rcConfigured
-                    ? l10n.proSubscribeSubtitleConfigured
-                    : l10n.proSubscribeSubtitleWeb,
+            if (sellable)
+              ListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: Text(l10n.proSubscribeTitle(priceLabel)),
+                subtitle: Text(
+                  rcConfigured
+                      ? l10n.proSubscribeSubtitleConfigured
+                      : l10n.proSubscribeSubtitleWeb,
+                ),
+                trailing: Icon(
+                  rcConfigured ? Icons.chevron_right : Icons.open_in_new,
+                  size: 18,
+                ),
+                enabled: !_proBusy,
+                onTap: () => _startProCheckout(context),
+              )
+            else
+              ListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: Text(l10n.proComingSoonTitle),
+                subtitle: Text(l10n.proComingSoon),
               ),
-              trailing: Icon(
-                rcConfigured ? Icons.chevron_right : Icons.open_in_new,
-                size: 18,
-              ),
-              enabled: !_proBusy,
-              onTap: () => _startProCheckout(context),
-            ),
             // Honesty note mirroring web /settings/upgrade (audit-findings
             // 2026-05-30 Medium [regional]). Shown only when we're falling
             // back to the $9.99 USD list price (RevenueCat unconfigured or
             // offering not yet loaded); once the store returns a localised
             // price the note is dropped. See followups.md § Mobile.
-            if (showRegionalNote)
+            if (sellable && showRegionalNote)
               Padding(
                 padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
                 child: Text(

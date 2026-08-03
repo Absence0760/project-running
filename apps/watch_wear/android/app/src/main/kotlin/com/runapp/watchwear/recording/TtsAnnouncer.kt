@@ -96,28 +96,47 @@ class TtsAnnouncer(context: Context) {
 
     fun announceStart() = speak(appContext.getString(R.string.tts_run_started))
 
-    fun announceFinish(distanceM: Double, durationS: Int) =
+    fun announceFinish(distanceM: Double, durationS: Int, unit: DistanceUnit) =
         speak(
             appContext.getString(
-                R.string.tts_run_complete,
-                finishDistanceSpoken(distanceM),
+                when (unit) {
+                    DistanceUnit.KM -> R.string.tts_run_complete_km
+                    DistanceUnit.MI -> R.string.tts_run_complete_mi
+                },
+                finishDistanceSpoken(distanceM, unit),
                 finishMinutes(durationS),
             ),
         )
 
-    /// Announce a split at the end of kilometre [km], pacing reported
-    /// in seconds-per-km. Mirrors the Android wording so a runner
-    /// carrying both devices doesn't hear two different dialects.
-    fun announceSplit(km: Int, paceSecPerKm: Double?) {
+    /// Announce the completion of split [splitIndex] — the [splitIndex]th
+    /// whole kilometre or mile, per the runner's [unit] — with the pace
+    /// reported in seconds-per-km and converted for the read-out. Mirrors
+    /// the Android wording so a runner carrying both devices doesn't hear
+    /// two different dialects.
+    fun announceSplit(splitIndex: Int, paceSecPerKm: Double?, unit: DistanceUnit) {
         val res = appContext.resources
-        val unit = res.getQuantityString(R.plurals.tts_split_unit, km, km)
-        val ms = paceMinSec(paceSecPerKm)
+        val label = res.getQuantityString(
+            when (unit) {
+                DistanceUnit.KM -> R.plurals.tts_split_unit_km
+                DistanceUnit.MI -> R.plurals.tts_split_unit_mi
+            },
+            splitIndex,
+            splitIndex,
+        )
+        val ms = paceMinSecFor(paceSecPerKm, unit)
         val tail = if (ms == null) {
             ""
         } else {
-            appContext.getString(R.string.tts_pace_tail, ms.first, ms.second)
+            appContext.getString(
+                when (unit) {
+                    DistanceUnit.KM -> R.string.tts_pace_tail_km
+                    DistanceUnit.MI -> R.string.tts_pace_tail_mi
+                },
+                ms.first,
+                ms.second,
+            )
         }
-        speak(appContext.getString(R.string.tts_split_phrase, unit, tail))
+        speak(appContext.getString(R.string.tts_split_phrase, label, tail))
     }
 
     fun announcePaceAlert(tooSlow: Boolean) =

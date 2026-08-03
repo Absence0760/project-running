@@ -4,12 +4,13 @@
 //! `N` receivers and returns `None` past that, so `N` tracks the live
 //! subscriber count — bump it when a new consumer subscribes.
 
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::watch::Watch;
 use watch_core::alerts::Alert;
+use watch_core::ble_sync::{PushKind, PushOutcome};
 use watch_core::button::RecordCommand;
 use watch_core::course::Course;
 use watch_core::elevation::{Reading as ElevationReading, RezeroStatus};
@@ -189,15 +190,45 @@ pub static NAV: Watch<CriticalSectionRawMutex, NavView, 2> = Watch::new();
 /// once here so a re-push replaces it cleanly, no static-cell reuse.
 pub static COURSE: Watch<CriticalSectionRawMutex, Option<Course>, 2> = Watch::new();
 
-/// Wrapping count of course pushes the watch REJECTED — a short or
-/// out-of-order chunk, a failed CRC, an undecodable frame — after which
-/// [`COURSE`] keeps whatever it already held. The `ble` task bumps and
-/// publishes it; the `record` task mirrors it into the recorder snapshot so
-/// the alert engine can edge-detect the rejection into the `! CRS FAIL`
-/// banner. Without it a phone re-pushing a corrected course mid-race that
-/// failed CRC left only a defmt warn, and the runner navigated the stale
-/// course believing it updated. One receiver (`record`).
-pub static COURSE_REJECTS: Watch<CriticalSectionRawMutex, u8, 1> = Watch::new();
+/// The verdict on the last phone→watch push any transport resolved — the ONE
+/// funnel all five latest-value pushes run through ([`note_push`]).
+///
+/// Every one of them keeps its PREVIOUS value when a push is refused: a bad
+/// chunk, a failed CRC, an undecodable frame, or a settings queue with no
+/// room. The `record` task mirrors this into the recorder snapshot so the
+/// alert engine can edge-detect a refusal into its `! <KIND> FAIL` banner.
+/// Before the funnel existed only `course` had a surface at all and the other
+/// four left nothing but a defmt warn down a cable no runner carries, so a
+/// runner ran a race against the settings, workout, schedule or screens they
+/// believed they had replaced. One receiver (`record`).
+pub static PUSH_OUTCOME: Watch<CriticalSectionRawMutex, PushOutcome, 1> = Watch::new();
+
+/// The wrapping sequence [`note_push`] stamps. An atomic rather than a `Cell`
+/// in either transport task, because BOTH the `ble` task and the sim's
+/// `phone` task resolve pushes and a per-task counter would let one rewind
+/// the other's — the alert engine reads a bare inequality, so a rewind is a
+/// spurious banner.
+static PUSH_SEQ: AtomicU8 = AtomicU8::new(0);
+
+/// Record one resolved phone→watch push and publish it. Returns the outcome so
+/// a transport that also serves it on the wire (the `ble` task's `push_status`
+/// characteristic) publishes exactly what the wrist was told.
+///
+/// Called on ACCEPTANCE too: the phone reads the sequence to learn whether its
+/// "sent" was true, and a counter that only moved on failure is
+/// indistinguishable, from the phone, from a watch that never answered. The
+/// wrist stays silent for an accepted push — that judgement is the alert
+/// engine's, not this seam's.
+pub fn note_push(kind: PushKind, accepted: bool) -> PushOutcome {
+    let seq = PUSH_SEQ.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
+    let outcome = PushOutcome {
+        seq,
+        kind,
+        accepted,
+    };
+    PUSH_OUTCOME.sender().send(outcome);
+    outcome
+}
 
 /// Pushed structured workout (the `WKT1` path): the `ble` task decodes a
 /// chunked phone write into a `workout_store` frame's step list and publishes

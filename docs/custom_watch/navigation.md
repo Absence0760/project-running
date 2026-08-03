@@ -109,6 +109,14 @@ mode is armed the auto-lap fires on the corral bell instead of at 1 km, so a
 runner who marks nothing still gets one lap per hour and the loop count
 cannot silently merge two loops into one.
 
+**Nothing resets the along-course position, by design (§463).** A press is not
+what tells the nav projector a new lap began — a course whose ends meet has a
+*circular* along-axis, so the second traversal restarts at zero on its own,
+whether the runner lapped, marked nothing, or stopped and restarted the run at
+the line. That is deliberate: every button- or state-shaped reset event is only
+ever a proxy for the runner passing the point where the axis wraps, and each one
+of them misses a case the others catch.
+
 ## The page cycle (§286 order, §284 filter)
 
 The paging pair walks this ring the way it is drawn — the ring renders
@@ -584,6 +592,17 @@ removes.
 - **Alert banners defer while the grid is open** (their TTL outlives it and
   fuel reminders latch into the persistent row-1 marker); the armed-stop
   banner outranks alerts but yields to the grid, where BTN2 means cancel.
+- **A refused phone push names which push** (§464). All five phone→watch
+  pushes are latest-value, so a refusal leaves the PREVIOUS value armed;
+  each raises `! SET FAIL` / `! CRS FAIL` / `! WKT FAIL` / `! SCR FAIL` /
+  `! RBK FAIL` — the wire frame's own three-letter tag (`SET1`, `CRS1`,
+  `WKT1`, `SCR1`, `RBK1`), all five exactly filling the ten-cell band the
+  `!` convention leaves, and all five re-queued at §400's rung between
+  `! CUTOFF` and `! STORM`. "Something didn't land" is not actionable: a
+  refused course and a refused roadbook want different re-pushes. An
+  ACCEPTED push stays silent — the pages re-announce what they hold, and a
+  confirmation banner would teach a runner to wait for one that failure
+  also never showed.
 - **Idle gestures are duration-stable**: a BTN3 hold of any length while
   idle is the QNH re-zero, and BTN4 walks the idle faces whatever its
   duration — duration never changes an idle gesture's meaning mid-press.
@@ -740,6 +759,11 @@ removes.
   surface, so a countdown that lapses between runs is correct on both its
   surfaces and simply silent — which is the honest behaviour on a device that
   could not have made a noise anyway.
+- **A push refused while idle raises no banner either** (§464), for the same
+  reason — and deliberately so: a runner pushing from the start line is
+  holding the phone, which now names the refusal off the `push_status`
+  characteristic, while the wrist banner covers the case the phone cannot —
+  a mid-race re-push with the phone back in a drop bag.
 
 - The timezone offset is static between pushes: a DST transition or a border
   crossing shifts the home clock only after the phone's next settings push

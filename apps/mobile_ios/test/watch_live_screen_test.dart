@@ -127,6 +127,9 @@ class _FakeTransport implements WatchBleTransport {
   Future<void> writeRoadbook(List<int> chunk) async {}
 
   @override
+  Future<List<int>> readPushStatus() async => const [];
+
+  @override
   Future<void> disconnect() async {}
 }
 
