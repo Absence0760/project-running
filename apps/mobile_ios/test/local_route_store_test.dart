@@ -914,4 +914,124 @@ void main() {
           reason: "the stale tag must not hide a re-created unowned route");
     });
   });
+
+  // Issue #674: LocalRouteStore previously had no delete-retry queue at
+  // all — a failed api.deleteRoute left the route intact locally with
+  // no way to ever retry. This group mirrors LocalRunStore's pending
+  // remote-delete coverage (local_run_store_test.dart).
+  group('pending remote deletes', () {
+    test('markPendingRemoteDelete persists across reload and is idempotent',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('route-a');
+      await store.markPendingRemoteDelete('route-b');
+      await store.markPendingRemoteDelete('route-a');
+      expect(store.pendingRemoteDeleteIds, {'route-a', 'route-b'});
+
+      final store2 = LocalRouteStore();
+      await store2.init(overrideDirectory: tempDir);
+      expect(store2.pendingRemoteDeleteIds, {'route-a', 'route-b'});
+    });
+
+    test('markManyPendingRemoteDelete folds N adds into one notify',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      var notifyCount = 0;
+      store.addListener(() => notifyCount++);
+      await store.markManyPendingRemoteDelete(['a', 'b', 'c']);
+      expect(notifyCount, 1);
+      expect(store.pendingRemoteDeleteIds, {'a', 'b', 'c'});
+    });
+
+    test(
+        'markManyPendingRemoteDelete with no new ids is a no-op '
+        '(no notify, no write)', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('a');
+      var notifyCount = 0;
+      store.addListener(() => notifyCount++);
+      await store.markManyPendingRemoteDelete(['a']);
+      expect(notifyCount, 0);
+    });
+
+    test('clearPendingRemoteDelete removes a single id and persists',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markManyPendingRemoteDelete(['a', 'b']);
+      await store.clearPendingRemoteDelete('a');
+      expect(store.pendingRemoteDeleteIds, {'b'});
+
+      final store2 = LocalRouteStore();
+      await store2.init(overrideDirectory: tempDir);
+      expect(store2.pendingRemoteDeleteIds, {'b'});
+    });
+
+    test('clearing the last pending id deletes the sidecar', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('only');
+      expect(
+          File('${tempDir.path}/pending_remote_route_deletes.json')
+              .existsSync(),
+          true);
+      await store.clearPendingRemoteDelete('only');
+      expect(
+          File('${tempDir.path}/pending_remote_route_deletes.json')
+              .existsSync(),
+          false);
+    });
+
+    test('pending-delete owner tag persists across cold start', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('route-a', ownerUserId: 'user-a');
+      await store.markPendingRemoteDelete('route-b', ownerUserId: 'user-b');
+      await store.markPendingRemoteDelete('route-legacy'); // no owner
+
+      expect(store.debugPendingRemoteDeleteOwner('route-a'), 'user-a');
+      expect(store.debugPendingRemoteDeleteOwner('route-b'), 'user-b');
+      expect(store.debugPendingRemoteDeleteOwner('route-legacy'), isNull);
+
+      final store2 = LocalRouteStore();
+      await store2.init(overrideDirectory: tempDir);
+      expect(store2.debugPendingRemoteDeleteOwner('route-a'), 'user-a');
+      expect(store2.debugPendingRemoteDeleteOwner('route-b'), 'user-b');
+      expect(store2.debugPendingRemoteDeleteOwner('route-legacy'), isNull);
+    });
+
+    test('pendingRemoteDeletesForUser filters by owner + accepts untagged',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('a-1', ownerUserId: 'user-a');
+      await store.markPendingRemoteDelete('a-2', ownerUserId: 'user-a');
+      await store.markPendingRemoteDelete('b-1', ownerUserId: 'user-b');
+      await store.markPendingRemoteDelete('legacy'); // untagged
+
+      expect(store.pendingRemoteDeletesForUser('user-a'),
+          {'a-1', 'a-2', 'legacy'});
+      expect(store.pendingRemoteDeletesForUser('user-b'), {'b-1', 'legacy'});
+      expect(store.pendingRemoteDeletesForUser(null), isEmpty);
+      expect(
+          store.pendingRemoteDeleteIds, {'a-1', 'a-2', 'b-1', 'legacy'});
+    });
+
+    test('pending_remote_route_deletes.json is excluded from the route-file '
+        'glob', () async {
+      File('${tempDir.path}/pending_remote_route_deletes.json')
+          .writeAsStringSync('{"deletes":{"queued-1":null}}');
+      final realRoute = makeRoute(id: 'real');
+      File('${tempDir.path}/${realRoute.id}.json')
+          .writeAsStringSync(jsonEncode(realRoute.toJson()));
+
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.routes.map((r) => r.id).toList(), ['real']);
+      expect(store.pendingRemoteDeleteIds, {'queued-1'});
+    });
+  });
 }

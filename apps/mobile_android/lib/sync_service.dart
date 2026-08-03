@@ -207,9 +207,13 @@ class SyncService with WidgetsBindingObserver {
         .where((r) => !pendingDeleteIds.contains(r.id))
         .toList();
     final unsyncedRoutes = routeStore?.unsyncedRoutes ?? const [];
+    final hasPendingRouteDeletes =
+        routeStore?.pendingRemoteDeletesForUser(api.userId).isNotEmpty ??
+            false;
     if (unsynced.isEmpty &&
         !hasPendingDeletes &&
-        unsyncedRoutes.isEmpty) return;
+        unsyncedRoutes.isEmpty &&
+        !hasPendingRouteDeletes) return;
 
     _syncing = true;
     var anyFailure = false;
@@ -247,6 +251,10 @@ class SyncService with WidgetsBindingObserver {
       final store = routeStore;
       if (store != null && unsyncedRoutes.isNotEmpty) {
         final ok = await drainUnsyncedRoutes(api, store, reason: reason);
+        if (!ok) anyFailure = true;
+      }
+      if (store != null && hasPendingRouteDeletes) {
+        final ok = await drainPendingRouteDeletes(api, store, reason: reason);
         if (!ok) anyFailure = true;
       }
     } finally {
@@ -323,7 +331,14 @@ Future<bool> drainUnsyncedRoutes(
   LocalRouteStore routeStore, {
   String reason = 'background',
 }) async {
-  final unsyncedRoutes = routeStore.unsyncedRoutes;
+  // A route queued for deletion is never pushed, even if it was never
+  // synced — the routes counterpart of issue #675's run-side guard.
+  // Filtered here (inside the shared drain) rather than at each call
+  // site so the foreground and background paths can't drift.
+  final pendingDeleteIds = routeStore.pendingRemoteDeletesForUser(api.userId);
+  final unsyncedRoutes = routeStore.unsyncedRoutes
+      .where((r) => !pendingDeleteIds.contains(r.id))
+      .toList();
   if (unsyncedRoutes.isEmpty) return true;
   debugPrint(
     'Sync: pushing ${unsyncedRoutes.length} unsynced routes ($reason)',
@@ -354,6 +369,51 @@ Future<bool> drainUnsyncedRoutes(
   debugPrint(
     'Sync: drained $ok / ${unsyncedRoutes.length} unsynced routes',
   );
+  return failed == 0;
+}
+
+/// Retry remote-side route deletes that failed on first attempt (e.g.
+/// the user batch-deleted routes while offline). Each id is attempted
+/// independently so one persistent failure doesn't poison the rest of
+/// the queue. On success the local copy is also removed — the routes
+/// screen kept it around precisely so the local list stayed consistent
+/// with the cloud, and now that the cloud row is gone the local row
+/// should follow. Mirrors [drainPendingDeletes] for runs.
+///
+/// Only deletes owned by the currently-signed-in user are attempted —
+/// entries owned by a different user stay in the queue for their
+/// rightful owner to drain on their next sync. Untagged entries
+/// (legacy / queued-while-signed-out) adopt to the current user.
+///
+/// Returns `true` iff every pending id was drained without error.
+///
+/// Shared free function so the foreground [SyncService] and the
+/// WorkManager `background_sync.dart#runBackgroundSyncCycle` drain
+/// the same queue the same way and can't drift.
+Future<bool> drainPendingRouteDeletes(
+  ApiClient api,
+  LocalRouteStore routeStore, {
+  String reason = 'background',
+}) async {
+  final ids = routeStore.pendingRemoteDeletesForUser(api.userId).toList();
+  if (ids.isEmpty) return true;
+  debugPrint(
+    'Sync: retrying ${ids.length} pending remote route deletes ($reason)',
+  );
+  var ok = 0;
+  var failed = 0;
+  for (final id in ids) {
+    try {
+      await api.deleteRoute(id);
+      await routeStore.delete(id);
+      await routeStore.clearPendingRemoteDelete(id);
+      ok++;
+    } catch (e) {
+      debugPrint('Sync: retry route delete failed for $id: $e');
+      failed++;
+    }
+  }
+  debugPrint('Sync: drained $ok / ${ids.length} pending route deletes');
   return failed == 0;
 }
 

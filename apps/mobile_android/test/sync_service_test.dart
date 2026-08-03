@@ -3,9 +3,10 @@ import 'dart:io';
 import 'package:api_client/api_client.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:core_models/core_models.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart' hide Route;
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/social_service.dart';
 import '../lib/sync_service.dart';
@@ -22,6 +23,11 @@ class _FakeApiClient extends ApiClient {
 
   int saveBatchCallCount = 0;
   int deleteCallCount = 0;
+
+  final List<String> savedRouteIds = [];
+  final Set<String> routeSaveFailFor = {};
+  final List<String> deletedRouteIds = [];
+  final Set<String> routeDeleteFailFor = {};
 
   @override
   String? get userId => fakeUserId;
@@ -56,6 +62,22 @@ class _FakeApiClient extends ApiClient {
     }
     deletedIds.add(runId);
   }
+
+  @override
+  Future<void> saveRoute(Route route) async {
+    if (routeSaveFailFor.contains(route.id)) {
+      throw Exception('route push denied ${route.id}');
+    }
+    savedRouteIds.add(route.id);
+  }
+
+  @override
+  Future<void> deleteRoute(String routeId) async {
+    if (routeDeleteFailFor.contains(routeId)) {
+      throw Exception('rls denied $routeId');
+    }
+    deletedRouteIds.add(routeId);
+  }
 }
 
 class _FakeSocialService extends SocialService {
@@ -67,6 +89,19 @@ class _FakeSocialService extends SocialService {
     recomputeCalls.add(runStartedAts.toList());
   }
 }
+
+Route makeRoute(String id) => Route(
+      id: id,
+      userId: 'test-user',
+      name: 'Park loop',
+      waypoints: const [
+        Waypoint(lat: 47.37, lng: 8.54),
+        Waypoint(lat: 47.371, lng: 8.541),
+      ],
+      distanceMetres: 5000,
+      isPublic: false,
+      isStarred: false,
+    );
 
 Run makeRun(String id, {Map<String, dynamic>? metadata}) => Run(
       id: id,
@@ -99,15 +134,22 @@ void main() {
 
   late Directory tempDir;
   late LocalRunStore store;
+  late Directory routeTempDir;
+  late LocalRouteStore routeStore;
 
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('sync_service_test_');
     store = LocalRunStore();
     await store.init(overrideDirectory: tempDir);
+    routeTempDir =
+        Directory.systemTemp.createTempSync('sync_service_route_test_');
+    routeStore = LocalRouteStore();
+    await routeStore.init(overrideDirectory: routeTempDir);
   });
 
   tearDown(() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    if (routeTempDir.existsSync()) routeTempDir.deleteSync(recursive: true);
   });
 
   group('SyncService._trySync — guard clauses', () {
@@ -356,6 +398,102 @@ void main() {
       // No batch push call, no delete call — the cycle bailed early.
       expect(api.saveBatchCallCount, 0);
       expect(api.deleteCallCount, 0);
+    });
+  });
+
+  // Issue #674: LocalRouteStore previously had no delete-retry queue at
+  // all, so a route whose remote delete failed was abandoned locally
+  // forever. This mirrors the run pending-delete drain group above.
+  group('SyncService._trySync — pending route-delete drain (issue #674)', () {
+    test('successful route delete removes from cloud, local store, and '
+        'pending set', () async {
+      await routeStore.save(makeRoute('route-1'), markSynced: true);
+      await routeStore.markPendingRemoteDelete('route-1');
+      expect(routeStore.pendingRemoteDeleteIds, contains('route-1'));
+
+      final api = _FakeApiClient();
+      final svc =
+          SyncService(apiClient: api, runStore: store, routeStore: routeStore);
+
+      await svc.debugTrySync('test');
+
+      expect(api.deletedRouteIds, ['route-1']);
+      expect(routeStore.routes, isEmpty);
+      expect(routeStore.pendingRemoteDeleteIds, isEmpty);
+    });
+
+    test('one failing route delete does not poison the rest of the queue',
+        () async {
+      for (final id in ['route-bad', 'route-ok-1', 'route-ok-2']) {
+        await routeStore.save(makeRoute(id), markSynced: true);
+        await routeStore.markPendingRemoteDelete(id);
+      }
+      final api = _FakeApiClient()..routeDeleteFailFor.add('route-bad');
+      final svc =
+          SyncService(apiClient: api, runStore: store, routeStore: routeStore);
+
+      await svc.debugTrySync('test');
+
+      expect(api.deletedRouteIds.toSet(), {'route-ok-1', 'route-ok-2'});
+      expect(routeStore.pendingRemoteDeleteIds, {'route-bad'});
+      expect(routeStore.routes.map((r) => r.id).toSet(), {'route-bad'});
+    });
+
+    test('user-b drain skips a route delete queued by user-a (shared '
+        'device)', () async {
+      await routeStore.markPendingRemoteDelete('route-a-1',
+          ownerUserId: 'user-a');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-b';
+      final svc =
+          SyncService(apiClient: api, runStore: store, routeStore: routeStore);
+
+      await svc.debugTrySync('test');
+
+      expect(api.deletedRouteIds, isEmpty,
+          reason: 'user-b must not attempt user-a\'s pending route delete');
+      expect(routeStore.pendingRemoteDeleteIds, {'route-a-1'});
+    });
+
+    test(
+        'a never-synced route queued for delete is never pushed — only '
+        'deleted (routes counterpart of issue #675)', () async {
+      await routeStore.save(makeRoute('route-never-synced'));
+      await routeStore.markPendingRemoteDelete('route-never-synced');
+
+      final api = _FakeApiClient();
+      final svc =
+          SyncService(apiClient: api, runStore: store, routeStore: routeStore);
+
+      await svc.debugTrySync('test');
+
+      expect(api.savedRouteIds, isEmpty,
+          reason: 'a route queued for deletion must never be uploaded, '
+              'even when it was never synced');
+      expect(api.deletedRouteIds, ['route-never-synced']);
+      expect(routeStore.routes, isEmpty);
+      expect(routeStore.pendingRemoteDeleteIds, isEmpty);
+    });
+
+    test('runs + routes: unsynced push, pending delete, and pending route '
+        'delete all fire in one cycle', () async {
+      await store.save(makeRun('r-new'));
+      await routeStore.save(makeRoute('route-new'));
+      await routeStore.save(makeRoute('route-old'), markSynced: true);
+      await routeStore.markPendingRemoteDelete('route-old');
+
+      final api = _FakeApiClient();
+      final svc =
+          SyncService(apiClient: api, runStore: store, routeStore: routeStore);
+
+      await svc.debugTrySync('test');
+
+      expect(api.saveBatchCallCount, 1);
+      expect(api.savedRouteIds, ['route-new']);
+      expect(api.deletedRouteIds, ['route-old']);
+      expect(store.unsyncedCount, 0);
+      expect(routeStore.unsyncedRoutes, isEmpty);
+      expect(routeStore.pendingRemoteDeleteIds, isEmpty);
     });
   });
 

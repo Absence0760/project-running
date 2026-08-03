@@ -70,6 +70,19 @@ class LocalRouteStore extends ChangeNotifier {
   static const _ownerTagsFilename = 'route_owner_tags.json';
   File get _ownerTagsFile => File('${_dir!.path}/$_ownerTagsFilename');
 
+  /// Route ids whose cloud-side delete failed on the first attempt, mapped
+  /// to the user_id who queued the delete. The local copy is kept so the
+  /// UI stays consistent with the cloud; [SyncService] drains this queue
+  /// on its usual triggers (foreground, connectivity-on, startup) and
+  /// removes ids on success. Mirrors `LocalRunStore._pendingRemoteDeletes`
+  /// — see that field's doc for the owner-tag / null-owner-adoption
+  /// rationale (`docs/architecture/decisions.md § 67`).
+  final Map<String, String?> _pendingRemoteDeletes = {};
+  static const _pendingRemoteDeletesFilename =
+      'pending_remote_route_deletes.json';
+  File get _pendingRemoteDeletesFile =>
+      File('${_dir!.path}/$_pendingRemoteDeletesFilename');
+
   /// Session provider, same idiom as `LocalRunStore.currentUserIdProvider`
   /// (§67): wired once in main.dart to `() => api?.userId`, read at each
   /// save (stamp) and each getter (filter). Null / unset = signed out —
@@ -135,6 +148,36 @@ class LocalRouteStore extends ChangeNotifier {
 
   Set<String> get offlinePinnedIds => Set.unmodifiable(_offlinePinnedIds);
 
+  /// Route ids the user asked to delete but whose remote-side
+  /// `api.deleteRoute` failed (network error, RLS, transient 5xx). The
+  /// SyncService retries these on the next sync trigger. Surfaced as
+  /// an unmodifiable view so callers can't mutate the set directly —
+  /// use [markPendingRemoteDelete] / [clearPendingRemoteDelete].
+  ///
+  /// Includes every queued id regardless of owner — use
+  /// [pendingRemoteDeletesForUser] for the per-user drainable subset.
+  Set<String> get pendingRemoteDeleteIds =>
+      Set<String>.unmodifiable(_pendingRemoteDeletes.keys);
+
+  /// Subset of [pendingRemoteDeleteIds] that the currently-signed-in
+  /// [userId] is allowed to drain. Mirrors
+  /// `LocalRunStore.pendingRemoteDeletesForUser` — see that method's
+  /// doc for the owner-tag / null-owner-adoption rationale.
+  Set<String> pendingRemoteDeletesForUser(String? userId) {
+    if (userId == null) return const <String>{};
+    return _pendingRemoteDeletes.entries
+        .where((e) => e.value == null || e.value == userId)
+        .map((e) => e.key)
+        .toSet();
+  }
+
+  /// The owner user_id stamped on a pending-delete entry, or null when
+  /// the entry is untagged (legacy / queued-while-signed-out) or the id
+  /// isn't in the queue. Exposed for tests that need to assert the tag.
+  @visibleForTesting
+  String? debugPendingRemoteDeleteOwner(String routeId) =>
+      _pendingRemoteDeletes[routeId];
+
   /// Test-only seed that populates the in-memory list directly,
   /// bypassing `init()` + `_loadAll()`. Mirrors `LocalRunStore.debugSeed`
   /// — same flutter_test fake-async hazard. Production code never
@@ -167,6 +210,7 @@ class LocalRouteStore extends ChangeNotifier {
     await _loadSyncedIds();
     await _loadOfflinePinnedIds();
     await _loadOwnerTags();
+    await _loadPendingRemoteDeletes();
   }
 
   /// Recover from a missed / failed init() by lazily creating the
@@ -383,6 +427,106 @@ class LocalRouteStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Record that a route's remote-side delete failed and should be
+  /// retried by the SyncService on the next sync trigger. Idempotent —
+  /// repeated calls don't grow the queue. Mirrors
+  /// `LocalRunStore.markPendingRemoteDelete`.
+  ///
+  /// [ownerUserId] is stamped onto the queued entry so the drain path
+  /// can skip foreign-owned deletes on a shared device. Pass the
+  /// currently-signed-in user id at the time of failure; pass null
+  /// when no user is signed in (legacy adoption — first signed-in
+  /// user picks it up).
+  Future<void> markPendingRemoteDelete(
+    String routeId, {
+    String? ownerUserId,
+  }) async {
+    final existed = _pendingRemoteDeletes.containsKey(routeId);
+    final prevOwner = existed ? _pendingRemoteDeletes[routeId] : null;
+    if (existed && prevOwner == ownerUserId) return;
+    _pendingRemoteDeletes[routeId] = ownerUserId;
+    await _persistPendingRemoteDeletes();
+    notifyListeners();
+  }
+
+  /// Bulk variant for the routes_screen batch-delete path — folds N
+  /// failures into a single sidecar write + single notify.
+  Future<void> markManyPendingRemoteDelete(
+    Iterable<String> routeIds, {
+    String? ownerUserId,
+  }) async {
+    var changed = false;
+    for (final id in routeIds) {
+      final existed = _pendingRemoteDeletes.containsKey(id);
+      final prevOwner = existed ? _pendingRemoteDeletes[id] : null;
+      if (!existed || prevOwner != ownerUserId) {
+        _pendingRemoteDeletes[id] = ownerUserId;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    await _persistPendingRemoteDeletes();
+    notifyListeners();
+  }
+
+  /// Drop a route id from the retry queue. Called by the SyncService
+  /// after a successful retry, or by the user if they purge the
+  /// orphan locally.
+  Future<void> clearPendingRemoteDelete(String routeId) async {
+    // containsKey guard, not `remove() != null` — entries can have a
+    // null value (untagged / legacy) and Map.remove returns the value,
+    // which would silently skip the persistence + notify for those.
+    if (!_pendingRemoteDeletes.containsKey(routeId)) return;
+    _pendingRemoteDeletes.remove(routeId);
+    await _persistPendingRemoteDeletes();
+    notifyListeners();
+  }
+
+  Future<void> _persistPendingRemoteDeletes() async {
+    try {
+      if (_pendingRemoteDeletes.isEmpty &&
+          _pendingRemoteDeletesFile.existsSync()) {
+        await _pendingRemoteDeletesFile.delete();
+        return;
+      }
+      await writeJsonAtomic(_pendingRemoteDeletesFile, {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+        'deletes': _pendingRemoteDeletes,
+      });
+    } catch (e) {
+      debugPrint(
+          'Failed to persist pending_remote_route_deletes sidecar: $e');
+    }
+  }
+
+  Future<void> _loadPendingRemoteDeletes() async {
+    _pendingRemoteDeletes.clear();
+    final loaded = await _readPendingRemoteDeletes();
+    if (loaded != null) _pendingRemoteDeletes.addAll(loaded);
+  }
+
+  Future<Map<String, String?>?> _readPendingRemoteDeletes() async {
+    final file = _pendingRemoteDeletesFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      if (data['deletes'] is Map) {
+        final raw = data['deletes'] as Map;
+        final out = <String, String?>{};
+        for (final entry in raw.entries) {
+          final key = entry.key as String;
+          final value = entry.value;
+          out[key] = value is String ? value : null;
+        }
+        return out;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Failed to read pending_remote_route_deletes sidecar: $e');
+      return null;
+    }
+  }
+
   Future<void> _loadAll() async {
     _routes = [];
     _syncedIdsCleared.clear();
@@ -401,6 +545,7 @@ class LocalRouteStore extends ChangeNotifier {
         .where((f) => !f.path.endsWith(_syncedIdsFilename))
         .where((f) => !f.path.endsWith(_offlinePinnedIdsFilename))
         .where((f) => !f.path.endsWith(_ownerTagsFilename))
+        .where((f) => !f.path.endsWith(_pendingRemoteDeletesFilename))
         .toList();
 
     // Read all files in parallel — cold-start is bounded by the slowest

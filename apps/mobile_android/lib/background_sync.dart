@@ -9,7 +9,11 @@ import 'package:workmanager/workmanager.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'sync_service.dart'
-    show drainPendingDeletes, drainUnsyncedRoutes, filterRunsForCurrentUser;
+    show
+        drainPendingDeletes,
+        drainPendingRouteDeletes,
+        drainUnsyncedRoutes,
+        filterRunsForCurrentUser;
 
 const backgroundSyncTaskName = 'com.threkir.backgroundSync';
 
@@ -46,16 +50,17 @@ void callbackDispatcher() {
 }
 
 /// Drain the local queues to the cloud from the WorkManager callback:
-/// unsynced runs, pending remote-deletes, and unsynced routes — the
-/// same three queues the foreground [SyncService] drains every cycle.
-/// Extracted from [callbackDispatcher] so it can be unit-tested without
-/// the WorkManager + dotenv + Supabase bootstrap.
+/// unsynced runs, pending remote-deletes, unsynced routes, and pending
+/// route remote-deletes — the same four queues the foreground
+/// [SyncService] drains every cycle. Extracted from [callbackDispatcher]
+/// so it can be unit-tested without the WorkManager + dotenv + Supabase
+/// bootstrap.
 ///
 /// The delete + route drains reuse the shared [drainPendingDeletes] /
-/// [drainUnsyncedRoutes] free functions so the background path can't
-/// drift from the foreground one. Each queue is wrapped in its own
-/// try/catch (layered resilience) so a failure draining one queue
-/// doesn't abort the others.
+/// [drainUnsyncedRoutes] / [drainPendingRouteDeletes] free functions so
+/// the background path can't drift from the foreground one. Each queue
+/// is wrapped in its own try/catch (layered resilience) so a failure
+/// draining one queue doesn't abort the others.
 ///
 /// **Always** routes the run queue through [filterRunsForCurrentUser]
 /// so the background path honours the same owner-tag guard the
@@ -108,6 +113,11 @@ Future<void> runBackgroundSyncCycle(
     await drainUnsyncedRoutes(api, routeStore);
   } catch (e) {
     debugPrint('Background sync route drain failed: $e');
+  }
+  try {
+    await drainPendingRouteDeletes(api, routeStore);
+  } catch (e) {
+    debugPrint('Background sync route delete drain failed: $e');
   }
 }
 
