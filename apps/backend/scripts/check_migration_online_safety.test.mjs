@@ -11,6 +11,8 @@ import {
   scanMigrations,
 } from './check_migration_online_safety.mjs';
 
+const AFTER_CUTOFF = `${BigInt(GRANDFATHER_CUTOFF) + 1n}`;
+
 test('isAfterCutoff grandfathers the shipped history, flags newer days', () => {
   // The cutoff itself and everything before it is grandfathered.
   assert.equal(isAfterCutoff('20270430'), false);
@@ -30,8 +32,9 @@ test('isAfterCutoff grandfathers the shipped history, flags newer days', () => {
   // a naive numeric one that would rank 2026…000002 above the 2027 cutoff).
   assert.equal(isAfterCutoff('20260528000002'), false);
   // A genuinely newer migration is guarded.
-  assert.equal(isAfterCutoff('20270501'), true);
-  assert.equal(isAfterCutoff('20270430000001'), true); // same-day, added later
+  assert.equal(isAfterCutoff(GRANDFATHER_CUTOFF), false);
+  assert.equal(isAfterCutoff(AFTER_CUTOFF), true);
+  assert.equal(isAfterCutoff(`${GRANDFATHER_CUTOFF}000001`), true); // same-day, added later
   assert.equal(isAfterCutoff('20280101'), true);
 });
 
@@ -86,10 +89,10 @@ test('scanMigrations catches a bare jobs ADD CONSTRAINT after the cutoff', () =>
   );
   // Flagged for a NEW widening after the cutoff.
   const caught = scanMigrations([
-    { filename: '20270501_001_jobs_new_kind.sql', sql: unsafe },
+    { filename: `${AFTER_CUTOFF}_001_jobs_new_kind.sql`, sql: unsafe },
   ]);
   assert.equal(caught.length, 1);
-  assert.equal(caught[0].filename, '20270501_001_jobs_new_kind.sql');
+  assert.equal(caught[0].filename, `${AFTER_CUTOFF}_001_jobs_new_kind.sql`);
   assert.equal(caught[0].table, 'jobs');
 });
 
@@ -128,10 +131,10 @@ test('scanMigrations grandfathers a pre-cutoff violation but catches a post-cuto
     [],
   );
   const caught = scanMigrations([
-    { filename: '20270501_001_new_runs_check.sql', sql: unsafe },
+    { filename: `${AFTER_CUTOFF}_001_new_runs_check.sql`, sql: unsafe },
   ]);
   assert.equal(caught.length, 1);
-  assert.equal(caught[0].filename, '20270501_001_new_runs_check.sql');
+  assert.equal(caught[0].filename, `${AFTER_CUTOFF}_001_new_runs_check.sql`);
   assert.equal(caught[0].table, 'runs');
 });
 
