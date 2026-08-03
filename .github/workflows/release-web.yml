@@ -304,16 +304,21 @@ jobs:
         run: |
           # Hashed assets get a year-long immutable cache; HTML gets
           # a short cache so route-table changes propagate within the
-          # next page load.
+          # next page load. app-capabilities.json rides with the HTML:
+          # the native clients read it to decide whether Pro is sellable
+          # (decisions §466), so an immutable year-long cache would keep
+          # a mobile storefront selling a perk the deploy has turned off.
           aws s3 sync apps/web/build/ "s3://${{ steps.aws.outputs.bucket }}/" \
             --delete \
             --cache-control "public,max-age=31536000,immutable" \
             --exclude "index.html" \
-            --exclude "*.html"
+            --exclude "*.html" \
+            --exclude "app-capabilities.json"
           aws s3 sync apps/web/build/ "s3://${{ steps.aws.outputs.bucket }}/" \
             --cache-control "public,max-age=60,must-revalidate" \
             --exclude "*" \
-            --include "*.html"
+            --include "*.html" \
+            --include "app-capabilities.json"
 
       - name: Update coach Lambda
         run: |
