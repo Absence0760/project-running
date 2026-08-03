@@ -111,8 +111,30 @@ still deferred) sells Pro without advertising the dead perk. Setting
 each flag true (only once its feature is actually live) restores the
 full card with no code change. The tier machinery (`subscription_tier`,
 `is_pro()`, `TIER_LIMITS`, RevenueCat webhook) stays intact and dormant
-either way. Mobile has its own upgrade surface and is not part of the
-rock-bottom web launch — mirroring this gate on Flutter is a followup.
+either way.
+
+**Mobile mirrors the same gate** ([decisions.md § 466](../architecture/decisions.md)).
+A Flutter binary has no server-rendered env, so the web build publishes
+the two flags it already reads as a prerendered manifest at
+**`/app-capabilities.json`** (`apps/web/src/routes/app-capabilities.json/+server.ts`,
+body `{coach, route_gen}`, derived from the *same* `coachEnabled()` /
+`routeGenEnabled()` gates — there is no second flag to keep in sync).
+`apps/mobile_android/lib/pro_sellable.dart` (twin-mirrored) fetches it
+from `WEB_BASE_URL` — the origin the app already calls for `/api/coach`
+— and `SettingsProScreen` swaps the "Subscribe to Pro" tile for the
+`proComingSoonTitle` / `proComingSoon` teaser when `ProPerks.sellable`
+is false, exactly as web swaps in `upgrade.proComingSoon`.
+**Fail-closed:** an unreachable host, a timeout, a non-200, a malformed
+body, a missing field, and a truthy-but-not-boolean field all resolve to
+`ProPerks.none`, and the state is unknown-therefore-not-sellable until
+the manifest lands — a client that can't establish a perk is live never
+takes a payment. `_startProCheckout` carries the same gate so no caller
+can route around the hidden tile. **Restore purchases** and **Manage
+subscription** stay reachable in both states: they aren't sales, and
+Apple Guideline 3.1.1 / the Play subscription policy require them
+regardless. The release workflow gives the manifest the short
+HTML-style `cache-control` rather than the immutable-asset one, so a
+perk switched off propagates instead of sticking in caches for a year.
 
 The same `coachEnabled()` flag hides every other **web** entry point into
 the AI Coach so rock-bottom shows no door that only 503s:
