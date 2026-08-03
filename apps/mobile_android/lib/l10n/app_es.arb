@@ -1747,6 +1747,8 @@
   "proSubscribeTitle": "Suscribirse a Pro — {price}/mes",
   "proSubscribeSubtitleConfigured": "Entrenador de IA ilimitado + procesamiento prioritario. Se renueva automáticamente cada mes hasta que se cancele en Ajustes → Suscripciones.",
   "proSubscribeSubtitleWeb": "Abre el portal de suscripción en tu navegador. Se renueva automáticamente cada mes hasta su cancelación.",
+  "proComingSoonTitle": "Pro: próximamente",
+  "proComingSoon": "Pro desbloquea el entrenador con IA: próximamente. Aún puedes apoyar la app más abajo.",
   "proRegionalNote": "Se factura en dólares estadounidenses. La disponibilidad depende de tu país y método de pago: algunas regiones no pueden ser atendidas por nuestro procesador de pagos.",
   "proRestorePurchases": "Restaurar compras",
   "proRestorePurchasesSubtitle": "Vuelve a vincular compras de una instalación anterior u otro dispositivo",

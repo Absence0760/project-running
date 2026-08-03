@@ -6305,6 +6305,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Abre el portal de suscripción en tu navegador. Se renueva automáticamente cada mes hasta su cancelación.';
 
   @override
+  String get proComingSoonTitle => 'Pro: próximamente';
+
+  @override
+  String get proComingSoon =>
+      'Pro desbloquea el entrenador con IA: próximamente. Aún puedes apoyar la app más abajo.';
+
+  @override
   String get proRegionalNote =>
       'Se factura en dólares estadounidenses. La disponibilidad depende de tu país y método de pago: algunas regiones no pueden ser atendidas por nuestro procesador de pagos.';
 

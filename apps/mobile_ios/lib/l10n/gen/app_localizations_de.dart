@@ -6318,6 +6318,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Öffnet das Abo-Portal in deinem Browser. Verlängert sich monatlich automatisch bis zur Kündigung.';
 
   @override
+  String get proComingSoonTitle => 'Pro – demnächst';
+
+  @override
+  String get proComingSoon =>
+      'Pro schaltet den KI-Coach frei – demnächst verfügbar. Du kannst die App unten trotzdem unterstützen.';
+
+  @override
   String get proRegionalNote =>
       'Abrechnung in US-Dollar. Die Verfügbarkeit hängt von deinem Land und deiner Zahlungsmethode ab — einige Regionen können von unserem Zahlungsdienstleister nicht bedient werden.';
 

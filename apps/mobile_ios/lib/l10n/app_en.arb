@@ -8433,6 +8433,14 @@
   "@proSubscribeSubtitleWeb": {
     "description": "Pro tile subtitle when falling back to the web portal"
   },
+  "proComingSoonTitle": "Pro — coming soon",
+  "@proComingSoonTitle": {
+    "description": "Pro tile title when the deploy has no live Pro perk to sell"
+  },
+  "proComingSoon": "Pro unlocks the AI Coach — coming soon. You can still support the app below.",
+  "@proComingSoon": {
+    "description": "Pro tile subtitle shown instead of a purchase CTA when no Pro perk is live"
+  },
   "proRegionalNote": "Billed in US dollars. Availability depends on your country and payment method — some regions can't be served by our payment processor.",
   "@proRegionalNote": {
     "description": "Honesty note about billing currency and regional availability"
