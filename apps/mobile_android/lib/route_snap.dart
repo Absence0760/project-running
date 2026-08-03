@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'geo.dart' show lonDeltaDeg, wrapLonDeg;
 import 'run_stats.dart' show haversineMetres;
 
 /// Snap a dropped point to a route's polyline.
@@ -95,9 +96,9 @@ SnapResult? snapToPolyline(
     final cosLat = cos(toRad(aLat));
     const ax = 0.0;
     const ay = 0.0;
-    final bx = toRad(bLng - aLng) * r * cosLat;
+    final bx = toRad(lonDeltaDeg(aLng, bLng)) * r * cosLat;
     final by = toRad(bLat - aLat) * r;
-    final px = toRad(point.lng - aLng) * r * cosLat;
+    final px = toRad(lonDeltaDeg(aLng, point.lng)) * r * cosLat;
     final py = toRad(point.lat - aLat) * r;
 
     final dx = bx - ax;
@@ -106,7 +107,7 @@ SnapResult? snapToPolyline(
     // Degenerate (duplicate) vertices → treat as the start point.
     final t = lenSq > 0 ? ((px * dx + py * dy) / lenSq).clamp(0.0, 1.0) : 0.0;
 
-    final sLng = aLng + (bLng - aLng) * t;
+    final sLng = wrapLonDeg(aLng + lonDeltaDeg(aLng, bLng) * t);
     final sLat = aLat + (bLat - aLat) * t;
     final offset = haversineMetres(point.lat, point.lng, sLat, sLng);
 
