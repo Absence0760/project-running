@@ -75,6 +75,16 @@ void main() {
       expect(out, isEmpty);
     });
 
+    // The zone test is haversine, and sin/cos are periodic, so a whole-turn
+    // longitude error cancels — privacy is the one route helper that needed
+    // no antimeridian fix. Pinned so a future reader doesn't have to take
+    // that on trust, and so nobody "fixes" it into a planar frame.
+    test('a zone on the antimeridian still catches a point across it', () {
+      const line = PrivacyZone(lat: 0, lng: 179.999, radiusM: 300);
+      expect(isInAnyZone(0, -179.999, const [line]), isTrue);
+      expect(isInAnyZone(0, -179.99, const [line]), isFalse);
+    });
+
     test('multiple zones — clips against the union', () {
       const work = PrivacyZone(lat: 40.75, lng: -73.99, radiusM: 200);
       final pts = [

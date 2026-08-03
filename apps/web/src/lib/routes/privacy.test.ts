@@ -58,6 +58,16 @@ test('clipPointsToZones — every point in zone returns empty', () => {
 	assert.deepEqual(clipPointsToZones(pts, [home]), []);
 });
 
+// The zone test is haversine, and `sin`/`cos` are periodic, so a whole-turn
+// longitude error cancels — privacy is the one route helper that needed no
+// antimeridian fix. Pinned so a future reader doesn't have to take that on
+// trust, and so nobody "fixes" it into a planar frame that would break.
+test('isInAnyZone — a zone on the antimeridian still catches a point across it', () => {
+	const line: PrivacyZone = { lat: 0, lng: 179.999, radius_m: 300 };
+	assert.equal(isInAnyZone({ lat: 0, lng: -179.999 }, [line]), true);
+	assert.equal(isInAnyZone({ lat: 0, lng: -179.99 }, [line]), false);
+});
+
 test('clipPointsToZones — multiple zones', () => {
 	const work: PrivacyZone = { lat: 40.75, lng: -73.99, radius_m: 200 };
 	const pts: LatLng[] = [
