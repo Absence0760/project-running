@@ -72,3 +72,30 @@ test('honours custom pad value', () => {
 	const paddedSpan = Math.abs(padded[1].x - padded[0].x);
 	assert.ok(paddedSpan < tightSpan, `padded ${paddedSpan} should be < tight ${tightSpan}`);
 });
+
+test('a track across the antimeridian fits its own width, not the whole world', () => {
+	// A 0.01° x 0.01° box straddling the line. Its longitudes span 0.01°,
+	// not the 359.99° a raw min/max reads, so the fit is the same one the
+	// identical box a degree west of the line gets.
+	const across: TrackPoint[] = [
+		{ lat: 0, lng: 179.995 },
+		{ lat: 0.01, lng: 179.995 },
+		{ lat: 0.01, lng: -179.995 },
+		{ lat: 0, lng: -179.995 },
+	];
+	const west: TrackPoint[] = [
+		{ lat: 0, lng: 178.995 },
+		{ lat: 0.01, lng: 178.995 },
+		{ lat: 0.01, lng: 179.005 },
+		{ lat: 0, lng: 179.005 },
+	];
+	const a = projectTrack(across, 100, 100);
+	const w = projectTrack(west, 100, 100);
+	assert.equal(a.length, 4);
+	for (let i = 0; i < a.length; i++) {
+		assert.ok(Math.abs(a[i].x - w[i].x) < 1e-6, `x[${i}] ${a[i].x} vs ${w[i].x}`);
+		assert.ok(Math.abs(a[i].y - w[i].y) < 1e-6, `y[${i}] ${a[i].y} vs ${w[i].y}`);
+	}
+	// And the box actually uses the panel rather than collapsing to a dot.
+	assert.ok(Math.abs(a[2].x - a[0].x) > 50, `span ${Math.abs(a[2].x - a[0].x)}`);
+});

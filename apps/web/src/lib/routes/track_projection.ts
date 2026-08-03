@@ -5,6 +5,7 @@
 // lockstep.
 
 import type { TrackPoint } from '../types';
+import { unwrapLonDeg } from './geo';
 
 export interface Projected {
 	x: number;
@@ -24,15 +25,20 @@ export function projectTrack(
 	pad = 4,
 ): Projected[] {
 	if (points.length < 2) return [];
+	// Longitudes are expressed on the first point's side of the antimeridian,
+	// so a track that crosses it spans its own width instead of ~360° (which
+	// collapsed the fitted scale to a dot). Identity inside a hemisphere.
+	const refLng = points[0].lng;
 	let minLat = points[0].lat;
 	let maxLat = points[0].lat;
-	let minLng = points[0].lng;
-	let maxLng = points[0].lng;
+	let minLng = refLng;
+	let maxLng = refLng;
 	for (const p of points) {
 		if (p.lat < minLat) minLat = p.lat;
 		if (p.lat > maxLat) maxLat = p.lat;
-		if (p.lng < minLng) minLng = p.lng;
-		if (p.lng > maxLng) maxLng = p.lng;
+		const lng = unwrapLonDeg(refLng, p.lng);
+		if (lng < minLng) minLng = lng;
+		if (lng > maxLng) maxLng = lng;
 	}
 	// A degree of longitude is shorter than a degree of latitude
 	// everywhere except the equator — at 51 °N (London) it's only ~62 %
@@ -50,7 +56,7 @@ export function projectTrack(
 	const out: Projected[] = [];
 	for (const p of points) {
 		out.push({
-			x: offX + (p.lng - minLng) * lngScale * scale,
+			x: offX + (unwrapLonDeg(refLng, p.lng) - minLng) * lngScale * scale,
 			// SVG y grows downward; invert latitude so north is up.
 			y: offY + (maxLat - p.lat) * scale,
 		});
