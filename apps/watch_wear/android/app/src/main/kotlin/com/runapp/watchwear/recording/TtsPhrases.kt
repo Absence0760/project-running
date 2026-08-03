@@ -21,12 +21,24 @@ internal fun paceMinSec(secondsPerKm: Double?): Pair<Int, Int>? {
     return m to s
 }
 
+/// [paceMinSec] for a runner on [unit]: the recorder's seconds-per-km is
+/// scaled to the mile first, so a mi-mode runner hears the pace their face
+/// already shows instead of the metric figure under a mile label.
+internal fun paceMinSecFor(secondsPerKm: Double?, unit: DistanceUnit): Pair<Int, Int>? =
+    paceMinSec(secondsPerKm?.let { paceSecPerUnit(it, unit) })
+
 /// Whole minutes (floor) spoken for the run-complete summary. Matches the
 /// phone's "27 minutes" read-out — no half-minute rounding.
 internal fun finishMinutes(durationS: Int): Int = durationS / 60
 
-/// Distance for the run-complete phrase, formatted with a period decimal
-/// regardless of locale. The spoken distance must use a period: a comma
-/// would be read aloud as the literal word "comma" by most TTS engines.
-internal fun finishDistanceSpoken(distanceM: Double): String =
-    "%.2f".format(java.util.Locale.US, distanceM / 1000.0)
+/// Distance for the run-complete phrase in the runner's [unit], formatted
+/// with a period decimal regardless of locale. The spoken distance must use
+/// a period: a comma would be read aloud as the literal word "comma" by most
+/// TTS engines.
+internal fun finishDistanceSpoken(distanceM: Double, unit: DistanceUnit): String {
+    val value = when (unit) {
+        DistanceUnit.KM -> distanceM / 1000.0
+        DistanceUnit.MI -> distanceM / METRES_PER_MILE
+    }
+    return "%.2f".format(java.util.Locale.US, value)
+}
