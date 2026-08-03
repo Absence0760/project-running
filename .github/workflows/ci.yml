@@ -248,9 +248,11 @@ jobs:
       # regressions fail fast and independent of stack health.
       - name: CHECK constraints vs TS unions
         run: npm run check:check-constraints --workspace=apps/web
+      # `src/**`, not `src/lib/**`: the route-level source guards under
+      # src/routes (e.g. the preferences i18n guard) were silently never run.
       - name: Web TS unit tests
         working-directory: apps/web
-        run: npx tsx --test 'src/lib/**/*.test.ts'
+        run: npx tsx --test 'src/**/*.test.ts'
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
