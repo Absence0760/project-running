@@ -204,6 +204,41 @@ void main() {
     );
   });
 
+  test(
+      'GPS retry loop gates on the SAME permission predicate as prepare() (#671)',
+      () {
+    // Reason: _startGpsRetryLoop() used to precheck denied/deniedForever
+    // only, missing the Android whileInUse case prepare() refuses on. That
+    // let the retry timer silently reopen the position stream ~3s after
+    // prepare() had just thrown LocationPermissionWhileInUseError for the
+    // same permission state — reintroducing the background-freeze prepare()
+    // exists to prevent. Both gates must call the same shared predicate so
+    // they cannot drift apart again; this pins that both bodies reference it
+    // rather than re-deriving the condition inline.
+    final prepareBody = _extractMethodBody(
+      source,
+      r'Future<void> prepare\(\{[^)]*\}\)\s*async\s*\{',
+    );
+    expect(
+      prepareBody,
+      contains('_permissionAllowsStream('),
+      reason: 'prepare() must gate the stream-opening decision through '
+          '_permissionAllowsStream, not an inline whileInUse condition.',
+    );
+    final retryLoopBody = _extractMethodBody(
+      source,
+      r'void _startGpsRetryLoop\(\)\s*\{',
+    );
+    expect(
+      retryLoopBody,
+      contains('_permissionAllowsStream('),
+      reason: '_startGpsRetryLoop() must precheck permission through the '
+          'SAME _permissionAllowsStream predicate prepare() uses — a '
+          'hand-rolled denied/deniedForever-only check silently drifts '
+          'from prepare()\'s gate (see #671).',
+    );
+  });
+
   test('GPS retry loop exists and is cancelled on stop/dispose', () {
     // Reason: the retry loop is what reopens the stream after a
     // mid-run Location toggle. If it's not started in prepare or not
