@@ -5948,6 +5948,12 @@ class AppLocalizationsJa extends AppLocalizations {
       'ブラウザでサブスクリプションポータルを開きます。解約するまで毎月自動更新されます。';
 
   @override
+  String get proComingSoonTitle => 'Pro — 近日公開';
+
+  @override
+  String get proComingSoon => 'Pro は AI コーチを解放します — 近日公開。下からアプリを支援することはできます。';
+
+  @override
   String get proRegionalNote =>
       '米ドルで請求されます。利用可否はお住まいの国や支払い方法によって異なります — 一部の地域では決済代行業者が対応できません。';
 

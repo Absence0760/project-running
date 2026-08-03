@@ -6304,6 +6304,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Abre o portal de assinatura no seu navegador. Renova automaticamente todo mês até ser cancelado.';
 
   @override
+  String get proComingSoonTitle => 'Pro — em breve';
+
+  @override
+  String get proComingSoon =>
+      'O Pro desbloqueia o Coach de IA — em breve. Você ainda pode apoiar o app abaixo.';
+
+  @override
   String get proRegionalNote =>
       'Cobrado em dólares americanos. A disponibilidade depende do seu país e forma de pagamento — algumas regiões não podem ser atendidas pelo nosso processador de pagamentos.';
 
@@ -18616,6 +18623,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get proSubscribeSubtitleWeb =>
       'Abre o portal de assinatura no seu navegador. Renova automaticamente todo mês até ser cancelado.';
+
+  @override
+  String get proComingSoonTitle => 'Pro — em breve';
+
+  @override
+  String get proComingSoon =>
+      'O Pro desbloqueia o Coach de IA — em breve. Você ainda pode apoiar o app abaixo.';
 
   @override
   String get proRegionalNote =>

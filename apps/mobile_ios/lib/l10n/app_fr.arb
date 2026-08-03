@@ -1747,6 +1747,8 @@
   "proSubscribeTitle": "S'abonner à Pro — {price}/mois",
   "proSubscribeSubtitleConfigured": "Coach IA illimité + traitement prioritaire. Renouvellement mensuel automatique jusqu'à résiliation dans Réglages → Abonnements.",
   "proSubscribeSubtitleWeb": "Ouvre le portail d'abonnement dans ton navigateur. Renouvellement mensuel automatique jusqu'à résiliation.",
+  "proComingSoonTitle": "Pro — bientôt disponible",
+  "proComingSoon": "Pro débloque le coach IA — bientôt disponible. Tu peux tout de même soutenir l'app ci-dessous.",
   "proRegionalNote": "Facturé en dollars américains. La disponibilité dépend de ton pays et de ton moyen de paiement — certaines régions ne peuvent pas être desservies par notre prestataire de paiement.",
   "proRestorePurchases": "Restaurer les achats",
   "proRestorePurchasesSubtitle": "Relie les achats d'une installation précédente ou d'un autre appareil",

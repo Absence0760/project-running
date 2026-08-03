@@ -10335,6 +10335,18 @@ abstract class AppLocalizations {
   /// **'Opens the subscription portal in your browser. Auto-renews monthly until cancelled.'**
   String get proSubscribeSubtitleWeb;
 
+  /// Pro tile title when the deploy has no live Pro perk to sell
+  ///
+  /// In en, this message translates to:
+  /// **'Pro — coming soon'**
+  String get proComingSoonTitle;
+
+  /// Pro tile subtitle shown instead of a purchase CTA when no Pro perk is live
+  ///
+  /// In en, this message translates to:
+  /// **'Pro unlocks the AI Coach — coming soon. You can still support the app below.'**
+  String get proComingSoon;
+
   /// Honesty note about billing currency and regional availability
   ///
   /// In en, this message translates to:

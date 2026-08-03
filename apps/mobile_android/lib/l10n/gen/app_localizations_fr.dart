@@ -6325,6 +6325,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ouvre le portail d\'abonnement dans ton navigateur. Renouvellement mensuel automatique jusqu\'à résiliation.';
 
   @override
+  String get proComingSoonTitle => 'Pro — bientôt disponible';
+
+  @override
+  String get proComingSoon =>
+      'Pro débloque le coach IA — bientôt disponible. Tu peux tout de même soutenir l\'app ci-dessous.';
+
+  @override
   String get proRegionalNote =>
       'Facturé en dollars américains. La disponibilité dépend de ton pays et de ton moyen de paiement — certaines régions ne peuvent pas être desservies par notre prestataire de paiement.';
 
