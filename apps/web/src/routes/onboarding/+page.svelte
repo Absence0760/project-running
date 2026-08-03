@@ -3,7 +3,12 @@
 	import { browser } from '$app/environment';
 	import { m } from '$lib/i18n/store.svelte';
 	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
-	import { parseWeightToKg, roundWeight, type WeightUnit } from '$lib/format/weight';
+	import {
+		parseWeightToKg,
+		roundWeight,
+		isBodyWeightInRangeKg,
+		type WeightUnit,
+	} from '$lib/format/weight';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -64,6 +69,15 @@
 	const weightUnit = $derived<WeightUnit>(preferredUnit === 'mi' ? 'lbs' : 'kg');
 	const weightMin = $derived(weightUnit === 'lbs' ? 44 : 20);
 	const weightMax = $derived(weightUnit === 'lbs' ? 550 : 250);
+	// The `min`/`max` input attributes above are cosmetic — the wizard
+	// advances via onclick handlers, not a native form submit, so the
+	// browser's constraint validation never runs (issue #677). This is the
+	// real gate: parses the typed value the same way the Finish handler
+	// does, then checks it against the plausible-human-body-weight range.
+	const weightOutOfRange = $derived.by(() => {
+		const kg = parseWeightToKg(String(bodyWeight ?? ''), weightUnit);
+		return kg != null && !isBodyWeightInRangeKg(kg);
+	});
 	let healthDataConsent = $state(false);
 
 	// ── Step 5: privacy default ───────────────────────────────
@@ -239,7 +253,13 @@
 			// number (or null when empty); parseWeightToKg takes the raw typed
 			// string (it trims + tolerates a comma decimal), so stringify first.
 			const weightKg = parseWeightToKg(String(bodyWeight ?? ''), weightUnit);
-			if (weightKg != null && weightKg > 0) bagChanges.body_weight_kg = roundWeight(weightKg);
+			// isBodyWeightInRangeKg is the same gate the Continue button's
+			// disabled state checks — kept here too so an out-of-bounds value
+			// can never reach the TDEE/hydration math even via a path that
+			// bypasses step 4 (e.g. the step-7 CTA reached after Skip).
+			if (weightKg != null && weightKg > 0 && isBodyWeightInRangeKg(weightKg)) {
+				bagChanges.body_weight_kg = roundWeight(weightKg);
+			}
 			// DOB mirrors into the prefs bag only under health consent —
 			// the bag copy feeds the coach/leaderboard read paths, which
 			// are Art 9 surfaces. The minor-exclusion floor reads the
@@ -418,7 +438,21 @@
 				</label>
 				<label class="field">
 					<span class="label-text">{m('onboarding.weightLabel', { unit: weightUnit })}</span>
-					<input type="number" inputmode="decimal" min={weightMin} max={weightMax} step="0.1" bind:value={bodyWeight} placeholder={m('onboarding.weightPlaceholder', { example: weightUnit === 'lbs' ? 155 : 70 })} />
+					<input
+						type="number"
+						inputmode="decimal"
+						min={weightMin}
+						max={weightMax}
+						step="0.1"
+						bind:value={bodyWeight}
+						placeholder={m('onboarding.weightPlaceholder', { example: weightUnit === 'lbs' ? 155 : 70 })}
+						aria-invalid={weightOutOfRange}
+					/>
+					{#if weightOutOfRange}
+						<span class="field-error" role="alert">
+							{m('onboarding.weightOutOfRange', { min: weightMin, max: weightMax, unit: weightUnit })}
+						</span>
+					{/if}
 				</label>
 				{#if gender || dateOfBirth}
 					<label class="consent-row">
@@ -529,12 +563,22 @@
 			{/if}
 			<div class="nav-right">
 				{#if step !== 7 && step !== 1 && step !== 5 && step !== 2}
-					<button type="button" class="skip-step" onclick={skipStep} disabled={saving}>
+					<button
+						type="button"
+						class="skip-step"
+						onclick={skipStep}
+						disabled={saving || (step === 4 && weightOutOfRange)}
+					>
 						{m('onboarding.skip')}
 					</button>
 				{/if}
 				{#if step < ONBOARDING_TOTAL_STEPS}
-					<button type="button" class="btn btn-primary" onclick={next} disabled={saving}>
+					<button
+						type="button"
+						class="btn btn-primary"
+						onclick={next}
+						disabled={saving || (step === 4 && weightOutOfRange)}
+					>
 						{m('onboarding.continue')}
 					</button>
 				{:else}
@@ -628,6 +672,7 @@
 	.field { display: flex; flex-direction: column; gap: 0.35rem; }
 	.label-text { font-size: 0.85rem; color: var(--color-text-secondary); font-weight: 500; }
 	.field-note { font-size: 0.78rem; color: var(--color-text-tertiary); line-height: 1.45; }
+	.field-error { font-size: 0.78rem; color: var(--color-danger); line-height: 1.45; }
 	.field input, .field select {
 		padding: 0.6rem 0.7rem;
 		border: 1px solid var(--color-border);

@@ -15,6 +15,9 @@ import {
 	roundWeight,
 	formatWeightKg,
 	parseWeightToKg,
+	isBodyWeightInRangeKg,
+	BODY_WEIGHT_MIN_KG,
+	BODY_WEIGHT_MAX_KG,
 } from './weight.js';
 
 test('parseWeightUnit: only "lbs" maps to lbs, everything else to kg', () => {
@@ -85,4 +88,34 @@ test('parseWeightToKg: empty / non-numeric / negative -> null', () => {
 	assert.equal(parseWeightToKg('abc', 'kg'), null);
 	assert.equal(parseWeightToKg('-5', 'kg'), null);
 	assert.equal(parseWeightToKg(null, 'lbs'), null);
+});
+
+test('parseWeightToKg: has no upper bound — a gym-load caller can still parse a heavy barbell weight', () => {
+	// isBodyWeightInRangeKg is the separate, narrower check a body-weight
+	// field opts into; the generic parser must keep accepting values well
+	// above any plausible human body weight (e.g. a 1RM near a world
+	// record) since GymEditor/RoutineEditor also route through this parser.
+	assert.equal(parseWeightToKg('500', 'kg'), 500);
+});
+
+test('isBodyWeightInRangeKg: accepts the documented 20-250kg human range, rejects outside it', () => {
+	assert.equal(isBodyWeightInRangeKg(BODY_WEIGHT_MIN_KG), true);
+	assert.equal(isBodyWeightInRangeKg(BODY_WEIGHT_MAX_KG), true);
+	assert.equal(isBodyWeightInRangeKg(60), true);
+	assert.equal(isBodyWeightInRangeKg(BODY_WEIGHT_MIN_KG - 0.01), false);
+	assert.equal(isBodyWeightInRangeKg(BODY_WEIGHT_MAX_KG + 0.01), false);
+	assert.equal(isBodyWeightInRangeKg(9999), false);
+});
+
+test('isBodyWeightInRangeKg: non-finite input is out of range', () => {
+	assert.equal(isBodyWeightInRangeKg(NaN), false);
+	assert.equal(isBodyWeightInRangeKg(Infinity), false);
+	assert.equal(isBodyWeightInRangeKg(-Infinity), false);
+});
+
+test('isBodyWeightInRangeKg + parseWeightToKg: the onboarding issue #677 repro — 9999 typed in either unit is rejected', () => {
+	const kgFromKg = parseWeightToKg('9999', 'kg');
+	assert.ok(kgFromKg != null && !isBodyWeightInRangeKg(kgFromKg));
+	const kgFromLbs = parseWeightToKg('9999', 'lbs');
+	assert.ok(kgFromLbs != null && !isBodyWeightInRangeKg(kgFromLbs));
 });

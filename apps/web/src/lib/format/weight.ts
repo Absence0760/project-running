@@ -72,3 +72,15 @@ export function parseWeightToKg(
 	if (!Number.isFinite(value) || value < 0) return null;
 	return displayToKg(value, unit);
 }
+
+export const BODY_WEIGHT_MIN_KG = 20;
+export const BODY_WEIGHT_MAX_KG = 250;
+
+/// A plausible HUMAN body-weight bound, not a generic weight bound —
+/// `parseWeightToKg` above also parses gym-load weights (a barbell one-rep
+/// max, a dumbbell increment) that routinely exceed 250 kg, so this stays a
+/// separate, narrower check callers opt into for a body-weight field
+/// specifically (e.g. onboarding, Settings demographics).
+export function isBodyWeightInRangeKg(kg: number): boolean {
+	return Number.isFinite(kg) && kg >= BODY_WEIGHT_MIN_KG && kg <= BODY_WEIGHT_MAX_KG;
+}

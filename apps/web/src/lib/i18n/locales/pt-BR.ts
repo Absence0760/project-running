@@ -402,6 +402,7 @@ export const messages = {
 	"onboarding.dobNote": "Usada para manter contas de menores de 18 anos fora da busca pública de pessoas. Adicionar a calibração por idade ao seu ritmo, zonas de FC e rankings ainda requer o consentimento abaixo.",
 	"onboarding.weightLabel": "Peso corporal em {unit} (opcional)",
 	"onboarding.weightPlaceholder": "ex.: {example}",
+	"onboarding.weightOutOfRange": "Informe um peso entre {min} e {max} {unit}.",
 	"onboarding.healthConsent": "Autorizo o Threkir a usar meu gênero e data de nascimento para alimentar os rankings de segmentos por gênero e faixa etária e as estimativas calibradas de ritmo e calorias (RGPD Art. 9(2)(a)). Posso retirar o consentimento em Configurações quando quiser.",
 	"onboarding.step5Title": "Quem pode ver suas corridas?",
 	"onboarding.step5Hint": "Define o padrão para cada nova corrida. Você pode substituí-lo por corrida antes de compartilhar, ou alterar o padrão em Configurações.",
