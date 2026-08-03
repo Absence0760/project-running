@@ -1,7 +1,10 @@
 /**
- * Dashboard streak-card state. Web-only (the fetch + card are a web
- * surface; mobile's card reads its full local store) — deliberately NOT
- * in streaks.ts, which is a TS<->Dart parity pair.
+ * Dashboard streak-card state. TS<->Dart parity pair with
+ * apps/mobile_android/lib/streak_card.dart (decisions § 475 — mobile's
+ * local store only holds resident history, the same windowed-claim
+ * problem this module solves for web) — kept separate from streaks.ts,
+ * which is its own pair. The Dart side's mergeAllTimeStreaks is a
+ * documented mobile-only extra (offline-first union fold), not owed here.
  *
  * The card's headline + sub-label prefer the server-side all-time
  * aggregate (`run_streaks_for_user`, decisions § 471). When that fetch
