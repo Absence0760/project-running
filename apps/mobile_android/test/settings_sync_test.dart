@@ -294,6 +294,40 @@ void main() {
       expect(prefs.voiceCueEnabled('not_a_bool'), isTrue);
     });
 
+    test('a universal voice_cue_types map reaches the recorder', () async {
+      // Web's settings page can only write the universal bag — the browser
+      // is its own device row and never records — so a per-cue choice made
+      // there is dead unless the universal overlay reads the key too.
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyUniversal({
+        SettingsKeys.voiceCueTypes: {VoiceCue.splits: false},
+      });
+
+      expect(prefs.voiceCueEnabled(VoiceCue.splits), isFalse);
+      expect(prefs.voiceCueEnabled(VoiceCue.paceAlerts), isTrue);
+    });
+
+    test('a device voice_cue_types entry overrides the universal one',
+        () async {
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(preferences: prefs);
+
+      svc.debugApplyUniversal({
+        SettingsKeys.voiceCueTypes: {
+          VoiceCue.splits: false,
+          VoiceCue.offRoute: false,
+        },
+      });
+      svc.debugApplyDevice({
+        SettingsKeys.voiceCueTypes: {VoiceCue.splits: true},
+      });
+
+      expect(prefs.voiceCueEnabled(VoiceCue.splits), isTrue);
+      expect(prefs.voiceCueEnabled(VoiceCue.offRoute), isFalse);
+    });
+
     test('voice_cue_types merge keeps locally-toggled ids the bag omits',
         () async {
       final prefs = await freshPrefs();
