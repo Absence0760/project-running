@@ -45,7 +45,9 @@ a 100 m distance arm, a 60 s elapsed arm, and a 5:00-5:20/km band the ~5:33/km
 bench_jog fixture sits outside), so this asserts what that arming makes
 inevitable and nothing more — see `scenario_alerts`. Boots `--no-course`: the
 §380/§381 course-driven arms would otherwise hold the slot through the opening
-quiet window the baseline dump depends on.
+quiet window the baseline dump depends on. `--no-workout` beside it so that
+window is the one before the first alert rather than the 114 ms gap the demo
+workout's warm-up TTL left ahead of the pace latch — see `scenario_alerts`.
 
 `pages` — the paged glance cycle. Walks the cycle right with `runMacro $btn4`
 (§350: the lower-right key pages right) and, for each page of interest, waits
@@ -67,7 +69,11 @@ now in it and render. `pages` proves these two stay OUT of an unarmed cycle;
 this proves they come INTO an armed one, which is the half a mis-wired
 data-presence bit would pass silently. Note the baro profile is load-bearing:
 `feed_gap` prefers baro altitude over the fix's, so the fixture's GPS ramp
-alone is shadowed by the model's static default.
+alone is shadowed by the model's static default. Boots `--no-alerts`
+`--no-workout` so the page dumps are of pages: it keeps `sim-course` (the crest
+assertion reads the pushed profile) and therefore cannot shed the OffCourse
+arm, so instead it sheds everything that could DISPLACE that arm and leave the
+slot handed on without ever clearing.
 
 `dropout` — the recorder across a signal void, on the gps_dropout fixture. The
 one scenario here whose subject is a bug that has actually happened: the fixture
@@ -291,8 +297,55 @@ SCENARIO_LAUNCHER_ARGS = {
     # `sim-alerts` (the fuel / distance / time / pace arms ARE its subject);
     # none of its assertions read the course, and the course-driven kinds are
     # host-tested (`core/src/alerts.rs`), not sim-asserted.
-    "alerts": ("--no-course",),
+    #
+    # `--no-workout` because the baseline used to be taken in the gap the demo
+    # workout's warm-up step left when its TTL expired, and that gap is not the
+    # wide one `scenario_alerts` assumed. Measured on CI run 30789397930: the
+    # warm-up raised at 5.085 s, cleared at 13.085 s, and `PaceSlow` took the
+    # slot at 13.199 s — a 114 ms window, which no DumpFrame round-trip fits
+    # inside, so the baseline was a coin flip on whether the pace arm or the
+    # dump landed first. The arm is not late by accident either: the pace band
+    # latches on the first excursion, and the ~5:33/km fixture sits outside the
+    # 5:00-5:20 band from the first pace estimate, so it is due at ~13 s every
+    # run. Shedding the workout replaces that race with the window BEFORE the
+    # first alert of any kind — `latest_alert` is None from boot until the pace
+    # arm at ~13 s, which the quiet loop accepts and which is two orders of
+    # magnitude wider than the gap it replaces. Nothing here asserts a workout
+    # edge; `workout` owns that rail.
+    "alerts": ("--no-course", "--no-workout"),
+    # Terrain shares `workout`'s and `storm`'s problem and none of their fixes
+    # had ever been applied to it: it walks the page cycle calling
+    # `wait_for_no_alert` before each dump, and `wait_for_no_alert` can only
+    # resolve on a Some -> None transition. `--no-alerts` sheds the fuel /
+    # distance / time / pace chain, which is pure noise to a scenario whose
+    # subject is two pages entering the cycle.
+    #
+    # `--no-workout` is the load-bearing half. What broke CI run 30789379617
+    # was the handoff, not the volume: `OffCourse` at 121.7 s displaced by
+    # `WorkoutStep { Rep }` at 123.7 s, and a displaced OffCourse re-queues —
+    # so the slot went banner-to-banner and never emitted `cleared`, exactly
+    # the chain `storm`'s note describes. With the workout's edges gone nothing
+    # displaces OffCourse, so it runs its TTL out and the clear is due.
+    #
+    # `--no-course` is NOT available here, unlike `workout` and `storm`: the
+    # crest assertion reads the pushed course profile (`SIM_COURSE_ELEV_M`),
+    # and its own failure message names a course that never reached the
+    # recorder as one of the two things it is testing for. So this scenario
+    # cannot shed the OffCourse arm — mountain_loop is nowhere near the
+    # three-point canned course and the latch is permanently tripped — it can
+    # only make sure nothing displaces it.
+    "terrain": ("--no-alerts", "--no-workout"),
 }
+
+# `pages` deliberately has no entry, though it walks the same cycle as `terrain`
+# and calls the same `wait_for_no_alert` before each dump. Booting it
+# `--no-alerts --no-workout` was tried and passes, but both flags cost it cycle:
+# the Zones page's data-presence bit rides the alert arms and the Workout page's
+# rides `sim-workout`, so the walk drops from 19 pages to 17. What makes that a
+# bad trade is that `pages` is not exposed to the chain the flags fix — its walk
+# is done inside ~35 s, and the regime where the slot is handed banner-to-banner
+# without ever clearing opens past ~100 s (this module's header). `terrain` is
+# exposed because it waits ~90 s for the baro ramp before it walks at all.
 
 # The pages the walk has to reach and render. Two always-available heroes
 # (Distance / Pace, the generated-numeral pages), plus the pages the recent
@@ -1497,12 +1550,24 @@ def scenario_alerts(sim):
     # whenever the second arm to fire was a late one: a run whose arms landed
     # Drink then Distance never saw another clear inside the timeout.
     #
-    # The opening window is different in kind. The armed workout raises its
-    # warm-up step within a millisecond of the first fix, that single alert is
-    # the only thing holding the slot, and the earliest competing cadence is
-    # 30 s of MOVING time — so its TTL expiry is due with nothing behind it and
-    # leaves a wide bannerless stretch after it. That is the one `cleared` the
-    # scenario can count on, so it is the one the baseline is taken against.
+    # The opening window is different in kind, but not for the reason this
+    # comment used to give. It claimed the armed workout's warm-up step held the
+    # slot alone and that its TTL expiry left a wide bannerless stretch because
+    # the earliest competing cadence was 30 s of MOVING time. The pace arm is
+    # earlier than that and is not a cadence at all — it latches on the first
+    # excursion, and the ~5:33/km fixture is outside the 5:00-5:20 band from the
+    # first pace estimate. Measured: warm-up cleared at 13.085 s, `PaceSlow`
+    # took the slot at 13.199 s. The stretch was 114 ms, and which of the arm
+    # and the dump landed first was a coin flip the scenario lost outright.
+    #
+    # So the baseline is taken in the window before the FIRST alert instead of
+    # in a gap between two. `latest_alert` reads None from boot until something
+    # raises, the loop below accepts None exactly as it accepts `cleared`, and
+    # this session sheds `sim-workout` (see `SCENARIO_LAUNCHER_ARGS`) so nothing
+    # raises until the pace arm at ~13 s. That is a window two orders of
+    # magnitude wider than the one it replaces, and it needs no `cleared` edge
+    # at all — which matters because `cleared` is the thing the overlapping
+    # regime stops emitting.
     #
     # Both halves of the pair still race the PANEL the same way, and the
     # baseline is the half that fails silently: the record task's line leads the
@@ -1527,10 +1592,13 @@ def scenario_alerts(sim):
             quiet = shot
     if quiet is None:
         raise SmokeFailure(
-            "no panel frame could be dumped in the run's opening quiet window — "
-            "an alert took the slot again between the first one clearing and the "
-            "first dump landing, so there is no baseline to measure a banner's "
-            "ink against"
+            "no panel frame could be dumped before the run's first alert — "
+            "something took the banner slot between the recording starting and "
+            "the first dump landing, so there is no baseline to measure a "
+            "banner's ink against. This session boots --no-workout so the "
+            "earliest arm is the pace latch at ~13 s; an alert inside that "
+            "window means a new arm now fires earlier than the fixture's first "
+            "pace estimate"
         )
     announce(f"quiet baseline: {quiet.dark} dark pixels (lowest of {ALERT_QUIET_ATTEMPTS})")
 
