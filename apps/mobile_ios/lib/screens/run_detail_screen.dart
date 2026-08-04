@@ -2499,9 +2499,27 @@ class _StatBig extends StatelessWidget {
   }
 }
 
+/// Fill colours for the elevation chart's pace bands, ordered
+/// faster → steady → slower.
+///
+/// The bands are separated by luminance, not by hue alone. A WCAG contrast
+/// ratio is computed from relative luminance only, so the floors these clear
+/// (>= 2:1 between neighbouring bands, >= 4:1 between faster and slower, >=
+/// 1.5:1 against the page background) are simultaneously greyscale-separation
+/// floors — which the previous red/green ramp, at 1.03:1 in the light theme,
+/// was not at any level of colour vision. "Slower" always sits furthest from
+/// the page background, so heavier ink means slower in both themes even
+/// though the ramp direction inverts with the background, exactly as the
+/// AppSemanticColors pairs do.
+@visibleForTesting
+List<Color> elevationPaceBandColours(Brightness brightness) =>
+    brightness == Brightness.dark
+        ? const [Color(0xFF325D42), Color(0xFFB47F34), Color(0xFFEFCDC7)]
+        : const [Color(0xFF89BF9D), Color(0xFF9E702E), Color(0xFF7C3024)];
+
 /// Interactive elevation + pace chart. Drag or tap to see elevation and
-/// pace at any point along the run. The fill is colored by pace zones:
-/// green for fast segments, amber for average, red for slow.
+/// pace at any point along the run. The fill under the profile is banded by
+/// pace against the run's own median, keyed by [_ElevationPaceLegend].
 class _ElevationChart extends StatefulWidget {
   final List<Waypoint> track;
   final ThemeData theme;
@@ -2570,6 +2588,7 @@ class _ElevationChartState extends State<_ElevationChart> {
             ),
           ),
         ),
+        const _ElevationPaceLegend(),
       ],
     );
   }
@@ -2679,6 +2698,55 @@ class _ElevationChartState extends State<_ElevationChart> {
   }
 }
 
+/// Key for the elevation chart's pace banding. Without it the encoding
+/// existed only in a source comment, so the colour carried no meaning to
+/// the reader at all.
+class _ElevationPaceLegend extends StatelessWidget {
+  const _ElevationPaceLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final bands = elevationPaceBandColours(theme.brightness);
+    final labels = <String>[
+      l10n.runDetailPaceBandFaster,
+      l10n.runDetailPaceBandSteady,
+      l10n.runDetailPaceBandSlower,
+    ];
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(l10n.runDetailPaceLegendTitle, style: labelStyle),
+          for (var i = 0; i < bands.length; i++)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: bands[i],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(labels[i], style: labelStyle),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ElevationPacePainter extends CustomPainter {
   final List<Waypoint> track;
   final ThemeData theme;
@@ -2731,7 +2799,7 @@ class _ElevationPacePainter extends CustomPainter {
         : 300.0;
 
     // Draw filled segments colored by pace.
-    final semantic = AppSemanticColors.ofTheme(theme);
+    final bands = elevationPaceBandColours(theme.brightness);
     for (int i = 1; i < elevations.length; i++) {
       final x0 = (i - 1) / (elevations.length - 1) * size.width;
       final x1 = i / (elevations.length - 1) * size.width;
@@ -2741,15 +2809,18 @@ class _ElevationPacePainter extends CustomPainter {
           size.height - ((elevations[i] - minEle) / range) * size.height;
 
       final p = paces[i];
-      Color segColor;
+      final Color segColor;
       if (p == null || p < 60 || p > 1200) {
-        segColor = theme.colorScheme.primary.withOpacity(0.15);
+        // Deliberately the faintest fill of the four and absent from the
+        // legend: no pace could be derived here, which is an absence rather
+        // than a fourth band.
+        segColor = theme.colorScheme.onSurface.withValues(alpha: 0.08);
       } else if (p < medianPace * 0.9) {
-        segColor = semantic.success.withOpacity(0.35);
+        segColor = bands[0];
       } else if (p > medianPace * 1.1) {
-        segColor = semantic.danger.withOpacity(0.35);
+        segColor = bands[2];
       } else {
-        segColor = semantic.warning.withOpacity(0.25);
+        segColor = bands[1];
       }
 
       final fill = Path()

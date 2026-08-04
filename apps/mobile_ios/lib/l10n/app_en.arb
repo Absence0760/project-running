@@ -2821,6 +2821,22 @@
   "@runDetailSectionElevation": {
     "description": "Section header for the elevation chart on run-detail"
   },
+  "runDetailPaceLegendTitle": "Pace vs median",
+  "@runDetailPaceLegendTitle": {
+    "description": "Caption of the pace-band legend under the run-detail elevation chart"
+  },
+  "runDetailPaceBandFaster": "Faster",
+  "@runDetailPaceBandFaster": {
+    "description": "Legend key for elevation-chart segments run faster than the run's median pace"
+  },
+  "runDetailPaceBandSteady": "Steady",
+  "@runDetailPaceBandSteady": {
+    "description": "Legend key for elevation-chart segments run within 10% of the run's median pace"
+  },
+  "runDetailPaceBandSlower": "Slower",
+  "@runDetailPaceBandSlower": {
+    "description": "Legend key for elevation-chart segments run slower than the run's median pace"
+  },
   "runDetailSectionLaps": "Laps",
   "@runDetailSectionLaps": {
     "description": "Section header for the laps list on run-detail"
