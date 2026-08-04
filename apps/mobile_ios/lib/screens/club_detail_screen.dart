@@ -23,6 +23,7 @@ import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
 import '../widgets/club_photos.dart';
+import '../widgets/error_state.dart';
 import '../widgets/event_form_sheet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/route_track_preview.dart';
@@ -348,40 +349,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     if (c == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.help_outline, size: 48,
-                    color: Theme.of(context).colorScheme.outline),
-                const SizedBox(height: 12),
-                Text(
-                  AppLocalizations.of(context).clubDetailLoadFailedTitle,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _timedOut
-                      ? AppLocalizations.of(context).clubDetailTimeoutError
-                      : _error != null
-                          ? _error!
-                          : AppLocalizations.of(context)
-                              .clubDetailLoadFailedBody,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _load,
-                  child: Text(AppLocalizations.of(context).clubDetailRetry),
-                ),
-              ],
-            ),
-          ),
+        body: ErrorState(
+          icon: Icons.help_outline,
+          message: _timedOut
+              ? AppLocalizations.of(context).clubDetailTimeoutError
+              : _error ?? AppLocalizations.of(context).clubDetailLoadFailedBody,
+          onRetry: _load,
         ),
       );
     }

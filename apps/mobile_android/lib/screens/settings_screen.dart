@@ -15,9 +15,9 @@ import '../widgets/top_banner.dart';
 import 'coaching_screen.dart';
 import 'devices_screen.dart';
 import 'gear_screen.dart';
+import 'settings_about_screen.dart';
 import 'settings_account_screen.dart';
 import 'settings_integrations_screen.dart';
-import 'settings_licenses_screen.dart';
 import 'settings_preferences_screen.dart';
 import 'settings_pro_screen.dart';
 import 'settings_safety_screen.dart';
@@ -198,10 +198,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _open((_) => const SettingsProScreen()),
             ),
             _tab(
-              icon: Icons.description_outlined,
-              label: l10n.licensesTitle,
-              subtitle: l10n.settingsTabLicensesSubtitle,
-              onTap: () => _open((_) => const SettingsLicensesScreen()),
+              icon: Icons.info_outline,
+              label: l10n.aboutTitle,
+              subtitle: l10n.settingsTabAboutSubtitle,
+              onTap: () => _open((_) => const SettingsAboutScreen()),
             ),
             if (isLocalSupabaseUrl(
                 widget.devBackendUrl ?? maybeDevBackendUrl())) ...[

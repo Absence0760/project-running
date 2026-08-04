@@ -1091,6 +1091,12 @@ abstract class AppLocalizations {
   /// **'Contact email'**
   String get safetyAddLabel;
 
+  /// Example email placeholder in the add-safety-contact input; the local part is localized, the example.com domain is RFC 2606 reserved and must stay
+  ///
+  /// In en, this message translates to:
+  /// **'partner@example.com'**
+  String get safetyAddHint;
+
   /// Button to add a safety contact
   ///
   /// In en, this message translates to:
@@ -1589,23 +1595,11 @@ abstract class AppLocalizations {
   /// **'I accept the '**
   String get signUpAcceptPrefix;
 
-  /// Tappable Terms of Service link text inside the terms-acceptance checkbox label
-  ///
-  /// In en, this message translates to:
-  /// **'Terms of Service'**
-  String get signUpTermsLink;
-
   /// Conjunction between the Terms of Service and Privacy Policy links in the terms-acceptance checkbox label
   ///
   /// In en, this message translates to:
   /// **' and '**
   String get signUpAcceptConjunction;
-
-  /// Tappable Privacy Policy link text inside the terms-acceptance checkbox label
-  ///
-  /// In en, this message translates to:
-  /// **'Privacy Policy'**
-  String get signUpPrivacyLink;
 
   /// Validation error shown when the age gate is not confirmed
   ///
@@ -1672,12 +1666,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Already have an account? Sign in'**
   String get signUpSignInPrompt;
-
-  /// Banner shown when a legal-document link (Terms / Privacy) fails to open
-  ///
-  /// In en, this message translates to:
-  /// **'Could not open {url}'**
-  String signUpCouldNotOpen(String url);
 
   /// Title of the first onboarding slide
   ///
@@ -6880,23 +6868,11 @@ abstract class AppLocalizations {
   /// **'Report this post'**
   String get clubDetailReportPost;
 
-  /// Title shown when the club fails to load
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t load this club.'**
-  String get clubDetailLoadFailedTitle;
-
   /// Body shown when the club fails to load
   ///
   /// In en, this message translates to:
-  /// **'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.'**
+  /// **'Couldn\'t load this club. It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.'**
   String get clubDetailLoadFailedBody;
-
-  /// Retry button on the club load-error state
-  ///
-  /// In en, this message translates to:
-  /// **'Retry'**
-  String get clubDetailRetry;
 
   /// Error shown when loading the club times out
   ///
@@ -10437,17 +10413,17 @@ abstract class AppLocalizations {
   /// **'One-off donation in your browser'**
   String get proSupportSubtitle;
 
-  /// AppBar title for the Settings > Licenses screen
+  /// AppBar title for the Settings > About & updates screen
   ///
   /// In en, this message translates to:
-  /// **'Licenses'**
-  String get licensesTitle;
+  /// **'About & updates'**
+  String get aboutTitle;
 
   /// Tile title showing the app version
   ///
   /// In en, this message translates to:
   /// **'Version'**
-  String get licensesVersion;
+  String get aboutVersion;
 
   /// Tile title that opens the bundled-licenses page
   ///
@@ -10461,41 +10437,89 @@ abstract class AppLocalizations {
   /// **'Third-party packages bundled with this app'**
   String get licensesOpenSourceSubtitle;
 
-  /// Shown on the Licenses screen while an in-app update check is in flight
+  /// Tile that starts a user-initiated in-app update check
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get aboutCheckForUpdates;
+
+  /// Shown on the About screen while an in-app update check is in flight
   ///
   /// In en, this message translates to:
   /// **'Checking for updates…'**
-  String get licensesCheckingUpdate;
+  String get aboutCheckingUpdate;
 
-  /// Title of the update-available row on the Licenses screen (Play In-App Updates)
+  /// Title of the update-available row on the About screen (Play In-App Updates)
   ///
   /// In en, this message translates to:
   /// **'Update available'**
-  String get licensesUpdateAvailable;
+  String get aboutUpdateAvailable;
 
-  /// Subtitle of the update-available row on the Licenses screen
+  /// Subtitle of the update-available row on the About screen
   ///
   /// In en, this message translates to:
   /// **'A newer version is ready to install.'**
-  String get licensesUpdateAvailableSubtitle;
+  String get aboutUpdateAvailableSubtitle;
 
   /// Button that starts the in-app update to the latest version
   ///
   /// In en, this message translates to:
   /// **'Update'**
-  String get licensesUpdate;
+  String get aboutUpdate;
 
-  /// Shown on the Licenses screen when no newer version is available
+  /// Shown on the About screen when no newer version is available
   ///
   /// In en, this message translates to:
   /// **'You\'re on the latest version'**
-  String get licensesUpToDate;
+  String get aboutUpToDate;
+
+  /// Subtitle shown when the build has no in-app update channel (dev / sideload / iOS)
+  ///
+  /// In en, this message translates to:
+  /// **'This build updates through the store you installed it from.'**
+  String get aboutUpdateUnavailable;
 
   /// Banner shown when the in-app update flow fails to start
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t start the update. Try again from the Play Store.'**
-  String get licensesUpdateFailed;
+  String get aboutUpdateFailed;
+
+  /// Label for the Privacy Policy link (settings About screen + sign-up consent)
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get legalPrivacy;
+
+  /// Label for the Terms of Service link (settings About screen + sign-up consent)
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Service'**
+  String get legalTerms;
+
+  /// Label for the Cookie Notice link on the settings About screen
+  ///
+  /// In en, this message translates to:
+  /// **'Cookie Notice'**
+  String get legalCookieNotice;
+
+  /// Label for the consumer health data privacy notice link on the settings About screen
+  ///
+  /// In en, this message translates to:
+  /// **'Health data privacy'**
+  String get legalHealthDataNotice;
+
+  /// Banner shown when a legal-document link fails to open
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {url}'**
+  String legalCouldNotOpen(String url);
+
+  /// Section header above the legal-document links on the About screen
+  ///
+  /// In en, this message translates to:
+  /// **'Legal'**
+  String get aboutLegalSection;
 
   /// AppBar title for the Settings > Devices screen
   ///
@@ -15086,11 +15110,11 @@ abstract class AppLocalizations {
   /// **'Subscribe, restore purchases, manage billing'**
   String get settingsTabProSubtitle;
 
-  /// Settings landing: Licenses tile subtitle
+  /// Settings landing: About & updates tile subtitle
   ///
   /// In en, this message translates to:
-  /// **'App version and open-source notices'**
-  String get settingsTabLicensesSubtitle;
+  /// **'Version, updates and legal documents'**
+  String get settingsTabAboutSubtitle;
 
   /// Period-summary title for a single week, e.g. 'Week of 13 Apr'
   ///
@@ -16277,8 +16301,14 @@ abstract class AppLocalizations {
   /// No description provided for @nutritionNoTargets.
   ///
   /// In en, this message translates to:
-  /// **'Add your height, weight, age and sex on the web app to see calorie + macro targets.'**
+  /// **'Add your height, weight, age and sex to see calorie + macro targets.'**
   String get nutritionNoTargets;
+
+  /// CTA on the nutrition rings card that opens Settings > Body metrics
+  ///
+  /// In en, this message translates to:
+  /// **'Add body metrics'**
+  String get nutritionAddBodyMetrics;
 
   /// No description provided for @nutritionWeeklyTrend.
   ///

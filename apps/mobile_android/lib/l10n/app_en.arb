@@ -835,6 +835,10 @@
   "@safetyAddLabel": {
     "description": "Label for the add-contact email input"
   },
+  "safetyAddHint": "partner@example.com",
+  "@safetyAddHint": {
+    "description": "Example email placeholder in the add-safety-contact input; the local part is localized, the example.com domain is RFC 2606 reserved and must stay"
+  },
   "safetyAddButton": "Add contact",
   "@safetyAddButton": {
     "description": "Button to add a safety contact"
@@ -1192,17 +1196,9 @@
   "@signUpAcceptPrefix": {
     "description": "Leading text of the terms-acceptance checkbox label, before the Terms of Service link"
   },
-  "signUpTermsLink": "Terms of Service",
-  "@signUpTermsLink": {
-    "description": "Tappable Terms of Service link text inside the terms-acceptance checkbox label"
-  },
   "signUpAcceptConjunction": " and ",
   "@signUpAcceptConjunction": {
     "description": "Conjunction between the Terms of Service and Privacy Policy links in the terms-acceptance checkbox label"
-  },
-  "signUpPrivacyLink": "Privacy Policy",
-  "@signUpPrivacyLink": {
-    "description": "Tappable Privacy Policy link text inside the terms-acceptance checkbox label"
   },
   "signUpErrorConfirmAge": "Please confirm you are 16 or older to continue.",
   "@signUpErrorConfirmAge": {
@@ -1257,15 +1253,6 @@
   "signUpSignInPrompt": "Already have an account? Sign in",
   "@signUpSignInPrompt": {
     "description": "Link from the sign-up screen back to the sign-in screen"
-  },
-  "signUpCouldNotOpen": "Could not open {url}",
-  "@signUpCouldNotOpen": {
-    "description": "Banner shown when a legal-document link (Terms / Privacy) fails to open",
-    "placeholders": {
-      "url": {
-        "type": "String"
-      }
-    }
   },
   "onboardingTrackTitle": "Track every run",
   "@onboardingTrackTitle": {
@@ -5591,17 +5578,9 @@
   "@clubDetailReportPost": {
     "description": "Tooltip on the report-post button on a club feed post"
   },
-  "clubDetailLoadFailedTitle": "Couldn't load this club.",
-  "@clubDetailLoadFailedTitle": {
-    "description": "Title shown when the club fails to load"
-  },
-  "clubDetailLoadFailedBody": "It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.",
+  "clubDetailLoadFailedBody": "Couldn't load this club. It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.",
   "@clubDetailLoadFailedBody": {
     "description": "Body shown when the club fails to load"
-  },
-  "clubDetailRetry": "Retry",
-  "@clubDetailRetry": {
-    "description": "Retry button on the club load-error state"
   },
   "clubDetailTimeoutError": "Connection timed out. Check your network and try again.",
   "@clubDetailTimeoutError": {
@@ -8508,12 +8487,12 @@
   "@proSupportSubtitle": {
     "description": "Subtitle of the Support the app tile"
   },
-  "licensesTitle": "Licenses",
-  "@licensesTitle": {
-    "description": "AppBar title for the Settings > Licenses screen"
+  "aboutTitle": "About & updates",
+  "@aboutTitle": {
+    "description": "AppBar title for the Settings > About & updates screen"
   },
-  "licensesVersion": "Version",
-  "@licensesVersion": {
+  "aboutVersion": "Version",
+  "@aboutVersion": {
     "description": "Tile title showing the app version"
   },
   "licensesOpenSource": "Open-source licenses",
@@ -8524,29 +8503,66 @@
   "@licensesOpenSourceSubtitle": {
     "description": "Subtitle of the Open-source licenses tile"
   },
-  "licensesCheckingUpdate": "Checking for updates…",
-  "@licensesCheckingUpdate": {
-    "description": "Shown on the Licenses screen while an in-app update check is in flight"
+  "aboutCheckForUpdates": "Check for updates",
+  "@aboutCheckForUpdates": {
+    "description": "Tile that starts a user-initiated in-app update check"
   },
-  "licensesUpdateAvailable": "Update available",
-  "@licensesUpdateAvailable": {
-    "description": "Title of the update-available row on the Licenses screen (Play In-App Updates)"
+  "aboutCheckingUpdate": "Checking for updates…",
+  "@aboutCheckingUpdate": {
+    "description": "Shown on the About screen while an in-app update check is in flight"
   },
-  "licensesUpdateAvailableSubtitle": "A newer version is ready to install.",
-  "@licensesUpdateAvailableSubtitle": {
-    "description": "Subtitle of the update-available row on the Licenses screen"
+  "aboutUpdateAvailable": "Update available",
+  "@aboutUpdateAvailable": {
+    "description": "Title of the update-available row on the About screen (Play In-App Updates)"
   },
-  "licensesUpdate": "Update",
-  "@licensesUpdate": {
+  "aboutUpdateAvailableSubtitle": "A newer version is ready to install.",
+  "@aboutUpdateAvailableSubtitle": {
+    "description": "Subtitle of the update-available row on the About screen"
+  },
+  "aboutUpdate": "Update",
+  "@aboutUpdate": {
     "description": "Button that starts the in-app update to the latest version"
   },
-  "licensesUpToDate": "You're on the latest version",
-  "@licensesUpToDate": {
-    "description": "Shown on the Licenses screen when no newer version is available"
+  "aboutUpToDate": "You're on the latest version",
+  "@aboutUpToDate": {
+    "description": "Shown on the About screen when no newer version is available"
   },
-  "licensesUpdateFailed": "Couldn't start the update. Try again from the Play Store.",
-  "@licensesUpdateFailed": {
+  "aboutUpdateUnavailable": "This build updates through the store you installed it from.",
+  "@aboutUpdateUnavailable": {
+    "description": "Subtitle shown when the build has no in-app update channel (dev / sideload / iOS)"
+  },
+  "aboutUpdateFailed": "Couldn't start the update. Try again from the Play Store.",
+  "@aboutUpdateFailed": {
     "description": "Banner shown when the in-app update flow fails to start"
+  },
+  "legalPrivacy": "Privacy Policy",
+  "@legalPrivacy": {
+    "description": "Label for the Privacy Policy link (settings About screen + sign-up consent)"
+  },
+  "legalTerms": "Terms of Service",
+  "@legalTerms": {
+    "description": "Label for the Terms of Service link (settings About screen + sign-up consent)"
+  },
+  "legalCookieNotice": "Cookie Notice",
+  "@legalCookieNotice": {
+    "description": "Label for the Cookie Notice link on the settings About screen"
+  },
+  "legalHealthDataNotice": "Health data privacy",
+  "@legalHealthDataNotice": {
+    "description": "Label for the consumer health data privacy notice link on the settings About screen"
+  },
+  "legalCouldNotOpen": "Could not open {url}",
+  "@legalCouldNotOpen": {
+    "description": "Banner shown when a legal-document link fails to open",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutLegalSection": "Legal",
+  "@aboutLegalSection": {
+    "description": "Section header above the legal-document links on the About screen"
   },
   "devicesTitle": "Devices",
   "@devicesTitle": {
@@ -12244,9 +12260,9 @@
   "@settingsTabProSubtitle": {
     "description": "Settings landing: Pro & support tile subtitle"
   },
-  "settingsTabLicensesSubtitle": "App version and open-source notices",
-  "@settingsTabLicensesSubtitle": {
-    "description": "Settings landing: Licenses tile subtitle"
+  "settingsTabAboutSubtitle": "Version, updates and legal documents",
+  "@settingsTabAboutSubtitle": {
+    "description": "Settings landing: About & updates tile subtitle"
   },
   "periodSummaryWeekOf": "Week of {date}",
   "@periodSummaryWeekOf": {
@@ -12772,7 +12788,11 @@
   "nutritionWater": "Water",
   "nutritionWaterAdd": "Add water",
   "nutritionWaterRemove": "Remove water",
-  "nutritionNoTargets": "Add your height, weight, age and sex on the web app to see calorie + macro targets.",
+  "nutritionNoTargets": "Add your height, weight, age and sex to see calorie + macro targets.",
+  "nutritionAddBodyMetrics": "Add body metrics",
+  "@nutritionAddBodyMetrics": {
+    "description": "CTA on the nutrition rings card that opens Settings > Body metrics"
+  },
   "nutritionWeeklyTrend": "Last 7 days",
   "nutritionCaloriesLeft": "{n} kcal left",
   "@nutritionCaloriesLeft": {

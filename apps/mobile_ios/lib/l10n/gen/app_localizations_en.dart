@@ -623,6 +623,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyAddLabel => 'Contact email';
 
   @override
+  String get safetyAddHint => 'partner@example.com';
+
+  @override
   String get safetyAddButton => 'Add contact';
 
   @override
@@ -903,13 +906,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signUpAcceptPrefix => 'I accept the ';
 
   @override
-  String get signUpTermsLink => 'Terms of Service';
-
-  @override
   String get signUpAcceptConjunction => ' and ';
-
-  @override
-  String get signUpPrivacyLink => 'Privacy Policy';
 
   @override
   String get signUpErrorConfirmAge =>
@@ -949,11 +946,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => 'Already have an account? Sign in';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return 'Could not open $url';
-  }
 
   @override
   String get onboardingTrackTitle => 'Track every run';
@@ -4112,14 +4104,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubDetailReportPost => 'Report this post';
 
   @override
-  String get clubDetailLoadFailedTitle => 'Couldn\'t load this club.';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.';
-
-  @override
-  String get clubDetailRetry => 'Retry';
+      'Couldn\'t load this club. It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.';
 
   @override
   String get clubDetailTimeoutError =>
@@ -6299,10 +6285,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get proSupportSubtitle => 'One-off donation in your browser';
 
   @override
-  String get licensesTitle => 'Licenses';
+  String get aboutTitle => 'About & updates';
 
   @override
-  String get licensesVersion => 'Version';
+  String get aboutVersion => 'Version';
 
   @override
   String get licensesOpenSource => 'Open-source licenses';
@@ -6312,24 +6298,51 @@ class AppLocalizationsEn extends AppLocalizations {
       'Third-party packages bundled with this app';
 
   @override
-  String get licensesCheckingUpdate => 'Checking for updates…';
+  String get aboutCheckForUpdates => 'Check for updates';
 
   @override
-  String get licensesUpdateAvailable => 'Update available';
+  String get aboutCheckingUpdate => 'Checking for updates…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Update available';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'A newer version is ready to install.';
 
   @override
-  String get licensesUpdate => 'Update';
+  String get aboutUpdate => 'Update';
 
   @override
-  String get licensesUpToDate => 'You\'re on the latest version';
+  String get aboutUpToDate => 'You\'re on the latest version';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'This build updates through the store you installed it from.';
+
+  @override
+  String get aboutUpdateFailed =>
       'Couldn\'t start the update. Try again from the Play Store.';
+
+  @override
+  String get legalPrivacy => 'Privacy Policy';
+
+  @override
+  String get legalTerms => 'Terms of Service';
+
+  @override
+  String get legalCookieNotice => 'Cookie Notice';
+
+  @override
+  String get legalHealthDataNotice => 'Health data privacy';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return 'Could not open $url';
+  }
+
+  @override
+  String get aboutLegalSection => 'Legal';
 
   @override
   String get devicesTitle => 'Devices';
@@ -9024,8 +9037,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Subscribe, restore purchases, manage billing';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'App version and open-source notices';
+  String get settingsTabAboutSubtitle => 'Version, updates and legal documents';
 
   @override
   String periodSummaryWeekOf(Object date) {
@@ -9710,7 +9722,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nutritionNoTargets =>
-      'Add your height, weight, age and sex on the web app to see calorie + macro targets.';
+      'Add your height, weight, age and sex to see calorie + macro targets.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Add body metrics';
 
   @override
   String get nutritionWeeklyTrend => 'Last 7 days';

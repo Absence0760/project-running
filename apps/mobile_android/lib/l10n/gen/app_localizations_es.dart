@@ -628,6 +628,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get safetyAddLabel => 'Correo del contacto';
 
   @override
+  String get safetyAddHint => 'pareja@example.com';
+
+  @override
   String get safetyAddButton => 'Añadir contacto';
 
   @override
@@ -911,13 +914,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get signUpAcceptPrefix => 'Acepto las ';
 
   @override
-  String get signUpTermsLink => 'Condiciones del servicio';
-
-  @override
   String get signUpAcceptConjunction => ' y la ';
-
-  @override
-  String get signUpPrivacyLink => 'Política de privacidad';
 
   @override
   String get signUpErrorConfirmAge =>
@@ -957,11 +954,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => '¿Ya tienes una cuenta? Inicia sesión';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return 'No se pudo abrir $url';
-  }
 
   @override
   String get onboardingTrackTitle => 'Registra cada carrera';
@@ -4142,14 +4134,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get clubDetailReportPost => 'Denunciar esta publicación';
 
   @override
-  String get clubDetailLoadFailedTitle => 'No se pudo cargar este club.';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      'Puede que se haya eliminado, o que tu sesión deba actualizarse. Desliza para reintentar, o cierra sesión y vuelve a entrar desde Ajustes.';
-
-  @override
-  String get clubDetailRetry => 'Reintentar';
+      'No se pudo cargar este club. Puede que se haya eliminado, o que tu sesión deba actualizarse. Desliza para reintentar, o cierra sesión y vuelve a entrar desde Ajustes.';
 
   @override
   String get clubDetailTimeoutError =>
@@ -6365,10 +6351,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get proSupportSubtitle => 'Donación única en tu navegador';
 
   @override
-  String get licensesTitle => 'Licencias';
+  String get aboutTitle => 'Acerca de y actualizaciones';
 
   @override
-  String get licensesVersion => 'Versión';
+  String get aboutVersion => 'Versión';
 
   @override
   String get licensesOpenSource => 'Licencias de código abierto';
@@ -6378,24 +6364,51 @@ class AppLocalizationsEs extends AppLocalizations {
       'Paquetes de terceros incluidos con esta app';
 
   @override
-  String get licensesCheckingUpdate => 'Buscando actualizaciones…';
+  String get aboutCheckForUpdates => 'Buscar actualizaciones';
 
   @override
-  String get licensesUpdateAvailable => 'Actualización disponible';
+  String get aboutCheckingUpdate => 'Buscando actualizaciones…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Actualización disponible';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'Hay una versión más reciente lista para instalar.';
 
   @override
-  String get licensesUpdate => 'Actualizar';
+  String get aboutUpdate => 'Actualizar';
 
   @override
-  String get licensesUpToDate => 'Tienes la última versión';
+  String get aboutUpToDate => 'Tienes la última versión';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'Esta versión se actualiza desde la tienda en la que la instalaste.';
+
+  @override
+  String get aboutUpdateFailed =>
       'No se pudo iniciar la actualización. Inténtalo de nuevo desde Play Store.';
+
+  @override
+  String get legalPrivacy => 'Política de privacidad';
+
+  @override
+  String get legalTerms => 'Condiciones del servicio';
+
+  @override
+  String get legalCookieNotice => 'Aviso de cookies';
+
+  @override
+  String get legalHealthDataNotice => 'Privacidad de datos de salud';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return 'No se pudo abrir $url';
+  }
+
+  @override
+  String get aboutLegalSection => 'Legal';
 
   @override
   String get devicesTitle => 'Dispositivos';
@@ -9122,8 +9135,8 @@ class AppLocalizationsEs extends AppLocalizations {
       'Suscríbete, restaura compras, gestiona la facturación';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'Versión de la app y avisos de código abierto';
+  String get settingsTabAboutSubtitle =>
+      'Versión, actualizaciones y documentos legales';
 
   @override
   String periodSummaryWeekOf(Object date) {
@@ -9810,7 +9823,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get nutritionNoTargets =>
-      'Añade tu altura, peso, edad y sexo en la app web para ver los objetivos de calorías y macros.';
+      'Añade tu altura, peso, edad y sexo para ver los objetivos de calorías y macros.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Añadir datos corporales';
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 días';

@@ -9,7 +9,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/settings_account_screen.dart';
-import '../lib/screens/settings_licenses_screen.dart';
+import '../lib/screens/settings_about_screen.dart';
 import '../lib/screens/settings_preferences_screen.dart';
 import '../lib/screens/settings_pro_screen.dart';
 import '../lib/screens/settings_screen.dart';
@@ -84,7 +84,7 @@ void main() {
         'Devices',
         'Gear',
         'Pro & support',
-        'Licenses',
+        'About & updates',
       ]) {
         await tester.scrollUntilVisible(find.text(label), 200,
             scrollable: list);
@@ -152,17 +152,18 @@ void main() {
       expect(find.byType(SettingsProScreen), findsOneWidget);
     });
 
-    testWidgets('Licenses tile pushes SettingsLicensesScreen', (tester) async {
+    testWidgets('About & updates tile pushes SettingsAboutScreen',
+        (tester) async {
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
       await tester.scrollUntilVisible(
-        find.text('Licenses'),
+        find.text('About & updates'),
         200,
         scrollable: find.byType(Scrollable).first,
       );
-      await tester.tap(find.text('Licenses'));
+      await tester.tap(find.text('About & updates'));
       await tester.pumpAndSettle();
-      expect(find.byType(SettingsLicensesScreen), findsOneWidget);
+      expect(find.byType(SettingsAboutScreen), findsOneWidget);
     });
   });
 

@@ -7,6 +7,7 @@
 // test plant a specific unread count.
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,6 +28,42 @@ class _FakeApiClient extends ApiClient {
     if (errorToThrow != null) throw errorToThrow!;
     return unread;
   }
+
+  // The bell pushes ProfileScreen, which fans out its own fetches on
+  // mount; stub them so the destination renders offline.
+  @override
+  Future<ProfileSummary?> fetchProfileSummary(String userId) async =>
+      const ProfileSummary(
+        id: 'test-user-id',
+        displayName: 'Test Runner',
+        followerCount: 0,
+        followingCount: 0,
+        viewerFollows: false,
+      );
+
+  @override
+  Future<List<RunRow>> fetchPublicRunsByUser(String userId,
+          {int limit = 50}) async =>
+      const [];
+
+  @override
+  Future<List<UserProfileRow>> fetchFollowers(String userId,
+          {int limit = 20, int offset = 0}) async =>
+      const [];
+
+  @override
+  Future<List<UserProfileRow>> fetchFollowing(String userId,
+          {int limit = 20, int offset = 0}) async =>
+      const [];
+
+  @override
+  Future<List<AchievementRow>> fetchUserBadges(String userId) async => const [];
+
+  @override
+  Future<List<NotificationView>> fetchNotificationViews({
+    int limit = 100,
+  }) async =>
+      const [];
 }
 
 Future<void> _pump(WidgetTester tester, ApiClient api) async {
@@ -146,6 +183,23 @@ void main() {
         return dec is BoxDecoration && dec.shape == BoxShape.circle;
       });
       expect(dot, findsNothing);
+    });
+
+    testWidgets('tapping the bell lands on the Notifications tab',
+        (tester) async {
+      // The bell used to name its destination with a bare index literal
+      // (3). Inserting the Achievements tab ahead of Notifications moved
+      // Notifications to 4 and silently re-pointed the bell at Following.
+      // Assert on the SELECTED TAB'S LABEL, never its position, so the
+      // same insertion can't pass this test.
+      final api = _FakeApiClient();
+      await _pump(tester, api);
+      await tester.tap(find.byIcon(Icons.notifications_outlined));
+      await tester.pumpAndSettle();
+
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      final selected = tabBar.tabs[tabBar.controller!.index] as Tab;
+      expect(selected.text, 'Notifications');
     });
 
     testWidgets('signed-out user (api.userId == null) does not crash',
