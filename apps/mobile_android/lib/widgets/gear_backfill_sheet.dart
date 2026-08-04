@@ -219,14 +219,15 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          OverflowBar(
+            alignment: MainAxisAlignment.end,
+            overflowAlignment: OverflowBarAlignment.end,
+            spacing: 8,
             children: [
               TextButton(
                 onPressed: _saving ? null : () => Navigator.pop(context, null),
                 child: Text(l10n.gearBackfillSkip),
               ),
-              const SizedBox(width: 8),
               FilledButton(
                 onPressed: _saving ? null : _attach,
                 child: Text(_saving

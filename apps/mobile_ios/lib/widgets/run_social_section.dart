@@ -502,7 +502,7 @@ class _CommentTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(entry.comment.body, style: theme.textTheme.bodyMedium),
-                Row(
+                OverflowBar(
                   children: [
                     if (onReply != null)
                       TextButton(

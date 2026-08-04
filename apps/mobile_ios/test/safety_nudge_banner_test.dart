@@ -70,6 +70,18 @@ void main() {
     expect(shared, 0);
   });
 
+  testWidgets('action row stacks at a narrow width instead of overflowing',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(220, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(tester, onShare: () {}, onDismiss: () {});
+    // Not now + Share share an OverflowBar; at 220 it wraps to a column
+    // instead of throwing a RenderFlex overflow (the harness fails the
+    // test on one).
+    expect(find.widgetWithText(FilledButton, 'Share'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Not now'), findsOneWidget);
+  });
+
   for (final (name, theme) in [
     ('light', AppTheme.light),
     ('dark', AppTheme.dark),

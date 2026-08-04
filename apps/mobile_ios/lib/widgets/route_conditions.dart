@@ -295,8 +295,10 @@ class _RouteConditionsState extends State<RouteConditions> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          OverflowBar(
+            alignment: MainAxisAlignment.end,
+            overflowAlignment: OverflowBarAlignment.end,
+            spacing: 8,
             children: [
               TextButton(
                 onPressed: _submitting
@@ -304,7 +306,6 @@ class _RouteConditionsState extends State<RouteConditions> {
                     : () => setState(() => _composerOpen = false),
                 child: Text(l10n.routeConditionsCancel),
               ),
-              const SizedBox(width: 8),
               FilledButton(
                 onPressed: _submitting ? null : _submit,
                 child: Text(_submitting

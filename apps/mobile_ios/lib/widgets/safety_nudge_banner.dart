@@ -48,8 +48,10 @@ class SafetyNudgeBanner extends StatelessWidget {
                 ),
               ],
             ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            OverflowBar(
+              alignment: MainAxisAlignment.end,
+              overflowAlignment: OverflowBarAlignment.end,
+              spacing: 4,
               children: [
                 TextButton(
                   onPressed: onDismiss,
@@ -60,7 +62,6 @@ class SafetyNudgeBanner extends StatelessWidget {
                             scheme.onInverseSurface.withValues(alpha: 0.75)),
                   ),
                 ),
-                const SizedBox(width: 4),
                 FilledButton(
                   onPressed: onShare,
                   child: Text(l10n.runSafetyNudgeShareAction),

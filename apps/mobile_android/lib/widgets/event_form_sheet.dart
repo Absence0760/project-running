@@ -379,14 +379,15 @@ class _EventFormState extends State<_EventForm> {
               ),
             ],
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            OverflowBar(
+              alignment: MainAxisAlignment.end,
+              overflowAlignment: OverflowBarAlignment.end,
+              spacing: 8,
               children: [
                 TextButton(
                   onPressed: _busy ? null : () => Navigator.maybePop(context),
                   child: Text(l10n.eventFormCancel),
                 ),
-                const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _busy ? null : _submit,
                   child: _busy

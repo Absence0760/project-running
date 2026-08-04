@@ -445,8 +445,10 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                      OverflowBar(
+                        alignment: MainAxisAlignment.end,
+                        overflowAlignment: OverflowBarAlignment.end,
+                        spacing: 8,
                         children: [
                           TextButton(
                             onPressed: _uploading
@@ -457,7 +459,6 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
                                     }),
                             child: Text(l10n.routePhotosCancel),
                           ),
-                          const SizedBox(width: 8),
                           FilledButton(
                             onPressed: _uploading ? null : _uploadPending,
                             child: Text(_uploading
@@ -533,8 +534,9 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      overflowAlignment: OverflowBarAlignment.end,
                       children: [
                         TextButton(
                           onPressed: () => setState(() => _editingId = null),

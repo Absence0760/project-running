@@ -158,14 +158,15 @@ class _RunRaceSectionState extends State<RunRaceSection> {
             children: [
               Text(l.racesMatchPrompt(candidate.name)),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              OverflowBar(
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
+                spacing: 8,
                 children: [
                   TextButton(
                     onPressed: () => setState(() => _dismissed = true),
                     child: Text(l.racesMatchDismiss),
                   ),
-                  const SizedBox(width: 8),
                   FilledButton(
                     onPressed: _confirmMatch,
                     child: Text(l.racesMatchConfirm),

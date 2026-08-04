@@ -128,14 +128,15 @@ class _RunGearChipsState extends State<RunGearChips> {
                     ),
                   ),
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  spacing: 8,
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
                       child: Text(l10n.runGearChipsCancel),
                     ),
-                    const SizedBox(width: 8),
                     FilledButton(
                       onPressed: active.isEmpty
                           ? null
