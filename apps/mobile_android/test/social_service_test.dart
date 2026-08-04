@@ -439,37 +439,6 @@ void main() {
     });
   });
 
-  group('hashHue', () {
-    test('stays in [0, 360) and is deterministic per id', () {
-      for (final id in ['a', 'user-123', 'ZZZ', '😀']) {
-        final h = hashHue(id);
-        expect(h, inInclusiveRange(0, 359));
-        expect(hashHue(id), h, reason: 'same id hashes to the same hue');
-      }
-    });
-
-    test('different ids generally differ (avatar colour-diffing)', () {
-      expect(hashHue('alice') == hashHue('bob'), isFalse);
-    });
-  });
-
-  group('initialFor', () {
-    test('uppercases the first letter', () {
-      expect(initialFor('alice'), 'A');
-      expect(initialFor('Bob'), 'B');
-    });
-
-    test('null / empty / whitespace falls back to "?"', () {
-      expect(initialFor(null), '?');
-      expect(initialFor(''), '?');
-      expect(initialFor('   '), '?');
-    });
-
-    test('trims leading whitespace before taking the initial', () {
-      expect(initialFor('  zed'), 'Z');
-    });
-  });
-
   group('fmtPace', () {
     test('null → empty string', () {
       expect(fmtPace(null), '');

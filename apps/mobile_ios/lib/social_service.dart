@@ -1965,21 +1965,6 @@ class SocialService extends ChangeNotifier {
   }
 }
 
-/// Hash a user id to a hue 0-360 so avatars colour-diff consistently.
-int hashHue(String id) {
-  var h = 0;
-  for (final c in id.codeUnits) {
-    h = (h * 31 + c) & 0x7fffffff;
-  }
-  return h % 360;
-}
-
-/// Initial letter for an avatar bubble.
-String initialFor(String? name) {
-  final c = (name ?? '?').trim();
-  return c.isEmpty ? '?' : c.substring(0, 1).toUpperCase();
-}
-
 /// Localized relative-time label for a feed/comment timestamp. The
 /// canonical formatter — feed_screen + run_social_section delegate here
 /// so every relative timestamp reads consistently and in the user's
