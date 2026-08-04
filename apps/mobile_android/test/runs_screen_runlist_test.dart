@@ -14,6 +14,7 @@ import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/runs_screen.dart';
+import '../lib/widgets/surface_peer_strip.dart';
 
 /// Signed-in fake with no remote runs — keeps `_fetchRemote` off the network
 /// so the run-list mode renders purely from the seeded local store.
@@ -48,8 +49,8 @@ void main() {
   }
 
   /// Mount the run-list surface (no gymStore) the way the Fitness hub's Runs
-  /// sub-tab does, with the Routes + Plans AppBar actions wired so the bar is
-  /// as crowded as it gets in production.
+  /// sub-tab does, with the labelled peer strip wired so the screen is as
+  /// crowded as it gets in production.
   Future<void> pumpRunList(
     WidgetTester tester, {
     List<Run> runs = const [],
@@ -74,8 +75,12 @@ void main() {
         runStore: runStore,
         routeStore: LocalRouteStore(),
         preferences: prefs,
-        onOpenRoutes: () {},
-        onOpenPlans: () {},
+        surfacePeers: [
+          const SurfacePeer(label: 'Runs'),
+          SurfacePeer(label: 'Routes', onTap: () {}),
+          SurfacePeer(label: 'Plans', onTap: () {}),
+          SurfacePeer(label: 'Races', onTap: () {}),
+        ],
       ),
     ));
     await tester.pumpAndSettle();
@@ -84,8 +89,8 @@ void main() {
   testWidgets(
       'a long custom date-range title does not overflow the crowded AppBar',
       (tester) async {
-    // A realistic phone width where the six AppBar actions (Routes, Plans,
-    // heatmap, range, sort, refresh) leave the title only a narrow slot —
+    // A realistic phone width where the AppBar actions (range, sort, refresh)
+    // leave the title only a narrow slot —
     // enough room for the ellipsised label + count, but not for the full
     // two-date span, so the ellipsis is what keeps it from overflowing.
     await tester.binding.setSurfaceSize(const Size(420, 800));

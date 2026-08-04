@@ -718,6 +718,30 @@
   "@fitnessRunsPlans": {
     "description": "Label for the Training plans entry on the Fitness hub's Runs sub-tab"
   },
+  "runSurfaceLabel": "Run surface sections",
+  "@runSurfaceLabel": {
+    "description": "Accessibility label for the labelled peer strip on the run surface"
+  },
+  "runSurfaceTabPlans": "Plans",
+  "@runSurfaceTabPlans": {
+    "description": "Run surface peer strip entry opening the training plan library"
+  },
+  "runSurfaceTabRaces": "Races",
+  "@runSurfaceTabRaces": {
+    "description": "Run surface peer strip entry opening the race calendar"
+  },
+  "gymSurfaceLabel": "Gym sections",
+  "@gymSurfaceLabel": {
+    "description": "Accessibility label for the labelled peer strip on the gym surface"
+  },
+  "gymTabLog": "Log",
+  "@gymTabLog": {
+    "description": "Gym peer strip entry for the logged-workout list"
+  },
+  "gymTabRecords": "Records",
+  "@gymTabRecords": {
+    "description": "Gym peer strip entry opening personal records"
+  },
   "homeAskCoach": "Ask your coach",
   "@homeAskCoach": {
     "description": "Title of the pinned coach entry at the top of the Home dashboard"

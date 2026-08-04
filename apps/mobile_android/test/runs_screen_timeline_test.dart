@@ -17,6 +17,7 @@ import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/runs_screen.dart';
 import '../lib/widgets/activity_timeline_list.dart';
+import '../lib/widgets/surface_peer_strip.dart';
 
 /// Fake client: signed in, no remote runs. The History timeline is now built
 /// from the LOCAL stores (not `fetchActivities`), so the test seeds those
@@ -306,12 +307,11 @@ void main() {
     expect(tester.getSize(find.byType(ActivityTimelineList)).width, 800);
   });
 
-  /// Mount the run-list (Runs sub-tab) shape with the Routes + Plans AppBar
-  /// callbacks wired, the way the Fitness hub's Runs tab does.
+  /// Mount the run-list (Runs sub-tab) shape with the labelled peer strip
+  /// wired, the way the Fitness hub's Runs tab does.
   Future<void> pumpRunList(
     WidgetTester tester, {
-    VoidCallback? onOpenRoutes,
-    VoidCallback? onOpenPlans,
+    List<SurfacePeer>? peers,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = Preferences();
@@ -327,39 +327,72 @@ void main() {
         runStore: runStore,
         routeStore: LocalRouteStore(),
         preferences: prefs,
-        onOpenRoutes: onOpenRoutes,
-        onOpenPlans: onOpenPlans,
+        surfacePeers: peers,
       ),
     ));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Runs sub-tab surfaces both Routes + Plans AppBar actions; Plans fires its callback',
+  testWidgets(
+      'the run surface renders every peer as a label and fires the tapped one',
       (tester) async {
-    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     var routesTaps = 0;
     var plansTaps = 0;
-    await pumpRunList(
-      tester,
-      onOpenRoutes: () => routesTaps++,
-      onOpenPlans: () => plansTaps++,
-    );
+    var racesTaps = 0;
+    await pumpRunList(tester, peers: [
+      const SurfacePeer(label: 'Runs'),
+      SurfacePeer(label: 'Routes', onTap: () => routesTaps++),
+      SurfacePeer(label: 'Plans', onTap: () => plansTaps++),
+      SurfacePeer(label: 'Races', onTap: () => racesTaps++),
+    ]);
 
-    final routesBtn = find.byTooltip(l10n.fitnessRunsRoutes);
-    final plansBtn = find.byTooltip(l10n.fitnessRunsPlans);
-    expect(routesBtn, findsOneWidget);
-    expect(plansBtn, findsOneWidget);
+    final strip = find.byType(SurfacePeerStrip);
+    expect(strip, findsOneWidget);
+    for (final label in ['Runs', 'Routes', 'Plans', 'Races']) {
+      expect(find.descendant(of: strip, matching: find.text(label)),
+          findsOneWidget);
+    }
 
-    await tester.tap(plansBtn);
+    await tester.tap(find.descendant(of: strip, matching: find.text('Plans')));
     await tester.pumpAndSettle();
     expect(plansTaps, 1);
     expect(routesTaps, 0);
+    expect(racesTaps, 0);
   });
 
-  testWidgets('no Plans action when onOpenPlans is null', (tester) async {
-    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+  testWidgets('the current peer is marked selected and does not navigate',
+      (tester) async {
+    await pumpRunList(tester, peers: [
+      const SurfacePeer(label: 'Runs'),
+      SurfacePeer(label: 'Routes', onTap: () {}),
+    ]);
+
+    final chips = tester.widgetList<ChoiceChip>(find.byType(ChoiceChip)).toList();
+    expect(chips.length, 2);
+    expect(chips[0].selected, isTrue);
+    expect(chips[1].selected, isFalse);
+
+    // Tapping the peer you are already on is a no-op, not a re-push.
+    await tester.tap(find.text('Runs'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RunsScreen), findsOneWidget);
+  });
+
+  testWidgets('no peer strip on a mount that supplies none', (tester) async {
     await pumpRunList(tester);
-    expect(find.byTooltip(l10n.fitnessRunsPlans), findsNothing);
-    expect(find.byTooltip(l10n.fitnessRunsRoutes), findsNothing);
+    expect(find.byType(SurfacePeerStrip), findsNothing);
+  });
+
+  testWidgets('the peer strip survives 320dp with the longest German labels',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpRunList(tester, peers: [
+      const SurfacePeer(label: 'Läufe'),
+      SurfacePeer(label: 'Routen', onTap: () {}),
+      SurfacePeer(label: 'Trainingspläne', onTap: () {}),
+      SurfacePeer(label: 'Rennkalender', onTap: () {}),
+    ]);
+    expect(tester.takeException(), isNull);
   });
 }

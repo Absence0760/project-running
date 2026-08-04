@@ -528,6 +528,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get fitnessRunsPlans => 'Planos de treino';
 
   @override
+  String get runSurfaceLabel => 'Seções da área de corrida';
+
+  @override
+  String get runSurfaceTabPlans => 'Planos';
+
+  @override
+  String get runSurfaceTabRaces => 'Corridas';
+
+  @override
+  String get gymSurfaceLabel => 'Seções da academia';
+
+  @override
+  String get gymTabLog => 'Registro';
+
+  @override
+  String get gymTabRecords => 'Recordes';
+
+  @override
   String get homeAskCoach => 'Pergunte ao seu treinador';
 
   @override
@@ -12955,6 +12973,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get fitnessRunsPlans => 'Planos de treino';
+
+  @override
+  String get runSurfaceLabel => 'Seções da área de corrida';
+
+  @override
+  String get runSurfaceTabPlans => 'Planos';
+
+  @override
+  String get runSurfaceTabRaces => 'Corridas';
+
+  @override
+  String get gymSurfaceLabel => 'Seções da academia';
+
+  @override
+  String get gymTabLog => 'Registro';
+
+  @override
+  String get gymTabRecords => 'Recordes';
 
   @override
   String get homeAskCoach => 'Pergunte ao seu treinador';

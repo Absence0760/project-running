@@ -528,6 +528,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get fitnessRunsPlans => 'Planes de entrenamiento';
 
   @override
+  String get runSurfaceLabel => 'Secciones del área de carrera';
+
+  @override
+  String get runSurfaceTabPlans => 'Planes';
+
+  @override
+  String get runSurfaceTabRaces => 'Carreras';
+
+  @override
+  String get gymSurfaceLabel => 'Secciones del gimnasio';
+
+  @override
+  String get gymTabLog => 'Registro';
+
+  @override
+  String get gymTabRecords => 'Récords';
+
+  @override
   String get homeAskCoach => 'Pregunta a tu entrenador';
 
   @override

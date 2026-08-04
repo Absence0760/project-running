@@ -16,8 +16,12 @@ import '../lib/preferences.dart';
 import '../lib/screens/fitness_hub_screen.dart';
 import '../lib/screens/gym_screen.dart';
 import '../lib/screens/nutrition_screen.dart';
+import '../lib/screens/plans_screen.dart';
+import '../lib/screens/races_screen.dart';
+import '../lib/screens/routes_screen.dart';
 import '../lib/training_service.dart';
 import '../lib/widgets/activity_timeline_list.dart';
+import '../lib/widgets/surface_peer_strip.dart';
 
 void main() {
   setUpAll(() => initializeDateFormatting());
@@ -131,14 +135,52 @@ void main() {
     expect(find.text('Lifts'), findsNothing);
   });
 
-  testWidgets('Runs sub-tab surfaces the relocated Routes entry',
+  testWidgets('Runs sub-tab renders the labelled peer strip',
       (tester) async {
     await pump(tester, runs: [runRow('r1')]);
     await tester.tap(find.text('Runs').first);
     await tester.pumpAndSettle();
-    // The run-management surface carries a Routes action (relocated out of
-    // Social) — a route icon button in its AppBar.
-    expect(find.byIcon(Icons.route), findsOneWidget);
+    // Every run-planning surface is a named peer, not a tooltip-only glyph.
+    final strip = find.byType(SurfacePeerStrip);
+    expect(strip, findsOneWidget);
+    for (final label in ['Runs', 'Routes', 'Plans', 'Races']) {
+      expect(find.descendant(of: strip, matching: find.text(label)),
+          findsOneWidget);
+    }
+  });
+
+  testWidgets('the Races peer opens the race calendar with no provider key',
+      (tester) async {
+    await pump(tester, runs: [runRow('r1')]);
+    await tester.tap(find.text('Runs').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+        of: find.byType(SurfacePeerStrip), matching: find.text('Races')));
+    await tester.pumpAndSettle();
+    // No RunSignUp / ChronoTrack key and no signed-in client: the calendar is
+    // still reachable, it just has nothing to list.
+    expect(find.byType(RacesScreen), findsOneWidget);
+  });
+
+  testWidgets('the Routes peer opens the relocated route library',
+      (tester) async {
+    await pump(tester, runs: [runRow('r1')]);
+    await tester.tap(find.text('Runs').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+        of: find.byType(SurfacePeerStrip), matching: find.text('Routes')));
+    await tester.pumpAndSettle();
+    expect(find.byType(RoutesScreen), findsOneWidget);
+  });
+
+  testWidgets('the Plans peer opens the training plan library', (tester) async {
+    await pump(tester, runs: [runRow('r1')]);
+    await tester.tap(find.text('Runs').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+        of: find.byType(SurfacePeerStrip), matching: find.text('Plans')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PlansScreen), findsOneWidget);
   });
 
   testWidgets('Runs sub-tab hides the cloud sync slot; All keeps it',
@@ -161,9 +203,10 @@ void main() {
     await pump(tester, runs: [runRow('r1')]);
     await tester.tap(find.text('Runs').first);
     await tester.pumpAndSettle();
-    // "Runs" appears twice: the hub's tab label + the sub-tab's static
-    // AppBar title (matching the Gym / Nutrition siblings).
-    expect(find.text('Runs'), findsNWidgets(2));
+    // "Runs" appears three times: the hub's tab label, the sub-tab's static
+    // AppBar title (matching the Gym / Nutrition siblings), and the current
+    // peer in the surface strip.
+    expect(find.text('Runs'), findsNWidgets(3));
     // The range + count status the title otherwise carries renders as the
     // filter header's leading row instead (default range = This week).
     expect(find.text('This week · 1 run'), findsOneWidget);
