@@ -305,8 +305,12 @@ class _RunSocialSectionState extends State<RunSocialSection> {
           // Section header + kudos pill
           Row(
             children: [
-              Text(l10n.runSocialActivity, style: theme.textTheme.titleMedium),
-              const Spacer(),
+              Expanded(
+                child: Text(l10n.runSocialActivity,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium),
+              ),
               _KudosPill(
                 count: _eng.kudosCount,
                 viewerHas: _eng.viewerHasKudos,

@@ -156,11 +156,15 @@ class _Band extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                l10n.runWorkoutStepCounter(
-                    state.currentIndex + 1, state.totalSteps),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.outline,
+              Expanded(
+                child: Text(
+                  l10n.runWorkoutStepCounter(
+                      state.currentIndex + 1, state.totalSteps),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
               ),
               Text(

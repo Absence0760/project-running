@@ -366,14 +366,24 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
               Icon(Icons.photo_library_outlined,
                   size: 18, color: cs.onSurfaceVariant),
               const SizedBox(width: 6),
-              Text(l10n.clubPhotosTitle, style: theme.textTheme.titleMedium),
-              if (_photos.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                Text('(${_photos.length})',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant)),
-              ],
-              const Spacer(),
+              Expanded(
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(l10n.clubPhotosTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium),
+                    ),
+                    if (_photos.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Text('(${_photos.length})',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant)),
+                    ],
+                  ],
+                ),
+              ),
               if (widget.canUpload)
                 TextButton.icon(
                   onPressed: _pending == null ? _pickPhoto : null,
