@@ -3027,9 +3027,8 @@ class _SegmentStatsCard extends StatelessWidget {
         _stat(l10n.runDetailSegStatGain, '+${segment.eleGainMetres.round()} m'),
     ];
     return Card(
-      elevation: 4,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [

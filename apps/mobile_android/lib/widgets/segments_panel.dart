@@ -358,7 +358,7 @@ class _CreateForm extends StatelessWidget {
     final hint = l10n.segmentsPanelRouteHint(routeDistanceM.round());
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

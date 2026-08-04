@@ -957,7 +957,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   Widget _heroCard(ThemeData theme, AppLocalizations l10n, TrainingPlanRow p,
       int pct, int done, int total) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),
@@ -1051,7 +1051,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       borderRadius: BorderRadius.circular(16),
       onTap: () => _openWorkout(wo),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,

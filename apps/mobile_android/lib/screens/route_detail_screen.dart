@@ -1384,7 +1384,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                         const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
                     child: Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

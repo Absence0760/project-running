@@ -152,7 +152,7 @@ class _RunRaceSectionState extends State<RunRaceSection> {
       return Card(
         margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

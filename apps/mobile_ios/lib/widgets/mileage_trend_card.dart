@@ -69,7 +69,7 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
       // — field report: "the Mileage modal looks less wide (thinner)
       // than the other modals on the dashboard."
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
