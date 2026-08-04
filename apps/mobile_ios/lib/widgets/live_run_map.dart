@@ -1200,7 +1200,7 @@ class _CourseMarkerPin extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
               color: Color(0xFF1E293B),
             ),

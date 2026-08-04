@@ -349,7 +349,6 @@ class _ClubTile extends StatelessWidget {
                           child: Text(
                             AppLocalizations.of(context).clubsBadgePrivate,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              fontSize: 9,
                               letterSpacing: 0.8,
                               color: theme.colorScheme.outline,
                             ),

@@ -228,7 +228,6 @@ class _PlanCalendarState extends State<PlanCalendar> {
                 color: kindColor,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.4,
-                fontSize: 9,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -238,7 +237,6 @@ class _PlanCalendarState extends State<PlanCalendar> {
                 fmtKm(wo.targetDistanceM, 1),
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
-                  fontSize: 9,
                 ),
               ),
             if (isDone)
