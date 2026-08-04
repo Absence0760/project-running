@@ -75,15 +75,18 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
           children: [
             Row(
               children: [
-                Text(
-                  l10n.mileageTitle,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.06,
-                    color: theme.colorScheme.outline,
+                Expanded(
+                  child: Text(
+                    l10n.mileageTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.06,
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 _ViewToggle(
                   view: _view,
                   onChanged: (v) => setState(() => _view = v),

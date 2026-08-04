@@ -71,6 +71,36 @@ void main() {
       expect(find.byIcon(Icons.place), findsNothing);
     });
 
+    testWidgets('long title + meet label survive a narrow width without '
+        'overflowing', (tester) async {
+      const longTitle =
+          'Jahresabschluss-Vereinsmeisterschaft mit anschliessendem '
+          'gemeinsamem Fruehstueckslauf am Flussufer';
+      const longMeet =
+          'Treffpunkt am Haupteingang des Stadtparks neben dem grossen '
+          'Brunnen gegenueber der Strassenbahnhaltestelle';
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: UpcomingEventCard(
+                  event: _event(title: longTitle, meetLabel: longMeet),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      // Title and meet label must ellipsize; a RenderFlex overflow fails
+      // the test via the harness.
+      expect(find.text(longTitle), findsOneWidget);
+      expect(find.text(longMeet), findsOneWidget);
+    });
+
     testWidgets('calls onTap when tapped', (tester) async {
       var taps = 0;
       await _pump(tester, _event(), onTap: () => taps++);
