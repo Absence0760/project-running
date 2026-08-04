@@ -4016,7 +4016,6 @@ class _RunScreenState extends State<RunScreen> {
     // RouteMiniMap mounted under the digit.
     final isCountdown = _state == _ScreenState.countdown;
     final l10n = AppLocalizations.of(context);
-    final semantic = AppSemanticColors.of(context);
     return Stack(
       children: [
         // Always-mounted map. During countdown stats.currentPosition may
