@@ -64,7 +64,6 @@ class IntensityCard extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     return Card(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

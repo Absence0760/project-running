@@ -31,7 +31,6 @@ class TrainingLoadChart extends StatelessWidget {
     final last = points.isEmpty ? null : points.last;
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
