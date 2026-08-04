@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart';
 import '../lib/event_category.dart';
 import '../lib/event_gym_template.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -414,6 +415,7 @@ void main() {
       await pumpEvent(tester, social);
       expect(find.text('Jamie'), findsOneWidget);
       expect(find.text('Riley'), findsOneWidget);
+      expect(find.byType(IdentityAvatar), findsNWidgets(2));
     });
 
     testWidgets('an event with no RSVPs shows the no-RSVPs hint',

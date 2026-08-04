@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:core_models/core_models.dart' as cm;
@@ -444,24 +445,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: HSLColor.fromAHSL(
-                1, hashHue(c.row.id).toDouble(), 0.55, 0.55).toColor(),
-            ),
-            child: Text(
-              initialFor(c.row.name),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          IdentityAvatar(seed: c.row.id, name: c.row.name, size: 56, fontSize: 24),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -740,23 +724,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         children: [
           Row(
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: HSLColor.fromAHSL(
-                    1, hashHue(p.row.authorId).toDouble(), 0.5, 0.55).toColor(),
-                ),
-                child: Text(
-                  initialFor(p.authorName),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              IdentityAvatar(
+                  seed: p.row.authorId,
+                  name: p.authorName,
+                  size: 32,
+                  fontSize: 14),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(

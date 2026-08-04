@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/club_detail_screen.dart';
 import '../lib/social_service.dart';
@@ -658,6 +659,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.text('Track Club'), findsWidgets);
+      expect(find.byType(IdentityAvatar), findsOneWidget);
       expect(find.text('Feed'), findsOneWidget);
       expect(find.text('Events'), findsOneWidget);
       expect(find.text('Members'), findsOneWidget);

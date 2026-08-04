@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart';
 import '../lib/geocoding.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/clubs_screen.dart';
@@ -189,6 +190,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       expect(find.text('Morning Milers'), findsOneWidget);
       expect(find.text('Sunset Striders'), findsOneWidget);
+      expect(find.byType(IdentityAvatar), findsNWidgets(2));
     });
 
     testWidgets('a private club shows the PRIVATE badge', (tester) async {
