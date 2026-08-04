@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -11,7 +12,12 @@ import '../lib/gym_prs.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/local_routine_store.dart';
+import '../lib/screens/gym_records_screen.dart';
 import '../lib/screens/gym_screen.dart';
+import '../lib/screens/routine_library_screen.dart';
+import '../lib/screens/sessions_screen.dart';
+import '../lib/widgets/pending_sync_banner.dart';
+import '../lib/widgets/surface_peer_strip.dart';
 
 /// No-op so a resumed session screen's `WakelockPlus.enable()` / `.disable()`
 /// don't hit the real pigeon channel (which throws under flutter_test).
@@ -82,6 +88,36 @@ Set<String> _referencePrWorkoutIds(List<StoredGymWorkout> workouts) {
 class _OfflineFakeApi extends ApiClient {
   @override
   String? get userId => null;
+}
+
+/// Signed in but unreachable: the mount's refresh throws, so no store write
+/// fires in the fake-async zone, while `userId` is non-null so the
+/// server-backed peers (session plans) are offered.
+class _SignedInOfflineApi extends ApiClient {
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>>
+      fetchGymWorkoutsWithSets({int limit = 50}) async =>
+          throw Exception('offline');
+}
+
+/// Signed in and believed online, but the mount's fetch never resolves — the
+/// state that keeps the failed-sync banner (message + Retry) on screen while a
+/// pending row is still queued.
+class _HangingApi extends ApiClient {
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>>
+      fetchGymWorkoutsWithSets({int limit = 50}) => Completer<
+          List<
+              ({
+                Map<String, dynamic> workout,
+                List<Map<String, dynamic>> sets
+              })>>().future;
 }
 
 /// Online api whose fetches succeed but whose workout push is rejected —
@@ -389,6 +425,136 @@ void main() {
       } finally {
         dir.deleteSync(recursive: true);
       }
+    });
+  });
+
+  group('GymScreen peer strip (issue #666 T1)', () {
+    Future<
+        ({
+          LocalGymStore store,
+          LocalRoutineStore routines,
+          Directory dir
+        })> seed(WidgetTester tester, {bool withRecord = false}) async {
+      late LocalGymStore store;
+      late LocalRoutineStore routines;
+      late Directory dir;
+      await tester.runAsync(() async {
+        dir = Directory.systemTemp.createTempSync('gym_screen_peers_');
+        store = LocalGymStore();
+        await store.init(overrideDirectory: Directory('${dir.path}/gym'));
+        routines = LocalRoutineStore();
+        await routines.init(overrideDirectory: Directory('${dir.path}/routines'));
+        if (withRecord) {
+          await store.createLocal(
+            title: 'Push day',
+            startedAt: DateTime.utc(2026, 2, 1),
+            sets: const [
+              (
+                exerciseName: 'Bench',
+                reps: 5,
+                weightKg: 100.0,
+                rpe: null,
+                setType: null,
+                durationS: null,
+                exerciseId: null
+              ),
+            ],
+          );
+        }
+      });
+      addTearDown(() => dir.deleteSync(recursive: true));
+      return (store: store, routines: routines, dir: dir);
+    }
+
+    testWidgets('names Log + Routines; Records only once a record exists',
+        (tester) async {
+      final s = await seed(tester);
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pumpAndSettle();
+
+      final strip = find.byType(SurfacePeerStrip);
+      expect(strip, findsOneWidget);
+      expect(
+          find.descendant(of: strip, matching: find.text('Log')), findsOneWidget);
+      expect(find.descendant(of: strip, matching: find.text('Routines')),
+          findsOneWidget);
+      expect(find.descendant(of: strip, matching: find.text('Records')),
+          findsNothing);
+      // Signed out, so the server-backed session plans are not offered.
+      expect(find.descendant(of: strip, matching: find.text('Sessions')),
+          findsNothing);
+    });
+
+    testWidgets('Records appears once a weighted set is logged, and opens',
+        (tester) async {
+      final s = await seed(tester, withRecord: true);
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pumpAndSettle();
+
+      final records = find.descendant(
+          of: find.byType(SurfacePeerStrip), matching: find.text('Records'));
+      expect(records, findsOneWidget);
+      await tester.tap(records);
+      await tester.pumpAndSettle();
+      expect(find.byType(GymRecordsScreen), findsOneWidget);
+    });
+
+    testWidgets('Routines opens the routine library', (tester) async {
+      final s = await seed(tester);
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+          of: find.byType(SurfacePeerStrip), matching: find.text('Routines')));
+      await tester.pumpAndSettle();
+      expect(find.byType(RoutineLibraryScreen), findsOneWidget);
+    });
+
+    testWidgets('a signed-in gym reaches its own session plans',
+        (tester) async {
+      final s = await seed(tester);
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: GymScreen(
+          api: _SignedInOfflineApi(),
+          store: s.store,
+          routineStore: s.routines,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final sessions = find.descendant(
+          of: find.byType(SurfacePeerStrip), matching: find.text('Sessions'));
+      expect(sessions, findsOneWidget);
+      await tester.tap(sessions);
+      await tester.pumpAndSettle();
+      expect(find.byType(SessionsScreen), findsOneWidget);
+    });
+
+    testWidgets('the strip and the sync banner survive 320dp in German',
+        (tester) async {
+      // The narrowest phone the app targets, in the longest locale, with the
+      // whole chrome stack up at once: peer strip + the online failed-sync
+      // banner over the workout list. The banner's Retry used to take its
+      // intrinsic width first and starve the message to a few pixels, growing
+      // the banner past the viewport as soon as the strip claimed its 64dp.
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final s = await seed(tester, withRecord: true);
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('de'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: GymScreen(
+          api: _HangingApi(),
+          store: s.store,
+          routineStore: s.routines,
+        ),
+      ));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(SurfacePeerStrip), findsOneWidget);
+      expect(find.byType(PendingSyncBanner), findsOneWidget);
     });
   });
 

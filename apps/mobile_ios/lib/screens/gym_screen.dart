@@ -14,11 +14,13 @@ import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/pending_sync_banner.dart';
+import '../widgets/surface_peer_strip.dart';
 import '../widgets/top_banner.dart';
 import 'gym_detail_screen.dart';
 import 'gym_records_screen.dart';
 import 'gym_session_screen.dart';
 import 'routine_library_screen.dart';
+import 'sessions_screen.dart';
 
 /// Total working volume (Σ reps·weight, rounded) for a stored workout — the
 /// list-row stat. Sets missing reps or weight contribute nothing.
@@ -120,6 +122,11 @@ List<String> gymExerciseSuggestions(List<StoredGymWorkout> workouts) {
 /// [LocalGymStore] so logging a lift works offline; a best-effort server
 /// fetch overlays the latest workouts on mount and pending writes drain on
 /// the next online refresh.
+///
+/// A labelled peer strip `Log · Routines · Sessions · Records` sits above the
+/// list, mirroring web `/gym`'s header links — the gym's planning surfaces
+/// (routines, session plans) are named destinations rather than tooltip-only
+/// AppBar glyphs (decisions § 488).
 class GymScreen extends StatefulWidget {
   /// Optional. When null (no Supabase env vars OR signed-out) the screen
   /// reads + writes exclusively to [LocalGymStore]; the pending queue
@@ -260,6 +267,39 @@ class _GymScreenState extends State<GymScreen> {
     );
   }
 
+  void _openSessions(ApiClient api) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SessionsScreen(api: api, gymStore: widget.store),
+      ),
+    );
+  }
+
+  void _openRecords() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GymRecordsScreen(api: widget.api, store: widget.store),
+      ),
+    );
+  }
+
+  /// `Log · Routines · Sessions · Records`. Routines waits on the routine
+  /// store's disk hydration; Sessions reads the server, so it needs a
+  /// signed-in client; Records is data-gated exactly as web's header link is.
+  List<SurfacePeer> _peers(
+      AppLocalizations l10n, List<StoredGymWorkout> workouts) {
+    final api = widget.api;
+    return [
+      SurfacePeer(label: l10n.gymTabLog),
+      if (_routineStoreReady)
+        SurfacePeer(label: l10n.gymRoutineTitle, onTap: _openRoutines),
+      if (api != null && api.userId != null)
+        SurfacePeer(label: l10n.sessionTitle, onTap: () => _openSessions(api)),
+      if (exerciseRecords(gymSetHistory(workouts)).isNotEmpty)
+        SurfacePeer(label: l10n.gymTabRecords, onTap: _openRecords),
+    ];
+  }
+
   Future<void> _open(StoredGymWorkout w) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -371,25 +411,6 @@ class _GymScreenState extends State<GymScreen> {
       appBar: AppBar(
         title: Text(l10n.gymTitle),
         actions: [
-          if (_routineStoreReady)
-            IconButton(
-              tooltip: l10n.gymRoutineTitle,
-              icon: const Icon(Icons.list_alt),
-              onPressed: _openRoutines,
-            ),
-          if (exerciseRecords(gymSetHistory(workouts)).isNotEmpty)
-            IconButton(
-              tooltip: l10n.gymRecordsTitle,
-              icon: const Icon(Icons.emoji_events_outlined),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => GymRecordsScreen(
-                    api: widget.api,
-                    store: widget.store,
-                  ),
-                ),
-              ),
-            ),
           IconButton(
             tooltip: l10n.gymLog,
             icon: const Icon(Icons.add),
@@ -399,6 +420,10 @@ class _GymScreenState extends State<GymScreen> {
       ),
       body: Column(
         children: [
+          SurfacePeerStrip(
+            label: l10n.gymSurfaceLabel,
+            peers: _peers(l10n, workouts),
+          ),
           if (!_isOnline && !pending)
             Container(
               width: double.infinity,
