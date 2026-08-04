@@ -6719,14 +6719,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'This removes every zone, re-exposing all of these areas on public shares.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Discard changes?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'You have unsaved privacy zones. Leave without saving?';
 
   @override
-  String get privacyZonesDiscard => 'Discard';
+  String get discardChangesTitle => 'Discard changes?';
+
+  @override
+  String get discardChangesBody =>
+      'You have unsaved changes. Leave without saving?';
+
+  @override
+  String get discardChangesCancel => 'Cancel';
+
+  @override
+  String get discardChangesDiscard => 'Discard';
 
   @override
   String get prefsTitle => 'Preferences';

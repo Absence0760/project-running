@@ -11103,23 +11103,35 @@ abstract class AppLocalizations {
   /// **'This removes every zone, re-exposing all of these areas on public shares.'**
   String get privacyZonesClearAllBody;
 
-  /// Title of the unsaved-changes confirm dialog on the privacy-zones editor
-  ///
-  /// In en, this message translates to:
-  /// **'Discard changes?'**
-  String get privacyZonesDiscardTitle;
-
-  /// Body of the unsaved-changes confirm dialog on the privacy-zones editor
+  /// Privacy-zones-specific body for the shared discard-changes confirm dialog
   ///
   /// In en, this message translates to:
   /// **'You have unsaved privacy zones. Leave without saving?'**
   String get privacyZonesDiscardBody;
 
-  /// Confirm button that leaves the privacy-zones editor discarding unsaved zones
+  /// Title of the shared unsaved-changes confirm dialog shown when backing out of a create/edit form
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes?'**
+  String get discardChangesTitle;
+
+  /// Generic body of the shared unsaved-changes confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'You have unsaved changes. Leave without saving?'**
+  String get discardChangesBody;
+
+  /// Button that dismisses the discard-changes dialog and keeps the form open
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get discardChangesCancel;
+
+  /// Confirm button that leaves the form discarding unsaved edits
   ///
   /// In en, this message translates to:
   /// **'Discard'**
-  String get privacyZonesDiscard;
+  String get discardChangesDiscard;
 
   /// AppBar title for the Settings > Preferences screen
   ///

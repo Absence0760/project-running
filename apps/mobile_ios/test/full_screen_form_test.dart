@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/full_screen_form.dart';
 
-Future<void> _open(WidgetTester tester, {required Widget body, String title = 'Form'}) async {
+Future<void> _open(
+  WidgetTester tester, {
+  required Widget body,
+  String title = 'Form',
+  bool Function()? isDirty,
+}) async {
   await tester.binding.setSurfaceSize(const Size(400, 800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: Builder(
           builder: (ctx) => TextButton(
@@ -14,6 +22,7 @@ Future<void> _open(WidgetTester tester, {required Widget body, String title = 'F
               ctx,
               title: title,
               builder: (_) => body,
+              isDirty: isDirty,
             ),
             child: const Text('open'),
           ),
@@ -74,6 +83,100 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(result, 'saved');
+    });
+  });
+
+  group('showFullScreenForm — discard guard', () {
+    testWidgets('dirty form: system back shows the confirm; Cancel keeps the form and its state',
+        (tester) async {
+      final ctl = TextEditingController();
+      addTearDown(ctl.dispose);
+      await _open(
+        tester,
+        body: TextField(controller: ctl),
+        isDirty: () => ctl.text.isNotEmpty,
+      );
+      await tester.enterText(find.byType(TextField), 'typed');
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsOneWidget);
+      expect(find.text('You have unsaved changes. Leave without saving?'),
+          findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(ctl.text, 'typed');
+    });
+
+    testWidgets('dirty form: confirming Discard pops the form', (tester) async {
+      final ctl = TextEditingController();
+      addTearDown(ctl.dispose);
+      await _open(
+        tester,
+        body: TextField(controller: ctl),
+        isDirty: () => ctl.text.isNotEmpty,
+      );
+      await tester.enterText(find.byType(TextField), 'typed');
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('open'), findsOneWidget);
+    });
+
+    testWidgets('clean form: system back pops without a confirm', (tester) async {
+      final ctl = TextEditingController();
+      addTearDown(ctl.dispose);
+      await _open(
+        tester,
+        body: TextField(controller: ctl),
+        isDirty: () => ctl.text.isNotEmpty,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('open'), findsOneWidget);
+    });
+
+    testWidgets('dirty form: the AppBar close button routes through the confirm',
+        (tester) async {
+      final ctl = TextEditingController();
+      addTearDown(ctl.dispose);
+      await _open(
+        tester,
+        body: TextField(controller: ctl),
+        isDirty: () => ctl.text.isNotEmpty,
+      );
+      await tester.enterText(find.byType(TextField), 'typed');
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
+    testWidgets('no isDirty probe keeps the legacy immediate pop', (tester) async {
+      await _open(tester, body: const Text('body-marker'));
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('body-marker'), findsNothing);
+      expect(find.text('open'), findsOneWidget);
     });
   });
 

@@ -9035,17 +9035,25 @@
   "@privacyZonesClearAll": {
     "description": "Button to remove all privacy zones"
   },
-  "privacyZonesDiscardTitle": "Discard changes?",
-  "@privacyZonesDiscardTitle": {
-    "description": "Title of the unsaved-changes confirm dialog on the privacy-zones editor"
-  },
   "privacyZonesDiscardBody": "You have unsaved privacy zones. Leave without saving?",
   "@privacyZonesDiscardBody": {
-    "description": "Body of the unsaved-changes confirm dialog on the privacy-zones editor"
+    "description": "Privacy-zones-specific body for the shared discard-changes confirm dialog"
   },
-  "privacyZonesDiscard": "Discard",
-  "@privacyZonesDiscard": {
-    "description": "Confirm button that leaves the privacy-zones editor discarding unsaved zones"
+  "discardChangesTitle": "Discard changes?",
+  "@discardChangesTitle": {
+    "description": "Title of the shared unsaved-changes confirm dialog shown when backing out of a create/edit form"
+  },
+  "discardChangesBody": "You have unsaved changes. Leave without saving?",
+  "@discardChangesBody": {
+    "description": "Generic body of the shared unsaved-changes confirm dialog"
+  },
+  "discardChangesCancel": "Cancel",
+  "@discardChangesCancel": {
+    "description": "Button that dismisses the discard-changes dialog and keeps the form open"
+  },
+  "discardChangesDiscard": "Discard",
+  "@discardChangesDiscard": {
+    "description": "Confirm button that leaves the form discarding unsaved edits"
   },
   "prefsTitle": "Preferences",
   "@prefsTitle": {

@@ -6801,14 +6801,21 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dadurch werden alle Zonen entfernt und alle diese Bereiche bei öffentlichen Freigaben wieder sichtbar.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Änderungen verwerfen?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'Sie haben nicht gespeicherte Datenschutzzonen. Ohne Speichern verlassen?';
 
   @override
-  String get privacyZonesDiscard => 'Verwerfen';
+  String get discardChangesTitle => 'Änderungen verwerfen?';
+
+  @override
+  String get discardChangesBody =>
+      'Sie haben nicht gespeicherte Änderungen. Ohne Speichern verlassen?';
+
+  @override
+  String get discardChangesCancel => 'Abbrechen';
+
+  @override
+  String get discardChangesDiscard => 'Verwerfen';
 
   @override
   String get prefsTitle => 'Einstellungen';

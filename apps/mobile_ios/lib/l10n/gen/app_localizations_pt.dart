@@ -6790,14 +6790,21 @@ class AppLocalizationsPt extends AppLocalizations {
       'Isso remove todas as zonas, reexpondo todas essas áreas nos compartilhamentos públicos.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Descartar alterações?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'Você tem zonas de privacidade não salvas. Sair sem salvar?';
 
   @override
-  String get privacyZonesDiscard => 'Descartar';
+  String get discardChangesTitle => 'Descartar alterações?';
+
+  @override
+  String get discardChangesBody =>
+      'Você tem alterações não salvas. Sair sem salvar?';
+
+  @override
+  String get discardChangesCancel => 'Cancelar';
+
+  @override
+  String get discardChangesDiscard => 'Descartar';
 
   @override
   String get prefsTitle => 'Preferências';
@@ -19147,14 +19154,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Isso remove todas as zonas, reexpondo todas essas áreas nos compartilhamentos públicos.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Descartar alterações?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'Você tem zonas de privacidade não salvas. Sair sem salvar?';
 
   @override
-  String get privacyZonesDiscard => 'Descartar';
+  String get discardChangesTitle => 'Descartar alterações?';
+
+  @override
+  String get discardChangesBody =>
+      'Você tem alterações não salvas. Sair sem salvar?';
+
+  @override
+  String get discardChangesCancel => 'Cancelar';
+
+  @override
+  String get discardChangesDiscard => 'Descartar';
 
   @override
   String get prefsTitle => 'Preferências';

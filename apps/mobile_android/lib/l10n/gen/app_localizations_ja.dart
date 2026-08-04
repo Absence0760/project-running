@@ -6408,13 +6408,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get privacyZonesClearAllBody => 'すべてのゾーンが削除され、これらのエリアが公開共有で再び公開されます。';
 
   @override
-  String get privacyZonesDiscardTitle => '変更を破棄しますか？';
-
-  @override
   String get privacyZonesDiscardBody => '保存されていないプライバシーゾーンがあります。保存せずに終了しますか？';
 
   @override
-  String get privacyZonesDiscard => '破棄';
+  String get discardChangesTitle => '変更を破棄しますか？';
+
+  @override
+  String get discardChangesBody => '保存されていない変更があります。保存せずに終了しますか？';
+
+  @override
+  String get discardChangesCancel => 'キャンセル';
+
+  @override
+  String get discardChangesDiscard => '破棄';
 
   @override
   String get prefsTitle => '環境設定';

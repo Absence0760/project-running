@@ -13,6 +13,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../privacy.dart';
 import '../settings_sync.dart';
 import '../tile_cache.dart';
+import '../widgets/confirm_discard.dart';
 import '../widgets/live_run_map.dart' show currentTileUrl;
 import '../widgets/top_banner.dart';
 
@@ -201,31 +202,6 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
     }
   }
 
-  Future<bool> _confirmDiscard() async {
-    final l10n = AppLocalizations.of(context);
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.privacyZonesDiscardTitle),
-            content: Text(l10n.privacyZonesDiscardBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.prefsCancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: Text(l10n.privacyZonesDiscard),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
   // ── Location ─────────────────────────────────────────────────────────
 
   /// One-shot startup fix. Centres the map on the user only on first open
@@ -346,13 +322,9 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
         : (_userLatLng ??
               const LatLng(51.5074, -0.1278)); // London-ish fallback
 
-    return PopScope(
-      canPop: !_dirty,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        final leave = await _confirmDiscard();
-        if (leave && mounted) Navigator.of(context).pop();
-      },
+    return DiscardGuard(
+      isDirty: () => _dirty,
+      confirmBody: l10n.privacyZonesDiscardBody,
       child: Scaffold(
         appBar: AppBar(
           title: Text(l10n.privacyZonesTitle),
