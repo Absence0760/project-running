@@ -1,12 +1,59 @@
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/profile_screen.dart';
+
+/// Signed-in viewer looking at their own profile — the five-tab shape
+/// that carries Notifications.
+class _SelfApi extends ApiClient {
+  @override
+  String? get userId => 'me';
+
+  @override
+  Future<ProfileSummary?> fetchProfileSummary(String userId) async =>
+      const ProfileSummary(
+        id: 'me',
+        displayName: 'Me',
+        followerCount: 0,
+        followingCount: 0,
+        viewerFollows: false,
+      );
+
+  @override
+  Future<List<RunRow>> fetchPublicRunsByUser(String userId,
+          {int limit = 50}) async =>
+      const [];
+
+  @override
+  Future<List<UserProfileRow>> fetchFollowers(String userId,
+          {int limit = 20, int offset = 0}) async =>
+      const [];
+
+  @override
+  Future<List<UserProfileRow>> fetchFollowing(String userId,
+          {int limit = 20, int offset = 0}) async =>
+      const [];
+
+  @override
+  Future<List<AchievementRow>> fetchUserBadges(String userId) async => const [];
+
+  @override
+  Future<List<NotificationView>> fetchNotificationViews({
+    int limit = 100,
+  }) async =>
+      const [];
+}
+
+String _selectedTabLabel(WidgetTester tester) {
+  final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+  return (tabBar.tabs[tabBar.controller!.index] as Tab).text!;
+}
 
 bool _supabaseReady = false;
 
@@ -21,12 +68,20 @@ Future<void> _ensureSupabase() async {
   _supabaseReady = true;
 }
 
-Future<void> _pump(WidgetTester tester, {required String userId}) {
+Future<void> _pump(
+  WidgetTester tester, {
+  required String userId,
+  ProfileTab initialTab = ProfileTab.runs,
+}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: ProfileScreen(api: ApiClient(), userId: userId),
+      home: ProfileScreen(
+        api: ApiClient(),
+        userId: userId,
+        initialTab: initialTab,
+      ),
     ),
   );
 }
@@ -61,6 +116,59 @@ void main() {
       expect(find.text('Followers'), findsOneWidget);
       expect(find.text('Following'), findsOneWidget);
       expect(find.text('Notifications'), findsNothing);
+    });
+  });
+
+  group('ProfileScreen — named tab deep links', () {
+    Future<void> pumpSelf(WidgetTester tester, ProfileTab tab) =>
+        tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ProfileScreen(
+              api: _SelfApi(),
+              userId: 'me',
+              initialTab: tab,
+            ),
+          ),
+        );
+
+    testWidgets('ProfileTab.notifications opens the Notifications tab',
+        (tester) async {
+      await pumpSelf(tester, ProfileTab.notifications);
+      await tester.pumpAndSettle();
+      expect(_selectedTabLabel(tester), 'Notifications');
+    });
+
+    testWidgets('the tab a bare index 3 would have selected is NOT '
+        'Notifications', (tester) async {
+      // Documents the bug the enum closes: Achievements was inserted at
+      // index 1, so the literal the bell used to pass now names Following.
+      // If a future insertion moves things again this still holds, and the
+      // test above still asserts the bell's real destination by label.
+      await pumpSelf(tester, ProfileTab.notifications);
+      await tester.pumpAndSettle();
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      expect((tabBar.tabs[3] as Tab).text, isNot('Notifications'));
+    });
+
+    testWidgets('defaults to the Runs tab', (tester) async {
+      await pumpSelf(tester, ProfileTab.runs);
+      await tester.pumpAndSettle();
+      expect(_selectedTabLabel(tester), 'Runs');
+    });
+
+    testWidgets(
+        'a tab this profile does not carry falls back to the first tab',
+        (tester) async {
+      // Someone else's profile has no Notifications tab. The old int
+      // parameter clamped an out-of-range index onto the LAST tab
+      // (Following) — a near-miss that reads like a bug. Naming the tab
+      // makes the absence explicit and lands on Runs.
+      await _pump(tester,
+          userId: 'someone-else', initialTab: ProfileTab.notifications);
+      await tester.pump();
+      expect(_selectedTabLabel(tester), 'Runs');
     });
   });
 
