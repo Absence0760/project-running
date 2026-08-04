@@ -15,6 +15,7 @@ import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -4015,6 +4016,7 @@ class _RunScreenState extends State<RunScreen> {
     // RouteMiniMap mounted under the digit.
     final isCountdown = _state == _ScreenState.countdown;
     final l10n = AppLocalizations.of(context);
+    final semantic = AppSemanticColors.of(context);
     return Stack(
       children: [
         // Always-mounted map. During countdown stats.currentPosition may
@@ -4226,14 +4228,15 @@ class _RunScreenState extends State<RunScreen> {
               right: 0,
               child: Center(
                 child: Card(
-                  color: const Color(0xFFEF4444),
+                  color: semantic.danger,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 8),
                     child: Text(
                       l10n.runOffRoute(off.round()),
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: semantic.onDanger,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -4263,20 +4266,21 @@ class _RunScreenState extends State<RunScreen> {
             right: 0,
             child: Center(
               child: Card(
-                color: const Color(0xFFDC2626),
+                color: semantic.danger,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.location_off,
-                          color: Colors.white, size: 18),
+                      Icon(Icons.location_off,
+                          color: semantic.onDanger, size: 18),
                       const SizedBox(width: 8),
                       Text(
                         l10n.runPermissionRevoked,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: semantic.onDanger,
+                            fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -4291,20 +4295,21 @@ class _RunScreenState extends State<RunScreen> {
             right: 0,
             child: Center(
               child: Card(
-                color: const Color(0xFFEF4444),
+                color: semantic.danger,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.gps_off,
-                          color: Colors.white, size: 18),
+                      Icon(Icons.gps_off,
+                          color: semantic.onDanger, size: 18),
                       const SizedBox(width: 8),
                       Text(
                         l10n.runGpsLost,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: semantic.onDanger,
+                            fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -4319,20 +4324,21 @@ class _RunScreenState extends State<RunScreen> {
             right: 0,
             child: Center(
               child: Card(
-                color: const Color(0xFFD97706),
+                color: semantic.warning,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.gps_not_fixed,
-                          color: Colors.white, size: 18),
+                      Icon(Icons.gps_not_fixed,
+                          color: semantic.onWarning, size: 18),
                       const SizedBox(width: 8),
                       Text(
                         l10n.runWeakGps,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: semantic.onWarning,
+                            fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
