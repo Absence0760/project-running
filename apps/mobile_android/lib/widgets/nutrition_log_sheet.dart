@@ -24,10 +24,12 @@ Future<bool?> showNutritionLogSheet({
   required LocalFoodStore store,
 }) {
   final l10n = AppLocalizations.of(context);
+  final formKey = GlobalKey<_NutritionLogSheetState>();
   return showFullScreenForm<bool>(
     context,
     title: l10n.nutritionLogTitle,
-    builder: (ctx) => NutritionLogSheet(store: store),
+    isDirty: () => formKey.currentState?.isDirty ?? false,
+    builder: (ctx) => NutritionLogSheet(key: formKey, store: store),
   );
 }
 
@@ -91,6 +93,22 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
   final _manualSodium = TextEditingController();
   final _manualSatFat = TextEditingController();
   final _manualCholesterol = TextEditingController();
+
+  // Only the manual-entry composer holds loseable work: a search query /
+  // its results and the meal-slot pick are one tap to recreate, and a
+  // search pick logs immediately through the portion dialog.
+  bool get isDirty => [
+        _manualName,
+        _manualKcal,
+        _manualProtein,
+        _manualCarbs,
+        _manualFat,
+        _manualFiber,
+        _manualSugar,
+        _manualSodium,
+        _manualSatFat,
+        _manualCholesterol,
+      ].any((c) => c.text.trim().isNotEmpty);
 
   @override
   void dispose() {

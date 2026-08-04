@@ -43,6 +43,7 @@ Future<GearFormResult?> showGearFormSheet({
   ApiClient? api,
 }) {
   final l10n = AppLocalizations.of(context);
+  final formKey = GlobalKey<_GearFormSheetState>();
   return showFullScreenForm<GearFormResult>(
     context,
     title: existing != null
@@ -50,7 +51,9 @@ Future<GearFormResult?> showGearFormSheet({
         : (kind == 'shoe'
             ? l10n.gearFormTitleAddShoes
             : l10n.gearFormTitleAddBike),
+    isDirty: () => formKey.currentState?.isDirty ?? false,
     builder: (_) => _GearFormSheet(
+      key: formKey,
       store: store,
       preferences: preferences,
       kind: kind,
@@ -67,6 +70,7 @@ class _GearFormSheet extends StatefulWidget {
   final Map<String, dynamic>? existing;
   final ApiClient? api;
   const _GearFormSheet({
+    super.key,
     required this.store,
     required this.preferences,
     required this.kind,
@@ -119,7 +123,26 @@ class _GearFormSheetState extends State<_GearFormSheet> {
       _gearId = e['id'] as String?;
       if (_gearId != null && widget.api != null) _loadWearLogs();
     }
+    _initialSnapshot = _snapshot();
   }
+
+  late final String _initialSnapshot;
+
+  String _snapshot() => [
+        _name.text,
+        _brand.text,
+        _model.text,
+        _target.text,
+        _notes.text,
+        _purchasedAt?.toIso8601String() ?? '',
+      ].join('\u0000');
+
+  // The wear-note composer commits through its own Add button, so pending
+  // text / area there is loseable work too.
+  bool get isDirty =>
+      _snapshot() != _initialSnapshot ||
+      _wearNote.text.trim().isNotEmpty ||
+      _wearArea != null;
 
   @override
   void dispose() {
@@ -455,7 +478,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.maybePop(context),
                   child: Text(l10n.gearFormCancel),
                 ),
                 const SizedBox(width: 8),

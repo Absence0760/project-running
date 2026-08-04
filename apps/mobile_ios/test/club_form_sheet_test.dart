@@ -458,6 +458,71 @@ void main() {
       expect(readyDouble.isReady, isTrue);
     });
   });
+
+  group('showClubFormSheet — discard guard', () {
+    testWidgets(
+        'typed name: system back shows the confirm; dialog Cancel keeps the text',
+        (tester) async {
+      await _openSheet(tester);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Name'), 'Sunday Runners');
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsOneWidget);
+
+      // The form has its own Cancel button — scope to the dialog's.
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Cancel')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.text('Sunday Runners'), findsOneWidget);
+    });
+
+    testWidgets('typed name: Discard pops without creating', (tester) async {
+      final social = _CapturingSocialService();
+      await _openSheet(tester, social: social);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Name'), 'Sunday Runners');
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Discard')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('result=<cancelled>'), findsOneWidget);
+      expect(social.createCalled, isFalse);
+    });
+
+    testWidgets('untouched form: back pops with no confirm', (tester) async {
+      await _openSheet(tester);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.text('result=<cancelled>'), findsOneWidget);
+    });
+
+    testWidgets('typed name: the Cancel button routes through the confirm',
+        (tester) async {
+      await _openSheet(tester);
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Name'), 'Sunday Runners');
+      await tester.pump();
+
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsOneWidget);
+    });
+  });
 }
 
 /// Minimal test double that opts-in to "ready" via the override

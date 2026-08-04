@@ -17,10 +17,13 @@ Future<bool> showWorkoutEditSheet(
   required PlanWorkoutRow workout,
   required TrainingService training,
 }) async {
+  final formKey = GlobalKey<_WorkoutEditSheetState>();
   final ok = await showFullScreenForm<bool>(
     context,
     title: AppLocalizations.of(context).workoutEditTitle,
+    isDirty: () => formKey.currentState?.isDirty ?? false,
     builder: (ctx) => _WorkoutEditSheet(
+      key: formKey,
       workout: workout,
       training: training,
     ),
@@ -32,6 +35,7 @@ class _WorkoutEditSheet extends StatefulWidget {
   final PlanWorkoutRow workout;
   final TrainingService training;
   const _WorkoutEditSheet({
+    super.key,
     required this.workout,
     required this.training,
   });
@@ -64,7 +68,19 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
           : _paceToEditText(w.targetPaceSecPerKm!),
     );
     _notesCtl = TextEditingController(text: w.notes ?? '');
+    _initialSnapshot = _snapshot();
   }
+
+  late final String _initialSnapshot;
+
+  String _snapshot() => [
+        _kind.name,
+        _distanceCtl.text,
+        _paceCtl.text,
+        _notesCtl.text,
+      ].join('\u0000');
+
+  bool get isDirty => _snapshot() != _initialSnapshot;
 
   @override
   void dispose() {
@@ -128,7 +144,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
                 child: OutlinedButton(
                   onPressed: _saving
                       ? null
-                      : () => Navigator.of(context).pop(false),
+                      : () => Navigator.of(context).maybePop(false),
                   child: Text(l10n.workoutEditCancel),
                 ),
               ),

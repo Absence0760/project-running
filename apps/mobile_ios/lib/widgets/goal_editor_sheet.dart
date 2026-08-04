@@ -27,12 +27,15 @@ Future<String?> showGoalEditorSheet(
   RunGoal? existing,
 }) {
   final l10n = AppLocalizations.of(context);
+  final formKey = GlobalKey<_GoalEditorSheetState>();
   return showFullScreenForm<String>(
     context,
     title: existing == null
         ? l10n.goalEditorTitleNew
         : l10n.goalEditorTitleEdit,
+    isDirty: () => formKey.currentState?.isDirty ?? false,
     builder: (ctx) => _GoalEditorSheet(
+      key: formKey,
       preferences: preferences,
       settingsSync: settingsSync,
       existing: existing,
@@ -45,6 +48,7 @@ class _GoalEditorSheet extends StatefulWidget {
   final SettingsSyncService? settingsSync;
   final RunGoal? existing;
   const _GoalEditorSheet({
+    super.key,
     required this.preferences,
     required this.settingsSync,
     this.existing,
@@ -65,6 +69,18 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
   late final TextEditingController _countCtl;
   String? _error;
   bool _saving = false;
+  late final String _initialSnapshot;
+
+  String _snapshot() => [
+        _titleCtl.text,
+        _distanceCtl.text,
+        _timeCtl.text,
+        _paceCtl.text,
+        _countCtl.text,
+        _period.name,
+      ].join('\u0000');
+
+  bool get isDirty => _snapshot() != _initialSnapshot;
 
   @override
   void initState() {
@@ -94,6 +110,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
           ? existing!.runCount!.toInt().toString()
           : '',
     );
+    _initialSnapshot = _snapshot();
   }
 
   @override
@@ -216,7 +233,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                   ),
                 const Spacer(),
                 TextButton(
-                  onPressed: _saving ? null : () => Navigator.pop(context),
+                  onPressed: _saving ? null : () => Navigator.maybePop(context),
                   child: Text(l10n.goalEditorCancel),
                 ),
                 const SizedBox(width: 8),

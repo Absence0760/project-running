@@ -21,19 +21,22 @@ Future<String?> showClubFormSheet(
   required SocialService social,
   ClubRow? existing,
 }) {
+  final formKey = GlobalKey<_ClubFormScreenState>();
   return showFullScreenForm<String>(
     context,
     title: existing == null
         ? AppLocalizations.of(context).clubFormTitle
         : AppLocalizations.of(context).clubFormEditTitle,
-    builder: (_) => _ClubFormScreen(social: social, existing: existing),
+    isDirty: () => formKey.currentState?.isDirty ?? false,
+    builder: (_) =>
+        _ClubFormScreen(key: formKey, social: social, existing: existing),
   );
 }
 
 class _ClubFormScreen extends StatefulWidget {
   final SocialService social;
   final ClubRow? existing;
-  const _ClubFormScreen({required this.social, this.existing});
+  const _ClubFormScreen({super.key, required this.social, this.existing});
 
   @override
   State<_ClubFormScreen> createState() => _ClubFormScreenState();
@@ -59,6 +62,31 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
   String? _error;
 
   bool get _isEdit => widget.existing != null;
+
+  late final String _initialSnapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialSnapshot = _snapshot();
+  }
+
+  // The join-policy chips only render on create; edit mode leaves the value
+  // untouched so it stays out of the edit snapshot (toggling visibility can
+  // shuffle it without any visible change).
+  String _snapshot() => [
+        _name.text,
+        _description.text,
+        _location.text,
+        _website.text,
+        _instagram.text,
+        _strava.text,
+        _facebook.text,
+        _isPublic.toString(),
+        if (!_isEdit) _joinPolicy,
+      ].join('\u0000');
+
+  bool get isDirty => _snapshot() != _initialSnapshot;
 
   @override
   void dispose() {
@@ -279,7 +307,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 children: [
                   TextButton(
                     onPressed:
-                        _busy ? null : () => Navigator.pop(context),
+                        _busy ? null : () => Navigator.maybePop(context),
                     child: Text(l10n.clubFormCancel),
                   ),
                   const SizedBox(width: 8),

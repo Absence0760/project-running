@@ -74,10 +74,13 @@ Future<bool?> showGymComposeSheet({
   ApiClient? api,
 }) {
   final l10n = AppLocalizations.of(context);
+  final formKey = GlobalKey<_GymComposeSheetState>();
   return showFullScreenForm<bool>(
     context,
     title: existing == null ? l10n.gymEditorNewTitle : l10n.gymEditorEditTitle,
+    isDirty: () => formKey.currentState?.isDirty ?? false,
     builder: (ctx) => GymComposeSheet(
+      key: formKey,
       store: store,
       existing: existing,
       seedSets: seedSets,
@@ -185,7 +188,41 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                     'duration_s': s.durationS,
                   },
               ]));
+    _initialSnapshot = _snapshot();
   }
+
+  late final String _initialSnapshot;
+
+  // Serialises every raw input (including unnamed exercises whose sets
+  // _buildSets would drop) so the guard fires on anything typed, and a
+  // seeded / edit baseline reads clean until actually touched.
+  String _snapshot() {
+    final b = StringBuffer()
+      ..write(_titleCtl.text)
+      ..write('\u0000')
+      ..write(_isPublic);
+    for (final ex in _exercises) {
+      b
+        ..write('\u0001')
+        ..write(ex.name.text);
+      for (final s in ex.sets) {
+        b
+          ..write('\u0002')
+          ..write(s.reps.text)
+          ..write('\u0000')
+          ..write(s.weight.text)
+          ..write('\u0000')
+          ..write(s.rpe.text)
+          ..write('\u0000')
+          ..write(s.duration.text)
+          ..write('\u0000')
+          ..write(s.setType);
+      }
+    }
+    return b.toString();
+  }
+
+  bool get isDirty => _snapshot() != _initialSnapshot;
 
   /// Rebuild exercise blocks from a list of stored set maps. Sets arrive in
   /// order grouped by exercise (that's how the composer writes them), so a
@@ -430,7 +467,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                 const Spacer(),
                 TextButton(
                   onPressed:
-                      _saving ? null : () => Navigator.pop(context),
+                      _saving ? null : () => Navigator.maybePop(context),
                   child: Text(l10n.gymEditorCancel),
                 ),
                 const SizedBox(width: 8),

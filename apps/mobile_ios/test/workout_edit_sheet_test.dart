@@ -139,4 +139,61 @@ void main() {
       expect(training.lastUpdate!.targetDistanceM, closeTo(12000, 1));
     });
   });
+
+  group('WorkoutEditSheet — discard guard', () {
+    testWidgets('unedited form: Cancel pops with no discard confirm',
+        (tester) async {
+      final training = _FakeTraining();
+      await _pumpSheet(tester, _workout(), training);
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.byType(AppBar), findsNothing);
+      expect(training.lastUpdate, isNull);
+    });
+
+    testWidgets(
+        'edited form: system back shows the confirm; dialog Cancel keeps the edit',
+        (tester) async {
+      final training = _FakeTraining();
+      await _pumpSheet(tester, _workout(), training);
+      await tester.enterText(find.widgetWithText(TextField, '8.0'), '12.0');
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsOneWidget);
+
+      // The sheet has its own Cancel button — scope to the dialog's.
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Cancel')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.text('12.0'), findsOneWidget);
+    });
+
+    testWidgets(
+        'edited form: the Cancel button routes through the confirm; Discard pops without saving',
+        (tester) async {
+      final training = _FakeTraining();
+      await _pumpSheet(tester, _workout(), training);
+      await tester.enterText(find.widgetWithText(TextField, '8.0'), '12.0');
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsOneWidget);
+
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Discard')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.byType(AppBar), findsNothing);
+      expect(training.lastUpdate, isNull);
+    });
+  });
 }

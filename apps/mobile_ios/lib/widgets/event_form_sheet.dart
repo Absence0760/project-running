@@ -19,11 +19,16 @@ Future<String?> showEventFormSheet(
   required String clubId,
   bool clubIsPublic = true,
 }) {
+  final formKey = GlobalKey<_EventFormState>();
   return showFullScreenForm<String>(
     context,
     title: AppLocalizations.of(context).eventFormTitle,
-    builder: (_) =>
-        _EventForm(social: social, clubId: clubId, clubIsPublic: clubIsPublic),
+    isDirty: () => formKey.currentState?.isDirty ?? false,
+    builder: (_) => _EventForm(
+        key: formKey,
+        social: social,
+        clubId: clubId,
+        clubIsPublic: clubIsPublic),
   );
 }
 
@@ -35,6 +40,7 @@ class _EventForm extends StatefulWidget {
   // for a private club.
   final bool clubIsPublic;
   const _EventForm({
+    super.key,
     required this.social,
     required this.clubId,
     this.clubIsPublic = true,
@@ -57,6 +63,28 @@ class _EventFormState extends State<_EventForm> {
   bool _isPublic = true;
   bool _busy = false;
   String? _error;
+  late final String _initialSnapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialSnapshot = _snapshot();
+  }
+
+  String _snapshot() => [
+        _title.text,
+        _description.text,
+        _meetLabel.text,
+        _distanceKm.text,
+        _durationMin.text,
+        _discipline.text,
+        _category,
+        _recurrence,
+        _isPublic.toString(),
+        _starts.toIso8601String(),
+      ].join('\u0000');
+
+  bool get isDirty => _snapshot() != _initialSnapshot;
 
   @override
   void dispose() {
@@ -341,7 +369,7 @@ class _EventFormState extends State<_EventForm> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: _busy ? null : () => Navigator.pop(context),
+                  onPressed: _busy ? null : () => Navigator.maybePop(context),
                   child: Text(l10n.eventFormCancel),
                 ),
                 const SizedBox(width: 8),

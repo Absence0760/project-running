@@ -25,10 +25,13 @@ Future<String?> showRoutineBuilderSheet({
   List<String> suggestions = const [],
 }) {
   final l10n = AppLocalizations.of(context);
+  final formKey = GlobalKey<_RoutineBuilderSheetState>();
   return showFullScreenForm<String>(
     context,
     title: l10n.gymRoutineEditorNewTitle,
+    isDirty: () => formKey.currentState?.isDirty ?? false,
     builder: (ctx) => RoutineBuilderSheet(
+      key: formKey,
       store: store,
       seedExercises: seedExercises,
       seedTitle: seedTitle,
@@ -106,7 +109,60 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
     _titleCtl = TextEditingController(text: widget.seedTitle);
     _notesCtl = TextEditingController();
     _exercises = _initExercises(widget.seedExercises);
+    _initialSnapshot = _snapshot();
   }
+
+  late final String _initialSnapshot;
+
+  // Serialises every raw input so the guard fires on anything typed, and a
+  // seeded baseline reads clean until actually touched.
+  String _snapshot() {
+    final b = StringBuffer()
+      ..write(_titleCtl.text)
+      ..write('\u0000')
+      ..write(_notesCtl.text);
+    for (final ex in _exercises) {
+      b
+        ..write('\u0001')
+        ..write(ex.name.text)
+        ..write('\u0000')
+        ..write(ex.modality)
+        ..write('\u0000')
+        ..write(ex.progression)
+        ..write('\u0000')
+        ..write(ex.supersetWithNext)
+        ..write('\u0000')
+        ..write(ex.increment.text)
+        ..write('\u0000')
+        ..write(ex.percent.text)
+        ..write('\u0000')
+        ..write(ex.oneRm.text)
+        ..write('\u0000')
+        ..write(ex.targetRpe.text);
+      for (final s in ex.sets) {
+        b
+          ..write('\u0002')
+          ..write(s.setType)
+          ..write('\u0000')
+          ..write(s.reps.text)
+          ..write('\u0000')
+          ..write(s.repsMax.text)
+          ..write('\u0000')
+          ..write(s.weight.text)
+          ..write('\u0000')
+          ..write(s.rest.text)
+          ..write('\u0000')
+          ..write(s.duration.text)
+          ..write('\u0000')
+          ..write(s.distance.text)
+          ..write('\u0000')
+          ..write(s.rpe.text);
+      }
+    }
+    return b.toString();
+  }
+
+  bool get isDirty => _snapshot() != _initialSnapshot;
 
   List<_EditExercise> _initExercises(List<RoutineSeedExercise>? src) {
     if (src == null || src.isEmpty) return [_EditExercise()];
@@ -318,7 +374,7 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
           children: [
             const Spacer(),
             TextButton(
-              onPressed: _saving ? null : () => Navigator.pop(context),
+              onPressed: _saving ? null : () => Navigator.maybePop(context),
               child: Text(l10n.gymRoutineEditorCancel),
             ),
             const SizedBox(width: 8),
