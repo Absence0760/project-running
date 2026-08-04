@@ -15,7 +15,6 @@ import '../auth_validation.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../legal_links.dart';
 import '../widgets/password_field.dart';
-import '../widgets/top_banner.dart';
 
 /// Email/password account-creation screen with Google + Apple OAuth.
 ///
