@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
-
-/// The green "Live" broadcast colour, shared with the spectator badge
-/// (`live_spectator_screen.dart`) so a runner and their spectators read the
-/// same colour for "the live feed is on".
-const Color kLiveShareGreen = Color(0xFF10B981);
 
 /// The persistent "you are live sharing this run" indicator on the
 /// recording screen (issue #613). A compact pill — a live dot + label +
@@ -25,6 +21,7 @@ class LiveShareIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final liveColor = AppSemanticColors.of(context).success;
     final l10n = AppLocalizations.of(context);
     return Material(
       color: Colors.transparent,
@@ -47,23 +44,23 @@ class LiveShareIndicator extends StatelessWidget {
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: kLiveShareGreen,
+                    color: liveColor,
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   l10n.runLiveShareActive,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
-                    color: kLiveShareGreen,
+                    color: liveColor,
                     letterSpacing: 0.4,
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(Icons.podcasts, size: 14, color: kLiveShareGreen),
+                Icon(Icons.podcasts, size: 14, color: liveColor),
               ],
             ),
           ),
@@ -98,9 +95,9 @@ Future<LiveShareAction?> showLiveShareSheet(BuildContext context) {
                   Container(
                     width: 8,
                     height: 8,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: kLiveShareGreen,
+                      color: AppSemanticColors.of(ctx).success,
                     ),
                   ),
                   const SizedBox(width: 8),

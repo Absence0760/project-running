@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../live_cutoff_eta.dart';
@@ -23,6 +24,7 @@ class CutoffCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     final unknown = eta.status == LiveCutoffStatus.unknown;
     final label = eta.checkpoint!.label.trim();
@@ -30,15 +32,15 @@ class CutoffCard extends StatelessWidget {
 
     final (chipColor, chipLabel) = switch (eta.status) {
       LiveCutoffStatus.behind => (
-          const Color(0xFFEF4444),
+          semantic.danger,
           l10n.liveCutoffBehind(_marginLabel(eta.marginS!.abs())),
         ),
       LiveCutoffStatus.tight => (
-          const Color(0xFFF59E0B),
+          semantic.warning,
           l10n.liveCutoffAhead(_marginLabel(eta.marginS!)),
         ),
       LiveCutoffStatus.on => (
-          const Color(0xFF10B981),
+          semantic.success,
           l10n.liveCutoffAhead(_marginLabel(eta.marginS!)),
         ),
       LiveCutoffStatus.unknown => (theme.colorScheme.outline, ''),
@@ -83,7 +85,7 @@ class CutoffCard extends StatelessWidget {
               stale ? l10n.liveCutoffSignalLost : l10n.liveCutoffWaitingSignal,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: stale
-                    ? const Color(0xFFF59E0B)
+                    ? semantic.warning
                     : theme.colorScheme.onSurfaceVariant,
                 fontWeight: stale ? FontWeight.w700 : null,
                 fontStyle: stale ? null : FontStyle.italic,

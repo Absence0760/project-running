@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../fundraiser_progress.dart';
@@ -123,7 +124,7 @@ class _FundraiserSectionState extends State<FundraiserSection> {
                 minHeight: 10,
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
                 color: progress.state == ThermometerState.exceeded
-                    ? Colors.green
+                    ? AppSemanticColors.of(context).success
                     : theme.colorScheme.primary,
               ),
             ),
@@ -154,7 +155,7 @@ class _FundraiserSectionState extends State<FundraiserSection> {
                   Text(
                     l10n.fundraiserOverGoal,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.green,
+                      color: AppSemanticColors.of(context).success,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

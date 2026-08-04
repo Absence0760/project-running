@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -300,11 +301,12 @@ class PaceDelta {
   const PaceDelta(this.label, this.tone);
 
   Color color(ThemeData theme) {
+    final semantic = AppSemanticColors.ofTheme(theme);
     switch (tone) {
       case PaceDeltaTone.on:
-        return Colors.green;
+        return semantic.success;
       case PaceDeltaTone.amber:
-        return Colors.amber;
+        return semantic.warning;
       case PaceDeltaTone.off:
         return theme.colorScheme.error;
       case PaceDeltaTone.neutral:
@@ -336,11 +338,10 @@ class AdherencePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final (bg, fg) = switch (adherence) {
-      'completed' => (Colors.green.shade100, Colors.green.shade900),
-      // amber.900 text on amber.100 is only 2.4:1 — fails WCAG AA. #6D4C00 on
-      // amber.100 is 6.7:1. Pinned by contrast_guard_test.dart.
-      'partial' => (Colors.amber.shade100, const Color(0xFF6D4C00)),
+      'completed' => (semantic.success, semantic.onSuccess),
+      'partial' => (semantic.warning, semantic.onWarning),
       'abandoned' =>
         (theme.colorScheme.errorContainer, theme.colorScheme.onErrorContainer),
       _ => (

@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -702,17 +703,18 @@ class _CrownBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final crown = AppSemanticColors.of(context).crown;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0x1FF5B30A),
-        border: Border.all(color: const Color(0x59F5B30A)),
+        color: crown.withValues(alpha: 0.12),
+        border: Border.all(color: crown.withValues(alpha: 0.35)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          const Icon(Icons.emoji_events, color: Color(0xFFF5B30A), size: 18),
+          Icon(Icons.emoji_events, color: crown, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -759,9 +761,9 @@ class _LeaderboardRow extends StatelessWidget {
             child: isCrowned
                 ? Tooltip(
                     message: crownLabel,
-                    child: const Icon(
+                    child: Icon(
                       Icons.emoji_events,
-                      color: Color(0xFFF5B30A),
+                      color: AppSemanticColors.of(context).crown,
                       size: 20,
                     ),
                   )
