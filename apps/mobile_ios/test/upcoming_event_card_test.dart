@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:core_models/core_models.dart' hide Route;
+import 'package:ui_kit/ui_kit.dart';
 import '../lib/social_service.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/upcoming_event_card.dart';
@@ -34,9 +35,11 @@ Future<void> _pump(
   WidgetTester tester,
   EventView event, {
   VoidCallback? onTap,
+  ThemeData? theme,
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -83,6 +86,18 @@ void main() {
       // No exception — InkWell with a null onTap is inert.
       expect(tester.takeException(), isNull);
     });
+
+    for (final (name, theme) in [
+      ('light', AppTheme.light),
+      ('dark', AppTheme.dark),
+    ]) {
+      testWidgets('event icon uses onPrimary over the primary bubble ($name)',
+          (tester) async {
+        await _pump(tester, _event(), theme: theme);
+        final icon = tester.widget<Icon>(find.byIcon(Icons.event));
+        expect(icon.color, theme.colorScheme.onPrimary);
+      });
+    }
   });
 
   group('UpcomingEventCard — relative-time badge', () {

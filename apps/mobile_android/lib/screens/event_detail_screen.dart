@@ -7,6 +7,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
@@ -908,25 +909,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 18,
-                          height: 18,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: HSLColor.fromAHSL(
-                              1, hashHue(a.userId).toDouble(), 0.5, 0.55,
-                            ).toColor(),
-                          ),
-                          child: Text(
-                            initialFor(a.displayName),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
+                        IdentityAvatar(
+                            seed: a.userId,
+                            name: a.displayName,
+                            size: 18,
+                            fontSize: 10),
                         const SizedBox(width: 6),
                         Text(a.displayName ?? l10n.eventAttendeeMember,
                             style: theme.textTheme.bodySmall),

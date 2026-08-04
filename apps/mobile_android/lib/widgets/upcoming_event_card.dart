@@ -46,7 +46,8 @@ class UpcomingEventCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: theme.colorScheme.primary,
               ),
-              child: const Icon(Icons.event, color: Colors.white, size: 26),
+              child: Icon(Icons.event,
+                  color: theme.colorScheme.onPrimary, size: 26),
             ),
             const SizedBox(width: 12),
             Expanded(
