@@ -155,6 +155,11 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   bool get hasPending =>
       rowsById.values.any((e) => e.syncState != SyncState.synced);
 
+  /// Count of rows not yet pushed to the server (creates, updates, and
+  /// delete tombstones alike).
+  int get pendingCount =>
+      rowsById.values.where((e) => e.syncState != SyncState.synced).length;
+
   Future<void> init({Directory? overrideDirectory}) async {
     if (overrideDirectory != null) {
       dir = overrideDirectory;

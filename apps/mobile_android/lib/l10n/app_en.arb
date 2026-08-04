@@ -15707,5 +15707,27 @@
   "watchLiveShare": "Share live link",
   "watchLiveStartFailed": "Couldn't start the live broadcast — nothing is being shared.",
   "watchLiveSyncAction": "Sync runs from watch",
-  "watchLiveSyncSubtitle": "Pulls recorded runs off the watch. The relay pauses while it runs."
+  "watchLiveSyncSubtitle": "Pulls recorded runs off the watch. The relay pauses while it runs.",
+  "pendingSyncOffline": "{count, plural, one{{count} change saved on this device — will sync when online} other{{count} changes saved on this device — will sync when online}}",
+  "@pendingSyncOffline": {
+    "description": "Pending-sync banner while offline or signed out",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pendingSyncFailed": "{count, plural, one{{count} change hasn't synced} other{{count} changes haven't synced}}",
+  "@pendingSyncFailed": {
+    "description": "Pending-sync banner when a push failed while online",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pendingSyncRetry": "Retry",
+  "@pendingSyncRetry": {
+    "description": "Retry button on the pending-sync banner"
+  }
 }

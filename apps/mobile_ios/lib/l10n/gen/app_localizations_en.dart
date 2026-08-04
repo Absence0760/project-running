@@ -12229,4 +12229,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Pulls recorded runs off the watch. The relay pauses while it runs.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count changes saved on this device — will sync when online',
+      one: '$count change saved on this device — will sync when online',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count changes haven\'t synced',
+      one: '$count change hasn\'t synced',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Retry';
 }

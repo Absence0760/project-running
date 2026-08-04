@@ -3602,5 +3602,8 @@
   "watchLiveShare": "Compartilhar link ao vivo",
   "watchLiveStartFailed": "Não foi possível iniciar a transmissão ao vivo — nada está sendo compartilhado.",
   "watchLiveSyncAction": "Sincronizar corridas do relógio",
-  "watchLiveSyncSubtitle": "Baixa as corridas gravadas no relógio. A retransmissão fica pausada nesse período."
+  "watchLiveSyncSubtitle": "Baixa as corridas gravadas no relógio. A retransmissão fica pausada nesse período.",
+  "pendingSyncOffline": "{count, plural, one{{count} alteração salva neste dispositivo — será sincronizada quando você estiver on-line} other{{count} alterações salvas neste dispositivo — serão sincronizadas quando você estiver on-line}}",
+  "pendingSyncFailed": "{count, plural, one{{count} alteração não foi sincronizada} other{{count} alterações não foram sincronizadas}}",
+  "pendingSyncRetry": "Tentar novamente"
 }

@@ -3602,5 +3602,8 @@
   "watchLiveShare": "Partilhar ligação em direto",
   "watchLiveStartFailed": "Não foi possível iniciar a emissão em direto — não está a ser partilhado nada.",
   "watchLiveSyncAction": "Sincronizar corridas do relógio",
-  "watchLiveSyncSubtitle": "Transfere as corridas gravadas no relógio. A retransmissão fica em pausa durante esse período."
+  "watchLiveSyncSubtitle": "Transfere as corridas gravadas no relógio. A retransmissão fica em pausa durante esse período.",
+  "pendingSyncOffline": "{count, plural, one{{count} alteração guardada neste dispositivo — será sincronizada quando estiver on-line} other{{count} alterações guardadas neste dispositivo — serão sincronizadas quando estiver on-line}}",
+  "pendingSyncFailed": "{count, plural, one{{count} alteração não foi sincronizada} other{{count} alterações não foram sincronizadas}}",
+  "pendingSyncRetry": "Tentar novamente"
 }

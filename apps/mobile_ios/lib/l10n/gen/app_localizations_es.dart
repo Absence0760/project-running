@@ -12357,4 +12357,31 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Descarga las carreras grabadas del reloj. La retransmisión se pausa mientras tanto.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count cambios guardados en este dispositivo — se sincronizarán al volver a estar en línea',
+      one:
+          '$count cambio guardado en este dispositivo — se sincronizará al volver a estar en línea',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cambios no se han sincronizado',
+      one: '$count cambio no se ha sincronizado',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Reintentar';
 }

@@ -11781,4 +11781,27 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get watchLiveSyncSubtitle => 'ウォッチに記録されたランを取り込みます。その間、中継は一時停止します。';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件の変更をこの端末に保存しました — オンラインになったら同期します',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件の変更が同期されていません',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => '再試行';
 }

@@ -12354,6 +12354,33 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Transfere as corridas gravadas no relógio. A retransmissão fica em pausa durante esse período.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count alterações guardadas neste dispositivo — serão sincronizadas quando estiver on-line',
+      one:
+          '$count alteração guardada neste dispositivo — será sincronizada quando estiver on-line',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alterações não foram sincronizadas',
+      one: '$count alteração não foi sincronizada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Tentar novamente';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -24701,4 +24728,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get watchLiveSyncSubtitle =>
       'Baixa as corridas gravadas no relógio. A retransmissão fica pausada nesse período.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count alterações salvas neste dispositivo — serão sincronizadas quando você estiver on-line',
+      one:
+          '$count alteração salva neste dispositivo — será sincronizada quando você estiver on-line',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alterações não foram sincronizadas',
+      one: '$count alteração não foi sincronizada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Tentar novamente';
 }

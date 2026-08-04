@@ -3602,5 +3602,8 @@
   "watchLiveShare": "Live-Link teilen",
   "watchLiveStartFailed": "Live-Übertragung konnte nicht gestartet werden – es wird nichts geteilt.",
   "watchLiveSyncAction": "Läufe von der Uhr synchronisieren",
-  "watchLiveSyncSubtitle": "Holt aufgezeichnete Läufe von der Uhr. Die Übertragung pausiert währenddessen."
+  "watchLiveSyncSubtitle": "Holt aufgezeichnete Läufe von der Uhr. Die Übertragung pausiert währenddessen.",
+  "pendingSyncOffline": "{count, plural, one{{count} Änderung auf diesem Gerät gespeichert – wird synchronisiert, sobald du online bist} other{{count} Änderungen auf diesem Gerät gespeichert – werden synchronisiert, sobald du online bist}}",
+  "pendingSyncFailed": "{count, plural, one{{count} Änderung wurde nicht synchronisiert} other{{count} Änderungen wurden nicht synchronisiert}}",
+  "pendingSyncRetry": "Erneut versuchen"
 }

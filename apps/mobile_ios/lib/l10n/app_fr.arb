@@ -3602,5 +3602,8 @@
   "watchLiveShare": "Partager le lien en direct",
   "watchLiveStartFailed": "Impossible de démarrer la diffusion en direct — rien n'est partagé.",
   "watchLiveSyncAction": "Synchroniser les courses de la montre",
-  "watchLiveSyncSubtitle": "Récupère les courses enregistrées sur la montre. Le relais est suspendu pendant ce temps."
+  "watchLiveSyncSubtitle": "Récupère les courses enregistrées sur la montre. Le relais est suspendu pendant ce temps.",
+  "pendingSyncOffline": "{count, plural, one{{count} modification enregistrée sur cet appareil — synchronisation dès le retour en ligne} other{{count} modifications enregistrées sur cet appareil — synchronisation dès le retour en ligne}}",
+  "pendingSyncFailed": "{count, plural, one{{count} modification n'a pas été synchronisée} other{{count} modifications n'ont pas été synchronisées}}",
+  "pendingSyncRetry": "Réessayer"
 }

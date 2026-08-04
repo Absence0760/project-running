@@ -12368,4 +12368,31 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Holt aufgezeichnete Läufe von der Uhr. Die Übertragung pausiert währenddessen.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count Änderungen auf diesem Gerät gespeichert – werden synchronisiert, sobald du online bist',
+      one:
+          '$count Änderung auf diesem Gerät gespeichert – wird synchronisiert, sobald du online bist',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Änderungen wurden nicht synchronisiert',
+      one: '$count Änderung wurde nicht synchronisiert',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Erneut versuchen';
 }

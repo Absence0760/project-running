@@ -3602,5 +3602,8 @@
   "watchLiveShare": "ライブリンクを共有",
   "watchLiveStartFailed": "ライブ配信を開始できませんでした — 何も共有されていません。",
   "watchLiveSyncAction": "ウォッチのランを同期",
-  "watchLiveSyncSubtitle": "ウォッチに記録されたランを取り込みます。その間、中継は一時停止します。"
+  "watchLiveSyncSubtitle": "ウォッチに記録されたランを取り込みます。その間、中継は一時停止します。",
+  "pendingSyncOffline": "{count, plural, other{{count}件の変更をこの端末に保存しました — オンラインになったら同期します}}",
+  "pendingSyncFailed": "{count, plural, other{{count}件の変更が同期されていません}}",
+  "pendingSyncRetry": "再試行"
 }

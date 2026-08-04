@@ -3602,5 +3602,8 @@
   "watchLiveShare": "Compartir enlace en directo",
   "watchLiveStartFailed": "No se pudo iniciar la emisión en directo: no se está compartiendo nada.",
   "watchLiveSyncAction": "Sincronizar carreras del reloj",
-  "watchLiveSyncSubtitle": "Descarga las carreras grabadas del reloj. La retransmisión se pausa mientras tanto."
+  "watchLiveSyncSubtitle": "Descarga las carreras grabadas del reloj. La retransmisión se pausa mientras tanto.",
+  "pendingSyncOffline": "{count, plural, one{{count} cambio guardado en este dispositivo — se sincronizará al volver a estar en línea} other{{count} cambios guardados en este dispositivo — se sincronizarán al volver a estar en línea}}",
+  "pendingSyncFailed": "{count, plural, one{{count} cambio no se ha sincronizado} other{{count} cambios no se han sincronizado}}",
+  "pendingSyncRetry": "Reintentar"
 }

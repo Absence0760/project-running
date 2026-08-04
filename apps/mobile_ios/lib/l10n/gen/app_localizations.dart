@@ -20659,6 +20659,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pulls recorded runs off the watch. The relay pauses while it runs.'**
   String get watchLiveSyncSubtitle;
+
+  /// Pending-sync banner while offline or signed out
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} change saved on this device — will sync when online} other{{count} changes saved on this device — will sync when online}}'**
+  String pendingSyncOffline(int count);
+
+  /// Pending-sync banner when a push failed while online
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} change hasn\'t synced} other{{count} changes haven\'t synced}}'**
+  String pendingSyncFailed(int count);
+
+  /// Retry button on the pending-sync banner
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get pendingSyncRetry;
 }
 
 class _AppLocalizationsDelegate
