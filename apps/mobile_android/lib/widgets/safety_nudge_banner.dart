@@ -23,8 +23,9 @@ class SafetyNudgeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return Card(
-      color: const Color(0xFF1F2937),
+      color: scheme.inverseSurface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
         child: Column(
@@ -34,14 +35,15 @@ class SafetyNudgeBanner extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.nightlight_round,
-                    color: Colors.white, size: 20),
+                Icon(Icons.nightlight_round,
+                    color: scheme.onInverseSurface, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     l10n.runSafetyNudgeSolo,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: scheme.onInverseSurface,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -53,7 +55,9 @@ class SafetyNudgeBanner extends StatelessWidget {
                   onPressed: onDismiss,
                   child: Text(
                     l10n.runNotNow,
-                    style: const TextStyle(color: Colors.white70),
+                    style: TextStyle(
+                        color:
+                            scheme.onInverseSurface.withValues(alpha: 0.75)),
                   ),
                 ),
                 const SizedBox(width: 4),
