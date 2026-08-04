@@ -42,7 +42,7 @@ Future<void> showReportSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
+    useSafeArea: true,
     builder: (ctx) => _ReportSheet(
       api: api,
       targetKind: targetKind,

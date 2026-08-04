@@ -47,7 +47,6 @@ Future<LogAction?> showLogSheet({
 }) {
   return showModalBottomSheet<LogAction>(
     context: context,
-    showDragHandle: true,
     builder: (ctx) => _LogSheet(recent: recent),
   );
 }

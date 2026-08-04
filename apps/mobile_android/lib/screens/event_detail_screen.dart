@@ -433,6 +433,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final picked = await showModalBottomSheet<_SubmitResultChoice>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) => _SubmitTimeSheet(social: widget.social),
     );
     if (picked == null || !mounted) return;

@@ -181,6 +181,7 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
     return showModalBottomSheet<_WeighInResult>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) => _WeighInSheet(),
     );
   }

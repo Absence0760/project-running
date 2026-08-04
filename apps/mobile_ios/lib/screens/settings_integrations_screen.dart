@@ -514,6 +514,7 @@ class _HeartRateMonitorTileState extends State<HeartRateMonitorTile> {
     final device = await showModalBottomSheet<BleDeviceCandidate>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) => _HeartRateScanSheet(heartRate: widget.heartRate),
     );
     if (device != null) {
@@ -726,6 +727,7 @@ class _TreadmillTileState extends State<TreadmillTile> {
     final device = await showModalBottomSheet<BleTreadmillCandidate>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) => _TreadmillScanSheet(treadmill: widget.treadmill),
     );
     if (device != null) {

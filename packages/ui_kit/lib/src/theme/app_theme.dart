@@ -109,6 +109,19 @@ class AppTheme {
           side: BorderSide(color: parchmentLine),
         ),
       ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: parchment,
+        modalBackgroundColor: parchment,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: 0,
+        showDragHandle: true,
+        dragHandleColor: parchmentLine,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+      ),
       textTheme: const TextTheme(
         labelSmall: TextStyle(
           fontSize: 11,
@@ -245,6 +258,19 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
           side: BorderSide(color: duskLine),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: duskDeep,
+        modalBackgroundColor: duskDeep,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: 0,
+        showDragHandle: true,
+        dragHandleColor: duskLine,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
       textTheme: const TextTheme(

@@ -33,7 +33,9 @@ Future<void> showRouteShareSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
+    showDragHandle: false,
     builder: (ctx) => _ShareRouteSheet(
       route: route,
       preferences: preferences,

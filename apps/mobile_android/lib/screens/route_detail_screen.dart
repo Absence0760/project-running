@@ -1874,6 +1874,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final result = await showModalBottomSheet<TransferRouteResult>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => RouteTransferClubPicker(
         clubs: eligible,
         currentClubId: _clubId,

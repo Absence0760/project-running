@@ -301,7 +301,9 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
+      showDragHandle: false,
       builder: (ctx) => _PeriodShareSheet(
         periodTitle: periodTitle(_period, _anchor, tag, weekStartDay: _weekStartDay),
         periodLabel: periodLabel(_period, _anchor, tag, weekStartDay: _weekStartDay),

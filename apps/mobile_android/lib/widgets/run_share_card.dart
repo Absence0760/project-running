@@ -32,7 +32,9 @@ Future<void> showRunShareSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
+    showDragHandle: false,
     builder: (ctx) => _ShareRunSheet(
       run: run,
       preferences: preferences,

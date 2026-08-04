@@ -547,7 +547,6 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     if (_waypoints.isEmpty) return;
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
       builder: (ctx) => WaypointListSheet(
         waypoints: List.of(_waypoints),
         onApply: (next) {

@@ -3386,6 +3386,7 @@ class _RunScreenState extends State<RunScreen> {
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) => Padding(
           padding:

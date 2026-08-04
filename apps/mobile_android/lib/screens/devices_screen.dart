@@ -184,6 +184,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final next = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => _OverridesSheet(initial: prefs),
     );
     if (next == null) return;
@@ -460,6 +461,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
     final entry = await showModalBottomSheet<MapEntry<String, dynamic>>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => _AddOverrideSheet(eligible: eligible),
     );
     if (entry == null) return;

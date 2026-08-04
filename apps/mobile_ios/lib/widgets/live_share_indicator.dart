@@ -81,7 +81,6 @@ Future<LiveShareAction?> showLiveShareSheet(BuildContext context) {
   final l10n = AppLocalizations.of(context);
   return showModalBottomSheet<LiveShareAction>(
     context: context,
-    showDragHandle: true,
     builder: (ctx) {
       final theme = Theme.of(ctx);
       return SafeArea(
