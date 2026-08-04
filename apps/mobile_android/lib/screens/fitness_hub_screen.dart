@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
@@ -8,12 +9,15 @@ import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../race_service.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import '../widgets/surface_peer_strip.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
 import 'plans_screen.dart';
+import 'races_screen.dart';
 import 'routes_screen.dart';
 import 'runs_screen.dart';
 
@@ -33,6 +37,11 @@ import 'runs_screen.dart';
 /// only the TabBar chrome (mirrors `social_screen.dart`'s host shape). The
 /// self-hiding contract holds — empty Gym/Nutrition tabs render their own
 /// onboarding empty state, never a forced card.
+///
+/// The Runs sub-tab additionally carries the labelled peer strip
+/// `Runs · Routes · Plans · Races` (mirroring web's `RunSurfaceTabs`), so run
+/// planning has a named destination instead of hanging off tooltip-only
+/// glyphs (decisions § 488).
 class FitnessHubScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final SocialService? social;
@@ -74,6 +83,7 @@ class FitnessHubScreen extends StatefulWidget {
 class _FitnessHubScreenState extends State<FitnessHubScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _controller;
+  late final RaceService _raceService = RaceService();
 
   @override
   void initState() {
@@ -114,6 +124,23 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
     ));
   }
 
+  void _openRaces() {
+    // The race calendar is a public search — no provider key, and no sign-in,
+    // gates reaching it (decisions § 488). The MapTiler key only powers the
+    // optional "near a place" geocode, so an uninitialised dotenv degrades to
+    // name + distance search rather than blocking the push.
+    String? key;
+    try {
+      final raw = (dotenv.env['MAPTILER_KEY'] ?? '').trim();
+      if (raw.isNotEmpty) key = raw;
+    } catch (e) {
+      debugPrint('fitness_hub: MAPTILER_KEY unreadable: $e');
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => RacesScreen(service: _raceService, mapTilerKey: key),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -151,8 +178,12 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
             routeStore: widget.routeStore,
             preferences: widget.preferences,
             settingsSync: widget.settingsSync,
-            onOpenRoutes: _openRoutes,
-            onOpenPlans: _openPlans,
+            surfacePeers: [
+              SurfacePeer(label: l10n.fitnessTabRuns),
+              SurfacePeer(label: l10n.fitnessRunsRoutes, onTap: _openRoutes),
+              SurfacePeer(label: l10n.runSurfaceTabPlans, onTap: _openPlans),
+              SurfacePeer(label: l10n.runSurfaceTabRaces, onTap: _openRaces),
+            ],
             showSyncActions: false,
             titleText: l10n.fitnessTabRuns,
           ),

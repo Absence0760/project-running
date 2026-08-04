@@ -26,6 +26,7 @@ import '../widgets/gym_compose_sheet.dart';
 import '../widgets/log_sheet.dart';
 import '../widgets/nutrition_log_sheet.dart';
 import '../widgets/run_track_preview.dart';
+import '../widgets/surface_peer_strip.dart';
 import '../widgets/track_preview.dart';
 import 'add_run_screen.dart';
 import 'gym_detail_screen.dart';
@@ -67,15 +68,10 @@ class RunsScreen extends StatefulWidget {
   /// tab strip. Default true preserves the standalone History behaviour.
   final bool showKindChips;
 
-  /// When set, the run-list AppBar surfaces a Routes action. The Fitness
-  /// hub's Runs sub-tab supplies this so Routes is co-located with the run
-  /// surface (relocated out of Social). Null elsewhere — no Routes affordance.
-  final VoidCallback? onOpenRoutes;
-
-  /// When set, the run-list AppBar surfaces a Training-plans action. The
-  /// Fitness hub's Runs sub-tab supplies this so Plans is co-located with the
-  /// run surface (relocated out of the Run-tab idle button). Null elsewhere.
-  final VoidCallback? onOpenPlans;
+  /// When set, a labelled peer strip (Runs · Routes · Plans · Races) renders
+  /// above the list. The Fitness hub's Runs sub-tab supplies it so the run
+  /// surface's planning tools have a named home; null elsewhere.
+  final List<SurfacePeer>? surfacePeers;
 
   /// When false the cloud slot (sync-unsynced badge / refresh / offline) is
   /// suppressed. The Fitness hub's Runs sub-tab passes false so the sync
@@ -100,8 +96,7 @@ class RunsScreen extends StatefulWidget {
     this.gymStore,
     this.foodStore,
     this.showKindChips = true,
-    this.onOpenRoutes,
-    this.onOpenPlans,
+    this.surfacePeers,
     this.showSyncActions = true,
     this.titleText,
   });
@@ -935,6 +930,7 @@ class _RunsScreenState extends State<RunsScreen> {
     final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final totalCount = widget.runStore.summaries.length;
+    final peers = widget.surfacePeers;
 
     return PopScope(
       canPop: !_selecting,
@@ -943,7 +939,14 @@ class _RunsScreenState extends State<RunsScreen> {
       },
       child: Scaffold(
         appBar: _selecting ? _selectionAppBar(l10n) : _normalAppBar(l10n),
-        body: _buildBody(theme, l10n, unit, totalCount),
+        body: peers == null
+            ? _buildBody(theme, l10n, unit, totalCount)
+            : Column(
+                children: [
+                  SurfacePeerStrip(label: l10n.runSurfaceLabel, peers: peers),
+                  Expanded(child: _buildBody(theme, l10n, unit, totalCount)),
+                ],
+              ),
         floatingActionButton: _selecting ? null : _buildAddFab(l10n),
       ),
     );
@@ -1121,18 +1124,6 @@ class _RunsScreenState extends State<RunsScreen> {
               ],
             ),
       actions: [
-        if (widget.onOpenRoutes != null)
-          IconButton(
-            icon: const Icon(Icons.route),
-            tooltip: l10n.fitnessRunsRoutes,
-            onPressed: widget.onOpenRoutes,
-          ),
-        if (widget.onOpenPlans != null)
-          IconButton(
-            icon: const Icon(Icons.event_note),
-            tooltip: l10n.fitnessRunsPlans,
-            onPressed: widget.onOpenPlans,
-          ),
         if (!_timelineMode)
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
