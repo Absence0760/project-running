@@ -917,6 +917,42 @@ abstract class AppLocalizations {
   /// **'Training plans'**
   String get fitnessRunsPlans;
 
+  /// Accessibility label for the labelled peer strip on the run surface
+  ///
+  /// In en, this message translates to:
+  /// **'Run surface sections'**
+  String get runSurfaceLabel;
+
+  /// Run surface peer strip entry opening the training plan library
+  ///
+  /// In en, this message translates to:
+  /// **'Plans'**
+  String get runSurfaceTabPlans;
+
+  /// Run surface peer strip entry opening the race calendar
+  ///
+  /// In en, this message translates to:
+  /// **'Races'**
+  String get runSurfaceTabRaces;
+
+  /// Accessibility label for the labelled peer strip on the gym surface
+  ///
+  /// In en, this message translates to:
+  /// **'Gym sections'**
+  String get gymSurfaceLabel;
+
+  /// Gym peer strip entry for the logged-workout list
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get gymTabLog;
+
+  /// Gym peer strip entry opening personal records
+  ///
+  /// In en, this message translates to:
+  /// **'Records'**
+  String get gymTabRecords;
+
   /// Title of the pinned coach entry at the top of the Home dashboard
   ///
   /// In en, this message translates to:
