@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
 	VOICE_CUE_IDS,
+	VOICE_FEEDBACK_ENABLED_DEFAULT,
 	isVoiceCueEnabled,
 	readVoiceCueMap,
 	setVoiceCueEnabled,
@@ -72,5 +73,61 @@ test('the cue ids match the Dart VoiceCue wire contract exactly', () => {
 		all[1].split(',').filter((s) => s.trim().length > 0).length,
 		VOICE_CUE_IDS.length,
 		'VoiceCue.all does not list every declared cue id',
+	);
+});
+
+test('the master-gate default agrees with the Dart local default', () => {
+	// The phone is what actually speaks. Its local default is what a runner
+	// who never touched the toggle experiences; the web fallback is what
+	// that runner is SHOWN. The two disagreed for months (web false, phone
+	// true — decisions § 474), so a drift must fail here, not surface in a
+	// future survey.
+	const dart = readFileSync(
+		resolve(__dirname, '../../../../mobile_android/lib/preferences.dart'),
+		'utf-8',
+	);
+	const load = dart.match(/_audioCues = _prefs\.getBool\(_kAudioCues\) \?\? (true|false);/);
+	assert.ok(load, 'audio-cues load fallback not found in preferences.dart');
+	assert.equal(
+		load[1] === 'true',
+		VOICE_FEEDBACK_ENABLED_DEFAULT,
+		'Dart load fallback disagrees with VOICE_FEEDBACK_ENABLED_DEFAULT',
+	);
+
+	const init = dart.match(/bool _audioCues = (true|false);/);
+	assert.ok(init, 'audio-cues field initialiser not found in preferences.dart');
+	assert.equal(
+		init[1] === 'true',
+		VOICE_FEEDBACK_ENABLED_DEFAULT,
+		'Dart field initialiser disagrees with VOICE_FEEDBACK_ENABLED_DEFAULT',
+	);
+});
+
+test('the web preferences page loads the master gate through the shared default', () => {
+	const page = readFileSync(
+		resolve(__dirname, '../../routes/settings/preferences/+page.svelte'),
+		'utf-8',
+	);
+	assert.ok(
+		page.includes("effective(settings, 'voice_feedback_enabled', VOICE_FEEDBACK_ENABLED_DEFAULT)"),
+		'preferences page must load voice_feedback_enabled through VOICE_FEEDBACK_ENABLED_DEFAULT',
+	);
+	assert.ok(
+		!/['"]voice_feedback_enabled['"]\s*,\s*(true|false)/.test(page),
+		'preferences page must not hard-code a voice_feedback_enabled fallback literal',
+	);
+});
+
+test('the settings.md registry row default matches the shared default', () => {
+	const registry = readFileSync(
+		resolve(__dirname, '../../../../../docs/backend/settings.md'),
+		'utf-8',
+	);
+	const row = registry.match(/^\| `voice_feedback_enabled` \| `bool` \| \w+ \| `(true|false)` \|/m);
+	assert.ok(row, 'voice_feedback_enabled row not found in docs/backend/settings.md');
+	assert.equal(
+		row[1] === 'true',
+		VOICE_FEEDBACK_ENABLED_DEFAULT,
+		'settings.md registry default disagrees with VOICE_FEEDBACK_ENABLED_DEFAULT',
 	);
 });

@@ -126,6 +126,7 @@ dependencies:
   # conflict and keeps both twin pubspecs' dep sets identical).
   intl: any
   in_app_update: ^4.2.5
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:

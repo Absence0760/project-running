@@ -12,6 +12,15 @@
 /// cues — recording is mobile-only). `voice_cues.test.ts` pins them against
 /// that file so the two can't drift.
 
+/// Default for the master `voice_feedback_enabled` gate when the key is
+/// absent from both bags. The phone — the only surface that speaks — has
+/// defaulted ON since v1 (`Preferences.audioCues` in `preferences.dart`),
+/// so this is what a runner who never touched the toggle actually hears;
+/// web hard-coded `false` here for months and displayed a switch that
+/// contradicted the phone's behaviour. `voice_cues.test.ts` reads the Dart
+/// source and the settings.md registry row and fails on drift. Decisions § 474.
+export const VOICE_FEEDBACK_ENABLED_DEFAULT = true;
+
 export const VOICE_CUE_IDS = [
 	'splits',
 	'start_finish',
