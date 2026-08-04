@@ -4101,14 +4101,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubDetailReportPost => 'Report this post';
 
   @override
-  String get clubDetailLoadFailedTitle => 'Couldn\'t load this club.';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.';
-
-  @override
-  String get clubDetailRetry => 'Retry';
+      'Couldn\'t load this club. It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.';
 
   @override
   String get clubDetailTimeoutError =>

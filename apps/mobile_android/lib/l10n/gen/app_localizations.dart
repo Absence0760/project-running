@@ -6862,23 +6862,11 @@ abstract class AppLocalizations {
   /// **'Report this post'**
   String get clubDetailReportPost;
 
-  /// Title shown when the club fails to load
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t load this club.'**
-  String get clubDetailLoadFailedTitle;
-
   /// Body shown when the club fails to load
   ///
   /// In en, this message translates to:
-  /// **'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.'**
+  /// **'Couldn\'t load this club. It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.'**
   String get clubDetailLoadFailedBody;
-
-  /// Retry button on the club load-error state
-  ///
-  /// In en, this message translates to:
-  /// **'Retry'**
-  String get clubDetailRetry;
 
   /// Error shown when loading the club times out
   ///

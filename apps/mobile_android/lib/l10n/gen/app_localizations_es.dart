@@ -4131,14 +4131,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get clubDetailReportPost => 'Denunciar esta publicación';
 
   @override
-  String get clubDetailLoadFailedTitle => 'No se pudo cargar este club.';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      'Puede que se haya eliminado, o que tu sesión deba actualizarse. Desliza para reintentar, o cierra sesión y vuelve a entrar desde Ajustes.';
-
-  @override
-  String get clubDetailRetry => 'Reintentar';
+      'No se pudo cargar este club. Puede que se haya eliminado, o que tu sesión deba actualizarse. Desliza para reintentar, o cierra sesión y vuelve a entrar desde Ajustes.';
 
   @override
   String get clubDetailTimeoutError =>

@@ -4135,15 +4135,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubDetailReportPost => 'Denunciar esta publicação';
 
   @override
-  String get clubDetailLoadFailedTitle =>
-      'Não foi possível carregar este clube.';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      'Pode ter sido removido, ou sua sessão precisa ser atualizada. Puxe para tentar novamente, ou saia e entre novamente em Configurações.';
-
-  @override
-  String get clubDetailRetry => 'Tentar novamente';
+      'Não foi possível carregar este clube. Pode ter sido removido, ou sua sessão precisa ser atualizada. Puxe para tentar novamente, ou saia e entre novamente em Configurações.';
 
   @override
   String get clubDetailTimeoutError =>
@@ -16567,15 +16560,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get clubDetailReportPost => 'Denunciar esta publicação';
 
   @override
-  String get clubDetailLoadFailedTitle =>
-      'Não foi possível carregar este clube.';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      'Pode ter sido removido, ou sua sessão precisa ser atualizada. Puxe para tentar novamente, ou saia e entre novamente em Configurações.';
-
-  @override
-  String get clubDetailRetry => 'Tentar novamente';
+      'Não foi possível carregar este clube. Pode ter sido removido, ou sua sessão precisa ser atualizada. Puxe para tentar novamente, ou saia e entre novamente em Configurações.';
 
   @override
   String get clubDetailTimeoutError =>

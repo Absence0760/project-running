@@ -5574,17 +5574,9 @@
   "@clubDetailReportPost": {
     "description": "Tooltip on the report-post button on a club feed post"
   },
-  "clubDetailLoadFailedTitle": "Couldn't load this club.",
-  "@clubDetailLoadFailedTitle": {
-    "description": "Title shown when the club fails to load"
-  },
-  "clubDetailLoadFailedBody": "It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.",
+  "clubDetailLoadFailedBody": "Couldn't load this club. It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.",
   "@clubDetailLoadFailedBody": {
     "description": "Body shown when the club fails to load"
-  },
-  "clubDetailRetry": "Retry",
-  "@clubDetailRetry": {
-    "description": "Retry button on the club load-error state"
   },
   "clubDetailTimeoutError": "Connection timed out. Check your network and try again.",
   "@clubDetailTimeoutError": {

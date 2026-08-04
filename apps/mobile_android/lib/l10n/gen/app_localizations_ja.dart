@@ -3897,14 +3897,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailReportPost => 'この投稿を報告';
 
   @override
-  String get clubDetailLoadFailedTitle => 'このクラブを読み込めませんでした。';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      '削除されたか、セッションの更新が必要かもしれません。引っ張って再試行するか、設定からサインアウトして再度サインインしてください。';
-
-  @override
-  String get clubDetailRetry => '再試行';
+      'このクラブを読み込めませんでした。削除されたか、セッションの更新が必要かもしれません。引っ張って再試行するか、設定からサインアウトして再度サインインしてください。';
 
   @override
   String get clubDetailTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';

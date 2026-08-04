@@ -4148,14 +4148,8 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubDetailReportPost => 'Signaler cette publication';
 
   @override
-  String get clubDetailLoadFailedTitle => 'Impossible de charger ce club.';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      'Il a peut-être été supprimé, ou votre session doit être actualisée. Tirez pour réessayer, ou déconnectez-vous et reconnectez-vous depuis les Réglages.';
-
-  @override
-  String get clubDetailRetry => 'Réessayer';
+      'Impossible de charger ce club. Il a peut-être été supprimé, ou votre session doit être actualisée. Tirez pour réessayer, ou déconnectez-vous et reconnectez-vous depuis les Réglages.';
 
   @override
   String get clubDetailTimeoutError =>
