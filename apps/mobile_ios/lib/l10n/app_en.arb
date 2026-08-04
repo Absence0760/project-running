@@ -10960,9 +10960,17 @@
   "@clubFormCreate": {
     "description": "Button to create the club"
   },
+  "clubFormErrName": "Give the club a name.",
+  "@clubFormErrName": {
+    "description": "Per-field validation error when the club name is empty on save"
+  },
   "clubFormErrSlug": "Name needs at least one letter or digit.",
   "@clubFormErrSlug": {
     "description": "Validation error when the name has no usable characters"
+  },
+  "eventFormErrTitle": "Give the event a title.",
+  "@eventFormErrTitle": {
+    "description": "Per-field validation error when the event title is empty on save"
   },
   "clubFormErrUnreachable": "Can't reach the server right now. Check your connection or sign in, then try again.",
   "@clubFormErrUnreachable": {

@@ -7795,7 +7795,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubFormCreate => '作成';
 
   @override
+  String get clubFormErrName => 'クラブに名前を付けてください。';
+
+  @override
   String get clubFormErrSlug => '名前には少なくとも 1 文字または数字が必要です。';
+
+  @override
+  String get eventFormErrTitle => 'イベントにタイトルを付けてください。';
 
   @override
   String get clubFormErrUnreachable =>

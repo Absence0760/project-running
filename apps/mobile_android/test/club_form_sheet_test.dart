@@ -355,6 +355,41 @@ void main() {
     });
 
     testWidgets(
+        'an empty name flags the field inline instead of silently ignoring '
+        'Create; typing clears it; create then proceeds (issue #666 U6)',
+        (tester) async {
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      final nameField = find.widgetWithText(TextField, 'Name');
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pump();
+      expect(tester.widget<TextField>(nameField).decoration?.errorText,
+          'Give the club a name.');
+      expect(fake.createCalled, isFalse);
+
+      // A name with no usable slug characters is name-attributable too.
+      await tester.enterText(nameField, '###');
+      await tester.pump();
+      expect(tester.widget<TextField>(nameField).decoration?.errorText,
+          isNull);
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pump();
+      expect(tester.widget<TextField>(nameField).decoration?.errorText,
+          'Name needs at least one letter or digit.');
+      expect(fake.createCalled, isFalse);
+
+      await tester.enterText(nameField, 'Real Club');
+      await tester.pump();
+      expect(tester.widget<TextField>(nameField).decoration?.errorText,
+          isNull);
+      await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+      await tester.pumpAndSettle();
+      expect(fake.createCalled, isTrue);
+      expect(fake.capturedSlug, 'real-club');
+    });
+
+    testWidgets(
         'switching to Private forces the invite join policy + offers only '
         'the Invite chip', (tester) async {
       final fake = _CapturingSocialService();

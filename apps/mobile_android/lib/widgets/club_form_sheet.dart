@@ -59,6 +59,10 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
   late bool _isPublic = widget.existing?.isPublic ?? true;
   String _joinPolicy = 'open';
   bool _busy = false;
+  // Name validation renders inline on the name field; _error stays for
+  // failures not attributable to a single field (unreachable backend,
+  // save failure).
+  String? _nameError;
   String? _error;
 
   bool get _isEdit => widget.existing != null;
@@ -107,14 +111,20 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
           );
 
   Future<void> _submit() async {
-    final name = _name.text.trim();
-    if (name.isEmpty || _busy) return;
+    if (_busy) return;
     final l10n = AppLocalizations.of(context);
+    final name = _name.text.trim();
+    // Empty name used to return silently — Save looked dead. Flag the
+    // field instead (sign_up_screen idiom); the no-usable-characters
+    // case is name-attributable too.
     final slug = _slugify(name);
-    if (slug.isEmpty) {
-      setState(() => _error = l10n.clubFormErrSlug);
-      return;
-    }
+    final nameError = name.isEmpty
+        ? l10n.clubFormErrName
+        : slug.isEmpty
+            ? l10n.clubFormErrSlug
+            : null;
+    setState(() => _nameError = nameError);
+    if (nameError != null) return;
     // Pre-flight readiness check — without this the createClub call
     // hits SocialService._c which throws StateError "called before
     // Supabase.initialize() resolved." The user surfaced this as a
@@ -207,7 +217,11 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 decoration: InputDecoration(
                   labelText: l10n.clubFormNameLabel,
                   border: const OutlineInputBorder(),
+                  errorText: _nameError,
                 ),
+                onChanged: (_) {
+                  if (_nameError != null) setState(() => _nameError = null);
+                },
               ),
               const SizedBox(height: 8),
               TextField(

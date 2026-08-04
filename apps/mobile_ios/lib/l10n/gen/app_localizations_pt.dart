@@ -8218,8 +8218,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubFormCreate => 'Criar';
 
   @override
+  String get clubFormErrName => 'Dê um nome ao clube.';
+
+  @override
   String get clubFormErrSlug =>
       'O nome precisa de pelo menos uma letra ou dígito.';
+
+  @override
+  String get eventFormErrTitle => 'Dê um título ao evento.';
 
   @override
   String get clubFormErrUnreachable =>
@@ -20624,8 +20630,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get clubFormCreate => 'Criar';
 
   @override
+  String get clubFormErrName => 'Dê um nome ao clube.';
+
+  @override
   String get clubFormErrSlug =>
       'O nome precisa de pelo menos uma letra ou dígito.';
+
+  @override
+  String get eventFormErrTitle => 'Dê um título ao evento.';
 
   @override
   String get clubFormErrUnreachable =>

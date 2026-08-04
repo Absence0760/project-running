@@ -36,6 +36,81 @@ void main() {
     }
   });
 
+  testWidgets(
+      'empty save flags title AND exercise name inline at once; editing '
+      'clears each; save then proceeds (issue #666 U6)', (tester) async {
+    final f = await _store('perfield');
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: RoutineBuilderSheet(store: f.store)),
+      ));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Save routine'));
+      await tester.pump();
+      await tester.tap(find.text('Save routine'));
+      await tester.pump();
+
+      // Both invalid fields flag in ONE save attempt, each as its own
+      // errorText (TextField 0 is the title, 1 the exercise name).
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(0))
+              .decoration
+              ?.errorText,
+          'Give the routine a name.');
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(1))
+              .decoration
+              ?.errorText,
+          'Add at least one exercise with a name.');
+      expect(f.store.routines, isEmpty);
+
+      await tester.enterText(find.byType(TextField).at(0), 'Push A');
+      await tester.pump();
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(0))
+              .decoration
+              ?.errorText,
+          isNull);
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(1))
+              .decoration
+              ?.errorText,
+          isNotNull);
+
+      await tester.enterText(find.byType(TextField).at(1), 'Bench');
+      await tester.pump();
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(1))
+              .decoration
+              ?.errorText,
+          isNull);
+
+      // Let the focused name field's autoscroll land before scrolling the
+      // Save button back into view — otherwise the deferred focus scroll
+      // undoes ensureVisible and the tap misses.
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.ensureVisible(find.text('Save routine'));
+      await tester.pump();
+      // The save runs inside runAsync so the atomic file write's await
+      // chain completes in the real zone.
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Save routine'));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pump();
+      expect(f.store.routines, hasLength(1));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('seeded title + exercise saves a routine to the store',
       (tester) async {
     final f = await _store('save');

@@ -136,6 +136,10 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   late final TextEditingController _titleCtl;
   late bool _isPublic;
   late List<_EditExercise> _exercises;
+  // Set on a save attempt with no named exercise; renders as errorText on
+  // the (necessarily all-empty) exercise-name fields. _error stays for
+  // save FAILURES only — validation is per-field.
+  bool _needExercise = false;
   String? _error;
   bool _saving = false;
 
@@ -334,6 +338,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     if (picked == null) return;
     setState(() {
       ex.name.text = picked.name;
+      _needExercise = false;
       if (_error != null) _error = null;
     });
   }
@@ -377,10 +382,11 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     final l10n = AppLocalizations.of(context);
     final sets = _buildSets();
     if (sets.isEmpty) {
-      setState(() => _error = l10n.gymEditorNeedExercise);
+      setState(() => _needExercise = true);
       return;
     }
     setState(() {
+      _needExercise = false;
       _error = null;
       _saving = true;
     });
@@ -625,7 +631,14 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           border: const OutlineInputBorder(),
           hintText: l10n.gymEditorExercisePlaceholder,
+          errorText: _needExercise && ex.name.text.trim().isEmpty
+              ? l10n.gymEditorNeedExercise
+              : null,
         );
+    void clearNeedExercise(String _) {
+      if (_needExercise) setState(() => _needExercise = false);
+    }
+
     if (_datalistNames.isEmpty) {
       return Semantics(
         label: l10n.gymEditorExercisePlaceholder,
@@ -634,6 +647,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           focusNode: ex.nameFocus,
           textCapitalization: TextCapitalization.words,
           decoration: deco(),
+          onChanged: clearNeedExercise,
         ),
       );
     }
@@ -654,6 +668,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           focusNode: focusNode,
           textCapitalization: TextCapitalization.words,
           decoration: deco(),
+          onChanged: clearNeedExercise,
           onSubmitted: (_) => onSubmit(),
         ),
       ),
