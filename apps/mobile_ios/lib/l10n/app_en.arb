@@ -13265,6 +13265,27 @@
   "@gymSessionKeepGoing": {
     "description": "Leave-session dialog action that stays in the live session"
   },
+  "gymDraftTitle": "Workout in progress",
+  "@gymDraftTitle": {
+    "description": "Title of the gym-screen card offering to resume an in-flight guided-session draft"
+  },
+  "gymDraftSetCount": "{count, plural, =1{1 set logged} other{{count} sets logged}}",
+  "@gymDraftSetCount": {
+    "description": "Logged-set count on the gym-screen resume card",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gymDraftResume": "Resume",
+  "@gymDraftResume": {
+    "description": "Resume-card action restoring the guided session from its draft"
+  },
+  "gymDraftSave": "Save as is",
+  "@gymDraftSave": {
+    "description": "Resume-card action keeping the draft's logged sets as a finished workout without resuming"
+  },
   "gymSessionSaved": "Workout saved",
   "@gymSessionSaved": {
     "description": "Banner shown after a guided session is saved"

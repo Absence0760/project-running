@@ -16976,6 +16976,30 @@ abstract class AppLocalizations {
   /// **'Keep going'**
   String get gymSessionKeepGoing;
 
+  /// Title of the gym-screen card offering to resume an in-flight guided-session draft
+  ///
+  /// In en, this message translates to:
+  /// **'Workout in progress'**
+  String get gymDraftTitle;
+
+  /// Logged-set count on the gym-screen resume card
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 set logged} other{{count} sets logged}}'**
+  String gymDraftSetCount(int count);
+
+  /// Resume-card action restoring the guided session from its draft
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get gymDraftResume;
+
+  /// Resume-card action keeping the draft's logged sets as a finished workout without resuming
+  ///
+  /// In en, this message translates to:
+  /// **'Save as is'**
+  String get gymDraftSave;
+
   /// Banner shown after a guided session is saved
   ///
   /// In en, this message translates to:

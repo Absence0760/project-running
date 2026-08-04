@@ -10139,6 +10139,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymSessionKeepGoing => 'Keep going';
 
   @override
+  String get gymDraftTitle => 'Workout in progress';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sets logged',
+      one: '1 set logged',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Resume';
+
+  @override
+  String get gymDraftSave => 'Save as is';
+
+  @override
   String get gymSessionSaved => 'Workout saved';
 
   @override

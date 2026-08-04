@@ -10240,6 +10240,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymSessionKeepGoing => 'Continuar a treinar';
 
   @override
+  String get gymDraftTitle => 'Sessão em curso';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count séries registadas',
+      one: '1 série registada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Retomar';
+
+  @override
+  String get gymDraftSave => 'Guardar como está';
+
+  @override
   String get gymSessionSaved => 'Treino guardado';
 
   @override
@@ -22615,6 +22635,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymSessionKeepGoing => 'Continuar treinando';
+
+  @override
+  String get gymDraftTitle => 'Sessão em andamento';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count séries registradas',
+      one: '1 série registrada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Retomar';
+
+  @override
+  String get gymDraftSave => 'Salvar como está';
 
   @override
   String get gymSessionSaved => 'Treino salvo';

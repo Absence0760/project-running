@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' show MetadataKeys;
 import 'package:flutter/material.dart';
 
 import '../exercise_records.dart';
@@ -12,8 +13,10 @@ import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/pending_sync_banner.dart';
+import '../widgets/top_banner.dart';
 import 'gym_detail_screen.dart';
 import 'gym_records_screen.dart';
+import 'gym_session_screen.dart';
 import 'routine_library_screen.dart';
 
 /// Total working volume (Σ reps·weight, rounded) for a stored workout — the
@@ -128,11 +131,16 @@ class GymScreen extends StatefulWidget {
   /// hides publishing; reading / adopting club templates never needs it.
   final SocialService? social;
 
+  /// Optional, for tests: an already-initialised routine store. When null the
+  /// screen owns (and initialises) its own, as before.
+  final LocalRoutineStore? routineStore;
+
   const GymScreen({
     super.key,
     required this.api,
     required this.store,
     this.social,
+    this.routineStore,
   });
 
   @override
@@ -152,7 +160,8 @@ class _GymScreenState extends State<GymScreen> {
   // Routines (gym_programming.md P1) are a parallel planning surface owned by
   // this screen — the same "each surface owns its store" precedent the gym /
   // food stores follow (decisions §122). Lazily init'd; re-hydrates from disk.
-  final LocalRoutineStore _routineStore = LocalRoutineStore();
+  late final LocalRoutineStore _routineStore =
+      widget.routineStore ?? LocalRoutineStore();
   bool _routineStoreReady = false;
 
   @override
@@ -165,10 +174,12 @@ class _GymScreenState extends State<GymScreen> {
   }
 
   Future<void> _initRoutines() async {
-    try {
-      await _routineStore.init();
-    } catch (e) {
-      debugPrint('gym_screen: routine store init failed: $e');
+    if (widget.routineStore == null) {
+      try {
+        await _routineStore.init();
+      } catch (e) {
+        debugPrint('gym_screen: routine store init failed: $e');
+      }
     }
     if (mounted) setState(() => _routineStoreReady = true);
   }
@@ -262,6 +273,93 @@ class _GymScreenState extends State<GymScreen> {
     // already refreshed the list, so nothing more to do here.
   }
 
+  // The newest in-flight guided-session draft whose routine still exists —
+  // what the resume card offers to restore. L4 auxiliary read: a malformed
+  // row or a broken routine store must degrade to "no card", never break
+  // the gym list.
+  ({StoredGymWorkout draft, StoredRoutine routine})? _resumableDraft() {
+    try {
+      if (!_routineStoreReady) return null;
+      for (final w in widget.store.workouts) {
+        final meta = w.row['metadata'];
+        if (meta is! Map || meta[MetadataKeys.gymSessionDraft] == null) {
+          continue;
+        }
+        final rid = meta[MetadataKeys.routineId];
+        final routine = rid is String ? _routineStore.byId(rid) : null;
+        if (routine == null) continue;
+        return (draft: w, routine: routine);
+      }
+    } catch (e) {
+      debugPrint('gym_screen: draft scan failed: $e');
+    }
+    return null;
+  }
+
+  Future<void> _resumeDraft(
+      ({StoredGymWorkout draft, StoredRoutine routine}) d) async {
+    final saved = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => GymSessionScreen(
+          api: widget.api,
+          routine: d.routine,
+          gymStore: widget.store,
+          resumeDraft: d.draft,
+        ),
+      ),
+    );
+    if (saved != null) await _maybeSync();
+  }
+
+  /// The run screen's "Finish" analogue: keep the logged sets as a plain
+  /// workout without re-entering the runner. Strips the draft marker (no
+  /// adherence verdict is claimed — the session never ran to completion).
+  Future<void> _saveDraftAsIs(StoredGymWorkout draft) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      final meta = Map<String, dynamic>.from(
+          (draft.row['metadata'] as Map?) ?? const <String, dynamic>{});
+      meta.remove(MetadataKeys.gymSessionDraft);
+      await widget.store.updateLocal(draft.id, metadata: meta);
+      await _maybeSync();
+      if (mounted) showTopBanner(context, l10n.gymSessionSaved);
+    } catch (e) {
+      debugPrint('gym_screen: draft save-as-is failed: $e');
+      if (mounted) showTopBanner(context, l10n.gymSessionSaveFailed);
+    }
+  }
+
+  Future<void> _discardDraft(StoredGymWorkout draft) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(l10n.gymSessionDiscardTitle),
+            content: Text(l10n.gymSessionDiscardBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(l10n.gymRoutineEditorCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(ctx).colorScheme.error),
+                child: Text(l10n.gymSessionDiscardConfirm),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!ok) return;
+    try {
+      await widget.store.deleteLocal(draft.id);
+      await _maybeSync();
+    } catch (e) {
+      debugPrint('gym_screen: draft discard failed: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -323,6 +421,7 @@ class _GymScreenState extends State<GymScreen> {
             isOnline: _isOnline,
             stores: [widget.store, _routineStore],
           ),
+          if (_resumableDraft() case final d?) _draftCard(d, theme, l10n),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refresh,
@@ -407,6 +506,71 @@ class _GymScreenState extends State<GymScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _draftCard(({StoredGymWorkout draft, StoredRoutine routine}) d,
+      ThemeData theme, AppLocalizations l10n) {
+    final title = d.routine.title.trim();
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _resumeDraft(d),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.play_circle_outline,
+                      color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(l10n.gymDraftTitle,
+                            style: theme.textTheme.titleSmall),
+                        Text(
+                          '${title.isEmpty ? l10n.gymUntitled : title} · ${l10n.gymDraftSetCount(d.draft.sets.length)}',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.colorScheme.outline),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => _discardDraft(d.draft),
+                      style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.error),
+                      child: Text(l10n.gymSessionDiscardConfirm),
+                    ),
+                    TextButton(
+                      onPressed: () => _saveDraftAsIs(d.draft),
+                      child: Text(l10n.gymDraftSave),
+                    ),
+                    FilledButton(
+                      onPressed: () => _resumeDraft(d),
+                      child: Text(l10n.gymDraftResume),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

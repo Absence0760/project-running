@@ -9738,6 +9738,25 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymSessionKeepGoing => '続ける';
 
   @override
+  String get gymDraftTitle => '進行中のワークアウト';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countセット記録済み',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => '再開';
+
+  @override
+  String get gymDraftSave => 'このまま保存';
+
+  @override
   String get gymSessionSaved => 'ワークアウトを保存しました';
 
   @override
