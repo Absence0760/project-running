@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../training_load.dart';
+
+/// Series hues for the three curves. The legend swatch and the painted line
+/// read the SAME constant, so a key can never name one colour while the plot
+/// draws another. Form carries no sign colouring: one stroke cannot honestly
+/// change hue at every zero crossing of the window it spans, and the sign is
+/// already told three other ways on this card (the dashed zero line, the
+/// signed value in the legend entry, the reading chip below the plot).
+@visibleForTesting
+const trainingLoadFitnessColour = Color(0xFF4F46E5);
+@visibleForTesting
+const trainingLoadFatigueColour = Color(0xFFF59E0B);
+@visibleForTesting
+const trainingLoadFormColour = Color(0xFFEF4444);
 
 /// Dashboard "Fitness / Fatigue / Form" chart. Mirrors
 /// `apps/web/src/lib/components/TrainingLoadChart.svelte` (decisions §34).
@@ -75,6 +87,7 @@ class TrainingLoadChart extends StatelessWidget {
                 height: 180,
                 width: double.infinity,
                 child: CustomPaint(
+                  key: const Key('trainingLoadChartPainter'),
                   painter: _ChartPainter(
                     points: points,
                     axisColor: theme.colorScheme.outline.withValues(alpha: 0.5),
@@ -142,26 +155,25 @@ class _Legend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final semantic = AppSemanticColors.of(context);
-    final formColor = last.tsb >= 0 ? semantic.success : semantic.danger;
     return Wrap(
       spacing: 16,
       runSpacing: 6,
       children: [
         _LegendKey(
-          color: const Color(0xFF4F46E5),
+          color: trainingLoadFitnessColour,
           label: l10n.trainingLoadLegendFitness,
           value: last.ctl,
         ),
         _LegendKey(
-          color: const Color(0xFFF59E0B),
+          color: trainingLoadFatigueColour,
           label: l10n.trainingLoadLegendFatigue,
           value: last.atl,
         ),
         _LegendKey(
-            color: formColor,
-            label: l10n.trainingLoadLegendForm,
-            value: last.tsb),
+          color: trainingLoadFormColour,
+          label: l10n.trainingLoadLegendForm,
+          value: last.tsb,
+        ),
       ],
     );
   }
@@ -207,10 +219,6 @@ class _LegendKey extends StatelessWidget {
 class _ChartPainter extends CustomPainter {
   final List<TrainingLoadPoint> points;
   final Color axisColor;
-
-  static const _fitness = Color(0xFF4F46E5);
-  static const _fatigue = Color(0xFFF59E0B);
-  static const _form = Color(0xFFEF4444);
 
   _ChartPainter({required this.points, required this.axisColor});
 
@@ -283,9 +291,9 @@ class _ChartPainter extends CustomPainter {
       canvas.drawPath(path, paint);
     }
 
-    drawSeries((p) => p.ctl, _fitness);
-    drawSeries((p) => p.atl, _fatigue);
-    drawSeries((p) => p.tsb, _form);
+    drawSeries((p) => p.ctl, trainingLoadFitnessColour);
+    drawSeries((p) => p.atl, trainingLoadFatigueColour);
+    drawSeries((p) => p.tsb, trainingLoadFormColour);
   }
 
   void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
