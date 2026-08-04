@@ -147,9 +147,11 @@ class _FundraiserSectionState extends State<FundraiserSection> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  l10n.fundraiserDonorCount(donors),
-                  style: theme.textTheme.bodySmall,
+                Expanded(
+                  child: Text(
+                    l10n.fundraiserDonorCount(donors),
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
                 if (progress.state == ThermometerState.exceeded)
                   Text(
@@ -217,7 +219,14 @@ class _DonationRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
               Text(
                 money(entry.amountCents, entry.currency),
                 style: const TextStyle(fontWeight: FontWeight.w600),

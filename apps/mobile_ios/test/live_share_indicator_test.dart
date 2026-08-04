@@ -84,6 +84,18 @@ void main() {
     expect(resolved, LiveShareAction.stop);
   });
 
+  testWidgets('sheet title survives a narrow width without overflowing',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(240, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpSheetHost(tester, onResolved: (_) {});
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // The dot + title header row must wrap the title instead of throwing
+    // a RenderFlex overflow (the harness fails the test on one).
+    expect(find.text('Live sharing on'), findsOneWidget);
+  });
+
   testWidgets('dismissing the sheet resolves null', (tester) async {
     LiveShareAction? resolved;
     var called = false;

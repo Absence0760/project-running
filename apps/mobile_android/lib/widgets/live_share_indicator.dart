@@ -101,10 +101,13 @@ Future<LiveShareAction?> showLiveShareSheet(BuildContext context) {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    l10n.runLiveShareSheetTitle,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                  Expanded(
+                    child: Text(
+                      l10n.runLiveShareSheetTitle,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
               ),

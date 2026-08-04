@@ -62,15 +62,18 @@ class ReadinessCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text(
-                  l10n.readinessCardHeader,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.06,
-                    color: theme.colorScheme.outline,
+                Expanded(
+                  child: Text(
+                    l10n.readinessCardHeader,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.06,
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -152,10 +155,14 @@ class _ContributorChip extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(
-          contribution.name,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
+        Flexible(
+          child: Text(
+            contribution.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
         ),
         const SizedBox(width: 4),

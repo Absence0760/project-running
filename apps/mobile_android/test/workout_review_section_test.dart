@@ -252,6 +252,33 @@ void main() {
       expect(find.text('0.12 km'), findsNothing);
     });
 
+    testWidgets('header row survives a narrow width without overflowing',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 240,
+                child: SingleChildScrollView(
+                  child: WorkoutReviewSection(metadata: {
+                    'workout_adherence': 'completed',
+                    'workout_step_results': [_step(kind: 'warmup')],
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      // Title + adherence pill share one row; at 240 the title must
+      // ellipsize instead of throwing a RenderFlex overflow (the harness
+      // fails the test on one).
+      expect(find.text('Workout'), findsOneWidget);
+    });
+
     test('WorkoutStepReview.fromMap reads target_duration_s', () {
       final s = WorkoutStepReview.fromMap({
         'kind': 'rep',

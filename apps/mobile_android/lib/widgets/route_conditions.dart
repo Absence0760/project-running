@@ -210,9 +210,12 @@ class _RouteConditionsState extends State<RouteConditions> {
               Icon(Icons.report_outlined,
                   size: 18, color: cs.onSurfaceVariant),
               const SizedBox(width: 6),
-              Text(l10n.routeConditionsTitle,
-                  style: theme.textTheme.titleMedium),
-              const Spacer(),
+              Expanded(
+                child: Text(l10n.routeConditionsTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium),
+              ),
               if (_showComposer && !_composerOpen)
                 TextButton.icon(
                   onPressed: () => setState(() => _composerOpen = true),
@@ -292,8 +295,10 @@ class _RouteConditionsState extends State<RouteConditions> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          OverflowBar(
+            alignment: MainAxisAlignment.end,
+            overflowAlignment: OverflowBarAlignment.end,
+            spacing: 8,
             children: [
               TextButton(
                 onPressed: _submitting
@@ -301,7 +306,6 @@ class _RouteConditionsState extends State<RouteConditions> {
                     : () => setState(() => _composerOpen = false),
                 child: Text(l10n.routeConditionsCancel),
               ),
-              const SizedBox(width: 8),
               FilledButton(
                 onPressed: _submitting ? null : _submit,
                 child: Text(_submitting
@@ -332,39 +336,54 @@ class _RouteConditionsState extends State<RouteConditions> {
           children: [
             Row(
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: sevColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    routeConditionKindLabel(l10n, c.condition),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: sevColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: sevColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            routeConditionKindLabel(l10n, c.condition),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: sevColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          routeConditionSeverityLabel(l10n, c.severity)
+                              .toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(color: sevColor),
+                        ),
+                      ),
+                      if (c.positionM != null) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            l10n.routeConditionsAtDistance(
+                                formatDistanceForPref(c.positionM!)),
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  routeConditionSeverityLabel(l10n, c.severity).toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(color: sevColor),
-                ),
-                if (c.positionM != null) ...[
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      l10n.routeConditionsAtDistance(
-                          formatDistanceForPref(c.positionM!)),
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-                const Spacer(),
                 Text(
                   fmtRelative(c.createdAt, activeLocaleTag),
                   style: theme.textTheme.bodySmall

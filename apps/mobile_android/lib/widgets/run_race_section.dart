@@ -158,14 +158,15 @@ class _RunRaceSectionState extends State<RunRaceSection> {
             children: [
               Text(l.racesMatchPrompt(candidate.name)),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              OverflowBar(
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
+                spacing: 8,
                 children: [
                   TextButton(
                     onPressed: () => setState(() => _dismissed = true),
                     child: Text(l.racesMatchDismiss),
                   ),
-                  const SizedBox(width: 8),
                   FilledButton(
                     onPressed: _confirmMatch,
                     child: Text(l.racesMatchConfirm),
@@ -185,17 +186,21 @@ class _RunRaceSectionState extends State<RunRaceSection> {
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           children: [
-            Expanded(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-            Text(value,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
       );

@@ -99,9 +99,13 @@ class _PlanCalendarState extends State<PlanCalendar> {
                     : null,
                 tooltip: l10n.planCalendarPrevMonth,
               ),
-              Text(
-                '${formatMonthName(DateTime(current.year, current.month + 1), tag)} ${current.year}',
-                style: theme.textTheme.titleMedium,
+              Flexible(
+                child: Text(
+                  '${formatMonthName(DateTime(current.year, current.month + 1), tag)} ${current.year}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium,
+                ),
               ),
               IconButton(
                 icon: const Icon(Icons.chevron_right),

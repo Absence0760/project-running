@@ -184,6 +184,40 @@ void main() {
       );
       expect(find.text('<1%'), findsOneWidget);
     });
+
+    testWidgets('header row survives a narrow width without overflowing',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: SingleChildScrollView(
+                  child: IntensityCard(
+                    runs: [
+                      _r(
+                          startedAt: now.subtract(const Duration(days: 1)),
+                          durationS: 1200,
+                          avgBpm: 145),
+                    ],
+                    hrZones: zones,
+                    now: now,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      // Title + window label share one row; at 320 the title must
+      // ellipsize instead of throwing a RenderFlex overflow (the harness
+      // fails the test on one).
+      expect(find.text('TRAINING INTENSITY'), findsOneWidget);
+      expect(find.text('last 30 days'), findsOneWidget);
+    });
   });
 
   group('IntensityCard age-estimated caveat (#268)', () {

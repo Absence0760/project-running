@@ -43,8 +43,12 @@ class RecentLiftsCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(l10n.dashboardSectionRecentLifts,
-                    style: theme.textTheme.titleMedium),
+                Expanded(
+                  child: Text(l10n.dashboardSectionRecentLifts,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium),
+                ),
                 TextButton(
                   onPressed: onViewAll,
                   child: Text(l10n.dashboardViewAllGym),

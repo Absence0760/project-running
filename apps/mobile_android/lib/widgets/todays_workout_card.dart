@@ -78,27 +78,45 @@ class TodaysWorkoutCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      if (w.targetDistanceM != null) ...[
-                        Icon(Icons.straighten,
-                            size: 13, color: theme.colorScheme.onPrimary),
-                        const SizedBox(width: 3),
-                        Text(fmtKm(w.targetDistanceM),
-                            style: TextStyle(
-                              color: theme.colorScheme.onPrimary,
-                            )),
-                        const SizedBox(width: 10),
-                      ],
-                      if (w.targetPaceSecPerKm != null) ...[
-                        Icon(Icons.speed,
-                            size: 13, color: theme.colorScheme.onPrimary),
-                        const SizedBox(width: 3),
-                        Text('@ ${fmtPace(w.targetPaceSecPerKm)}',
-                            style: TextStyle(
-                              color: theme.colorScheme.onPrimary,
-                            )),
-                      ],
+                      if (w.targetDistanceM != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.straighten,
+                                size: 13, color: theme.colorScheme.onPrimary),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(fmtKm(w.targetDistanceM),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onPrimary,
+                                  )),
+                            ),
+                          ],
+                        ),
+                      if (w.targetPaceSecPerKm != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.speed,
+                                size: 13, color: theme.colorScheme.onPrimary),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text('@ ${fmtPace(w.targetPaceSecPerKm)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onPrimary,
+                                  )),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ],
