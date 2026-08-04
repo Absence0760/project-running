@@ -4129,6 +4129,8 @@ The merge rules differ because the two sidecars fail in opposite directions:
 
 Concretely: `_syncedIdsCleared` / `_offlinePinnedCleared` carry set removals and `_ownerTagsTouched` carries the map's set-and-drop, each cleared after a successful write. `synced_route_ids` additionally prunes an id for a route this process no longer holds whose file is gone (the growth bound `_persistSyncedIds` has); the offline pins deliberately do not, because pinning an id before its route lands is a supported forward-looking intent.
 
+**Amended 2026-08-03.** `LocalRouteStore` grew a fourth sidecar, `pending_remote_route_deletes.json` (the delete-retry queue), after this decision landed — and it shipped with the old unlocked whole-map overwrite, carrying the same bug this entry fixed for the other three. It now takes `_withSidecarLock` too, merging the `pending_remote_deletes` way (additions win, removals via a `_clearedRemoteDeletes` ledger) — the same rule `LocalRunStore`'s equivalent sidecar already uses, since losing a queued route delete is exactly as unrecoverable as losing a queued run delete.
+
 ---
 
 ## 304. Gym adherence matches planned to actual by expanded-step ordinal, not by the per-block set index

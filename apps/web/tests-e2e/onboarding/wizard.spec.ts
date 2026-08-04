@@ -375,6 +375,68 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		expect(data?.gender).toBeNull();
 	});
 
+	test('step 4 body weight rejects an out-of-bounds value — Continue stays disabled until it is fixed (#677)', async ({
+		page,
+	}) => {
+		// Regression: weightMin/weightMax were HTML min/max attributes only.
+		// The wizard advances via onclick handlers, not a native form submit,
+		// so the browser's constraint validation never ran — typing 9999 and
+		// clicking Continue was not blocked, and the uncapped value would
+		// flow into the Mifflin-St Jeor TDEE/hydration math that consumes
+		// body_weight_kg. This pins that Continue (and the per-step Skip) is
+		// disabled while the typed value is out of the plausible human
+		// range, an inline error explains why, and a corrected value
+		// re-enables both and saves the canonical kg correctly.
+		test.setTimeout(45_000);
+		await page.goto('/onboarding');
+
+		await page.getByLabel('Display name').fill('E2E Weight Bounds');
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 2 — units (default km, so the field reads/validates in kg).
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 3 — goal (leave unset).
+		await page.getByRole('button', { name: 'Continue' }).click();
+
+		// Step 4 — type an absurd body weight.
+		await expect(
+			page.getByRole('heading', { name: /A bit about you/i })
+		).toBeVisible();
+		const weightField = page.getByLabel(/Body weight in kg/i);
+		await weightField.fill('9999');
+
+		const continueBtn = page.getByRole('button', { name: 'Continue' });
+		const skipBtn = page.getByRole('button', { name: 'Skip', exact: true });
+		await expect(continueBtn).toBeDisabled();
+		await expect(skipBtn).toBeDisabled();
+		await expect(page.getByRole('alert')).toContainText(/between 20 and 250 kg/i);
+
+		// Fix it to a plausible value — both buttons re-enable, the error
+		// clears.
+		await weightField.fill('70');
+		await expect(continueBtn).toBeEnabled();
+		await expect(skipBtn).toBeEnabled();
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		await continueBtn.click();
+
+		// Step 5 — privacy
+		await page.getByRole('radio', { name: /Private/i }).click();
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 6 — notifications
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 7 — finish
+		await page.getByRole('button', { name: 'Open dashboard' }).click();
+		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+
+		const admin = getAdminClient();
+		const { data: settings } = await admin
+			.from('user_settings')
+			.select('prefs')
+			.eq('user_id', USER_A.id)
+			.maybeSingle();
+		const p = (settings?.prefs ?? {}) as Record<string, unknown>;
+		expect(p.body_weight_kg).toBe(70);
+	});
+
 	test('finishing with every optional section blank exits to /dashboard and a revisit does not bounce back to step 1 (#227)', async ({
 		page,
 	}) => {

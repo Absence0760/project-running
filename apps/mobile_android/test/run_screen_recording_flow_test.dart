@@ -95,11 +95,17 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform {
 /// `_stop()` → `runStore.save(run)` UI path end-to-end.
 class _CapturingRunStore extends LocalRunStore {
   final List<dynamic> captured = [];
+  final List<dynamic> capturedInProgress = [];
   int clearInProgressCalls = 0;
 
   @override
   Future<void> save(run) async {
     captured.add(run);
+  }
+
+  @override
+  Future<void> saveInProgress(run) async {
+    capturedInProgress.add(run);
   }
 
   @override
@@ -204,6 +210,18 @@ cm.Route _cornerRoute() {
     distanceMetres: 800,
   );
 }
+
+cm.Route _testRoute(String id) => cm.Route(
+      id: id,
+      userId: 'u1',
+      name: 'Test loop',
+      distanceMetres: 5000,
+      isPublic: false,
+      waypoints: const [
+        cm.Waypoint(lat: 47.37, lng: 8.54),
+        cm.Waypoint(lat: 47.371, lng: 8.541),
+      ],
+    );
 
 void main() {
   late _FakeGeolocatorPlatform geolocator;
@@ -654,6 +672,66 @@ void main() {
     });
 
     testWidgets(
+        'crash-safe incremental save carries the selected route (#672)',
+        (tester) async {
+      // Spy store captures saveInProgress synchronously (see
+      // _CapturingRunStore) so the 10s timer's real-I/O save doesn't hang
+      // under the fake test clock.
+      final runStore = _CapturingRunStore();
+      await runStore.init(overrideDirectory: runsDir);
+      final s = await makeStores();
+      final route = _testRoute('route-selected-1');
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+            treadmill: s.treadmill,
+            initialRoute: route,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // drain LiveRunMap tile-fetch noise
+
+      // Fire the 10s crash-safe incremental-save timer once.
+      await tester.pump(const Duration(seconds: 10));
+      tester.takeException();
+
+      expect(runStore.capturedInProgress, isNotEmpty,
+          reason: 'the 10s incremental-save timer must have fired');
+      final partial = runStore.capturedInProgress.first;
+      expect(partial.routeId, route.id,
+          reason: 'a crash-safe partial save must carry the selected '
+              'route, or a resumed run permanently loses its route '
+              'link (#672)');
+
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+    });
+
+    testWidgets(
         'split posts reuse update_split and run start clears leftovers (#303)',
         (tester) async {
       // Capture every RunNotificationBridge channel call so we can pin the
@@ -910,7 +988,7 @@ void main() {
   });
 
   group('RunScreen — resume a process-killed partial', () {
-    cm.Run resumablePartial() {
+    cm.Run resumablePartial({String? routeId}) {
       final track = List.generate(
         6,
         (i) => cm.Waypoint(
@@ -925,6 +1003,7 @@ void main() {
         duration: const Duration(hours: 40),
         distanceMetres: 187000,
         track: track,
+        routeId: routeId,
         source: cm.RunSource.app,
         metadata: {
           'activity_type': 'run',
@@ -942,10 +1021,17 @@ void main() {
       );
     }
 
-    Future<_CapturingRunStore> pumpResume(WidgetTester tester) async {
+    Future<_CapturingRunStore> pumpResume(
+      WidgetTester tester, {
+      String? routeId,
+      List<cm.Route> seedRoutes = const [],
+    }) async {
       final runStore = _CapturingRunStore();
       await runStore.init(overrideDirectory: runsDir);
       final s = await makeStores();
+      if (seedRoutes.isNotEmpty) {
+        s.routeStore.debugSeed(seedRoutes);
+      }
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -961,7 +1047,7 @@ void main() {
             training: s.training,
             heartRate: s.heartRate,
             treadmill: s.treadmill,
-            initialResumablePartial: resumablePartial(),
+            initialResumablePartial: resumablePartial(routeId: routeId),
           ),
         ),
       );
@@ -1082,6 +1168,49 @@ void main() {
           reason: 'the finished run is the SAME run that was resumed');
       // Elapsed carries the pre-kill 40 h offset (continuity, not a fresh clock).
       expect(saved.duration.inHours, greaterThanOrEqualTo(40));
+
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+    });
+
+    testWidgets(
+        'Resume restores the followed route so finishing keeps it linked (#672)',
+        (tester) async {
+      final route = _testRoute('route-resume-1');
+      final runStore = await pumpResume(
+        tester,
+        routeId: route.id,
+        seedRoutes: [route],
+      );
+      await tester.tap(find.text('Resume'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // LiveRunMap tile-fetch noise on the recording mount
+
+      // Drain the 3 s resumed banner timer before finishing (still < 10 s).
+      await tester.pump(const Duration(seconds: 4));
+      tester.takeException();
+
+      // Feed a couple of post-resume fixes, then finish.
+      for (var i = 0; i < 3; i++) {
+        geolocator.emit(_pos(metresEast: 1000 + i * 12.0, secondsFromStart: i * 2));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+
+      await holdFinish(tester);
+      tester.takeException();
+
+      expect(runStore.captured, hasLength(1));
+      final saved = runStore.captured.single;
+      expect(saved.routeId, route.id,
+          reason: 'a route picked before the crash must still be linked '
+              'after resuming the crash-recovered partial and finishing '
+              '(#672) — the off-route / remaining-distance UI depends on '
+              'this restoring _selectedRoute before recording resumes');
 
       await tester.pumpWidget(const SizedBox());
       for (var i = 0; i < 4; i++) {

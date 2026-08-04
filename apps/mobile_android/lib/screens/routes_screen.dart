@@ -509,6 +509,18 @@ class RoutesScreenState extends State<RoutesScreen> {
     }
     final ok2 = ids.difference(failedIds);
     if (ok2.isNotEmpty) await widget.routeStore.deleteMany(ok2);
+    if (failedIds.isNotEmpty) {
+      // Queue the failed ids for retry so a partial-delete failure
+      // isn't abandoned — SyncService drains this on its usual triggers
+      // (foreground, connectivity-on, startup). Stamped with the
+      // current user so a sign-out → other-user sign-in cycle doesn't
+      // drain User A's pending deletes under User B's session. See
+      // `docs/architecture/decisions.md § 67` for the owner-tag design.
+      await widget.routeStore.markManyPendingRemoteDelete(
+        failedIds,
+        ownerUserId: api?.userId,
+      );
+    }
     if (!mounted) return;
     setState(() {
       _selecting = false;

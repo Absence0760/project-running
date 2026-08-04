@@ -1894,6 +1894,26 @@ class _RunScreenState extends State<RunScreen> {
     final restoredSteps =
         (partial.metadata?[cm.MetadataKeys.steps] as num?)?.toInt() ?? 0;
 
+    // Restore the followed route so off-route detection + the remaining-
+    // distance UI survive a crash-recovered resume, mirroring what
+    // _selectRoute() does at a fresh start. Best-effort against the local
+    // library only (the runner is typically offline right after a crash) —
+    // a route no longer in the store just means the run resumes unfollowed,
+    // same as picking no route at all.
+    final restoredRouteId = partial.routeId;
+    if (restoredRouteId != null && restoredRouteId.isNotEmpty) {
+      cm.Route? match;
+      for (final r in widget.routeStore.routes) {
+        if (r.id == restoredRouteId) {
+          match = r;
+          break;
+        }
+      }
+      _selectedRoute = match;
+      _rebuildTurnAnnouncer();
+      unawaited(_loadCutoffLegs());
+    }
+
     // Seed the mirror fields up front so an early crash-save (before the first
     // post-resume snapshot lands) still writes the full accumulated
     // track / stats, and the finish summary is continuous from the moment of
@@ -2691,6 +2711,7 @@ class _RunScreenState extends State<RunScreen> {
       distanceMetres:
           indoorEstimate ? _displayDistanceMetres : _distanceMetres,
       track: List.unmodifiable(_track),
+      routeId: _selectedRoute?.id,
       source: cm.RunSource.app,
       metadata: metadata,
     );

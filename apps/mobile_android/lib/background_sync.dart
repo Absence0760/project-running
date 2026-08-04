@@ -9,7 +9,11 @@ import 'package:workmanager/workmanager.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'sync_service.dart'
-    show drainPendingDeletes, drainUnsyncedRoutes, filterRunsForCurrentUser;
+    show
+        drainPendingDeletes,
+        drainPendingRouteDeletes,
+        drainUnsyncedRoutes,
+        filterRunsForCurrentUser;
 
 const backgroundSyncTaskName = 'com.threkir.backgroundSync';
 
@@ -46,16 +50,17 @@ void callbackDispatcher() {
 }
 
 /// Drain the local queues to the cloud from the WorkManager callback:
-/// unsynced runs, pending remote-deletes, and unsynced routes — the
-/// same three queues the foreground [SyncService] drains every cycle.
-/// Extracted from [callbackDispatcher] so it can be unit-tested without
-/// the WorkManager + dotenv + Supabase bootstrap.
+/// unsynced runs, pending remote-deletes, unsynced routes, and pending
+/// route remote-deletes — the same four queues the foreground
+/// [SyncService] drains every cycle. Extracted from [callbackDispatcher]
+/// so it can be unit-tested without the WorkManager + dotenv + Supabase
+/// bootstrap.
 ///
 /// The delete + route drains reuse the shared [drainPendingDeletes] /
-/// [drainUnsyncedRoutes] free functions so the background path can't
-/// drift from the foreground one. Each queue is wrapped in its own
-/// try/catch (layered resilience) so a failure draining one queue
-/// doesn't abort the others.
+/// [drainUnsyncedRoutes] / [drainPendingRouteDeletes] free functions so
+/// the background path can't drift from the foreground one. Each queue
+/// is wrapped in its own try/catch (layered resilience) so a failure
+/// draining one queue doesn't abort the others.
 ///
 /// **Always** routes the run queue through [filterRunsForCurrentUser]
 /// so the background path honours the same owner-tag guard the
@@ -70,14 +75,21 @@ Future<void> runBackgroundSyncCycle(
   LocalRouteStore routeStore,
 ) async {
   final allUnsynced = store.unsyncedRuns;
-  final unsynced = filterRunsForCurrentUser(allUnsynced, api.userId);
-  final skippedForeignOwner = allUnsynced.length - unsynced.length;
+  final unsyncedForOwner = filterRunsForCurrentUser(allUnsynced, api.userId);
+  final skippedForeignOwner = allUnsynced.length - unsyncedForOwner.length;
   if (skippedForeignOwner > 0) {
     debugPrint(
       'Background sync: skipping $skippedForeignOwner runs owned by a '
       'different user (signed in as ${api.userId})',
     );
   }
+  // Never push a run that's queued for deletion, even if it was never
+  // synced — otherwise the push recreates the row the user just asked
+  // to delete before the drain below removes it. See issue #675.
+  final pendingDeleteIds = store.pendingRemoteDeletesForUser(api.userId);
+  final unsynced = unsyncedForOwner
+      .where((r) => !pendingDeleteIds.contains(r.id))
+      .toList();
   if (unsynced.isNotEmpty) {
     try {
       final failed = await api.saveRunsBatch(unsynced);
@@ -101,6 +113,11 @@ Future<void> runBackgroundSyncCycle(
     await drainUnsyncedRoutes(api, routeStore);
   } catch (e) {
     debugPrint('Background sync route drain failed: $e');
+  }
+  try {
+    await drainPendingRouteDeletes(api, routeStore);
+  } catch (e) {
+    debugPrint('Background sync route delete drain failed: $e');
   }
 }
 

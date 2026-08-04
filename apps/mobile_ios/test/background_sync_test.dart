@@ -20,6 +20,8 @@ class _FakeApiClient extends ApiClient {
 
   final List<String> savedRouteIds = [];
   final Set<String> routeSaveFailFor = {};
+  final List<String> deletedRouteIds = [];
+  final Set<String> routeDeleteFailFor = {};
 
   @override
   String? get userId => fakeUserId;
@@ -49,6 +51,14 @@ class _FakeApiClient extends ApiClient {
       throw Exception('route push denied ${route.id}');
     }
     savedRouteIds.add(route.id);
+  }
+
+  @override
+  Future<void> deleteRoute(String routeId) async {
+    if (routeDeleteFailFor.contains(routeId)) {
+      throw Exception('rls denied $routeId');
+    }
+    deletedRouteIds.add(routeId);
   }
 }
 
@@ -189,6 +199,27 @@ void main() {
     });
   });
 
+  group('runBackgroundSyncCycle — never-synced + queued for delete '
+      '(issue #675)', () {
+    test('a run deleted offline before its first push is never uploaded',
+        () async {
+      await store.save(_runForOwner('r-never-synced', 'user-a'));
+      await store.markPendingRemoteDelete('r-never-synced',
+          ownerUserId: 'user-a');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+
+      await runBackgroundSyncCycle(api, store, routeStore);
+
+      expect(api.saveBatchCallCount, 0,
+          reason: 'the background cycle must never push a run that is '
+              'already queued for deletion, even if it was never synced');
+      expect(api.deletedIds, ['r-never-synced']);
+      expect(store.runs, isEmpty);
+      expect(store.pendingRemoteDeleteIds, isEmpty);
+    });
+  });
+
   group('runBackgroundSyncCycle — guard clauses', () {
     test('empty queue is a no-op (no API call)', () async {
       final api = _FakeApiClient()..fakeUserId = 'user-a';
@@ -274,6 +305,65 @@ void main() {
       expect(api.deletedIds, ['r-gone']);
       expect(routeStore.unsyncedRoutes.map((r) => r.id), ['route-bad'],
           reason: 'a failed route push stays unsynced for the next cycle');
+    });
+  });
+
+  // Issue #674: LocalRouteStore previously had no delete-retry queue at
+  // all, so a route whose remote delete failed was abandoned locally
+  // forever with no code path to ever retry it. The background cycle
+  // now drains this queue too, mirroring the run pending-delete drain.
+  group('runBackgroundSyncCycle — pending route-delete drain (issue #674)',
+      () {
+    test('a pending remote route-delete drains in the background', () async {
+      await routeStore.save(_route('route-1'), markSynced: true);
+      await routeStore.markPendingRemoteDelete('route-1',
+          ownerUserId: 'user-a');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+
+      await runBackgroundSyncCycle(api, store, routeStore);
+
+      expect(api.deletedRouteIds, ['route-1']);
+      expect(routeStore.routes, isEmpty);
+      expect(routeStore.pendingRemoteDeleteIds, isEmpty);
+    });
+
+    test('a failing route-delete stays queued without aborting the rest '
+        'of the cycle', () async {
+      await routeStore.save(_route('route-bad'), markSynced: true);
+      await routeStore.markPendingRemoteDelete('route-bad',
+          ownerUserId: 'user-a');
+      await store.save(_runForOwner('r-ok', 'user-a'));
+
+      final api = _FakeApiClient()
+        ..fakeUserId = 'user-a'
+        ..routeDeleteFailFor.add('route-bad');
+
+      await runBackgroundSyncCycle(api, store, routeStore);
+
+      expect(routeStore.pendingRemoteDeleteIds, {'route-bad'},
+          reason: 'the failed route delete stays queued for the next cycle');
+      expect(api.savedBatchIds.single, ['r-ok'],
+          reason: 'a failure draining the route-delete queue must not '
+              'abort the run push');
+    });
+
+    test('a never-synced route queued for delete is never uploaded '
+        '(routes counterpart of issue #675)', () async {
+      await routeStore.save(_route('route-never-synced'));
+      await routeStore.markPendingRemoteDelete('route-never-synced',
+          ownerUserId: 'user-a');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+
+      await runBackgroundSyncCycle(api, store, routeStore);
+
+      expect(api.savedRouteIds, isEmpty,
+          reason: 'the background cycle must never push a route that is '
+              'already queued for deletion, even if it was never synced');
+      expect(api.deletedRouteIds, ['route-never-synced']);
+      expect(routeStore.routes, isEmpty);
+      expect(routeStore.pendingRemoteDeleteIds, isEmpty);
     });
   });
 }

@@ -406,12 +406,36 @@ class RunRecorder {
     if (permission == LocationPermission.denied) {
       throw LocationPermissionDeniedError();
     }
-    if (defaultTargetPlatform == TargetPlatform.android &&
-        permission == LocationPermission.whileInUse) {
+    if (!_permissionAllowsStream(permission)) {
       throw LocationPermissionWhileInUseError();
     }
 
     _openPositionStream();
+  }
+
+  /// Whether [permission] is strong enough to safely open the live GPS
+  /// position stream. Shared by [prepare]'s explicit gate and
+  /// [_startGpsRetryLoop]'s periodic precheck so the two conditions cannot
+  /// drift apart (#671) — the retry loop bypassing this same check used to
+  /// silently start GPS tracking ~3 s after [prepare] had just refused to,
+  /// for the exact permission state [prepare] refuses on.
+  ///
+  /// False for [LocationPermission.denied] / [LocationPermission.deniedForever]
+  /// on every platform, and — Android only — for [LocationPermission.whileInUse]:
+  /// Android 11+ stops delivering fixes the moment the app loses focus under
+  /// that grant (see [LocationPermissionWhileInUseError]). Not restricted on
+  /// iOS, where "While Using the App" plus the background-modes capability is
+  /// enough for CoreLocation to keep feeding fixes.
+  static bool _permissionAllowsStream(LocationPermission permission) {
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return false;
+    }
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        permission == LocationPermission.whileInUse) {
+      return false;
+    }
+    return true;
   }
 
   /// Subscribe to [Geolocator.getPositionStream] with the accuracy settings
@@ -480,7 +504,13 @@ class RunRecorder {
 
   /// Periodically check whether GPS is available and (re-)open the
   /// position stream if it's currently down. Idempotent — a healthy
-  /// stream is a no-op.
+  /// stream is a no-op. Gates on [_permissionAllowsStream] — the SAME
+  /// predicate [prepare] gates on — so a permission state [prepare] refuses
+  /// to open a stream for (Android whileInUse, denied, deniedForever) can
+  /// never be silently opened by this loop a few seconds later (#671). A
+  /// permission upgrade mid-run (e.g. the runner grants "Allow all the
+  /// time" from Settings) still reopens the stream on the next tick, since
+  /// [Geolocator.checkPermission] reflects the new grant.
   void _startGpsRetryLoop() {
     _gpsRetryTimer?.cancel();
     _gpsRetryTimer = Timer.periodic(_gpsRetryInterval, (_) async {
@@ -489,8 +519,7 @@ class RunRecorder {
       try {
         if (!await Geolocator.isLocationServiceEnabled()) return;
         final p = await Geolocator.checkPermission();
-        if (p == LocationPermission.denied ||
-            p == LocationPermission.deniedForever) return;
+        if (!_permissionAllowsStream(p)) return;
       } catch (e) {
         debugPrint('RunRecorder: GPS retry precheck failed — $e');
         return;
