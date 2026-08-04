@@ -430,14 +430,24 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return;
     }
     if (!mounted) return;
+    final picked = await showModalBottomSheet<_SubmitResultChoice>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _SubmitTimeSheet(social: widget.social),
+    );
+    if (picked == null || !mounted) return;
+    await _submitPickedResult(picked);
+  }
+
+  /// The submit half of [_submitMyTime], split out so the failure
+  /// banner's Retry can re-send the already-picked result without
+  /// re-opening the sheet.
+  Future<void> _submitPickedResult(_SubmitResultChoice picked) async {
+    final e = _event;
+    final inst = _activeInstance;
+    if (e == null || inst == null || _submittingResult) return;
     setState(() => _submittingResult = true);
     try {
-      final picked = await showModalBottomSheet<_SubmitResultChoice>(
-        context: context,
-        isScrollControlled: true,
-        builder: (ctx) => _SubmitTimeSheet(social: widget.social),
-      );
-      if (picked == null) return;
       await widget.social.submitEventResult(
         eventId: e.row.id,
         instance: inst,
@@ -453,10 +463,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (err) {
       debugPrint('event submit failed: $err');
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         showTopBanner(
-            context,
-            AppLocalizations.of(context).eventSubmitFailed(
-                friendlyError(AppLocalizations.of(context), err)));
+          context,
+          l10n.eventSubmitFailed(friendlyError(l10n, err)),
+          duration: const Duration(seconds: 6),
+          actionLabel: l10n.errorStateRetry,
+          onAction: () => _submitPickedResult(picked),
+        );
       }
     } finally {
       if (mounted) setState(() => _submittingResult = false);

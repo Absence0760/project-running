@@ -171,7 +171,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     } catch (e) {
       debugPrint('ClubDetailScreen._join failed: $e');
       if (mounted) {
-        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+        final l10n = AppLocalizations.of(context);
+        showTopBanner(
+          context,
+          friendlyError(l10n, e),
+          duration: const Duration(seconds: 6),
+          actionLabel: l10n.errorStateRetry,
+          onAction: _join,
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -199,6 +206,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       ),
     );
     if (ok != true) return;
+    await _doLeave();
+  }
+
+  Future<void> _doLeave() async {
+    final c = _club;
+    if (c == null || _busy) return;
     setState(() => _busy = true);
     try {
       await widget.social.leaveClub(c.row.id);
@@ -206,7 +219,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     } catch (e) {
       debugPrint('ClubDetailScreen._leave failed: $e');
       if (mounted) {
-        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+        final l10n = AppLocalizations.of(context);
+        showTopBanner(
+          context,
+          friendlyError(l10n, e),
+          duration: const Duration(seconds: 6),
+          actionLabel: l10n.errorStateRetry,
+          onAction: _doLeave,
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -225,8 +245,17 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       await _load();
     } catch (e) {
       debugPrint('ClubDetailScreen._submitPost failed: $e');
+      // The controller text survives (cleared only on success), so a
+      // retry re-submits exactly what the user typed.
       if (mounted) {
-        setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+        final l10n = AppLocalizations.of(context);
+        showTopBanner(
+          context,
+          friendlyError(l10n, e),
+          duration: const Duration(seconds: 6),
+          actionLabel: l10n.errorStateRetry,
+          onAction: _submitPost,
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -273,8 +302,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       // so the user knows to retry; the controller text stays
       // because the `ctrl?.clear()` above only fires on success.
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       showTopBanner(
-          context, AppLocalizations.of(context).clubDetailReplyFailed(friendlyError(AppLocalizations.of(context), e)));
+        context,
+        l10n.clubDetailReplyFailed(friendlyError(l10n, e)),
+        duration: const Duration(seconds: 6),
+        actionLabel: l10n.errorStateRetry,
+        onAction: () => _sendReply(postId),
+      );
     } finally {
       if (mounted) setState(() => _replyBusy.remove(postId));
     }

@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -46,6 +47,45 @@ class _SignedInApi extends ApiClient {
 class _SignedOutApi extends ApiClient {
   @override
   String? get userId => null;
+}
+
+/// Consented, with one loaded message so the new-chat action renders, and
+/// an archive write that always fails — drives the archive-failure banner
+/// + its Retry action (which must re-run the mutation, not the dialog).
+class _ArchiveFailApi extends ApiClient {
+  int archiveCalls = 0;
+
+  @override
+  String? get userId => 'u-viewer';
+
+  @override
+  Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+
+  @override
+  Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) async => [
+        CoachMessageRow(
+          id: 'm1',
+          userId: 'u-viewer',
+          role: 'user',
+          content: 'How was my week?',
+          createdAt: DateTime.utc(2026, 6, 1),
+        ),
+      ];
+
+  @override
+  Future<List<DateTime>> listCoachArchives({String? planId}) async => const [];
+
+  @override
+  Future<int> getCoachUsage() async => 0;
+
+  @override
+  Future<bool> isPro() async => false;
+
+  @override
+  Future<void> archiveCoachThread({String? planId}) async {
+    archiveCalls++;
+    throw Exception('network down');
+  }
 }
 
 Future<void> _pump(WidgetTester tester, {ApiClient? api}) {
@@ -138,6 +178,46 @@ void main() {
       );
       // Settle pending timers before exit.
       await tester.pump(const Duration(milliseconds: 200));
+    });
+  });
+
+  group('CoachScreen — archive failure retry (issue #666 U9)', () {
+    testWidgets(
+        'a failed new-conversation archive shows a Retry banner that '
+        're-runs the mutation without re-prompting', (tester) async {
+      final api = _ArchiveFailApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: CoachScreen(api: api, training: TrainingService()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // One loaded message → the new-chat action renders in the AppBar.
+      await tester.tap(find.byIcon(Icons.add_comment_outlined));
+      await tester.pump();
+      expect(find.text('Start a new conversation?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'New chat'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(api.archiveCalls, 1);
+      expect(find.text('Could not start a new conversation.'), findsOneWidget);
+      final retry = find.widgetWithText(TextButton, 'Retry');
+      expect(retry, findsOneWidget);
+
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(api.archiveCalls, 2);
+      // Retry re-runs the mutation directly — no second confirm dialog.
+      expect(find.text('Start a new conversation?'), findsNothing);
+      // Drain the replacement banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
     });
   });
 }
