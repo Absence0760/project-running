@@ -591,7 +591,6 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   Future<void> _editMapStyle() async {
     final l10n = AppLocalizations.of(context);
-    const opts = ['streets', 'satellite', 'outdoors', 'dark'];
     final labels = [
       l10n.prefsMapStyleStreets,
       l10n.prefsMapStyleSatellite,
@@ -600,12 +599,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     ];
     final picked = await _pickRadio<String>(
       title: l10n.prefsMapStyle,
-      options: opts,
+      options: kMapStyles,
       labels: labels,
-      current: _bagValue<String>(SettingsKeys.mapStyle) ?? 'streets',
+      current: _mapStylePref,
     );
-    if (picked != null) await _putUniversal(SettingsKeys.mapStyle, picked);
+    if (picked == null) return;
+    // Local mirror first: it is what every map surface reads through
+    // `activeMapStyle`, and it must survive a cold start offline.
+    await widget.preferences.setMapStyle(picked);
+    await _putUniversal(SettingsKeys.mapStyle, picked);
   }
+
+  String get _mapStylePref => normaliseMapStyle(
+      _bagValue<String>(SettingsKeys.mapStyle) ?? widget.preferences.mapStyle);
 
   Future<void> _editPaceFormat() async {
     final l10n = AppLocalizations.of(context);
@@ -1133,10 +1139,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
             ),
             ListTile(
               title: Text(l10n.prefsMapStyle),
-              subtitle: Text(
-                _mapStyleLabel(
-                    l10n, _bagValue<String>(SettingsKeys.mapStyle) ?? 'streets'),
-              ),
+              subtitle: Text(_mapStyleLabel(l10n, _mapStylePref)),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editMapStyle,

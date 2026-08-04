@@ -288,7 +288,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: currentTileUrl(),
+                urlTemplate: currentTileUrl(context),
                 userAgentPackageName: 'com.threkir.app',
                 tileProvider: CachedTileProvider(
                   store: TileCache.store,
