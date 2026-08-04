@@ -13004,6 +13004,24 @@ abstract class AppLocalizations {
   /// **'Walk {index}/{total}'**
   String workoutReviewLabelWalkN(int index, int total);
 
+  /// Adherence pill on the run-detail workout review: every planned step done
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get workoutReviewAdherenceCompleted;
+
+  /// Adherence pill on the run-detail workout review: some planned steps missed
+  ///
+  /// In en, this message translates to:
+  /// **'Partial'**
+  String get workoutReviewAdherencePartial;
+
+  /// Adherence pill on the run-detail workout review: workout abandoned
+  ///
+  /// In en, this message translates to:
+  /// **'Abandoned'**
+  String get workoutReviewAdherenceAbandoned;
+
   /// Header for the route segments panel
   ///
   /// In en, this message translates to:

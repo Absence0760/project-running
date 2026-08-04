@@ -7917,6 +7917,15 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Terminée';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Partielle';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonnée';
+
+  @override
   String get segmentsPanelTitle => 'Segments';
 
   @override

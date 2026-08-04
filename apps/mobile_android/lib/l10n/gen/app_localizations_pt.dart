@@ -7893,6 +7893,15 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Concluído';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Parcial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonado';
+
+  @override
   String get segmentsPanelTitle => 'Segmentos';
 
   @override
@@ -20288,6 +20297,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String workoutReviewLabelWalkN(int index, int total) {
     return 'Caminhada $index/$total';
   }
+
+  @override
+  String get workoutReviewAdherenceCompleted => 'Concluído';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Parcial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonado';
 
   @override
   String get segmentsPanelTitle => 'Segmentos';

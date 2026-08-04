@@ -7909,6 +7909,15 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Abgeschlossen';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Teilweise';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abgebrochen';
+
+  @override
   String get segmentsPanelTitle => 'Segmente';
 
   @override

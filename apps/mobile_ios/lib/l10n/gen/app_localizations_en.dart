@@ -7816,6 +7816,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Completed';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Partial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandoned';
+
+  @override
   String get segmentsPanelTitle => 'Segments';
 
   @override

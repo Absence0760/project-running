@@ -10535,6 +10535,18 @@
       }
     }
   },
+  "workoutReviewAdherenceCompleted": "Completed",
+  "@workoutReviewAdherenceCompleted": {
+    "description": "Adherence pill on the run-detail workout review: every planned step done"
+  },
+  "workoutReviewAdherencePartial": "Partial",
+  "@workoutReviewAdherencePartial": {
+    "description": "Adherence pill on the run-detail workout review: some planned steps missed"
+  },
+  "workoutReviewAdherenceAbandoned": "Abandoned",
+  "@workoutReviewAdherenceAbandoned": {
+    "description": "Adherence pill on the run-detail workout review: workout abandoned"
+  },
   "segmentsPanelTitle": "Segments",
   "@segmentsPanelTitle": {
     "description": "Header for the route segments panel"

@@ -7477,6 +7477,15 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => '完了';
+
+  @override
+  String get workoutReviewAdherencePartial => '一部完了';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => '中断';
+
+  @override
   String get segmentsPanelTitle => 'セグメント';
 
   @override

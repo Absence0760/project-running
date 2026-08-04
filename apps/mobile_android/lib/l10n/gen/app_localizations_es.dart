@@ -7898,6 +7898,15 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Completado';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Parcial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonado';
+
+  @override
   String get segmentsPanelTitle => 'Segmentos';
 
   @override

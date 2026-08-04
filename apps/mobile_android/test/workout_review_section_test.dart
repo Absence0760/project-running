@@ -76,7 +76,7 @@ void main() {
       });
 
       expect(find.text('Workout'), findsOneWidget);
-      expect(find.text('completed'), findsOneWidget);
+      expect(find.text('Completed'), findsOneWidget);
       expect(find.text('Warmup'), findsOneWidget);
       expect(find.text('Rep 1/6'), findsOneWidget);
       expect(find.text('Recovery 1/6'), findsOneWidget);
@@ -84,6 +84,33 @@ void main() {
       expect(find.text('STEP'), findsOneWidget);
       expect(find.text('PLAN'), findsOneWidget);
       expect(find.text('ACTUAL'), findsOneWidget);
+    });
+
+    testWidgets('the adherence pill renders localized text, not the raw enum',
+        (tester) async {
+      // Regression (issue #666 U3): the pill rendered the metadata value
+      // verbatim — lowercase English in every locale.
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('de'),
+          home: const Scaffold(
+            body: AdherencePill(adherence: 'partial'),
+          ),
+        ),
+      );
+      expect(find.text('Teilweise'), findsOneWidget);
+      expect(find.text('partial'), findsNothing);
+    });
+
+    testWidgets('an unknown adherence value falls back to the raw string',
+        (tester) async {
+      await _pump(tester, metadata: {
+        'workout_adherence': 'wildly_unexpected',
+        'workout_step_results': [_step(kind: 'rep', repIndex: 1, repTotal: 2)],
+      });
+      expect(find.text('wildly_unexpected'), findsOneWidget);
     });
 
     testWidgets('shows skip label and strikethrough for skipped step',

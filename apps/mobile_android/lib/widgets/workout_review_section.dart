@@ -339,6 +339,7 @@ class AdherencePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final semantic = AppSemanticColors.of(context);
+    final l10n = AppLocalizations.of(context);
     final (bg, fg) = switch (adherence) {
       'completed' => (semantic.success, semantic.onSuccess),
       'partial' => (semantic.warning, semantic.onWarning),
@@ -349,6 +350,14 @@ class AdherencePill extends StatelessWidget {
           theme.colorScheme.outline,
         ),
     };
+    // An unknown enum value falls back to the raw string — visible and
+    // greppable beats hidden or crashed. Mirrors web /runs/[id]'s pill keys.
+    final label = switch (adherence) {
+      'completed' => l10n.workoutReviewAdherenceCompleted,
+      'partial' => l10n.workoutReviewAdherencePartial,
+      'abandoned' => l10n.workoutReviewAdherenceAbandoned,
+      _ => adherence,
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -356,7 +365,7 @@ class AdherencePill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        adherence,
+        label,
         style: theme.textTheme.labelSmall?.copyWith(
           color: fg,
           fontWeight: FontWeight.w700,
