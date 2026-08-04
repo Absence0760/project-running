@@ -2028,17 +2028,6 @@ class _RunsFilterHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // The default ChipTheme derived from the dusk seed renders the
-    // selected state as dark purple — low-contrast against the dark
-    // surface in dark mode and over-saturated against parchment in
-    // light. Branch on brightness so the selected chip stays legible
-    // on both palettes. Hex values mirror ui_kit's AppPalette
-    // (lilac / midnight + parchment) without taking the package dep.
-    final isDark = theme.brightness == Brightness.dark;
-    final selectedChipBg =
-        isDark ? const Color(0xFF5A4985) : const Color(0xFFD8CCFA);
-    final selectedChipLabel =
-        isDark ? const Color(0xFFF7F3EC) : const Color(0xFF120D22);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2070,37 +2059,26 @@ class _RunsFilterHeader extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 8),
-        ChipTheme(
-          data: theme.chipTheme.copyWith(
-            selectedColor: selectedChipBg,
-            secondarySelectedColor: selectedChipBg,
-            checkmarkColor: selectedChipLabel,
-            secondaryLabelStyle: theme.chipTheme.secondaryLabelStyle?.copyWith(
-                  color: selectedChipLabel,
-                ) ??
-                TextStyle(color: selectedChipLabel),
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              FilterChip(
+                label: Text(l10n.historyFilterAll),
+                selected: activityFilter == null,
+                onSelected: (_) => onActivityChanged(null),
+              ),
+              const SizedBox(width: 8),
+              for (final type in ActivityType.values) ...[
                 FilterChip(
-                  label: Text(l10n.historyFilterAll),
-                  selected: activityFilter == null,
-                  onSelected: (_) => onActivityChanged(null),
+                  avatar: Icon(type.icon, size: 18),
+                  label: Text(type.label),
+                  selected: activityFilter == type,
+                  onSelected: (_) => onActivityChanged(type),
                 ),
                 const SizedBox(width: 8),
-                for (final type in ActivityType.values) ...[
-                  FilterChip(
-                    avatar: Icon(type.icon, size: 18),
-                    label: Text(type.label),
-                    selected: activityFilter == type,
-                    onSelected: (_) => onActivityChanged(type),
-                  ),
-                  const SizedBox(width: 8),
-                ],
               ],
-            ),
+            ],
           ),
         ),
         const SizedBox(height: 8),

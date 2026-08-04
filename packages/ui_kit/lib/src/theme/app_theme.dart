@@ -64,8 +64,16 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         selectedColor: dusk,
         side: const BorderSide(color: haze),
-        labelStyle: const TextStyle(color: ink),
-        secondaryLabelStyle: const TextStyle(color: parchment),
+        // RawChip resolves only labelStyle.color as a WidgetStateProperty
+        // (never the whole TextStyle, never secondaryLabelStyle), so the
+        // selected/unselected fork must live on the color itself.
+        labelStyle: TextStyle(
+          color: WidgetStateColor.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? scheme.onPrimary : ink,
+          ),
+        ),
+        checkmarkColor: scheme.onPrimary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
@@ -140,8 +148,14 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         selectedColor: coral,
         side: const BorderSide(color: haze),
-        labelStyle: const TextStyle(color: parchment),
-        secondaryLabelStyle: const TextStyle(color: midnight),
+        labelStyle: TextStyle(
+          color: WidgetStateColor.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? scheme.onPrimary
+                : parchment,
+          ),
+        ),
+        checkmarkColor: scheme.onPrimary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
