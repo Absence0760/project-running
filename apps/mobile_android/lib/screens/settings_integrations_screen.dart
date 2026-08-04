@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -242,9 +243,32 @@ class _SettingsIntegrationsScreenState
     }
   }
 
+  Widget _integrationSubtitle(String status, String action) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(status),
+        Text(
+          action,
+          style: theme.textTheme.labelMedium
+              ?.copyWith(color: theme.colorScheme.primary),
+        ),
+      ],
+    );
+  }
+
   void _openRaces() {
+    String? key;
+    try {
+      final raw = (dotenv.env['MAPTILER_KEY'] ?? '').trim();
+      if (raw.isNotEmpty) key = raw;
+    } catch (e) {
+      debugPrint('settings: MAPTILER_KEY unreadable: $e');
+    }
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => RacesScreen(service: _raceService),
+      builder: (_) => RacesScreen(service: _raceService, mapTilerKey: key),
     ));
   }
 
@@ -398,25 +422,36 @@ class _SettingsIntegrationsScreenState
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _importParkrun,
               ),
+              // Both tiles stay tappable whatever the provider probe says:
+              // they are secondary deep links into the race calendar, whose
+              // search never needed a provider key. The subtitle discloses
+              // whether the *import* leg is live; the second line says where
+              // the tap actually goes (decisions § 488).
               ListTile(
+                isThreeLine: true,
                 leading: const Icon(Icons.flag_outlined),
                 title: Text(l10n.integrationsRunsignup),
-                subtitle: Text(_runSignUpAvailable
-                    ? l10n.integrationsRunsignupConnect
-                    : l10n.integrationsRunsignupUnavailable),
-                trailing:
-                    _runSignUpAvailable ? const Icon(Icons.chevron_right) : null,
-                onTap: _runSignUpAvailable ? _openRaces : null,
+                subtitle: _integrationSubtitle(
+                  _runSignUpAvailable
+                      ? l10n.integrationsRunsignupConnect
+                      : l10n.integrationsRunsignupUnavailable,
+                  l10n.integrationsRunsignupOpen,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openRaces,
               ),
               ListTile(
+                isThreeLine: true,
                 leading: const Icon(Icons.timer_outlined),
                 title: Text(l10n.integrationsChronotrack),
-                subtitle: Text(_chronoTrackAvailable
-                    ? l10n.integrationsChronotrackConnect
-                    : l10n.integrationsChronotrackUnavailable),
-                trailing:
-                    _chronoTrackAvailable ? const Icon(Icons.chevron_right) : null,
-                onTap: _chronoTrackAvailable ? _openRaces : null,
+                subtitle: _integrationSubtitle(
+                  _chronoTrackAvailable
+                      ? l10n.integrationsChronotrackConnect
+                      : l10n.integrationsChronotrackUnavailable,
+                  l10n.integrationsChronotrackOpen,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _openRaces,
               ),
             ] else
               ListTile(
