@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/live_spectator_screen.dart';
@@ -249,7 +250,7 @@ void main() {
         final lost = tester.widget<Text>(
           find.textContaining('Signal lost'),
         );
-        expect(lost.style?.color, const Color(0xFFF59E0B));
+        expect(lost.style?.color, AppSemanticColors.light.warning);
         await tester.pumpWidget(const SizedBox());
       });
     });

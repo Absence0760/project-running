@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 import 'package:uuid/uuid.dart';
 
 import '../adaptive_width.dart';
@@ -863,9 +864,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 value: 'delete',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  leading: Icon(Icons.delete_outline,
+                      color: AppSemanticColors.of(context).danger),
                   title: Text(l10n.runDetailDeleteRun,
-                      style: const TextStyle(color: Colors.red)),
+                      style: TextStyle(
+                          color: AppSemanticColors.of(context).danger)),
                 ),
               ),
             ],
@@ -1715,7 +1718,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                       isBest ? Icons.emoji_events : Icons.timer,
                       size: 20,
                       color: isBest
-                          ? const Color(0xFFEAB308)
+                          ? AppSemanticColors.ofTheme(theme).crown
                           : theme.colorScheme.outline,
                     ),
                     const SizedBox(width: 8),
@@ -1728,7 +1731,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: isBest
-                              ? const Color(0xFFEAB308)
+                              ? AppSemanticColors.ofTheme(theme).crown
                               : theme.colorScheme.onSurface,
                         ),
                       ),
@@ -2050,15 +2053,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           ? 1.0 - ((sec - fastestSec) / secRange) * 0.6
           : 0.7;
 
-      // The bar carries white pace text, so every fill must clear WCAG AA
-      // against white. The old emerald-400 / red-400 / primary@0.5 fills
-      // were all too light (~1.8–2.3:1). Length already encodes fast/slow;
-      // these darker shades keep the green/red cue and read at any size.
-      final barColor = isFastest
-          ? const Color(0xFF047857) // emerald-700, ~5.4:1 on white
+      // Length already encodes fast/slow; the AA-guarded semantic pairs
+      // keep the green/red cue legible at any size in both themes.
+      final semantic = AppSemanticColors.ofTheme(theme);
+      final (barColor, barTextColor) = isFastest
+          ? (semantic.success, semantic.onSuccess)
           : isSlowest
-              ? const Color(0xFFB91C1C) // red-700, ~6.4:1 on white
-              : theme.colorScheme.primary;
+              ? (semantic.danger, semantic.onDanger)
+              : (theme.colorScheme.primary, theme.colorScheme.onPrimary);
 
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
@@ -2095,7 +2097,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                           ? UnitFormat.speed(paceSecPerKm, unit)
                           : UnitFormat.pace(paceSecPerKm, unit),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white,
+                        color: barTextColor,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -2349,7 +2351,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemanticColors.of(ctx).danger,
+              foregroundColor: AppSemanticColors.of(ctx).onDanger,
+            ),
             child: Text(l10n.runDetailDelete),
           ),
         ],
@@ -2721,6 +2726,7 @@ class _ElevationPacePainter extends CustomPainter {
         : 300.0;
 
     // Draw filled segments colored by pace.
+    final semantic = AppSemanticColors.ofTheme(theme);
     for (int i = 1; i < elevations.length; i++) {
       final x0 = (i - 1) / (elevations.length - 1) * size.width;
       final x1 = i / (elevations.length - 1) * size.width;
@@ -2734,11 +2740,11 @@ class _ElevationPacePainter extends CustomPainter {
       if (p == null || p < 60 || p > 1200) {
         segColor = theme.colorScheme.primary.withOpacity(0.15);
       } else if (p < medianPace * 0.9) {
-        segColor = const Color(0xFF34D399).withOpacity(0.35);
+        segColor = semantic.success.withOpacity(0.35);
       } else if (p > medianPace * 1.1) {
-        segColor = const Color(0xFFF87171).withOpacity(0.35);
+        segColor = semantic.danger.withOpacity(0.35);
       } else {
-        segColor = const Color(0xFFFBBF24).withOpacity(0.25);
+        segColor = semantic.warning.withOpacity(0.25);
       }
 
       final fill = Path()
