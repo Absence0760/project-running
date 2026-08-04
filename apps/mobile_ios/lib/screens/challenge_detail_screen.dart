@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../challenge_progress.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -184,7 +185,10 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
           : _loadError
               ? ErrorState(message: l10n.challengesLoadFailed, onRetry: _load)
               : _notFound || c == null
-              ? Center(child: Text(l10n.challengesNotFound))
+              ? EmptyState(
+                  icon: Icons.emoji_events_outlined,
+                  title: l10n.challengesNotFound,
+                )
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [

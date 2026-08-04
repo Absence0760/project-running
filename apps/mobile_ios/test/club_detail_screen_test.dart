@@ -756,6 +756,50 @@ void main() {
       expect(social.joinCalls, 1);
     });
   });
+
+  group('ClubDetailScreen — post failure retry (issue #666 U8/U9)', () {
+    testWidgets(
+        'a failed compose post shows a Retry banner (not the inline strip) '
+        'and tapping Retry re-submits the kept text', (tester) async {
+      final social = _PostFailSocial();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: social,
+            training: _FakeTraining(),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Share an update…'), 'Long run Sat');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(social.createCalls, 1);
+      // The mutation failure surfaces as a transient banner with a Retry
+      // action — no static errorContainer strip in the body.
+      final retry = find.widgetWithText(TextButton, 'Retry');
+      expect(retry, findsOneWidget);
+      // The composer keeps the text (cleared only on success).
+      expect(find.text('Long run Sat'), findsOneWidget);
+
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(social.createCalls, 2);
+      // Drain the replacement banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
+    });
+  });
 }
 
 ClubView _nonMemberClub() => ClubView(
@@ -803,6 +847,37 @@ class _AdminSocial extends SocialService {
       const [];
   @override
   Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  @override
+  RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
+      Supabase.instance.client.channel('test-$clubId');
+}
+
+/// Member club with an empty feed whose createPost always fails — drives
+/// the compose-failure banner + its Retry action.
+class _PostFailSocial extends SocialService {
+  int createCalls = 0;
+
+  @override
+  Future<ClubView?> fetchClubBySlug(String slug) async => _memberClub();
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
+  @override
+  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
+      const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  @override
+  Future<void> createPost({
+    required String clubId,
+    required String body,
+    String? parentPostId,
+    String? eventId,
+    DateTime? eventInstanceStart,
+  }) async {
+    createCalls++;
+    throw Exception('network down');
+  }
+
   @override
   RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
       Supabase.instance.client.channel('test-$clubId');

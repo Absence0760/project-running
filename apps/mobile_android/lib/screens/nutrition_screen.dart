@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' show FoodEntry;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../auth_error.dart';
 import '../exercise_calories.dart';
@@ -869,7 +870,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     const SizedBox(height: 12),
                   ],
                   if (groups.isEmpty)
-                    _emptyState(theme, l10n)
+                    EmptyState(
+                      icon: Icons.restaurant,
+                      title: l10n.nutritionEmptyTitle,
+                      body: l10n.nutritionEmptyBody,
+                      ctaLabel: l10n.nutritionLogFood,
+                      onCta: _logFood,
+                    )
                   else
                     ...groups.map((g) => _mealGroup(theme, l10n, g)),
                   if (today.isNotEmpty) ...[
@@ -1487,29 +1494,6 @@ class _NutritionScreenState extends State<NutritionScreen> {
       ),
     );
   }
-
-  Widget _emptyState(ThemeData theme, AppLocalizations l10n) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-        child: Column(
-          children: [
-            Icon(Icons.restaurant, size: 56, color: theme.colorScheme.outline),
-            const SizedBox(height: 12),
-            Text(l10n.nutritionEmptyTitle,
-                style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
-            const SizedBox(height: 4),
-            Text(l10n.nutritionEmptyBody,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
-                textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              icon: const Icon(Icons.add),
-              label: Text(l10n.nutritionLogFood),
-              onPressed: _logFood,
-            ),
-          ],
-        ),
-      );
 
   void _openMealDetail(String slot) {
     Navigator.of(context).push(

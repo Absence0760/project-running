@@ -169,6 +169,33 @@ class _RecentRunsFailSocial extends _EventSocial {
   }
 }
 
+/// The result WRITE always fails — drives the submit-failure banner and
+/// its Retry action (which must re-send the picked result, not re-open
+/// the sheet).
+class _SubmitFailSocial extends _EventSocial {
+  _SubmitFailSocial({super.club});
+  int submitCalls = 0;
+
+  @override
+  Future<List<RecentRunRow>> fetchRecentRuns({int limit = 20}) async =>
+      const [];
+
+  @override
+  Future<void> submitEventResult({
+    required String eventId,
+    required DateTime instance,
+    required int durationS,
+    required double distanceM,
+    String? runId,
+    String finisherStatus = 'finished',
+    double? ageGradePct,
+    String? note,
+  }) async {
+    submitCalls++;
+    throw Exception('network down');
+  }
+}
+
 bool _supabaseReady = false;
 
 Future<void> _ensureSupabase() async {
@@ -581,6 +608,54 @@ void main() {
       expect(social.fetchRecentRunsCalls, 2);
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.text("Couldn't load your recent runs."), findsOneWidget);
+    });
+  });
+
+  group('EventDetailScreen — result submit failure retry (issue #666 U8)', () {
+    testWidgets(
+        'a failed submit shows a Retry banner that re-sends the picked '
+        'result without re-opening the sheet', (tester) async {
+      final social = _SubmitFailSocial(club: _club('member'));
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: EventDetailScreen(
+            social: social,
+            clubSlug: 'club-1',
+            eventId: 'e1',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final submit = find.widgetWithText(FilledButton, 'Submit my time');
+      expect(submit, findsOneWidget);
+      await tester.tap(submit);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Pick the DNF shortcut so the sheet pops with a concrete choice.
+      await tester.tap(find.widgetWithText(TextButton, 'Record DNF'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(social.submitCalls, 1);
+      expect(find.textContaining('Submit failed'), findsOneWidget);
+      final retry = find.widgetWithText(TextButton, 'Retry');
+      expect(retry, findsOneWidget);
+      // The sheet must not have re-opened.
+      expect(find.text('Submit your time'), findsNothing);
+
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(social.submitCalls, 2);
+      expect(find.text('Submit your time'), findsNothing);
+      // Drain the replacement banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
     });
   });
 }

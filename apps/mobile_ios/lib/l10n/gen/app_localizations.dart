@@ -13610,11 +13610,23 @@ abstract class AppLocalizations {
   /// **'Create'**
   String get clubFormCreate;
 
+  /// Per-field validation error when the club name is empty on save
+  ///
+  /// In en, this message translates to:
+  /// **'Give the club a name.'**
+  String get clubFormErrName;
+
   /// Validation error when the name has no usable characters
   ///
   /// In en, this message translates to:
   /// **'Name needs at least one letter or digit.'**
   String get clubFormErrSlug;
+
+  /// Per-field validation error when the event title is empty on save
+  ///
+  /// In en, this message translates to:
+  /// **'Give the event a title.'**
+  String get eventFormErrTitle;
 
   /// Error when the server can't be reached during create
   ///

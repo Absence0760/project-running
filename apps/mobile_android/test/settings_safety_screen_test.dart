@@ -56,6 +56,28 @@ class _SafetyApi extends ApiClient {
 }
 
 
+/// The contact add always fails — drives the add-failure banner + its
+/// Retry action (which must re-submit the kept email text).
+class _AddFailApi extends ApiClient {
+  int addCalls = 0;
+
+  @override
+  String? get userId => 'me';
+
+  @override
+  Future<List<SafetyContact>> fetchMySafetyContacts() async => const [];
+
+  @override
+  Future<List<PendingSafetyRequest>> fetchPendingSafetyRequests() async =>
+      const [];
+
+  @override
+  Future<SafetyContact> addSafetyContact(String email) async {
+    addCalls++;
+    throw Exception('network down');
+  }
+}
+
 /// Records bag writes and reports `synced` so the pref controls enable —
 /// same shape as settings_email_notifications_test's fake. `service`
 /// returns null, so the screen renders the defaults (Off / switch off).
@@ -158,6 +180,39 @@ void main() {
       api.confirmGate.complete();
       await tester.pump();
       await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets(
+        'a failed contact add shows a Retry banner that re-submits the '
+        'kept email (issue #666 U8)', (tester) async {
+      final api = _AddFailApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsSafetyScreen(api: api),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+          find.byType(TextField).first, 'partner@example.com');
+      await tester.tap(find.text('Add contact'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(api.addCalls, 1);
+      expect(find.textContaining('Could not add contact'), findsOneWidget);
+      final retry = find.widgetWithText(TextButton, 'Retry');
+      expect(retry, findsOneWidget);
+
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(api.addCalls, 2);
+      // Drain the replacement banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
     });
   });
 

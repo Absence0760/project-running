@@ -68,6 +68,10 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
   late final TextEditingController _timeCtl;
   late final TextEditingController _paceCtl;
   late final TextEditingController _countCtl;
+  String? _distanceError;
+  String? _timeError;
+  String? _paceError;
+  String? _countError;
   String? _error;
   bool _saving = false;
   late final String _initialSnapshot;
@@ -185,6 +189,8 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               suffix: UnitFormat.distanceLabel(unit),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              errorText: _distanceError,
+              onEdited: () => _distanceError = null,
             ),
             const SizedBox(height: 12),
             _targetField(
@@ -195,6 +201,8 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               suffix: l10n.goalEditorSuffixMin,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              errorText: _timeError,
+              onEdited: () => _timeError = null,
             ),
             const SizedBox(height: 12),
             _targetField(
@@ -204,6 +212,8 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               hint: '-',
               suffix: UnitFormat.paceLabel(unit),
               keyboardType: TextInputType.text,
+              errorText: _paceError,
+              onEdited: () => _paceError = null,
             ),
             const SizedBox(height: 12),
             _targetField(
@@ -213,6 +223,8 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               hint: '-',
               suffix: l10n.goalEditorSuffixRuns,
               keyboardType: TextInputType.number,
+              errorText: _countError,
+              onEdited: () => _countError = null,
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
@@ -256,6 +268,8 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     required String hint,
     required String suffix,
     required TextInputType keyboardType,
+    String? errorText,
+    required VoidCallback onEdited,
   }) {
     final theme = Theme.of(context);
     return Row(
@@ -284,10 +298,12 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               border: const OutlineInputBorder(),
               hintText: hint,
               suffixText: suffix,
+              errorText: errorText,
             ),
-            onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
-            },
+            onChanged: (_) => setState(() {
+              onEdited();
+              _error = null;
+            }),
           ),
         ),
       ],
@@ -298,60 +314,78 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
 
-    // Distance
+    // Validate every target in one pass so each invalid field is flagged
+    // inline at once (sign_up_screen idiom), instead of surfacing them
+    // one save attempt at a time.
     double? distance;
+    String? distanceError;
     final distanceText = _distanceCtl.text.trim();
     if (distanceText.isNotEmpty) {
       final n = double.tryParse(distanceText);
       if (n == null || n <= 0) {
-        setState(() => _error = l10n.goalEditorErrDistance);
-        return;
+        distanceError = l10n.goalEditorErrDistance;
+      } else {
+        distance = unit == DistanceUnit.mi ? n * _metresPerMile : n * 1000;
       }
-      distance = unit == DistanceUnit.mi ? n * _metresPerMile : n * 1000;
     }
 
-    // Time
     double? time;
+    String? timeError;
     final timeText = _timeCtl.text.trim();
     if (timeText.isNotEmpty) {
       final n = double.tryParse(timeText);
       if (n == null || n <= 0) {
-        setState(() => _error = l10n.goalEditorErrTime);
-        return;
+        timeError = l10n.goalEditorErrTime;
+      } else {
+        time = n * 60;
       }
-      time = n * 60;
     }
 
-    // Pace
     double? pace;
+    String? paceError;
     final paceText = _paceCtl.text.trim();
     if (paceText.isNotEmpty) {
       final secPerUnit = _parsePace(paceText);
       if (secPerUnit == null || secPerUnit <= 0) {
-        setState(() => _error = l10n.goalEditorErrPace);
-        return;
+        paceError = l10n.goalEditorErrPace;
+      } else {
+        pace = unit == DistanceUnit.mi
+            ? secPerUnit / (_metresPerMile / 1000)
+            : secPerUnit.toDouble();
       }
-      pace = unit == DistanceUnit.mi
-          ? secPerUnit / (_metresPerMile / 1000)
-          : secPerUnit.toDouble();
     }
 
-    // Run count
     double? count;
+    String? countError;
     final countText = _countCtl.text.trim();
     if (countText.isNotEmpty) {
       final n = int.tryParse(countText);
       if (n == null || n <= 0) {
-        setState(() => _error = l10n.goalEditorErrRuns);
-        return;
+        countError = l10n.goalEditorErrRuns;
+      } else {
+        count = n.toDouble();
       }
-      count = n.toDouble();
     }
 
-    if (distance == null && time == null && pace == null && count == null) {
-      setState(() => _error = l10n.goalEditorErrNoTarget);
-      return;
-    }
+    final fieldInvalid = distanceError != null ||
+        timeError != null ||
+        paceError != null ||
+        countError != null;
+    // No-target stays form-level: it's the one condition not attributable
+    // to a single field.
+    final noTarget = !fieldInvalid &&
+        distance == null &&
+        time == null &&
+        pace == null &&
+        count == null;
+    setState(() {
+      _distanceError = distanceError;
+      _timeError = timeError;
+      _paceError = paceError;
+      _countError = countError;
+      _error = noTarget ? l10n.goalEditorErrNoTarget : null;
+    });
+    if (fieldInvalid || noTarget) return;
 
     final trimmedTitle = _titleCtl.text.trim();
     final goal = RunGoal(

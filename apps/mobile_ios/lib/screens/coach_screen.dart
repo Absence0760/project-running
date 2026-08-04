@@ -153,7 +153,6 @@ class _CoachScreenState extends State<CoachScreen> {
   List<_Msg> _messages = [];
   bool _threadLoaded = false;
   bool _busy = false;
-  String? _error;
 
   List<DateTime> _archives = const [];
   DateTime? _viewingArchiveAt;
@@ -444,10 +443,7 @@ class _CoachScreenState extends State<CoachScreen> {
     String? anchorId,
   }) async {
     final l10n = AppLocalizations.of(context);
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    setState(() => _busy = true);
     if (userText != null) {
       _messages.add(_Msg(role: 'user', content: userText));
     }
@@ -460,7 +456,7 @@ class _CoachScreenState extends State<CoachScreen> {
       String? token =
           Supabase.instance.client.auth.currentSession?.accessToken;
       if (token == null) {
-        setState(() => _error = l10n.coachSignInFirst);
+        showTopBanner(context, l10n.coachSignInFirst);
         _rollback(assistantIdx, userText != null);
         return;
       }
@@ -536,7 +532,7 @@ class _CoachScreenState extends State<CoachScreen> {
         }
         if (res.statusCode == 401) {
           if (mounted) {
-            setState(() => _error = l10n.coachSessionExpired);
+            showTopBanner(context, l10n.coachSessionExpired);
           }
         } else if (res.statusCode == 429) {
           final used = (j['used'] as num?)?.toInt() ?? _dailyLimit;
@@ -549,14 +545,23 @@ class _CoachScreenState extends State<CoachScreen> {
               if (j['limit'] is num) {
                 _dailyLimit = (j['limit'] as num).toInt();
               }
-              _error = (j['message'] as String?) ??
-                  l10n.coachDailyLimitError(_dailyLimit);
             });
+            showTopBanner(
+                context,
+                (j['message'] as String?) ??
+                    l10n.coachDailyLimitError(_dailyLimit));
           }
         } else {
           if (mounted) {
-            setState(() => _error = (j['error'] as String?) ??
-                l10n.coachGenericError(res.statusCode));
+            showTopBanner(
+              context,
+              (j['error'] as String?) ??
+                  l10n.coachGenericError(res.statusCode),
+              duration: const Duration(seconds: 6),
+              actionLabel: l10n.errorStateRetry,
+              onAction: () => _retryTurn(
+                  mode: mode, userText: userText, anchorId: anchorId),
+            );
           }
         }
         _rollback(assistantIdx, userText != null);
@@ -570,7 +575,14 @@ class _CoachScreenState extends State<CoachScreen> {
       // Audit/coach May 2026 Low #16.
       debugPrint('coach_screen: transport error: $e');
       if (mounted) {
-        setState(() => _error = l10n.coachTransportError);
+        showTopBanner(
+          context,
+          l10n.coachTransportError,
+          duration: const Duration(seconds: 6),
+          actionLabel: l10n.errorStateRetry,
+          onAction: () =>
+              _retryTurn(mode: mode, userText: userText, anchorId: anchorId),
+        );
       }
       _rollback(assistantIdx, userText != null);
     } finally {
@@ -585,6 +597,14 @@ class _CoachScreenState extends State<CoachScreen> {
         debugPrint('coach_screen: archive refresh failed: $e');
       }
     }
+  }
+
+  /// Retry hook for the failure banners. [_rollback] has already removed
+  /// the optimistic messages, so re-running the turn with the same
+  /// arguments reproduces the original request for all three modes.
+  void _retryTurn({required String mode, String? userText, String? anchorId}) {
+    if (_busy) return;
+    _runTurn(mode: mode, userText: userText, anchorId: anchorId);
   }
 
   void _rollback(int assistantIdx, bool hadUser) {
@@ -610,8 +630,13 @@ class _CoachScreenState extends State<CoachScreen> {
       onDone: () => completer.complete(),
       onError: (e) {
         debugPrint('CoachScreen stream error: $e');
+        // No retry action: partial assistant content stays in the thread
+        // (no rollback on a mid-stream failure), so a blind re-send would
+        // duplicate the user message — the per-message regenerate
+        // affordance is the recovery path.
         if (mounted) {
-          setState(() => _error = friendlyError(AppLocalizations.of(context), e));
+          showTopBanner(
+              context, friendlyError(AppLocalizations.of(context), e));
         }
         completer.complete();
       },
@@ -665,8 +690,10 @@ class _CoachScreenState extends State<CoachScreen> {
         setState(() => _messages[assistantIdx].id = id);
       }
     } else if (event == 'error') {
-      setState(() => _error = (data['message'] as String?) ??
-          AppLocalizations.of(context).coachStreamFailed);
+      showTopBanner(
+          context,
+          (data['message'] as String?) ??
+              AppLocalizations.of(context).coachStreamFailed);
     }
   }
 
@@ -692,6 +719,11 @@ class _CoachScreenState extends State<CoachScreen> {
         ) ??
         false;
     if (!ok) return;
+    await _doArchive();
+  }
+
+  Future<void> _doArchive() async {
+    final l10n = AppLocalizations.of(context);
     try {
       await widget.api.archiveCoachThread(planId: _planId);
       if (!mounted) return;
@@ -704,7 +736,13 @@ class _CoachScreenState extends State<CoachScreen> {
     } catch (e) {
       debugPrint('New conversation failed: $e');
       if (!mounted) return;
-      setState(() => _error = l10n.coachNewConversationFailed);
+      showTopBanner(
+        context,
+        l10n.coachNewConversationFailed,
+        duration: const Duration(seconds: 6),
+        actionLabel: l10n.errorStateRetry,
+        onAction: _doArchive,
+      );
     }
   }
 
@@ -922,7 +960,6 @@ class _CoachScreenState extends State<CoachScreen> {
           if (_ctx != null) _buildContextStrip(theme, l10n),
           if (_viewingArchiveAt != null) _buildArchiveBanner(theme, l10n),
           if (_remaining <= 3) _buildLimitBanner(theme, l10n, cs),
-          if (_error != null) _buildErrorBanner(theme, cs),
           Expanded(
             child: _threadLoaded
                 ? _buildScroll(theme, l10n, hasPlan)
@@ -1227,33 +1264,6 @@ class _CoachScreenState extends State<CoachScreen> {
       child: Text(
         text,
         style: theme.textTheme.bodySmall?.copyWith(color: cs.onTertiaryContainer),
-      ),
-    );
-  }
-
-  Widget _buildErrorBanner(ThemeData theme, ColorScheme cs) {
-    return Container(
-      width: double.infinity,
-      color: cs.errorContainer,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              _error!,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: cs.onErrorContainer),
-            ),
-          ),
-          IconButton(
-            tooltip: AppLocalizations.of(context).commonDismiss,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            iconSize: 18,
-            onPressed: () => setState(() => _error = null),
-            icon: Icon(Icons.close, color: cs.onErrorContainer),
-          ),
-        ],
       ),
     );
   }

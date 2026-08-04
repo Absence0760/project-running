@@ -100,6 +100,12 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
   late final TextEditingController _titleCtl;
   late final TextEditingController _notesCtl;
   late List<_EditExercise> _exercises;
+  // Per-field validation state (sign_up_screen idiom): the title error
+  // renders on the title field, the need-exercise flag on the
+  // (necessarily all-empty) exercise-name fields. _error stays for save
+  // FAILURES only.
+  String? _titleError;
+  bool _needExercise = false;
   String? _error;
   bool _saving = false;
 
@@ -282,15 +288,14 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final title = _titleCtl.text.trim();
-    if (title.isEmpty) {
-      setState(() => _error = l10n.gymRoutineEditorNeedTitle);
-      return;
-    }
     final exercises = _buildExercises();
-    if (exercises.isEmpty) {
-      setState(() => _error = l10n.gymRoutineEditorNeedExercise);
-      return;
-    }
+    // Validate both in one pass so each invalid field is flagged inline
+    // at once (sign_up_screen idiom).
+    setState(() {
+      _titleError = title.isEmpty ? l10n.gymRoutineEditorNeedTitle : null;
+      _needExercise = exercises.isEmpty;
+    });
+    if (title.isEmpty || exercises.isEmpty) return;
     setState(() {
       _error = null;
       _saving = true;
@@ -332,7 +337,11 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             border: const OutlineInputBorder(),
             hintText: l10n.gymRoutineEditorTitlePlaceholder,
+            errorText: _titleError,
           ),
+          onChanged: (_) {
+            if (_titleError != null) setState(() => _titleError = null);
+          },
         ),
         const SizedBox(height: 20),
         for (var i = 0; i < _exercises.length; i++)
@@ -640,7 +649,14 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           border: const OutlineInputBorder(),
           hintText: l10n.gymEditorExercisePlaceholder,
+          errorText: _needExercise && ex.name.text.trim().isEmpty
+              ? l10n.gymRoutineEditorNeedExercise
+              : null,
         );
+    void clearNeedExercise(String _) {
+      if (_needExercise) setState(() => _needExercise = false);
+    }
+
     if (widget.suggestions.isEmpty) {
       return Semantics(
         label: l10n.gymEditorExercisePlaceholder,
@@ -649,6 +665,7 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
           focusNode: ex.nameFocus,
           textCapitalization: TextCapitalization.words,
           decoration: deco(),
+          onChanged: clearNeedExercise,
         ),
       );
     }
@@ -669,6 +686,7 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
           focusNode: focusNode,
           textCapitalization: TextCapitalization.words,
           decoration: deco(),
+          onChanged: clearNeedExercise,
           onSubmitted: (_) => onSubmit(),
         ),
       ),

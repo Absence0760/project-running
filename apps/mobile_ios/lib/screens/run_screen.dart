@@ -4016,7 +4016,6 @@ class _RunScreenState extends State<RunScreen> {
     // RouteMiniMap mounted under the digit.
     final isCountdown = _state == _ScreenState.countdown;
     final l10n = AppLocalizations.of(context);
-    final semantic = AppSemanticColors.of(context);
     return Stack(
       children: [
         // Always-mounted map. During countdown stats.currentPosition may
@@ -4154,198 +4153,104 @@ class _RunScreenState extends State<RunScreen> {
             ),
           ),
 
-        // Persistent live-share indicator — top left while a broadcast is
-        // active (issue #613). Standing confirmation the feed is on, and the
-        // only mid-run tap target to re-share the link or stop sharing.
-        // Reads its own notifier so attach/detach flips it without a
-        // Stack-wide rebuild.
-        ValueListenableBuilder<bool>(
-          valueListenable: _liveShareActive,
-          builder: (context, active, _) {
-            if (!active) return const SizedBox.shrink();
-            return Positioned(
-              top: 56,
-              left: 16,
-              child: LiveShareIndicator(onTap: _onLiveShareIndicatorTap),
-            );
-          },
-        ),
-
-        // "X to go" badge — top right when a route is selected. Listens
-        // to the snapshot notifier so it updates at GPS rate without
-        // triggering a full-screen rebuild.
-        ValueListenableBuilder<_LiveStats>(
-          valueListenable: _statsNotifier,
-          builder: (context, stats, _) {
-            final rem = stats.routeRemaining;
-            if (rem == null) return const SizedBox.shrink();
-            return Positioned(
-              top: 56,
-              right: 16,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 8),
-                  ],
-                ),
+        // Top overlay band — the two badges then every conditional banner
+        // composed in ONE Positioned Column, mirroring the bottom-anchored
+        // utility stack below: fixed per-widget offsets overlapped the
+        // moment two showed at once (off-route + GPS-lost were both pinned
+        // to top: 60, and the centred cards crossed the top: 56 badges).
+        Positioned(
+          top: 56,
+          left: 12,
+          right: 12,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Persistent live-share indicator on the left while a
+              // broadcast is active (issue #613) — standing confirmation
+              // the feed is on, and the only mid-run tap target to
+              // re-share the link or stop sharing. "X to go" badge on the
+              // right when a route is selected. Each reads its own
+              // notifier so it updates at attach/detach or GPS rate
+              // without a Stack-wide rebuild.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.flag_rounded,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _liveShareActive,
+                      builder: (context, active, _) {
+                        if (!active) return const SizedBox.shrink();
+                        return LiveShareIndicator(
+                            onTap: _onLiveShareIndicatorTap);
+                      },
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.runRouteRemaining(
-                          UnitFormat.distance(rem, _unit)),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13),
+                    const Spacer(),
+                    ValueListenableBuilder<_LiveStats>(
+                      valueListenable: _statsNotifier,
+                      builder: (context, stats, _) {
+                        final rem = stats.routeRemaining;
+                        if (rem == null) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surface
+                                .withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black26, blurRadius: 8),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.flag_rounded,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                l10n.runRouteRemaining(
+                                    UnitFormat.distance(rem, _unit)),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
-            );
-          },
-        ),
-
-        // Off-route banner — listens to the notifier for the same reason.
-        ValueListenableBuilder<_LiveStats>(
-          valueListenable: _statsNotifier,
-          builder: (context, stats, _) {
-            final off = stats.offRouteDistance;
-            if (off == null || off <= _offRouteThresholdMetres) {
-              return const SizedBox.shrink();
-            }
-            return Positioned(
-              top: 60,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Card(
-                  color: semantic.danger,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    child: Text(
-                      l10n.runOffRoute(off.round()),
-                      style: TextStyle(
-                          color: semantic.onDanger,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ),
+              const SizedBox(height: 4),
+              ValueListenableBuilder<_LiveStats>(
+                valueListenable: _statsNotifier,
+                builder: (context, stats, _) {
+                  final off = stats.offRouteDistance;
+                  return RunTopBanners(
+                    offRouteMetres:
+                        off != null && off > _offRouteThresholdMetres
+                            ? off
+                            : null,
+                    permissionLost: _permissionLost,
+                    gpsLost: _gpsLost,
+                    weakGps: _weakGps,
+                    safetyNudgeVisible: _safetyNudgeVisible,
+                    onSafetyNudgeShare: _onSafetyNudgeShare,
+                    onSafetyNudgeDismiss: _dismissSafetyNudge,
+                  );
+                },
               ),
-            );
-          },
-        ),
-
-        // Solo-run safety nudge — a persistent, dismissible action card
-        // (not a 6-second toast) so an after-dark solo runner can't miss
-        // it. Sits below the compact status banners. Acting on it (Share /
-        // Not now) stamps the throttle; merely showing it does not.
-        if (_safetyNudgeVisible)
-          Positioned(
-            top: 108,
-            left: 12,
-            right: 12,
-            child: SafetyNudgeBanner(
-              onShare: _onSafetyNudgeShare,
-              onDismiss: _dismissSafetyNudge,
-            ),
+            ],
           ),
-        if (_permissionLost)
-          Positioned(
-            top: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Card(
-                color: semantic.danger,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.location_off,
-                          color: semantic.onDanger, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.runPermissionRevoked,
-                        style: TextStyle(
-                            color: semantic.onDanger,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          )
-        else if (_gpsLost)
-          Positioned(
-            top: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Card(
-                color: semantic.danger,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.gps_off,
-                          color: semantic.onDanger, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.runGpsLost,
-                        style: TextStyle(
-                            color: semantic.onDanger,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          )
-        else if (_weakGps)
-          Positioned(
-            top: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Card(
-                color: semantic.warning,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.gps_not_fixed,
-                          color: semantic.onWarning, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.runWeakGps,
-                        style: TextStyle(
-                            color: semantic.onWarning,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+        ),
         // Bottom-anchored utility stack above the stats overlay: the
         // race-strategy phase chip, the next-cutoff card (L4), and the
         // treadmill live-mode toggle compose in one Column so their real
@@ -5058,6 +4963,144 @@ class _TargetMarker {
     required this.label,
     required this.targetS,
   });
+}
+
+/// The conditional banners over the top of the live map — off-route, the
+/// permission / GPS status chain, and the solo-safety nudge — composed in
+/// one Column so any combination stacks vertically instead of overlapping
+/// (issue #666 V10; the bottom-anchored utility stack got the same
+/// treatment first). Public so the composition is widget-testable without
+/// pumping the whole run screen.
+class RunTopBanners extends StatelessWidget {
+  const RunTopBanners({
+    super.key,
+    required this.offRouteMetres,
+    required this.permissionLost,
+    required this.gpsLost,
+    required this.weakGps,
+    required this.safetyNudgeVisible,
+    required this.onSafetyNudgeShare,
+    required this.onSafetyNudgeDismiss,
+  });
+
+  /// Metres off the planned route, already gated on the alert threshold by
+  /// the caller; null hides the banner.
+  final double? offRouteMetres;
+  final bool permissionLost;
+  final bool gpsLost;
+  final bool weakGps;
+  final bool safetyNudgeVisible;
+  final VoidCallback onSafetyNudgeShare;
+  final VoidCallback onSafetyNudgeDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final semantic = AppSemanticColors.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Off-route banner — independent of the status chain below, so
+        // both can show at once and stack.
+        if (offRouteMetres != null)
+          Center(
+            child: Card(
+              color: semantic.danger,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  l10n.runOffRoute(offRouteMetres!.round()),
+                  style: TextStyle(
+                      color: semantic.onDanger, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+        if (permissionLost)
+          Center(
+            child: Card(
+              color: semantic.danger,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.location_off,
+                        color: semantic.onDanger, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.runPermissionRevoked,
+                      style: TextStyle(
+                          color: semantic.onDanger,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (gpsLost)
+          Center(
+            child: Card(
+              color: semantic.danger,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.gps_off, color: semantic.onDanger, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.runGpsLost,
+                      style: TextStyle(
+                          color: semantic.onDanger,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (weakGps)
+          Center(
+            child: Card(
+              color: semantic.warning,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.gps_not_fixed,
+                        color: semantic.onWarning, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.runWeakGps,
+                      style: TextStyle(
+                          color: semantic.onWarning,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        // Solo-run safety nudge — a persistent, dismissible action card
+        // (not a 6-second toast) so an after-dark solo runner can't miss
+        // it. Acting on it (Share / Not now) stamps the throttle; merely
+        // showing it does not.
+        if (safetyNudgeVisible)
+          SafetyNudgeBanner(
+            onShare: onSafetyNudgeShare,
+            onDismiss: onSafetyNudgeDismiss,
+          ),
+      ],
+    );
+  }
 }
 
 class _LiveStats {

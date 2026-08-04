@@ -1,6 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, EmptyState;
 
 import '../gear_backfill.dart';
 import '../gear_wear.dart';
@@ -327,7 +327,17 @@ class _GearScreenState extends State<GearScreen> {
             child: RefreshIndicator(
               onRefresh: _refresh,
               child: _visible.isEmpty
-                  ? _emptyState(theme)
+                  ? EmptyState(
+                      icon: _activeKind == 'shoe'
+                          ? Icons.directions_run
+                          : Icons.directions_bike,
+                      title: _activeKind == 'shoe'
+                          ? l10n.gearEmptyShoes
+                          : l10n.gearEmptyBikes,
+                      body: l10n.gearEmptySubtitle,
+                      ctaLabel: l10n.gearAddGear,
+                      onCta: _create,
+                    )
                   : ListView(
                       padding: const EdgeInsets.all(16),
                       children: [
@@ -351,51 +361,6 @@ class _GearScreenState extends State<GearScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _emptyState(ThemeData theme) {
-    final l10n = AppLocalizations.of(context);
-    return ListView(
-      children: [
-        SizedBox(
-          height: MediaQuery.of(context).size.height * 0.6,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  _activeKind == 'shoe'
-                      ? Icons.directions_run
-                      : Icons.directions_bike,
-                  size: 64,
-                  color: theme.colorScheme.outline,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _activeKind == 'shoe'
-                      ? l10n.gearEmptyShoes
-                      : l10n.gearEmptyBikes,
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.gearEmptySubtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.gearAddGear),
-                  onPressed: _create,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 

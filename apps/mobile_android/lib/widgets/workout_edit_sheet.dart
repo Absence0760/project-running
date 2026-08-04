@@ -50,6 +50,8 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
   late final TextEditingController _paceCtl;
   late final TextEditingController _notesCtl;
   bool _saving = false;
+  String? _distanceError;
+  String? _paceError;
   String? _error;
 
   @override
@@ -115,7 +117,13 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
             decoration: InputDecoration(
               labelText: l10n.workoutEditDistanceLabel,
               hintText: l10n.workoutEditDistanceHint,
+              errorText: _distanceError,
             ),
+            onChanged: (_) {
+              if (_distanceError != null) {
+                setState(() => _distanceError = null);
+              }
+            },
           ),
           const SizedBox(height: 8),
           TextField(
@@ -124,7 +132,13 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
             decoration: InputDecoration(
               labelText: l10n.workoutEditPaceLabel,
               hintText: l10n.workoutEditPaceHint,
+              errorText: _paceError,
             ),
+            onChanged: (_) {
+              if (_paceError != null) {
+                setState(() => _paceError = null);
+              }
+            },
           ),
           const SizedBox(height: 8),
           TextField(
@@ -169,26 +183,35 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
 
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
+    // Validate both targets in one pass so each invalid field is flagged
+    // inline at once (sign_up_screen idiom).
     final distanceText = _distanceCtl.text.trim();
     double? distanceM;
+    String? distanceError;
     if (distanceText.isNotEmpty) {
       final km = double.tryParse(distanceText);
       if (km == null || km <= 0) {
-        setState(() => _error = l10n.workoutEditErrDistance);
-        return;
+        distanceError = l10n.workoutEditErrDistance;
+      } else {
+        distanceM = km * 1000;
       }
-      distanceM = km * 1000;
     }
 
     final paceText = _paceCtl.text.trim();
     int? paceSecPerKm;
+    String? paceError;
     if (paceText.isNotEmpty) {
       paceSecPerKm = _parsePaceMmSs(paceText);
       if (paceSecPerKm == null) {
-        setState(() => _error = l10n.workoutEditErrPace);
-        return;
+        paceError = l10n.workoutEditErrPace;
       }
     }
+
+    setState(() {
+      _distanceError = distanceError;
+      _paceError = paceError;
+    });
+    if (distanceError != null || paceError != null) return;
 
     setState(() {
       _saving = true;

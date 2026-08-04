@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/gen/app_localizations.dart';
@@ -212,7 +213,7 @@ class _RacesScreenState extends State<RacesScreen> {
       return ErrorState(message: l.racesSearchFailed, onRetry: _run);
     }
     if (_results.isEmpty) {
-      return Center(child: Text(l.racesEmpty));
+      return EmptyState(icon: Icons.flag_outlined, title: l.racesEmpty);
     }
     return ListView.builder(
       itemCount: _results.length,

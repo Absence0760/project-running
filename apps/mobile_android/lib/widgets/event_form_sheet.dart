@@ -62,6 +62,9 @@ class _EventFormState extends State<_EventForm> {
   String _recurrence = 'none'; // none | weekly | biweekly | monthly
   bool _isPublic = true;
   bool _busy = false;
+  // Title validation renders inline on the title field; _error stays for
+  // save failures only.
+  String? _titleError;
   String? _error;
   late final String _initialSnapshot;
 
@@ -139,8 +142,15 @@ class _EventFormState extends State<_EventForm> {
   }
 
   Future<void> _submit() async {
+    if (_busy) return;
     final title = _title.text.trim();
-    if (title.isEmpty || _busy) return;
+    // An empty title used to return silently — Create looked dead. Flag
+    // the field instead (sign_up_screen idiom).
+    if (title.isEmpty) {
+      setState(() =>
+          _titleError = AppLocalizations.of(context).eventFormErrTitle);
+      return;
+    }
     final athletic = isAthleticEventCategory(_category);
     final distance =
         athletic ? double.tryParse(_distanceKm.text.trim()) : null;
@@ -262,7 +272,11 @@ class _EventFormState extends State<_EventForm> {
               decoration: InputDecoration(
                 labelText: l10n.eventFormTitleLabel,
                 border: const OutlineInputBorder(),
+                errorText: _titleError,
               ),
+              onChanged: (_) {
+                if (_titleError != null) setState(() => _titleError = null);
+              },
             ),
             const SizedBox(height: 8),
             InkWell(

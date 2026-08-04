@@ -151,9 +151,19 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  void _banner(String message) {
+  void _banner(String message, {VoidCallback? onRetry}) {
     if (!mounted) return;
-    showTopBanner(context, message);
+    if (onRetry == null) {
+      showTopBanner(context, message);
+      return;
+    }
+    showTopBanner(
+      context,
+      message,
+      duration: const Duration(seconds: 6),
+      actionLabel: AppLocalizations.of(context).errorStateRetry,
+      onAction: onRetry,
+    );
   }
 
   Future<void> _add() async {
@@ -173,7 +183,9 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       _banner(l10n.safetyAddedToast);
     } catch (e) {
       debugPrint('safety add failed: $e');
-      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
+      // The email text survives (cleared only on success), so a retry
+      // re-submits exactly what the user typed.
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)), onRetry: _add);
     } finally {
       if (mounted) setState(() => _adding = false);
     }
@@ -222,7 +234,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       _banner(l10n.safetyConfirmedToast);
     } catch (e) {
       debugPrint('safety add failed: $e');
-      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)),
+          onRetry: () => _confirm(req));
     } finally {
       if (mounted) setState(() => _respondingId = null);
     }
@@ -239,7 +252,8 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       _banner(l10n.safetyDeclinedToast);
     } catch (e) {
       debugPrint('safety add failed: $e');
-      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
+      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)),
+          onRetry: () => _decline(req));
     } finally {
       if (mounted) setState(() => _respondingId = null);
     }

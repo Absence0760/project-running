@@ -8233,8 +8233,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubFormCreate => 'Erstellen';
 
   @override
+  String get clubFormErrName => 'Gib dem Club einen Namen.';
+
+  @override
   String get clubFormErrSlug =>
       'Der Name braucht mindestens einen Buchstaben oder eine Ziffer.';
+
+  @override
+  String get eventFormErrTitle => 'Gib dem Event einen Titel.';
 
   @override
   String get clubFormErrUnreachable =>

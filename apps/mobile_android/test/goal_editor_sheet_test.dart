@@ -164,6 +164,59 @@ void main() {
       expect(find.text('Distance: enter a positive number'), findsOneWidget);
     });
 
+    testWidgets(
+        'invalid targets flag their own fields in ONE save attempt; editing '
+        'a field clears only its error; save then proceeds (issue #666 U6)',
+        (tester) async {
+      final prefs = await _makeCountingPrefs();
+      await _pumpWithSync(tester, prefs, null);
+
+      // TextField order: 0 name, 1 distance, 2 time, 3 pace, 4 runs.
+      await tester.enterText(find.byType(TextField).at(1), '0');
+      await tester.enterText(find.byType(TextField).at(4), '0');
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(1))
+              .decoration
+              ?.errorText,
+          'Distance: enter a positive number');
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(4))
+              .decoration
+              ?.errorText,
+          'Runs: enter a positive whole number');
+      expect(prefs.upsertCalls, 0);
+
+      // Editing the distance clears only the distance error.
+      await tester.enterText(find.byType(TextField).at(1), '10');
+      await tester.pump();
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(1))
+              .decoration
+              ?.errorText,
+          isNull);
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(4))
+              .decoration
+              ?.errorText,
+          isNotNull);
+
+      await tester.enterText(find.byType(TextField).at(4), '3');
+      await tester.pump();
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(prefs.upsertCalls, 1);
+    });
+
     testWidgets('Cancel button dismisses the sheet without saving',
         (tester) async {
       final prefs = await _makePrefs();

@@ -111,6 +111,48 @@ void main() {
       expect(find.textContaining('Pace must look like'), findsOneWidget);
     });
 
+    testWidgets(
+        'invalid distance + pace flag their own fields in ONE save attempt; '
+        'editing clears each; save then proceeds (issue #666 U6)',
+        (tester) async {
+      final training = _FakeTraining();
+      await _pumpSheet(
+        tester,
+        _workout(targetDistanceM: null, targetPaceSecPerKm: null, notes: ''),
+        training,
+      );
+      final distanceField = find.widgetWithText(TextField, 'e.g. 8.0');
+      final paceField = find.widgetWithText(TextField, 'e.g. 5:30');
+      await tester.enterText(distanceField, 'abc');
+      await tester.enterText(paceField, 'notapace');
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+
+      expect(
+          tester.widget<TextField>(distanceField).decoration?.errorText,
+          'Enter a positive distance in km');
+      expect(tester.widget<TextField>(paceField).decoration?.errorText,
+          'Pace must look like 5:30');
+      expect(training.lastUpdate, isNull);
+
+      await tester.enterText(distanceField, '10');
+      await tester.pump();
+      expect(tester.widget<TextField>(distanceField).decoration?.errorText,
+          isNull);
+      expect(tester.widget<TextField>(paceField).decoration?.errorText,
+          isNotNull);
+
+      await tester.enterText(paceField, '5:00');
+      await tester.pump();
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(training.lastUpdate, isNotNull);
+      expect(training.lastUpdate!.targetDistanceM, closeTo(10000, 1));
+      expect(training.lastUpdate!.targetPaceSecPerKm, 300);
+    });
+
     testWidgets('Cancel returns false and does not call updateWorkout',
         (tester) async {
       final training = _FakeTraining();

@@ -37,6 +37,34 @@ class _FakeSignedInApi extends ApiClient {
   }
 }
 
+/// Signed in, but the batch upload always fails — drives the sync-failure
+/// banner + its Retry action.
+class _SyncFailApi extends ApiClient {
+  int syncCalls = 0;
+
+  @override
+  String? get userId => 'me';
+
+  @override
+  Future<List<Run>> getRuns({
+    int limit = 50,
+    DateTime? before,
+    DateTime? updatedSince,
+  }) async =>
+      const [];
+
+  @override
+  Future<Set<String>> saveRunsBatch(
+    List<Run> runs, {
+    int uploadConcurrency = 8,
+    int rowChunkSize = 100,
+    void Function(int saved)? onProgress,
+  }) async {
+    syncCalls++;
+    throw Exception('network down');
+  }
+}
+
 // Initialised by every test that calls _makeStores; pure unit tests in
 // the pagination group don't touch the filesystem so the directory may
 // not exist on tearDown — tearDown checks before deleting.
@@ -1147,6 +1175,59 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('1 run'), findsOneWidget);
+    });
+  });
+
+  group('RunsScreen — sync failure retry (issue #666 U8)', () {
+    testWidgets('a failed Sync all shows a Retry banner that re-runs the sync',
+        (tester) async {
+      final s = await _makeStores();
+      final now = DateTime.now();
+      // ignore: invalid_use_of_visible_for_testing_member
+      s.runStore.debugSeed([
+        Run(
+          id: 'unsynced-1',
+          startedAt: DateTime(now.year, now.month, now.day, now.hour).toUtc(),
+          duration: const Duration(minutes: 30),
+          distanceMetres: 5000,
+          source: RunSource.app,
+        ),
+      ], dir: _runsDir!, synced: false);
+
+      final api = _SyncFailApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunsScreen(
+            apiClient: api,
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final syncBtn = find.byIcon(Icons.cloud_upload);
+      expect(syncBtn, findsOneWidget);
+      await tester.tap(syncBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(api.syncCalls, 1);
+      expect(find.textContaining('Synced 0/1'), findsOneWidget);
+      final retry = find.widgetWithText(TextButton, 'Retry');
+      expect(retry, findsOneWidget);
+
+      await tester.tap(retry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(api.syncCalls, 2);
+      // Drain the replacement banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
     });
   });
 }

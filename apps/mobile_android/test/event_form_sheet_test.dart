@@ -214,6 +214,27 @@ void main() {
       expect(fake.createCalled, isFalse);
     });
 
+    testWidgets(
+        'blank title flags the field inline; typing clears it; create then '
+        'proceeds (issue #666 U6)', (tester) async {
+      final fake = _CapturingSocialService();
+      await _openSheet(tester, social: fake);
+      final titleField = find.widgetWithText(TextField, 'Title');
+
+      await tapCreate(tester);
+      expect(tester.widget<TextField>(titleField).decoration?.errorText,
+          'Give the event a title.');
+      expect(fake.createCalled, isFalse);
+
+      await tester.enterText(titleField, 'Saturday 5k');
+      await tester.pump();
+      expect(tester.widget<TextField>(titleField).decoration?.errorText,
+          isNull);
+      await tapCreate(tester);
+      expect(fake.createCalled, isTrue);
+      expect(find.text('result=ok'), findsOneWidget);
+    });
+
     testWidgets('a run event submits distance in metres + run category',
         (tester) async {
       final fake = _CapturingSocialService();

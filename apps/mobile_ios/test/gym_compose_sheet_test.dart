@@ -74,6 +74,53 @@ void main() {
     }
   });
 
+  testWidgets(
+      'the need-exercise error renders on the name field, clears on typing, '
+      'and save then proceeds (issue #666 U6)', (tester) async {
+    final f = await _store('perfield_');
+    try {
+      await tester.pumpWidget(_opener(f.store));
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      await tester.tap(find.text('Save workout'));
+      await tester.pump();
+
+      // Per-field, not form-level: the message is the exercise-name
+      // field's errorText (TextField 0 is the title, 1 the name).
+      final nameField =
+          tester.widget<TextField>(find.byType(TextField).at(1));
+      expect(nameField.decoration?.errorText,
+          'Add at least one exercise with a name.');
+      expect(f.store.workouts, isEmpty);
+
+      await tester.enterText(find.byType(TextField).at(1), 'Squat');
+      await tester.pump();
+      expect(
+          tester
+              .widget<TextField>(find.byType(TextField).at(1))
+              .decoration
+              ?.errorText,
+          isNull);
+
+      await tester.enterText(find.byType(TextField).at(2), '5');
+      // The whole save runs inside runAsync: the earlier workouts read
+      // primed the store's revision-keyed cache, and only a real-zone tap
+      // lets the atomic file write's await chain complete so the
+      // revision bump invalidates it.
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Save workout'));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(f.store.workouts, hasLength(1));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('entering an exercise + saving creates a workout in the store',
       (tester) async {
     final f = await _store('create_');

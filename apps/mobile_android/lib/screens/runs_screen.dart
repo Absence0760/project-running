@@ -764,6 +764,7 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   Future<void> _syncAll() async {
+    if (_syncing) return;
     final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
@@ -799,7 +800,12 @@ class _RunsScreenState extends State<RunsScreen> {
     if (!mounted) return;
     if (lastError != null) {
       showTopBanner(
-          context, l10n.historySyncPartial(synced, unsynced.length, lastError));
+        context,
+        l10n.historySyncPartial(synced, unsynced.length, lastError),
+        duration: const Duration(seconds: 6),
+        actionLabel: l10n.errorStateRetry,
+        onAction: _syncAll,
+      );
     } else {
       showTopBanner(context, l10n.historySyncAllDone(synced));
     }
