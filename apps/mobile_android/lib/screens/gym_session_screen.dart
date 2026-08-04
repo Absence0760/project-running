@@ -42,16 +42,27 @@ class GymSessionScreen extends StatefulWidget {
   final StoredRoutine routine;
   final LocalGymStore gymStore;
 
+  /// A previously persisted draft to restore the runner from — the row the
+  /// gym screen's resume card found. Null starts a fresh session.
+  final StoredGymWorkout? resumeDraft;
+
   const GymSessionScreen({
     super.key,
     required this.api,
     required this.routine,
     required this.gymStore,
+    this.resumeDraft,
   });
 
   @override
   State<GymSessionScreen> createState() => _GymSessionScreenState();
 }
+
+/// The user's choice at the leave-session prompt (system back, the AppBar
+/// back button, or the band's Abandon control). Mirrors the run screen's
+/// `_ResumeChoice` shape: stay, exit keeping the recoverable state, or
+/// destroy it.
+enum _LeaveChoice { keep, leave, discard }
 
 class _GymSessionScreenState extends State<GymSessionScreen> {
   static const _saveInterval = Duration(seconds: 10);
@@ -76,7 +87,9 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   // counter, so a backgrounded / throttled timer can't drift the rest pause.
   DateTime? _restStartWall;
   int _restTotal = 0;
-  final DateTime _startedAt = DateTime.now().toUtc();
+  // Re-anchored on a draft resume so elapsed continues from the last durable
+  // save instead of counting the time the app was gone.
+  DateTime _startedAt = DateTime.now().toUtc();
 
   // What the athlete entered, keyed by expanded-step index — mirrors web
   // GymSessionRunner's sparse `outcomes` so a rewind re-surfaces the prior edit
@@ -90,14 +103,21 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   bool _finished = false;
   bool _abandoned = false;
   bool _saving = false;
+  bool _confirmingLeave = false;
 
   @override
   void initState() {
     super.initState();
     _steps = _buildSteps();
     _runner = GymWorkoutRunner(steps: _steps, routineId: widget.routine.id);
+    final resumed = _restoreFromDraft();
     _events = _runner.events.listen(_onEvent);
-    _runner.start();
+    if (!resumed) {
+      _runner.start();
+    } else {
+      if (_runner.isComplete) _finished = true;
+      _seedInputs();
+    }
     _publishBand();
     try {
       WakelockPlus.enable();
@@ -393,32 +413,57 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
             ),
       ];
 
-  Future<void> _onAbandon() async {
+  // True while there's session state a plain pop would strand: logged sets,
+  // an already-persisted draft, or a finished-but-unsaved run of steps.
+  bool get _dirty =>
+      _draftId != null || _finished || _buildSets().isNotEmpty;
+
+  Future<_LeaveChoice> _confirmLeave() async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
+    return await showDialog<_LeaveChoice>(
           context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.gymSessionDiscardTitle),
-            content: Text(l10n.gymSessionDiscardBody),
+          builder: (ctx) => AlertDialog(
+            title: Text(l10n.gymSessionLeaveTitle),
+            content: Text(l10n.gymSessionLeaveBody),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.gymRoutineEditorCancel),
+                onPressed: () => Navigator.pop(ctx, _LeaveChoice.discard),
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(ctx).colorScheme.error),
+                child: Text(l10n.gymSessionDiscardConfirm),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error),
-                child: Text(l10n.gymSessionDiscardConfirm),
+                onPressed: () => Navigator.pop(ctx, _LeaveChoice.leave),
+                child: Text(l10n.gymSessionLeaveDraft),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, _LeaveChoice.keep),
+                child: Text(l10n.gymSessionKeepGoing),
               ),
             ],
           ),
         ) ??
-        false;
-    if (!ok) return;
-    _runner.abandon();
-    await _discardDraft();
-    if (mounted) Navigator.pop(context);
+        _LeaveChoice.keep;
+  }
+
+  Future<void> _applyLeaveChoice(_LeaveChoice choice) async {
+    final navigator = Navigator.of(context);
+    switch (choice) {
+      case _LeaveChoice.keep:
+        return;
+      case _LeaveChoice.leave:
+        await _durableSave(force: true);
+        if (mounted) navigator.pop();
+      case _LeaveChoice.discard:
+        _runner.abandon();
+        await _discardDraft();
+        if (mounted) navigator.pop();
+    }
+  }
+
+  Future<void> _onAbandon() async {
+    final choice = await _confirmLeave();
+    await _applyLeaveChoice(choice);
   }
 
   int _durationS() =>
@@ -495,14 +540,99 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     };
   }
 
+  // Rebuild the runner from a persisted draft by replaying its ordered
+  // per-step outcomes through the public runner API — the current step is
+  // derived, never stored, so an edited routine degrades to "replay what
+  // still fits" instead of landing on a phantom step. Runs before the event
+  // subscription exists, so replayed transitions and rest starts are dropped
+  // rather than ticking timers. Best-effort: an unreadable snapshot falls
+  // back to a fresh start (still onto the same draft row, so the next
+  // durable save can't fork a duplicate).
+  bool _restoreFromDraft() {
+    final draft = widget.resumeDraft;
+    if (draft == null) return false;
+    _draftId = draft.id;
+    try {
+      final meta = draft.row['metadata'];
+      final snap = meta is Map ? meta[MetadataKeys.gymSessionDraft] : null;
+      if (snap is! Map) return false;
+      _runner.start();
+      final results = snap['results'];
+      if (results is List) {
+        for (final r in results) {
+          if (r is! Map || _runner.isComplete) continue;
+          if (r['status'] == 'completed') {
+            final entered = (
+              reps: (r['reps'] as num?)?.toInt(),
+              weightKg: (r['weight_kg'] as num?)?.toDouble(),
+              rpe: (r['rpe'] as num?)?.toDouble(),
+              durationS: (r['duration_s'] as num?)?.toInt(),
+              distanceM: (r['distance_m'] as num?)?.toDouble(),
+            );
+            _enteredByStep[_runner.currentStepIndex] = entered;
+            _runner.completeSet(
+              reps: entered.reps,
+              weightKg: entered.weightKg,
+              rpe: entered.rpe,
+              durationS: entered.durationS,
+              distanceM: entered.distanceM,
+            );
+          } else {
+            _runner.skipStep();
+          }
+        }
+      }
+      final savedS = (draft.row['duration_s'] as num?)?.toInt();
+      if (savedS != null && savedS > 0) {
+        _startedAt =
+            DateTime.now().toUtc().subtract(Duration(seconds: savedS));
+      }
+      return true;
+    } catch (e) {
+      debugPrint('gym session draft restore failed: $e');
+      return false;
+    }
+  }
+
+  // The runner's ordered per-step outcomes, without snapshotResults()'s
+  // synthetic not-yet-done entry for the current step (its stepIndex equals
+  // currentStepIndex; every real outcome sits strictly before it).
+  List<Map<String, dynamic>> _draftResults() => [
+        for (final r in _runner.snapshotResults())
+          if (r.stepIndex < _runner.currentStepIndex)
+            {
+              'step_index': r.stepIndex,
+              'status': r.status == GymRunnerStepStatus.completed
+                  ? 'completed'
+                  : 'skipped',
+              'reps': r.actualReps,
+              'weight_kg': r.actualWeightKg,
+              'rpe': r.actualRpe,
+              'duration_s': r.actualDurationS,
+              'distance_m': r.actualDistanceM,
+            },
+      ];
+
+  Map<String, dynamic> _draftMetadata() => {
+        MetadataKeys.routineId: widget.routine.id,
+        MetadataKeys.gymSessionDraft: {
+          'saved_at': DateTime.now().toUtc().toIso8601String(),
+          'results': _draftResults(),
+        },
+      };
+
   // Crash-safe incremental persistence — keep the entered sets in a single
   // draft workout so a force-kill mid-session is recoverable. Mirrors
-  // run_screen._saveInProgress. Best-effort: a write failure leaves the
-  // in-memory state intact for the next tick / the final save.
-  Future<void> _durableSave() async {
-    if (_finished || _abandoned) return;
+  // run_screen._saveInProgress. The draft metadata carries the runner
+  // snapshot the gym screen's resume card restores from. Best-effort: a
+  // write failure leaves the in-memory state intact for the next tick / the
+  // final save. [force] lets the leave-with-draft path persist a finished-
+  // but-unsaved session; the periodic tick must NOT write after finish, or
+  // it could race _finishAndSave and clobber the final metadata trio.
+  Future<void> _durableSave({bool force = false}) async {
+    if (_abandoned || (_finished && !force)) return;
     final sets = _buildSets();
-    if (sets.isEmpty) return;
+    if (sets.isEmpty && _draftId == null) return;
     try {
       if (_draftId == null) {
         final stored = await widget.gymStore.createLocal(
@@ -510,6 +640,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
           startedAt: _startedAt,
           durationS: _durationS(),
           sets: sets,
+          metadata: _draftMetadata(),
         );
         _draftId = stored.id;
       } else {
@@ -517,6 +648,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
           _draftId!,
           durationS: _durationS(),
           sets: sets,
+          metadata: _draftMetadata(),
         );
       }
     } catch (e) {
@@ -573,10 +705,40 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
     }
   }
 
+  // Pop-time guard, mirroring DiscardGuard's shape — but not DiscardGuard
+  // itself: this isn't a form and the choice isn't binary. Leaving a live
+  // session has a third, non-destructive outcome (keep the draft and come
+  // back through the gym screen's resume card), so the pop routes through
+  // the same three-way dialog the Abandon control uses. Explicit
+  // `Navigator.pop` calls (finish-save, the dialog's own leave/discard)
+  // bypass the guard by design.
+  Future<void> _onPopAttempt(Object? result) async {
+    if (_confirmingLeave || _saving) return;
+    final navigator = Navigator.of(context);
+    if (_abandoned || !_dirty) {
+      navigator.pop(result);
+      return;
+    }
+    _confirmingLeave = true;
+    final choice = await _confirmLeave();
+    _confirmingLeave = false;
+    if (mounted) await _applyLeaveChoice(choice);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final title = widget.routine.title.trim();
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _onPopAttempt(result);
+      },
+      child: _buildScaffold(l10n, title),
+    );
+  }
+
+  Widget _buildScaffold(AppLocalizations l10n, String title) {
     return Scaffold(
       appBar: AppBar(
         title: Text(title.isEmpty ? l10n.gymRoutineTitle : title),

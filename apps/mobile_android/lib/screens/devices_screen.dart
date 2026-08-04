@@ -8,55 +8,57 @@ import '../l10n/locale_support.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
-/// Localized display label for an [OverrideKeySpec] — the const registry
-/// can't carry localized strings, so the key drives a lookup at render
-/// time. Falls back to the registry's English label for unknown keys.
-String overrideKeyLabel(AppLocalizations l10n, OverrideKeySpec spec) {
-  switch (spec.key) {
-    case 'preferred_unit':
+/// Resolve an l10n key IDENTIFIER carried by an [OverrideKeySpec] to its
+/// localized string — the key-not-string convention the `badges` parity pair
+/// uses (`badgeText`): the const registry carries identifiers, never English.
+/// An unknown identifier falls back to itself — visible and greppable.
+@visibleForTesting
+String overrideKeyText(AppLocalizations l10n, String key) {
+  switch (key) {
+    case 'devicesKeyPreferredUnitLabel':
       return l10n.devicesKeyPreferredUnitLabel;
-    case 'default_activity_type':
+    case 'devicesKeyPreferredUnitHint':
+      return l10n.devicesKeyPreferredUnitHint;
+    case 'devicesKeyDefaultActivityLabel':
       return l10n.devicesKeyDefaultActivityLabel;
-    case 'map_style':
+    case 'devicesKeyDefaultActivityHint':
+      return l10n.devicesKeyDefaultActivityHint;
+    case 'devicesKeyMapStyleLabel':
       return l10n.devicesKeyMapStyleLabel;
-    case 'units_pace_format':
+    case 'devicesKeyMapStyleHint':
+      return l10n.devicesKeyMapStyleHint;
+    case 'devicesKeyPaceFormatLabel':
       return l10n.devicesKeyPaceFormatLabel;
-    case 'voice_feedback_enabled':
+    case 'devicesKeyPaceFormatHint':
+      return l10n.devicesKeyPaceFormatHint;
+    case 'devicesKeyVoiceFeedbackLabel':
       return l10n.devicesKeyVoiceFeedbackLabel;
-    case 'voice_feedback_interval_km':
+    case 'devicesKeyVoiceFeedbackHint':
+      return l10n.devicesKeyVoiceFeedbackHint;
+    case 'devicesKeyVoiceIntervalLabel':
       return l10n.devicesKeyVoiceIntervalLabel;
-    case 'haptic_feedback_enabled':
+    case 'devicesKeyVoiceIntervalHint':
+      return l10n.devicesKeyVoiceIntervalHint;
+    case 'devicesKeyHapticLabel':
       return l10n.devicesKeyHapticLabel;
-    case 'keep_screen_on':
+    case 'devicesKeyHapticHint':
+      return l10n.devicesKeyHapticHint;
+    case 'devicesKeyKeepScreenOnLabel':
       return l10n.devicesKeyKeepScreenOnLabel;
+    case 'devicesKeyKeepScreenOnHint':
+      return l10n.devicesKeyKeepScreenOnHint;
     default:
-      return spec.label;
+      return key;
   }
 }
 
+/// Localized display label for an [OverrideKeySpec].
+String overrideKeyLabel(AppLocalizations l10n, OverrideKeySpec spec) =>
+    overrideKeyText(l10n, spec.labelKey);
+
 /// Localized hint for an [OverrideKeySpec]; see [overrideKeyLabel].
-String overrideKeyHint(AppLocalizations l10n, OverrideKeySpec spec) {
-  switch (spec.key) {
-    case 'preferred_unit':
-      return l10n.devicesKeyPreferredUnitHint;
-    case 'default_activity_type':
-      return l10n.devicesKeyDefaultActivityHint;
-    case 'map_style':
-      return l10n.devicesKeyMapStyleHint;
-    case 'units_pace_format':
-      return l10n.devicesKeyPaceFormatHint;
-    case 'voice_feedback_enabled':
-      return l10n.devicesKeyVoiceFeedbackHint;
-    case 'voice_feedback_interval_km':
-      return l10n.devicesKeyVoiceIntervalHint;
-    case 'haptic_feedback_enabled':
-      return l10n.devicesKeyHapticHint;
-    case 'keep_screen_on':
-      return l10n.devicesKeyKeepScreenOnHint;
-    default:
-      return spec.hint;
-  }
-}
+String overrideKeyHint(AppLocalizations l10n, OverrideKeySpec spec) =>
+    overrideKeyText(l10n, spec.hintKey);
 
 /// Settings → Devices: the list of devices the current user has signed
 /// in on, with rename + remove + per-device override-editor surfaces.
@@ -349,18 +351,23 @@ class _DevicesScreenState extends State<DevicesScreen> {
 ///   - `bool`  → SwitchListTile
 ///   - `enum`  → radio list of [options]
 ///   - `int` / `double` → text input parsed to the declared type
+///
+/// [labelKey] / [hintKey] are l10n key IDENTIFIERS resolved through
+/// [overrideKeyText] at render time — a const registry can't carry localized
+/// strings, and carrying English literals here is exactly how 16 hardcoded
+/// strings shipped (issue #666 U4).
 @visibleForTesting
 class OverrideKeySpec {
   final String key;
-  final String label;
-  final String hint;
+  final String labelKey;
+  final String hintKey;
   final String kind; // 'bool' | 'enum' | 'int' | 'double'
   final List<String>? options;
 
   const OverrideKeySpec({
     required this.key,
-    required this.label,
-    required this.hint,
+    required this.labelKey,
+    required this.hintKey,
     required this.kind,
     this.options,
   });
@@ -373,55 +380,55 @@ const overrideKeyRegistry = <OverrideKeySpec>[
   // UD — universal default, optional per-device override.
   OverrideKeySpec(
     key: 'preferred_unit',
-    label: 'Preferred unit',
-    hint: 'Distance unit for all displays.',
+    labelKey: 'devicesKeyPreferredUnitLabel',
+    hintKey: 'devicesKeyPreferredUnitHint',
     kind: 'enum',
     options: ['km', 'mi'],
   ),
   OverrideKeySpec(
     key: 'default_activity_type',
-    label: 'Default activity type',
-    hint: 'Pre-selected activity on the start screen.',
+    labelKey: 'devicesKeyDefaultActivityLabel',
+    hintKey: 'devicesKeyDefaultActivityHint',
     kind: 'enum',
     options: ['run', 'walk', 'hike', 'cycle'],
   ),
   OverrideKeySpec(
     key: 'map_style',
-    label: 'Map style',
-    hint: 'MapLibre style for the map view.',
+    labelKey: 'devicesKeyMapStyleLabel',
+    hintKey: 'devicesKeyMapStyleHint',
     kind: 'enum',
     options: ['streets', 'satellite', 'outdoors', 'dark'],
   ),
   OverrideKeySpec(
     key: 'units_pace_format',
-    label: 'Pace format',
-    hint: 'Display format for pace.',
+    labelKey: 'devicesKeyPaceFormatLabel',
+    hintKey: 'devicesKeyPaceFormatHint',
     kind: 'enum',
     options: ['min_per_km', 'min_per_mi', 'kph', 'mph'],
   ),
   // D — device-only.
   OverrideKeySpec(
     key: 'voice_feedback_enabled',
-    label: 'Voice feedback',
-    hint: 'Speak pace / distance callouts during a run.',
+    labelKey: 'devicesKeyVoiceFeedbackLabel',
+    hintKey: 'devicesKeyVoiceFeedbackHint',
     kind: 'bool',
   ),
   OverrideKeySpec(
     key: 'voice_feedback_interval_km',
-    label: 'Voice feedback interval (km)',
-    hint: 'Distance between spoken callouts.',
+    labelKey: 'devicesKeyVoiceIntervalLabel',
+    hintKey: 'devicesKeyVoiceIntervalHint',
     kind: 'double',
   ),
   OverrideKeySpec(
     key: 'haptic_feedback_enabled',
-    label: 'Haptic feedback',
-    hint: 'Vibration on lap + pace-zone changes.',
+    labelKey: 'devicesKeyHapticLabel',
+    hintKey: 'devicesKeyHapticHint',
     kind: 'bool',
   ),
   OverrideKeySpec(
     key: 'keep_screen_on',
-    label: 'Keep screen on',
-    hint: 'Disable OS auto-dim while recording.',
+    labelKey: 'devicesKeyKeepScreenOnLabel',
+    hintKey: 'devicesKeyKeepScreenOnHint',
     kind: 'bool',
   ),
 ];

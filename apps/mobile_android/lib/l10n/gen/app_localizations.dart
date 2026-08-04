@@ -13004,6 +13004,24 @@ abstract class AppLocalizations {
   /// **'Walk {index}/{total}'**
   String workoutReviewLabelWalkN(int index, int total);
 
+  /// Adherence pill on the run-detail workout review: every planned step done
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get workoutReviewAdherenceCompleted;
+
+  /// Adherence pill on the run-detail workout review: some planned steps missed
+  ///
+  /// In en, this message translates to:
+  /// **'Partial'**
+  String get workoutReviewAdherencePartial;
+
+  /// Adherence pill on the run-detail workout review: workout abandoned
+  ///
+  /// In en, this message translates to:
+  /// **'Abandoned'**
+  String get workoutReviewAdherenceAbandoned;
+
   /// Header for the route segments panel
   ///
   /// In en, this message translates to:
@@ -16951,6 +16969,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discard'**
   String get gymSessionDiscardConfirm;
+
+  /// Title of the three-way dialog shown when backing out of a live guided session
+  ///
+  /// In en, this message translates to:
+  /// **'Leave workout?'**
+  String get gymSessionLeaveTitle;
+
+  /// Body of the leave-session dialog explaining the draft-and-resume path
+  ///
+  /// In en, this message translates to:
+  /// **'Your logged sets are kept as a draft — you can pick the session back up from the Gym tab, or discard it.'**
+  String get gymSessionLeaveBody;
+
+  /// Leave-session dialog action that exits while keeping the resumable draft
+  ///
+  /// In en, this message translates to:
+  /// **'Leave — keep draft'**
+  String get gymSessionLeaveDraft;
+
+  /// Leave-session dialog action that stays in the live session
+  ///
+  /// In en, this message translates to:
+  /// **'Keep going'**
+  String get gymSessionKeepGoing;
+
+  /// Title of the gym-screen card offering to resume an in-flight guided-session draft
+  ///
+  /// In en, this message translates to:
+  /// **'Workout in progress'**
+  String get gymDraftTitle;
+
+  /// Logged-set count on the gym-screen resume card
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 set logged} other{{count} sets logged}}'**
+  String gymDraftSetCount(int count);
+
+  /// Resume-card action restoring the guided session from its draft
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get gymDraftResume;
+
+  /// Resume-card action keeping the draft's logged sets as a finished workout without resuming
+  ///
+  /// In en, this message translates to:
+  /// **'Save as is'**
+  String get gymDraftSave;
 
   /// Banner shown after a guided session is saved
   ///

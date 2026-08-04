@@ -10535,6 +10535,18 @@
       }
     }
   },
+  "workoutReviewAdherenceCompleted": "Completed",
+  "@workoutReviewAdherenceCompleted": {
+    "description": "Adherence pill on the run-detail workout review: every planned step done"
+  },
+  "workoutReviewAdherencePartial": "Partial",
+  "@workoutReviewAdherencePartial": {
+    "description": "Adherence pill on the run-detail workout review: some planned steps missed"
+  },
+  "workoutReviewAdherenceAbandoned": "Abandoned",
+  "@workoutReviewAdherenceAbandoned": {
+    "description": "Adherence pill on the run-detail workout review: workout abandoned"
+  },
   "segmentsPanelTitle": "Segments",
   "@segmentsPanelTitle": {
     "description": "Header for the route segments panel"
@@ -13248,6 +13260,43 @@
   "gymSessionDiscardConfirm": "Discard",
   "@gymSessionDiscardConfirm": {
     "description": "Confirm button to discard the guided session"
+  },
+  "gymSessionLeaveTitle": "Leave workout?",
+  "@gymSessionLeaveTitle": {
+    "description": "Title of the three-way dialog shown when backing out of a live guided session"
+  },
+  "gymSessionLeaveBody": "Your logged sets are kept as a draft — you can pick the session back up from the Gym tab, or discard it.",
+  "@gymSessionLeaveBody": {
+    "description": "Body of the leave-session dialog explaining the draft-and-resume path"
+  },
+  "gymSessionLeaveDraft": "Leave — keep draft",
+  "@gymSessionLeaveDraft": {
+    "description": "Leave-session dialog action that exits while keeping the resumable draft"
+  },
+  "gymSessionKeepGoing": "Keep going",
+  "@gymSessionKeepGoing": {
+    "description": "Leave-session dialog action that stays in the live session"
+  },
+  "gymDraftTitle": "Workout in progress",
+  "@gymDraftTitle": {
+    "description": "Title of the gym-screen card offering to resume an in-flight guided-session draft"
+  },
+  "gymDraftSetCount": "{count, plural, =1{1 set logged} other{{count} sets logged}}",
+  "@gymDraftSetCount": {
+    "description": "Logged-set count on the gym-screen resume card",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gymDraftResume": "Resume",
+  "@gymDraftResume": {
+    "description": "Resume-card action restoring the guided session from its draft"
+  },
+  "gymDraftSave": "Save as is",
+  "@gymDraftSave": {
+    "description": "Resume-card action keeping the draft's logged sets as a finished workout without resuming"
   },
   "gymSessionSaved": "Workout saved",
   "@gymSessionSaved": {

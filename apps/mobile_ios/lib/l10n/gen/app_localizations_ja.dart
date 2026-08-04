@@ -7477,6 +7477,15 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => '完了';
+
+  @override
+  String get workoutReviewAdherencePartial => '一部完了';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => '中断';
+
+  @override
   String get segmentsPanelTitle => 'セグメント';
 
   @override
@@ -9723,6 +9732,38 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => '破棄';
+
+  @override
+  String get gymSessionLeaveTitle => 'セッションを中断しますか？';
+
+  @override
+  String get gymSessionLeaveBody =>
+      '記録済みのセットは下書きとして保存されます。ジムタブからセッションを再開するか、破棄できます。';
+
+  @override
+  String get gymSessionLeaveDraft => '中断して下書きを保存';
+
+  @override
+  String get gymSessionKeepGoing => '続ける';
+
+  @override
+  String get gymDraftTitle => '進行中のワークアウト';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$countセット記録済み',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => '再開';
+
+  @override
+  String get gymDraftSave => 'このまま保存';
 
   @override
   String get gymSessionSaved => 'ワークアウトを保存しました';

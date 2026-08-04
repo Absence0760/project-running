@@ -7917,6 +7917,15 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Terminée';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Partielle';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonnée';
+
+  @override
   String get segmentsPanelTitle => 'Segments';
 
   @override
@@ -10252,6 +10261,39 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => 'Abandonner';
+
+  @override
+  String get gymSessionLeaveTitle => 'Quitter la séance ?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Vos séries enregistrées sont conservées en brouillon — vous pourrez reprendre la séance depuis l\'onglet Muscu, ou la supprimer.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Quitter — garder le brouillon';
+
+  @override
+  String get gymSessionKeepGoing => 'Continuer la séance';
+
+  @override
+  String get gymDraftTitle => 'Séance en cours';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count séries enregistrées',
+      one: '1 série enregistrée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Reprendre';
+
+  @override
+  String get gymDraftSave => 'Enregistrer en l\'état';
 
   @override
   String get gymSessionSaved => 'Entraînement enregistré';

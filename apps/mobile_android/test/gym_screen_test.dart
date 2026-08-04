@@ -5,11 +5,30 @@ import 'package:core_models/core_models.dart' show ExerciseRow, GymWorkoutRow;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interface.dart';
 
 import '../lib/gym_prs.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
+import '../lib/local_routine_store.dart';
 import '../lib/screens/gym_screen.dart';
+
+/// No-op so a resumed session screen's `WakelockPlus.enable()` / `.disable()`
+/// don't hit the real pigeon channel (which throws under flutter_test).
+class _NoOpWakelock extends WakelockPlusPlatformInterface {
+  bool _on = false;
+
+  @override
+  bool get isMock => true;
+
+  @override
+  Future<void> toggle({required bool enable}) async {
+    _on = enable;
+  }
+
+  @override
+  Future<bool> get enabled async => _on;
+}
 
 /// Build a synced [StoredGymWorkout] inline (no disk) for the pure-helper
 /// tests. `sets` are `gym_sets`-shaped maps as the store stores them.
@@ -115,10 +134,95 @@ Future<void> _pumpUntil(
   }
 }
 
+/// A store pair seeded with an in-flight guided-session draft (one logged
+/// bench set of a two-set routine) plus the routine it came from — the state
+/// a mid-session process kill leaves behind.
+Future<({LocalGymStore store, LocalRoutineStore routines, Directory dir})>
+    _seedDraft(WidgetTester tester, {bool withRoutine = true}) async {
+  late LocalGymStore store;
+  late LocalRoutineStore routines;
+  late Directory dir;
+  await tester.runAsync(() async {
+    dir = Directory.systemTemp.createTempSync('gym_screen_draft_');
+    store = LocalGymStore();
+    await store.init(overrideDirectory: Directory('${dir.path}/gym'));
+    routines = LocalRoutineStore();
+    await routines.init(overrideDirectory: Directory('${dir.path}/routines'));
+    await store.createLocal(
+      title: 'Bench routine',
+      startedAt: DateTime.utc(2026, 3, 1, 10),
+      durationS: 300,
+      sets: const [
+        (
+          exerciseName: 'Bench',
+          reps: 5,
+          weightKg: 80.0,
+          rpe: null,
+          setType: 'working',
+          durationS: null,
+          exerciseId: null,
+        ),
+      ],
+      metadata: {
+        'routine_id': 'routine-1',
+        'gym_session_draft': {
+          'saved_at': '2026-03-01T10:05:00Z',
+          'results': [
+            {
+              'step_index': 0,
+              'status': 'completed',
+              'reps': 5,
+              'weight_kg': 80.0,
+              'rpe': null,
+              'duration_s': null,
+              'distance_m': null,
+            },
+          ],
+        },
+      },
+    );
+    if (withRoutine) {
+      await routines.upsertFromServer(
+        {
+          'id': 'routine-1',
+          'title': 'Bench routine',
+          'exercise_count': 1,
+          'last_modified_at': '2026-03-01T09:00:00.000Z',
+        },
+        [
+          StoredRoutineExercise(
+            exerciseName: 'Bench',
+            exerciseKey: 'bench',
+            sets: [
+              StoredRoutineSet(targetRepsMin: 5, targetWeightKg: 80, restS: 0),
+              StoredRoutineSet(targetRepsMin: 5, targetWeightKg: 80, restS: 0),
+            ],
+          ),
+        ],
+      );
+    }
+  });
+  return (store: store, routines: routines, dir: dir);
+}
+
+Widget _gymScreen(LocalGymStore store, LocalRoutineStore routines) =>
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: GymScreen(
+        api: _OfflineFakeApi(),
+        store: store,
+        routineStore: routines,
+      ),
+    );
+
 void main() {
   // The list rows render a localised date via formatDateMed → intl DateFormat,
   // which needs the locale symbol data loaded once.
-  setUpAll(() => initializeDateFormatting());
+  setUpAll(() {
+    initializeDateFormatting();
+    WakelockPlusPlatformInterface.instance = _NoOpWakelock();
+  });
 
   group('gym list pure helpers', () {
     test('gymWorkoutVolume sums reps*weight, ignores incomplete sets', () {
@@ -342,6 +446,139 @@ void main() {
       } finally {
         dir.deleteSync(recursive: true);
       }
+    });
+  });
+
+  group('GymScreen guided-session resume card (issue #666 U5)', () {
+    testWidgets('a draft with a live routine surfaces the resume card',
+        (tester) async {
+      final s = await _seedDraft(tester);
+      addTearDown(() => s.dir.deleteSync(recursive: true));
+
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pump();
+
+      expect(find.text('Workout in progress'), findsOneWidget);
+      expect(find.text('Bench routine · 1 set logged'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Resume'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Save as is'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Discard'), findsOneWidget);
+    });
+
+    testWidgets('no card without a draft marker', (tester) async {
+      final dir = Directory.systemTemp.createTempSync('gym_screen_nodraft_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final store = LocalGymStore();
+      final routines = LocalRoutineStore();
+      await tester.runAsync(() async {
+        await store.init(overrideDirectory: Directory('${dir.path}/gym'));
+        await routines.init(
+            overrideDirectory: Directory('${dir.path}/routines'));
+        await store.createLocal(
+            title: 'Push day', startedAt: DateTime.utc(2026, 2, 1));
+      });
+
+      await tester.pumpWidget(_gymScreen(store, routines));
+      await tester.pump();
+
+      expect(find.text('Workout in progress'), findsNothing);
+    });
+
+    testWidgets('no card when the draft routine no longer exists',
+        (tester) async {
+      final s = await _seedDraft(tester, withRoutine: false);
+      addTearDown(() => s.dir.deleteSync(recursive: true));
+
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pump();
+
+      // The draft row still lists as a plain workout; only the card hides.
+      expect(find.text('Workout in progress'), findsNothing);
+      expect(find.text('Bench routine'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Resume restores the runner mid-routine and finishing completes '
+        'the same draft row', (tester) async {
+      final s = await _seedDraft(tester);
+      addTearDown(() => s.dir.deleteSync(recursive: true));
+
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Resume'));
+      await tester.pumpAndSettle();
+
+      // The replayed draft lands on set 2 of 2, not back at set 1.
+      expect(find.text('Bench · set 2 of 2'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Finish'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pump();
+
+      final w = s.store.workouts.single;
+      expect(w.sets.length, 2,
+          reason: 'the replayed draft set and the freshly logged one must '
+              'both persist onto the one draft row');
+      final meta = w.row['metadata'] as Map;
+      expect(meta.containsKey('gym_session_draft'), isFalse,
+          reason: 'finishing must clear the draft marker');
+      expect(meta['gym_adherence'], 'completed');
+    });
+
+    testWidgets('Save as is keeps the sets and clears the draft marker',
+        (tester) async {
+      final s = await _seedDraft(tester);
+      addTearDown(() => s.dir.deleteSync(recursive: true));
+
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(TextButton, 'Save as is'));
+      await _pumpUntil(
+          tester, () => !tester.any(find.text('Workout in progress')));
+
+      final w = s.store.workouts.single;
+      expect(w.sets.length, 1);
+      final meta = w.row['metadata'] as Map;
+      expect(meta.containsKey('gym_session_draft'), isFalse);
+      expect(meta['routine_id'], 'routine-1');
+
+      // Drain the confirmation banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('Discard confirms, then deletes the draft row',
+        (tester) async {
+      final s = await _seedDraft(tester);
+      addTearDown(() => s.dir.deleteSync(recursive: true));
+
+      await tester.pumpWidget(_gymScreen(s.store, s.routines));
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard session?'), findsOneWidget);
+
+      // Cancel keeps the draft.
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Cancel')));
+      await tester.pumpAndSettle();
+      expect(find.text('Workout in progress'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Discard')));
+      await _pumpUntil(
+          tester, () => !tester.any(find.text('Workout in progress')));
+
+      expect(s.store.workouts, isEmpty);
     });
   });
 }

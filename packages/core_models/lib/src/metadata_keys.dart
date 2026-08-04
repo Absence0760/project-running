@@ -31,6 +31,7 @@ class MetadataKeys {
   static const String fastestMarathonS = 'fastest_marathon_s';
   static const String garminId = 'garmin_id';
   static const String gymAdherence = 'gym_adherence';
+  static const String gymSessionDraft = 'gym_session_draft';
   static const String gymStepResults = 'gym_step_results';
   static const String healthConnectType = 'health_connect_type';
   static const String hrSeriesUrl = 'hr_series_url';

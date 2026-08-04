@@ -405,6 +405,7 @@ one). Any future axis has to pick a side of that line deliberately.
 - **Supersets** run round-robin (Set 1 of A → Set 1 of B → rest → Set 2 of A …), not a linear list.
 - **Rest** is an explicit duration-based step kind, mirroring the run side's `walk` recovery; a local `Timer` drives the countdown, no server round-trip.
 - **Crash-safety dual save:** a `reviewMetadata()` analogue runs on **both** the in-progress save tick and final stop, so a mid-session crash preserves the trail.
+- **Leave guard + resume (mobile, issue #666 U5):** the session Scaffold sits under a `PopScope(canPop: false)`, so a system back / AppBar back mid-session routes through the same three-way dialog as the band's Abandon control — *keep going* / *leave (draft kept)* / *discard*. The 10 s durable save stamps the draft row with `gym_session_draft` metadata (an ordered per-step outcome list, registered in [metadata.md](../backend/metadata.md)); the gym screen surfaces any draft whose routine still exists as a resume card (Resume / Save as is / Discard, mirroring the run screen's Resume / Finish / Discard). Resume rebuilds the runner by **replaying** the outcome list through the public runner API — the current step is derived, never stored — and re-anchors elapsed to `now − saved duration_s`, so time the app was gone isn't counted (matching `resumeSession`'s elapsed semantics on the run side). A draft whose routine was deleted degrades to a plain workout row (no card).
 
 ### The metadata trio (on `gym_workouts.metadata`)
 
