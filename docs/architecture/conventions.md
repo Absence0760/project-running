@@ -414,7 +414,7 @@ On the Flutter apps, good/warning/bad/crown colouring comes from the `AppSemanti
 
 ## Mobile empty states — ui_kit `EmptyState`
 
-On the Flutter apps, a whole-surface "nothing here yet / not found" state renders ui_kit's `EmptyState` (icon 48, `all(32)` padding, titleMedium title, bodySmall body, optional CTA — mirroring `ErrorState`'s proportions; [decisions.md § 484](decisions.md)), never a hand-rolled centred `Text` or bespoke icon column; tiny inline empty hints inside a larger card/list section stay inline.
+On the Flutter apps, a whole-surface "nothing here yet / not found" state renders ui_kit's `EmptyState` (icon 48, `all(32)` padding, titleMedium title, bodySmall body, optional CTA — reusing `ErrorState`'s icon size and padding; [decisions.md § 485](decisions.md)), never a hand-rolled centred `Text` or bespoke icon column; tiny inline empty hints inside a larger card/list section stay inline.
 
 ## Mobile tap targets — no `VisualDensity.compact` on IconButtons
 
