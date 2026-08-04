@@ -871,13 +871,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signUpAcceptPrefix => '以下に同意します：';
 
   @override
-  String get signUpTermsLink => '利用規約';
-
-  @override
   String get signUpAcceptConjunction => 'および';
-
-  @override
-  String get signUpPrivacyLink => 'プライバシーポリシー';
 
   @override
   String get signUpErrorConfirmAge => '続けるには、16歳以上であることを確認してください。';
@@ -915,11 +909,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => 'すでにアカウントをお持ちですか？ サインイン';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return '$url を開けませんでした';
-  }
 
   @override
   String get onboardingTrackTitle => 'すべてのランを記録';
@@ -6039,6 +6028,26 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get aboutUpdateFailed => 'アップデートを開始できませんでした。Play ストアからもう一度お試しください。';
+
+  @override
+  String get legalPrivacy => 'プライバシーポリシー';
+
+  @override
+  String get legalTerms => '利用規約';
+
+  @override
+  String get legalCookieNotice => 'Cookie に関する通知';
+
+  @override
+  String get legalHealthDataNotice => '健康データのプライバシー';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return '$url を開けませんでした';
+  }
+
+  @override
+  String get aboutLegalSection => '法的情報';
 
   @override
   String get devicesTitle => 'デバイス';

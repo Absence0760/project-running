@@ -1589,23 +1589,11 @@ abstract class AppLocalizations {
   /// **'I accept the '**
   String get signUpAcceptPrefix;
 
-  /// Tappable Terms of Service link text inside the terms-acceptance checkbox label
-  ///
-  /// In en, this message translates to:
-  /// **'Terms of Service'**
-  String get signUpTermsLink;
-
   /// Conjunction between the Terms of Service and Privacy Policy links in the terms-acceptance checkbox label
   ///
   /// In en, this message translates to:
   /// **' and '**
   String get signUpAcceptConjunction;
-
-  /// Tappable Privacy Policy link text inside the terms-acceptance checkbox label
-  ///
-  /// In en, this message translates to:
-  /// **'Privacy Policy'**
-  String get signUpPrivacyLink;
 
   /// Validation error shown when the age gate is not confirmed
   ///
@@ -1672,12 +1660,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Already have an account? Sign in'**
   String get signUpSignInPrompt;
-
-  /// Banner shown when a legal-document link (Terms / Privacy) fails to open
-  ///
-  /// In en, this message translates to:
-  /// **'Could not open {url}'**
-  String signUpCouldNotOpen(String url);
 
   /// Title of the first onboarding slide
   ///
@@ -10508,6 +10490,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t start the update. Try again from the Play Store.'**
   String get aboutUpdateFailed;
+
+  /// Label for the Privacy Policy link (settings About screen + sign-up consent)
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get legalPrivacy;
+
+  /// Label for the Terms of Service link (settings About screen + sign-up consent)
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Service'**
+  String get legalTerms;
+
+  /// Label for the Cookie Notice link on the settings About screen
+  ///
+  /// In en, this message translates to:
+  /// **'Cookie Notice'**
+  String get legalCookieNotice;
+
+  /// Label for the consumer health data privacy notice link on the settings About screen
+  ///
+  /// In en, this message translates to:
+  /// **'Health data privacy'**
+  String get legalHealthDataNotice;
+
+  /// Banner shown when a legal-document link fails to open
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {url}'**
+  String legalCouldNotOpen(String url);
+
+  /// Section header above the legal-document links on the About screen
+  ///
+  /// In en, this message translates to:
+  /// **'Legal'**
+  String get aboutLegalSection;
 
   /// AppBar title for the Settings > Devices screen
   ///

@@ -5,6 +5,7 @@ import 'package:in_app_update/in_app_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../legal_links.dart';
 import '../widgets/top_banner.dart';
 
 /// The result of an update check, decoupled from the `in_app_update` plugin
@@ -124,6 +125,27 @@ class _SettingsAboutScreenState extends State<SettingsAboutScreen> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => showLicensePage(context: context),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+              child: Text(
+                l10n.aboutLegalSection.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  letterSpacing: 0.8,
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            // Same four documents web links from its settings nav footer.
+            // Signed-in users had no route to any of them on mobile — the
+            // only links lived on the pre-account sign-up screen.
+            for (final doc in LegalDoc.values)
+              ListTile(
+                leading: const Icon(Icons.gavel_outlined),
+                title: Text(legalDocLabel(l10n, doc)),
+                trailing: const Icon(Icons.open_in_new, size: 18),
+                onTap: () => openLegalDoc(context, doc),
+              ),
           ],
         ),
       ),

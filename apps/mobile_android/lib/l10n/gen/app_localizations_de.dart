@@ -911,13 +911,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get signUpAcceptPrefix => 'Ich akzeptiere die ';
 
   @override
-  String get signUpTermsLink => 'Nutzungsbedingungen';
-
-  @override
   String get signUpAcceptConjunction => ' und die ';
-
-  @override
-  String get signUpPrivacyLink => 'Datenschutzerklärung';
 
   @override
   String get signUpErrorConfirmAge =>
@@ -958,11 +952,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => 'Du hast schon ein Konto? Anmelden';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return '$url konnte nicht geöffnet werden';
-  }
 
   @override
   String get onboardingTrackTitle => 'Jeden Lauf aufzeichnen';
@@ -6416,6 +6405,26 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get aboutUpdateFailed =>
       'Update konnte nicht gestartet werden. Versuche es erneut über den Play Store.';
+
+  @override
+  String get legalPrivacy => 'Datenschutzerklärung';
+
+  @override
+  String get legalTerms => 'Nutzungsbedingungen';
+
+  @override
+  String get legalCookieNotice => 'Cookie-Hinweis';
+
+  @override
+  String get legalHealthDataNotice => 'Gesundheitsdaten-Datenschutz';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return '$url konnte nicht geöffnet werden';
+  }
+
+  @override
+  String get aboutLegalSection => 'Rechtliches';
 
   @override
   String get devicesTitle => 'Geräte';

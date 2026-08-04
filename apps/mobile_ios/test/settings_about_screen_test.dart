@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/legal_links.dart';
 import '../lib/screens/settings_about_screen.dart';
 
 Future<void> _pump(WidgetTester tester) async {
@@ -142,6 +143,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('update-unavailable')), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Update'), findsNothing);
+  });
+
+  testWidgets('links every legal document web links from its settings footer',
+      (tester) async {
+    // Before this screen existed the only links to any of these lived on
+    // the pre-account sign-up form — a signed-in user could not reach the
+    // Privacy Policy or the Terms from anywhere in the app.
+    await _pump(tester);
+    expect(find.text('Privacy Policy'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsOneWidget);
+    expect(find.text('Cookie Notice'), findsOneWidget);
+    expect(find.text('Health data privacy'), findsOneWidget);
+  });
+
+  test('legal document URLs resolve against the web host', () {
+    expect(legalDocUrl(LegalDoc.privacy, webBase: 'https://threkir.com'),
+        'https://threkir.com/privacy');
+    expect(legalDocUrl(LegalDoc.terms, webBase: 'https://threkir.com/'),
+        'https://threkir.com/terms');
+    expect(legalDocUrl(LegalDoc.cookieNotice, webBase: 'https://preview.test'),
+        'https://preview.test/cookie-notice');
+    expect(legalDocUrl(LegalDoc.healthDataNotice, webBase: ''),
+        'https://threkir.com/health-data-notice');
   });
 
   testWidgets('checking state shows while the update check is in flight',

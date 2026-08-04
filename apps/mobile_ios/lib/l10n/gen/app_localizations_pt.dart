@@ -911,13 +911,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get signUpAcceptPrefix => 'Aceito os ';
 
   @override
-  String get signUpTermsLink => 'Termos de Serviço';
-
-  @override
   String get signUpAcceptConjunction => ' e a ';
-
-  @override
-  String get signUpPrivacyLink => 'Política de Privacidade';
 
   @override
   String get signUpErrorConfirmAge =>
@@ -957,11 +951,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => 'Já tem uma conta? Entre';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return 'Não foi possível abrir $url';
-  }
 
   @override
   String get onboardingTrackTitle => 'Registre cada corrida';
@@ -6402,6 +6391,26 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get aboutUpdateFailed =>
       'Não foi possível iniciar a atualização. Tente novamente na Play Store.';
+
+  @override
+  String get legalPrivacy => 'Política de Privacidade';
+
+  @override
+  String get legalTerms => 'Termos de Serviço';
+
+  @override
+  String get legalCookieNotice => 'Aviso de cookies';
+
+  @override
+  String get legalHealthDataNotice => 'Privacidade dos dados de saúde';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return 'Não foi possível abrir $url';
+  }
+
+  @override
+  String get aboutLegalSection => 'Informação legal';
 
   @override
   String get devicesTitle => 'Dispositivos';
@@ -13332,13 +13341,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get signUpAcceptPrefix => 'Aceito os ';
 
   @override
-  String get signUpTermsLink => 'Termos de Serviço';
-
-  @override
   String get signUpAcceptConjunction => ' e a ';
-
-  @override
-  String get signUpPrivacyLink => 'Política de Privacidade';
 
   @override
   String get signUpErrorConfirmAge =>
@@ -13378,11 +13381,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get signUpSignInPrompt => 'Já tem uma conta? Entre';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return 'Não foi possível abrir $url';
-  }
 
   @override
   String get onboardingTrackTitle => 'Registre cada corrida';
@@ -18821,6 +18819,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get aboutUpdateFailed =>
       'Não foi possível iniciar a atualização. Tente novamente na Play Store.';
+
+  @override
+  String get legalPrivacy => 'Política de Privacidade';
+
+  @override
+  String get legalTerms => 'Termos de Serviço';
+
+  @override
+  String get legalCookieNotice => 'Aviso de cookies';
+
+  @override
+  String get legalHealthDataNotice => 'Privacidade dos dados de saúde';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return 'Não foi possível abrir $url';
+  }
+
+  @override
+  String get aboutLegalSection => 'Jurídico';
 
   @override
   String get devicesTitle => 'Dispositivos';

@@ -914,13 +914,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get signUpAcceptPrefix => 'J\'accepte les ';
 
   @override
-  String get signUpTermsLink => 'Conditions d\'utilisation';
-
-  @override
   String get signUpAcceptConjunction => ' et la ';
-
-  @override
-  String get signUpPrivacyLink => 'Politique de confidentialité';
 
   @override
   String get signUpErrorConfirmAge =>
@@ -961,11 +955,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => 'Vous avez déjà un compte ? Connectez-vous';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return 'Impossible d\'ouvrir $url';
-  }
 
   @override
   String get onboardingTrackTitle => 'Suivez chaque course';
@@ -6422,6 +6411,26 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get aboutUpdateFailed =>
       'Impossible de lancer la mise à jour. Réessayez depuis le Play Store.';
+
+  @override
+  String get legalPrivacy => 'Politique de confidentialité';
+
+  @override
+  String get legalTerms => 'Conditions d\'utilisation';
+
+  @override
+  String get legalCookieNotice => 'Avis relatif aux cookies';
+
+  @override
+  String get legalHealthDataNotice => 'Confidentialité des données de santé';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return 'Impossible d\'ouvrir $url';
+  }
+
+  @override
+  String get aboutLegalSection => 'Mentions légales';
 
   @override
   String get devicesTitle => 'Appareils';

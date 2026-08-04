@@ -1192,17 +1192,9 @@
   "@signUpAcceptPrefix": {
     "description": "Leading text of the terms-acceptance checkbox label, before the Terms of Service link"
   },
-  "signUpTermsLink": "Terms of Service",
-  "@signUpTermsLink": {
-    "description": "Tappable Terms of Service link text inside the terms-acceptance checkbox label"
-  },
   "signUpAcceptConjunction": " and ",
   "@signUpAcceptConjunction": {
     "description": "Conjunction between the Terms of Service and Privacy Policy links in the terms-acceptance checkbox label"
-  },
-  "signUpPrivacyLink": "Privacy Policy",
-  "@signUpPrivacyLink": {
-    "description": "Tappable Privacy Policy link text inside the terms-acceptance checkbox label"
   },
   "signUpErrorConfirmAge": "Please confirm you are 16 or older to continue.",
   "@signUpErrorConfirmAge": {
@@ -1257,15 +1249,6 @@
   "signUpSignInPrompt": "Already have an account? Sign in",
   "@signUpSignInPrompt": {
     "description": "Link from the sign-up screen back to the sign-in screen"
-  },
-  "signUpCouldNotOpen": "Could not open {url}",
-  "@signUpCouldNotOpen": {
-    "description": "Banner shown when a legal-document link (Terms / Privacy) fails to open",
-    "placeholders": {
-      "url": {
-        "type": "String"
-      }
-    }
   },
   "onboardingTrackTitle": "Track every run",
   "@onboardingTrackTitle": {
@@ -8555,6 +8538,35 @@
   "aboutUpdateFailed": "Couldn't start the update. Try again from the Play Store.",
   "@aboutUpdateFailed": {
     "description": "Banner shown when the in-app update flow fails to start"
+  },
+  "legalPrivacy": "Privacy Policy",
+  "@legalPrivacy": {
+    "description": "Label for the Privacy Policy link (settings About screen + sign-up consent)"
+  },
+  "legalTerms": "Terms of Service",
+  "@legalTerms": {
+    "description": "Label for the Terms of Service link (settings About screen + sign-up consent)"
+  },
+  "legalCookieNotice": "Cookie Notice",
+  "@legalCookieNotice": {
+    "description": "Label for the Cookie Notice link on the settings About screen"
+  },
+  "legalHealthDataNotice": "Health data privacy",
+  "@legalHealthDataNotice": {
+    "description": "Label for the consumer health data privacy notice link on the settings About screen"
+  },
+  "legalCouldNotOpen": "Could not open {url}",
+  "@legalCouldNotOpen": {
+    "description": "Banner shown when a legal-document link fails to open",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutLegalSection": "Legal",
+  "@aboutLegalSection": {
+    "description": "Section header above the legal-document links on the About screen"
   },
   "devicesTitle": "Devices",
   "@devicesTitle": {

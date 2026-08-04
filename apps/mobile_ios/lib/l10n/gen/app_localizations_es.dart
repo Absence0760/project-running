@@ -911,13 +911,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get signUpAcceptPrefix => 'Acepto las ';
 
   @override
-  String get signUpTermsLink => 'Condiciones del servicio';
-
-  @override
   String get signUpAcceptConjunction => ' y la ';
-
-  @override
-  String get signUpPrivacyLink => 'Política de privacidad';
 
   @override
   String get signUpErrorConfirmAge =>
@@ -957,11 +951,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => '¿Ya tienes una cuenta? Inicia sesión';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return 'No se pudo abrir $url';
-  }
 
   @override
   String get onboardingTrackTitle => 'Registra cada carrera';
@@ -6403,6 +6392,26 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get aboutUpdateFailed =>
       'No se pudo iniciar la actualización. Inténtalo de nuevo desde Play Store.';
+
+  @override
+  String get legalPrivacy => 'Política de privacidad';
+
+  @override
+  String get legalTerms => 'Condiciones del servicio';
+
+  @override
+  String get legalCookieNotice => 'Aviso de cookies';
+
+  @override
+  String get legalHealthDataNotice => 'Privacidad de datos de salud';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return 'No se pudo abrir $url';
+  }
+
+  @override
+  String get aboutLegalSection => 'Legal';
 
   @override
   String get devicesTitle => 'Dispositivos';
