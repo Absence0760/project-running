@@ -234,4 +234,98 @@ void main() {
       expect(find.byIcon(Icons.search), findsOneWidget);
     });
   });
+
+  group('AddRunScreen — discard guard', () {
+    // Pushes the screen over a root route so a guarded pop can be observed
+    // returning to the root.
+    Future<void> pushScreen(
+      WidgetTester tester,
+      LocalRunStore runStore,
+      LocalRouteStore routeStore,
+      Preferences prefs,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => AddRunScreen(
+                        runStore: runStore,
+                        routeStore: routeStore,
+                        preferences: prefs,
+                      ),
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'edited field: back shows the discard confirm; Cancel keeps the input',
+        (tester) async {
+      final s = await _makeStores();
+      await pushScreen(tester, s.runs, s.routes, s.prefs);
+
+      await tester.enterText(find.byType(TextFormField).first, '5.0');
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsOneWidget);
+
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Cancel')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.byType(AddRunScreen), findsOneWidget);
+      expect(find.text('5.0'), findsOneWidget);
+    });
+
+    testWidgets('edited field: Discard pops without saving', (tester) async {
+      final s = await _makeStores();
+      await pushScreen(tester, s.runs, s.routes, s.prefs);
+
+      await tester.enterText(find.byType(TextFormField).first, '5.0');
+      await tester.pump();
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Discard')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.byType(AddRunScreen), findsNothing);
+      expect(find.text('open'), findsOneWidget);
+      expect(s.runs.runs, isEmpty);
+    });
+
+    testWidgets('untouched form: back pops with no confirm', (tester) async {
+      final s = await _makeStores();
+      await pushScreen(tester, s.runs, s.routes, s.prefs);
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.byType(AddRunScreen), findsNothing);
+      expect(find.text('open'), findsOneWidget);
+    });
+  });
 }
