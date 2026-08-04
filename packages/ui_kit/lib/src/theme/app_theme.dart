@@ -100,11 +100,10 @@ class AppTheme {
       ),
       // Light surfaceContainerLow computes to 1.005:1 against parchment (and
       // carries the seed's cool lavender cast on a warm page), so card
-      // separation comes from the hairline outline, not a tonal fill.
-      // No horizontal margin: a card's left edge is its parent's padding
-      // edge, so cards in one list cannot disagree about where the column
-      // starts. The vertical 4 is kept because 49 stacked-card sites carry
-      // no gap of their own and the Material default was supplying it.
+      // separation comes from the hairline outline, not a tonal fill. The
+      // margin is vertical-only so a card's left edge is always its parent's
+      // padding edge; the 4 stays because 49 stacked-card sites carry no gap
+      // of their own and Material's default margin was supplying it.
       cardTheme: const CardThemeData(
         color: parchment,
         elevation: 0,
