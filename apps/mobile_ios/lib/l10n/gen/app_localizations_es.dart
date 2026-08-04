@@ -6365,10 +6365,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get proSupportSubtitle => 'Donación única en tu navegador';
 
   @override
-  String get licensesTitle => 'Licencias';
+  String get aboutTitle => 'Acerca de y actualizaciones';
 
   @override
-  String get licensesVersion => 'Versión';
+  String get aboutVersion => 'Versión';
 
   @override
   String get licensesOpenSource => 'Licencias de código abierto';
@@ -6378,23 +6378,30 @@ class AppLocalizationsEs extends AppLocalizations {
       'Paquetes de terceros incluidos con esta app';
 
   @override
-  String get licensesCheckingUpdate => 'Buscando actualizaciones…';
+  String get aboutCheckForUpdates => 'Buscar actualizaciones';
 
   @override
-  String get licensesUpdateAvailable => 'Actualización disponible';
+  String get aboutCheckingUpdate => 'Buscando actualizaciones…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Actualización disponible';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'Hay una versión más reciente lista para instalar.';
 
   @override
-  String get licensesUpdate => 'Actualizar';
+  String get aboutUpdate => 'Actualizar';
 
   @override
-  String get licensesUpToDate => 'Tienes la última versión';
+  String get aboutUpToDate => 'Tienes la última versión';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'Esta versión se actualiza desde la tienda en la que la instalaste.';
+
+  @override
+  String get aboutUpdateFailed =>
       'No se pudo iniciar la actualización. Inténtalo de nuevo desde Play Store.';
 
   @override
@@ -9122,8 +9129,8 @@ class AppLocalizationsEs extends AppLocalizations {
       'Suscríbete, restaura compras, gestiona la facturación';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'Versión de la app y avisos de código abierto';
+  String get settingsTabAboutSubtitle =>
+      'Versión, actualizaciones y documentos legales';
 
   @override
   String periodSummaryWeekOf(Object date) {

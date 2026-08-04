@@ -6364,10 +6364,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get proSupportSubtitle => 'Doação única no seu navegador';
 
   @override
-  String get licensesTitle => 'Licenças';
+  String get aboutTitle => 'Sobre e atualizações';
 
   @override
-  String get licensesVersion => 'Versão';
+  String get aboutVersion => 'Versão';
 
   @override
   String get licensesOpenSource => 'Licenças de código aberto';
@@ -6377,23 +6377,30 @@ class AppLocalizationsPt extends AppLocalizations {
       'Pacotes de terceiros incluídos neste app';
 
   @override
-  String get licensesCheckingUpdate => 'A procurar atualizações…';
+  String get aboutCheckForUpdates => 'Procurar atualizações';
 
   @override
-  String get licensesUpdateAvailable => 'Atualização disponível';
+  String get aboutCheckingUpdate => 'A procurar atualizações…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Atualização disponível';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'Está disponível uma versão mais recente para instalar.';
 
   @override
-  String get licensesUpdate => 'Atualizar';
+  String get aboutUpdate => 'Atualizar';
 
   @override
-  String get licensesUpToDate => 'Tem a versão mais recente';
+  String get aboutUpToDate => 'Tem a versão mais recente';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'Esta versão é atualizada através da loja onde a instalou.';
+
+  @override
+  String get aboutUpdateFailed =>
       'Não foi possível iniciar a atualização. Tente novamente na Play Store.';
 
   @override
@@ -9117,8 +9124,8 @@ class AppLocalizationsPt extends AppLocalizations {
       'Assine, restaure compras, gerencie a cobrança';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'Versão do app e avisos de código aberto';
+  String get settingsTabAboutSubtitle =>
+      'Versão, atualizações e documentos legais';
 
   @override
   String periodSummaryWeekOf(Object date) {
@@ -18776,10 +18783,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get proSupportSubtitle => 'Doação única no seu navegador';
 
   @override
-  String get licensesTitle => 'Licenças';
+  String get aboutTitle => 'Sobre e atualizações';
 
   @override
-  String get licensesVersion => 'Versão';
+  String get aboutVersion => 'Versão';
 
   @override
   String get licensesOpenSource => 'Licenças de código aberto';
@@ -18789,23 +18796,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Pacotes de terceiros incluídos neste app';
 
   @override
-  String get licensesCheckingUpdate => 'Procurando atualizações…';
+  String get aboutCheckForUpdates => 'Verificar atualizações';
 
   @override
-  String get licensesUpdateAvailable => 'Atualização disponível';
+  String get aboutCheckingUpdate => 'Procurando atualizações…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Atualização disponível';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'Há uma versão mais recente pronta para instalar.';
 
   @override
-  String get licensesUpdate => 'Atualizar';
+  String get aboutUpdate => 'Atualizar';
 
   @override
-  String get licensesUpToDate => 'Você está na versão mais recente';
+  String get aboutUpToDate => 'Você está na versão mais recente';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'Esta versão é atualizada pela loja onde você a instalou.';
+
+  @override
+  String get aboutUpdateFailed =>
       'Não foi possível iniciar a atualização. Tente novamente na Play Store.';
 
   @override
@@ -21529,8 +21543,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Assine, restaure compras, gerencie a cobrança';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'Versão do app e avisos de código aberto';
+  String get settingsTabAboutSubtitle =>
+      'Versão, atualizações e documentos legais';
 
   @override
   String periodSummaryWeekOf(Object date) {

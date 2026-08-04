@@ -6005,10 +6005,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get proSupportSubtitle => 'ブラウザで一回限りの寄付';
 
   @override
-  String get licensesTitle => 'ライセンス';
+  String get aboutTitle => 'アプリ情報とアップデート';
 
   @override
-  String get licensesVersion => 'バージョン';
+  String get aboutVersion => 'バージョン';
 
   @override
   String get licensesOpenSource => 'オープンソースライセンス';
@@ -6017,22 +6017,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get licensesOpenSourceSubtitle => 'このアプリに同梱されているサードパーティパッケージ';
 
   @override
-  String get licensesCheckingUpdate => 'アップデートを確認中…';
+  String get aboutCheckForUpdates => 'アップデートを確認';
 
   @override
-  String get licensesUpdateAvailable => 'アップデートがあります';
+  String get aboutCheckingUpdate => 'アップデートを確認中…';
 
   @override
-  String get licensesUpdateAvailableSubtitle => '新しいバージョンをインストールできます。';
+  String get aboutUpdateAvailable => 'アップデートがあります';
 
   @override
-  String get licensesUpdate => '更新';
+  String get aboutUpdateAvailableSubtitle => '新しいバージョンをインストールできます。';
 
   @override
-  String get licensesUpToDate => '最新バージョンです';
+  String get aboutUpdate => '更新';
 
   @override
-  String get licensesUpdateFailed => 'アップデートを開始できませんでした。Play ストアからもう一度お試しください。';
+  String get aboutUpToDate => '最新バージョンです';
+
+  @override
+  String get aboutUpdateUnavailable => 'このビルドはインストール元のストアから更新されます。';
+
+  @override
+  String get aboutUpdateFailed => 'アップデートを開始できませんでした。Play ストアからもう一度お試しください。';
 
   @override
   String get devicesTitle => 'デバイス';
@@ -8649,7 +8655,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsTabProSubtitle => '登録、購入の復元、請求の管理';
 
   @override
-  String get settingsTabLicensesSubtitle => 'アプリのバージョンとオープンソースの通知';
+  String get settingsTabAboutSubtitle => 'バージョン、アップデート、法的文書';
 
   @override
   String periodSummaryWeekOf(Object date) {

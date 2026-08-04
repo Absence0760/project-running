@@ -6378,10 +6378,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get proSupportSubtitle => 'Einmalige Spende in deinem Browser';
 
   @override
-  String get licensesTitle => 'Lizenzen';
+  String get aboutTitle => 'Über & Updates';
 
   @override
-  String get licensesVersion => 'Version';
+  String get aboutVersion => 'Version';
 
   @override
   String get licensesOpenSource => 'Open-Source-Lizenzen';
@@ -6391,23 +6391,30 @@ class AppLocalizationsDe extends AppLocalizations {
       'Drittanbieter-Pakete, die mit dieser App gebündelt sind';
 
   @override
-  String get licensesCheckingUpdate => 'Suche nach Updates…';
+  String get aboutCheckForUpdates => 'Nach Updates suchen';
 
   @override
-  String get licensesUpdateAvailable => 'Update verfügbar';
+  String get aboutCheckingUpdate => 'Suche nach Updates…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Update verfügbar';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'Eine neuere Version kann installiert werden.';
 
   @override
-  String get licensesUpdate => 'Aktualisieren';
+  String get aboutUpdate => 'Aktualisieren';
 
   @override
-  String get licensesUpToDate => 'Du hast die neueste Version';
+  String get aboutUpToDate => 'Du hast die neueste Version';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'Dieser Build wird über den Store aktualisiert, aus dem du ihn installiert hast.';
+
+  @override
+  String get aboutUpdateFailed =>
       'Update konnte nicht gestartet werden. Versuche es erneut über den Play Store.';
 
   @override
@@ -9129,8 +9136,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Abonnieren, Käufe wiederherstellen, Abrechnung verwalten';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'App-Version und Open-Source-Hinweise';
+  String get settingsTabAboutSubtitle => 'Version, Updates und Rechtsdokumente';
 
   @override
   String periodSummaryWeekOf(Object date) {

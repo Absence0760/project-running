@@ -10437,17 +10437,17 @@ abstract class AppLocalizations {
   /// **'One-off donation in your browser'**
   String get proSupportSubtitle;
 
-  /// AppBar title for the Settings > Licenses screen
+  /// AppBar title for the Settings > About & updates screen
   ///
   /// In en, this message translates to:
-  /// **'Licenses'**
-  String get licensesTitle;
+  /// **'About & updates'**
+  String get aboutTitle;
 
   /// Tile title showing the app version
   ///
   /// In en, this message translates to:
   /// **'Version'**
-  String get licensesVersion;
+  String get aboutVersion;
 
   /// Tile title that opens the bundled-licenses page
   ///
@@ -10461,41 +10461,53 @@ abstract class AppLocalizations {
   /// **'Third-party packages bundled with this app'**
   String get licensesOpenSourceSubtitle;
 
-  /// Shown on the Licenses screen while an in-app update check is in flight
+  /// Tile that starts a user-initiated in-app update check
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get aboutCheckForUpdates;
+
+  /// Shown on the About screen while an in-app update check is in flight
   ///
   /// In en, this message translates to:
   /// **'Checking for updates…'**
-  String get licensesCheckingUpdate;
+  String get aboutCheckingUpdate;
 
-  /// Title of the update-available row on the Licenses screen (Play In-App Updates)
+  /// Title of the update-available row on the About screen (Play In-App Updates)
   ///
   /// In en, this message translates to:
   /// **'Update available'**
-  String get licensesUpdateAvailable;
+  String get aboutUpdateAvailable;
 
-  /// Subtitle of the update-available row on the Licenses screen
+  /// Subtitle of the update-available row on the About screen
   ///
   /// In en, this message translates to:
   /// **'A newer version is ready to install.'**
-  String get licensesUpdateAvailableSubtitle;
+  String get aboutUpdateAvailableSubtitle;
 
   /// Button that starts the in-app update to the latest version
   ///
   /// In en, this message translates to:
   /// **'Update'**
-  String get licensesUpdate;
+  String get aboutUpdate;
 
-  /// Shown on the Licenses screen when no newer version is available
+  /// Shown on the About screen when no newer version is available
   ///
   /// In en, this message translates to:
   /// **'You\'re on the latest version'**
-  String get licensesUpToDate;
+  String get aboutUpToDate;
+
+  /// Subtitle shown when the build has no in-app update channel (dev / sideload / iOS)
+  ///
+  /// In en, this message translates to:
+  /// **'This build updates through the store you installed it from.'**
+  String get aboutUpdateUnavailable;
 
   /// Banner shown when the in-app update flow fails to start
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t start the update. Try again from the Play Store.'**
-  String get licensesUpdateFailed;
+  String get aboutUpdateFailed;
 
   /// AppBar title for the Settings > Devices screen
   ///
@@ -15086,11 +15098,11 @@ abstract class AppLocalizations {
   /// **'Subscribe, restore purchases, manage billing'**
   String get settingsTabProSubtitle;
 
-  /// Settings landing: Licenses tile subtitle
+  /// Settings landing: About & updates tile subtitle
   ///
   /// In en, this message translates to:
-  /// **'App version and open-source notices'**
-  String get settingsTabLicensesSubtitle;
+  /// **'Version, updates and legal documents'**
+  String get settingsTabAboutSubtitle;
 
   /// Period-summary title for a single week, e.g. 'Week of 13 Apr'
   ///

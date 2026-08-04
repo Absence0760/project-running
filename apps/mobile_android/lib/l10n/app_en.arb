@@ -8508,12 +8508,12 @@
   "@proSupportSubtitle": {
     "description": "Subtitle of the Support the app tile"
   },
-  "licensesTitle": "Licenses",
-  "@licensesTitle": {
-    "description": "AppBar title for the Settings > Licenses screen"
+  "aboutTitle": "About & updates",
+  "@aboutTitle": {
+    "description": "AppBar title for the Settings > About & updates screen"
   },
-  "licensesVersion": "Version",
-  "@licensesVersion": {
+  "aboutVersion": "Version",
+  "@aboutVersion": {
     "description": "Tile title showing the app version"
   },
   "licensesOpenSource": "Open-source licenses",
@@ -8524,28 +8524,36 @@
   "@licensesOpenSourceSubtitle": {
     "description": "Subtitle of the Open-source licenses tile"
   },
-  "licensesCheckingUpdate": "Checking for updates…",
-  "@licensesCheckingUpdate": {
-    "description": "Shown on the Licenses screen while an in-app update check is in flight"
+  "aboutCheckForUpdates": "Check for updates",
+  "@aboutCheckForUpdates": {
+    "description": "Tile that starts a user-initiated in-app update check"
   },
-  "licensesUpdateAvailable": "Update available",
-  "@licensesUpdateAvailable": {
-    "description": "Title of the update-available row on the Licenses screen (Play In-App Updates)"
+  "aboutCheckingUpdate": "Checking for updates…",
+  "@aboutCheckingUpdate": {
+    "description": "Shown on the About screen while an in-app update check is in flight"
   },
-  "licensesUpdateAvailableSubtitle": "A newer version is ready to install.",
-  "@licensesUpdateAvailableSubtitle": {
-    "description": "Subtitle of the update-available row on the Licenses screen"
+  "aboutUpdateAvailable": "Update available",
+  "@aboutUpdateAvailable": {
+    "description": "Title of the update-available row on the About screen (Play In-App Updates)"
   },
-  "licensesUpdate": "Update",
-  "@licensesUpdate": {
+  "aboutUpdateAvailableSubtitle": "A newer version is ready to install.",
+  "@aboutUpdateAvailableSubtitle": {
+    "description": "Subtitle of the update-available row on the About screen"
+  },
+  "aboutUpdate": "Update",
+  "@aboutUpdate": {
     "description": "Button that starts the in-app update to the latest version"
   },
-  "licensesUpToDate": "You're on the latest version",
-  "@licensesUpToDate": {
-    "description": "Shown on the Licenses screen when no newer version is available"
+  "aboutUpToDate": "You're on the latest version",
+  "@aboutUpToDate": {
+    "description": "Shown on the About screen when no newer version is available"
   },
-  "licensesUpdateFailed": "Couldn't start the update. Try again from the Play Store.",
-  "@licensesUpdateFailed": {
+  "aboutUpdateUnavailable": "This build updates through the store you installed it from.",
+  "@aboutUpdateUnavailable": {
+    "description": "Subtitle shown when the build has no in-app update channel (dev / sideload / iOS)"
+  },
+  "aboutUpdateFailed": "Couldn't start the update. Try again from the Play Store.",
+  "@aboutUpdateFailed": {
     "description": "Banner shown when the in-app update flow fails to start"
   },
   "devicesTitle": "Devices",
@@ -12244,9 +12252,9 @@
   "@settingsTabProSubtitle": {
     "description": "Settings landing: Pro & support tile subtitle"
   },
-  "settingsTabLicensesSubtitle": "App version and open-source notices",
-  "@settingsTabLicensesSubtitle": {
-    "description": "Settings landing: Licenses tile subtitle"
+  "settingsTabAboutSubtitle": "Version, updates and legal documents",
+  "@settingsTabAboutSubtitle": {
+    "description": "Settings landing: About & updates tile subtitle"
   },
   "periodSummaryWeekOf": "Week of {date}",
   "@periodSummaryWeekOf": {

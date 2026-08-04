@@ -6385,10 +6385,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get proSupportSubtitle => 'Don ponctuel dans ton navigateur';
 
   @override
-  String get licensesTitle => 'Licences';
+  String get aboutTitle => 'À propos et mises à jour';
 
   @override
-  String get licensesVersion => 'Version';
+  String get aboutVersion => 'Version';
 
   @override
   String get licensesOpenSource => 'Licences open source';
@@ -6397,23 +6397,30 @@ class AppLocalizationsFr extends AppLocalizations {
   String get licensesOpenSourceSubtitle => 'Paquets tiers intégrés à cette app';
 
   @override
-  String get licensesCheckingUpdate => 'Recherche de mises à jour…';
+  String get aboutCheckForUpdates => 'Rechercher des mises à jour';
 
   @override
-  String get licensesUpdateAvailable => 'Mise à jour disponible';
+  String get aboutCheckingUpdate => 'Recherche de mises à jour…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Mise à jour disponible';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'Une version plus récente est prête à être installée.';
 
   @override
-  String get licensesUpdate => 'Mettre à jour';
+  String get aboutUpdate => 'Mettre à jour';
 
   @override
-  String get licensesUpToDate => 'Vous avez la dernière version';
+  String get aboutUpToDate => 'Vous avez la dernière version';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'Cette version se met à jour via la boutique depuis laquelle vous l\'avez installée.';
+
+  @override
+  String get aboutUpdateFailed =>
       'Impossible de lancer la mise à jour. Réessayez depuis le Play Store.';
 
   @override
@@ -9144,8 +9151,8 @@ class AppLocalizationsFr extends AppLocalizations {
       'S\'abonner, restaurer les achats, gérer la facturation';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'Version de l\'app et mentions open source';
+  String get settingsTabAboutSubtitle =>
+      'Version, mises à jour et documents juridiques';
 
   @override
   String periodSummaryWeekOf(Object date) {

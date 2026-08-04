@@ -6299,10 +6299,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get proSupportSubtitle => 'One-off donation in your browser';
 
   @override
-  String get licensesTitle => 'Licenses';
+  String get aboutTitle => 'About & updates';
 
   @override
-  String get licensesVersion => 'Version';
+  String get aboutVersion => 'Version';
 
   @override
   String get licensesOpenSource => 'Open-source licenses';
@@ -6312,23 +6312,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'Third-party packages bundled with this app';
 
   @override
-  String get licensesCheckingUpdate => 'Checking for updates…';
+  String get aboutCheckForUpdates => 'Check for updates';
 
   @override
-  String get licensesUpdateAvailable => 'Update available';
+  String get aboutCheckingUpdate => 'Checking for updates…';
 
   @override
-  String get licensesUpdateAvailableSubtitle =>
+  String get aboutUpdateAvailable => 'Update available';
+
+  @override
+  String get aboutUpdateAvailableSubtitle =>
       'A newer version is ready to install.';
 
   @override
-  String get licensesUpdate => 'Update';
+  String get aboutUpdate => 'Update';
 
   @override
-  String get licensesUpToDate => 'You\'re on the latest version';
+  String get aboutUpToDate => 'You\'re on the latest version';
 
   @override
-  String get licensesUpdateFailed =>
+  String get aboutUpdateUnavailable =>
+      'This build updates through the store you installed it from.';
+
+  @override
+  String get aboutUpdateFailed =>
       'Couldn\'t start the update. Try again from the Play Store.';
 
   @override
@@ -9024,8 +9031,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Subscribe, restore purchases, manage billing';
 
   @override
-  String get settingsTabLicensesSubtitle =>
-      'App version and open-source notices';
+  String get settingsTabAboutSubtitle => 'Version, updates and legal documents';
 
   @override
   String periodSummaryWeekOf(Object date) {
