@@ -925,9 +925,9 @@ Bottom nav becomes `Home · Train · [+] Log · Social · You` (still five slots
 │  ┌──────┬──────┬──────┬───────────┐             │
 │  │ All  │ Runs │ Gym  │ Nutrition │             │
 │  └──────┴──────┴──────┴───────────┘             │
-│   Runs ▸  • Run list                            │
-│           • Routes        ← relocated here       │
-│           • Training plans                       │
+│   Runs ▸ [Runs][Routes][Plans][Races]           │
+│           • Run list                            │
+│   Gym  ▸ [Log][Routines][Sessions][Records]     │
 │                                                 │
 ├───────────────────────────────────────────────┤
 │   ⌂        🏃        ╔═══╗        ◎        ◐     │
@@ -938,8 +938,8 @@ Bottom nav becomes `Home · Train · [+] Log · Social · You` (still five slots
 
 - **`Train`** is the modality hub. A top sub-tab strip `All · Runs · Gym · Nutrition`:
   - **All** = the unified cross-modal timeline that is the *current* `History` tab — the `History` bottom-nav slot is absorbed here, not deleted. Same offline-first local-store assembly (`lib/local_activities.dart` over the three `Local*Store`s), same `activity_timeline_list.dart` rows, same per-row tap-to-detail. The `History`-tab kind chips become the hub's sub-tabs.
-  - **Runs** = the run-management surface (today's `RunsScreen` reached via History `View all`) **plus Routes plus Training plans** as sections/sub-routes within it.
-  - **Gym** = `GymScreen` (list + records) + Routines when the gym-programming P1 lands ([gym_programming.md](gym_programming.md)).
+  - **Runs** = the run-management surface (today's `RunsScreen` reached via History `View all`) under a labelled **peer strip** `Runs · Routes · Plans · Races` — the mobile mirror of web's `RunSurfaceTabs.svelte`. **Shipped 2026-08-04** ([decisions.md § 488](../architecture/decisions.md)) as `widgets/surface_peer_strip.dart`, fed by `RunsScreen.surfacePeers` from the hub. The first shipped shape parked Routes and Plans on tooltip-only AppBar glyphs instead; that is what § 488 replaced.
+  - **Gym** = `GymScreen` under its own peer strip `Log · Routines · Sessions · Records` (mirroring web `/gym`'s header links), also shipped 2026-08-04 by § 488 — Routines waits on the routine store's disk hydration, Sessions needs a signed-in client, Records is data-gated on a weighted set exactly as web is ([gym_programming.md](gym_programming.md), [session_planner.md](session_planner.md)).
   - **Nutrition** = `NutritionScreen` (day/week) + targets.
 - **`Log` (+)** is unchanged — the capture sheet (Log run / lift / food → keep-alive capture page), long-press = repeat last. Capture stays separate from the Train *review/plan* surfaces (the verb-vs-modality split §63 established).
 - **`Social`** is unchanged (Feed / People / Clubs). **Routes leaves Social** — the mobile Social screen drops any routes entry.
