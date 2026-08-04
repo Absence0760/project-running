@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
@@ -63,7 +64,11 @@ class _SessionsScreenState extends State<SessionsScreen> {
           : _error
               ? ErrorState(message: l10n.sessionLoadError, onRetry: _load)
               : _plans.isEmpty
-                  ? _EmptyState(l10n: l10n)
+                  ? EmptyState(
+                      icon: Icons.self_improvement,
+                      title: l10n.sessionEmpty,
+                      body: l10n.sessionEmptyHint,
+                    )
                   : ListView.builder(
                       itemCount: _plans.length,
                       itemBuilder: (context, i) {
@@ -96,32 +101,3 @@ class _SessionsScreenState extends State<SessionsScreen> {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.l10n});
-
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(l10n.sessionEmpty,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              l10n.sessionEmptyHint,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

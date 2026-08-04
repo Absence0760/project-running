@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../exercise_records.dart';
 import '../l10n/date_format.dart';
@@ -61,7 +62,10 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.gymRecordsTitle)),
       body: records.isEmpty
-          ? _empty(theme, l10n)
+          ? EmptyState(
+              icon: Icons.emoji_events_outlined,
+              title: l10n.gymRecordsEmpty,
+            )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: records.length + 1,
@@ -188,26 +192,6 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
     final dt = DateTime.tryParse(iso);
     return dt == null ? iso : formatDateMed(dt.toLocal(), tag);
   }
-
-  Widget _empty(ThemeData theme, AppLocalizations l10n) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.emoji_events_outlined,
-                  size: 56, color: theme.colorScheme.outline),
-              const SizedBox(height: 12),
-              Text(
-                l10n.gymRecordsEmpty,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.outline),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
 
   static String _numStr(num v) {
     if (v is int) return v.toString();

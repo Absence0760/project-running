@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:ui_kit/ui_kit.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -619,7 +620,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     if (p == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: Center(child: Text(l10n.planDetailNotFound)),
+        body: EmptyState(
+          icon: Icons.calendar_month_outlined,
+          title: l10n.planDetailNotFound,
+        ),
       );
     }
     final theme = Theme.of(context);

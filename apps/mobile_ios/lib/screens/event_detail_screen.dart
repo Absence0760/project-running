@@ -652,7 +652,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (e == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: Center(child: Text(l10n.eventNotFound)),
+        body: EmptyState(
+          icon: Icons.event_busy_outlined,
+          title: l10n.eventNotFound,
+        ),
       );
     }
     final desc = describeRecurrence(e.freq, e.byday);
