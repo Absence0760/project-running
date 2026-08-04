@@ -12,6 +12,7 @@ class AppTheme {
   static const Color parchmentDim = Color(0xFFEBE5D8);
   static const Color ink = Color(0xFF1B1628);
   static const Color haze = Color(0xFF6B6380);
+  static const Color duskDivider = Color(0xFF2E2545);
   static const Color error = Color(0xFFD8594C);
 
   static const Color primary = dusk;
@@ -54,6 +55,48 @@ class AppTheme {
             fontWeight: FontWeight.w600,
             letterSpacing: 0.2,
           ),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        ),
+      ),
+      // Light surfaceContainerLow computes to 1.005:1 against parchment (and
+      // carries the seed's cool lavender cast on a warm page), so card
+      // separation comes from the hairline outline, not a tonal fill.
+      cardTheme: const CardThemeData(
+        color: parchment,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: parchmentDim),
+        ),
+      ),
+      textTheme: const TextTheme(
+        labelSmall: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.5,
         ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
@@ -141,6 +184,45 @@ class AppTheme {
           ),
         ),
       ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        ),
+      ),
+      cardTheme: const CardThemeData(
+        color: duskDeep,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: duskDivider),
+        ),
+      ),
+      textTheme: const TextTheme(
+        labelSmall: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.5,
+        ),
+      ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: coral,
         foregroundColor: midnight,
@@ -185,7 +267,7 @@ class AppTheme {
           ),
         ),
       ),
-      dividerColor: const Color(0xFF2E2545),
+      dividerColor: duskDivider,
       extensions: const [AppSemanticColors.dark],
     );
   }
