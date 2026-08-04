@@ -44,11 +44,21 @@ class AppTheme {
       scaffoldBackgroundColor: parchment,
       useMaterial3: true,
       splashFactory: InkRipple.splashFactory,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: parchment,
+      // The seeded surface tint is a cool lavender (#64558F); laid over
+      // parchment at the elevation-3 opacity it computes to #E7E2E2, a
+      // 1.16:1 step in the wrong hue family. Light therefore separates the
+      // scrolled-under bar with a warm fill plus a real shadow.
+      appBarTheme: AppBarThemeData(
+        backgroundColor: WidgetStateColor.resolveWith(
+          (states) => states.contains(WidgetState.scrolledUnder)
+              ? parchmentDim
+              : parchment,
+        ),
         foregroundColor: ink,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 3,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: ink,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -177,11 +187,19 @@ class AppTheme {
       scaffoldBackgroundColor: midnight,
       useMaterial3: true,
       splashFactory: InkRipple.splashFactory,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: midnight,
+      // A shadow is not available against midnight, so dark carries the
+      // whole separation in the fill: rising to dusk is a 1.56:1 step,
+      // against 1.22:1 for the seeded tint and 1.17:1 for duskDeep.
+      appBarTheme: AppBarThemeData(
+        backgroundColor: WidgetStateColor.resolveWith(
+          (states) =>
+              states.contains(WidgetState.scrolledUnder) ? dusk : midnight,
+        ),
         foregroundColor: parchment,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 3,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: midnight,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
