@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../fitness.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -192,24 +193,24 @@ class _ConfidenceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
+    final semantic = AppSemanticColors.of(context);
     late final Color bg;
     late final Color fg;
     late final String label;
     switch (quality.confidence) {
       case PredictionConfidence.high:
-        bg = dark ? const Color(0xFF064E3B) : const Color(0xFFD1FAE5);
-        fg = dark ? const Color(0xFFA7F3D0) : const Color(0xFF047857);
+        bg = semantic.success;
+        fg = semantic.onSuccess;
         label = l10n.racePredictorConfidenceHigh;
         break;
       case PredictionConfidence.moderate:
-        bg = dark ? const Color(0xFF78350F) : const Color(0xFFFEF3C7);
-        fg = dark ? const Color(0xFFFDE68A) : const Color(0xFFB45309);
+        bg = semantic.warning;
+        fg = semantic.onWarning;
         label = l10n.racePredictorConfidenceModerate;
         break;
       case PredictionConfidence.low:
-        bg = dark ? const Color(0xFF7F1D1D) : const Color(0xFFFEE2E2);
-        fg = dark ? const Color(0xFFFECACA) : const Color(0xFFB91C1C);
+        bg = semantic.danger;
+        fg = semantic.onDanger;
         label = l10n.racePredictorConfidenceLow;
         break;
     }

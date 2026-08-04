@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../exercise_history.dart';
@@ -902,10 +903,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                 delta > 0 ? Icons.trending_up : Icons.trending_down,
                 size: 14,
                 color: delta > 0
-                    ? Color.alphaBlend(
-                        Colors.green.withValues(alpha: 0.5),
-                        theme.colorScheme.onSurface,
-                      )
+                    ? AppSemanticColors.ofTheme(theme).success
                     : theme.colorScheme.outline,
               ),
               Text(
@@ -913,10 +911,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: delta > 0
-                      ? Color.alphaBlend(
-                          Colors.green.withValues(alpha: 0.5),
-                          theme.colorScheme.onSurface,
-                        )
+                      ? AppSemanticColors.ofTheme(theme).success
                       : theme.colorScheme.outline,
                 ),
               ),

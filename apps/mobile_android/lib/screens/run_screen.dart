@@ -3231,7 +3231,10 @@ class _RunScreenState extends State<RunScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemanticColors.of(ctx).danger,
+              foregroundColor: AppSemanticColors.of(ctx).onDanger,
+            ),
             child: Text(_l10n.runDiscard),
           ),
         ],
@@ -3733,6 +3736,7 @@ class _RunScreenState extends State<RunScreen> {
 
   Widget _buildIdle(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     final lastRun = _mostRecentRun();
     return SafeArea(
@@ -3935,22 +3939,18 @@ class _RunScreenState extends State<RunScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: const Color(0xFF22C55E).withOpacity(0.3),
+                            color: semantic.success.withOpacity(0.3),
                             width: 3,
                           ),
                         ),
                         padding: const EdgeInsets.all(8),
                         child: Container(
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Color(0xFF22C55E), Color(0xFF16A34A)],
-                            ),
+                            color: semantic.success,
                             boxShadow: [
                               BoxShadow(
-                                color: Color(0x4022C55E),
+                                color: semantic.success.withValues(alpha: 0.25),
                                 blurRadius: 24,
                                 spreadRadius: 4,
                               ),
@@ -3959,10 +3959,10 @@ class _RunScreenState extends State<RunScreen> {
                           child: Center(
                             child: Text(
                               l10n.runStart,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
-                                color: Colors.white,
+                                color: semantic.onSuccess,
                                 letterSpacing: 1.5,
                               ),
                             ),
@@ -4630,6 +4630,7 @@ class FinishedSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     return SafeArea(
       top: false,
@@ -4671,15 +4672,15 @@ class FinishedSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 if (synced) ...[
-                  const Icon(Icons.cloud_done, color: Colors.green, size: 36),
+                  Icon(Icons.cloud_done, color: semantic.success, size: 36),
                   const SizedBox(height: 4),
                   Text(l10n.runSynced),
                 ] else if (syncError != null) ...[
-                  const Icon(Icons.cloud_off, size: 36, color: Colors.orange),
+                  Icon(Icons.cloud_off, size: 36, color: semantic.warning),
                   const SizedBox(height: 4),
                   Text(syncError!,
-                      style: const TextStyle(
-                          color: Colors.orange, fontSize: 13)),
+                      style: TextStyle(
+                          color: semantic.warning, fontSize: 13)),
                 ] else ...[
                   const SizedBox(
                     width: 24,
@@ -4757,6 +4758,7 @@ class _StatsOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
@@ -4881,13 +4883,15 @@ class _StatsOverlay extends StatelessWidget {
                         height: 56,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: paused ? const Color(0xFF22C55E) : const Color(0xFFF59E0B),
+                          color: paused ? semantic.success : semantic.warning,
                         ),
                         child: Center(
                           child: Icon(
                             paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
                             size: 32,
-                            color: Colors.white,
+                            color: paused
+                                ? semantic.onSuccess
+                                : semantic.onWarning,
                           ),
                         ),
                       ),
@@ -4934,9 +4938,9 @@ class _StatsOverlay extends StatelessWidget {
                               top: 6,
                               child: Container(
                                 padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.red,
+                                  color: semantic.danger,
                                 ),
                                 constraints: const BoxConstraints(
                                   minWidth: 14,
@@ -4944,9 +4948,9 @@ class _StatsOverlay extends StatelessWidget {
                                 ),
                                 child: Text(
                                   '$lapCount',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 9,
-                                    color: Colors.white,
+                                    color: semantic.onDanger,
                                     fontWeight: FontWeight.w700,
                                   ),
                                   textAlign: TextAlign.center,
@@ -5202,6 +5206,7 @@ class _HoldToStopButtonState extends State<HoldToStopButton>
 
   @override
   Widget build(BuildContext context) {
+    final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     // The hold gesture is a sighted-user accidental-stop guard built on
     // raw Listener pointer events — a screen-reader user navigates by
@@ -5242,12 +5247,12 @@ class _HoldToStopButtonState extends State<HoldToStopButton>
             Container(
               width: widget.size,
               height: widget.size,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.red,
+                color: semantic.danger,
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0x40EF4444),
+                    color: semantic.danger.withValues(alpha: 0.25),
                     blurRadius: 16,
                     spreadRadius: 2,
                   ),
@@ -5255,7 +5260,7 @@ class _HoldToStopButtonState extends State<HoldToStopButton>
               ),
               child: Center(
                 child: Icon(Icons.stop_rounded,
-                    size: widget.iconSize, color: Colors.white),
+                    size: widget.iconSize, color: semantic.onDanger),
               ),
             ),
             if (_progress > 0)

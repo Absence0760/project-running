@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/live_cutoff_eta.dart';
@@ -75,7 +76,7 @@ void main() {
       expect(find.textContaining('Signal lost'), findsOneWidget);
       expect(find.textContaining('Waiting for a fresh signal'), findsNothing);
       final lost = tester.widget<Text>(find.textContaining('Signal lost'));
-      expect(lost.style?.color, const Color(0xFFF59E0B));
+      expect(lost.style?.color, AppSemanticColors.light.warning);
     });
 
     testWidgets('unknown + fresh keeps the neutral waiting line',

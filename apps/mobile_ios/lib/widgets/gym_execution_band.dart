@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -290,11 +291,12 @@ class _SetPip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final (color, icon) = !entered
         ? (theme.colorScheme.outline, Icons.radio_button_unchecked)
         : targetHit
-            ? (Colors.green, Icons.check_circle)
-            : (Colors.amber, Icons.error_outline);
+            ? (semantic.success, Icons.check_circle)
+            : (semantic.warning, Icons.error_outline);
     return Icon(color: color, size: 22, icon);
   }
 }

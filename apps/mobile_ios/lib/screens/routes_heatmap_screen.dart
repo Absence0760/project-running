@@ -9,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../distance_bands.dart';
@@ -296,7 +297,8 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
               ListTile(
                 dense: true,
                 leading: p.featured
-                    ? const Icon(Icons.star, color: Color(0xFFFACC15), size: 20)
+                    ? Icon(Icons.star,
+                        color: AppSemanticColors.of(ctx).crown, size: 20)
                     : const Icon(Icons.place_outlined, size: 20),
                 title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Row(
@@ -1063,7 +1065,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       dense: true,
       selected: p.id == _selectedRouteId,
       leading: p.featured
-          ? const Icon(Icons.star, color: Color(0xFFFACC15), size: 20)
+          ? Icon(Icons.star, color: AppSemanticColors.of(sheetCtx).crown, size: 20)
           : const Icon(Icons.place_outlined, size: 20),
       title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Row(

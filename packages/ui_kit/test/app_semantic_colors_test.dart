@@ -99,5 +99,19 @@ void main() {
       expect(copied.danger, AppSemanticColors.light.danger);
       expect(copied.crown, AppSemanticColors.light.crown);
     });
+
+    test('ofTheme reads the registered extension', () {
+      expect(AppSemanticColors.ofTheme(AppTheme.light),
+          same(AppTheme.light.extension<AppSemanticColors>()));
+      expect(AppSemanticColors.ofTheme(AppTheme.dark),
+          same(AppTheme.dark.extension<AppSemanticColors>()));
+    });
+
+    test('ofTheme falls back by brightness when the extension is absent', () {
+      expect(AppSemanticColors.ofTheme(ThemeData(brightness: Brightness.light)),
+          same(AppSemanticColors.light));
+      expect(AppSemanticColors.ofTheme(ThemeData(brightness: Brightness.dark)),
+          same(AppSemanticColors.dark));
+    });
   });
 }

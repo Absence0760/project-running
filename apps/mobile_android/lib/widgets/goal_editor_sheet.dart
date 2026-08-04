@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../goals.dart';
@@ -229,7 +230,8 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                     onPressed: _saving ? null : _delete,
                     icon: const Icon(Icons.delete_outline),
                     label: Text(l10n.goalEditorDelete),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    style: TextButton.styleFrom(
+                        foregroundColor: AppSemanticColors.of(context).danger),
                   ),
                 const Spacer(),
                 TextButton(

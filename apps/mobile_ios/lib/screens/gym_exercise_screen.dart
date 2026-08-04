@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../exercise_history.dart';
 import '../l10n/date_format.dart';
@@ -147,10 +148,7 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
     } else if (delta > 0) {
       text = l10n.gymSinceFirstUp(mag);
       icon = Icons.trending_up;
-      color = Color.alphaBlend(
-        Colors.green.withValues(alpha: 0.5),
-        theme.colorScheme.onSurface,
-      );
+      color = AppSemanticColors.ofTheme(theme).success;
     } else {
       text = l10n.gymSinceFirstDown(mag);
       icon = Icons.trending_down;

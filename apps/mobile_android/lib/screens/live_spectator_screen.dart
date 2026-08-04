@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../live_cutoff_eta.dart';
@@ -356,6 +357,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     // Freshness ("Updated N ago" + the stale flag) is a *live*-tracking
     // signal; a terminal run is frozen on its saved totals, so we don't
@@ -432,7 +434,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                               key: const Key('coarse-sub'),
                               textAlign: TextAlign.center,
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: const Color(0xFFF59E0B),
+                                color: semantic.warning,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.4,
                               ),
@@ -444,7 +446,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                               _freshnessLabel(l10n, fresh),
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: stale
-                                    ? const Color(0xFFF59E0B)
+                                    ? semantic.warning
                                     : theme.colorScheme.onSurfaceVariant,
                                 fontWeight:
                                     stale ? FontWeight.w700 : FontWeight.w500,
@@ -588,15 +590,16 @@ class _StatusBadge extends StatelessWidget {
     // stale — distinct from "Finished" (neutral) and "DNF" (danger). A
     // live coarse (privacy-zone last-seen) fix outranks the live/stale
     // label so the badge reads "Approximate", never a precise "Live".
+    final semantic = AppSemanticColors.of(context);
     final (label, color) = switch (status) {
       'dnf' => (l10n.liveSpectatorBadgeDnf, theme.colorScheme.error),
       'finished' =>
         (l10n.liveSpectatorBadgeFinished, theme.colorScheme.outline),
       'live' when coarse =>
-        (l10n.liveSpectatorBadgeApproximate, const Color(0xFFF59E0B)),
+        (l10n.liveSpectatorBadgeApproximate, semantic.warning),
       'live' when stale =>
-        (l10n.liveSpectatorBadgeStale, const Color(0xFFF59E0B)),
-      'live' => (l10n.liveSpectatorBadgeLive, const Color(0xFF10B981)),
+        (l10n.liveSpectatorBadgeStale, semantic.warning),
+      'live' => (l10n.liveSpectatorBadgeLive, semantic.success),
       'idle' => (l10n.liveSpectatorBadgeIdle, theme.colorScheme.outline),
       _ => (l10n.liveSpectatorBadgeConnecting, theme.colorScheme.outline),
     };
@@ -676,7 +679,7 @@ class _ConclusionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    const green = Color(0xFF10B981);
+    final green = AppSemanticColors.of(context).success;
     return Container(
       key: const Key('conclusion-card'),
       width: double.infinity,
@@ -684,7 +687,7 @@ class _ConclusionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: const BorderDirectional(
+        border: BorderDirectional(
           start: BorderSide(color: green, width: 4),
         ),
       ),
@@ -693,7 +696,7 @@ class _ConclusionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.flag_circle, color: green),
+              Icon(Icons.flag_circle, color: green),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

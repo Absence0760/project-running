@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -215,7 +216,10 @@ class _RankPill extends StatelessWidget {
   }
 
   (Color, Color) _colors(ThemeData theme) {
-    if (rank == 1) return (const Color(0xFFF59E0B), Colors.white);
+    if (rank == 1) {
+      final semantic = AppSemanticColors.ofTheme(theme);
+      return (semantic.crown, semantic.onCrown);
+    }
     if (rank <= 3) return (const Color(0xFF94A3B8), Colors.white);
     if (rank <= 10) return (const Color(0xFFB45309), Colors.white);
     return (

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
@@ -780,7 +781,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       star <= selectedRating
                           ? Icons.star
                           : Icons.star_border,
-                      color: const Color(0xFFEAB308),
+                      color: AppSemanticColors.of(context).crown,
                       size: 32,
                     ),
                     onPressed: () =>
@@ -853,7 +854,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemanticColors.of(ctx).danger,
+              foregroundColor: AppSemanticColors.of(ctx).onDanger,
+            ),
             child: Text(l10n.routeDetailDeleteReviewCta),
           ),
         ],
@@ -876,6 +880,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final route = widget.route;
@@ -898,8 +903,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               // Start silently did nothing from any pusher that didn't — the
               // shared-file import landing, a deep push, etc.
               onPressed: () => pendingStartRunWithRoute.value = route,
-              backgroundColor: const Color(0xFF22C55E),
-              foregroundColor: Colors.white,
+              backgroundColor: semantic.success,
+              foregroundColor: semantic.onSuccess,
               icon: const Icon(Icons.play_arrow),
               label: Text(
                 l10n.routeDetailStartRun,
@@ -956,7 +961,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
             icon: Icon(
               _isOfflinePinned ? Icons.download_done : Icons.download_outlined,
               color: _isOfflinePinned
-                  ? const Color(0xFF22C55E)
+                  ? semantic.success
                   : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             tooltip: _isOfflinePinned
@@ -969,7 +974,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               icon: Icon(
                 _isStarred ? Icons.star : Icons.star_border,
                 color: _isStarred
-                    ? const Color(0xFFFBBF24)
+                    ? semantic.crown
                     : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               tooltip: _isStarred
@@ -1180,7 +1185,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                           : Icons.download_outlined,
                       size: 20,
                       color: _isOfflinePinned
-                          ? const Color(0xFF22C55E)
+                          ? semantic.success
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 8),
@@ -1261,7 +1266,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       _MetaChip(
                         icon: Icons.star,
                         label: l10n.routeDetailFeatured,
-                        color: const Color(0xFFFBBF24),
+                        color: semantic.crown,
                       ),
                   ],
                 ),
@@ -1392,7 +1397,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                                         ? Icons.star
                                         : Icons.star_border,
                                     size: 16,
-                                    color: const Color(0xFFEAB308),
+                                    color: AppSemanticColors.of(context).crown,
                                   ),
                                 ),
                                 const Spacer(),
@@ -1903,7 +1908,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemanticColors.of(ctx).danger,
+              foregroundColor: AppSemanticColors.of(ctx).onDanger,
+            ),
             child: Text(l10n.routeDetailDelete),
           ),
         ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -133,8 +134,8 @@ class _Legend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final formColor =
-        last.tsb >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final semantic = AppSemanticColors.of(context);
+    final formColor = last.tsb >= 0 ? semantic.success : semantic.danger;
     return Wrap(
       spacing: 16,
       runSpacing: 6,

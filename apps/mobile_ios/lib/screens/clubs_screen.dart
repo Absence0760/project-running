@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
@@ -308,7 +309,7 @@ class _ClubTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _Avatar(seed: c.id, label: initialFor(c.name), size: 44),
+            IdentityAvatar(seed: c.id, name: c.name, size: 44),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -465,31 +466,3 @@ class _Empty extends StatelessWidget {
 
 enum _ClubsLoadError { timeout, generic }
 
-class _Avatar extends StatelessWidget {
-  final String seed;
-  final String label;
-  final double size;
-  const _Avatar({required this.seed, required this.label, this.size = 36});
-
-  @override
-  Widget build(BuildContext context) {
-    final hue = hashHue(seed);
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: HSLColor.fromAHSL(1, hue.toDouble(), 0.5, 0.55).toColor(),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: size * 0.42,
-        ),
-      ),
-    );
-  }
-}

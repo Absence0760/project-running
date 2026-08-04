@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -103,7 +104,8 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppSemanticColors.of(context).danger),
                 child: Text(l10n.gearDelete),
               ),
             ],

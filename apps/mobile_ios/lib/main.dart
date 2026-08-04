@@ -94,16 +94,18 @@ void main() async {
         color: const Color(0xFF1E1B4B),
         alignment: Alignment.center,
         padding: const EdgeInsets.all(16),
-        child: const Column(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.warning_amber_rounded,
-              color: Color(0xFFF59E0B),
+              // No Theme above this builder; the surface is hardcoded dark,
+              // so take the dark palette's token statically.
+              color: AppSemanticColors.dark.warning,
               size: 32,
             ),
-            SizedBox(height: 8),
-            Text(
+            const SizedBox(height: 8),
+            const Text(
               "This section couldn't load.\nRecording is still running.",
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white, fontSize: 13),

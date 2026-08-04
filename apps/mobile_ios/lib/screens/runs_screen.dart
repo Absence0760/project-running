@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../adaptive_width.dart';
 import '../auth_error.dart';
@@ -857,7 +858,10 @@ class _RunsScreenState extends State<RunsScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemanticColors.of(ctx).danger,
+              foregroundColor: AppSemanticColors.of(ctx).onDanger,
+            ),
             child: Text(l10n.historyDelete),
           ),
         ],

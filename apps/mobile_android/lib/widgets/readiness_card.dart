@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../readiness.dart';
@@ -45,7 +46,7 @@ class ReadinessCard extends StatelessWidget {
     final readiness = computeReadiness(ReadinessInputs(tsb: tsb));
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final accent = _bandAccent(readiness.band);
+    final accent = _bandAccent(AppSemanticColors.of(context), readiness.band);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -119,10 +120,11 @@ class ReadinessCard extends StatelessWidget {
     );
   }
 
-  static Color _bandAccent(ReadinessBand band) => switch (band) {
-        ReadinessBand.high => const Color(0xFF2E7D32),
-        ReadinessBand.moderate => const Color(0xFFF59E0B),
-        ReadinessBand.low => const Color(0xFFD32F2F),
+  static Color _bandAccent(AppSemanticColors semantic, ReadinessBand band) =>
+      switch (band) {
+        ReadinessBand.high => semantic.success,
+        ReadinessBand.moderate => semantic.warning,
+        ReadinessBand.low => semantic.danger,
       };
 
   static String _bandLabel(AppLocalizations l10n, ReadinessBand band) =>

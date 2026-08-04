@@ -10,6 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../backend_timeout.dart';
 import '../auth_error.dart';
@@ -1059,10 +1060,11 @@ class _CoachScreenState extends State<CoachScreen> {
                     Dismissible(
                       key: ValueKey(t.toIso8601String()),
                       background: Container(
-                        color: Colors.red,
+                        color: AppSemanticColors.of(context).danger,
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.only(right: 16),
-                        child: const Icon(Icons.delete, color: Colors.white),
+                        child: Icon(Icons.delete,
+                            color: AppSemanticColors.of(context).onDanger),
                       ),
                       direction: DismissDirection.endToStart,
                       confirmDismiss: (_) => _deleteArchive(t),

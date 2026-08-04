@@ -242,11 +242,12 @@ class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
 
   // Brightness-matched fallback so a harness that pumps a bare MaterialApp
   // (no AppTheme) renders sane status colours instead of throwing.
-  static AppSemanticColors of(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.extension<AppSemanticColors>() ??
-        (theme.brightness == Brightness.dark ? dark : light);
-  }
+  static AppSemanticColors of(BuildContext context) =>
+      ofTheme(Theme.of(context));
+
+  static AppSemanticColors ofTheme(ThemeData theme) =>
+      theme.extension<AppSemanticColors>() ??
+      (theme.brightness == Brightness.dark ? dark : light);
 
   @override
   AppSemanticColors copyWith({

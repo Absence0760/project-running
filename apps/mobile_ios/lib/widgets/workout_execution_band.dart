@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -304,9 +305,10 @@ class _PacePip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.of(context);
     final color = switch (adherence) {
-      PaceAdherence.onPace => Colors.green,
-      PaceAdherence.ahead || PaceAdherence.behind => Colors.amber,
+      PaceAdherence.onPace => semantic.success,
+      PaceAdherence.ahead || PaceAdherence.behind => semantic.warning,
       PaceAdherence.wayAhead || PaceAdherence.wayBehind =>
         theme.colorScheme.error,
     };

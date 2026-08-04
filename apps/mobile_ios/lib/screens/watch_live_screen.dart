@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -341,16 +342,17 @@ class _WatchLiveScreenState extends State<WatchLiveScreen> {
     }
   }
 
-  Color _stateColour(_RelayState state, ColorScheme scheme) {
+  Color _stateColour(_RelayState state, ThemeData theme) {
+    final scheme = theme.colorScheme;
     switch (state) {
       case _RelayState.off:
         return scheme.onSurfaceVariant;
       case _RelayState.connecting:
         return scheme.primary;
       case _RelayState.live:
-        return const Color(0xFF16A34A);
+        return AppSemanticColors.ofTheme(theme).success;
       case _RelayState.gap:
-        return const Color(0xFFF59E0B);
+        return AppSemanticColors.ofTheme(theme).warning;
       case _RelayState.lost:
         return scheme.error;
     }
@@ -376,7 +378,7 @@ class _WatchLiveScreenState extends State<WatchLiveScreen> {
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: _stateColour(state, theme.colorScheme),
+                    color: _stateColour(state, theme),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -386,7 +388,7 @@ class _WatchLiveScreenState extends State<WatchLiveScreen> {
                     _stateLabel(state),
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: _stateColour(state, theme.colorScheme),
+                      color: _stateColour(state, theme),
                     ),
                   ),
                 ),

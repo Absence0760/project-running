@@ -6,6 +6,7 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../elevation.dart';
 import '../fuel_plan.dart';
@@ -572,13 +573,16 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _cutoffColor(cutoff.status).withValues(alpha: 0.18),
+                        color: _cutoffColor(AppSemanticColors.of(context),
+                                cutoff.status)
+                            .withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         '${l10n.routeMarkerKindCutoff} ${_marginLabel(cutoff.marginS)}',
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: _cutoffColor(cutoff.status)),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: _cutoffColor(
+                                AppSemanticColors.of(context), cutoff.status)),
                       ),
                     ),
                   ),
@@ -633,10 +637,11 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     ];
   }
 
-  Color _cutoffColor(CutoffStatus s) => switch (s) {
-        CutoffStatus.miss => const Color(0xFFB91C1C),
-        CutoffStatus.tight => const Color(0xFFB45309),
-        CutoffStatus.safe => const Color(0xFF15803D),
+  Color _cutoffColor(AppSemanticColors semantic, CutoffStatus s) =>
+      switch (s) {
+        CutoffStatus.miss => semantic.danger,
+        CutoffStatus.tight => semantic.warning,
+        CutoffStatus.safe => semantic.success,
       };
 
   static String _serviceLabel(AppLocalizations l10n, String s) => switch (s) {

@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -486,7 +487,10 @@ class RoutesScreenState extends State<RoutesScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppSemanticColors.of(ctx).danger,
+              foregroundColor: AppSemanticColors.of(ctx).onDanger,
+            ),
             child: Text(l10n.routeDetailDelete),
           ),
         ],
@@ -1061,10 +1065,10 @@ class RoutesScreenState extends State<RoutesScreen> {
                         if (isOfflinePinned) ...[
                           Tooltip(
                             message: l10n.routesSavedForOffline,
-                            child: const Icon(
+                            child: Icon(
                               Icons.download_done,
                               size: 16,
-                              color: Color(0xFF22C55E),
+                              color: AppSemanticColors.of(context).success,
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -1074,7 +1078,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                             icon: Icon(
                               route.isStarred ? Icons.star : Icons.star_border,
                               color: route.isStarred
-                                  ? const Color(0xFFFBBF24)
+                                  ? AppSemanticColors.of(context).crown
                                   : theme.colorScheme.onSurfaceVariant,
                             ),
                             tooltip: route.isStarred
@@ -1452,7 +1456,7 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
                           : Icons.star_border,
                       size: 18,
                       color: widget.starredOnly
-                          ? const Color(0xFFFBBF24)
+                          ? AppSemanticColors.of(context).crown
                           : theme.colorScheme.onSurfaceVariant,
                     ),
                     selected: widget.starredOnly,

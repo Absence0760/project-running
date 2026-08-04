@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../gear_backfill.dart';
 import '../gear_wear.dart';
@@ -220,7 +221,8 @@ class _GearScreenState extends State<GearScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppSemanticColors.of(context).danger),
                 child: Text(l10n.gearDelete),
               ),
             ],
@@ -398,15 +400,12 @@ class _GearScreenState extends State<GearScreen> {
   }
 
   Widget? _wearBadge(GearWear wear, ThemeData theme, AppLocalizations l10n) {
-    final dark = theme.brightness == Brightness.dark;
+    final semantic = AppSemanticColors.ofTheme(theme);
     final (Color bg, Color fg, IconData icon, String label) = switch (
         wear.status) {
-      // Soft amber pill, AA-verified both themes (light: #6D4C00 on amber.100
-      // = 6.7:1; dark: amber.200 on #3E2D00 = 10.3:1). amber.900 text on
-      // amber.100 is only 2.4:1 — don't "simplify" to it.
       GearWearStatus.due => (
-          dark ? const Color(0xFF3E2D00) : Colors.amber.shade100,
-          dark ? Colors.amber.shade200 : const Color(0xFF6D4C00),
+          semantic.warning,
+          semantic.onWarning,
           Icons.schedule,
           l10n.gearWearDue,
         ),
@@ -504,7 +503,8 @@ class _GearScreenState extends State<GearScreen> {
                           value: prog.pct,
                           minHeight: 6,
                           color: switch (wear.status) {
-                            GearWearStatus.due => Colors.amber,
+                            GearWearStatus.due =>
+                              AppSemanticColors.ofTheme(theme).warning,
                             GearWearStatus.worn => theme.colorScheme.error,
                             _ => null,
                           },
