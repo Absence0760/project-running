@@ -163,7 +163,6 @@ class _ExerciseCataloguePickerScreenState
                   decoration: InputDecoration(
                     isDense: true,
                     prefixIcon: const Icon(Icons.search),
-                    border: const OutlineInputBorder(),
                     hintText: l10n.gymCatalogueSearchPlaceholder,
                   ),
                 ),

@@ -272,7 +272,6 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             initialValue: selected?.id,
-            decoration: const InputDecoration(border: OutlineInputBorder()),
             items: [
               for (final cp in _checkpoints)
                 DropdownMenuItem(
@@ -295,7 +294,6 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
             decoration: InputDecoration(
               labelText: l10n.checkpointBibLabel,
               hintText: l10n.checkpointBibHint,
-              border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.tag),
             ),
             onSubmitted: (_) => _busy ? null : _stamp(isOut: false),
@@ -430,7 +428,6 @@ class _WeighInSheetState extends State<_WeighInSheet> {
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: l10n.checkpointWeighInWeightKg,
-                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),

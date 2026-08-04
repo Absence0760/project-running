@@ -399,7 +399,6 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                 initialValue: _publishingTo.isEmpty ? null : _publishingTo,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
                   isDense: true,
                 ),
                 hint: Text(l10n.gymRoutinePublishPick),

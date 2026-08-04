@@ -109,6 +109,9 @@ class AppTheme {
           side: BorderSide(color: parchmentLine),
         ),
       ),
+      inputDecorationTheme: InputDecorationThemeData(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: parchment,
         modalBackgroundColor: parchment,
@@ -259,6 +262,9 @@ class AppTheme {
           borderRadius: BorderRadius.all(Radius.circular(12)),
           side: BorderSide(color: duskLine),
         ),
+      ),
+      inputDecorationTheme: InputDecorationThemeData(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: duskDeep,

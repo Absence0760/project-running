@@ -120,7 +120,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
           controller: ctrl,
           autofocus: true,
           maxLength: 80,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
         ),
         actions: [
           TextButton(
@@ -707,7 +706,6 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
           decoration: InputDecoration(
             labelText: l10n.devicesValue,
             errorText: _numError,
-            border: const OutlineInputBorder(),
           ),
         );
     }

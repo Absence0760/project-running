@@ -195,8 +195,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             decoration: InputDecoration(
               hintText: l10n.discoverSearchPlaceholder,
               prefixIcon: const Icon(Icons.search, size: 20),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12)),
               isDense: true,
               suffixIcon: _query.isNotEmpty
                   ? IconButton(

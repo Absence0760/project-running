@@ -262,7 +262,6 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
             decoration: InputDecoration(
               labelText: l10n.setupNameLabel,
               hintText: l10n.setupNamePlaceholder,
-              border: const OutlineInputBorder(),
             ),
           ),
         );
@@ -397,7 +396,6 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
             initialValue: _gender,
             decoration: InputDecoration(
               labelText: l10n.setupGenderLabel,
-              border: const OutlineInputBorder(),
             ),
             items: [
               DropdownMenuItem(value: '', child: Text(l10n.setupGenderPreferNot)),
@@ -416,7 +414,6 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
                 labelText: l10n.setupDobLabel,
                 helperText: l10n.setupDobNote,
                 helperMaxLines: 3,
-                border: const OutlineInputBorder(),
               ),
               child: Text(
                 _dateOfBirth == null
@@ -433,7 +430,6 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
             decoration: InputDecoration(
               labelText: l10n.setupWeightLabel,
               hintText: l10n.setupWeightPlaceholder,
-              border: const OutlineInputBorder(),
             ),
           ),
           if (_gender.isNotEmpty || _dateOfBirth != null) ...[

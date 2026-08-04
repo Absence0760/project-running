@@ -368,9 +368,6 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                   hintText: l10n.privacyZonesSearchHint,
                   prefixIcon: const Icon(Icons.search, size: 20),
                   isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
                 ),
               ),
             ),

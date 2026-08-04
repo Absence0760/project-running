@@ -2154,7 +2154,6 @@ class _RunDetailScreenState extends State<RunDetailScreen>
               autofocus: true,
               decoration: InputDecoration(
                 labelText: l10n.runDetailRouteNameLabel,
-                border: const OutlineInputBorder(),
               ),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => Navigator.pop(ctx, true),

@@ -576,7 +576,6 @@ class _Composer extends StatelessWidget {
             textInputAction: TextInputAction.newline,
             decoration: InputDecoration(
               hintText: hint,
-              border: const OutlineInputBorder(),
               isDense: true,
             ),
           ),

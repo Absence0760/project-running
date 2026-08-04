@@ -404,7 +404,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       onSubmitted: (_) => _passwordFocus.requestFocus(),
                       decoration: InputDecoration(
                         labelText: l10n.authEmailLabel,
-                        border: const OutlineInputBorder(),
                         errorText: _emailError,
                       ),
                     ),
@@ -413,7 +412,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       controller: _passwordController,
                       focusNode: _passwordFocus,
                       labelText: l10n.authPasswordLabel,
-                      border: const OutlineInputBorder(),
                       errorText: _passwordError,
                       autofillHints: const [AutofillHints.newPassword],
                       textInputAction: TextInputAction.next,
@@ -425,7 +423,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       controller: _confirmPasswordController,
                       focusNode: _confirmPasswordFocus,
                       labelText: l10n.signUpConfirmPasswordLabel,
-                      border: const OutlineInputBorder(),
                       autofillHints: const [AutofillHints.newPassword],
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) {

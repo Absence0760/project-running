@@ -216,7 +216,6 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 maxLength: 80,
                 decoration: InputDecoration(
                   labelText: l10n.clubFormNameLabel,
-                  border: const OutlineInputBorder(),
                   errorText: _nameError,
                 ),
                 onChanged: (_) {
@@ -230,7 +229,6 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 maxLength: 500,
                 decoration: InputDecoration(
                   labelText: l10n.clubFormDescriptionLabel,
-                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
@@ -240,7 +238,6 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 decoration: InputDecoration(
                   labelText: l10n.clubFormLocationLabel,
                   hintText: l10n.clubFormLocationHint,
-                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
@@ -359,7 +356,6 @@ class _LinkField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        border: const OutlineInputBorder(),
         counterText: '',
       ),
     );

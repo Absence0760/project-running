@@ -155,7 +155,6 @@ class _RacesScreenState extends State<RacesScreen> {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
                     hintText: l.racesSearchPlaceholder,
-                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (v) {
@@ -169,7 +168,6 @@ class _RacesScreenState extends State<RacesScreen> {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.place_outlined),
                     hintText: l.racesNearPlace,
-                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (v) {

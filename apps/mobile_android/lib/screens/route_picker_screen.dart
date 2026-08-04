@@ -115,7 +115,6 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                           },
                         ),
                   hintText: l10n.routePickerSearchHint,
-                  border: const OutlineInputBorder(),
                 ),
               ),
             ),

@@ -125,7 +125,6 @@ class _ClubInviteScreenState extends State<ClubInviteScreen> {
               controller: _tokenCtl,
               decoration: InputDecoration(
                 labelText: l10n.clubInviteCodeLabel,
-                border: const OutlineInputBorder(),
               ),
               autocorrect: false,
               enableSuggestions: false,

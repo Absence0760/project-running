@@ -349,7 +349,6 @@ class _SignInScreenState extends State<SignInScreen> {
                       onSubmitted: (_) => _passwordFocus.requestFocus(),
                       decoration: InputDecoration(
                         labelText: l10n.authEmailLabel,
-                        border: const OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -357,7 +356,6 @@ class _SignInScreenState extends State<SignInScreen> {
                       controller: _passwordController,
                       focusNode: _passwordFocus,
                       labelText: l10n.authPasswordLabel,
-                      border: const OutlineInputBorder(),
                       autofillHints: const [AutofillHints.password],
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) {

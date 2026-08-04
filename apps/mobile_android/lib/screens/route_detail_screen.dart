@@ -794,7 +794,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 controller: commentCtl,
                 decoration: InputDecoration(
                   labelText: l10n.routeDetailCommentLabel,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 3,
               ),

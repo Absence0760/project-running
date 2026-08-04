@@ -280,7 +280,6 @@ class _SettingsIntegrationsScreenState
               decoration: InputDecoration(
                 labelText: l10n.integrationsParkrunFieldLabel,
                 hintText: 'A123456',
-                border: const OutlineInputBorder(),
               ),
             ),
           ],

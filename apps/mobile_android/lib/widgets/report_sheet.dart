@@ -191,7 +191,6 @@ class _ReportSheetState extends State<_ReportSheet> {
             enabled: !_busy,
             decoration: InputDecoration(
               labelText: l10n.reportNotesLabel,
-              border: const OutlineInputBorder(),
             ),
           ),
           if (_error != null) ...[

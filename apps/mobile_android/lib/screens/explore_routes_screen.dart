@@ -414,9 +414,6 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
                         },
                       )
                     : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
               textInputAction: TextInputAction.search,

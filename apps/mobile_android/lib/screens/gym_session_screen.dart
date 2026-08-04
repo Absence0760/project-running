@@ -801,7 +801,6 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
       onChanged: (_) => _publishBand(),
       decoration: InputDecoration(
         labelText: label,
-        border: const OutlineInputBorder(),
       ),
     );
   }

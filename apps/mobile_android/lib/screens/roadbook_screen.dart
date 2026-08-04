@@ -136,7 +136,6 @@ Future<RoadbookPlan?> showRoadbookPlanSheet(
                 labelText: l10n.roadbookGoalTime,
                 hintText: '4:30:00',
                 errorText: goalError,
-                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
@@ -447,7 +446,6 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                   decoration: InputDecoration(
                     labelText: l10n.roadbookGoalTime,
                     hintText: '4:30:00',
-                    border: const OutlineInputBorder(),
                   ),
                   onSubmitted: _onGoalSubmit,
                   onTapOutside: (_) => _onGoalSubmit(_goal.text),

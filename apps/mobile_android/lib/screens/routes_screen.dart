@@ -1435,7 +1435,6 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
                       },
                     ),
               hintText: l10n.routesSearchHint,
-              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 8),
