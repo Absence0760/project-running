@@ -1139,6 +1139,11 @@ void registerActivePreferences(Preferences p) {
   _activePreferences = p;
 }
 
+/// The registered instance, or null before `main.dart` has run (host
+/// tests). Surfaces that must hand a whole Preferences to a screen they
+/// push, but don't carry one themselves, read it here.
+Preferences? get activePreferences => _activePreferences;
+
 /// Current user unit pref. Returns km when no Preferences has been
 /// registered (host-test runner, very early app start). Use this
 /// rather than constructing Preferences again.

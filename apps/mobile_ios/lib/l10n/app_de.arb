@@ -2770,7 +2770,8 @@
   "nutritionWater": "Wasser",
   "nutritionWaterAdd": "Wasser hinzufügen",
   "nutritionWaterRemove": "Wasser entfernen",
-  "nutritionNoTargets": "Gib in der Web-App Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.",
+  "nutritionNoTargets": "Gib Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.",
+  "nutritionAddBodyMetrics": "Körperdaten hinzufügen",
   "nutritionWeeklyTrend": "Letzte 7 Tage",
   "nutritionCaloriesLeft": "{n} kcal übrig",
   "@nutritionCaloriesLeft": {

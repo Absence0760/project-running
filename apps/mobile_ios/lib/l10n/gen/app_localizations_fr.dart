@@ -9850,7 +9850,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get nutritionNoTargets =>
-      'Renseigne ta taille, ton poids, ton âge et ton sexe dans l\'app web pour voir les objectifs de calories et de macros.';
+      'Renseigne ta taille, ton poids, ton âge et ton sexe pour voir les objectifs de calories et de macros.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Ajouter mes données corporelles';
 
   @override
   String get nutritionWeeklyTrend => '7 derniers jours';

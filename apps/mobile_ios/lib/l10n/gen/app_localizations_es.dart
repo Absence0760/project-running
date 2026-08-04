@@ -9826,7 +9826,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get nutritionNoTargets =>
-      'Añade tu altura, peso, edad y sexo en la app web para ver los objetivos de calorías y macros.';
+      'Añade tu altura, peso, edad y sexo para ver los objetivos de calorías y macros.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Añadir datos corporales';
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 días';

@@ -2770,7 +2770,8 @@
   "nutritionWater": "水分",
   "nutritionWaterAdd": "水分を追加",
   "nutritionWaterRemove": "水分を減らす",
-  "nutritionNoTargets": "カロリー・マクロの目標を表示するには、ウェブアプリで身長・体重・年齢・性別を入力してください。",
+  "nutritionNoTargets": "カロリー・マクロの目標を表示するには、身長・体重・年齢・性別を入力してください。",
+  "nutritionAddBodyMetrics": "身体データを入力",
   "nutritionWeeklyTrend": "直近7日間",
   "nutritionCaloriesLeft": "残り {n} kcal",
   "@nutritionCaloriesLeft": {

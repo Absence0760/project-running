@@ -12792,7 +12792,11 @@
   "nutritionWater": "Water",
   "nutritionWaterAdd": "Add water",
   "nutritionWaterRemove": "Remove water",
-  "nutritionNoTargets": "Add your height, weight, age and sex on the web app to see calorie + macro targets.",
+  "nutritionNoTargets": "Add your height, weight, age and sex to see calorie + macro targets.",
+  "nutritionAddBodyMetrics": "Add body metrics",
+  "@nutritionAddBodyMetrics": {
+    "description": "CTA on the nutrition rings card that opens Settings > Body metrics"
+  },
   "nutritionWeeklyTrend": "Last 7 days",
   "nutritionCaloriesLeft": "{n} kcal left",
   "@nutritionCaloriesLeft": {

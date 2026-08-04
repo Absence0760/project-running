@@ -9823,7 +9823,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get nutritionNoTargets =>
-      'Informe sua altura, peso, idade e sexo no app web para ver as metas de calorias e macros.';
+      'Informe sua altura, peso, idade e sexo para ver as metas de calorias e macros.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Adicionar dados corporais';
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 dias';
@@ -22251,7 +22254,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionNoTargets =>
-      'Informe sua altura, peso, idade e sexo no app web para ver as metas de calorias e macros.';
+      'Informe sua altura, peso, idade e sexo para ver as metas de calorias e macros.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Adicionar dados corporais';
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 dias';

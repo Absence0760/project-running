@@ -9333,8 +9333,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionWaterRemove => '水分を減らす';
 
   @override
-  String get nutritionNoTargets =>
-      'カロリー・マクロの目標を表示するには、ウェブアプリで身長・体重・年齢・性別を入力してください。';
+  String get nutritionNoTargets => 'カロリー・マクロの目標を表示するには、身長・体重・年齢・性別を入力してください。';
+
+  @override
+  String get nutritionAddBodyMetrics => '身体データを入力';
 
   @override
   String get nutritionWeeklyTrend => '直近7日間';

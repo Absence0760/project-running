@@ -10,7 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
+import '../lib/preferences.dart';
 import '../lib/screens/nutrition_screen.dart';
+import '../lib/screens/settings_body_metrics_screen.dart';
 
 class _OfflineFakeApi extends ApiClient {
   @override
@@ -84,6 +86,33 @@ void main() {
       expect(find.text('No food logged today'), findsOneWidget);
       // Rings + water cards still render with zeros.
       expect(find.text('Water'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('targets-unset state offers a route to Body metrics, not the web',
+      (tester) async {
+    // The copy used to tell mobile users to go and fill their body metrics
+    // in on the WEB app, three taps after SettingsBodyMetricsScreen shipped
+    // here. The empty state is now the way in.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = Preferences();
+    await prefs.init();
+    registerActivePreferences(prefs);
+    final f = await _store('targets_');
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(
+        find.text(
+            'Add your height, weight, age and sex to see calorie + macro targets.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Add body metrics'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsBodyMetricsScreen), findsOneWidget);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

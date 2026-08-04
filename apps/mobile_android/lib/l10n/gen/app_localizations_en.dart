@@ -9725,7 +9725,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nutritionNoTargets =>
-      'Add your height, weight, age and sex on the web app to see calorie + macro targets.';
+      'Add your height, weight, age and sex to see calorie + macro targets.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Add body metrics';
 
   @override
   String get nutritionWeeklyTrend => 'Last 7 days';

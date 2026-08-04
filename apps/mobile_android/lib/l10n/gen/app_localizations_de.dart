@@ -9838,7 +9838,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get nutritionNoTargets =>
-      'Gib in der Web-App Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.';
+      'Gib Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.';
+
+  @override
+  String get nutritionAddBodyMetrics => 'Körperdaten hinzufügen';
 
   @override
   String get nutritionWeeklyTrend => 'Letzte 7 Tage';

@@ -16307,8 +16307,14 @@ abstract class AppLocalizations {
   /// No description provided for @nutritionNoTargets.
   ///
   /// In en, this message translates to:
-  /// **'Add your height, weight, age and sex on the web app to see calorie + macro targets.'**
+  /// **'Add your height, weight, age and sex to see calorie + macro targets.'**
   String get nutritionNoTargets;
+
+  /// CTA on the nutrition rings card that opens Settings > Body metrics
+  ///
+  /// In en, this message translates to:
+  /// **'Add body metrics'**
+  String get nutritionAddBodyMetrics;
 
   /// No description provided for @nutritionWeeklyTrend.
   ///
