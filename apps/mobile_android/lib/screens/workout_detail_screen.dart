@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
@@ -168,7 +169,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     if (w == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: Center(child: Text(l10n.workoutNotFound)),
+        body: EmptyState(
+          icon: Icons.directions_run,
+          title: l10n.workoutNotFound,
+        ),
       );
     }
     final theme = Theme.of(context);

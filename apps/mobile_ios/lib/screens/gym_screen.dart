@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' show MetadataKeys;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../exercise_records.dart';
 import '../gym_prs.dart';
@@ -426,7 +427,13 @@ class _GymScreenState extends State<GymScreen> {
             child: RefreshIndicator(
               onRefresh: _refresh,
               child: workouts.isEmpty
-                  ? _emptyState(theme, l10n)
+                  ? EmptyState(
+                      icon: Icons.fitness_center,
+                      title: l10n.gymEmptyTitle,
+                      body: l10n.gymEmptyBody,
+                      ctaLabel: l10n.gymLog,
+                      onCta: _create,
+                    )
                   : _list(workouts, theme, l10n),
             ),
           ),
@@ -590,40 +597,4 @@ class _GymScreenState extends State<GymScreen> {
         ),
       );
 
-  Widget _emptyState(ThemeData theme, AppLocalizations l10n) => ListView(
-        children: [
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.6,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.fitness_center,
-                        size: 64, color: theme.colorScheme.outline),
-                    const SizedBox(height: 12),
-                    Text(l10n.gymEmptyTitle,
-                        style: theme.textTheme.titleMedium,
-                        textAlign: TextAlign.center),
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.gymEmptyBody,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.add),
-                      label: Text(l10n.gymLog),
-                      onPressed: _create,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
 }

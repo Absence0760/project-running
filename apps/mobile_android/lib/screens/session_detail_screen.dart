@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart'
     hide SessionPlanBlockInput, SessionPlanItemInput;
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../audio_cues.dart';
@@ -227,7 +228,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           : _error
               ? ErrorState(message: l10n.sessionDetailLoadError, onRetry: _load)
               : _steps.isEmpty
-              ? Center(child: Text(l10n.sessionNotFound))
+              ? EmptyState(
+                  icon: Icons.self_improvement,
+                  title: l10n.sessionNotFound,
+                )
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
@@ -597,7 +601,10 @@ class _SessionExecutionBand extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final step = state.step;
     if (step == null) {
-      return Center(child: Text(l10n.sessionRunComplete));
+      return EmptyState(
+        icon: Icons.task_alt,
+        title: l10n.sessionRunComplete,
+      );
     }
     final isTimed = step.kind != SessionItemKind.reps &&
         (step.durationS ?? 0) > 0 &&

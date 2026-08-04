@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -205,7 +206,13 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
             child: RefreshIndicator(
               onRefresh: _refresh,
               child: routines.isEmpty
-                  ? _emptyState(theme, l10n)
+                  ? EmptyState(
+                      icon: Icons.list_alt,
+                      title: l10n.gymRoutineEmptyTitle,
+                      body: l10n.gymRoutineEmptyBody,
+                      ctaLabel: l10n.gymRoutineNew,
+                      onCta: _create,
+                    )
                   : _list(routines, theme, l10n),
             ),
           ),
@@ -263,40 +270,4 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
     );
   }
 
-  Widget _emptyState(ThemeData theme, AppLocalizations l10n) => ListView(
-        children: [
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.6,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.list_alt,
-                        size: 64, color: theme.colorScheme.outline),
-                    const SizedBox(height: 12),
-                    Text(l10n.gymRoutineEmptyTitle,
-                        style: theme.textTheme.titleMedium,
-                        textAlign: TextAlign.center),
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.gymRoutineEmptyBody,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.add),
-                      label: Text(l10n.gymRoutineNew),
-                      onPressed: _create,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
 }

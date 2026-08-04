@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../auth_error.dart';
 import '../l10n/date_format.dart';
@@ -803,11 +804,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     required Future<void> Function() onLoadMore,
   }) {
     if (people.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(emptyMessage),
-        ),
+      return EmptyState(
+        icon: Icons.people_outline,
+        title: emptyMessage,
       );
     }
     return RefreshIndicator(
