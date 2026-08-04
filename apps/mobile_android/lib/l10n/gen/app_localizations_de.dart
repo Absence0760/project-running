@@ -6625,19 +6625,6 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Offline — $count Änderungen in der Warteschlange, zeige zwischengespeicherte Ausrüstung.',
-      one:
-          'Offline — $count Änderung in der Warteschlange, zeige zwischengespeicherte Ausrüstung.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached =>
       'Offline — zeige zwischengespeicherte Ausrüstung.';
 
@@ -6814,14 +6801,21 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dadurch werden alle Zonen entfernt und alle diese Bereiche bei öffentlichen Freigaben wieder sichtbar.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Änderungen verwerfen?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'Sie haben nicht gespeicherte Datenschutzzonen. Ohne Speichern verlassen?';
 
   @override
-  String get privacyZonesDiscard => 'Verwerfen';
+  String get discardChangesTitle => 'Änderungen verwerfen?';
+
+  @override
+  String get discardChangesBody =>
+      'Sie haben nicht gespeicherte Änderungen. Ohne Speichern verlassen?';
+
+  @override
+  String get discardChangesCancel => 'Abbrechen';
+
+  @override
+  String get discardChangesDiscard => 'Verwerfen';
 
   @override
   String get prefsTitle => 'Einstellungen';
@@ -9158,10 +9152,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Offline – gespeicherte Trainings werden angezeigt';
 
   @override
-  String get gymOfflineQueued =>
-      'Offline – Änderungen werden später synchronisiert';
-
-  @override
   String get gymEmptyTitle => 'Noch keine Gym-Trainings';
 
   @override
@@ -9951,10 +9941,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'Eintrag konnte nicht gelöscht werden: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Offline – Änderungen werden später synchronisiert';
 
   @override
   String get nutritionOfflineCached =>
@@ -12368,4 +12354,31 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Holt aufgezeichnete Läufe von der Uhr. Die Übertragung pausiert währenddessen.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count Änderungen auf diesem Gerät gespeichert – werden synchronisiert, sobald du online bist',
+      one:
+          '$count Änderung auf diesem Gerät gespeichert – wird synchronisiert, sobald du online bist',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Änderungen wurden nicht synchronisiert',
+      one: '$count Änderung wurde nicht synchronisiert',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Erneut versuchen';
 }

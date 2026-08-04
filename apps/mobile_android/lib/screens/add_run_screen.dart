@@ -10,6 +10,7 @@ import '../l10n/locale_support.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../widgets/confirm_discard.dart';
 import '../widgets/top_banner.dart';
 
 /// Form for adding a run to history without recording it live.
@@ -48,6 +49,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
   final _secondsCtl = TextEditingController();
 
   late DateTime _startedAt;
+  late DateTime _initialStartedAt;
   ActivityType _activityType = ActivityType.run;
   Route? _selectedRoute;
   bool _saving = false;
@@ -57,7 +59,19 @@ class _AddRunScreenState extends State<AddRunScreen> {
     super.initState();
     final now = DateTime.now();
     _startedAt = DateTime(now.year, now.month, now.day, now.hour);
+    _initialStartedAt = _startedAt;
   }
+
+  bool get _isDirty =>
+      _titleCtl.text.isNotEmpty ||
+      _notesCtl.text.isNotEmpty ||
+      _distanceCtl.text.isNotEmpty ||
+      _hoursCtl.text.isNotEmpty ||
+      _minutesCtl.text.isNotEmpty ||
+      _secondsCtl.text.isNotEmpty ||
+      _activityType != ActivityType.run ||
+      _selectedRoute != null ||
+      _startedAt != _initialStartedAt;
 
   @override
   void dispose() {
@@ -209,7 +223,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
     final unit = widget.preferences.unit;
     final routes = widget.routeStore.routes;
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         title: Text(l10n.addRunTitle),
         actions: [
@@ -409,6 +423,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
         ),
       ),
     );
+    return DiscardGuard(isDirty: () => _isDirty, child: scaffold);
   }
 
   Widget _durationField(

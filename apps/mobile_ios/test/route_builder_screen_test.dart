@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_map/flutter_map.dart' show FlutterMap;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path/path.dart' as p;
@@ -938,6 +939,99 @@ void main() {
     });
   });
 
+  group('RouteBuilderScreen — discard guard', () {
+    // Pushes the screen over a root route so a guarded pop can be observed.
+    // pumpAndSettle hangs on the map, so pump fixed durations instead.
+    Future<void> pushScreen(WidgetTester tester, LocalRouteStore store) async {
+      await tester.binding.setSurfaceSize(const Size(400, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => RouteBuilderScreen(
+                        apiClient: ApiClient(),
+                        routeStore: store,
+                        osrmFetcher: _stubOsrm,
+                        elevationFetcher: _stubElev,
+                        geocodingFetcher: _stubGeocoding,
+                        locateFn: _stubLocate,
+                      ),
+                    ),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets('placed waypoint: back shows the discard confirm; Cancel stays',
+        (tester) async {
+      final store = await _store();
+      await pushScreen(tester, store);
+
+      await tester.tap(find.byType(FlutterMap));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Discard changes?'), findsOneWidget);
+
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Cancel')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(RouteBuilderScreen), findsOneWidget);
+      expect(find.text('Discard changes?'), findsNothing);
+    });
+
+    testWidgets('placed waypoint: confirming Discard leaves the builder',
+        (tester) async {
+      final store = await _store();
+      await pushScreen(tester, store);
+
+      await tester.tap(find.byType(FlutterMap));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog), matching: find.text('Discard')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(RouteBuilderScreen), findsNothing);
+      expect(find.text('open'), findsOneWidget);
+    });
+
+    testWidgets('no waypoints: back pops with no confirm', (tester) async {
+      final store = await _store();
+      await pushScreen(tester, store);
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Discard changes?'), findsNothing);
+      expect(find.byType(RouteBuilderScreen), findsNothing);
+      expect(find.text('open'), findsOneWidget);
+    });
+  });
+
   _registerOfflineSaveTests();
 }
 
@@ -1252,4 +1346,5 @@ void _registerOfflineSaveTests() {
       expect(find.byType(WaypointListSheet), findsNothing);
     });
   });
+
 }

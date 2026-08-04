@@ -8829,15 +8829,6 @@
       }
     }
   },
-  "gearOfflineQueued": "{count, plural, one{Offline — {count} edit queued, showing cached gear.} other{Offline — {count} edits queued, showing cached gear.}}",
-  "@gearOfflineQueued": {
-    "description": "Offline banner when edits are queued",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "gearOfflineCached": "Offline — showing cached gear.",
   "@gearOfflineCached": {
     "description": "Offline banner when no edits are queued"
@@ -9044,17 +9035,25 @@
   "@privacyZonesClearAll": {
     "description": "Button to remove all privacy zones"
   },
-  "privacyZonesDiscardTitle": "Discard changes?",
-  "@privacyZonesDiscardTitle": {
-    "description": "Title of the unsaved-changes confirm dialog on the privacy-zones editor"
-  },
   "privacyZonesDiscardBody": "You have unsaved privacy zones. Leave without saving?",
   "@privacyZonesDiscardBody": {
-    "description": "Body of the unsaved-changes confirm dialog on the privacy-zones editor"
+    "description": "Privacy-zones-specific body for the shared discard-changes confirm dialog"
   },
-  "privacyZonesDiscard": "Discard",
-  "@privacyZonesDiscard": {
-    "description": "Confirm button that leaves the privacy-zones editor discarding unsaved zones"
+  "discardChangesTitle": "Discard changes?",
+  "@discardChangesTitle": {
+    "description": "Title of the shared unsaved-changes confirm dialog shown when backing out of a create/edit form"
+  },
+  "discardChangesBody": "You have unsaved changes. Leave without saving?",
+  "@discardChangesBody": {
+    "description": "Generic body of the shared unsaved-changes confirm dialog"
+  },
+  "discardChangesCancel": "Cancel",
+  "@discardChangesCancel": {
+    "description": "Button that dismisses the discard-changes dialog and keeps the form open"
+  },
+  "discardChangesDiscard": "Discard",
+  "@discardChangesDiscard": {
+    "description": "Confirm button that leaves the form discarding unsaved edits"
   },
   "prefsTitle": "Preferences",
   "@prefsTitle": {
@@ -12260,7 +12259,6 @@
   "gymLog": "Log workout",
   "gymUntitled": "Untitled workout",
   "gymOfflineCached": "Offline — showing saved workouts",
-  "gymOfflineQueued": "Offline — changes will sync when you reconnect",
   "gymEmptyTitle": "No gym workouts yet",
   "gymEmptyBody": "Log a lift to track it here and feed your training load.",
   "gymPrBadge": "PR",
@@ -12905,7 +12903,6 @@
       }
     }
   },
-  "nutritionOfflineQueued": "Offline — changes will sync when you reconnect",
   "nutritionOfflineCached": "Offline — showing saved entries",
   "nutritionLogTitle": "Log food",
   "nutritionSearchHint": "Search for a food",
@@ -15707,5 +15704,27 @@
   "watchLiveShare": "Share live link",
   "watchLiveStartFailed": "Couldn't start the live broadcast — nothing is being shared.",
   "watchLiveSyncAction": "Sync runs from watch",
-  "watchLiveSyncSubtitle": "Pulls recorded runs off the watch. The relay pauses while it runs."
+  "watchLiveSyncSubtitle": "Pulls recorded runs off the watch. The relay pauses while it runs.",
+  "pendingSyncOffline": "{count, plural, one{{count} change saved on this device — will sync when online} other{{count} changes saved on this device — will sync when online}}",
+  "@pendingSyncOffline": {
+    "description": "Pending-sync banner while offline or signed out",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pendingSyncFailed": "{count, plural, one{{count} change hasn't synced} other{{count} changes haven't synced}}",
+  "@pendingSyncFailed": {
+    "description": "Pending-sync banner when a push failed while online",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pendingSyncRetry": "Retry",
+  "@pendingSyncRetry": {
+    "description": "Retry button on the pending-sync banner"
+  }
 }

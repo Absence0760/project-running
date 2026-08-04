@@ -6544,17 +6544,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Offline — $count edits queued, showing cached gear.',
-      one: 'Offline — $count edit queued, showing cached gear.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'Offline — showing cached gear.';
 
   @override
@@ -6730,14 +6719,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'This removes every zone, re-exposing all of these areas on public shares.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Discard changes?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'You have unsaved privacy zones. Leave without saving?';
 
   @override
-  String get privacyZonesDiscard => 'Discard';
+  String get discardChangesTitle => 'Discard changes?';
+
+  @override
+  String get discardChangesBody =>
+      'You have unsaved changes. Leave without saving?';
+
+  @override
+  String get discardChangesCancel => 'Cancel';
+
+  @override
+  String get discardChangesDiscard => 'Discard';
 
   @override
   String get prefsTitle => 'Preferences';
@@ -9050,10 +9046,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymOfflineCached => 'Offline — showing saved workouts';
 
   @override
-  String get gymOfflineQueued =>
-      'Offline — changes will sync when you reconnect';
-
-  @override
   String get gymEmptyTitle => 'No gym workouts yet';
 
   @override
@@ -9836,10 +9828,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'Couldn’t delete the entry: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Offline — changes will sync when you reconnect';
 
   @override
   String get nutritionOfflineCached => 'Offline — showing saved entries';
@@ -12229,4 +12217,29 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Pulls recorded runs off the watch. The relay pauses while it runs.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count changes saved on this device — will sync when online',
+      one: '$count change saved on this device — will sync when online',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count changes haven\'t synced',
+      one: '$count change hasn\'t synced',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Retry';
 }

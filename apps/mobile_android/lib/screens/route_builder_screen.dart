@@ -28,6 +28,7 @@ import '../routing.dart';
 import '../social_service.dart';
 import '../run_stats.dart' show haversineMetres;
 import '../tile_cache.dart';
+import '../widgets/confirm_discard.dart';
 import '../widgets/live_run_map.dart' show currentTileUrl;
 import '../widgets/snap_to_start.dart';
 import '../widgets/top_banner.dart';
@@ -916,7 +917,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     // placing another pin mid-route.
     final canListPoints = _waypoints.isNotEmpty && !_saving;
     final compactActions = _searchFocused;
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _searchCtl,
@@ -1201,6 +1202,12 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         onPressed: _routing || _saving ? null : _locate,
         child: const Icon(Icons.my_location),
       ),
+    );
+    // Any placed waypoint is unsaved work (Save pops directly after
+    // persisting, which bypasses the guard).
+    return DiscardGuard(
+      isDirty: () => _waypoints.isNotEmpty,
+      child: scaffold,
     );
   }
 }

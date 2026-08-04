@@ -6615,18 +6615,6 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Sin conexión — $count cambios en cola, mostrando equipo en caché.',
-      one: 'Sin conexión — $count cambio en cola, mostrando equipo en caché.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'Sin conexión: mostrando equipo en caché.';
 
   @override
@@ -6803,14 +6791,21 @@ class AppLocalizationsEs extends AppLocalizations {
       'Esto elimina todas las zonas y vuelve a exponer todas estas áreas en las publicaciones públicas.';
 
   @override
-  String get privacyZonesDiscardTitle => '¿Descartar cambios?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'Tienes zonas de privacidad sin guardar. ¿Salir sin guardar?';
 
   @override
-  String get privacyZonesDiscard => 'Descartar';
+  String get discardChangesTitle => '¿Descartar cambios?';
+
+  @override
+  String get discardChangesBody =>
+      'Tienes cambios sin guardar. ¿Salir sin guardar?';
+
+  @override
+  String get discardChangesCancel => 'Cancelar';
+
+  @override
+  String get discardChangesDiscard => 'Descartar';
 
   @override
   String get prefsTitle => 'Preferencias';
@@ -9150,10 +9145,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'Sin conexión: mostrando entrenamientos guardados';
 
   @override
-  String get gymOfflineQueued =>
-      'Sin conexión: los cambios se sincronizarán más tarde';
-
-  @override
   String get gymEmptyTitle => 'Aún no hay entrenamientos de gimnasio';
 
   @override
@@ -9937,10 +9928,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'No se pudo eliminar la entrada: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Sin conexión: los cambios se sincronizarán al reconectar';
 
   @override
   String get nutritionOfflineCached =>
@@ -12357,4 +12344,31 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Descarga las carreras grabadas del reloj. La retransmisión se pausa mientras tanto.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count cambios guardados en este dispositivo — se sincronizarán al volver a estar en línea',
+      one:
+          '$count cambio guardado en este dispositivo — se sincronizará al volver a estar en línea',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cambios no se han sincronizado',
+      one: '$count cambio no se ha sincronizado',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Reintentar';
 }

@@ -6614,18 +6614,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Off-line — $count edições na fila, mostrando equipamento em cache.',
-      one: 'Off-line — $count edição na fila, mostrando equipamento em cache.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'Off-line — mostrando equipamento em cache.';
 
   @override
@@ -6802,14 +6790,21 @@ class AppLocalizationsPt extends AppLocalizations {
       'Isso remove todas as zonas, reexpondo todas essas áreas nos compartilhamentos públicos.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Descartar alterações?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'Você tem zonas de privacidade não salvas. Sair sem salvar?';
 
   @override
-  String get privacyZonesDiscard => 'Descartar';
+  String get discardChangesTitle => 'Descartar alterações?';
+
+  @override
+  String get discardChangesBody =>
+      'Você tem alterações não salvas. Sair sem salvar?';
+
+  @override
+  String get discardChangesCancel => 'Cancelar';
+
+  @override
+  String get discardChangesDiscard => 'Descartar';
 
   @override
   String get prefsTitle => 'Preferências';
@@ -9144,10 +9139,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymOfflineCached => 'Offline: mostrando treinos salvos';
 
   @override
-  String get gymOfflineQueued =>
-      'Offline: as alterações serão sincronizadas mais tarde';
-
-  @override
   String get gymEmptyTitle => 'Nenhum treino de academia ainda';
 
   @override
@@ -9934,10 +9925,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'Não foi possível eliminar a entrada: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Offline — as alterações serão sincronizadas ao reconectar';
 
   @override
   String get nutritionOfflineCached => 'Offline — mostrando entradas salvas';
@@ -12354,6 +12341,33 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get watchLiveSyncSubtitle =>
       'Transfere as corridas gravadas no relógio. A retransmissão fica em pausa durante esse período.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count alterações guardadas neste dispositivo — serão sincronizadas quando estiver on-line',
+      one:
+          '$count alteração guardada neste dispositivo — será sincronizada quando estiver on-line',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alterações não foram sincronizadas',
+      one: '$count alteração não foi sincronizada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Tentar novamente';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18964,18 +18978,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Off-line — $count edições na fila, mostrando equipamento em cache.',
-      one: 'Off-line — $count edição na fila, mostrando equipamento em cache.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'Off-line — mostrando equipamento em cache.';
 
   @override
@@ -19152,14 +19154,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Isso remove todas as zonas, reexpondo todas essas áreas nos compartilhamentos públicos.';
 
   @override
-  String get privacyZonesDiscardTitle => 'Descartar alterações?';
-
-  @override
   String get privacyZonesDiscardBody =>
       'Você tem zonas de privacidade não salvas. Sair sem salvar?';
 
   @override
-  String get privacyZonesDiscard => 'Descartar';
+  String get discardChangesTitle => 'Descartar alterações?';
+
+  @override
+  String get discardChangesBody =>
+      'Você tem alterações não salvas. Sair sem salvar?';
+
+  @override
+  String get discardChangesCancel => 'Cancelar';
+
+  @override
+  String get discardChangesDiscard => 'Descartar';
 
   @override
   String get prefsTitle => 'Preferências';
@@ -21494,10 +21503,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get gymOfflineCached => 'Offline: mostrando treinos salvos';
 
   @override
-  String get gymOfflineQueued =>
-      'Offline: as alterações serão sincronizadas mais tarde';
-
-  @override
   String get gymEmptyTitle => 'Nenhum treino de academia ainda';
 
   @override
@@ -22284,10 +22289,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String nutritionDeleteFailed(String error) {
     return 'Não foi possível excluir a entrada: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Offline — as alterações serão sincronizadas ao reconectar';
 
   @override
   String get nutritionOfflineCached => 'Offline — mostrando entradas salvas';
@@ -24701,4 +24702,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get watchLiveSyncSubtitle =>
       'Baixa as corridas gravadas no relógio. A retransmissão fica pausada nesse período.';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count alterações salvas neste dispositivo — serão sincronizadas quando você estiver on-line',
+      one:
+          '$count alteração salva neste dispositivo — será sincronizada quando você estiver on-line',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alterações não foram sincronizadas',
+      one: '$count alteração não foi sincronizada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => 'Tentar novamente';
 }

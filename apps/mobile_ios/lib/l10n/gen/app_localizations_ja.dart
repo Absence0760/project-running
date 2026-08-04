@@ -6239,16 +6239,6 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'オフライン — $count件の編集をキューに登録、キャッシュされたギアを表示中。',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'オフライン — キャッシュされたギアを表示中。';
 
   @override
@@ -6418,13 +6408,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get privacyZonesClearAllBody => 'すべてのゾーンが削除され、これらのエリアが公開共有で再び公開されます。';
 
   @override
-  String get privacyZonesDiscardTitle => '変更を破棄しますか？';
-
-  @override
   String get privacyZonesDiscardBody => '保存されていないプライバシーゾーンがあります。保存せずに終了しますか？';
 
   @override
-  String get privacyZonesDiscard => '破棄';
+  String get discardChangesTitle => '変更を破棄しますか？';
+
+  @override
+  String get discardChangesBody => '保存されていない変更があります。保存せずに終了しますか？';
+
+  @override
+  String get discardChangesCancel => 'キャンセル';
+
+  @override
+  String get discardChangesDiscard => '破棄';
 
   @override
   String get prefsTitle => '環境設定';
@@ -8673,9 +8669,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymOfflineCached => 'オフライン：保存済みのワークアウトを表示中';
 
   @override
-  String get gymOfflineQueued => 'オフライン：変更は後で同期されます';
-
-  @override
   String get gymEmptyTitle => 'ジムのワークアウトがまだありません';
 
   @override
@@ -9440,9 +9433,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'エントリーを削除できませんでした: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued => 'オフライン — 再接続時に変更を同期します';
 
   @override
   String get nutritionOfflineCached => 'オフライン — 保存済みの記録を表示しています';
@@ -11781,4 +11771,27 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get watchLiveSyncSubtitle => 'ウォッチに記録されたランを取り込みます。その間、中継は一時停止します。';
+
+  @override
+  String pendingSyncOffline(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件の変更をこの端末に保存しました — オンラインになったら同期します',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String pendingSyncFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件の変更が同期されていません',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pendingSyncRetry => '再試行';
 }

@@ -10839,12 +10839,6 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{Attached {name} to {count} run.} other{Attached {name} to {count} runs.}}'**
   String gearAttached(String name, int count);
 
-  /// Offline banner when edits are queued
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, one{Offline — {count} edit queued, showing cached gear.} other{Offline — {count} edits queued, showing cached gear.}}'**
-  String gearOfflineQueued(int count);
-
   /// Offline banner when no edits are queued
   ///
   /// In en, this message translates to:
@@ -11109,23 +11103,35 @@ abstract class AppLocalizations {
   /// **'This removes every zone, re-exposing all of these areas on public shares.'**
   String get privacyZonesClearAllBody;
 
-  /// Title of the unsaved-changes confirm dialog on the privacy-zones editor
-  ///
-  /// In en, this message translates to:
-  /// **'Discard changes?'**
-  String get privacyZonesDiscardTitle;
-
-  /// Body of the unsaved-changes confirm dialog on the privacy-zones editor
+  /// Privacy-zones-specific body for the shared discard-changes confirm dialog
   ///
   /// In en, this message translates to:
   /// **'You have unsaved privacy zones. Leave without saving?'**
   String get privacyZonesDiscardBody;
 
-  /// Confirm button that leaves the privacy-zones editor discarding unsaved zones
+  /// Title of the shared unsaved-changes confirm dialog shown when backing out of a create/edit form
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes?'**
+  String get discardChangesTitle;
+
+  /// Generic body of the shared unsaved-changes confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'You have unsaved changes. Leave without saving?'**
+  String get discardChangesBody;
+
+  /// Button that dismisses the discard-changes dialog and keeps the form open
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get discardChangesCancel;
+
+  /// Confirm button that leaves the form discarding unsaved edits
   ///
   /// In en, this message translates to:
   /// **'Discard'**
-  String get privacyZonesDiscard;
+  String get discardChangesDiscard;
 
   /// AppBar title for the Settings > Preferences screen
   ///
@@ -15098,12 +15104,6 @@ abstract class AppLocalizations {
   /// **'Offline — showing saved workouts'**
   String get gymOfflineCached;
 
-  /// No description provided for @gymOfflineQueued.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline — changes will sync when you reconnect'**
-  String get gymOfflineQueued;
-
   /// No description provided for @gymEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -16459,12 +16459,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn’t delete the entry: {error}'**
   String nutritionDeleteFailed(String error);
-
-  /// No description provided for @nutritionOfflineQueued.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline — changes will sync when you reconnect'**
-  String get nutritionOfflineQueued;
 
   /// No description provided for @nutritionOfflineCached.
   ///
@@ -20659,6 +20653,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pulls recorded runs off the watch. The relay pauses while it runs.'**
   String get watchLiveSyncSubtitle;
+
+  /// Pending-sync banner while offline or signed out
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} change saved on this device — will sync when online} other{{count} changes saved on this device — will sync when online}}'**
+  String pendingSyncOffline(int count);
+
+  /// Pending-sync banner when a push failed while online
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} change hasn\'t synced} other{{count} changes haven\'t synced}}'**
+  String pendingSyncFailed(int count);
+
+  /// Retry button on the pending-sync banner
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get pendingSyncRetry;
 }
 
 class _AppLocalizationsDelegate

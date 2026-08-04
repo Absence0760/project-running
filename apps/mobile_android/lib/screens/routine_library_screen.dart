@@ -7,6 +7,7 @@ import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../social_service.dart';
+import '../widgets/pending_sync_banner.dart';
 import '../widgets/routine_builder_sheet.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
 import 'routine_detail_screen.dart';
@@ -126,6 +127,13 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
     }
   }
 
+  Future<void> _maybeSync() async {
+    final api = widget.api;
+    if (api == null || !_isOnline) return;
+    await widget.store.syncWithServer(api);
+    if (mounted && widget.store.hasPending) setState(() {});
+  }
+
   Future<void> _create() async {
     final id = await showRoutineBuilderSheet(
       context: context,
@@ -133,8 +141,7 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
       suggestions: gymExerciseSuggestions(widget.gymStore.workouts),
     );
     if (id != null) {
-      final api = widget.api;
-      if (api != null && _isOnline) await widget.store.syncWithServer(api);
+      await _maybeSync();
       if (mounted) _open(id);
     }
   }
@@ -187,11 +194,22 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: routines.isEmpty
-            ? _emptyState(theme, l10n)
-            : _list(routines, theme, l10n),
+      body: Column(
+        children: [
+          PendingSyncBanner(
+            api: widget.api,
+            isOnline: _isOnline,
+            stores: [widget.store],
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: routines.isEmpty
+                  ? _emptyState(theme, l10n)
+                  : _list(routines, theme, l10n),
+            ),
+          ),
+        ],
       ),
     );
   }

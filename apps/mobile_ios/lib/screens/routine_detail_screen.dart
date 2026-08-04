@@ -9,6 +9,7 @@ import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/gym_compose_sheet.dart';
+import '../widgets/pending_sync_banner.dart';
 import '../widgets/top_banner.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
 import 'gym_session_screen.dart';
@@ -167,6 +168,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await widget.store.syncWithServer(api);
+    if (mounted && widget.store.hasPending) setState(() {});
   }
 
   /// "Start routine" (P1: prefill-only — no execution loop). Expand the saved
@@ -278,15 +280,26 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                 ),
               ],
       ),
-      body: r == null
-          ? Center(
-              child: Text(
-                l10n.gymRoutineNotFound,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.outline),
-              ),
-            )
-          : _body(r, theme, l10n),
+      body: Column(
+        children: [
+          PendingSyncBanner(
+            api: widget.api,
+            isOnline: _isOnline,
+            stores: [widget.store],
+          ),
+          Expanded(
+            child: r == null
+                ? Center(
+                    child: Text(
+                      l10n.gymRoutineNotFound,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.outline),
+                    ),
+                  )
+                : _body(r, theme, l10n),
+          ),
+        ],
+      ),
       floatingActionButton: r == null
           ? null
           : Column(

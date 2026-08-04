@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'confirm_discard.dart';
+
 /// Canonical presentation for a create / edit entity form on mobile: a
 /// full-screen modal dialog (slide-up, close affordance) hosting [builder]
 /// inside a [Scaffold] + [AppBar] + [SafeArea].
@@ -15,18 +17,28 @@ import 'package:flutter/material.dart';
 ///
 /// [title] is read from the caller's context once (the heading lives in the
 /// AppBar, not inline in the body). Resolves to whatever the form pops.
+///
+/// [isDirty], when set, arms a [DiscardGuard]: backing out (system back, the
+/// AppBar close button, or any `maybePop`) while it reports unsaved edits
+/// confirms via [confirmDiscard] before popping. Save paths that pop with
+/// `Navigator.pop` after persisting bypass the guard by design.
 Future<T?> showFullScreenForm<T>(
   BuildContext context, {
   required String title,
   required WidgetBuilder builder,
+  bool Function()? isDirty,
 }) {
   return Navigator.of(context).push<T>(
     MaterialPageRoute<T>(
       fullscreenDialog: true,
-      builder: (ctx) => Scaffold(
-        appBar: AppBar(title: Text(title)),
-        body: SafeArea(child: builder(ctx)),
-      ),
+      builder: (ctx) {
+        final scaffold = Scaffold(
+          appBar: AppBar(title: Text(title)),
+          body: SafeArea(child: builder(ctx)),
+        );
+        if (isDirty == null) return scaffold;
+        return DiscardGuard(isDirty: isDirty, child: scaffold);
+      },
     ),
   );
 }

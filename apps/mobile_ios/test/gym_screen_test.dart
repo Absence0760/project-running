@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' show ExerciseRow, GymWorkoutRow;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -62,6 +63,56 @@ Set<String> _referencePrWorkoutIds(List<StoredGymWorkout> workouts) {
 class _OfflineFakeApi extends ApiClient {
   @override
   String? get userId => null;
+}
+
+/// Online api whose fetches succeed but whose workout push is rejected —
+/// the RLS-denial / 500 / expired-token class of failure issue #666 U2 is
+/// about: the row stays pending while the screen believes it's online.
+class _RejectingSyncApi extends ApiClient {
+  @override
+  String? get userId => 'user-1';
+
+  @override
+  Future<List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>>
+      fetchGymWorkoutsWithSets({int limit = 50}) async => const [];
+
+  @override
+  Future<List<ExerciseRow>> fetchExerciseCatalogue() async => const [];
+
+  @override
+  Future<GymWorkoutRow> createGymWorkout({
+    String? id,
+    String? title,
+    required DateTime startedAt,
+    int? durationS,
+    String? notes,
+    bool isPublic = false,
+    String? externalId,
+    DateTime? lastModifiedAt,
+    Map<String, dynamic>? metadata,
+    List<GymSetInput> sets = const [],
+  }) async {
+    throw Exception('server rejected');
+  }
+}
+
+/// Real file I/O driven from mount has no completion hook to await, so poll
+/// the observable end-state rather than sleeping a fixed duration (same
+/// pattern as nutrition_screen_test).
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() done, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!done()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('timed out after $timeout waiting for the expected state');
+    }
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.pump();
+  }
 }
 
 void main() {
@@ -231,6 +282,63 @@ void main() {
         expect(find.text('1 exercise'), findsOneWidget);
         // First-ever workout sets a PR → badge shows.
         expect(find.text('PR'), findsOneWidget);
+      } finally {
+        dir.deleteSync(recursive: true);
+      }
+    });
+  });
+
+  group('GymScreen pending-sync banner (issue #666 U2)', () {
+    testWidgets(
+        'a pending row surfaces the failed-sync banner with Retry when the '
+        'server rejects the push while online', (tester) async {
+      final dir = Directory.systemTemp.createTempSync('gym_screen_pend_on_');
+      final store = LocalGymStore();
+      await tester.runAsync(() async {
+        await store.init(overrideDirectory: dir);
+        await store.createLocal(
+            title: 'Push day', startedAt: DateTime.utc(2026, 2, 1));
+      });
+      try {
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GymScreen(api: _RejectingSyncApi(), store: store),
+        ));
+        await _pumpUntil(
+            tester, () => tester.any(find.text("1 change hasn't synced")));
+        expect(find.text('Retry'), findsOneWidget);
+        expect(store.hasPending, isTrue);
+        // Let the in-flight refresh drain before tearing the temp dir down.
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 100)));
+        await tester.pump();
+      } finally {
+        dir.deleteSync(recursive: true);
+      }
+    });
+
+    testWidgets('a pending row surfaces the saved-on-device banner offline',
+        (tester) async {
+      final dir = Directory.systemTemp.createTempSync('gym_screen_pend_off_');
+      final store = LocalGymStore();
+      await tester.runAsync(() async {
+        await store.init(overrideDirectory: dir);
+        await store.createLocal(
+            title: 'Push day', startedAt: DateTime.utc(2026, 2, 1));
+      });
+      try {
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GymScreen(api: _OfflineFakeApi(), store: store),
+        ));
+        await tester.pump();
+        expect(
+          find.text('1 change saved on this device — will sync when online'),
+          findsOneWidget,
+        );
+        expect(find.text('Retry'), findsNothing);
       } finally {
         dir.deleteSync(recursive: true);
       }

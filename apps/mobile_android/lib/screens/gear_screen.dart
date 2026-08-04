@@ -11,6 +11,7 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../widgets/gear_backfill_sheet.dart';
 import '../widgets/gear_form_sheet.dart';
+import '../widgets/pending_sync_banner.dart';
 import '../widgets/top_banner.dart';
 import 'gear_rotations_screen.dart';
 
@@ -109,6 +110,7 @@ class _GearScreenState extends State<GearScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await widget.store.syncWithServer(api);
+    if (mounted && widget.store.hasPending) setState(() {});
   }
 
   Future<void> _create() async {
@@ -258,12 +260,6 @@ class _GearScreenState extends State<GearScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final pendingCount = widget.store.hasPending
-        ? widget.store.rows.length -
-            widget.store.rows
-                .where((r) => r['id'] != null && !widget.store.hasPending)
-                .length
-        : 0;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.gearTitle),
@@ -283,7 +279,7 @@ class _GearScreenState extends State<GearScreen> {
       ),
       body: Column(
         children: [
-          if (!_isOnline)
+          if (!_isOnline && !widget.store.hasPending)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -294,15 +290,18 @@ class _GearScreenState extends State<GearScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.store.hasPending && pendingCount > 0
-                          ? l10n.gearOfflineQueued(pendingCount)
-                          : l10n.gearOfflineCached,
+                      l10n.gearOfflineCached,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
                 ],
               ),
             ),
+          PendingSyncBanner(
+            api: widget.api,
+            isOnline: _isOnline,
+            stores: [widget.store],
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SegmentedButton<String>(
