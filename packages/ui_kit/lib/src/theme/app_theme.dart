@@ -99,6 +99,7 @@ class AppTheme {
         ),
       ),
       dividerColor: parchmentDim,
+      extensions: const [AppSemanticColors.light],
     );
   }
 
@@ -185,6 +186,103 @@ class AppTheme {
         ),
       ),
       dividerColor: const Color(0xFF2E2545),
+      extensions: const [AppSemanticColors.dark],
+    );
+  }
+}
+
+/// Semantic status colours outside the Material scheme: success, warning,
+/// danger, and the segment-crown gold. Every on*/base pair is tuned to
+/// >= 4.5:1 WCAG AA contrast and every base to >= 3:1 against its
+/// brightness's scaffold background — the scheme's own error/onError pair
+/// computes below AA (3.85:1 in light), which is why danger exists.
+@immutable
+class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
+  const AppSemanticColors({
+    required this.success,
+    required this.onSuccess,
+    required this.warning,
+    required this.onWarning,
+    required this.danger,
+    required this.onDanger,
+    required this.crown,
+    required this.onCrown,
+  });
+
+  final Color success;
+  final Color onSuccess;
+  final Color warning;
+  final Color onWarning;
+  final Color danger;
+  final Color onDanger;
+  final Color crown;
+  final Color onCrown;
+
+  static const AppSemanticColors light = AppSemanticColors(
+    success: Color(0xFF2E6B3C),
+    onSuccess: AppTheme.parchment,
+    warning: Color(0xFF8A5712),
+    onWarning: AppTheme.parchment,
+    danger: Color(0xFFA93B2E),
+    onDanger: AppTheme.parchment,
+    crown: Color(0xFF7A5C10),
+    onCrown: AppTheme.parchment,
+  );
+
+  static const AppSemanticColors dark = AppSemanticColors(
+    success: Color(0xFF8CC49B),
+    onSuccess: AppTheme.midnight,
+    warning: Color(0xFFE6A23C),
+    onWarning: AppTheme.midnight,
+    danger: Color(0xFFEC8B7A),
+    onDanger: AppTheme.midnight,
+    crown: Color(0xFFE0BE4E),
+    onCrown: AppTheme.midnight,
+  );
+
+  // Brightness-matched fallback so a harness that pumps a bare MaterialApp
+  // (no AppTheme) renders sane status colours instead of throwing.
+  static AppSemanticColors of(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.extension<AppSemanticColors>() ??
+        (theme.brightness == Brightness.dark ? dark : light);
+  }
+
+  @override
+  AppSemanticColors copyWith({
+    Color? success,
+    Color? onSuccess,
+    Color? warning,
+    Color? onWarning,
+    Color? danger,
+    Color? onDanger,
+    Color? crown,
+    Color? onCrown,
+  }) {
+    return AppSemanticColors(
+      success: success ?? this.success,
+      onSuccess: onSuccess ?? this.onSuccess,
+      warning: warning ?? this.warning,
+      onWarning: onWarning ?? this.onWarning,
+      danger: danger ?? this.danger,
+      onDanger: onDanger ?? this.onDanger,
+      crown: crown ?? this.crown,
+      onCrown: onCrown ?? this.onCrown,
+    );
+  }
+
+  @override
+  AppSemanticColors lerp(ThemeExtension<AppSemanticColors>? other, double t) {
+    if (other is! AppSemanticColors) return this;
+    return AppSemanticColors(
+      success: Color.lerp(success, other.success, t)!,
+      onSuccess: Color.lerp(onSuccess, other.onSuccess, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      onWarning: Color.lerp(onWarning, other.onWarning, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+      onDanger: Color.lerp(onDanger, other.onDanger, t)!,
+      crown: Color.lerp(crown, other.crown, t)!,
+      onCrown: Color.lerp(onCrown, other.onCrown, t)!,
     );
   }
 }
