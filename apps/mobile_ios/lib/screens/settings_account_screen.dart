@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_change_aware.dart';
 import '../auth_error.dart';
@@ -485,7 +486,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                     ),
                     if (error != null) ...[
                       const SizedBox(height: 8),
-                      Text(error!, style: const TextStyle(color: Colors.red)),
+                      Text(error!,
+                          style: TextStyle(
+                              color: AppSemanticColors.of(ctx).danger)),
                     ],
                     Align(
                       alignment: AlignmentDirectional.centerStart,
@@ -590,7 +593,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
-                  Text(error!, style: const TextStyle(color: Colors.red)),
+                  Text(error!,
+                      style:
+                          TextStyle(color: AppSemanticColors.of(ctx).danger)),
                 ],
               ],
             ),
@@ -682,7 +687,10 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 child: Text(l10n.settingsAccountCancel),
               ),
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppSemanticColors.of(ctx).danger,
+                  foregroundColor: AppSemanticColors.of(ctx).onDanger,
+                ),
                 onPressed: met ? () => Navigator.pop(ctx, true) : null,
                 child: Text(l10n.settingsAccountDelete),
               ),
@@ -1083,10 +1091,12 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 onTap: _changePassword,
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                leading: Icon(Icons.delete_outline,
+                    color: AppSemanticColors.of(context).danger),
                 title: Text(
                   l10n.settingsAccountDeleteAccount,
-                  style: const TextStyle(color: Colors.red),
+                  style:
+                      TextStyle(color: AppSemanticColors.of(context).danger),
                 ),
                 subtitle: Text(l10n.settingsAccountDeleteAccountSubtitle),
                 trailing: const Icon(Icons.chevron_right),

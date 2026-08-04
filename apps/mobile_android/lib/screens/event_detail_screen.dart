@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../event_category.dart';
@@ -947,7 +948,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             iconSize: 18,
                             tooltip: l10n.eventMarkAttended,
                             color: a.attendance == 'attended'
-                                ? Colors.green
+                                ? AppSemanticColors.of(context).success
                                 : theme.colorScheme.outline,
                             icon: const Icon(Icons.check_circle_outline),
                             onPressed: _markingAttendance != null
@@ -979,7 +980,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             style: theme.textTheme.labelSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: a.attendance == 'attended'
-                                  ? Colors.green
+                                  ? AppSemanticColors.of(context).success
                                   : theme.colorScheme.error,
                             ),
                           ),

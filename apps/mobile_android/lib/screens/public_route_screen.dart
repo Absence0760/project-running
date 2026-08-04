@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -208,8 +209,8 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
           ? FloatingActionButton.extended(
               heroTag: 'public_route_start_run',
               onPressed: () => _startRun(route),
-              backgroundColor: const Color(0xFF22C55E),
-              foregroundColor: Colors.white,
+              backgroundColor: AppSemanticColors.of(context).success,
+              foregroundColor: AppSemanticColors.of(context).onSuccess,
               icon: const Icon(Icons.play_arrow),
               label: Text(
                 l10n.routeDetailStartRun,

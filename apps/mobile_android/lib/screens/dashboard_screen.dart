@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../adaptive_width.dart';
 import '../age_grade.dart';
@@ -1436,9 +1437,7 @@ class _GoalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final completeColor = theme.brightness == Brightness.dark
-        ? Colors.green.shade300
-        : Colors.green.shade600;
+    final completeColor = AppSemanticColors.of(context).success;
     final accent =
         progress.complete ? completeColor : theme.colorScheme.primary;
     final periodLabel = goal.period == GoalPeriod.week
@@ -1580,9 +1579,7 @@ class _TargetRow extends StatelessWidget {
       );
     }
 
-    final completeColor = theme.brightness == Brightness.dark
-        ? Colors.green.shade300
-        : Colors.green.shade600;
+    final completeColor = AppSemanticColors.ofTheme(theme).success;
     final accent = t.complete ? completeColor : theme.colorScheme.primary;
 
     return Column(
@@ -1917,7 +1914,8 @@ class _StreakRow extends StatelessWidget {
       windowed,
     );
     final crown = state.current > 0;
-    final color = crown ? const Color(0xFFF5B30A) : theme.colorScheme.outline;
+    final color =
+        crown ? AppSemanticColors.of(context).crown : theme.colorScheme.outline;
     final bestText = switch (state.sub) {
       StreakSubKind.best => l10n.dashboardStreakBest(state.bestN!),
       StreakSubKind.allTimeBest => l10n.dashboardStreakAllTimeBest,

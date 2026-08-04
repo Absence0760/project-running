@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -151,7 +152,7 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                         return _SectionHeader(
                           icon: Icons.star,
                           label: l10n.routePickerStarredHeader,
-                          color: const Color(0xFFFBBF24),
+                          color: AppSemanticColors.of(context).crown,
                         );
                       }
                       // Find the index of the first non-starred
@@ -241,7 +242,7 @@ class _RouteTile extends StatelessWidget {
         child: Icon(
           route.isStarred ? Icons.star : Icons.route,
           color: route.isStarred
-              ? const Color(0xFFFBBF24)
+              ? AppSemanticColors.of(context).crown
               : theme.colorScheme.secondary,
         ),
       ),

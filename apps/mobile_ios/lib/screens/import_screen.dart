@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../backup.dart';
 import '../cross_source_dedup.dart';
@@ -657,11 +658,14 @@ class _ImportScreenState extends State<ImportScreen> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                          color: AppSemanticColors.of(context)
+                              .success
+                              .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.unarchive_outlined,
-                            color: Color(0xFF22C55E), size: 28),
+                        child: Icon(Icons.unarchive_outlined,
+                            color: AppSemanticColors.of(context).success,
+                            size: 28),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
