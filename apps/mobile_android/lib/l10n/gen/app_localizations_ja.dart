@@ -9725,6 +9725,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymSessionDiscardConfirm => '破棄';
 
   @override
+  String get gymSessionLeaveTitle => 'セッションを中断しますか？';
+
+  @override
+  String get gymSessionLeaveBody =>
+      '記録済みのセットは下書きとして保存されます。ジムタブからセッションを再開するか、破棄できます。';
+
+  @override
+  String get gymSessionLeaveDraft => '中断して下書きを保存';
+
+  @override
+  String get gymSessionKeepGoing => '続ける';
+
+  @override
   String get gymSessionSaved => 'ワークアウトを保存しました';
 
   @override

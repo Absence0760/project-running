@@ -10126,6 +10126,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Discard';
 
   @override
+  String get gymSessionLeaveTitle => 'Leave workout?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Your logged sets are kept as a draft — you can pick the session back up from the Gym tab, or discard it.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Leave — keep draft';
+
+  @override
+  String get gymSessionKeepGoing => 'Keep going';
+
+  @override
   String get gymSessionSaved => 'Workout saved';
 
   @override

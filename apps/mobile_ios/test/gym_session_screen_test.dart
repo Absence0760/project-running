@@ -122,6 +122,58 @@ Widget _screen(LocalGymStore store, StoredRoutine routine) => MaterialApp(
       home: GymSessionScreen(api: null, routine: routine, gymStore: store),
     );
 
+/// Hosts the session behind a launcher route so the pushed screen carries a
+/// real AppBar back button — the surface the PopScope guard intercepts.
+Widget _launcher(LocalGymStore store, StoredRoutine routine,
+        {StoredGymWorkout? resumeDraft}) =>
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => GymSessionScreen(
+                    api: null,
+                    routine: routine,
+                    gymStore: store,
+                    resumeDraft: resumeDraft,
+                  ),
+                ),
+              ),
+              child: const Text('open session'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+Finder _inDialog(String text) => find.descendant(
+    of: find.byType(AlertDialog), matching: find.text(text));
+
+/// Alternate real-clock delays (lets store file I/O complete) with pumps
+/// (flushes the fake-zone microtasks that resume the awaiting UI code) until
+/// [done]. The leave-with-draft path starts its async chain from the pop
+/// guard in the fake zone, so a single fixed delay inside runAsync never
+/// drains it — same pattern as gym_screen_test's `_pumpUntil`.
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() done, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!done()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('timed out after $timeout waiting for the expected state');
+    }
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.pump();
+  }
+}
+
 void main() {
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -314,7 +366,7 @@ void main() {
     expect(find.byIcon(Icons.flag), findsOneWidget);
   });
 
-  testWidgets('Abandon shows a confirm dialog; Cancel keeps the session',
+  testWidgets('Abandon shows the leave dialog; Keep going stays in place',
       (tester) async {
     final g = await _gymStore(tester);
     addTearDown(() => g.dir.deleteSync(recursive: true));
@@ -322,16 +374,103 @@ void main() {
     await tester.pumpWidget(_screen(g.store, _routine()));
     await tester.pump();
 
-    // The band's Abandon control opens the discard confirm dialog.
+    // The band's Abandon control opens the three-way leave dialog.
     await tester.tap(find.widgetWithText(OutlinedButton, 'Abandon'));
     await tester.pumpAndSettle();
-    expect(find.text('Discard session?'), findsOneWidget);
+    expect(find.text('Leave workout?'), findsOneWidget);
+    expect(_inDialog('Discard'), findsOneWidget);
+    expect(_inDialog('Leave — keep draft'), findsOneWidget);
 
-    // Cancel dismisses the dialog and leaves the entry view in place.
-    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    // Keep going dismisses the dialog and leaves the entry view in place.
+    await tester.tap(_inDialog('Keep going'));
     await tester.pumpAndSettle();
-    expect(find.text('Discard session?'), findsNothing);
+    expect(find.text('Leave workout?'), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Complete set'), findsOneWidget);
+  });
+
+  testWidgets('back with nothing logged pops without a dialog',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_launcher(g.store, _routine()));
+    await tester.tap(find.text('open session'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Complete set'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Leave workout?'), findsNothing);
+    expect(find.text('open session'), findsOneWidget);
+    expect(g.store.workouts, isEmpty);
+  });
+
+  testWidgets('back mid-session shows the leave dialog; Keep going stays',
+      (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_launcher(g.store, _routine()));
+    await tester.tap(find.text('open session'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Leave workout?'), findsOneWidget);
+
+    await tester.tap(_inDialog('Keep going'));
+    await tester.pumpAndSettle();
+    expect(find.text('Leave workout?'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Complete set'), findsOneWidget);
+  });
+
+  testWidgets('back → Leave pops and keeps a resumable draft', (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_launcher(g.store, _routine()));
+    await tester.tap(find.text('open session'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // Leave writes the draft file before popping; poll the pop through.
+    await tester.tap(_inDialog('Leave — keep draft'));
+    await _pumpUntil(tester, () => tester.any(find.text('open session')));
+    final draft = g.store.workouts.single;
+    expect(draft.sets.length, 1, reason: 'the logged set must survive');
+    final meta = draft.row['metadata'] as Map;
+    expect(meta['routine_id'], 'routine-1');
+    final snap = meta['gym_session_draft'] as Map;
+    final results = snap['results'] as List;
+    expect((results.single as Map)['status'], 'completed');
+  });
+
+  testWidgets('back → Discard pops and deletes the draft', (tester) async {
+    final g = await _gymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_launcher(g.store, _routine()));
+    await tester.tap(find.text('open session'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(_inDialog('Discard'));
+    await _pumpUntil(tester, () => tester.any(find.text('open session')));
+    expect(g.store.workouts, isEmpty,
+        reason: 'Discard must not leave an orphan draft row');
   });
 
   testWidgets(

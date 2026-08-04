@@ -13249,6 +13249,22 @@
   "@gymSessionDiscardConfirm": {
     "description": "Confirm button to discard the guided session"
   },
+  "gymSessionLeaveTitle": "Leave workout?",
+  "@gymSessionLeaveTitle": {
+    "description": "Title of the three-way dialog shown when backing out of a live guided session"
+  },
+  "gymSessionLeaveBody": "Your logged sets are kept as a draft — you can pick the session back up from the Gym tab, or discard it.",
+  "@gymSessionLeaveBody": {
+    "description": "Body of the leave-session dialog explaining the draft-and-resume path"
+  },
+  "gymSessionLeaveDraft": "Leave — keep draft",
+  "@gymSessionLeaveDraft": {
+    "description": "Leave-session dialog action that exits while keeping the resumable draft"
+  },
+  "gymSessionKeepGoing": "Keep going",
+  "@gymSessionKeepGoing": {
+    "description": "Leave-session dialog action that stays in the live session"
+  },
   "gymSessionSaved": "Workout saved",
   "@gymSessionSaved": {
     "description": "Banner shown after a guided session is saved"

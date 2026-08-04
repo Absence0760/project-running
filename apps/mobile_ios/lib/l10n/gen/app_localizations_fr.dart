@@ -10254,6 +10254,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Abandonner';
 
   @override
+  String get gymSessionLeaveTitle => 'Quitter la séance ?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Vos séries enregistrées sont conservées en brouillon — vous pourrez reprendre la séance depuis l\'onglet Muscu, ou la supprimer.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Quitter — garder le brouillon';
+
+  @override
+  String get gymSessionKeepGoing => 'Continuer la séance';
+
+  @override
   String get gymSessionSaved => 'Entraînement enregistré';
 
   @override

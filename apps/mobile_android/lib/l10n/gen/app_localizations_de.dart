@@ -10242,6 +10242,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Verwerfen';
 
   @override
+  String get gymSessionLeaveTitle => 'Einheit verlassen?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Deine protokollierten Sätze bleiben als Entwurf erhalten — du kannst die Einheit über den Gym-Tab fortsetzen oder sie verwerfen.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Verlassen — Entwurf behalten';
+
+  @override
+  String get gymSessionKeepGoing => 'Weitermachen';
+
+  @override
   String get gymSessionSaved => 'Training gespeichert';
 
   @override

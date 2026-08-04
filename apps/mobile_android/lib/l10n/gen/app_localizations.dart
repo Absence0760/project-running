@@ -16952,6 +16952,30 @@ abstract class AppLocalizations {
   /// **'Discard'**
   String get gymSessionDiscardConfirm;
 
+  /// Title of the three-way dialog shown when backing out of a live guided session
+  ///
+  /// In en, this message translates to:
+  /// **'Leave workout?'**
+  String get gymSessionLeaveTitle;
+
+  /// Body of the leave-session dialog explaining the draft-and-resume path
+  ///
+  /// In en, this message translates to:
+  /// **'Your logged sets are kept as a draft — you can pick the session back up from the Gym tab, or discard it.'**
+  String get gymSessionLeaveBody;
+
+  /// Leave-session dialog action that exits while keeping the resumable draft
+  ///
+  /// In en, this message translates to:
+  /// **'Leave — keep draft'**
+  String get gymSessionLeaveDraft;
+
+  /// Leave-session dialog action that stays in the live session
+  ///
+  /// In en, this message translates to:
+  /// **'Keep going'**
+  String get gymSessionKeepGoing;
+
   /// Banner shown after a guided session is saved
   ///
   /// In en, this message translates to:

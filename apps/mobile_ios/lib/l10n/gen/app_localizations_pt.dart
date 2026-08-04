@@ -10227,6 +10227,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Descartar';
 
   @override
+  String get gymSessionLeaveTitle => 'Sair da sessão?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'As tuas séries registadas ficam guardadas como rascunho — podes retomar a sessão no separador Academia ou descartá-la.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Sair — manter o rascunho';
+
+  @override
+  String get gymSessionKeepGoing => 'Continuar a treinar';
+
+  @override
   String get gymSessionSaved => 'Treino guardado';
 
   @override
@@ -22589,6 +22602,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionLeaveTitle => 'Sair da sessão?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Suas séries registradas ficam salvas como rascunho — você pode retomar a sessão na aba Academia ou descartá-la.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Sair e manter o rascunho';
+
+  @override
+  String get gymSessionKeepGoing => 'Continuar treinando';
 
   @override
   String get gymSessionSaved => 'Treino salvo';

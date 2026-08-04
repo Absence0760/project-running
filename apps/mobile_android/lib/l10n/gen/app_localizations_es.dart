@@ -10231,6 +10231,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Descartar';
 
   @override
+  String get gymSessionLeaveTitle => '¿Salir de la sesión?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Tus series registradas se conservan como borrador: puedes retomar la sesión desde la pestaña Gimnasio o descartarla.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Salir y conservar el borrador';
+
+  @override
+  String get gymSessionKeepGoing => 'Seguir entrenando';
+
+  @override
   String get gymSessionSaved => 'Entrenamiento guardado';
 
   @override
