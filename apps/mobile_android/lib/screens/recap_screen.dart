@@ -258,7 +258,12 @@ class _RecapScreenState extends State<RecapScreen> {
                   onPressed: () => _shiftPeriod(-1),
                   icon: const Icon(Icons.chevron_left),
                 ),
-                Text(label, style: theme.textTheme.headlineMedium),
+                Flexible(
+                  child: Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.headlineMedium),
+                ),
                 IconButton(
                   tooltip: _period == RecapPeriod.year
                       ? l10n.recapNextYear

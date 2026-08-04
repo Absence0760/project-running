@@ -337,5 +337,33 @@ void main() {
         expect(api.completedUnit, 'km');
       });
     });
+
+    group('narrow-width overflow (issue #666 V7)', () {
+      testWidgets(
+          'nav renders at 320 logical width with the forward actions in a '
+          'Wrap so long localized labels reflow instead of striping',
+          (tester) async {
+        tester.view.physicalSize = const Size(320, 1200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final api = _FakeApi();
+        await _pump(tester, api, await _prefs());
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+        // Advance one step so the Back button shares the row with the
+        // wrapped Skip + Continue cluster.
+        await tester.tap(find.text(l10n.setupContinue));
+        await tester.pumpAndSettle();
+
+        expect(find.text(l10n.setupBack), findsOneWidget);
+        expect(
+          find.ancestor(
+              of: find.widgetWithText(FilledButton, l10n.setupContinue),
+              matching: find.byType(Wrap)),
+          findsWidgets,
+        );
+      });
+    });
   });
 }

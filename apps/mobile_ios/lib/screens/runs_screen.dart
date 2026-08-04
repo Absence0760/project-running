@@ -2290,9 +2290,12 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
               child: Row(
                 children: [
-                  Text(l10n.historyRangePickerTitle,
-                      style: theme.textTheme.titleMedium),
-                  const Spacer(),
+                  Expanded(
+                    child: Text(l10n.historyRangePickerTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: l10n.historyCancelTooltip,
@@ -2440,14 +2443,16 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
             // gets a half-finished range.
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Row(
+              child: OverflowBar(
+                alignment: MainAxisAlignment.spaceBetween,
+                overflowAlignment: OverflowBarAlignment.end,
+                overflowSpacing: 4,
                 children: [
                   TextButton(
                     onPressed:
                         (_pendingFrom == null && _pendingTo == null) ? null : _clear,
                     child: Text(l10n.historyRangeClear),
                   ),
-                  const Spacer(),
                   FilledButton(
                     onPressed: canApply
                         ? () => Navigator.of(context).pop(

@@ -521,37 +521,49 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          if (_step > 0)
+          if (_step > 0) ...[
             OutlinedButton(
               onPressed: _saving ? null : _back,
               child: Text(l10n.setupBack),
             ),
-          const Spacer(),
-          if (!_isLastStep && showSkipStep)
-            TextButton(
-              onPressed: _saving ? null : _next,
-              child: Text(l10n.setupSkipStep),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                if (!_isLastStep && showSkipStep)
+                  TextButton(
+                    onPressed: _saving ? null : _next,
+                    child: Text(l10n.setupSkipStep),
+                  ),
+                if (!_isLastStep)
+                  FilledButton(
+                    onPressed: _saving ? null : _next,
+                    child: Text(l10n.setupContinue),
+                  )
+                // On the final step, when the runner picked a goal the body
+                // hosts the primary "Create my training plan" CTA — so "Open
+                // dashboard" demotes to a secondary action here to avoid two
+                // competing primary buttons. With no goal, finishing is the
+                // one primary action.
+                else if (_primaryGoal == null)
+                  FilledButton(
+                    onPressed: _saving ? null : _finish,
+                    child:
+                        Text(_saving ? l10n.setupSaving : l10n.setupOpenDashboard),
+                  )
+                else
+                  OutlinedButton(
+                    onPressed: _saving ? null : _finish,
+                    child: Text(l10n.setupOpenDashboard),
+                  ),
+              ],
             ),
-          const SizedBox(width: 8),
-          if (!_isLastStep)
-            FilledButton(
-              onPressed: _saving ? null : _next,
-              child: Text(l10n.setupContinue),
-            )
-          // On the final step, when the runner picked a goal the body hosts
-          // the primary "Create my training plan" CTA — so "Open dashboard"
-          // demotes to a secondary action here to avoid two competing primary
-          // buttons. With no goal, finishing is the one primary action.
-          else if (_primaryGoal == null)
-            FilledButton(
-              onPressed: _saving ? null : _finish,
-              child: Text(_saving ? l10n.setupSaving : l10n.setupOpenDashboard),
-            )
-          else
-            OutlinedButton(
-              onPressed: _saving ? null : _finish,
-              child: Text(l10n.setupOpenDashboard),
-            ),
+          ),
         ],
       ),
     );

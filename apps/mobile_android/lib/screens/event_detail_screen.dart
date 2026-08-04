@@ -753,10 +753,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
               if (e.row.durationMin != null) ...[
                 const SizedBox(width: 6),
-                Text(
-                  l10n.eventDurationMin(e.row.durationMin!),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                Flexible(
+                  child: Text(
+                    l10n.eventDurationMin(e.row.durationMin!),
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                 ),
               ],
@@ -1752,29 +1755,36 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
             const SizedBox(height: 8),
             Row(
               children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(
-                    const _SubmitResultChoice(
-                      runId: null,
-                      durationS: 0,
-                      distanceM: 0,
-                      finisherStatus: 'dnf',
-                    ),
+                Expanded(
+                  child: Wrap(
+                    spacing: 4,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(
+                          const _SubmitResultChoice(
+                            runId: null,
+                            durationS: 0,
+                            distanceM: 0,
+                            finisherStatus: 'dnf',
+                          ),
+                        ),
+                        child: Text(l10n.eventRecordDnf),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(
+                          const _SubmitResultChoice(
+                            runId: null,
+                            durationS: 0,
+                            distanceM: 0,
+                            finisherStatus: 'dns',
+                          ),
+                        ),
+                        child: Text(l10n.eventRecordDns),
+                      ),
+                    ],
                   ),
-                  child: Text(l10n.eventRecordDnf),
                 ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(
-                    const _SubmitResultChoice(
-                      runId: null,
-                      durationS: 0,
-                      distanceM: 0,
-                      finisherStatus: 'dns',
-                    ),
-                  ),
-                  child: Text(l10n.eventRecordDns),
-                ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text(l10n.eventSubmitCancel),

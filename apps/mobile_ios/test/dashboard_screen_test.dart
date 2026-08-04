@@ -1087,6 +1087,29 @@ void main() {
         }
       });
     });
+
+    testWidgets(
+        'empty-state actions sit in a Wrap so long localized button labels '
+        'reflow to a second line instead of striping', (tester) async {
+      tester.view.physicalSize = const Size(320, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final s = await _makeStores();
+      await _pump(tester,
+          runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
+
+      expect(
+        find.ancestor(
+            of: find.text('Set a goal'), matching: find.byType(Wrap)),
+        findsWidgets,
+      );
+      expect(
+        find.ancestor(
+            of: find.text('Import runs'), matching: find.byType(Wrap)),
+        findsWidgets,
+      );
+    });
   });
 }
 

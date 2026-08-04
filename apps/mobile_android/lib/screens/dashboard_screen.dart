@@ -1342,15 +1342,16 @@ class _WelcomeEmpty extends StatelessWidget {
             // discoverability handle to bulk-import a Strava / Garmin /
             // Health Connect history (the empty-state used to leave
             // import buried under Settings).
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 FilledButton.tonalIcon(
                   onPressed: onAddGoal,
                   icon: const Icon(Icons.flag_outlined),
                   label: Text(l10n.dashboardSetGoal),
                 ),
-                const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: onImport,
                   icon: const Icon(Icons.upload_file_outlined),

@@ -577,4 +577,25 @@ void main() {
       expect(find.text('Delete 2 routes?'), findsNothing);
     });
   });
+
+  group('RoutesScreen — narrow-width overflow (issue #666 V7)', () {
+    testWidgets(
+        'renders at 320 logical width with the Discover strip label bounded '
+        'so a long localized label ellipsizes instead of striping',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final prefs = await _makePrefs();
+      await _pump(tester, prefs: prefs);
+      await tester.pump();
+
+      expect(
+        find.ancestor(
+            of: find.text('Discover'), matching: find.byType(Expanded)),
+        findsWidgets,
+      );
+    });
+  });
 }
