@@ -12,8 +12,14 @@ class AppTheme {
   static const Color parchmentDim = Color(0xFFEBE5D8);
   static const Color ink = Color(0xFF1B1628);
   static const Color haze = Color(0xFF6B6380);
-  static const Color duskDivider = Color(0xFF2E2545);
   static const Color error = Color(0xFFD8594C);
+
+  /// The one line token per brightness: every divider, hairline outline and
+  /// hand-drawn border resolves to this, and each clears WCAG 1.4.11's 3:1
+  /// non-text minimum against the surfaces it is drawn on (light 3.53:1 on
+  /// parchment; dark 3.33:1 on duskDeep, 3.91:1 on midnight).
+  static const Color parchmentLine = Color(0xFF8A806A);
+  static const Color duskLine = Color(0xFF786A9A);
 
   static const Color primary = dusk;
   static const Color secondary = coral;
@@ -31,6 +37,7 @@ class AppTheme {
       surface: parchment,
       onSurface: ink,
       error: error,
+      outlineVariant: parchmentLine,
     );
     return ThemeData(
       colorScheme: scheme,
@@ -89,7 +96,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          side: BorderSide(color: parchmentDim),
+          side: BorderSide(color: parchmentLine),
         ),
       ),
       textTheme: const TextTheme(
@@ -141,7 +148,12 @@ class AppTheme {
           ),
         ),
       ),
-      dividerColor: parchmentDim,
+      dividerColor: parchmentLine,
+      // Divider ignores `dividerColor` under Material 3 and falls back to
+      // colorScheme.outlineVariant, so the token has to be pinned in all
+      // three places or a drawn hairline and a Divider beside it land on
+      // different greys.
+      dividerTheme: const DividerThemeData(color: parchmentLine),
       extensions: const [AppSemanticColors.light],
     );
   }
@@ -158,6 +170,7 @@ class AppTheme {
       surface: duskDeep,
       onSurface: parchment,
       error: error,
+      outlineVariant: duskLine,
     );
     return ThemeData(
       colorScheme: scheme,
@@ -213,7 +226,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          side: BorderSide(color: duskDivider),
+          side: BorderSide(color: duskLine),
         ),
       ),
       textTheme: const TextTheme(
@@ -267,7 +280,8 @@ class AppTheme {
           ),
         ),
       ),
-      dividerColor: duskDivider,
+      dividerColor: duskLine,
+      dividerTheme: const DividerThemeData(color: duskLine),
       extensions: const [AppSemanticColors.dark],
     );
   }
