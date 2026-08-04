@@ -267,7 +267,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   /// same way every other mobile map surface does — see
   /// `live_run_map.dart` for the helper, which falls back to OSM
   /// tiles when neither MAPTILER_KEY nor TILE_URL_TEMPLATE is set.
-  String get _tileUrl => currentTileUrl();
+  String get _tileUrl => currentTileUrl(context);
 
   OsrmProfile get _osrmProfile =>
       _mode == RouteBuilderMode.road ? OsrmProfile.car : OsrmProfile.foot;

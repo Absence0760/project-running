@@ -425,7 +425,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                         // privacy-zones picker the only map that worked on
                         // a Protomaps-only dev setup, which masked the
                         // resolveTileUrl regression.
-                        urlTemplate: currentTileUrl(),
+                        urlTemplate: currentTileUrl(context),
                         userAgentPackageName: 'com.threkir.app',
                         // Shared disk-backed tile cache (see TileCache in
                         // tile_cache.dart). Without it, panning the zone

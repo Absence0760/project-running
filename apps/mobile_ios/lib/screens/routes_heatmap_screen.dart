@@ -741,7 +741,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: currentTileUrl(),
+                urlTemplate: currentTileUrl(context),
                 userAgentPackageName: 'com.threkir.app',
                 tileProvider: CachedTileProvider(
                   store: TileCache.store,

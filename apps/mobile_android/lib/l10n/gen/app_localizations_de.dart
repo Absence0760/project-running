@@ -2175,6 +2175,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runDetailSectionElevation => 'Höhenmeter';
 
   @override
+  String get runDetailPaceLegendTitle => 'Tempo ggü. Median';
+
+  @override
+  String get runDetailPaceBandFaster => 'Schneller';
+
+  @override
+  String get runDetailPaceBandSteady => 'Gleichmäßig';
+
+  @override
+  String get runDetailPaceBandSlower => 'Langsamer';
+
+  @override
   String get runDetailSectionLaps => 'Runden';
 
   @override

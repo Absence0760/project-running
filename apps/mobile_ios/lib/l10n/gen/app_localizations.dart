@@ -3713,6 +3713,30 @@ abstract class AppLocalizations {
   /// **'Elevation'**
   String get runDetailSectionElevation;
 
+  /// Caption of the pace-band legend under the run-detail elevation chart
+  ///
+  /// In en, this message translates to:
+  /// **'Pace vs median'**
+  String get runDetailPaceLegendTitle;
+
+  /// Legend key for elevation-chart segments run faster than the run's median pace
+  ///
+  /// In en, this message translates to:
+  /// **'Faster'**
+  String get runDetailPaceBandFaster;
+
+  /// Legend key for elevation-chart segments run within 10% of the run's median pace
+  ///
+  /// In en, this message translates to:
+  /// **'Steady'**
+  String get runDetailPaceBandSteady;
+
+  /// Legend key for elevation-chart segments run slower than the run's median pace
+  ///
+  /// In en, this message translates to:
+  /// **'Slower'**
+  String get runDetailPaceBandSlower;
+
   /// Section header for the laps list on run-detail
   ///
   /// In en, this message translates to:

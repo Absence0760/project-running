@@ -17,6 +17,21 @@ enum WeightUnit { kg, lbs }
 /// keep a second copy of the same number.
 const double kMetresPerMile = 1609.344;
 
+/// Basemaps the user can pick in Settings → Preferences. Same four values,
+/// in the same order, as web's `MapStyle` union
+/// (`apps/web/src/lib/routes/map-style-url.ts`) — the preference roams
+/// through the shared `map_style` settings-bag key, so a value one platform
+/// writes must resolve on the other.
+const List<String> kMapStyles = ['streets', 'satellite', 'outdoors', 'dark'];
+
+const String kDefaultMapStyle = 'streets';
+
+/// [raw] when it names a known basemap, `streets` otherwise. Fail-safe:
+/// an unknown value from a newer client's settings bag renders the default
+/// basemap rather than an empty map.
+String normaliseMapStyle(String? raw) =>
+    kMapStyles.contains(raw) ? raw! : kDefaultMapStyle;
+
 enum ActivityType {
   run,
   walk,
@@ -308,6 +323,10 @@ class Preferences extends ChangeNotifier {
   // 'public' / 'followers' / 'private'. Empty / unknown = 'private'
   // (the conservative default — DB column default is false anyway).
   static const _kPrivacyDefault = 'privacy_default';
+  // Mirrors the universal `map_style` settings-bag key. Chooses the
+  // basemap every map surface renders. One of the values in
+  // [kMapStyles]; anything else resolves to 'streets'.
+  static const _kMapStyle = 'map_style';
   // Mirrors the universal `weight_unit` settings-bag key. Display +
   // entry unit for body / lift weights (Phase 4 gym/nutrition).
   // 'kg' (default) | 'lbs'. Storage stays canonical kg — this only
@@ -379,6 +398,7 @@ class Preferences extends ChangeNotifier {
   double _carbsPerHourG = _defaultCarbsPerHourG;
   double _fluidPerHourMl = _defaultFluidPerHourMl;
   String _privacyDefault = 'private';
+  String _mapStyle = kDefaultMapStyle;
   WeightUnit _weightUnit = WeightUnit.kg;
   bool _keepRunPrimary = false;
   String? _lastLogType;
@@ -452,6 +472,12 @@ class Preferences extends ChangeNotifier {
   /// today because there's no followers-only column on `runs`).
   /// Defaults to `private` — matches the DB column default.
   String get privacyDefault => _privacyDefault;
+
+  /// Basemap the map surfaces render, mirrored from
+  /// `user_settings.prefs.map_style`. One of [kMapStyles]; `streets`
+  /// resolves to a light or dark street basemap by app theme, matching
+  /// web's `buildMapStyleUrl`.
+  String get mapStyle => _mapStyle;
 
   /// Force the run-detail map to draw the RAW recorded track even when a
   /// map-matched line exists. Off by default (matched-when-present). A
@@ -613,6 +639,7 @@ class Preferences extends ChangeNotifier {
     await setCarbsPerHourG(null);
     await setFluidPerHourMl(null);
     await setPrivacyDefault('private');
+    await setMapStyle(kDefaultMapStyle);
     await setWeightUnit(WeightUnit.kg);
     await clearGoals();
     await clearRunsLastFetchedAt();
@@ -711,6 +738,7 @@ class Preferences extends ChangeNotifier {
     final fph = _prefs.getDouble(_kFluidPerHourMl);
     _fluidPerHourMl = (fph != null && fph > 0) ? fph : _defaultFluidPerHourMl;
     _privacyDefault = _prefs.getString(_kPrivacyDefault) ?? 'private';
+    _mapStyle = normaliseMapStyle(_prefs.getString(_kMapStyle));
     _weightUnit = WeightFormat.unitFromWire(_prefs.getString(_kWeightUnit));
     _keepRunPrimary = _prefs.getBool(_kKeepRunPrimary) ?? false;
     _lastLogType = _prefs.getString(_kLastLogType);
@@ -883,6 +911,18 @@ class Preferences extends ChangeNotifier {
     if (next == _privacyDefault) return;
     _privacyDefault = next;
     await _prefs.setString(_kPrivacyDefault, next);
+    notifyListeners();
+  }
+
+  /// Update the cached map_style. Unknown values resolve to `streets`,
+  /// so a corrupt bag can't leave the maps without a basemap. Driven from
+  /// `SettingsSyncService._applyUniversal` whenever the cloud bag's
+  /// `map_style` lands, and from the preferences screen on pick.
+  Future<void> setMapStyle(String v) async {
+    final next = normaliseMapStyle(v);
+    if (next == _mapStyle) return;
+    _mapStyle = next;
+    await _prefs.setString(_kMapStyle, next);
     notifyListeners();
   }
 
@@ -1176,6 +1216,11 @@ String formatPaceForPref(double secPerKm) => secPerKm <= 0
 /// detail PR chips) so weight renders + parses in the user's unit.
 WeightUnit get activeWeightUnit =>
     _activePreferences?.weightUnit ?? WeightUnit.kg;
+
+/// Current basemap pref. Returns the default when no Preferences has been
+/// registered (host-test runner, very early app start). Read by every map
+/// surface via `currentTileUrl`, none of which carries a Preferences dep.
+String get activeMapStyle => _activePreferences?.mapStyle ?? kDefaultMapStyle;
 
 @visibleForTesting
 void resetActivePreferencesForTest() {

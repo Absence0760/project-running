@@ -2152,6 +2152,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailSectionElevation => 'Elevation';
 
   @override
+  String get runDetailPaceLegendTitle => 'Pace vs median';
+
+  @override
+  String get runDetailPaceBandFaster => 'Faster';
+
+  @override
+  String get runDetailPaceBandSteady => 'Steady';
+
+  @override
+  String get runDetailPaceBandSlower => 'Slower';
+
+  @override
   String get runDetailSectionLaps => 'Laps';
 
   @override

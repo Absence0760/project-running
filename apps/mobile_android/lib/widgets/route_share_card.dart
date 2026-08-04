@@ -13,7 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../tile_cache.dart';
-import 'live_run_map.dart' show currentTileUrl;
+import 'live_run_map.dart' show tileUrlFor;
 import '../widgets/top_banner.dart';
 
 /// Open a portrait "share card" modal for [route] — a branded preview
@@ -175,7 +175,10 @@ class _ShareCardContent extends StatelessWidget {
   /// Honours `TILE_URL_TEMPLATE` for local Protomaps dev → falls
   /// back to MapTiler. Same single-knob override the rest of the
   /// mobile map surfaces use (see `live_run_map.dart`).
-  String get _tileUrl => currentTileUrl();
+  /// Pinned to the dark basemap rather than following the device theme
+  /// or the user's map-style preference: the card rasterises a fixed
+  /// dark PNG whose white type and overlays are drawn for a dark map.
+  String get _tileUrl => tileUrlFor('dark', Brightness.dark);
 
   @override
   Widget build(BuildContext context) {
