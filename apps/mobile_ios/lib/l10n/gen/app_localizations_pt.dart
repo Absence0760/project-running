@@ -7893,6 +7893,15 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Concluído';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Parcial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonado';
+
+  @override
   String get segmentsPanelTitle => 'Segmentos';
 
   @override
@@ -10225,6 +10234,39 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionLeaveTitle => 'Sair da sessão?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'As tuas séries registadas ficam guardadas como rascunho — podes retomar a sessão no separador Academia ou descartá-la.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Sair — manter o rascunho';
+
+  @override
+  String get gymSessionKeepGoing => 'Continuar a treinar';
+
+  @override
+  String get gymDraftTitle => 'Sessão em curso';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count séries registadas',
+      one: '1 série registada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Retomar';
+
+  @override
+  String get gymDraftSave => 'Guardar como está';
 
   @override
   String get gymSessionSaved => 'Treino guardado';
@@ -20257,6 +20299,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Concluído';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Parcial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonado';
+
+  @override
   String get segmentsPanelTitle => 'Segmentos';
 
   @override
@@ -22589,6 +22640,39 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionLeaveTitle => 'Sair da sessão?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Suas séries registradas ficam salvas como rascunho — você pode retomar a sessão na aba Academia ou descartá-la.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Sair e manter o rascunho';
+
+  @override
+  String get gymSessionKeepGoing => 'Continuar treinando';
+
+  @override
+  String get gymDraftTitle => 'Sessão em andamento';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count séries registradas',
+      one: '1 série registrada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Retomar';
+
+  @override
+  String get gymDraftSave => 'Salvar como está';
 
   @override
   String get gymSessionSaved => 'Treino salvo';

@@ -610,7 +610,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
 
   Widget _starterCard(ThemeData theme, AppLocalizations l10n) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withOpacity(0.4),
         border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
@@ -657,7 +657,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
 
   Widget _templateCard(ThemeData theme, AppLocalizations l10n) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withOpacity(0.4),
         border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
@@ -711,7 +711,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     final isWalkRun = p.weeks
         .any((w) => w.workouts.any((wo) => wo.kind == WorkoutKind.walkRun));
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),

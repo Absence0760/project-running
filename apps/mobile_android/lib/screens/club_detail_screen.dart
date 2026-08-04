@@ -617,7 +617,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -1117,7 +1117,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             for (final m in _pending)
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   child: Row(
                     children: [
                       Expanded(
@@ -1514,7 +1514,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           for (final t in _templates) ...[
             Card(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Row(
                   children: [
                     Expanded(
@@ -1556,7 +1556,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             for (final s in _sessionTemplates) ...[
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   child: Row(
                     children: [
                       Expanded(
@@ -1607,7 +1607,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             for (final g in _gymRoutineTemplates) ...[
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                   child: Row(
                     children: [
                       Expanded(

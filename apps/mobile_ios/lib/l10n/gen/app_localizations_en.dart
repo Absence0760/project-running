@@ -7816,6 +7816,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Completed';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Partial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandoned';
+
+  @override
   String get segmentsPanelTitle => 'Segments';
 
   @override
@@ -10124,6 +10133,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => 'Discard';
+
+  @override
+  String get gymSessionLeaveTitle => 'Leave workout?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Your logged sets are kept as a draft — you can pick the session back up from the Gym tab, or discard it.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Leave — keep draft';
+
+  @override
+  String get gymSessionKeepGoing => 'Keep going';
+
+  @override
+  String get gymDraftTitle => 'Workout in progress';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sets logged',
+      one: '1 set logged',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Resume';
+
+  @override
+  String get gymDraftSave => 'Save as is';
 
   @override
   String get gymSessionSaved => 'Workout saved';

@@ -7898,6 +7898,15 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Completado';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Parcial';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abandonado';
+
+  @override
   String get segmentsPanelTitle => 'Segmentos';
 
   @override
@@ -10229,6 +10238,39 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionLeaveTitle => '¿Salir de la sesión?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Tus series registradas se conservan como borrador: puedes retomar la sesión desde la pestaña Gimnasio o descartarla.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Salir y conservar el borrador';
+
+  @override
+  String get gymSessionKeepGoing => 'Seguir entrenando';
+
+  @override
+  String get gymDraftTitle => 'Sesión en curso';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count series registradas',
+      one: '1 serie registrada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Reanudar';
+
+  @override
+  String get gymDraftSave => 'Guardar tal cual';
 
   @override
   String get gymSessionSaved => 'Entrenamiento guardado';

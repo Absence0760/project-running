@@ -466,7 +466,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
     final dur = formatDurationCoarse(Duration(seconds: stats.totalDurationSec));
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Row(

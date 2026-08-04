@@ -2434,9 +2434,8 @@ class _StatSmall extends StatelessWidget {
           textAlign: TextAlign.center,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(
+          style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.outline,
-            fontSize: 10,
           ),
         ),
       ],
@@ -2779,8 +2778,8 @@ class _ElevationPacePainter extends CustomPainter {
     // Min/max labels. `dividerColor` (~#E0E0E0 in the light theme) on the
     // chart's surface fails WCAG contrast — use the secondary-text token,
     // which is contrast-checked against the surface in both themes.
-    final labelStyle =
-        TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 10);
+    final labelStyle = theme.textTheme.labelSmall!
+        .copyWith(color: theme.colorScheme.onSurfaceVariant);
     final maxText = TextPainter(
       text: TextSpan(text: '${maxEle.round()}m', style: labelStyle),
       textDirection: TextDirection.ltr,
@@ -3012,24 +3011,26 @@ class _SegmentStatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     final dur = segment.duration;
     final pace = segment.paceSecondsPerKm;
     final stats = <Widget>[
-      _stat(l10n.runDetailSegStatDistance,
+      _stat(theme, l10n.runDetailSegStatDistance,
           UnitFormat.distance(segment.distanceMetres, unit)),
-      if (dur != null) _stat(l10n.runDetailSegStatTime, _formatDur(dur)),
+      if (dur != null) _stat(theme, l10n.runDetailSegStatTime, _formatDur(dur)),
       if (pace != null)
-        _stat(l10n.runDetailSegStatPace,
+        _stat(theme, l10n.runDetailSegStatPace,
             '${UnitFormat.pace(pace, unit)} ${UnitFormat.paceLabel(unit)}'),
       if (segment.avgBpm != null)
-        _stat(l10n.runDetailSegStatHr, '${segment.avgBpm} ${l10n.runUnitBpm}'),
+        _stat(theme, l10n.runDetailSegStatHr,
+            '${segment.avgBpm} ${l10n.runUnitBpm}'),
       if (segment.eleGainMetres > 0)
-        _stat(l10n.runDetailSegStatGain, '+${segment.eleGainMetres.round()} m'),
+        _stat(theme, l10n.runDetailSegStatGain,
+            '+${segment.eleGainMetres.round()} m'),
     ];
     return Card(
-      elevation: 4,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -3051,18 +3052,17 @@ class _SegmentStatsCard extends StatelessWidget {
     );
   }
 
-  static Widget _stat(String label, String value) {
+  static Widget _stat(ThemeData theme, String label, String value) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 10,
+          style: theme.textTheme.labelSmall?.copyWith(
             fontWeight: FontWeight.w600,
             letterSpacing: 0.4,
-            color: Color(0xFF64748B),
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         Text(

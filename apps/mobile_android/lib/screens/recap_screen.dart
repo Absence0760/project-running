@@ -272,7 +272,7 @@ class _RecapScreenState extends State<RecapScreen> {
             if (_outOfRange) ...[
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   child: Text(
                     l10n.recapNoRunsForPeriod(label),
                     style: theme.textTheme.titleMedium,
@@ -282,7 +282,7 @@ class _RecapScreenState extends State<RecapScreen> {
             ] else if (recap.runCount == 0) ...[
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   child: Text(
                     l10n.recapNoRunsYetInPeriod(label),
                     style: theme.textTheme.bodyMedium,
@@ -293,7 +293,7 @@ class _RecapScreenState extends State<RecapScreen> {
               // Hero distance
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
                       Text(

@@ -49,7 +49,7 @@ import 'plan_detail_screen.dart';
 import 'profile_screen.dart';
 import 'recap_screen.dart';
 
-const _kCardPadding = EdgeInsets.all(20);
+const _kCardPadding = EdgeInsets.all(16);
 const _kSectionGap = SizedBox(height: 24);
 
 /// Metres for each best-effort PB label (both the offline track-scan keys and
@@ -1845,7 +1845,6 @@ class _PeriodStatCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      elevation: isTappable ? null : 0,
       shape: isTappable
           ? RoundedRectangleBorder(
               side: BorderSide(

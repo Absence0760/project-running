@@ -445,7 +445,7 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

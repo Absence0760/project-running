@@ -71,13 +71,28 @@ void main() {
               'privacy_default, etc.) that have no device-scope semantics');
     });
 
-    test('every key has a non-empty label + hint', () {
-      for (final s in overrideKeyRegistry) {
-        expect(s.label.trim(), isNotEmpty,
-            reason: '${s.key} must declare a UI label');
-        expect(s.hint.trim(), isNotEmpty,
-            reason: '${s.key} must declare a one-line hint shown under '
-                'the editor');
+    test('every spec resolves a non-empty localized label + hint in every '
+        'locale', () {
+      // The registry carries l10n key identifiers, not strings (issue #666
+      // U4). overrideKeyText falls back to the raw identifier for an unknown
+      // key, so equality with the identifier means the switch is missing a
+      // case — an untranslatable spec.
+      for (final locale in AppLocalizations.supportedLocales) {
+        final l10n = lookupAppLocalizations(locale);
+        for (final s in overrideKeyRegistry) {
+          final label = overrideKeyLabel(l10n, s);
+          expect(label.trim(), isNotEmpty,
+              reason: '${s.key} must resolve a UI label in $locale');
+          expect(label, isNot(s.labelKey),
+              reason: '${s.key} labelKey "${s.labelKey}" fell back to the '
+                  'raw identifier in $locale — add it to overrideKeyText');
+          final hint = overrideKeyHint(l10n, s);
+          expect(hint.trim(), isNotEmpty,
+              reason: '${s.key} must resolve a hint in $locale');
+          expect(hint, isNot(s.hintKey),
+              reason: '${s.key} hintKey "${s.hintKey}" fell back to the '
+                  'raw identifier in $locale — add it to overrideKeyText');
+        }
       }
     });
 

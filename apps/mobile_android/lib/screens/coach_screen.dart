@@ -1544,7 +1544,7 @@ class _CoachScreenState extends State<CoachScreen> {
               onPressed: _busy || _limitReached ? null : _send,
               style: FilledButton.styleFrom(
                 shape: const CircleBorder(),
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
               ),
               child: _busy
                   ? const SizedBox(

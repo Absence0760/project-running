@@ -158,7 +158,6 @@ class CurrentWeekStrip extends StatelessWidget {
               color: theme.colorScheme.outline,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.4,
-              fontSize: 9,
             ),
           ),
           if (wo != null) ...[
@@ -168,7 +167,6 @@ class CurrentWeekStrip extends StatelessWidget {
                 color: kindColor,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.4,
-                fontSize: 9,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -178,7 +176,6 @@ class CurrentWeekStrip extends StatelessWidget {
                 fmtKm(wo.targetDistanceM, 1),
                 style: theme.textTheme.labelSmall?.copyWith(
                   fontWeight: FontWeight.w600,
-                  fontSize: 9,
                 ),
               ),
             if (isDone)

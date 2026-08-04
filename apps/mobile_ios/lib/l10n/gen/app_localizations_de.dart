@@ -7909,6 +7909,15 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get workoutReviewAdherenceCompleted => 'Abgeschlossen';
+
+  @override
+  String get workoutReviewAdherencePartial => 'Teilweise';
+
+  @override
+  String get workoutReviewAdherenceAbandoned => 'Abgebrochen';
+
+  @override
   String get segmentsPanelTitle => 'Segmente';
 
   @override
@@ -10240,6 +10249,39 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => 'Verwerfen';
+
+  @override
+  String get gymSessionLeaveTitle => 'Einheit verlassen?';
+
+  @override
+  String get gymSessionLeaveBody =>
+      'Deine protokollierten Sätze bleiben als Entwurf erhalten — du kannst die Einheit über den Gym-Tab fortsetzen oder sie verwerfen.';
+
+  @override
+  String get gymSessionLeaveDraft => 'Verlassen — Entwurf behalten';
+
+  @override
+  String get gymSessionKeepGoing => 'Weitermachen';
+
+  @override
+  String get gymDraftTitle => 'Laufende Einheit';
+
+  @override
+  String gymDraftSetCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Sätze protokolliert',
+      one: '1 Satz protokolliert',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gymDraftResume => 'Fortsetzen';
+
+  @override
+  String get gymDraftSave => 'So speichern';
 
   @override
   String get gymSessionSaved => 'Training gespeichert';

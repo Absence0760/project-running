@@ -173,7 +173,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
           ],
         );
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),
@@ -208,7 +208,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
   Widget _itemsCard(
       ThemeData theme, AppLocalizations l10n, List<FoodEntry> entries) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),
@@ -282,7 +282,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
     String tag,
   ) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),

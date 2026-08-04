@@ -144,14 +144,19 @@ void main() {
   });
 
   group('AdherencePill meets WCAG AA', () {
-    for (final adherence in ['completed', 'partial']) {
+    for (final (adherence, label) in [
+      ('completed', 'Completed'),
+      ('partial', 'Partial'),
+    ]) {
       testWidgets('$adherence pill', (tester) async {
         await tester.pumpWidget(MaterialApp(
           theme: AppTheme.light,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(body: Center(child: AdherencePill(adherence: adherence))),
         ));
         await tester.pump();
-        final c = _badgeColors(tester, adherence);
+        final c = _badgeColors(tester, label);
         final ratio = _contrast(c.fg, c.bg);
         expect(ratio, greaterThanOrEqualTo(4.5),
             reason: '"$adherence" pill contrast $ratio fails AA');

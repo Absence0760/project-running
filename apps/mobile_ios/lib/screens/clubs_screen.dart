@@ -301,7 +301,7 @@ class _ClubTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(16),
@@ -349,7 +349,6 @@ class _ClubTile extends StatelessWidget {
                           child: Text(
                             AppLocalizations.of(context).clubsBadgePrivate,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              fontSize: 9,
                               letterSpacing: 0.8,
                               color: theme.colorScheme.outline,
                             ),

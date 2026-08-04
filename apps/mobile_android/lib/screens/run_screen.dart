@@ -4948,8 +4948,7 @@ class _StatsOverlay extends StatelessWidget {
                                 ),
                                 child: Text(
                                   '$lapCount',
-                                  style: TextStyle(
-                                    fontSize: 9,
+                                  style: theme.textTheme.labelSmall?.copyWith(
                                     color: semantic.onDanger,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -5010,9 +5009,8 @@ class StatColumn extends StatelessWidget {
                 const SizedBox(width: 2),
                 Text(
                   unit!,
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
-                    fontSize: 10,
                   ),
                 ),
               ],
