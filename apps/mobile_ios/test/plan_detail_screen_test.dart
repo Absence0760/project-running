@@ -203,4 +203,84 @@ void main() {
       expect(popped, isNull);
     });
   });
+
+  group('PlanDetailScreen — narrow-width overflow (issue #666 V7)', () {
+    testWidgets(
+        'renders a loaded plan at a narrow width with the week-header '
+        'phase label bounded so a long localized label ellipsizes instead '
+        'of striping', (tester) async {
+      // 360, not 320: below ~340 the PlanCalendar day grid (a separate
+      // widget file outside this fix's scope) still overflows under the
+      // test Ahem font and would fail this test for an unrelated reason.
+      tester.view.physicalSize = const Size(360, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanDetailScreen(
+            training: _FakePlanTraining(),
+            planId: 'p1',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('Week 1'), findsOneWidget);
+      expect(
+        find.ancestor(of: find.text('BASE'), matching: find.byType(Expanded)),
+        findsWidgets,
+      );
+    });
+  });
+}
+
+/// Serves one canned single-week plan so the loaded body (week cards
+/// included) renders without a backend. The viewer is not the owner, so the
+/// best-effort recent-runs / published-state fetches never fire.
+class _FakePlanTraining extends TrainingService {
+  @override
+  Future<
+      ({
+        TrainingPlanRow? plan,
+        List<PlanWeekRow> weeks,
+        List<PlanWorkoutRow> workouts
+      })> fetchPlan(String id) async => (
+        plan: TrainingPlanRow(
+          id: 'p1',
+          userId: 'someone-else',
+          name: 'Marathon Build',
+          goalEvent: 'marathon',
+          goalDistanceM: 42195,
+          startDate: DateTime(2026, 5, 4),
+          endDate: DateTime(2026, 8, 23),
+          daysPerWeek: 4,
+          status: 'active',
+          source: 'generated',
+          isTemplate: false,
+          isPublicTemplate: false,
+        ),
+        weeks: const [
+          PlanWeekRow(
+            id: 'w1',
+            planId: 'p1',
+            weekIndex: 0,
+            phase: 'base',
+            targetVolumeM: 30000,
+          ),
+        ],
+        workouts: [
+          PlanWorkoutRow(
+            id: 'wo1',
+            weekId: 'w1',
+            scheduledDate: DateTime(2026, 5, 5),
+            kind: 'easy',
+            targetDistanceM: 8000,
+            manuallyCompleted: false,
+          ),
+        ],
+      );
 }

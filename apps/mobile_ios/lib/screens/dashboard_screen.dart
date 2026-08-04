@@ -1276,8 +1276,13 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Text(title, style: theme.textTheme.titleMedium),
-          if (trailing != null) ...[const Spacer(), trailing!],
+          Expanded(
+            child: Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium),
+          ),
+          if (trailing != null) trailing!,
         ],
       ),
     );
@@ -1927,57 +1932,67 @@ class _StreakRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        Column(
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Icon(Icons.local_fire_department, color: color, size: 28),
-                const SizedBox(width: 6),
-                Text(
-                  '${state.current}',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: color,
+        Flexible(
+          child: Column(
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Icon(Icons.local_fire_department, color: color, size: 28),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${state.current}',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
                   ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      state.current == 1
+                          ? l10n.dashboardStreakDayUnit
+                          : l10n.dashboardStreakDaysUnit,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.dashboardStreakCurrent,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
                 ),
-                const SizedBox(width: 4),
+              ),
+            ],
+          ),
+        ),
+        if (bestText != null)
+          Flexible(
+            child: Column(
+              children: [
                 Text(
-                  state.current == 1
-                      ? l10n.dashboardStreakDayUnit
-                      : l10n.dashboardStreakDaysUnit,
+                  bestText,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.dashboardStreakHistory,
+                  textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              l10n.dashboardStreakCurrent,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-            ),
-          ],
-        ),
-        if (bestText != null)
-          Column(
-            children: [
-              Text(
-                bestText,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                l10n.dashboardStreakHistory,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
-                ),
-              ),
-            ],
           ),
       ],
     );
@@ -2082,9 +2097,12 @@ class _RunHeatmap extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Text(l10n.dashboardHeatmapLess,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline)),
+              Flexible(
+                child: Text(l10n.dashboardHeatmapLess,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline)),
+              ),
               const SizedBox(width: 6),
               for (final c in [0, 1, 2, 3]) ...[
                 Container(
@@ -2098,9 +2116,12 @@ class _RunHeatmap extends StatelessWidget {
                 const SizedBox(width: 3),
               ],
               const SizedBox(width: 3),
-              Text(l10n.dashboardHeatmapMore,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline)),
+              Flexible(
+                child: Text(l10n.dashboardHeatmapMore,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline)),
+              ),
             ],
           ),
           if (onWeekTap != null) ...[

@@ -1049,4 +1049,22 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
   });
+
+  group('RunDetailScreen — narrow-width overflow (issue #666 V7)', () {
+    testWidgets(
+        'renders at 320 logical width with the activity-type label bounded '
+        'so a long localized label ellipsizes instead of striping',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, _run());
+
+      expect(
+        find.ancestor(of: find.text('Run'), matching: find.byType(Flexible)),
+        findsWidgets,
+      );
+    });
+  });
 }

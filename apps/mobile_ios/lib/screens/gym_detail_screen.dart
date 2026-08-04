@@ -638,10 +638,13 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         Row(
           children: [
             if (started != null)
-              Text(
-                formatDateMed(started.toLocal(), tag),
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.outline),
+              Flexible(
+                child: Text(
+                  formatDateMed(started.toLocal(), tag),
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
               ),
             if (started != null) const SizedBox(width: 8),
             _visibilityChip(w, theme, l10n),

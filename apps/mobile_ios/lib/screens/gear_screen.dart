@@ -480,10 +480,13 @@ class _GearScreenState extends State<GearScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(prog.label, style: theme.textTheme.bodySmall),
-                        Text(
-                          l10n.gearRunCount(runCount),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.outline),
+                        Flexible(
+                          child: Text(
+                            l10n.gearRunCount(runCount),
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline),
+                          ),
                         ),
                       ],
                     ),

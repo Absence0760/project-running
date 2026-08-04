@@ -1033,6 +1033,61 @@ void main() {
       });
     });
   });
+
+  group('DashboardScreen — narrow-width overflow (issue #666 V7)', () {
+    testWidgets(
+        'renders a populated dashboard at a narrow width with the '
+        'section-header titles bounded so long localized titles ellipsize '
+        'instead of striping', (tester) async {
+      // 480, not 320: below ~480 the ThisWeekStrip + MileageTrendCard rows
+      // (separate widget files outside this fix's scope) still overflow
+      // under the test Ahem font and would fail this test for an
+      // unrelated reason.
+      tester.view.physicalSize = const Size(480, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = Preferences();
+        await prefs.init();
+
+        final dir = Directory.systemTemp.createTempSync('dashboard_narrow_');
+        try {
+          final seedStore = LocalRunStore();
+          await seedStore.init(overrideDirectory: dir);
+          await seedStore.save(_run(id: 'r1'));
+
+          final runStore = LocalRunStore();
+          await runStore.init(overrideDirectory: dir);
+
+          await tester.pumpWidget(
+            MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: DashboardScreen(
+                runStore: runStore,
+                routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
+                preferences: prefs,
+              ),
+            ),
+          );
+          await tester.pump();
+          await tester.pump();
+
+          expect(
+            find.ancestor(
+                of: find.text('Goals'), matching: find.byType(Expanded)),
+            findsWidgets,
+          );
+        } finally {
+          dir.deleteSync(recursive: true);
+        }
+      });
+    });
+  });
 }
 
 // Mirror of dashboard_screen's private _epochDay for assertions.

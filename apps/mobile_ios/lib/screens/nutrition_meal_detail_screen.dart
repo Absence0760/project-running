@@ -168,6 +168,8 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                 style: theme.textTheme.titleSmall
                     ?.copyWith(fontWeight: FontWeight.w700)),
             Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline)),
           ],
@@ -194,12 +196,20 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                       ?.copyWith(color: theme.colorScheme.outline)),
             ],
           ),
-          const Spacer(),
-          stat('${macros.proteinG}g', l10n.nutritionMealProtein),
           const SizedBox(width: 16),
-          stat('${macros.carbsG}g', l10n.nutritionMealCarbs),
-          const SizedBox(width: 16),
-          stat('${macros.fatG}g', l10n.nutritionMealFat),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Flexible(
+                    child: stat('${macros.proteinG}g', l10n.nutritionMealProtein)),
+                const SizedBox(width: 16),
+                Flexible(child: stat('${macros.carbsG}g', l10n.nutritionMealCarbs)),
+                const SizedBox(width: 16),
+                Flexible(child: stat('${macros.fatG}g', l10n.nutritionMealFat)),
+              ],
+            ),
+          ),
         ],
       ),
     );

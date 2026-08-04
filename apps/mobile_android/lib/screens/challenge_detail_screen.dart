@@ -224,14 +224,16 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              c.goalValue == null
-                  ? challengeValueLabel(l10n, c.metric, value)
-                  : l10n.challengesGoalProgress(
-                      challengeValueLabel(l10n, c.metric, value),
-                      challengeValueLabel(l10n, c.metric, c.goalValue!),
-                    ),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            Expanded(
+              child: Text(
+                c.goalValue == null
+                    ? challengeValueLabel(l10n, c.metric, value)
+                    : l10n.challengesGoalProgress(
+                        challengeValueLabel(l10n, c.metric, value),
+                        challengeValueLabel(l10n, c.metric, c.goalValue!),
+                      ),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
             if (complete)
               Text(l10n.challengesProgressComplete,
@@ -278,14 +280,19 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
       padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
-          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          Flexible(
+            child: Text(label,
+                style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          ),
           if (p.verdict == PaceVerdict.behind && p.requiredPerDay != null) ...[
             const SizedBox(width: 8),
-            Text(
-              l10n.challengesPaceNeedPerDay(
-                challengeValueLabel(l10n, c.metric, p.requiredPerDay!),
+            Flexible(
+              child: Text(
+                l10n.challengesPaceNeedPerDay(
+                  challengeValueLabel(l10n, c.metric, p.requiredPerDay!),
+                ),
+                style: TextStyle(color: Theme.of(context).hintColor),
               ),
-              style: TextStyle(color: Theme.of(context).hintColor),
             ),
           ],
         ],

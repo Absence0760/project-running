@@ -695,12 +695,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Icon(Icons.autorenew, size: 14,
                       color: theme.colorScheme.primary),
                   const SizedBox(width: 4),
-                  Text(
-                    desc.toUpperCase(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
+                  Expanded(
+                    child: Text(
+                      desc.toUpperCase(),
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
                     ),
                   ),
                 ],
@@ -741,9 +744,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               Icon(Icons.calendar_today, size: 16,
                   color: theme.colorScheme.outline),
               const SizedBox(width: 6),
-              Text(
-                fmtEventDate(active, localeToTag(Localizations.localeOf(context))),
-                style: theme.textTheme.titleMedium,
+              Flexible(
+                child: Text(
+                  fmtEventDate(active, localeToTag(Localizations.localeOf(context))),
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium,
+                ),
               ),
               if (e.row.durationMin != null) ...[
                 const SizedBox(width: 6),
@@ -1058,7 +1064,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          runSpacing: 8,
           children: [
             chip('going', l10n.eventRsvpGoing),
             chip('maybe', l10n.eventRsvpMaybe),
@@ -1073,10 +1080,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 Icon(Icons.hourglass_bottom,
                     size: 16, color: theme.colorScheme.tertiary),
                 const SizedBox(width: 6),
-                Text(
-                  l10n.eventRsvpWaitlisted,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.tertiary),
+                Expanded(
+                  child: Text(
+                    l10n.eventRsvpWaitlisted,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.tertiary),
+                  ),
                 ),
               ],
             ),
@@ -1147,11 +1156,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               children: [
                 Icon(Icons.sports_score, size: 18, color: bannerColour),
                 const SizedBox(width: 6),
-                Text(
-                  l10n.eventRaceControlLabel,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                    letterSpacing: 0.8,
+                Expanded(
+                  child: Text(
+                    l10n.eventRaceControlLabel,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                      letterSpacing: 0.8,
+                    ),
                   ),
                 ),
               ],
@@ -1464,8 +1476,12 @@ class EventResultsSection extends StatelessWidget {
             Icon(Icons.emoji_events_outlined,
                 size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 6),
-            Text(l10n.eventResultsTitle, style: theme.textTheme.titleSmall),
-            const Spacer(),
+            Expanded(
+              child: Text(l10n.eventResultsTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall),
+            ),
             if (hasMine)
               TextButton(
                 onPressed: submitting ? null : () => _confirmRemove(context),

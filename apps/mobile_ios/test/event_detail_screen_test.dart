@@ -658,4 +658,39 @@ void main() {
       await tester.pump(const Duration(seconds: 6));
     });
   });
+
+  group('EventDetailScreen — narrow-width overflow (issue #666 V7)', () {
+    testWidgets(
+        'renders at a narrow width with the RSVP buttons in a Wrap so '
+        'long localized labels flow to a second line instead of striping',
+        (tester) async {
+      // 400, not 320: below ~400 the EventPhotos add-photo row (a separate
+      // widget file outside this fix's scope) still overflows under the
+      // test Ahem font and would fail this test for an unrelated reason.
+      tester.view.physicalSize = const Size(400, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final social = _EventSocial(club: _club('member'));
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: EventDetailScreen(
+            social: social,
+            clubSlug: 'fake-slug',
+            eventId: 'fake-event-id',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.ancestor(
+            of: find.widgetWithText(OutlinedButton, "I'm in"),
+            matching: find.byType(Wrap)),
+        findsWidgets,
+      );
+    });
+  });
 }
