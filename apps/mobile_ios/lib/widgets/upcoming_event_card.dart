@@ -77,9 +77,13 @@ class UpcomingEventCard extends StatelessWidget {
                       Icon(Icons.schedule, size: 13,
                           color: theme.colorScheme.outline),
                       const SizedBox(width: 3),
-                      Text(
-                        fmtEventDate(when, localeToTag(Localizations.localeOf(context))),
-                        style: theme.textTheme.bodySmall,
+                      Flexible(
+                        child: Text(
+                          fmtEventDate(when, localeToTag(Localizations.localeOf(context))),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
                       ),
                       if (event.row.meetLabel != null) ...[
                         const SizedBox(width: 10),

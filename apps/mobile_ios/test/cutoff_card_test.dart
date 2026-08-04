@@ -86,5 +86,24 @@ void main() {
       expect(find.textContaining('Signal lost'), findsNothing);
       expect(find.textContaining('to spare'), findsNothing);
     });
+
+    testWidgets('chip + projection row survives a narrow width without '
+        'overflowing', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(220, 600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _eta(
+          status: LiveCutoffStatus.on,
+          marginS: 25 * 60,
+          projectedArrivalElapsedS: 2 * 3600 + 34 * 60,
+        ),
+        false,
+      );
+      // The margin chip and the projected-arrival text share one row; at
+      // 220 the chip must ellipsize instead of throwing a RenderFlex
+      // overflow (the harness fails the test on one).
+      expect(find.textContaining('to spare'), findsOneWidget);
+    });
   });
 }

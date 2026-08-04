@@ -126,4 +126,34 @@ void main() {
     await tester.pump();
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
   });
+
+  testWidgets('month header survives a narrow width without overflowing',
+      (tester) async {
+    final start = DateTime(2024, 4, 1);
+    final end = DateTime(2024, 4, 30);
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 200,
+            child: SingleChildScrollView(
+              child: PlanCalendar(
+                startDate: start,
+                endDate: end,
+                workouts: const [],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    // The month title sits between two chevron buttons; at 200 it must
+    // ellipsize instead of throwing a RenderFlex overflow (the harness
+    // fails the test on one).
+    expect(find.byIcon(Icons.chevron_left), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+  });
 }

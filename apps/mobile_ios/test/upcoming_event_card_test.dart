@@ -71,6 +71,28 @@ void main() {
       expect(find.byIcon(Icons.place), findsNothing);
     });
 
+    testWidgets('date-only schedule row survives a narrow width without '
+        'overflowing', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 200,
+                child: UpcomingEventCard(event: _event(meetLabel: null)),
+              ),
+            ),
+          ),
+        ),
+      );
+      // With no meet label the date is the only schedule-row text; at 200
+      // it must ellipsize instead of throwing a RenderFlex overflow (the
+      // harness fails the test on one).
+      expect(find.byIcon(Icons.schedule), findsOneWidget);
+    });
+
     testWidgets('long title + meet label survive a narrow width without '
         'overflowing', (tester) async {
       const longTitle =
