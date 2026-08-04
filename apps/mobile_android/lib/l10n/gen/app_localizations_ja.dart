@@ -603,6 +603,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get safetyAddLabel => '連絡先のメール';
 
   @override
+  String get safetyAddHint => 'partner@example.com';
+
+  @override
   String get safetyAddButton => '連絡先を追加';
 
   @override

@@ -629,6 +629,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get safetyAddLabel => 'E-mail du contact';
 
   @override
+  String get safetyAddHint => 'partenaire@example.com';
+
+  @override
   String get safetyAddButton => 'Ajouter un contact';
 
   @override

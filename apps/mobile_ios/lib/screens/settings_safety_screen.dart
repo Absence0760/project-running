@@ -287,7 +287,7 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                     enabled: !_adding,
                     decoration: InputDecoration(
                       labelText: l10n.safetyAddLabel,
-                      hintText: 'partner@example.com',
+                      hintText: l10n.safetyAddHint,
                     ),
                     onSubmitted: (_) => _adding ? null : _add(),
                   ),

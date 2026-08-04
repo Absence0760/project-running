@@ -628,6 +628,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetyAddLabel => 'E-mail do contato';
 
   @override
+  String get safetyAddHint => 'parceiro@example.com';
+
+  @override
   String get safetyAddButton => 'Adicionar contato';
 
   @override
@@ -13052,6 +13055,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get safetyAddLabel => 'E-mail do contato';
+
+  @override
+  String get safetyAddHint => 'parceiro@example.com';
 
   @override
   String get safetyAddButton => 'Adicionar contato';

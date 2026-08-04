@@ -1091,6 +1091,12 @@ abstract class AppLocalizations {
   /// **'Contact email'**
   String get safetyAddLabel;
 
+  /// Example email placeholder in the add-safety-contact input; the local part is localized, the example.com domain is RFC 2606 reserved and must stay
+  ///
+  /// In en, this message translates to:
+  /// **'partner@example.com'**
+  String get safetyAddHint;
+
   /// Button to add a safety contact
   ///
   /// In en, this message translates to:

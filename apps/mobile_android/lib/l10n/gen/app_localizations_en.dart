@@ -623,6 +623,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyAddLabel => 'Contact email';
 
   @override
+  String get safetyAddHint => 'partner@example.com';
+
+  @override
   String get safetyAddButton => 'Add contact';
 
   @override

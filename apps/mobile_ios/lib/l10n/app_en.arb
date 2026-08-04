@@ -835,6 +835,10 @@
   "@safetyAddLabel": {
     "description": "Label for the add-contact email input"
   },
+  "safetyAddHint": "partner@example.com",
+  "@safetyAddHint": {
+    "description": "Example email placeholder in the add-safety-contact input; the local part is localized, the example.com domain is RFC 2606 reserved and must stay"
+  },
   "safetyAddButton": "Add contact",
   "@safetyAddButton": {
     "description": "Button to add a safety contact"
