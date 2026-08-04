@@ -1112,20 +1112,26 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           children: [
             Icon(_activityType.icon, size: 18, color: theme.colorScheme.outline),
             const SizedBox(width: 6),
-            Text(
-              _activityType.label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+            Flexible(
+              child: Text(
+                _activityType.label,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
             ),
             if (_disciplineLabel != null) ...[
               const SizedBox(width: 8),
               Icon(Icons.terrain, size: 16, color: theme.colorScheme.outline),
               const SizedBox(width: 4),
-              Text(
-                _disciplineLabel!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
+              Flexible(
+                child: Text(
+                  _disciplineLabel!,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
               ),
             ],

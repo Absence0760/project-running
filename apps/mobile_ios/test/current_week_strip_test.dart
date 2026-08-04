@@ -52,9 +52,35 @@ void main() {
       workouts: [_wo('a', DateTime(2024, 4, 2), 'tempo', 10000)],
     );
     expect(find.text('This week'), findsOneWidget);
-    // Seven Expanded cells (one per day of the anchored week).
-    expect(find.byType(Expanded), findsNWidgets(7));
+    // Seven Expanded cells (one per day of the anchored week), plus the
+    // overflow-bounded header title.
+    expect(find.byType(Expanded), findsNWidgets(8));
     expect(find.text('TEMPO'), findsOneWidget);
+  });
+
+  testWidgets('header row survives a narrow width without overflowing',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 220,
+            child: CurrentWeekStrip(
+              startDate: start,
+              weekIndex: 0,
+              weekWorkouts: [_wo('a', DateTime(2024, 4, 2), 'tempo', 10000)],
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    // Title + done/active counter share one row; at 220 the title must
+    // ellipsize instead of throwing a RenderFlex overflow (the harness
+    // fails the test on one).
+    expect(find.text('This week'), findsOneWidget);
   });
 
   testWidgets('completion count reflects done vs active workouts in the week',

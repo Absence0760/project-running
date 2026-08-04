@@ -1160,14 +1160,17 @@ class RoutesScreenState extends State<RoutesScreen> {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 6),
-            Text(
-              l10n.routesDiscover,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
+            Expanded(
+              child: Text(
+                l10n.routesDiscover,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-            const Spacer(),
             if (_syncing)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1490,13 +1493,15 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Text(
-                l10n.routesCountMeta(widget.visibleCount, widget.totalCount),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              Expanded(
+                child: Text(
+                  l10n.routesCountMeta(widget.visibleCount, widget.totalCount),
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
-              const Spacer(),
               if (widget.filtersActive)
                 TextButton(
                   onPressed: widget.onClearFilters,

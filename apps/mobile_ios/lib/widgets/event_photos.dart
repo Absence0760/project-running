@@ -300,9 +300,12 @@ class _EventPhotosState extends State<EventPhotos> {
             Icon(Icons.photo_library_outlined,
                 size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 6),
-            Text(l10n.eventPhotosTitle(_photos.length),
-                style: theme.textTheme.titleMedium),
-            const Spacer(),
+            Expanded(
+              child: Text(l10n.eventPhotosTitle(_photos.length),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium),
+            ),
             if (widget.canAdd)
               TextButton.icon(
                 onPressed: _uploading ? null : _openPhotoFlow,

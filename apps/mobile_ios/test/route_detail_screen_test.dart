@@ -665,4 +665,34 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
   });
+
+  group('RouteDetailScreen — narrow-width overflow (issue #666 V7)', () {
+    testWidgets(
+        'owner body renders at 320 logical width and the switch titles are '
+        'bounded so long localized labels ellipsize instead of striping',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(
+          tester,
+          _route(
+              name: 'An unreasonably long route name that a runner might '
+                  'realistically paste in from a GPX export'),
+          isOwner: true);
+
+      expect(
+        find.ancestor(
+            of: find.text('Private route'), matching: find.byType(Expanded)),
+        findsWidgets,
+      );
+      expect(
+        find.ancestor(
+            of: find.text('Save for offline'),
+            matching: find.byType(Expanded)),
+        findsWidgets,
+      );
+    });
+  });
 }

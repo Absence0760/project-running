@@ -161,11 +161,15 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
-          Text(
-            label.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
-              letterSpacing: 0.8,
+          Expanded(
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.outline,
+                letterSpacing: 0.8,
+              ),
             ),
           ),
           Text(

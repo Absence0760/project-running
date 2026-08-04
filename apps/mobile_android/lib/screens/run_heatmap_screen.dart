@@ -434,10 +434,16 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(l10n.runHeatmapScaleLess,
-                            style: theme.textTheme.labelSmall),
-                        Text(l10n.runHeatmapScaleMore,
-                            style: theme.textTheme.labelSmall),
+                        Flexible(
+                          child: Text(l10n.runHeatmapScaleLess,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall),
+                        ),
+                        Flexible(
+                          child: Text(l10n.runHeatmapScaleMore,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall),
+                        ),
                       ],
                     ),
                   ],

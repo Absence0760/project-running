@@ -494,10 +494,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                       Icon(Icons.place, size: 14,
                           color: theme.colorScheme.outline),
                       const SizedBox(width: 3),
-                      Text(
-                        c.row.locationLabel!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                      Expanded(
+                        child: Text(
+                          c.row.locationLabel!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
                         ),
                       ),
                     ],
@@ -689,10 +693,13 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 Icon(Icons.calendar_today, size: 14,
                     color: theme.colorScheme.outline),
                 const SizedBox(width: 4),
-                Text(
-                  fmtEventDate(e.nextInstanceStart,
-                      localeToTag(Localizations.localeOf(context))),
-                  style: theme.textTheme.bodySmall,
+                Flexible(
+                  child: Text(
+                    fmtEventDate(e.nextInstanceStart,
+                        localeToTag(Localizations.localeOf(context))),
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Icon(Icons.group, size: 14,

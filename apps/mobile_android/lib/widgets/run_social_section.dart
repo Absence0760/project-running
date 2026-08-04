@@ -305,8 +305,12 @@ class _RunSocialSectionState extends State<RunSocialSection> {
           // Section header + kudos pill
           Row(
             children: [
-              Text(l10n.runSocialActivity, style: theme.textTheme.titleMedium),
-              const Spacer(),
+              Expanded(
+                child: Text(l10n.runSocialActivity,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium),
+              ),
               _KudosPill(
                 count: _eng.kudosCount,
                 viewerHas: _eng.viewerHasKudos,
@@ -498,7 +502,7 @@ class _CommentTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(entry.comment.body, style: theme.textTheme.bodyMedium),
-                Row(
+                OverflowBar(
                   children: [
                     if (onReply != null)
                       TextButton(

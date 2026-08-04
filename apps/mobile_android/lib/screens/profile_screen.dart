@@ -887,7 +887,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Row(
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 4,
             children: [
               SegmentedButton<String>(
                 segments: [
@@ -901,7 +904,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                     setState(() => _notifFilter = s.first),
                 showSelectedIcon: false,
               ),
-              const Spacer(),
               if (hasUnread)
                 TextButton(
                   onPressed: _markAllNotifsRead,

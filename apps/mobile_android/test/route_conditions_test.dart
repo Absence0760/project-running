@@ -102,6 +102,26 @@ void main() {
     expect(find.text('Creek crossing is high'), findsOneWidget);
   });
 
+  testWidgets('header + condition rows survive a narrow width without '
+      'overflowing', (tester) async {
+    final api = _ConditionsApi(seed: [
+      _row(note: 'Creek crossing is high', positionM: 4200),
+    ]);
+    await tester.pumpWidget(_host(SizedBox(
+      width: 320,
+      child: RouteConditions(
+        api: api,
+        routeId: 'route-1',
+        routeOwnerId: 'owner-9',
+      ),
+    )));
+    await tester.pumpAndSettle();
+    // The chip + severity + position share one row with the timestamp; at
+    // 320 the chip and severity must ellipsize instead of throwing a
+    // RenderFlex overflow (the harness fails the test on one).
+    expect(find.text('CAUTION'), findsOneWidget);
+  });
+
   testWidgets('the composer writes via the api', (tester) async {
     final api = _ConditionsApi();
     await tester.pumpWidget(_host(RouteConditions(

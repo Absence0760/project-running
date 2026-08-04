@@ -214,12 +214,16 @@ class _SectionHeader extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),
-          Text(
-            label.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              letterSpacing: 0.6,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                letterSpacing: 0.6,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

@@ -316,15 +316,16 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 ),
               ],
               const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              OverflowBar(
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
+                spacing: 8,
                 children: [
                   TextButton(
                     onPressed:
                         _busy ? null : () => Navigator.maybePop(context),
                     child: Text(l10n.clubFormCancel),
                   ),
-                  const SizedBox(width: 8),
                   FilledButton(
                     onPressed: _busy ? null : _submit,
                     child: _busy

@@ -174,19 +174,22 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
                 tristate: false,
                 onChanged: _saving ? null : (v) => _selectAll(v ?? false),
               ),
-              Semantics(
-                button: true,
-                child: GestureDetector(
-                  onTap: _saving ? null : () => _selectAll(!allSelected),
-                  child: Text(
-                    allSelected
-                        ? l10n.gearBackfillSelectNone
-                        : l10n.gearBackfillSelectAll,
-                    style: theme.textTheme.bodyMedium,
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  child: GestureDetector(
+                    onTap: _saving ? null : () => _selectAll(!allSelected),
+                    child: Text(
+                      allSelected
+                          ? l10n.gearBackfillSelectNone
+                          : l10n.gearBackfillSelectAll,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
                   ),
                 ),
               ),
-              const Spacer(),
               Text(
                 l10n.gearBackfillSelectedCount(
                     _selected.length, widget.candidates.length),
@@ -216,14 +219,15 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          OverflowBar(
+            alignment: MainAxisAlignment.end,
+            overflowAlignment: OverflowBarAlignment.end,
+            spacing: 8,
             children: [
               TextButton(
                 onPressed: _saving ? null : () => Navigator.pop(context, null),
                 child: Text(l10n.gearBackfillSkip),
               ),
-              const SizedBox(width: 8),
               FilledButton(
                 onPressed: _saving ? null : _attach,
                 child: Text(_saving

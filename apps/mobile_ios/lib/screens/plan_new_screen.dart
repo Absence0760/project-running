@@ -823,10 +823,13 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                   fontFeatures: const [FontFeature.tabularFigures()],
                 )),
           ),
-          Text(l10n.planNewSessions(active),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.outline,
-              )),
+          Flexible(
+            child: Text(l10n.planNewSessions(active),
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                )),
+          ),
         ],
       ),
     );

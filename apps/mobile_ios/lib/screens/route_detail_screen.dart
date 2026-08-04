@@ -1107,26 +1107,35 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _Stat(
-                    label: l10n.routeDetailStatDistance,
-                    value: UnitFormat.distanceValue(route.distanceMetres, unit),
-                    unit: UnitFormat.distanceLabel(unit),
+                  Flexible(
+                    child: _Stat(
+                      label: l10n.routeDetailStatDistance,
+                      value:
+                          UnitFormat.distanceValue(route.distanceMetres, unit),
+                      unit: UnitFormat.distanceLabel(unit),
+                    ),
                   ),
-                  _Stat(
-                    label: l10n.routeDetailStatElevation,
-                    value: '${route.elevationGainMetres.round()}',
-                    unit: 'm',
+                  Flexible(
+                    child: _Stat(
+                      label: l10n.routeDetailStatElevation,
+                      value: '${route.elevationGainMetres.round()}',
+                      unit: 'm',
+                    ),
                   ),
                   if (_avgRating > 0)
-                    _Stat(
-                      label: l10n.routeDetailStatReviews(_reviews.length),
-                      value: formatFixed(_avgRating, 1, activeLocaleTag),
-                      unit: '/ 5',
+                    Flexible(
+                      child: _Stat(
+                        label: l10n.routeDetailStatReviews(_reviews.length),
+                        value: formatFixed(_avgRating, 1, activeLocaleTag),
+                        unit: '/ 5',
+                      ),
                     )
                   else
-                    _Stat(
-                      label: l10n.routeDetailStatWaypoints,
-                      value: '${route.waypoints.length}',
+                    Flexible(
+                      child: _Stat(
+                        label: l10n.routeDetailStatWaypoints,
+                        value: '${route.waypoints.length}',
+                      ),
                     ),
                 ],
               ),
@@ -1153,10 +1162,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                             : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        _isPublic
-                            ? l10n.routeDetailPublicRoute
-                            : l10n.routeDetailPrivateRoute,
+                      Expanded(
+                        child: Text(
+                          _isPublic
+                              ? l10n.routeDetailPublicRoute
+                              : l10n.routeDetailPrivateRoute,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ],
                   ),
@@ -1189,9 +1201,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 8),
-                    Text(_isOfflinePinned
-                        ? l10n.routeDetailSavedForOffline
-                        : l10n.routeDetailSaveForOfflineTitle),
+                    Expanded(
+                      child: Text(
+                        _isOfflinePinned
+                            ? l10n.routeDetailSavedForOffline
+                            : l10n.routeDetailSaveForOfflineTitle,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
                 subtitle: Text(
@@ -1348,8 +1365,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(l10n.routeDetailReviewsHeading,
-                      style: theme.textTheme.titleMedium),
+                  Expanded(
+                    child: Text(l10n.routeDetailReviewsHeading,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium),
+                  ),
                   TextButton.icon(
                     onPressed: _submitReview,
                     icon: const Icon(Icons.rate_review, size: 18),
@@ -2108,14 +2129,17 @@ class _RoutePreviewScrubber extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
               const SizedBox(width: 6),
-              Text(
-                l10n.routeDetailPreview,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Text(
+                  l10n.routeDetailPreview,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              const Spacer(),
               // Live distance readout — updates as the user drags.
               // Gives feedback in distance terms rather than raw
               // percentage so the runner knows "I'm 2.3 km in" not
@@ -2141,16 +2165,22 @@ class _RoutePreviewScrubber extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  l10n.routeDetailPreviewStart,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                Flexible(
+                  child: Text(
+                    l10n.routeDetailPreviewStart,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-                Text(
-                  l10n.routeDetailPreviewFinish,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                Flexible(
+                  child: Text(
+                    l10n.routeDetailPreviewFinish,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ],
@@ -2220,10 +2250,14 @@ class _Stat extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Text(value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                )),
+            Flexible(
+              child: Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  )),
+            ),
             if (unit != null) ...[
               const SizedBox(width: 4),
               Text(unit!,
@@ -2235,6 +2269,8 @@ class _Stat extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             )),

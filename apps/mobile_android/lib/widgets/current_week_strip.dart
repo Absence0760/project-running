@@ -86,9 +86,13 @@ class CurrentWeekStrip extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(l10n.planDetailCurrentWeek,
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700)),
+              Expanded(
+                child: Text(l10n.planDetailCurrentWeek,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
               Text('$done / $active',
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.outline)),

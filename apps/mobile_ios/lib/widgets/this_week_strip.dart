@@ -70,10 +70,14 @@ class ThisWeekStrip extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  l10n.dashboardWeekStripTitle,
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    l10n.dashboardWeekStripTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
                 ),
                 Text(
                   '$totalLabel · $countLabel',

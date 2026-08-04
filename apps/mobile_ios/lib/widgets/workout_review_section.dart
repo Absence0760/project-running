@@ -38,8 +38,12 @@ class WorkoutReviewSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
           child: Row(
             children: [
-              Text(l10n.workoutReviewTitle, style: theme.textTheme.titleMedium),
-              const Spacer(),
+              Expanded(
+                child: Text(l10n.workoutReviewTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium),
+              ),
               if (adherence != null) AdherencePill(adherence: adherence),
             ],
           ),

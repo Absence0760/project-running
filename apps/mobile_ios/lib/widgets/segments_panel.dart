@@ -248,8 +248,12 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
         children: [
           Row(
             children: [
-              Text(l10n.segmentsPanelTitle, style: theme.textTheme.titleMedium),
-              const Spacer(),
+              Expanded(
+                child: Text(l10n.segmentsPanelTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium),
+              ),
               if (widget.canCreate)
                 OutlinedButton.icon(
                   onPressed: () =>

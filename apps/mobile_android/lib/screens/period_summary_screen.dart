@@ -824,33 +824,46 @@ class _PeriodShareCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _shareCardStat(
-                  label: l10n.periodShareStatDistance,
-                  value: dist,
-                  unitLabel: distLabel),
-              _shareCardStat(
-                  label: l10n.periodShareStatRuns,
-                  value: '${stats.runCount}'),
-              _shareCardStat(label: l10n.periodShareStatTime, value: dur),
+              Flexible(
+                child: _shareCardStat(
+                    label: l10n.periodShareStatDistance,
+                    value: dist,
+                    unitLabel: distLabel),
+              ),
+              Flexible(
+                child: _shareCardStat(
+                    label: l10n.periodShareStatRuns,
+                    value: '${stats.runCount}'),
+              ),
+              Flexible(
+                child:
+                    _shareCardStat(label: l10n.periodShareStatTime, value: dur),
+              ),
               if (pace != null)
-                _shareCardStat(
-                    label: l10n.periodShareStatAvgPace,
-                    value: pace,
-                    unitLabel: paceLabel),
+                Flexible(
+                  child: _shareCardStat(
+                      label: l10n.periodShareStatAvgPace,
+                      value: pace,
+                      unitLabel: paceLabel),
+                ),
             ],
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                l10n.periodShareCardTagline,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 3,
-                  height: 1.0,
+              Flexible(
+                child: Text(
+                  l10n.periodShareCardTagline,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 3,
+                    height: 1.0,
+                  ),
                 ),
               ),
             ],
@@ -871,6 +884,8 @@ class _PeriodShareCard extends StatelessWidget {
       children: [
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: Color(0xFF9CA3AF),
             fontSize: 9,
@@ -881,16 +896,21 @@ class _PeriodShareCard extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Row(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                height: 1.0,
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0,
+                ),
               ),
             ),
             if (unitLabel != null) ...[

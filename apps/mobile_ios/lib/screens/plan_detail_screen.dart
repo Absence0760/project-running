@@ -827,10 +827,13 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   Icon(Icons.trending_up,
                       size: 18, color: theme.colorScheme.primary),
                   const SizedBox(width: 8),
-                  Text('${l10n.planDetailLongestLongRun}: ',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
-                      )),
+                  Flexible(
+                    child: Text('${l10n.planDetailLongestLongRun}: ',
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        )),
+                  ),
                   Text(fmtKm(longest),
                       style: theme.textTheme.bodySmall
                           ?.copyWith(fontWeight: FontWeight.w600)),
@@ -1096,8 +1099,11 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   Icon(Icons.check_circle,
                       color: theme.colorScheme.primary, size: 18),
                   const SizedBox(width: 3),
-                  Text(l10n.planDetailCompleted,
-                      style: TextStyle(color: theme.colorScheme.primary)),
+                  Flexible(
+                    child: Text(l10n.planDetailCompleted,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: theme.colorScheme.primary)),
+                  ),
                 ],
               ],
             ),
@@ -1135,13 +1141,16 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(width: 8),
-              Text(planPhaseLabel(l10n, phase).toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    letterSpacing: 0.6,
-                    fontWeight: FontWeight.w700,
-                  )),
-              const Spacer(),
+              Expanded(
+                child: Text(planPhaseLabel(l10n, phase).toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      letterSpacing: 0.6,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ),
               Text(fmtKm(w.targetVolumeM, 0),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,

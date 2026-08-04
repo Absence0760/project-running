@@ -72,15 +72,18 @@ class IntensityCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text(
-                  l10n.intensityTitle,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.06,
-                    color: theme.colorScheme.outline,
+                Expanded(
+                  child: Text(
+                    l10n.intensityTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.06,
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 Text(
                   l10n.intensityWindow(windowDays),
                   style: theme.textTheme.labelSmall?.copyWith(

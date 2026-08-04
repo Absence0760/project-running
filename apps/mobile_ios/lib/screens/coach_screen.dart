@@ -907,7 +907,10 @@ class _CoachScreenState extends State<CoachScreen> {
         leading: const BackButton(),
         title: Row(
           children: [
-            Text(l10n.coachTitle),
+            Flexible(
+              child: Text(l10n.coachTitle,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
             if (_plans.length > 1) ...[
               const SizedBox(width: 12),
               Flexible(
@@ -1027,15 +1030,17 @@ class _CoachScreenState extends State<CoachScreen> {
                 ),
               ],
               const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              OverflowBar(
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
+                spacing: 12,
+                overflowSpacing: 4,
                 children: [
                   TextButton(
                     onPressed:
                         _consentSaving ? null : () => Navigator.maybePop(context),
                     child: Text(l10n.coachConsentCancel),
                   ),
-                  const SizedBox(width: 12),
                   FilledButton(
                     onPressed: _consentSaving ? null : _acceptCoachConsent,
                     child: Text(_consentSaving
@@ -1417,14 +1422,16 @@ class _CoachScreenState extends State<CoachScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+        OverflowBar(
+          alignment: MainAxisAlignment.end,
+          overflowAlignment: OverflowBarAlignment.end,
+          spacing: 4,
+          overflowSpacing: 4,
           children: [
             TextButton(
               onPressed: () => setState(() => _editingId = null),
               child: Text(l10n.coachEditCancel),
             ),
-            const SizedBox(width: 4),
             FilledButton(
               onPressed: _busy ? null : _commitEdit,
               child: Text(l10n.coachEditSaveResend),

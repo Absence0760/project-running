@@ -108,5 +108,32 @@ void main() {
       );
       expect(find.text('2.00 km · 1 activity'), findsOneWidget);
     });
+
+    testWidgets('header row survives a narrow width without overflowing',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 320,
+                child: ThisWeekStrip(
+                  runs: const [],
+                  unit: DistanceUnit.km,
+                  weekStartDay: 'monday',
+                  now: wed,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      // The title + total share one row; at 320 the title must ellipsize
+      // instead of throwing a RenderFlex overflow (the harness fails the
+      // test on one).
+      expect(find.text('This Week'), findsOneWidget);
+    });
   });
 }

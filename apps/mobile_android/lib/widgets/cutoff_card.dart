@@ -94,18 +94,22 @@ class CutoffCard extends StatelessWidget {
           else
             Row(
               children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: chipColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    chipLabel,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: chipColor,
-                      fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: chipColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      chipLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: chipColor,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),

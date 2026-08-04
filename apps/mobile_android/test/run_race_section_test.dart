@@ -113,6 +113,50 @@ void main() {
     expect(find.text('Import result'), findsNothing);
   });
 
+  testWidgets('a long race name survives a narrow width without overflowing',
+      (tester) async {
+    const longName =
+        'The Absolutely Enormous Transcontinental Springtime Marathon '
+        'Championship Invitational';
+    final service = _FakeRaceService(
+      result: const RaceResultForRun(
+        listing: null,
+        raceName: longName,
+        bib: '128',
+        chipTime: '3:21:45',
+        gunTime: null,
+        overallPlace: 128,
+        ageGroupPlace: null,
+        ageGroup: null,
+      ),
+    );
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 240,
+            child: SingleChildScrollView(
+              child: RunRaceSection(
+                service: service,
+                runId: 'run-1',
+                startedAt: '2027-04-18T13:00:00.000Z',
+                distanceM: 42100,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    // Each label/value row bounds its value; at 240 the race name must
+    // ellipsize instead of throwing a RenderFlex overflow (the harness
+    // fails the test on one).
+    expect(find.text('Official result'), findsOneWidget);
+    expect(find.text(longName), findsOneWidget);
+  });
+
   testWidgets('renders nothing when there is no result and no candidate',
       (tester) async {
     final service = _FakeRaceService();

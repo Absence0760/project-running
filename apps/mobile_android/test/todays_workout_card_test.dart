@@ -93,5 +93,28 @@ void main() {
       await tester.pump();
       expect(taps, 1);
     });
+
+    testWidgets('distance + pace targets survive a narrow width without '
+        'overflowing', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 200,
+                child: TodaysWorkoutCard(overview: _overview()),
+              ),
+            ),
+          ),
+        ),
+      );
+      // Both targets render in a Wrap; at 200 the pace chip flows to a
+      // second line (ellipsizing if still too wide) instead of throwing a
+      // RenderFlex overflow (the harness fails the test on one).
+      expect(find.byIcon(Icons.straighten), findsOneWidget);
+      expect(find.textContaining('@'), findsOneWidget);
+    });
   });
 }
