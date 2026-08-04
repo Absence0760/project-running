@@ -10839,12 +10839,6 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{Attached {name} to {count} run.} other{Attached {name} to {count} runs.}}'**
   String gearAttached(String name, int count);
 
-  /// Offline banner when edits are queued
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, one{Offline — {count} edit queued, showing cached gear.} other{Offline — {count} edits queued, showing cached gear.}}'**
-  String gearOfflineQueued(int count);
-
   /// Offline banner when no edits are queued
   ///
   /// In en, this message translates to:
@@ -15098,12 +15092,6 @@ abstract class AppLocalizations {
   /// **'Offline — showing saved workouts'**
   String get gymOfflineCached;
 
-  /// No description provided for @gymOfflineQueued.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline — changes will sync when you reconnect'**
-  String get gymOfflineQueued;
-
   /// No description provided for @gymEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -16459,12 +16447,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn’t delete the entry: {error}'**
   String nutritionDeleteFailed(String error);
-
-  /// No description provided for @nutritionOfflineQueued.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline — changes will sync when you reconnect'**
-  String get nutritionOfflineQueued;
 
   /// No description provided for @nutritionOfflineCached.
   ///

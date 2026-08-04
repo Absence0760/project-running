@@ -11,6 +11,7 @@ import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/gym_compose_sheet.dart';
+import '../widgets/pending_sync_banner.dart';
 import 'gym_detail_screen.dart';
 import 'gym_records_screen.dart';
 import 'routine_library_screen.dart';
@@ -220,6 +221,7 @@ class _GymScreenState extends State<GymScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await widget.store.syncWithServer(api);
+    if (mounted && widget.store.hasPending) setState(() {});
   }
 
   Future<void> _create() async {
@@ -265,7 +267,7 @@ class _GymScreenState extends State<GymScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final workouts = widget.store.workouts;
-    final pending = widget.store.hasPending;
+    final pending = widget.store.hasPending || _routineStore.hasPending;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.gymTitle),
@@ -298,7 +300,7 @@ class _GymScreenState extends State<GymScreen> {
       ),
       body: Column(
         children: [
-          if (!_isOnline)
+          if (!_isOnline && !pending)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -309,13 +311,18 @@ class _GymScreenState extends State<GymScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      pending ? l10n.gymOfflineQueued : l10n.gymOfflineCached,
+                      l10n.gymOfflineCached,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
                 ],
               ),
             ),
+          PendingSyncBanner(
+            api: widget.api,
+            isOnline: _isOnline,
+            stores: [widget.store, _routineStore],
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refresh,

@@ -6615,18 +6615,6 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Sin conexión — $count cambios en cola, mostrando equipo en caché.',
-      one: 'Sin conexión — $count cambio en cola, mostrando equipo en caché.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'Sin conexión: mostrando equipo en caché.';
 
   @override
@@ -9150,10 +9138,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'Sin conexión: mostrando entrenamientos guardados';
 
   @override
-  String get gymOfflineQueued =>
-      'Sin conexión: los cambios se sincronizarán más tarde';
-
-  @override
   String get gymEmptyTitle => 'Aún no hay entrenamientos de gimnasio';
 
   @override
@@ -9937,10 +9921,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'No se pudo eliminar la entrada: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Sin conexión: los cambios se sincronizarán al reconectar';
 
   @override
   String get nutritionOfflineCached =>

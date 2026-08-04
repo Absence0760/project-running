@@ -24,6 +24,7 @@ import '../nutrition_totals.dart';
 import '../nutrition_week.dart';
 import '../settings_sync.dart';
 import '../widgets/nutrition_log_sheet.dart';
+import '../widgets/pending_sync_banner.dart';
 import '../widgets/top_banner.dart';
 import 'nutrition_meal_detail_screen.dart';
 
@@ -267,6 +268,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await widget.store.syncWithServer(api);
+    if (mounted && widget.store.hasPending) setState(() {});
   }
 
   /// Best-effort: pull saved meal templates (with their items) and overlay the
@@ -397,6 +399,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await _templateStore.syncWithServer(api);
+    if (mounted && _templateStore.hasPending) setState(() {});
   }
 
   /// Log every item of [t] as a food_log entry at now, via the pure
@@ -533,6 +536,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await _recipeStore.syncWithServer(api);
+    if (mounted && _recipeStore.hasPending) setState(() {});
   }
 
   /// Promote today's logged entries into a named recipe. The name + servings
@@ -787,6 +791,11 @@ class _NutritionScreenState extends State<NutritionScreen> {
           FoodEntry.fromRow(r),
       ];
 
+  bool get _anyPending =>
+      widget.store.hasPending ||
+      _templateStore.hasPending ||
+      _recipeStore.hasPending;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -818,7 +827,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
       ),
       body: Column(
         children: [
-          if (!_isOnline)
+          if (!_isOnline && !_anyPending)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -829,15 +838,18 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.store.hasPending
-                          ? l10n.nutritionOfflineQueued
-                          : l10n.nutritionOfflineCached,
+                      l10n.nutritionOfflineCached,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
                 ],
               ),
             ),
+          PendingSyncBanner(
+            api: widget.api,
+            isOnline: _isOnline,
+            stores: [widget.store, _templateStore, _recipeStore],
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _refresh,

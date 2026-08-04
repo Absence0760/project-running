@@ -15,6 +15,7 @@ import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
+import '../widgets/pending_sync_banner.dart';
 import '../widgets/routine_builder_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'gym_exercise_screen.dart';
@@ -131,6 +132,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     final api = widget.api;
     if (api == null || !_isOnline) return;
     await widget.store.syncWithServer(api);
+    if (mounted && widget.store.hasPending) setState(() {});
   }
 
   static ProgressionScheme _schemeFromString(String s) {
@@ -599,15 +601,26 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                 ),
               ],
       ),
-      body: w == null
-          ? Center(
-              child: Text(
-                l10n.gymNotFound,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.outline),
-              ),
-            )
-          : _body(w, theme, l10n),
+      body: Column(
+        children: [
+          PendingSyncBanner(
+            api: widget.api,
+            isOnline: _isOnline,
+            stores: [widget.store, _routineStore],
+          ),
+          Expanded(
+            child: w == null
+                ? Center(
+                    child: Text(
+                      l10n.gymNotFound,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.outline),
+                    ),
+                  )
+                : _body(w, theme, l10n),
+          ),
+        ],
+      ),
     );
   }
 

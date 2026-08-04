@@ -6625,19 +6625,6 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Offline — $count Änderungen in der Warteschlange, zeige zwischengespeicherte Ausrüstung.',
-      one:
-          'Offline — $count Änderung in der Warteschlange, zeige zwischengespeicherte Ausrüstung.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached =>
       'Offline — zeige zwischengespeicherte Ausrüstung.';
 
@@ -9158,10 +9145,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Offline – gespeicherte Trainings werden angezeigt';
 
   @override
-  String get gymOfflineQueued =>
-      'Offline – Änderungen werden später synchronisiert';
-
-  @override
   String get gymEmptyTitle => 'Noch keine Gym-Trainings';
 
   @override
@@ -9951,10 +9934,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'Eintrag konnte nicht gelöscht werden: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Offline – Änderungen werden später synchronisiert';
 
   @override
   String get nutritionOfflineCached =>

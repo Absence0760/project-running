@@ -6614,18 +6614,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Off-line — $count edições na fila, mostrando equipamento em cache.',
-      one: 'Off-line — $count edição na fila, mostrando equipamento em cache.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'Off-line — mostrando equipamento em cache.';
 
   @override
@@ -9144,10 +9132,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymOfflineCached => 'Offline: mostrando treinos salvos';
 
   @override
-  String get gymOfflineQueued =>
-      'Offline: as alterações serão sincronizadas mais tarde';
-
-  @override
   String get gymEmptyTitle => 'Nenhum treino de academia ainda';
 
   @override
@@ -9934,10 +9918,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'Não foi possível eliminar a entrada: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Offline — as alterações serão sincronizadas ao reconectar';
 
   @override
   String get nutritionOfflineCached => 'Offline — mostrando entradas salvas';
@@ -18991,18 +18971,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other:
-          'Off-line — $count edições na fila, mostrando equipamento em cache.',
-      one: 'Off-line — $count edição na fila, mostrando equipamento em cache.',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'Off-line — mostrando equipamento em cache.';
 
   @override
@@ -21521,10 +21489,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get gymOfflineCached => 'Offline: mostrando treinos salvos';
 
   @override
-  String get gymOfflineQueued =>
-      'Offline: as alterações serão sincronizadas mais tarde';
-
-  @override
   String get gymEmptyTitle => 'Nenhum treino de academia ainda';
 
   @override
@@ -22311,10 +22275,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String nutritionDeleteFailed(String error) {
     return 'Não foi possível excluir a entrada: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued =>
-      'Offline — as alterações serão sincronizadas ao reconectar';
 
   @override
   String get nutritionOfflineCached => 'Offline — mostrando entradas salvas';

@@ -8829,15 +8829,6 @@
       }
     }
   },
-  "gearOfflineQueued": "{count, plural, one{Offline — {count} edit queued, showing cached gear.} other{Offline — {count} edits queued, showing cached gear.}}",
-  "@gearOfflineQueued": {
-    "description": "Offline banner when edits are queued",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "gearOfflineCached": "Offline — showing cached gear.",
   "@gearOfflineCached": {
     "description": "Offline banner when no edits are queued"
@@ -12260,7 +12251,6 @@
   "gymLog": "Log workout",
   "gymUntitled": "Untitled workout",
   "gymOfflineCached": "Offline — showing saved workouts",
-  "gymOfflineQueued": "Offline — changes will sync when you reconnect",
   "gymEmptyTitle": "No gym workouts yet",
   "gymEmptyBody": "Log a lift to track it here and feed your training load.",
   "gymPrBadge": "PR",
@@ -12905,7 +12895,6 @@
       }
     }
   },
-  "nutritionOfflineQueued": "Offline — changes will sync when you reconnect",
   "nutritionOfflineCached": "Offline — showing saved entries",
   "nutritionLogTitle": "Log food",
   "nutritionSearchHint": "Search for a food",

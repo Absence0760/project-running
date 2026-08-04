@@ -6239,16 +6239,6 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String gearOfflineQueued(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'オフライン — $count件の編集をキューに登録、キャッシュされたギアを表示中。',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get gearOfflineCached => 'オフライン — キャッシュされたギアを表示中。';
 
   @override
@@ -8673,9 +8663,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymOfflineCached => 'オフライン：保存済みのワークアウトを表示中';
 
   @override
-  String get gymOfflineQueued => 'オフライン：変更は後で同期されます';
-
-  @override
   String get gymEmptyTitle => 'ジムのワークアウトがまだありません';
 
   @override
@@ -9440,9 +9427,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String nutritionDeleteFailed(String error) {
     return 'エントリーを削除できませんでした: $error';
   }
-
-  @override
-  String get nutritionOfflineQueued => 'オフライン — 再接続時に変更を同期します';
 
   @override
   String get nutritionOfflineCached => 'オフライン — 保存済みの記録を表示しています';
