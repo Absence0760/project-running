@@ -583,11 +583,32 @@ action can honestly be reversed:
   putting the snapshot back, so ordering survives; if the delete cascades
   children server-side, filter the children out too or the list renders orphans.
 - **Not undoable** → keep the `ConfirmDialog`. Use it when the delete cascades
-  something the actor could not reconstruct, when the row is an authored
+  something the actor could not reconstruct, or when the row is an authored
   reusable artefact rather than a line of data (a routine, a saved meal, a
-  plan), or when the affordance sits **inside a modal**: `Modal.svelte` traps
-  Tab, so an undo bar shown over it is unreachable by keyboard and would be an
-  affordance that only exists for mouse users.
+  plan).
+
+**One intent, one undo — including a bulk delete.** Dismissing a collapsed group
+of N notifications is a single intent, so it takes a single slot: one `commit`
+that deletes all N ids in one query and one `restore` that puts the whole list
+snapshot back. The queue's one-slot rule is about *separate* intents (a second
+destruction commits the first); it is not a per-row rule and needs no widening
+for bulk. Don't coalesce two separate intents into one bar — "Undo" would then
+have to mean "undo both", which the user never asked for.
+
+**A delete inside a modal may use undo, but the bar has to be in the trap.**
+`Modal.svelte` traps Tab (the page behind is still in the DOM, there is no
+`inert`), so a fixed bar over it is pointer-only unless the trap admits it. Any
+rendered `[data-modal-trap-include]` host outside the dialog joins the ring,
+appended **after** the dialog's own controls — the offer is a consequence of what
+the user just did in the dialog, so that is where it reads (WCAG 2.4.3), and the
+order must not depend on where the host sits in the layout. `UndoBar`'s
+always-mounted region carries the attribute, so nothing pending means no extra
+focusables and the ring is unchanged. Escape still exits, so widening the ring
+does not create a keyboard trap (2.1.2) — what it fixes is 2.1.1, an affordance
+that was not operable by keyboard at all. Pinned by
+`src/lib/undo_modal_trap_guard.test.ts` plus a keyboard-only leg in
+`tests-e2e/settings/gear.spec.ts`; **do not re-derive the "in-modal deletes must
+confirm" rule**, it was resolved, not deferred.
 
 Two things are forbidden. **Both guards on one action** — a modal followed by an
 undo bar is two dismissals for one intent, and the modal is what teaches users to
@@ -597,6 +618,12 @@ cannot re-upload a deleted Storage object's bytes, so it hands back a different
 row while claiming otherwise. If a class of action genuinely needs restore
 after the fact, that is a soft-delete/trash feature — a `deleted_at` column, a
 read-path filter and a retention story — scope it, don't fake it.
+
+**A counter or badge that reads from the server moves on `commit`, not on
+`defer`.** While the offer stands the row is still there and still unread, so the
+truthful count includes it; decrementing early puts the badge at odds with every
+`refresh()` for the whole window — indefinitely, for a user on the no-time-limit
+setting. The list is the optimistic surface; a server-sourced aggregate is not.
 
 **A timed undo is an accessibility surface.** WCAG 2.2.1 requires the limit be
 turnable-off, adjustable, or extendable; the `undo_window_s` preference
