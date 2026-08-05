@@ -16,9 +16,16 @@ Future<({LocalFoodStore store, Directory dir})> _store(String tag) async {
   return (store: store, dir: dir);
 }
 
-Widget _app(LocalFoodStore store, DateTime day, String slot) => MaterialApp(
+Widget _app(LocalFoodStore store, DateTime day, String slot,
+        {double textScale = 1.0}) =>
+    MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: NutritionMealDetailScreen(store: store, day: day, slot: slot),
     );
 
@@ -78,6 +85,39 @@ void main() {
       await tester.pumpWidget(_app(f.store, DateTime.now(), 'dinner'));
       await tester.pump();
       expect(find.text('Nothing logged for this meal.'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the 7-day trend chart grows instead of overflowing at 2x '
+      'text scale (issue #666 V12)', (tester) async {
+    final f = await _store('scale_');
+    final today = DateTime.now();
+    await tester.runAsync(() async {
+      await f.store.createLocal(
+        startedAt: DateTime(today.year, today.month, today.day, 8),
+        itemName: 'Oats',
+        mealSlot: 'breakfast',
+        calories: 2400,
+      );
+    });
+    try {
+      final chart = find.byWidgetPredicate(
+          (w) => w is ConstrainedBox && w.constraints.minHeight == 120);
+
+      await tester.pumpWidget(_app(f.store, today, 'breakfast'));
+      await tester.pump();
+      expect(tester.getSize(chart).height, 120);
+
+      await tester.pumpWidget(
+          _app(f.store, today, 'breakfast', textScale: 2.0));
+      await tester.pump();
+      // Pre-fix: one RenderFlex overflow per trend column, because the two
+      // labelSmall captions doubled inside a fixed 120 px box.
+      expect(tester.takeException(), isNull);
+      expect(find.text('Last 7 days'), findsOneWidget);
+      expect(tester.getSize(chart).height, greaterThan(120));
     } finally {
       f.dir.deleteSync(recursive: true);
     }
