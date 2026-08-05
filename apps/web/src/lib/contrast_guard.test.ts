@@ -290,3 +290,56 @@ test('status text-on-tint keeps each --color-<status> mix share AA-safe in both 
 			offenders.join('\n'),
 	);
 });
+
+// The leaderboard medal pills (RunSegmentEfforts) and the segment-crown icon.
+// Gold rides the theme-aware --color-crown / --color-on-crown pair (mobile's
+// AppSemanticColors.crown/onCrown, mirrored); silver and bronze are fixed
+// metal fills whose foregrounds are therefore fixed too. Every pair is text on
+// an opaque fill, so the 4.5:1 normal-text floor applies; --color-crown is
+// additionally used as a bare icon colour, which is WCAG 1.4.11 non-text at
+// 3:1. The pre-fix values: gold #f59e0b + white 2.15:1, silver #94a3b8 + white
+// 2.56:1, crown icon #f5b30a on the light surface 1.85:1.
+const AA_NON_TEXT = 3;
+for (const { label, marker } of THEMES) {
+	test(`crown token pairs AA as pill text and 3:1 as an icon — ${label}`, () => {
+		const crown = resolveToken(marker, 'color-crown');
+		const onCrown = resolveToken(marker, 'color-on-crown');
+		const pill = contrastRatio(onCrown, crown);
+		assert.ok(
+			pill >= AA_NORMAL,
+			`--color-on-crown (${onCrown}) on --color-crown (${crown}) is ${pill.toFixed(2)}:1 in ${label}; the rank-1 pill needs >=${AA_NORMAL}:1.`,
+		);
+		for (const surfaceName of ['color-surface', 'color-bg']) {
+			const surface = resolveToken(marker, surfaceName);
+			const icon = contrastRatio(crown, surface);
+			assert.ok(
+				icon >= AA_NON_TEXT,
+				`--color-crown (${crown}) on --${surfaceName} (${surface}) is ${icon.toFixed(2)}:1 in ${label}; the crown icon carries meaning alone and needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+			);
+		}
+	});
+}
+
+test('fixed medal rank pills meet WCAG AA', () => {
+	const source = readFileSync(
+		resolve(__dirname, 'components/RunSegmentEfforts.svelte'),
+		'utf-8',
+	);
+	for (const medal of ['silver', 'bronze']) {
+		const rule = source.match(
+			new RegExp(`\\.rank-pill\\.${medal}\\s*\\{([^}]*)\\}`),
+		);
+		assert.ok(rule, `RunSegmentEfforts.svelte has no .rank-pill.${medal} rule`);
+		const body = rule![1];
+		const bg = body.match(/background:\s*(#[0-9A-Fa-f]{6})/)?.[1];
+		const fgRaw = body.match(/(?<![a-z-])color:\s*(#[0-9A-Fa-f]{6}|white)/)?.[1];
+		assert.ok(bg, `.rank-pill.${medal} has no literal background`);
+		assert.ok(fgRaw, `.rank-pill.${medal} has no literal colour`);
+		const fg = fgRaw === 'white' ? '#FFFFFF' : fgRaw!;
+		const ratio = contrastRatio(fg, bg!);
+		assert.ok(
+			ratio >= AA_NORMAL,
+			`.rank-pill.${medal} renders ${fg} on ${bg} = ${ratio.toFixed(2)}:1; WCAG AA requires >=${AA_NORMAL}:1.`,
+		);
+	}
+});

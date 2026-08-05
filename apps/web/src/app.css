@@ -52,6 +52,14 @@
 	--color-secondary-text: #A24A2C;
 	--color-accent-cyan-text: #3A7385;
 
+	/* Rank-1 / segment-crown gold, as a fill + its own foreground. Mirrors
+	   mobile's AppSemanticColors.crown / onCrown so a leaderboard pill reads
+	   the same on both platforms. Theme-aware because a single gold cannot be
+	   both: the bright #F5B30A this replaces was 1.85:1 as an icon on the light
+	   surface and 2.15:1 under the white pill text it carried. */
+	--color-crown: #7A5C10;
+	--color-on-crown: #F7F3EC;
+
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
@@ -166,6 +174,9 @@
 		--color-secondary-text: var(--color-secondary);
 		--color-accent-cyan-text: var(--color-accent-cyan);
 
+		--color-crown: #E0BE4E;
+		--color-on-crown: #120D22;
+
 		--color-bg: #120D22;
 		--color-bg-secondary: #0C0818;
 		--color-bg-tertiary: #241B3D;
@@ -219,6 +230,9 @@
 	--color-warning-text: var(--color-warning);
 	--color-secondary-text: var(--color-secondary);
 	--color-accent-cyan-text: var(--color-accent-cyan);
+
+	--color-crown: #E0BE4E;
+	--color-on-crown: #120D22;
 
 	--color-bg: #120D22;
 	--color-bg-secondary: #0C0818;

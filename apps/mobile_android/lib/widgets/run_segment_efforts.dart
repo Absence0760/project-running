@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -191,6 +191,27 @@ class _EffortRow extends StatelessWidget {
   }
 }
 
+/// Fill and foreground for a leaderboard rank pill, as `(background, text)`.
+///
+/// Both medal fills are fixed metal hues, so their foregrounds are fixed too —
+/// the pill is opaque and what sits under it never reaches the text. Silver is
+/// a LIGHT metal: it carries dark ink (6.87:1), not the white it shipped with
+/// (2.56:1). Bronze is dark enough for white (5.02:1). Only the crown is
+/// theme-aware, through [AppSemanticColors].
+@visibleForTesting
+(Color, Color) rankPillColors(ThemeData theme, int rank) {
+  if (rank == 1) {
+    final semantic = AppSemanticColors.ofTheme(theme);
+    return (semantic.crown, semantic.onCrown);
+  }
+  if (rank <= 3) return (const Color(0xFF94A3B8), AppTheme.ink);
+  if (rank <= 10) return (const Color(0xFFB45309), Colors.white);
+  return (
+    theme.colorScheme.surfaceContainerHighest,
+    theme.colorScheme.onSurfaceVariant,
+  );
+}
+
 class _RankPill extends StatelessWidget {
   final int rank;
   const _RankPill({required this.rank});
@@ -198,7 +219,7 @@ class _RankPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (bg, fg) = _colors(theme);
+    final (bg, fg) = rankPillColors(theme, rank);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -212,19 +233,6 @@ class _RankPill extends StatelessWidget {
           fontWeight: FontWeight.w700,
         ),
       ),
-    );
-  }
-
-  (Color, Color) _colors(ThemeData theme) {
-    if (rank == 1) {
-      final semantic = AppSemanticColors.ofTheme(theme);
-      return (semantic.crown, semantic.onCrown);
-    }
-    if (rank <= 3) return (const Color(0xFF94A3B8), Colors.white);
-    if (rank <= 10) return (const Color(0xFFB45309), Colors.white);
-    return (
-      theme.colorScheme.surfaceContainerHighest,
-      theme.colorScheme.onSurfaceVariant,
     );
   }
 }
