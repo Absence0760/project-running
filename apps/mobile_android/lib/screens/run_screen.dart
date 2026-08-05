@@ -66,6 +66,7 @@ import '../widgets/live_share_indicator.dart';
 import '../widgets/safety_nudge_banner.dart';
 import '../widgets/todays_workout_card.dart';
 import '../widgets/top_banner.dart';
+import '../widgets/track_preview.dart' show projectTrack;
 import '../widgets/upcoming_event_card.dart';
 import '../widgets/workout_execution_band.dart';
 import 'event_detail_screen.dart';
@@ -5763,6 +5764,12 @@ class _FirstRunPrompt extends StatelessWidget {
 
 /// Scales a waypoint list to fit a small rect and paints a rounded polyline.
 /// Cheap — used for last-run and route-preview cards on the Run tab idle view.
+///
+/// Projection is delegated to `projectTrack`, the same helper the routes-list
+/// thumbnails use, so the finish card and the routes list draw one shape for
+/// one run. Its own copy scaled latitude and longitude by the same factor,
+/// which stretched a square loop 1.61× too wide at 51.5 °N and exactly 2×
+/// at 60 °N — the distortion `decisions.md § 51` exists to prevent.
 class _TrackSparkPainter extends CustomPainter {
   final List<cm.Waypoint> track;
   final Color color;
@@ -5771,39 +5778,13 @@ class _TrackSparkPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (track.length < 2) return;
-    double minLat = track.first.lat, maxLat = track.first.lat;
-    double minLng = track.first.lng, maxLng = track.first.lng;
-    for (final w in track) {
-      if (w.lat < minLat) minLat = w.lat;
-      if (w.lat > maxLat) maxLat = w.lat;
-      if (w.lng < minLng) minLng = w.lng;
-      if (w.lng > maxLng) maxLng = w.lng;
-    }
-    final dLat = (maxLat - minLat).abs();
-    final dLng = (maxLng - minLng).abs();
-    if (dLat == 0 && dLng == 0) return;
+    if (track.length < 2 || size.width <= 0 || size.height <= 0) return;
+    final projected = projectTrack(track, size.width, size.height, pad: 4);
+    if (projected.length < 2) return;
 
-    const pad = 4.0;
-    final w = size.width - pad * 2;
-    final h = size.height - pad * 2;
-    final scale = dLat == 0
-        ? w / dLng
-        : dLng == 0
-            ? h / dLat
-            : (w / dLng < h / dLat ? w / dLng : h / dLat);
-    final xOff = pad + (w - dLng * scale) / 2;
-    final yOff = pad + (h - dLat * scale) / 2;
-
-    final path = Path();
-    for (int i = 0; i < track.length; i++) {
-      final x = xOff + (track[i].lng - minLng) * scale;
-      final y = yOff + (maxLat - track[i].lat) * scale;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+    final path = Path()..moveTo(projected.first.dx, projected.first.dy);
+    for (int i = 1; i < projected.length; i++) {
+      path.lineTo(projected[i].dx, projected[i].dy);
     }
 
     final bg = Paint()

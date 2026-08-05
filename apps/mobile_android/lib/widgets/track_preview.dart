@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import 'package:core_models/core_models.dart';
-import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -417,12 +417,13 @@ class _TrackPreviewPainter extends CustomPainter {
       old.points != points || old.color != color;
 }
 
-/// Project `points` into a `[0, vbW] × [0, vbH]` viewBox with the same
-/// `cos(midLat)` longitude correction the painter uses. Pure helper
-/// extracted so the projection can be unit-tested without spinning up
-/// a Flutter canvas. Mirrors `apps/web/src/lib/components/TrackPreview.svelte`
-/// — keep them in lockstep.
-@visibleForTesting
+/// Project `points` into a `[0, vbW] × [0, vbH]` viewBox with the
+/// `cos(midLat)` longitude correction of `decisions.md § 51`. Pure helper
+/// so the projection can be unit-tested without spinning up a Flutter
+/// canvas, and so every track thumbnail in the app draws the same shape
+/// for the same run — `run_screen`'s spark cards project through it too.
+/// Mirrors `apps/web/src/lib/components/TrackPreview.svelte` — keep them
+/// in lockstep.
 List<Offset> projectTrack(List<Waypoint> points, double vbW, double vbH,
     {double pad = 4}) {
   if (points.length < 2) return const [];
