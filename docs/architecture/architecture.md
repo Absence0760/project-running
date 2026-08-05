@@ -341,9 +341,11 @@ All row marshalling goes through the generated `RunRow` / `RouteRow` classes in 
 Shared Flutter widgets used by both phone apps. Ensures visual consistency across platforms.
 
 - `RunMap` — MapLibre widget with route overlay and live position
-- `StatCard` — metric display card (distance, pace, HR)
+- `StatTile` — the one metric cell (distance, pace, HR), at `.small` / `.medium` / `.large` emphasis
+- `StatGrid` — the row a `StatTile` sits in; column count derived from the width a cell needs at the current text scale
 - `RunListTile` — run history row
 - `ChartCardHeader` — the one header every dashboard chart card wears
+- `SectionHeader` — the one uppercased eyebrow that names a list group
 - `ImportSheet` — bottom sheet for GPX/KML file selection
 
 Plus `AppTheme` (the Dusk light / dark themes and the `AppSemanticColors` status

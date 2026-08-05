@@ -8,7 +8,8 @@ import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChartPalette;
+import 'package:ui_kit/ui_kit.dart'
+    show AppSemanticColors, ChartPalette, StatGrid, StatTile;
 import 'package:uuid/uuid.dart';
 
 import '../adaptive_width.dart';
@@ -1148,23 +1149,23 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       // imports) the "Moving" column is dropped — it's identical to "Time".
       Padding(
         padding: const EdgeInsets.all(20),
-        child: _StatGrid(
+        child: StatGrid(
           cells: [
-            _StatBig(
+            StatTile.large(
               label: l10n.runStatDistance,
               value: UnitFormat.distanceValue(run.distanceMetres, unit),
               unit: UnitFormat.distanceLabel(unit),
             ),
-            _StatBig(
+            StatTile.large(
               label: l10n.runStatTime,
               value: _formatDuration(run.duration),
             ),
             if (_showMovingTime)
-              _StatBig(
+              StatTile.large(
                 label: l10n.runStatMoving,
                 value: _formatDuration(_movingTime),
               ),
-            _StatBig(
+            StatTile.large(
               label: _activityType.usesSpeed
                   ? l10n.runStatAvgSpeed
                   : l10n.runStatPace,
@@ -1183,53 +1184,53 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       if (run.track.length >= 2 || _hasElevation) ...[
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: _StatGrid(
+          child: StatGrid(
             cells: [
               if (_hasElevation) ...[
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.trending_up,
                   label: l10n.runDetailStatElevGain,
                   value: '${_elevationGain.round()}m',
                 ),
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.trending_down,
                   label: l10n.runDetailStatElevLoss,
                   value: '${_elevationLoss.round()}m',
                 ),
               ],
               if (_showGradeAdjustedPace)
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.terrain,
                   label: l10n.runDetailStatGradeAdjPace,
                   value:
                       '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
                 ),
               if (_showCalories)
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.local_fire_department,
                   label: l10n.runStatCalories,
                   value: '$_estimatedCalories ${l10n.runUnitKcal}',
                 ),
               if (_steps > 0)
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.directions_walk,
                   label: l10n.runStatSteps,
                   value: '$_steps',
                 ),
               if (_cadence > 0)
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.speed,
                   label: l10n.runStatCadence,
                   value: '$_cadence ${l10n.runUnitSpm}',
                 ),
               if (_avgBpm > 0)
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.favorite,
                   label: l10n.runDetailStatAvgHr,
                   value: '$_avgBpm ${l10n.runUnitBpm}',
                 ),
               if (_ageGrade != null)
-                _StatSmall(
+                StatTile.small(
                   icon: Icons.emoji_events,
                   label: l10n.runDetailStatAgeGrade,
                   value: _ageGrade!,
@@ -1802,19 +1803,19 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-        child: _StatGrid(
+        child: StatGrid(
           cells: [
-            _StatSmall(
+            StatTile.small(
               icon: Icons.favorite,
               label: l10n.runDetailHrAvg,
               value: '${stats.avg} ${l10n.runUnitBpm}',
             ),
-            _StatSmall(
+            StatTile.small(
               icon: Icons.south,
               label: l10n.runDetailHrMin,
               value: '${stats.min}',
             ),
-            _StatSmall(
+            StatTile.small(
               icon: Icons.north,
               label: l10n.runDetailHrMax,
               value: '${stats.max}',
@@ -2403,144 +2404,6 @@ class _Split {
   final int tick;
   final Duration duration;
   const _Split(this.tick, this.duration);
-}
-
-/// Narrowest a stat cell may be before its value stops being readable.
-/// The widest secondary value the screen produces is a paced one — "10:24
-/// /km", "1234 kcal" — which needs ~64dp at the 14sp body size the value is
-/// drawn in, so 72 leaves the value whole and lets only the label truncate.
-const double _kStatCellMinWidth = 72;
-
-/// Equal-width stat cells that reflow onto a second run rather than striping.
-///
-/// The secondary-stats row was one `Row` of up to eight `Expanded` cells, so
-/// on a 360dp phone a hilly race recorded with a chest strap gave each cell
-/// (360 - 40) / 8 = 40dp — narrower than every value it had to draw, and
-/// `_StatSmall` clips to one ellipsised line. Nothing overflowed, so no test
-/// and no debug banner could see it: the screen just went unreadable. Column
-/// count is derived from the width a cell needs *at the current text scale*,
-/// so a 2.0x reader gets two wide columns instead of eight illegible ones,
-/// and a row that fills all four columns lines up with the row above it.
-class _StatGrid extends StatelessWidget {
-  const _StatGrid({required this.cells});
-
-  static const int _maxColumns = 4;
-
-  final List<Widget> cells;
-
-  @override
-  Widget build(BuildContext context) {
-    if (cells.isEmpty) return const SizedBox.shrink();
-    final minWidth =
-        MediaQuery.textScalerOf(context).scale(_kStatCellMinWidth);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final available = constraints.maxWidth;
-        final columns = (available / minWidth)
-            .floor()
-            .clamp(1, math.min(_maxColumns, cells.length));
-        // Floored so `columns` cells can never total more than `available`
-        // through floating-point drift and push the last one onto its own run.
-        final width = (available / columns).floorToDouble();
-        return Wrap(
-          runSpacing: 12,
-          children: [
-            for (final cell in cells) SizedBox(width: width, child: cell),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _StatSmall extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  const _StatSmall({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Icon(icon, size: 16, color: theme.colorScheme.outline),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatBig extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? unit;
-  const _StatBig({required this.label, required this.value, this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (unit != null) ...[
-                const SizedBox(width: 4),
-                Text(
-                  unit!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
 }
 
 /// Fill colours for the elevation chart's pace bands, ordered

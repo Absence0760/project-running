@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show SectionHeader;
 
 import '../ble_heart_rate.dart';
 import '../ble_treadmill.dart';
@@ -106,7 +107,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
-            _SectionHeader(l10n.settingsSectionProfile),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+              child: SectionHeader(label: l10n.settingsSectionProfile),
+            ),
             _tab(
               icon: Icons.person_outline,
               label: l10n.settingsAccountTitle,
@@ -151,7 +155,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     preferences: widget.preferences,
                   )),
             ),
-            _SectionHeader(l10n.settingsSectionAppsData),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+              child: SectionHeader(label: l10n.settingsSectionAppsData),
+            ),
             _tab(
               icon: Icons.link,
               label: l10n.integrationsTitle,
@@ -190,7 +197,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ));
               },
             ),
-            _SectionHeader(l10n.settingsSectionAccountLegal),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+              child: SectionHeader(label: l10n.settingsSectionAccountLegal),
+            ),
             _tab(
               icon: Icons.favorite_outline,
               label: l10n.proTitle,
@@ -205,7 +215,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (isLocalSupabaseUrl(
                 widget.devBackendUrl ?? maybeDevBackendUrl())) ...[
-              _SectionHeader(l10n.settingsSectionDeveloper),
+              Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+              child: SectionHeader(label: l10n.settingsSectionDeveloper),
+            ),
               _tab(
                 icon: Icons.watch_outlined,
                 label: l10n.simWatchTitle,
@@ -220,23 +233,3 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-      child: Text(
-        label.toUpperCase(),
-        style: theme.textTheme.labelSmall?.copyWith(
-          letterSpacing: 0.8,
-          color: theme.colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}

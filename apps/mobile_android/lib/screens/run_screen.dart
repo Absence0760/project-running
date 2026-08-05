@@ -16,7 +16,7 @@ import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatTile;
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -4551,19 +4551,19 @@ class FinishedSummary extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                           label: l10n.runStatDistance, value: distanceValue),
                     ),
                     Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                           label: l10n.runStatTime, value: timeValue),
                     ),
                     Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                           label: l10n.runStatMoving, value: movingValue),
                     ),
                     Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                         label: primaryLabel,
                         value: primaryValue,
                         unit: primaryUnit,
@@ -4677,28 +4677,28 @@ class _StatsOverlay extends StatelessWidget {
           Row(
                 children: [
                   Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                           label: l10n.runStatDistance, value: distanceValue, unit: distanceUnit)),
                   _divider(theme),
                   Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                           label: primaryLabel, value: primaryValue, unit: primaryUnit)),
                   _divider(theme),
                   Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                           label: secondaryLabel, value: secondaryValue, unit: primaryUnit)),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: StatColumn(label: l10n.runStatCalories, value: calories, unit: l10n.runUnitKcal)),
+                  Expanded(child: StatTile.medium(label: l10n.runStatCalories, value: calories, unit: l10n.runUnitKcal)),
                   _divider(theme),
-                  Expanded(child: StatColumn(label: l10n.runStatElevation, value: elevation, unit: l10n.runUnitMetres)),
+                  Expanded(child: StatTile.medium(label: l10n.runStatElevation, value: elevation, unit: l10n.runUnitMetres)),
                   _divider(theme),
-                  Expanded(child: StatColumn(label: l10n.runStatSteps, value: steps)),
+                  Expanded(child: StatTile.medium(label: l10n.runStatSteps, value: steps)),
                   _divider(theme),
-                  Expanded(child: StatColumn(label: l10n.runStatCadence, value: cadence, unit: l10n.runUnitSpm)),
+                  Expanded(child: StatTile.medium(label: l10n.runStatCadence, value: cadence, unit: l10n.runUnitSpm)),
                 ],
               ),
               // Heart rate row — only renders when a BLE chest strap is
@@ -4710,7 +4710,7 @@ class _StatsOverlay extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: StatColumn(
+                      child: StatTile.medium(
                         label: l10n.runStatHeartRate,
                         value: '$bpm',
                         unit: l10n.runUnitBpm,
@@ -4871,66 +4871,6 @@ class _StatsOverlay extends StatelessWidget {
 
   Widget _divider(ThemeData theme) {
     return Container(width: 1, height: 28, color: theme.dividerColor);
-  }
-}
-
-@visibleForTesting
-class StatColumn extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? unit;
-  const StatColumn(
-      {super.key, required this.label, required this.value, this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        // A wide value (a multi-hour elapsed time, a 4-digit ultra
-        // distance, a long localized unit) must shrink to fit its column
-        // rather than paint an overflow stripe — the finished summary packs
-        // four of these into one Row and the live overlay three, so the
-        // available width per column is small on a narrow phone.
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: [const FontFeature.tabularFigures()],
-                ),
-              ),
-              if (unit != null) ...[
-                const SizedBox(width: 2),
-                Text(
-                  unit!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
-            fontSize: 11,
-          ),
-        ),
-      ],
-    );
   }
 }
 

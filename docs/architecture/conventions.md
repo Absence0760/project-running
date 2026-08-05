@@ -440,6 +440,14 @@ On the Flutter apps, presentation that every instance of a widget should share l
 - **Text fields.** `inputDecorationTheme` names the outlined language at radius 12. **Don't declare `border: OutlineInputBorder()` at a call site** — it re-pins the radius to Material's default 4. A field that is deliberately a different component (a filled borderless search box, a pill composer) still says so locally.
 - **Cards.** The card theme carries **no horizontal margin**. Horizontal insets are the layout's job, so every card in a list starts at its parent's padding edge; a card that insets itself lands at a different left edge from its siblings. The vertical 4 stays, because stacked-card sites rely on it for separation.
 
+## Mobile stat cells — ui_kit `StatTile` in a `StatGrid`
+
+A metric shown as a value over the name of the thing it measures is ui_kit's `StatTile`, at one of three emphases — `.small` (a dense secondary grid cell, icon-led), `.medium` (a live-updating column, and the only tier with tabular figures, because a proportional digit changes the value's width every second), `.large` (a hero row) — never a new private class. Twelve of those had accumulated by round 11 of the #666 audit, drifting to six value type sizes, two label sizes and two muted colours ([decisions.md § 5xx](decisions.md)).
+
+**A value may only shrink; a label may truncate.** `.medium` and `.large` scale the value+unit pair with `BoxFit.scaleDown`, which needs a **bounded** parent — an intrinsically-sized cell in a `Row(mainAxisAlignment: spaceAround)` has no bound, so the row bursts instead of the number shrinking. Lay a stat row out with `StatGrid`, which bounds every cell by construction and derives its column count from the width a cell needs at the current text scale (`kStatCellMinWidth`, scaled); with four or fewer cells that fit it is byte-identical to the `Row` of `Expanded` it replaces. Muted text is `onSurfaceVariant`, never `colorScheme.outline`.
+
+A list group's uppercased eyebrow is ui_kit's `SectionHeader`. It is deliberately distinct from `ChartCardHeader` (the chart-card title, with a note slot) and from a `titleMedium` *section title*, which is a heading rather than an eyebrow. `apps/mobile_android/test/stat_tile_guard_test.dart` (mirrored on iOS) closes both class sets: a new stat-named `StatelessWidget` or a new `_SectionHeader` fails until it is either migrated or listed with the reason it is not one.
+
 ## Mobile empty states — ui_kit `EmptyState`
 
 On the Flutter apps, a whole-surface "nothing here yet / not found" state renders ui_kit's `EmptyState` (icon 48, `all(32)` padding, titleMedium title, bodySmall body, optional CTA — reusing `ErrorState`'s icon size and padding; [decisions.md § 485](decisions.md)), never a hand-rolled centred `Text` or bespoke icon column; tiny inline empty hints inside a larger card/list section stay inline. `architecture_guards_test.dart` fails any `class …EmptyState` declared in `lib/`.

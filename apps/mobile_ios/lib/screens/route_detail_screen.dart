@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatGrid, StatTile;
 
 import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
@@ -1122,38 +1122,28 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Flexible(
-                    child: _Stat(
-                      label: l10n.routeDetailStatDistance,
-                      value:
-                          UnitFormat.distanceValue(route.distanceMetres, unit),
-                      unit: UnitFormat.distanceLabel(unit),
-                    ),
+              child: StatGrid(
+                cells: [
+                  StatTile.large(
+                    label: l10n.routeDetailStatDistance,
+                    value: UnitFormat.distanceValue(route.distanceMetres, unit),
+                    unit: UnitFormat.distanceLabel(unit),
                   ),
-                  Flexible(
-                    child: _Stat(
-                      label: l10n.routeDetailStatElevation,
-                      value: '${route.elevationGainMetres.round()}',
-                      unit: 'm',
-                    ),
+                  StatTile.large(
+                    label: l10n.routeDetailStatElevation,
+                    value: '${route.elevationGainMetres.round()}',
+                    unit: 'm',
                   ),
                   if (_avgRating > 0)
-                    Flexible(
-                      child: _Stat(
-                        label: l10n.routeDetailStatReviews(_reviews.length),
-                        value: formatFixed(_avgRating, 1, activeLocaleTag),
-                        unit: '/ 5',
-                      ),
+                    StatTile.large(
+                      label: l10n.routeDetailStatReviews(_reviews.length),
+                      value: formatFixed(_avgRating, 1, activeLocaleTag),
+                      unit: '/ 5',
                     )
                   else
-                    Flexible(
-                      child: _Stat(
-                        label: l10n.routeDetailStatWaypoints,
-                        value: '${route.waypoints.length}',
-                      ),
+                    StatTile.large(
+                      label: l10n.routeDetailStatWaypoints,
+                      value: '${route.waypoints.length}',
                     ),
                 ],
               ),
@@ -2253,50 +2243,6 @@ class _MetaChip extends StatelessWidget {
   }
 }
 
-class _Stat extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? unit;
-  const _Stat({required this.label, required this.value, this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Flexible(
-              child: Text(value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  )),
-            ),
-            if (unit != null) ...[
-              const SizedBox(width: 4),
-              Text(unit!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  )),
-            ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            )),
-      ],
-    );
-  }
-}
 
 class _RouteTagsRow extends StatefulWidget {
   final cm.Route route;

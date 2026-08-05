@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show StatTile;
 
 import '../fitness.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -204,37 +205,16 @@ class FitnessStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final labelStyle =
-        theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline);
     final hasTip = tooltip != null;
-    final column = Column(
-      children: [
-        Text(value,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            )),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(label,
-                  style: labelStyle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-            ),
-            if (hasTip) ...[
-              const SizedBox(width: 3),
-              Icon(Icons.info_outline,
-                  size: 13, color: theme.colorScheme.outline),
-            ],
-          ],
-        ),
-      ],
+    final tile = StatTile.large(
+      label: label,
+      value: value,
+      labelTrailing: hasTip
+          ? Icon(Icons.info_outline,
+              size: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)
+          : null,
     );
-    if (!hasTip) return column;
+    if (!hasTip) return tile;
     return Tooltip(
       message: tooltip!,
       triggerMode: TooltipTriggerMode.longPress,
@@ -243,7 +223,7 @@ class FitnessStat extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: column,
+          child: tile,
         ),
       ),
     );

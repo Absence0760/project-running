@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, SectionHeader;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -148,10 +148,14 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                     // starred and the rest.
                     if (hasStarred && _search.trim().isEmpty) {
                       if (index == 0) {
-                        return _SectionHeader(
-                          icon: Icons.star,
-                          label: l10n.routePickerStarredHeader,
-                          color: AppSemanticColors.of(context).crown,
+                        return Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                          child: SectionHeader(
+                            icon: Icons.star,
+                            label: l10n.routePickerStarredHeader,
+                            iconColor: AppSemanticColors.of(context).crown,
+                          ),
                         );
                       }
                       // Find the index of the first non-starred
@@ -159,10 +163,13 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                       final firstUnstarred =
                           routes.indexWhere((r) => !r.isStarred);
                       if (firstUnstarred > 0 && index == firstUnstarred + 1) {
-                        return _SectionHeader(
-                          icon: Icons.route,
-                          label: l10n.routePickerAllRoutesHeader,
-                          color: theme.colorScheme.onSurfaceVariant,
+                        return Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                          child: SectionHeader(
+                            icon: Icons.route,
+                            label: l10n.routePickerAllRoutesHeader,
+                          ),
                         );
                       }
                       // Translate the rendered index → routes
@@ -194,42 +201,6 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _SectionHeader({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              label.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                letterSpacing: 0.6,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _RouteTile extends StatelessWidget {
   final cm.Route route;
