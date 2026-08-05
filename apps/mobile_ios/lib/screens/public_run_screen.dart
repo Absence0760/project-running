@@ -144,8 +144,9 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
         ],
       ),
       body: _loading
-          ? const Center(
-              child: ActivityLoader(kind: ActivityLoaderKind.run, size: 76),
+          ? FullBodyLoader(
+              kind: ActivityLoaderKind.run,
+              label: l10n.commonLoading,
             )
           : _loadError != null
               ? ErrorState(

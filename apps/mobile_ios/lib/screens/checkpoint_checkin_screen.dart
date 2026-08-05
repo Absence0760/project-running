@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show ActivityLoaderKind, FullBodyLoader;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../auth_error.dart';
@@ -218,7 +219,10 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
 
   Widget _buildBody(AppLocalizations l10n, ThemeData theme) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return FullBodyLoader(
+        kind: ActivityLoaderKind.run,
+        label: l10n.commonLoading,
+      );
     }
     if (_loadError != null) {
       return Center(

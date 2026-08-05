@@ -311,11 +311,12 @@ void main() {
   setUpAll(_ensureSupabase);
 
   group('ClubDetailScreen — initial render', () {
-    testWidgets('first frame shows the loading spinner', (tester) async {
+    testWidgets('first frame shows the full-body loader', (tester) async {
       // Reason: while _loading is true the screen returns a bare
-      // Scaffold with just a centered spinner.
+      // Scaffold carrying nothing but the loader.
       await _pump(tester);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(FullBodyLoader), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
     });
 
     testWidgets('initial Scaffold has no AppBar yet', (tester) async {
