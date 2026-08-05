@@ -378,10 +378,8 @@ class _AddRunScreenState extends State<AddRunScreen> {
                         padding: const EdgeInsets.only(top: 6, left: 12),
                         child: Text(
                           state.errorText!,
-                          style: TextStyle(
-                            color: theme.colorScheme.error,
-                            fontSize: 12,
-                          ),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.colorScheme.error),
                         ),
                       ),
                   ],

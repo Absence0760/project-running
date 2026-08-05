@@ -220,7 +220,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     _onPrivacyPage
                         ? l10n.onboardingGrantPermission
                         : l10n.onboardingNext,
-                    style: const TextStyle(fontSize: 16),
                   ),
                 ),
               ),

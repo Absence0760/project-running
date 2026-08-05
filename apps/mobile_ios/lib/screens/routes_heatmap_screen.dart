@@ -1211,11 +1211,10 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: scheme.onPrimaryContainer,
-        ),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: scheme.onPrimaryContainer,
+            ),
       ),
     );
   }
@@ -1231,12 +1230,11 @@ class _FilterGroupLabel extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8, bottom: 8),
       child: Text(
         text.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.6,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
       ),
     );
   }

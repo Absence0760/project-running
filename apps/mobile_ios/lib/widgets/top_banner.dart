@@ -196,7 +196,7 @@ class _TopBannerWidget extends StatelessWidget {
                             child: Text(
                               message,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13),
+                                  fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
@@ -214,8 +214,7 @@ class _TopBannerWidget extends StatelessWidget {
                         ),
                         child: Text(
                           actionLabel!,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 13),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],

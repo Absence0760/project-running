@@ -2327,7 +2327,7 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
         children: [
           for (final t in _tags)
             Chip(
-              label: Text(t, style: const TextStyle(fontSize: 12)),
+              label: Text(t, style: theme.textTheme.labelMedium),
               onDeleted: widget.isOwner && !_saving ? () => _remove(t) : null,
               visualDensity: VisualDensity.compact,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2338,7 +2338,7 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
               child: TextField(
                 controller: _controller,
                 enabled: !_saving,
-                style: const TextStyle(fontSize: 12),
+                style: theme.textTheme.bodySmall,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _add(),
                 decoration: InputDecoration(

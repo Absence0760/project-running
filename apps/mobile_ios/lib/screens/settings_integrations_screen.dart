@@ -662,8 +662,10 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
                 Expanded(
                   child: Text(
                     l10n.integrationsHrScanTitle,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (_scanning)
@@ -677,10 +679,9 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
             const SizedBox(height: 4),
             Text(
               l10n.integrationsHrScanHint,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 12),
             if (_results.isEmpty && !_scanning)
@@ -883,8 +884,10 @@ class _TreadmillScanSheetState extends State<_TreadmillScanSheet> {
                 Expanded(
                   child: Text(
                     l10n.integrationsTreadmillScanTitle,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (_scanning)
@@ -898,10 +901,9 @@ class _TreadmillScanSheetState extends State<_TreadmillScanSheet> {
             const SizedBox(height: 4),
             Text(
               l10n.integrationsTreadmillScanHint,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 12),
             if (_results.isEmpty && !_scanning)

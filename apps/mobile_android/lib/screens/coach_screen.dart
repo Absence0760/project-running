@@ -1253,7 +1253,11 @@ class _CoachScreenState extends State<CoachScreen> {
           children: [
             Icon(icon, size: 14, color: color),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 12, color: color)),
+            Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(color: color)),
           ],
         ),
       ),
