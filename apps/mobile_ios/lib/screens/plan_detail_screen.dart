@@ -1040,17 +1040,24 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               backgroundColor: theme.dividerColor,
             ),
           ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('$pct%',
-                  style: theme.textTheme.titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700)),
-              Text('$done/$total',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  )),
-            ],
+          // The ring's diameter is fixed by the header layout, so its caption
+          // is bounded by the graphic: at 2x OS text scale "100%" over "12/12"
+          // needs 144 px and overflowed the 64 px ring by 112. Scaling down
+          // keeps both numbers whole and legible where clipping did not.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('$pct%',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                Text('$done/$total',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    )),
+              ],
+            ),
           ),
         ],
       ),

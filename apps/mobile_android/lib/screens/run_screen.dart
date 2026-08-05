@@ -3958,14 +3958,28 @@ class _RunScreenState extends State<RunScreen> {
                               ),
                             ],
                           ),
+                          // The circle is a fixed 140 px, so its label is
+                          // bounded by the graphic. "START" already fills
+                          // 117.5 of the 124 px interior in English at 1.0x —
+                          // French "DÉMARRER" and German "STARTEN" were being
+                          // broken mid-word, and 2x cropped every locale.
                           child: Center(
-                            child: Text(
-                              l10n.runStart,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: semantic.onSuccess,
-                                letterSpacing: 1.5,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  l10n.runStart,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: semantic.onSuccess,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
                               ),
                             ),
                           ),

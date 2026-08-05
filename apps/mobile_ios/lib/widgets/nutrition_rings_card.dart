@@ -106,12 +106,22 @@ class NutritionRingsCard extends StatelessWidget {
                   color: ringColor,
                 ),
               ),
+              // The value lives inside the arc, so the ring bounds it: a
+              // four-digit calorie count already fills 46 of the 48 px at
+              // 1.0x, and at 2x it was being wrapped and cropped.
               if (over)
-                Text('+${r.budget!.over}',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.error))
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('+${r.budget!.over}',
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: theme.colorScheme.error)),
+                )
               else
-                Text('${r.consumed}', style: theme.textTheme.labelSmall),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child:
+                      Text('${r.consumed}', style: theme.textTheme.labelSmall),
+                ),
             ],
           ),
         ),

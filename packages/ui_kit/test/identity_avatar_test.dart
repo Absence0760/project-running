@@ -150,5 +150,39 @@ void main() {
       expect(find.text('B'), findsOneWidget);
       expect(find.byType(RawImage), findsNothing);
     });
+
+    testWidgets('the initial stays inside the circle at 2x OS text scale',
+        (tester) async {
+      Future<void> pump(double scale) => tester.pumpWidget(
+            MaterialApp(
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: const Scaffold(
+                body: Center(
+                  child: IdentityAvatar(
+                      seed: 'user-5', name: 'alice', size: 18, fontSize: 10),
+                ),
+              ),
+            ),
+          );
+
+      // The caller picks the diameter for layout, so the initial is bounded
+      // by the circle. Pre-fix a 10 px initial rendered 20.3 x 29 at 2x and
+      // spilled outside an 18 px avatar.
+      await pump(1.0);
+      final at1x = tester.getSize(find.byType(FittedBox));
+      expect(at1x.height, lessThanOrEqualTo(18));
+
+      await pump(2.0);
+      final at2x = tester.getSize(find.byType(FittedBox));
+      expect(at2x.width, lessThanOrEqualTo(18));
+      expect(at2x.height, lessThanOrEqualTo(18));
+      // Still bigger than at 1.0x — scaleDown honours the larger setting up
+      // to what the circle can hold, it does not pin the initial at 1.0x.
+      expect(at2x.height, greaterThan(at1x.height));
+    });
   });
 }

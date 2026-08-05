@@ -6,11 +6,17 @@ import '../lib/nutrition_targets.dart';
 import '../lib/nutrition_totals.dart';
 import '../lib/widgets/nutrition_rings_card.dart';
 
-Future<void> _pump(WidgetTester tester, Widget child) {
+Future<void> _pump(WidgetTester tester, Widget child,
+    {double textScale = 1.0}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, c) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: c!,
+      ),
       home: Scaffold(body: child),
     ),
   );
@@ -72,6 +78,32 @@ void main() {
       );
       await tester.tap(find.byType(NutritionRingsCard));
       expect(tapped, isTrue);
+    });
+
+    testWidgets('the ring value stays inside the 48 px arc at 2x text scale',
+        (tester) async {
+      // A four-digit calorie count already fills 46 of the 48 px at 1.0x; at
+      // 2x it needed 90 and was wrapped and cropped inside the ring.
+      const big =
+          MacroTotals(calories: 2450, proteinG: 132, carbsG: 180, fatG: 61);
+      final value = find.ancestor(
+          of: find.text('2450'), matching: find.byType(FittedBox));
+
+      await _pump(
+        tester,
+        const NutritionRingsCard(consumed: big, targets: null, onTap: _noop),
+      );
+      final at1x = tester.getSize(value.first);
+
+      await _pump(
+        tester,
+        const NutritionRingsCard(consumed: big, targets: null, onTap: _noop),
+        textScale: 2.0,
+      );
+      final at2x = tester.getSize(value.first);
+      expect(at2x.width, lessThanOrEqualTo(48));
+      expect(at2x.height, lessThanOrEqualTo(48));
+      expect(at2x.width, greaterThanOrEqualTo(at1x.width));
     });
   });
 }
