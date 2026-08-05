@@ -110,3 +110,16 @@ test('the route review delete defers and no longer confirms', () => {
 		'the review confirm was replaced by undo, not joined to it',
 	);
 });
+
+test('the route marker delete defers and no longer confirms', () => {
+	// Reason: a marker is one pin placed in one tap — no children, no
+	// Storage object — and its server-derived position_m survives precisely
+	// because the deferred delete never touches the row.
+	const source = read('src/lib/components/RouteMarkerEditor.svelte');
+	assert.match(source, /deferDestructive\(\{/, 'the marker delete must defer');
+	assert.doesNotMatch(
+		source,
+		/confirmDeleteId/,
+		'the marker confirm was replaced by undo, not joined to it',
+	);
+});

@@ -655,7 +655,12 @@
 							{route.is_public ? m('routeDetail.public') : m('routeDetail.private')}
 						</button>
 					{/if}
-					<button class="btn btn-primary btn-sm" onclick={handleShare} disabled={sharing}>{m('routeDetail.share')}</button>
+					<button
+						class="btn btn-primary btn-sm"
+						data-testid="route-share-btn"
+						onclick={handleShare}
+						disabled={sharing}>{m('routeDetail.share')}</button
+					>
 					{#if !isOwner && auth.user}
 						<button
 							class="btn btn-outline btn-sm"

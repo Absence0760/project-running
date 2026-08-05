@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { deferDestructive } from '$lib/stores/undo.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import ConfirmDialog from './ConfirmDialog.svelte';
 	import type { MapMarkerPin } from './RunMap.svelte';
 	import type { RouteMarker, RouteMarkerKind } from '$lib/types';
 	import {
@@ -98,7 +98,6 @@
 	let distanceClamped = $state(false);
 	let formOpen = $state(false);
 	let saving = $state(false);
-	let confirmDeleteId = $state<string | null>(null);
 
 	let sorted = $derived(sortMarkers(markers));
 
@@ -486,17 +485,24 @@
 		}
 	}
 
-	async function doDelete() {
-		const id = confirmDeleteId;
-		confirmDeleteId = null;
-		if (!id) return;
-		try {
-			await deleteRouteMarker(id);
-			await reload();
-			if (editingId === id) closeForm();
-		} catch (e) {
-			showToast(m('routeMarker.deleteFailed', { error: `${e}` }), 'error');
-		}
+	// A marker is one pin the author placed in one tap, with nothing hanging
+	// off it and no Storage object, so it takes the undo path rather than a
+	// modal. The row leaves the local list at once (the pin disappears with
+	// it, via the `sorted` -> `pins` effect) and the delete is held; a
+	// server-derived `position_m` survives because the row is never touched.
+	function removeMarker(id: string) {
+		const before = markers;
+		markers = markers.filter((mk) => mk.id !== id);
+		if (editingId === id) closeForm();
+		deferDestructive({
+			message: m('routeMarker.removed'),
+			commit: () => deleteRouteMarker(id),
+			restore: () => {
+				markers = before;
+			},
+			onCommitError: (e) =>
+				showToast(m('routeMarker.deleteFailed', { error: `${e}` }), 'error'),
+		});
 	}
 
 	function kindLabel(kind: string): string {
@@ -598,7 +604,7 @@
 								class="icon-btn"
 								title={m('routeMarker.delete')}
 								aria-label={m('routeMarker.delete')}
-								onclick={() => (confirmDeleteId = mk.id)}
+								onclick={() => removeMarker(mk.id)}
 							>
 								<span class="material-symbols">delete</span>
 							</button>
@@ -793,16 +799,6 @@
 		</form>
 	{/if}
 </section>
-
-<ConfirmDialog
-	open={confirmDeleteId != null}
-	title={m('routeMarker.deleteConfirmTitle')}
-	message={m('routeMarker.deleteConfirmMessage')}
-	confirmLabel={m('routeMarker.delete')}
-	danger
-	onconfirm={doDelete}
-	oncancel={() => (confirmDeleteId = null)}
-/>
 
 <style>
 	/* The clock-vs-elapsed switch sits OUTSIDE its field's <label>: a nested
