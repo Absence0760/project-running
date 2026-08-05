@@ -35,9 +35,13 @@ func pushMode(prefs map[string]interface{}) string {
 }
 
 // shouldPush decides whether a notification of the given kind is pushed under
-// the resolved mode. Shares importantKinds with the email channel — the
-// "what's important" classification is channel-independent.
+// the resolved mode. Shares importantKinds AND inAppOnlyKinds with the email
+// channel — both the "what's important" classification and the "this never
+// leaves the inbox" one are channel-independent.
 func shouldPush(kind, mode string) bool {
+	if inAppOnlyKinds[kind] {
+		return false
+	}
 	switch mode {
 	case pushModeOff:
 		return false

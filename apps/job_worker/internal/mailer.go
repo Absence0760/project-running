@@ -282,6 +282,28 @@ var importantKinds = map[string]bool{
 	"message":        true,
 }
 
+// inAppOnlyKinds never leave the notifications inbox, whatever channel mode
+// the recipient is on. Membership is the recorded exemption from the
+// catalogue-coverage guard in notification_copy_guard_test.go — a kind is
+// either emailable copy or listed here, never a silent fall-through to the
+// generic "you have a new notification".
+//
+// content_hidden is the one entry. It is a PROVISIONAL automated moderation
+// notice (auto_hide_target, migration 20270218_001) that a human reviewer may
+// reverse within hours, and it has no destination: web's notificationLinkFor
+// returns null for it deliberately, so an outbound message would carry a CTA
+// with nowhere to go. It also fires off a report count, which a coordinated
+// reporting campaign can drive — pushing that into a mailbox or a system tray
+// hands the campaign a channel the recipient cannot mute per-kind. The inbox
+// row still carries the notice, so nothing is withheld from the user.
+//
+// This must be enforced here rather than by omission from importantKinds:
+// absence there only suppresses the default "important" mode, and a recipient
+// on "all" would still be emailed and pushed.
+var inAppOnlyKinds = map[string]bool{
+	"content_hidden": true,
+}
+
 // emailMode reads the channel preference out of the user_settings.prefs
 // bag, defaulting to "important". A non-string or unknown value also
 // falls back to "important" (fail-toward-smaller-set).
@@ -301,6 +323,9 @@ func emailMode(prefs map[string]interface{}) string {
 // shouldEmail decides whether a notification of the given kind is emailed
 // under the resolved mode.
 func shouldEmail(kind, mode string) bool {
+	if inAppOnlyKinds[kind] {
+		return false
+	}
 	switch mode {
 	case emailModeOff:
 		return false
