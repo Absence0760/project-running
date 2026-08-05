@@ -564,7 +564,7 @@
 						{#if route.is_featured}
 							<div class="key-stat key-stat-activity">
 								<span class="key-stat-value">
-									<span class="material-symbols" style="color: #facc15">star</span>
+									<span class="material-symbols" style="color: var(--color-crown)">star</span>
 									{m('routeDetail.statFeatured')}
 								</span>
 								<span class="key-stat-label">{m('routeDetail.statStatus')}</span>
@@ -1175,7 +1175,7 @@
 	}
 
 	.star-btn.starred {
-		color: #fbbf24;
+		color: var(--color-crown);
 	}
 
 	.star-btn .material-symbols {
@@ -1375,7 +1375,7 @@
 	}
 
 	.star-btn.filled, .star-display.filled {
-		color: #EAB308;
+		color: var(--color-crown);
 	}
 
 	.star-display {

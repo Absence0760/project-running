@@ -586,7 +586,7 @@ img {
 }
 .btn-primary {
 	background: var(--color-primary);
-	color: #FFFFFF;
+	color: var(--color-on-primary);
 }
 .btn-primary:hover:not(:disabled) {
 	background: var(--color-primary-hover);

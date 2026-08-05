@@ -186,10 +186,10 @@
 		font-size: 0.95rem;
 	}
 	.delta-up {
-		color: #047857;
+		color: var(--color-success-text);
 	}
 	.delta-down {
-		color: #b45309;
+		color: var(--color-warning-text);
 	}
 	.delta-flat {
 		color: var(--color-text-secondary);

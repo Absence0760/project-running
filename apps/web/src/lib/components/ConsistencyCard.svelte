@@ -92,12 +92,12 @@
 		letter-spacing: 0.03em;
 	}
 	.chip-steady {
-		background: #d1fae5;
-		color: #047857;
+		background: var(--color-success-light);
+		color: var(--color-success-text);
 	}
 	.chip-variable {
-		background: #fef3c7;
-		color: #b45309;
+		background: var(--color-warning-light);
+		color: var(--color-warning-text);
 	}
 	.headline {
 		display: flex;

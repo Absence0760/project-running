@@ -582,7 +582,7 @@
 		z-index: var(--z-toast, 100);
 		/* WCAG 2.2 AA: white on --color-warning (#E6A96B) was 2.05:1.
 		   --color-warning-strong (#9A5B0A) is 5.42:1. */
-		background: var(--color-warning-strong, #9A5B0A);
+		background: var(--color-warning-strong);
 		color: white;
 		padding: 0.5rem var(--space-md);
 		font-size: 0.85rem;

@@ -64,7 +64,7 @@
 		flex-shrink: 0;
 		padding: var(--space-xs) var(--space-md);
 		/* WCAG AA: white on --color-danger was 3.06:1 in dark; -strong is 6.06:1. */
-		background: var(--color-danger-strong, #B0392C);
+		background: var(--color-danger-strong);
 		color: white;
 		border: none;
 		border-radius: var(--radius-sm);

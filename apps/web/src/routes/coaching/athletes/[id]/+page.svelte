@@ -523,7 +523,7 @@
 		color: var(--color-primary, #4f46e5);
 	}
 	.status-pill.status-missed {
-		background: color-mix(in srgb, var(--color-danger, #dc2626) 16%, transparent);
+		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
 		color: var(--color-danger-text);
 	}
 	.status-pill.status-upcoming {
@@ -557,7 +557,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 </style>
