@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
@@ -22,9 +23,11 @@ Future<void> _pump(
   required DateTime now,
   double textScale = 1.0,
   double width = 400,
+  ThemeData? theme,
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (context, child) => MediaQuery(
@@ -154,10 +157,59 @@ void main() {
           ),
         ),
       );
-      // The title + total share one row; at 320 the title must ellipsize
-      // instead of throwing a RenderFlex overflow (the harness fails the
-      // test on one).
+      // The title + total share one row where they fit and reflow where they
+      // do not; at 320 neither may throw a RenderFlex overflow (the harness
+      // fails the test on one).
       expect(find.text('This Week'), findsOneWidget);
+    });
+
+
+    // Issue #666 round 10 S7: the bar drew in colorScheme.primary, which is
+    // dusk in light and coral in dark — a brand/interaction token, so the same
+    // mark meant "data" in one theme and echoed an affordance in the other.
+    // Charts take their marks from ChartPalette.
+    for (final (name, theme) in [
+      ('light', AppTheme.light),
+      ('dark', AppTheme.dark),
+    ]) {
+      testWidgets('the fill bar draws the chart palette in $name',
+          (tester) async {
+        await _pump(
+          tester,
+          runs: [_run(startedAt: DateTime(2026, 6, 8, 7), distanceM: 12340)],
+          now: wed,
+          theme: theme,
+        );
+        final palette = ChartPalette.ofTheme(theme);
+        expect(_fillColour(tester), palette.bar);
+        expect(_fillColour(tester), isNot(theme.colorScheme.primary));
+      });
+
+      testWidgets('a logged cell wash comes off the same ramp in $name',
+          (tester) async {
+        await _pump(
+          tester,
+          runs: [_run(startedAt: DateTime(2026, 6, 8, 7), distanceM: 12340)],
+          now: wed,
+          theme: theme,
+        );
+        final ramp = ChartPalette.ofTheme(theme).ramp.first;
+        expect(
+          _loggedCellColours(tester),
+          contains(ramp.withValues(alpha: 0.18)),
+        );
+      });
+    }
+
+    testWidgets('the header is the shared chart eyebrow', (tester) async {
+      await _pump(tester, runs: const [], now: wed);
+      expect(
+        find.ancestor(
+          of: find.text('This Week'),
+          matching: find.byType(ChartCardHeader),
+        ),
+        findsOneWidget,
+      );
     });
 
     group('OS text scaling', () {
@@ -213,3 +265,26 @@ void main() {
     });
   });
 }
+
+/// Fill colour of the bar inside the first logged day cell.
+Color _fillColour(WidgetTester tester) => tester
+    .widgetList<Container>(find.descendant(
+      of: find.byType(FractionallySizedBox),
+      matching: find.byType(Container),
+    ))
+    .map((c) => c.decoration)
+    .whereType<BoxDecoration>()
+    .map((d) => d.color!)
+    .first;
+
+/// Background colours of the seven day cells, in render order.
+List<Color> _loggedCellColours(WidgetTester tester) => tester
+    .widgetList<Container>(find.descendant(
+      of: find.byType(IntrinsicHeight),
+      matching: find.byType(Container),
+    ))
+    .map((c) => c.decoration)
+    .whereType<BoxDecoration>()
+    .map((d) => d.color)
+    .whereType<Color>()
+    .toList();

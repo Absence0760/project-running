@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../hr_zone_palette.dart';
 import '../hr_zones.dart';
@@ -70,27 +71,9 @@ class IntensityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.intensityTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.06,
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ),
-                Text(
-                  l10n.intensityWindow(windowDays),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-              ],
+            ChartCardHeader(
+              title: l10n.intensityTitle,
+              note: l10n.intensityWindow(windowDays),
             ),
             const SizedBox(height: 10),
             _SegmentedBar(breakdown: breakdown),
@@ -100,7 +83,7 @@ class IntensityCard extends StatelessWidget {
             Text(
               l10n.intensityBasedOn(breakdown.hrTrackedRuns),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             if (_zonesAreAgeEstimated()) ...[
@@ -108,7 +91,7 @@ class IntensityCard extends StatelessWidget {
               Text(
                 l10n.runDetailHrDisclaimer,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -243,7 +226,7 @@ class _ZoneLegend extends StatelessWidget {
               Text(
                 _pctLabel(breakdown.zoneSeconds[i], total),
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],

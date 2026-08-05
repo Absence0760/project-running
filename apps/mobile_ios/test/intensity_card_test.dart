@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
@@ -55,9 +56,11 @@ Future<void> _pump(
   required List<int>? hrZones,
   required DateTime now,
   SettingsSyncService? settingsSync,
+  ThemeData? theme,
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -212,12 +215,54 @@ void main() {
           ),
         ),
       );
-      // Title + window label share one row; at 320 the title must
-      // ellipsize instead of throwing a RenderFlex overflow (the harness
-      // fails the test on one).
+      // Title + window label share one row where both fit and reflow where
+      // they do not; at 320 neither may throw a RenderFlex overflow (the
+      // harness fails the test on one).
       expect(find.text('TRAINING INTENSITY'), findsOneWidget);
       expect(find.text('last 30 days'), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.text('TRAINING INTENSITY'),
+          matching: find.byType(ChartCardHeader),
+        ),
+        findsOneWidget,
+      );
     });
+
+    // Issue #666 round 10 S7: every label on this card painted in
+    // colorScheme.outline — §487's 3:1 boundary token, 4.058:1 on the light
+    // card, under WCAG 1.4.3's 4.5:1 for the 11-12 sp type carrying it.
+    for (final (name, theme) in [
+      ('light', AppTheme.light),
+      ('dark', AppTheme.dark),
+    ]) {
+      testWidgets('no label paints in the boundary token in $name',
+          (tester) async {
+        await _pump(
+          tester,
+          runs: [
+            _r(
+              startedAt: now.subtract(const Duration(days: 1)),
+              durationS: 1200,
+              avgBpm: 140,
+            ),
+          ],
+          hrZones: zones,
+          now: now,
+          theme: theme,
+        );
+        final colours = tester
+            .widgetList<Text>(find.descendant(
+              of: find.byType(IntensityCard),
+              matching: find.byType(Text),
+            ))
+            .map((t) => t.style?.color)
+            .whereType<Color>()
+            .toSet();
+        expect(colours, isNotEmpty);
+        expect(colours, isNot(contains(theme.colorScheme.outline)));
+      });
+    }
   });
 
   group('IntensityCard age-estimated caveat (#268)', () {
