@@ -105,12 +105,6 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	'lib/components/RouteBuilder.svelte': { EF4444: 1, '22C55E': 1, '16A34A': 1, DC2626: 1 },
 	// Cartographic: the featured-cluster gold halo on the heatmap pins.
 	'lib/components/RouteHeatmap.svelte': { FACC15: 1 },
-	// Cartographic: the segment-effort overlay line + its two marker classes
-	// (animated replay dot, segment pin) and the start / finish map markers.
-	// The overlay accent is the web twin of mobile's live_run_map.dart entry;
-	// #F59E0B computes to 1.87:1 against a light basemap, so its contrast is
-	// carried by the white ring around it, not by the hue.
-	'lib/components/RunMap.svelte': { F59E0B: 5, '22C55E': 1, EF4444: 1 },
 	// Painted start / finish caps on the mini track preview — the exact twin
 	// of mobile's track_preview.dart allowlist entry.
 	'lib/components/TrackPreview.svelte': { '22C55E': 1, EF4444: 1 },
