@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../basemap_credits.dart' show tileEnv;
 import '../l10n/gen/app_localizations.dart';
 
 /// Inline diagnostic shown on map-bearing screens when NEITHER
@@ -34,15 +34,10 @@ class MissingMapTilesHint extends StatelessWidget {
 
   bool get _tilesConfigured {
     if (envKeyPresentOverride != null) return envKeyPresentOverride!;
-    try {
-      final key = (dotenv.env['MAPTILER_KEY'] ?? '').trim();
-      final override = (dotenv.env['TILE_URL_TEMPLATE'] ?? '').trim();
-      return key.isNotEmpty || override.isNotEmpty;
-    } catch (_) {
-      // dotenv may not be initialised in some test paths — treat
-      // as "no key" so the diagnostic surfaces rather than crashing.
-      return false;
-    }
+    final env = tileEnv();
+    final key = (env['MAPTILER_KEY'] ?? '').trim();
+    final override = (env['TILE_URL_TEMPLATE'] ?? '').trim();
+    return key.isNotEmpty || override.isNotEmpty;
   }
 
   @override
