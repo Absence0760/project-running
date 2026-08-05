@@ -18,11 +18,27 @@ import '../lib/widgets/live_run_map.dart';
 
 late Directory _runsDir;
 
+/// A due-north track of [km] kilometres sampled every 100 m, long enough for
+/// `computeSplitDurations` to emit per-kilometre splits.
+List<Waypoint> _straightTrack(int km) {
+  const metresPerDegreeLat = 111320.0;
+  final start = DateTime.utc(2026, 4, 15, 7, 30);
+  return [
+    for (var i = 0; i <= km * 10; i++)
+      Waypoint(
+        lat: -37.8136 + (i * 100) / metresPerDegreeLat,
+        lng: 144.9631,
+        timestamp: start.add(Duration(seconds: i * 30)),
+      ),
+  ];
+}
+
 Run _run({
   double distanceMetres = 5000,
   Duration duration = const Duration(minutes: 25),
   String? title,
   bool withTrack = false,
+  List<Waypoint>? track,
   Map<String, dynamic>? metadata,
 }) =>
     Run(
@@ -39,20 +55,21 @@ Run _run({
       // fire when a test cares about secondary stats; the values
       // aren't used by the calorie math (which derives from
       // distanceMetres + bodyWeightKg + activityType only).
-      track: withTrack
-          ? [
-              Waypoint(
-                lat: -37.8136,
-                lng: 144.9631,
-                timestamp: DateTime.utc(2026, 4, 15, 7, 30),
-              ),
-              Waypoint(
-                lat: -37.8137,
-                lng: 144.9632,
-                timestamp: DateTime.utc(2026, 4, 15, 7, 31),
-              ),
-            ]
-          : const [],
+      track: track ??
+          (withTrack
+              ? [
+                  Waypoint(
+                    lat: -37.8136,
+                    lng: 144.9631,
+                    timestamp: DateTime.utc(2026, 4, 15, 7, 30),
+                  ),
+                  Waypoint(
+                    lat: -37.8137,
+                    lng: 144.9632,
+                    timestamp: DateTime.utc(2026, 4, 15, 7, 31),
+                  ),
+                ]
+              : const []),
     );
 
 /// Signed-in fake whose column-only edit push succeeds.
@@ -174,7 +191,8 @@ Future<void> _pump(WidgetTester tester, Run run,
     {double? bodyWeightKg,
     LocalRouteStore? routeStore,
     ApiClient? apiClient,
-    SettingsSyncService? settingsSync}) async {
+    SettingsSyncService? settingsSync,
+    double textScale = 1.0}) async {
   SharedPreferences.setMockInitialValues(
     bodyWeightKg != null ? {'body_weight_kg': bodyWeightKg} : {},
   );
@@ -189,6 +207,11 @@ Future<void> _pump(WidgetTester tester, Run run,
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: RunDetailScreen(
         run: run,
         runStore: runStore,
@@ -1080,6 +1103,42 @@ void main() {
       expect(find.text('Faster'), findsOneWidget);
       expect(find.text('Steady'), findsOneWidget);
       expect(find.text('Slower'), findsOneWidget);
+    });
+  });
+
+  group('splits bar at OS text scale (issue #666 V12)', () {
+    // The bar is the only widget in the tree carrying this constraint.
+    final bar = find.byWidgetPredicate(
+        (w) => w is Container && w.constraints?.minHeight == 26);
+
+    testWidgets('the pace bar grows with the label instead of clipping it',
+        (tester) async {
+      final run = _run(track: _straightTrack(3));
+
+      // A tall viewport so the whole ListView mounts — the splits sit far
+      // below the fold and would otherwise never be built.
+      tester.view.physicalSize = const Size(400, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, run);
+      final small = tester.getSize(bar.first).height;
+      expect(small, 26);
+
+      await _pump(tester, run, textScale: 2.0);
+      // Pre-fix the bar measured exactly 26.0 here: the doubled bodySmall
+      // pace label needs 32, and the enclosing ClipRRect cropped it with no
+      // overflow stripe and no exception — just an unreadable number.
+      final grown = tester.getSize(bar.first).height;
+      expect(grown, greaterThan(small));
+      final label =
+          find.descendant(of: bar.first, matching: find.byType(Text));
+      expect(tester.getSize(label).height, lessThanOrEqualTo(grown));
+
+      // The map's attribution Row overflows horizontally at 2x. That is a
+      // separate, pre-existing finding (it reproduces against the unfixed
+      // screen); consume it so this test speaks only to the split bar.
+      tester.takeException();
     });
   });
 }
