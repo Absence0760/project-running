@@ -260,7 +260,6 @@ class _EventFormState extends State<_EventForm> {
                 decoration: InputDecoration(
                   labelText: l10n.eventEditorDiscipline,
                   hintText: l10n.eventEditorDisciplinePlaceholder,
-                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
@@ -271,7 +270,6 @@ class _EventFormState extends State<_EventForm> {
               maxLength: 120,
               decoration: InputDecoration(
                 labelText: l10n.eventFormTitleLabel,
-                border: const OutlineInputBorder(),
                 errorText: _titleError,
               ),
               onChanged: (_) {
@@ -284,7 +282,6 @@ class _EventFormState extends State<_EventForm> {
               child: InputDecorator(
                 decoration: InputDecoration(
                   labelText: l10n.eventFormStartsAt,
-                  border: const OutlineInputBorder(),
                   suffixIcon: const Icon(Icons.event),
                 ),
                 child: Text(formatDateTime(
@@ -298,7 +295,6 @@ class _EventFormState extends State<_EventForm> {
               maxLength: 1000,
               decoration: InputDecoration(
                 labelText: l10n.eventFormDescriptionLabel,
-                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
@@ -308,7 +304,6 @@ class _EventFormState extends State<_EventForm> {
               decoration: InputDecoration(
                 labelText: l10n.eventFormMeetLabel,
                 hintText: l10n.eventFormMeetHint,
-                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
@@ -321,7 +316,6 @@ class _EventFormState extends State<_EventForm> {
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
                         labelText: l10n.eventFormDistanceLabel,
-                        border: const OutlineInputBorder(),
                       ),
                     ),
                   ),
@@ -333,7 +327,6 @@ class _EventFormState extends State<_EventForm> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: l10n.eventFormDurationLabel,
-                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ),

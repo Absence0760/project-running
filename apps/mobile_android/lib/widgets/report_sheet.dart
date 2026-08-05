@@ -42,7 +42,7 @@ Future<void> showReportSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
+    useSafeArea: true,
     builder: (ctx) => _ReportSheet(
       api: api,
       targetKind: targetKind,
@@ -191,7 +191,6 @@ class _ReportSheetState extends State<_ReportSheet> {
             enabled: !_busy,
             decoration: InputDecoration(
               labelText: l10n.reportNotesLabel,
-              border: const OutlineInputBorder(),
             ),
           ),
           if (_error != null) ...[

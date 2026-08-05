@@ -64,39 +64,53 @@ class _PendingSyncBannerState extends State<PendingSyncBanner> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           color: theme.colorScheme.surfaceContainerHigh,
-          child: Row(
+          // The action sits on its own end-aligned line rather than at the
+          // tail of the message row: a `TextButton` takes its intrinsic width
+          // first, so a long German / French label ("Erneut versuchen") starves
+          // the `Expanded` message down to a few pixels and the banner grows to
+          // a column of single characters (decisions § 486, § 488).
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                canRetry ? Icons.sync_problem : Icons.cloud_off_outlined,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  canRetry
-                      ? l10n.pendingSyncFailed(pending)
-                      : l10n.pendingSyncOffline(pending),
-                  style: theme.textTheme.bodySmall,
-                ),
+              Row(
+                children: [
+                  Icon(
+                    canRetry ? Icons.sync_problem : Icons.cloud_off_outlined,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      canRetry
+                          ? l10n.pendingSyncFailed(pending)
+                          : l10n.pendingSyncOffline(pending),
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
               ),
               if (canRetry)
-                if (_retrying)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                else
-                  TextButton(
-                    onPressed: _retry,
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    child: Text(l10n.pendingSyncRetry),
-                  ),
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: _retrying
+                      ? const Padding(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : TextButton(
+                          onPressed: _retry,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          child: Text(l10n.pendingSyncRetry),
+                        ),
+                ),
             ],
           ),
         );

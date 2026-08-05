@@ -11,6 +11,7 @@ import '../lib/local_gym_store.dart';
 import '../lib/screens/gym_exercise_screen.dart';
 import '../lib/screens/gym_records_screen.dart';
 import '../lib/screens/gym_screen.dart' show gymSetHistory;
+import '../lib/widgets/gym_compose_sheet.dart';
 
 StoredGymWorkout _w(
   String id, {
@@ -114,6 +115,30 @@ void main() {
         find.textContaining('No weighted lifts logged yet'),
         findsOneWidget,
       );
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the empty state offers a way to log the workout that fills it',
+      (tester) async {
+    // The copy told the user to "add a weight to a set" from a screen with
+    // no route to a set — a dead end. The CTA opens the same compose sheet
+    // the gym list's + button does.
+    final dir = Directory.systemTemp.createTempSync('gym_records_cta_');
+    final store = LocalGymStore();
+    await store.init(overrideDirectory: dir);
+    try {
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: GymRecordsScreen(api: _OfflineFakeApi(), store: store),
+      ));
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Log workout'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GymComposeSheet), findsOneWidget);
     } finally {
       dir.deleteSync(recursive: true);
     }

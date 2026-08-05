@@ -267,7 +267,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   /// same way every other mobile map surface does — see
   /// `live_run_map.dart` for the helper, which falls back to OSM
   /// tiles when neither MAPTILER_KEY nor TILE_URL_TEMPLATE is set.
-  String get _tileUrl => currentTileUrl();
+  String get _tileUrl => currentTileUrl(context);
 
   OsrmProfile get _osrmProfile =>
       _mode == RouteBuilderMode.road ? OsrmProfile.car : OsrmProfile.foot;
@@ -547,7 +547,6 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     if (_waypoints.isEmpty) return;
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
       builder: (ctx) => WaypointListSheet(
         waypoints: List.of(_waypoints),
         onApply: (next) {

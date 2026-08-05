@@ -511,6 +511,24 @@ class AppLocalizationsJa extends AppLocalizations {
   String get fitnessRunsPlans => 'トレーニングプラン';
 
   @override
+  String get runSurfaceLabel => 'ランセクション';
+
+  @override
+  String get runSurfaceTabPlans => 'プラン';
+
+  @override
+  String get runSurfaceTabRaces => 'レース';
+
+  @override
+  String get gymSurfaceLabel => 'ジムセクション';
+
+  @override
+  String get gymTabLog => 'ログ';
+
+  @override
+  String get gymTabRecords => '記録';
+
+  @override
   String get homeAskCoach => 'コーチに相談';
 
   @override
@@ -601,6 +619,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get safetyAddLabel => '連絡先のメール';
+
+  @override
+  String get safetyAddHint => 'partner@example.com';
 
   @override
   String get safetyAddButton => '連絡先を追加';
@@ -871,13 +892,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get signUpAcceptPrefix => '以下に同意します：';
 
   @override
-  String get signUpTermsLink => '利用規約';
-
-  @override
   String get signUpAcceptConjunction => 'および';
-
-  @override
-  String get signUpPrivacyLink => 'プライバシーポリシー';
 
   @override
   String get signUpErrorConfirmAge => '続けるには、16歳以上であることを確認してください。';
@@ -915,11 +930,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get signUpSignInPrompt => 'すでにアカウントをお持ちですか？ サインイン';
-
-  @override
-  String signUpCouldNotOpen(String url) {
-    return '$url を開けませんでした';
-  }
 
   @override
   String get onboardingTrackTitle => 'すべてのランを記録';
@@ -2048,6 +2058,18 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runDetailSectionElevation => '獲得標高';
+
+  @override
+  String get runDetailPaceLegendTitle => '中央値との比較ペース';
+
+  @override
+  String get runDetailPaceBandFaster => '速い';
+
+  @override
+  String get runDetailPaceBandSteady => '一定';
+
+  @override
+  String get runDetailPaceBandSlower => '遅い';
 
   @override
   String get runDetailSectionLaps => 'ラップ';
@@ -3908,14 +3930,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailReportPost => 'この投稿を報告';
 
   @override
-  String get clubDetailLoadFailedTitle => 'このクラブを読み込めませんでした。';
-
-  @override
   String get clubDetailLoadFailedBody =>
-      '削除されたか、セッションの更新が必要かもしれません。引っ張って再試行するか、設定からサインアウトして再度サインインしてください。';
-
-  @override
-  String get clubDetailRetry => '再試行';
+      'このクラブを読み込めませんでした。削除されたか、セッションの更新が必要かもしれません。引っ張って再試行するか、設定からサインアウトして再度サインインしてください。';
 
   @override
   String get clubDetailTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
@@ -6005,10 +6021,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get proSupportSubtitle => 'ブラウザで一回限りの寄付';
 
   @override
-  String get licensesTitle => 'ライセンス';
+  String get aboutTitle => 'アプリ情報とアップデート';
 
   @override
-  String get licensesVersion => 'バージョン';
+  String get aboutVersion => 'バージョン';
 
   @override
   String get licensesOpenSource => 'オープンソースライセンス';
@@ -6017,22 +6033,48 @@ class AppLocalizationsJa extends AppLocalizations {
   String get licensesOpenSourceSubtitle => 'このアプリに同梱されているサードパーティパッケージ';
 
   @override
-  String get licensesCheckingUpdate => 'アップデートを確認中…';
+  String get aboutCheckForUpdates => 'アップデートを確認';
 
   @override
-  String get licensesUpdateAvailable => 'アップデートがあります';
+  String get aboutCheckingUpdate => 'アップデートを確認中…';
 
   @override
-  String get licensesUpdateAvailableSubtitle => '新しいバージョンをインストールできます。';
+  String get aboutUpdateAvailable => 'アップデートがあります';
 
   @override
-  String get licensesUpdate => '更新';
+  String get aboutUpdateAvailableSubtitle => '新しいバージョンをインストールできます。';
 
   @override
-  String get licensesUpToDate => '最新バージョンです';
+  String get aboutUpdate => '更新';
 
   @override
-  String get licensesUpdateFailed => 'アップデートを開始できませんでした。Play ストアからもう一度お試しください。';
+  String get aboutUpToDate => '最新バージョンです';
+
+  @override
+  String get aboutUpdateUnavailable => 'このビルドはインストール元のストアから更新されます。';
+
+  @override
+  String get aboutUpdateFailed => 'アップデートを開始できませんでした。Play ストアからもう一度お試しください。';
+
+  @override
+  String get legalPrivacy => 'プライバシーポリシー';
+
+  @override
+  String get legalTerms => '利用規約';
+
+  @override
+  String get legalCookieNotice => 'Cookie に関する通知';
+
+  @override
+  String get legalHealthDataNotice => '健康データのプライバシー';
+
+  @override
+  String legalCouldNotOpen(String url) {
+    return '$url を開けませんでした';
+  }
+
+  @override
+  String get aboutLegalSection => '法的情報';
 
   @override
   String get devicesTitle => 'デバイス';
@@ -8649,7 +8691,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsTabProSubtitle => '登録、購入の復元、請求の管理';
 
   @override
-  String get settingsTabLicensesSubtitle => 'アプリのバージョンとオープンソースの通知';
+  String get settingsTabAboutSubtitle => 'バージョン、アップデート、法的文書';
 
   @override
   String periodSummaryWeekOf(Object date) {
@@ -9318,8 +9360,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionWaterRemove => '水分を減らす';
 
   @override
-  String get nutritionNoTargets =>
-      'カロリー・マクロの目標を表示するには、ウェブアプリで身長・体重・年齢・性別を入力してください。';
+  String get nutritionNoTargets => 'カロリー・マクロの目標を表示するには、身長・体重・年齢・性別を入力してください。';
+
+  @override
+  String get nutritionAddBodyMetrics => '身体データを入力';
 
   @override
   String get nutritionWeeklyTrend => '直近7日間';

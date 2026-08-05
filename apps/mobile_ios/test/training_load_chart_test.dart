@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/training_load.dart';
-import '../lib/widgets/training_load_chart.dart';
+import '../lib/widgets/training_load_chart.dart'
+    show
+        TrainingLoadChart,
+        trainingLoadFatigueColour,
+        trainingLoadFitnessColour,
+        trainingLoadFormColour;
 
 TrainingLoadPoint _point({
   required DateTime date,
@@ -92,5 +97,56 @@ void main() {
       expect(find.text('Fatigue · 35'), findsOneWidget);
       expect(find.text('Form · 5'), findsOneWidget);
     });
+
+    // Issue #666 round 2: the legend recoloured Form by the sign of the
+    // last TSB while the painter drew it in a fixed red, so a tapered
+    // runner (TSB >= 0 — the state the card exists to celebrate) saw a
+    // green key above a red line. Legend and plot now read one constant.
+    for (final tsb in const [12.0, -12.0]) {
+      testWidgets('Form legend swatch matches the plotted line at tsb=$tsb',
+          (tester) async {
+        await _pump(
+          tester,
+          points: [
+            _point(date: DateTime(2026, 4, 1), atl: 35, ctl: 40, tsb: tsb),
+            _point(date: DateTime(2026, 4, 2), atl: 36, ctl: 41, tsb: tsb),
+          ],
+          hasHr: true,
+        );
+        expect(_swatchColours(tester), <Color>[
+          trainingLoadFitnessColour,
+          trainingLoadFatigueColour,
+          trainingLoadFormColour,
+        ]);
+        expect(
+          find.byKey(const Key('trainingLoadChartPainter')),
+          paints
+            ..path(color: trainingLoadFitnessColour)
+            ..path(color: trainingLoadFatigueColour)
+            ..path(color: trainingLoadFormColour),
+        );
+      });
+    }
+
+    testWidgets('the three series hues are mutually distinct', (tester) async {
+      expect(
+        <Color>{
+          trainingLoadFitnessColour,
+          trainingLoadFatigueColour,
+          trainingLoadFormColour,
+        }.length,
+        3,
+      );
+    });
   });
 }
+
+/// Fill colours of the three 12x12 legend swatches, in render order.
+List<Color> _swatchColours(WidgetTester tester) => tester
+    .widgetList<Container>(find.byType(Container))
+    .where((c) =>
+        c.constraints == BoxConstraints.tightFor(width: 12, height: 12))
+    .map((c) => c.decoration)
+    .whereType<BoxDecoration>()
+    .map((d) => d.color!)
+    .toList();

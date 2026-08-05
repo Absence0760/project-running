@@ -6,7 +6,7 @@ import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../l10n/gen/app_localizations.dart';
-import '../preferences.dart' show ActivityType;
+import '../preferences.dart' show ActivityType, activeMapStyle;
 import '../tile_cache.dart';
 import 'pace_segments.dart';
 import 'track_decorations.dart';
@@ -102,10 +102,29 @@ List<LatLng> smoothTrackIncremental(
 const _kOsmTileUrl =
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
+/// MapTiler raster style slug for a [kMapStyles] preference. Mirrors the
+/// slug switch in web's `buildMapStyleUrl`
+/// (`apps/web/src/lib/routes/map-style-url.ts`) so the roaming `map_style`
+/// preference resolves to the same basemap on both platforms: `streets`
+/// follows the app theme, the other three name a fixed basemap.
+String _maptilerSlug(String mapStyle, bool prefersDark) {
+  switch (mapStyle) {
+    case 'satellite':
+      return 'satellite';
+    case 'outdoors':
+      return 'outdoor-v2';
+    case 'dark':
+      return 'streets-v2-dark';
+    default:
+      return prefersDark ? 'streets-v2-dark' : 'streets-v2';
+  }
+}
+
 /// Build the raster-tile URL template. Resolution precedence:
 ///   1. `TILE_URL_TEMPLATE` override (local Protomaps tileserver-gl
 ///      dev setup — see `docs/ops/protomaps_local_setup.md`)
-///   2. `MAPTILER_KEY` → MapTiler streets-v2-dark
+///   2. `MAPTILER_KEY` → the MapTiler style named by [mapStyle] under
+///      [brightness]
 ///   3. OSM tiles as a last-resort fallback so the map isn\'t blank
 ///      on a dev setup with neither env var configured
 ///
@@ -126,32 +145,98 @@ const _kOsmTileUrl =
 /// fallback had to reimplement the check themselves; now it\'s the
 /// universal contract.
 @visibleForTesting
-String resolveTileUrl(Map<String, String> env) {
+String resolveTileUrl(
+  Map<String, String> env, {
+  required String mapStyle,
+  required Brightness brightness,
+}) {
   final override = (env['TILE_URL_TEMPLATE'] ?? '').trim();
   if (override.isNotEmpty) return override;
   final key = (env['MAPTILER_KEY'] ?? '').trim();
-  if (key.isNotEmpty) {
-    return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
-  }
-  return _kOsmTileUrl;
+  if (key.isEmpty) return _kOsmTileUrl;
+  final slug = _maptilerSlug(mapStyle, brightness == Brightness.dark);
+  return 'https://api.maptiler.com/maps/$slug/{z}/{x}/{y}@2x.png?key=$key';
 }
 
-/// Production-callsite convenience: read dotenv defensively (the
-/// `.env` may not be loaded in widget tests) and route through
-/// [resolveTileUrl]. Use this from screen build() methods instead
-/// of `resolveTileUrl(dotenv.env)` — bare `dotenv.env` throws
-/// `NotInitializedError` when the test harness hasn\'t called
-/// `dotenv.load()`, which then propagates up and prevents the
-/// screen from rendering at all (real bug found by the May 2026
-/// audit when the privacy-zones + heatmap screens started reading
-/// dotenv in their TileLayer URL).
-String currentTileUrl() {
+/// Whether the basemap [resolveTileUrl] resolves to under the same
+/// arguments is dark. Overlays derive their separator from this rather
+/// than from the app theme: the OSM fallback is light whatever the theme
+/// is, and a `dark` preference is dark even in the light theme.
+///
+/// Satellite counts as dark — imagery is mid-to-low luminance, and a light
+/// halo is what reads over it.
+///
+/// A `TILE_URL_TEMPLATE` override points at an arbitrary self-hosted
+/// style whose luminance we cannot know, so it is treated as light unless
+/// the URL names a dark style. `bin/protomaps-dev.sh` serves the light
+/// `basic` style, which is the case that has to be right by default.
+@visibleForTesting
+bool resolveBasemapIsDark(
+  Map<String, String> env, {
+  required String mapStyle,
+  required Brightness brightness,
+}) {
+  final override = (env['TILE_URL_TEMPLATE'] ?? '').trim();
+  if (override.isNotEmpty) return override.toLowerCase().contains('dark');
+  if ((env['MAPTILER_KEY'] ?? '').trim().isEmpty) return false;
+  final slug = _maptilerSlug(mapStyle, brightness == Brightness.dark);
+  return slug == 'streets-v2-dark' || slug == 'satellite';
+}
+
+/// Read dotenv defensively — bare `dotenv.env` throws
+/// `NotInitializedError` when the harness hasn\'t called `dotenv.load()`,
+/// which then propagates up and prevents the screen from rendering at all
+/// (real bug found by the May 2026 audit when the privacy-zones + heatmap
+/// screens started reading dotenv in their TileLayer URL). Tiles are an L2
+/// layer: failing to resolve one must never take a screen down with it.
+Map<String, String> _tileEnv() {
   try {
-    return resolveTileUrl(dotenv.env);
-  } catch (_) {
-    return resolveTileUrl(const {});
+    return dotenv.env;
+  } catch (e) {
+    debugPrint('dotenv unavailable for tile resolution: $e');
+    return const {};
   }
 }
+
+/// Tile URL for an explicit basemap choice. The share cards call this with
+/// a pinned dark basemap; every on-screen map goes through
+/// [currentTileUrl].
+String tileUrlFor(String mapStyle, Brightness brightness) =>
+    resolveTileUrl(_tileEnv(), mapStyle: mapStyle, brightness: brightness);
+
+/// Production-callsite convenience: the user's basemap preference under
+/// the ambient theme. Use this from screen build() methods.
+String currentTileUrl(BuildContext context) =>
+    tileUrlFor(activeMapStyle, Theme.of(context).brightness);
+
+/// Companion to [currentTileUrl] — whether the basemap it just resolved is
+/// dark, so overlays can pick a separator that shows against it.
+bool currentBasemapIsDark(BuildContext context) => resolveBasemapIsDark(
+      _tileEnv(),
+      mapStyle: activeMapStyle,
+      brightness: Theme.of(context).brightness,
+    );
+
+/// Separator between an overlay and the basemap: the casing under the
+/// recorded track, and the ring around a coloured marker dot.
+///
+/// Against a representative MapTiler `streets-v2-dark` land fill the old
+/// fixed `#1E1B4B` casing computes to 1.08:1 — it did nothing at all on
+/// the dark basemap every map was locked to. Flipped by basemap it reads
+/// 15.5:1 (white on dark) and 13.9:1 (`#1E1B4B` on an OSM light fill).
+@visibleForTesting
+Color mapOverlayOutline({required bool darkBasemap}) =>
+    darkBasemap ? Colors.white : const Color(0xFF1E1B4B);
+
+/// Gradient stops for the recorded track, oldest → newest. Both ramps
+/// start at the same mid indigo and move away from the basemap, so the
+/// newest stretch is always the most prominent and every stop clears 3:1
+/// against its basemap — the old pale `#C7D2FE` tail computes to 1.30:1
+/// over an OSM light fill.
+@visibleForTesting
+List<Color> trackGradientColours({required bool darkBasemap}) => darkBasemap
+    ? const [Color(0xFF6366F1), Color(0xFF818CF8), Color(0xFFC7D2FE)]
+    : const [Color(0xFF6366F1), Color(0xFF4F46E5), Color(0xFF3730A3)];
 
 /// Point at a fractional [index] along [line], linearly interpolated
 /// between the two adjacent vertices (clamped to the line's range).
@@ -394,14 +479,16 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   int _cachedPaceSegmentsForLength = -1;
   ActivityType? _cachedPaceSegmentsForActivity;
 
-  // Cached halo + dark-underline polylines for the recorded track. Without
-  // this, the 45 Hz position-tween setState path re-allocates three
-  // Polyline + three PolylineLayer widgets every frame even though their
-  // points are unchanged. Keyed by length only — the styling is constant.
+  // Cached halo + casing polylines for the recorded track. Without this,
+  // the 45 Hz position-tween setState path re-allocates three Polyline +
+  // three PolylineLayer widgets every frame even though their points are
+  // unchanged. Keyed by length and by basemap — the casing flips with the
+  // latter, so a style change must not serve a stale cache.
   List<Polyline>? _cachedHaloPolylines;
   int _cachedHaloForLength = -1;
+  bool? _cachedHaloForDarkBasemap;
 
-  String get _tileUrl => resolveTileUrl(dotenv.env);
+  String get _tileUrl => currentTileUrl(context);
 
   @override
   void initState() {
@@ -588,13 +675,14 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     return segs;
   }
 
-  /// Halo + dark-underline polylines for [rendered], cached by length.
+  /// Halo + casing polylines for [rendered], cached by length + basemap.
   /// Three Polylines bundled into a single layer (replacing three
   /// PolylineLayers in the previous version) — fewer Layer widgets means
   /// fewer diffs per position-tween tick.
-  List<Polyline> _haloPolylinesFor(List<LatLng> rendered) {
+  List<Polyline> _haloPolylinesFor(List<LatLng> rendered, bool darkBasemap) {
     if (_cachedHaloPolylines != null &&
-        _cachedHaloForLength == rendered.length) {
+        _cachedHaloForLength == rendered.length &&
+        _cachedHaloForDarkBasemap == darkBasemap) {
       return _cachedHaloPolylines!;
     }
     final out = <Polyline>[
@@ -611,11 +699,12 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       Polyline(
         points: rendered,
         strokeWidth: 8,
-        color: const Color(0xFF1E1B4B),
+        color: mapOverlayOutline(darkBasemap: darkBasemap),
       ),
     ];
     _cachedHaloPolylines = out;
     _cachedHaloForLength = rendered.length;
+    _cachedHaloForDarkBasemap = darkBasemap;
     return out;
   }
 
@@ -811,6 +900,9 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     final fitBounds = !widget.followRunner &&
         allPoints.length >= 2;
 
+    final darkBasemap = currentBasemapIsDark(context);
+    final outline = mapOverlayOutline(darkBasemap: darkBasemap);
+
     return Stack(
       children: [
         FlutterMap(
@@ -897,7 +989,8 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             //      between coalesced pace buckets)
             //   4. pace heatmap OR legacy gradient on top
             if (trackLatLngs.length >= 2) ...[
-              PolylineLayer(polylines: _haloPolylinesFor(trackLatLngs)),
+              PolylineLayer(
+                  polylines: _haloPolylinesFor(trackLatLngs, darkBasemap)),
               if (widget.activity != null)
                 PolylineLayer(
                   polylines: _pacedSegmentsFor(
@@ -912,11 +1005,8 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     Polyline(
                       points: trackLatLngs,
                       strokeWidth: 6,
-                      gradientColors: const [
-                        Color(0xFF4F46E5),
-                        Color(0xFF818CF8),
-                        Color(0xFFC7D2FE),
-                      ],
+                      gradientColors:
+                          trackGradientColours(darkBasemap: darkBasemap),
                     ),
                   ],
                 ),
@@ -1022,7 +1112,10 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     ),
                     width: 28,
                     height: 28,
-                    child: _HoverMarkerDot(animation: _pulseAnimation),
+                    child: _HoverMarkerDot(
+                      animation: _pulseAnimation,
+                      ringColour: outline,
+                    ),
                   ),
                 ],
               ),
@@ -1043,7 +1136,10 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     ),
                     width: 48,
                     height: 48,
-                    child: _PulsingDot(animation: _pulseAnimation),
+                    child: _PulsingDot(
+                      animation: _pulseAnimation,
+                      ringColour: outline,
+                    ),
                   ),
                 ],
               ),
@@ -1077,7 +1173,11 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                                 ? null
                                 : () => widget.onMarkerTap!(m.id),
                             child:
-                                _CourseMarkerPin(label: m.label, color: m.color),
+                                _CourseMarkerPin(
+                                  label: m.label,
+                                  color: m.color,
+                                  ringColour: outline,
+                                ),
                           ),
                         ),
                       ),
@@ -1098,7 +1198,10 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     height: 48,
                     child: widget.coarsePosition
                         ? const _CoarseDot()
-                        : _PulsingDot(animation: _pulseAnimation),
+                        : _PulsingDot(
+                            animation: _pulseAnimation,
+                            ringColour: outline,
+                          ),
                   ),
                 ],
               ),
@@ -1162,7 +1265,12 @@ class _DistanceMarkerPin extends StatelessWidget {
 class _CourseMarkerPin extends StatelessWidget {
   final String label;
   final String color;
-  const _CourseMarkerPin({required this.label, required this.color});
+  final Color ringColour;
+  const _CourseMarkerPin({
+    required this.label,
+    required this.color,
+    required this.ringColour,
+  });
 
   Color get _color {
     final hex = color.replaceFirst('#', '');
@@ -1182,7 +1290,7 @@ class _CourseMarkerPin extends StatelessWidget {
           decoration: BoxDecoration(
             color: _color,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
+            border: Border.all(color: ringColour, width: 2),
             boxShadow: const [
               BoxShadow(color: Colors.black26, blurRadius: 3, spreadRadius: 0.5),
             ],
@@ -1269,33 +1377,34 @@ class _CoarseDot extends StatelessWidget {
 
 class _PulsingDot extends StatelessWidget {
   final Animation<double> animation;
-  const _PulsingDot({required this.animation});
-
-  // Static inner dot. Moved out of the AnimatedBuilder so the 60 Hz
-  // pulse rebuild only touches the outer ring instead of reallocating
-  // the inner Container + BoxDecoration + BoxShadow tree on every frame.
-  static final _innerDot = Container(
-    width: 14,
-    height: 14,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: const Color(0xFF818CF8),
-      border: Border.all(color: Colors.white, width: 2.5),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x66818CF8),
-          blurRadius: 8,
-          spreadRadius: 2,
-        ),
-      ],
-    ),
-  );
+  final Color ringColour;
+  const _PulsingDot({required this.animation, required this.ringColour});
 
   @override
   Widget build(BuildContext context) {
+    // Built once per parent build and handed to AnimatedBuilder as `child`,
+    // so the 60 Hz pulse rebuild still only touches the outer ring instead
+    // of reallocating this Container + BoxDecoration + BoxShadow tree on
+    // every frame.
+    final innerDot = Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFF818CF8),
+        border: Border.all(color: ringColour, width: 2.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x66818CF8),
+            blurRadius: 8,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+    );
     return AnimatedBuilder(
       animation: animation,
-      child: _innerDot,
+      child: innerDot,
       builder: (context, child) {
         return Center(
           child: Stack(
@@ -1327,30 +1436,30 @@ class _PulsingDot extends StatelessWidget {
 /// web RunMap.svelte.
 class _HoverMarkerDot extends StatelessWidget {
   final Animation<double> animation;
-  const _HoverMarkerDot({required this.animation});
-
-  static final _innerDot = Container(
-    width: 12,
-    height: 12,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: const Color(0xFFF59E0B),
-      border: Border.all(color: Colors.white, width: 2),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x66F59E0B),
-          blurRadius: 6,
-          spreadRadius: 1,
-        ),
-      ],
-    ),
-  );
+  final Color ringColour;
+  const _HoverMarkerDot({required this.animation, required this.ringColour});
 
   @override
   Widget build(BuildContext context) {
+    final innerDot = Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFFF59E0B),
+        border: Border.all(color: ringColour, width: 2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x66F59E0B),
+            blurRadius: 6,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+    );
     return AnimatedBuilder(
       animation: animation,
-      child: _innerDot,
+      child: innerDot,
       builder: (context, child) {
         return Center(
           child: Stack(

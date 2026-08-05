@@ -9,7 +9,7 @@ import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'live_run_map.dart' show currentTileUrl;
+import 'live_run_map.dart' show tileUrlFor;
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/date_format.dart';
@@ -32,7 +32,9 @@ Future<void> showRunShareSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
+    showDragHandle: false,
     builder: (ctx) => _ShareRunSheet(
       run: run,
       preferences: preferences,
@@ -236,7 +238,11 @@ class RunShareCard extends StatelessWidget {
   /// show real tiles instead of MapTiler 403s. Falls back to the
   /// MapTiler `streets-v2-dark` style keyed by `MAPTILER_KEY` in
   /// production.
-  String get _tileUrl => currentTileUrl();
+  ///
+  /// Pinned to the dark basemap rather than following the device theme
+  /// or the user's map-style preference: the card rasterises a fixed
+  /// dark PNG whose white type and overlays are drawn for a dark map.
+  String get _tileUrl => tileUrlFor('dark', Brightness.dark);
 
   @override
   Widget build(BuildContext context) {

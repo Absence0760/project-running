@@ -105,7 +105,7 @@
 				<span class="swatch" aria-hidden="true"></span>
 				{t('trainingLoad.fatigue')} · {fmtNum(last?.atl)}
 			</span>
-			<span class="key form" class:positive={(last?.tsb ?? 0) >= 0}>
+			<span class="key form">
 				<span class="swatch" aria-hidden="true"></span>
 				{t('trainingLoad.form')} · {fmtNum(last?.tsb)}
 			</span>
@@ -205,8 +205,12 @@
 
 	.fitness .swatch { background: #4f46e5; }
 	.fatigue .swatch { background: #f59e0b; }
+	/* No sign colouring: one stroke cannot change hue at every zero
+	   crossing of the window it spans, so a key recoloured by the last
+	   TSB would name a colour the line never draws. The sign is carried
+	   by the dashed zero line, the signed value beside this key, and the
+	   reading below the plot. */
 	.form .swatch { background: #ef4444; }
-	.form.positive .swatch { background: #10b981; }
 
 	.chart-wrap {
 		display: flex;

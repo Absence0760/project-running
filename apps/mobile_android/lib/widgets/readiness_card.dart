@@ -49,7 +49,6 @@ class ReadinessCard extends StatelessWidget {
     final accent = _bandAccent(AppSemanticColors.of(context), readiness.band);
 
     return Card(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Container(
         decoration: BoxDecoration(
           border: Border(

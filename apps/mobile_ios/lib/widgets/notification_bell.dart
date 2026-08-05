@@ -7,7 +7,7 @@ import '../screens/profile_screen.dart';
 /// Notification bell icon for the dashboard action toolbar. Mirrors
 /// `apps/web/src/lib/components/NotificationBell.svelte`. Tapping
 /// navigates to the user's own ProfileScreen with the Notifications
-/// tab pre-selected (initialTab=3). A red dot covers the bell when
+/// tab pre-selected. A red dot covers the bell when
 /// the unread count is non-zero — the actual count text is hosted on
 /// the Notifications tab itself, so the dashboard surface stays a
 /// glance.
@@ -53,13 +53,10 @@ class _NotificationBellState extends State<NotificationBell> {
     Navigator.of(context)
         .push(
           MaterialPageRoute<void>(
-            // Tab index 3 = Notifications (Runs/Followers/Following/
-            // Notifications). Out-of-range values are clamped by
-            // ProfileScreen's TabController init.
             builder: (_) => ProfileScreen(
               api: widget.api,
               userId: uid,
-              initialTab: 3,
+              initialTab: ProfileTab.notifications,
             ),
           ),
         )

@@ -1066,5 +1066,41 @@ void main() {
         findsWidgets,
       );
     });
+
+    // Issue #666 round 2: the elevation chart's pace banding existed only
+    // in a Dart doc comment — nothing on screen said the fill meant pace.
+    testWidgets('elevation chart carries a pace-band legend', (tester) async {
+      tester.view.physicalSize = const Size(1000, 5000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, _elevationRun());
+
+      expect(find.text('Pace vs median'), findsOneWidget);
+      expect(find.text('Faster'), findsOneWidget);
+      expect(find.text('Steady'), findsOneWidget);
+      expect(find.text('Slower'), findsOneWidget);
+    });
   });
 }
+
+/// A run whose track carries elevation, so the elevation section renders.
+Run _elevationRun() => Run(
+      id: 'run-ele',
+      startedAt: DateTime.utc(2026, 4, 15, 7, 30),
+      duration: const Duration(minutes: 25),
+      distanceMetres: 5000,
+      source: RunSource.app,
+      metadata: const {'activity_type': 'run'},
+      track: [
+        for (var i = 0; i < 6; i++)
+          Waypoint(
+            lat: -37.8136 + i * 0.001,
+            lng: 144.9631 + i * 0.001,
+            elevationMetres: 10.0 + i * 4,
+            timestamp: DateTime.utc(2026, 4, 15, 7, 30).add(
+              Duration(seconds: i * 40),
+            ),
+          ),
+      ],
+    );

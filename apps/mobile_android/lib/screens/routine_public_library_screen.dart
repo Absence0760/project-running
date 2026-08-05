@@ -137,7 +137,6 @@ class _RoutinePublicLibraryScreenState
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
                 hintText: l10n.gymLibrarySearchHint,
-                border: const OutlineInputBorder(),
               ),
               onChanged: _onSearch,
             ),

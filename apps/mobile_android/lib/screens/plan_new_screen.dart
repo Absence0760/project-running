@@ -213,6 +213,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     final picked = await showModalBottomSheet<_TemplateOption>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => _TemplatePicker(options: _templates),
     );
     if (picked == null || !mounted) return;
@@ -260,6 +261,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     final picked = await showModalBottomSheet<StarterPlan>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => _StarterPicker(
         plans: starterPlans,
         nameFor: (id) => _starterName(l10n, id),

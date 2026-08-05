@@ -576,4 +576,54 @@ void main() {
       expect(reloaded.voiceFeedbackVerbosity, 'minimal');
     });
   });
+
+  // Issue #666 round 2: Settings offered four basemaps and persisted the
+  // pick, but nothing read it back — every map stayed on the dark style.
+  group('mapStyle', () {
+    tearDown(resetActivePreferencesForTest);
+
+    test('defaults to streets', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.mapStyle, 'streets');
+    });
+
+    test('persists and round-trips through a cold start', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await prefs.setMapStyle('outdoors');
+      expect(prefs.mapStyle, 'outdoors');
+
+      final reloaded = Preferences();
+      await reloaded.init();
+      expect(reloaded.mapStyle, 'outdoors');
+    });
+
+    test('an unknown value resolves to streets rather than a blank map',
+        () async {
+      SharedPreferences.setMockInitialValues({'map_style': 'terrain'});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.mapStyle, 'streets');
+
+      await prefs.setMapStyle('terrain');
+      expect(prefs.mapStyle, 'streets');
+    });
+
+    test('activeMapStyle is what the map surfaces read back', () async {
+      // The maps carry no Preferences dep — they read the registered
+      // instance through this accessor, so registration is the link
+      // that was missing.
+      expect(activeMapStyle, 'streets');
+
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await prefs.setMapStyle('satellite');
+      registerActivePreferences(prefs);
+      expect(activeMapStyle, 'satellite');
+    });
+  });
 }

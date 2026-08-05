@@ -372,7 +372,6 @@ class _CreateForm extends StatelessWidget {
               decoration: InputDecoration(
                 labelText: l10n.segmentsPanelNameLabel,
                 hintText: l10n.segmentsPanelNameHint,
-                border: const OutlineInputBorder(),
                 isDense: true,
               ),
             ),
@@ -385,7 +384,6 @@ class _CreateForm extends StatelessWidget {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText: l10n.segmentsPanelStartLabel,
-                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                   ),
@@ -398,7 +396,6 @@ class _CreateForm extends StatelessWidget {
                     decoration: InputDecoration(
                       labelText: l10n.segmentsPanelEndLabel,
                       helperText: hint,
-                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                   ),

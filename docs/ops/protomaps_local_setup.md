@@ -119,7 +119,7 @@ The reactive `getMapStyle()` / `setMapStyle(...)` signal still drives the user's
 
 ### Mobile (`apps/mobile_android/lib/widgets/live_run_map.dart`)
 
-File-level `resolveTileUrl(env)` reads `TILE_URL_TEMPLATE` first, falls back to the MapTiler URL keyed by `MAPTILER_KEY`. The widget's `_tileUrl` getter delegates to this helper. The iOS twin is byte-identical.
+File-level `resolveTileUrl(env, mapStyle:, brightness:)` reads `TILE_URL_TEMPLATE` first, falls back to the MapTiler URL keyed by `MAPTILER_KEY` for the style slug the user's `map_style` preference names under the app theme (the same slug switch as web's `buildMapStyleUrl`), and lands on OSM raster tiles when neither env var is set. `currentTileUrl(context)` is the production sugar — it reads the preference through `activeMapStyle` and the theme through `Theme.of(context)`. Its companion `resolveBasemapIsDark(...)` reports whether the resolved basemap is dark so the overlays (track casing, marker rings, gradient stops) can pick a separator that shows against it: the override is treated as light unless its URL names a dark style, because `bin/protomaps-dev.sh` serves the light `basic` style. The iOS twin is byte-identical.
 
 ### Wear OS (`apps/watch_wear/.../ui/TileSource.kt`)
 

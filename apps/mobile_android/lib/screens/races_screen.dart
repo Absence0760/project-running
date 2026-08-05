@@ -15,8 +15,14 @@ import '../widgets/top_banner.dart';
 /// "Import my result" affordance (manual paste; RunSignUp pull when the
 /// provider key is configured). A "Add a race" action submits a crowd listing.
 ///
-/// Reached as a sub-route from the run surface — NOT a bottom-nav destination
-/// (the 5-slot ceiling holds, decisions §63).
+/// Reached from the run surface's labelled peer strip (Train → Runs →
+/// **Races**, decisions § 488) and, as a secondary deep link, from the
+/// RunSignUp / ChronoTrack tiles under Settings → Integrations. NOT a
+/// bottom-nav destination (the 5-slot ceiling holds, decisions §63).
+///
+/// Nothing gates reaching it: the search is a public RPC, and
+/// [RaceService.isRunSignUpConfigured] gates only the *provider* import path
+/// inside the per-race import sheet.
 class RacesScreen extends StatefulWidget {
   final RaceService service;
   final String? mapTilerKey;
@@ -155,7 +161,6 @@ class _RacesScreenState extends State<RacesScreen> {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.search),
                     hintText: l.racesSearchPlaceholder,
-                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (v) {
@@ -169,7 +174,6 @@ class _RacesScreenState extends State<RacesScreen> {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.place_outlined),
                     hintText: l.racesNearPlace,
-                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   onChanged: (v) {

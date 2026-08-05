@@ -436,7 +436,6 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                 isDense: true,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                border: const OutlineInputBorder(),
                 hintText: l10n.gymEditorTitlePlaceholder,
               ),
             ),
@@ -538,7 +537,6 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                           labelText: l10n.gymRoutineSetType,
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
-                          border: const OutlineInputBorder(),
                         ),
                         items: [
                           for (final t in _gymSetTypes)
@@ -629,7 +627,6 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           isDense: true,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: const OutlineInputBorder(),
           hintText: l10n.gymEditorExercisePlaceholder,
           errorText: _needExercise && ex.name.text.trim().isEmpty
               ? l10n.gymEditorNeedExercise
@@ -707,7 +704,6 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
         isDense: true,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        border: const OutlineInputBorder(),
         hintText: hint,
       ),
       onChanged: (_) {

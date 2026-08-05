@@ -516,6 +516,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final clubId = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => PublishClubPicker(clubs: eligible),
     );
     if (clubId == null) {

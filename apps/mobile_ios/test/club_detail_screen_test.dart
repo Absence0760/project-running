@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/club_detail_screen.dart';
+import '../lib/widgets/error_state.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 
@@ -617,7 +618,8 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(find.text("Couldn't load this club."), findsOneWidget);
+      expect(find.textContaining("Couldn't load this club."), findsOneWidget);
+      expect(find.byType(ErrorState), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
 
@@ -636,7 +638,7 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(find.text("Couldn't load this club."), findsOneWidget);
+      expect(find.byType(ErrorState), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
   });

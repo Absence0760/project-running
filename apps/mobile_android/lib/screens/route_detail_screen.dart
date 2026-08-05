@@ -140,7 +140,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   // best-effort L4 effect kicked from the pin toggle and never blocks it.
   OfflineTilePackStore? _tilePackStore;
   OfflineTilePackStore get _tilePacks => _tilePackStore ??= OfflineTilePackStore(
-        tileUrlTemplate: currentTileUrl(),
+        tileUrlTemplate: currentTileUrl(context),
       );
   // Mirrors widget.route.clubId initially so the transfer/detach button
   // can show the current ownership state and `_transferToClub` can
@@ -794,7 +794,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 controller: commentCtl,
                 decoration: InputDecoration(
                   labelText: l10n.routeDetailCommentLabel,
-                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 3,
               ),
@@ -1874,6 +1873,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final result = await showModalBottomSheet<TransferRouteResult>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => RouteTransferClubPicker(
         clubs: eligible,
         currentClubId: _clubId,

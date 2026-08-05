@@ -61,13 +61,10 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
     final latestLabel = _latestLabel(l10n, _view);
 
     return Card(
-      // Use the Card default margin (EdgeInsets.all(4)) so this card
-      // matches the width of every other Card in the dashboard
-      // ListView (which itself supplies 16 px horizontal padding).
-      // The earlier explicit `fromLTRB(16, 8, 16, 8)` doubled the
-      // gutter and made this card visibly narrower than its siblings
-      // — field report: "the Mileage modal looks less wide (thinner)
-      // than the other modals on the dashboard."
+      // Never name a horizontal margin here: the dashboard ListView already
+      // supplies the 16 px gutter, and an explicit `fromLTRB(16, 8, 16, 8)`
+      // doubled it — field report: "the Mileage modal looks less wide
+      // (thinner) than the other modals on the dashboard."
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

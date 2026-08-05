@@ -31,7 +31,9 @@ Future<void> showFinisherCertificateSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
+    showDragHandle: false,
     builder: (_) => _CertificateSheet(
       eventTitle: eventTitle,
       finisherName: finisherName,

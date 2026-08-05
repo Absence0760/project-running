@@ -75,8 +75,9 @@ void main() {
       final s = await _makeStores();
       await _pump(tester, s.runs, s.routes, s.prefs);
       await tester.pumpAndSettle();
-      // The distance field is the screen's only TextFormField.
-      final node = tester.getSemantics(find.byType(TextFormField));
+      // Distance is the first TextFormField on the screen; how many of the
+      // later ones the list has built by now is a layout accident.
+      final node = tester.getSemantics(find.byType(TextFormField).first);
       expect(node.label, 'Distance');
     });
 

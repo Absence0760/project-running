@@ -69,6 +69,7 @@ class _RunGearChipsState extends State<RunGearChips> {
     final saved = await showModalBottomSheet<Set<String>>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setLocal) {
           final l10n = AppLocalizations.of(ctx);

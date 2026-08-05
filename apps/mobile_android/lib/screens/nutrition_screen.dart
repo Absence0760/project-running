@@ -20,6 +20,7 @@ import '../local_recipe_store.dart';
 import '../meal_template.dart';
 import '../nutrition_budget.dart';
 import '../nutrition_targets.dart';
+import '../preferences.dart';
 import '../recipe.dart';
 import '../nutrition_totals.dart';
 import '../nutrition_week.dart';
@@ -28,6 +29,7 @@ import '../widgets/nutrition_log_sheet.dart';
 import '../widgets/pending_sync_banner.dart';
 import '../widgets/top_banner.dart';
 import 'nutrition_meal_detail_screen.dart';
+import 'settings_body_metrics_screen.dart';
 
 /// Daily calorie + macro targets for the signed-in user, or null when a
 /// required body metric is missing. Shared by [NutritionScreen] and the
@@ -240,6 +242,21 @@ class _NutritionScreenState extends State<NutritionScreen> {
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
+  }
+
+  Future<void> _openBodyMetrics() async {
+    final prefs = activePreferences;
+    if (prefs == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsBodyMetricsScreen(
+          api: widget.api,
+          settingsSync: widget.settingsSync,
+          preferences: prefs,
+        ),
+      ),
+    );
+    await _refresh();
   }
 
   /// Today's run + gym exercise reduced to (a) whole active minutes for the
@@ -1055,6 +1072,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     ?.copyWith(color: theme.colorScheme.outline),
                 textAlign: TextAlign.center,
               ),
+              if (activePreferences != null) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonalIcon(
+                  onPressed: _openBodyMetrics,
+                  icon: const Icon(Icons.straighten),
+                  label: Text(l10n.nutritionAddBodyMetrics),
+                ),
+              ],
             ],
           ],
         ),

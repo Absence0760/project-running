@@ -101,7 +101,6 @@ class _PlanLibraryScreenState extends State<PlanLibraryScreen> {
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
                 hintText: l10n.planLibrarySearchHint,
-                border: const OutlineInputBorder(),
               ),
               onChanged: _onSearch,
             ),

@@ -335,7 +335,6 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
             isDense: true,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            border: const OutlineInputBorder(),
             hintText: l10n.gymRoutineEditorTitlePlaceholder,
             errorText: _titleError,
           ),
@@ -366,7 +365,6 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
             decoration: const InputDecoration(
               isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(),
             ),
           ),
         ),
@@ -480,7 +478,6 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
                   labelText: l10n.gymRoutineModality,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  border: const OutlineInputBorder(),
                 ),
                 items: [
                   for (final m in _modalities)
@@ -537,7 +534,6 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
               decoration: const InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                border: OutlineInputBorder(),
               ),
               items: [
                 for (final t in _setTypes)
@@ -611,7 +607,6 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
             labelText: l10n.gymRoutineProgression,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            border: const OutlineInputBorder(),
           ),
           items: [
             for (final s in _schemes)
@@ -647,7 +642,6 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
           isDense: true,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: const OutlineInputBorder(),
           hintText: l10n.gymEditorExercisePlaceholder,
           errorText: _needExercise && ex.name.text.trim().isEmpty
               ? l10n.gymRoutineEditorNeedExercise
@@ -725,7 +719,6 @@ class _RoutineBuilderSheetState extends State<RoutineBuilderSheet> {
         isDense: true,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        border: const OutlineInputBorder(),
         hintText: hint,
       ),
       onChanged: (_) {

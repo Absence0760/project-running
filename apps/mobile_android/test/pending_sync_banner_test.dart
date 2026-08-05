@@ -96,8 +96,10 @@ Widget _app({
   required ApiClient? api,
   required bool isOnline,
   required List<OfflineSyncStore<SyncEntry>> stores,
+  Locale? locale,
 }) =>
     MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
@@ -188,6 +190,25 @@ void main() {
     expect(store.hasPending, isTrue);
     expect(find.text("1 change hasn't synced"), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('the retry action reflows below the message at 320dp in German',
+      (tester) async {
+    // A `TextButton` at the tail of the message row takes its intrinsic width
+    // first, so a long German label starved the `Expanded` message down to a
+    // few pixels and the banner grew several hundred pixels tall — enough to
+    // overflow the host screen's body Column (decisions § 488).
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = _TestStore()..seed('a', SyncState.pendingCreate);
+    await tester.pumpWidget(_app(
+      api: _SignedInApi(),
+      isOnline: true,
+      stores: [store],
+      locale: const Locale('de'),
+    ));
+    expect(find.text('Erneut versuchen'), findsOneWidget);
+    expect(tester.getSize(find.byType(PendingSyncBanner)).height, lessThan(120));
   });
 
   testWidgets('sums pending rows across several stores and retries them all',

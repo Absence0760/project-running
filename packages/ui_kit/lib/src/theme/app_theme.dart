@@ -12,8 +12,14 @@ class AppTheme {
   static const Color parchmentDim = Color(0xFFEBE5D8);
   static const Color ink = Color(0xFF1B1628);
   static const Color haze = Color(0xFF6B6380);
-  static const Color duskDivider = Color(0xFF2E2545);
   static const Color error = Color(0xFFD8594C);
+
+  /// The one line token per brightness: every divider, hairline outline and
+  /// hand-drawn border resolves to this, and each clears WCAG 1.4.11's 3:1
+  /// non-text minimum against the surfaces it is drawn on (light 3.53:1 on
+  /// parchment; dark 3.33:1 on duskDeep, 3.91:1 on midnight).
+  static const Color parchmentLine = Color(0xFF8A806A);
+  static const Color duskLine = Color(0xFF786A9A);
 
   static const Color primary = dusk;
   static const Color secondary = coral;
@@ -31,17 +37,28 @@ class AppTheme {
       surface: parchment,
       onSurface: ink,
       error: error,
+      outlineVariant: parchmentLine,
     );
     return ThemeData(
       colorScheme: scheme,
       scaffoldBackgroundColor: parchment,
       useMaterial3: true,
       splashFactory: InkRipple.splashFactory,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: parchment,
+      // The seeded surface tint is a cool lavender (#64558F); laid over
+      // parchment at the elevation-3 opacity it computes to #E7E2E2, a
+      // 1.16:1 step in the wrong hue family. Light therefore separates the
+      // scrolled-under bar with a warm fill plus a real shadow.
+      appBarTheme: AppBarThemeData(
+        backgroundColor: WidgetStateColor.resolveWith(
+          (states) => states.contains(WidgetState.scrolledUnder)
+              ? parchmentDim
+              : parchment,
+        ),
         foregroundColor: ink,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 3,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: ink,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -83,13 +100,33 @@ class AppTheme {
       ),
       // Light surfaceContainerLow computes to 1.005:1 against parchment (and
       // carries the seed's cool lavender cast on a warm page), so card
-      // separation comes from the hairline outline, not a tonal fill.
+      // separation comes from the hairline outline, not a tonal fill. The
+      // margin is vertical-only so a card's left edge is always its parent's
+      // padding edge; the 4 stays because 49 stacked-card sites carry no gap
+      // of their own and Material's default margin was supplying it.
       cardTheme: const CardThemeData(
         color: parchment,
         elevation: 0,
+        margin: EdgeInsets.symmetric(vertical: 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          side: BorderSide(color: parchmentDim),
+          side: BorderSide(color: parchmentLine),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationThemeData(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: parchment,
+        modalBackgroundColor: parchment,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: 0,
+        showDragHandle: true,
+        dragHandleColor: parchmentLine,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
       textTheme: const TextTheme(
@@ -141,7 +178,12 @@ class AppTheme {
           ),
         ),
       ),
-      dividerColor: parchmentDim,
+      dividerColor: parchmentLine,
+      // Divider ignores `dividerColor` under Material 3 and falls back to
+      // colorScheme.outlineVariant, so the token has to be pinned in all
+      // three places or a drawn hairline and a Divider beside it land on
+      // different greys.
+      dividerTheme: const DividerThemeData(color: parchmentLine),
       extensions: const [AppSemanticColors.light],
     );
   }
@@ -158,17 +200,26 @@ class AppTheme {
       surface: duskDeep,
       onSurface: parchment,
       error: error,
+      outlineVariant: duskLine,
     );
     return ThemeData(
       colorScheme: scheme,
       scaffoldBackgroundColor: midnight,
       useMaterial3: true,
       splashFactory: InkRipple.splashFactory,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: midnight,
+      // A shadow is not available against midnight, so dark carries the
+      // whole separation in the fill: rising to dusk is a 1.56:1 step,
+      // against 1.22:1 for the seeded tint and 1.17:1 for duskDeep.
+      appBarTheme: AppBarThemeData(
+        backgroundColor: WidgetStateColor.resolveWith(
+          (states) =>
+              states.contains(WidgetState.scrolledUnder) ? dusk : midnight,
+        ),
         foregroundColor: parchment,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 3,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: midnight,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -211,9 +262,26 @@ class AppTheme {
       cardTheme: const CardThemeData(
         color: duskDeep,
         elevation: 0,
+        margin: EdgeInsets.symmetric(vertical: 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          side: BorderSide(color: duskDivider),
+          side: BorderSide(color: duskLine),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationThemeData(
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: duskDeep,
+        modalBackgroundColor: duskDeep,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: 0,
+        showDragHandle: true,
+        dragHandleColor: duskLine,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
       textTheme: const TextTheme(
@@ -267,7 +335,8 @@ class AppTheme {
           ),
         ),
       ),
-      dividerColor: duskDivider,
+      dividerColor: duskLine,
+      dividerTheme: const DividerThemeData(color: duskLine),
       extensions: const [AppSemanticColors.dark],
     );
   }

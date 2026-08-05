@@ -292,7 +292,6 @@ class _AddRunScreenState extends State<AddRunScreen> {
                 borderRadius: BorderRadius.circular(4),
                 child: InputDecorator(
                   decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
                     suffixIcon: _selectedRoute == null
                         ? const Icon(Icons.search)
                         : IconButton(
@@ -322,7 +321,6 @@ class _AddRunScreenState extends State<AddRunScreen> {
               // missing.
               InputDecorator(
                 decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
                   suffixIcon: Icon(Icons.route_outlined),
                 ),
                 child: Text(
@@ -346,7 +344,6 @@ class _AddRunScreenState extends State<AddRunScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                 ],
                 decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
                   suffixText: UnitFormat.distanceLabel(unit),
                 ),
                 validator: (v) {
@@ -397,7 +394,6 @@ class _AddRunScreenState extends State<AddRunScreen> {
             TextFormField(
               controller: _titleCtl,
               decoration: InputDecoration(
-                border: const OutlineInputBorder(),
                 hintText: l10n.addRunTitleHint,
               ),
             ),
@@ -408,7 +404,6 @@ class _AddRunScreenState extends State<AddRunScreen> {
               controller: _notesCtl,
               maxLines: 3,
               decoration: InputDecoration(
-                border: const OutlineInputBorder(),
                 hintText: l10n.addRunNotesHint,
               ),
             ),
@@ -437,7 +432,6 @@ class _AddRunScreenState extends State<AddRunScreen> {
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       onChanged: (_) => state.didChange(null),
       decoration: InputDecoration(
-        border: const OutlineInputBorder(),
         suffixText: suffix,
       ),
     );

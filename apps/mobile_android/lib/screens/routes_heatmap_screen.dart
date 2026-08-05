@@ -281,7 +281,6 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
-      showDragHandle: true,
       builder: (ctx) {
         return ListView(
           shrinkWrap: true,
@@ -398,7 +397,6 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
-      showDragHandle: true,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheet) {
@@ -743,7 +741,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: currentTileUrl(),
+                urlTemplate: currentTileUrl(context),
                 userAgentPackageName: 'com.threkir.app',
                 tileProvider: CachedTileProvider(
                   store: TileCache.store,
@@ -983,7 +981,6 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
-      showDragHandle: true,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheet) {

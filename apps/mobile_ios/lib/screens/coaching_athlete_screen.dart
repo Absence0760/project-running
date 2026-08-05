@@ -241,7 +241,6 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
           isExpanded: true,
           decoration: InputDecoration(
             labelText: l10n.coachingAthleteAssignSelectLabel,
-            border: const OutlineInputBorder(),
           ),
           hint: Text(l10n.coachingAthleteAssignSelectPlaceholder),
           items: [
@@ -258,7 +257,6 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
           child: InputDecorator(
             decoration: InputDecoration(
               labelText: l10n.coachingAthleteAssignStartLabel,
-              border: const OutlineInputBorder(),
             ),
             child: Text(formatDateMed(_startDate, activeLocaleTag)),
           ),

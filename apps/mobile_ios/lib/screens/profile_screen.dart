@@ -27,22 +27,29 @@ import 'public_run_screen.dart';
 /// across surfaces (`docs/architecture/conventions.md § Pagination`).
 const int _kFollowsPageSize = 20;
 
+/// The profile's tabs, in render order. Callers that deep-link into a tab
+/// name it; the index is derived from [_ProfileScreenState._tabOrder], so
+/// inserting a tab can never silently re-point an existing deep link the
+/// way a bare index literal did (the bell landed on Following once Badges
+/// was inserted ahead of it).
+enum ProfileTab { runs, badges, followers, following, notifications }
+
 /// Public profile screen — mirrors the web `/u/[id]` page (decisions §31).
 ///
-/// Four tabs: Runs (public-only), Followers, Following, Notifications.
-/// The Notifications tab is gated to the viewer's own profile (the row-
-/// level RLS would hide other users' notifications anyway, but showing
-/// the tab on someone else's profile is misleading).
+/// Tabs: Runs (public-only), Achievements, Followers, Following,
+/// Notifications. The Notifications tab is gated to the viewer's own
+/// profile (the row-level RLS would hide other users' notifications
+/// anyway, but showing the tab on someone else's profile is misleading).
 class ProfileScreen extends StatefulWidget {
   final ApiClient api;
   final String userId;
-  final int initialTab;
+  final ProfileTab initialTab;
 
   const ProfileScreen({
     super.key,
     required this.api,
     required this.userId,
-    this.initialTab = 0,
+    this.initialTab = ProfileTab.runs,
   });
 
   @override
@@ -92,15 +99,28 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _loadingMoreFollowing = false;
 
   bool get _isSelf => widget.api.userId == widget.userId;
-  int get _tabCount => _isSelf ? 5 : 4;
+
+  /// Single source of tab order — the TabBar labels, the TabBarView
+  /// children, and the deep-link index all read it, so they cannot drift.
+  List<ProfileTab> get _tabOrder => [
+        ProfileTab.runs,
+        ProfileTab.badges,
+        ProfileTab.followers,
+        ProfileTab.following,
+        if (_isSelf) ProfileTab.notifications,
+      ];
 
   @override
   void initState() {
     super.initState();
+    final order = _tabOrder;
+    // A tab this profile doesn't carry (Notifications on someone else's)
+    // has no index — open on the first tab rather than a nearby one.
+    final requested = order.indexOf(widget.initialTab);
     _tabs = TabController(
-      length: _tabCount,
+      length: order.length,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, _tabCount - 1),
+      initialIndex: requested < 0 ? 0 : requested,
     );
     _load();
   }
@@ -554,13 +574,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final tabs = <Tab>[
-      Tab(text: l10n.profileTabRuns),
-      Tab(text: l10n.badgesSectionTitle),
-      Tab(text: l10n.profileTabFollowers),
-      Tab(text: l10n.profileTabFollowing),
-      if (_isSelf) Tab(text: l10n.profileTabNotifications),
-    ];
+    final order = _tabOrder;
 
     return Scaffold(
       appBar: AppBar(
@@ -588,7 +602,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               onPressed: _blockBusy ? null : _toggleBlock,
             ),
         ],
-        bottom: TabBar(controller: _tabs, isScrollable: true, tabs: tabs),
+        bottom: TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          tabs: [for (final tab in order) Tab(text: _tabLabel(l10n, tab))],
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -607,50 +625,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           child: TabBarView(
                             controller: _tabs,
                             children: [
-                              _tabScope(
-                                loading: _runsLoading,
-                                error: _runsError,
-                                onRetry: _loadRuns,
-                                child: () => _buildRunsTab(theme),
-                              ),
-                              _tabScope(
-                                loading: _badgesLoading,
-                                error: _badgesError,
-                                onRetry: _loadBadges,
-                                child: () =>
-                                    BadgeGrid(badges: _badges, isOwner: _isSelf),
-                              ),
-                              _tabScope(
-                                loading: _followersLoading,
-                                error: _followersError,
-                                onRetry: _loadFollowers,
-                                child: () => _buildPeopleTab(
-                                  _followers,
-                                  l10n.profileFollowersEmpty,
-                                  hasMore: _followersHasMore,
-                                  loadingMore: _loadingMoreFollowers,
-                                  onLoadMore: _loadMoreFollowers,
-                                ),
-                              ),
-                              _tabScope(
-                                loading: _followingLoading,
-                                error: _followingError,
-                                onRetry: _loadFollowing,
-                                child: () => _buildPeopleTab(
-                                  _following,
-                                  l10n.profileFollowingEmpty,
-                                  hasMore: _followingHasMore,
-                                  loadingMore: _loadingMoreFollowing,
-                                  onLoadMore: _loadMoreFollowing,
-                                ),
-                              ),
-                              if (_isSelf)
-                                _tabScope(
-                                  loading: _notificationsLoading,
-                                  error: _notificationsError,
-                                  onRetry: _loadNotifications,
-                                  child: () => _buildNotificationsTab(theme),
-                                ),
+                              for (final tab in order) _tabView(theme, l10n, tab)
                             ],
                           ),
                         ),
@@ -702,6 +677,60 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     );
   }
+
+  String _tabLabel(AppLocalizations l10n, ProfileTab tab) => switch (tab) {
+        ProfileTab.runs => l10n.profileTabRuns,
+        ProfileTab.badges => l10n.badgesSectionTitle,
+        ProfileTab.followers => l10n.profileTabFollowers,
+        ProfileTab.following => l10n.profileTabFollowing,
+        ProfileTab.notifications => l10n.profileTabNotifications,
+      };
+
+  Widget _tabView(ThemeData theme, AppLocalizations l10n, ProfileTab tab) =>
+      switch (tab) {
+        ProfileTab.runs => _tabScope(
+            loading: _runsLoading,
+            error: _runsError,
+            onRetry: _loadRuns,
+            child: () => _buildRunsTab(theme),
+          ),
+        ProfileTab.badges => _tabScope(
+            loading: _badgesLoading,
+            error: _badgesError,
+            onRetry: _loadBadges,
+            child: () => BadgeGrid(badges: _badges, isOwner: _isSelf),
+          ),
+        ProfileTab.followers => _tabScope(
+            loading: _followersLoading,
+            error: _followersError,
+            onRetry: _loadFollowers,
+            child: () => _buildPeopleTab(
+              _followers,
+              l10n.profileFollowersEmpty,
+              hasMore: _followersHasMore,
+              loadingMore: _loadingMoreFollowers,
+              onLoadMore: _loadMoreFollowers,
+            ),
+          ),
+        ProfileTab.following => _tabScope(
+            loading: _followingLoading,
+            error: _followingError,
+            onRetry: _loadFollowing,
+            child: () => _buildPeopleTab(
+              _following,
+              l10n.profileFollowingEmpty,
+              hasMore: _followingHasMore,
+              loadingMore: _loadingMoreFollowing,
+              onLoadMore: _loadMoreFollowing,
+            ),
+          ),
+        ProfileTab.notifications => _tabScope(
+            loading: _notificationsLoading,
+            error: _notificationsError,
+            onRetry: _loadNotifications,
+            child: () => _buildNotificationsTab(theme),
+          ),
+      };
 
   Widget _tabScope({
     required bool loading,

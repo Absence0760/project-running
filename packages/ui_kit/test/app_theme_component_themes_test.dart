@@ -78,6 +78,16 @@ void main() {
         expect(shape.side.width, 1.0);
         expect(shape.side.style, BorderStyle.solid);
       });
+
+      test('carries no horizontal margin of its own', () {
+        final margin = card.margin!.resolve(TextDirection.ltr);
+        expect(margin.left, 0,
+            reason: 'a card that insets itself horizontally lands at a '
+                'different left edge from its siblings (issue #666 C1)');
+        expect(margin.right, 0);
+        expect(margin.top, 4);
+        expect(margin.bottom, 4);
+      });
     });
 
     group('textTheme in ${entry.key}', () {

@@ -617,7 +617,6 @@ class _ScreenCard extends StatelessWidget {
                         isExpanded: true,
                         decoration: InputDecoration(
                           labelText: l10n.watchScreensSlot(slot + 1),
-                          border: const OutlineInputBorder(),
                           isDense: true,
                         ),
                         items: [

@@ -229,6 +229,12 @@ class SettingsSyncService extends ChangeNotifier {
     if (pd is String) {
       preferences.setPrivacyDefault(pd);
     }
+    // Basemap for every map surface. Unknown values normalise to
+    // `streets` inside setMapStyle.
+    final ms = prefs[SettingsKeys.mapStyle];
+    if (ms is String) {
+      preferences.setMapStyle(ms);
+    }
     // Display + entry unit for body / lift weights (Phase 4). Storage
     // stays canonical kg; this only flips how the number is shown/parsed.
     final wu = prefs[SettingsKeys.weightUnit];

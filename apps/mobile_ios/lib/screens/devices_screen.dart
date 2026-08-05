@@ -120,7 +120,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
           controller: ctrl,
           autofocus: true,
           maxLength: 80,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
         ),
         actions: [
           TextButton(
@@ -184,6 +183,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final next = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => _OverridesSheet(initial: prefs),
     );
     if (next == null) return;
@@ -460,6 +460,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
     final entry = await showModalBottomSheet<MapEntry<String, dynamic>>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       builder: (_) => _AddOverrideSheet(eligible: eligible),
     );
     if (entry == null) return;
@@ -705,7 +706,6 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
           decoration: InputDecoration(
             labelText: l10n.devicesValue,
             errorText: _numError,
-            border: const OutlineInputBorder(),
           ),
         );
     }

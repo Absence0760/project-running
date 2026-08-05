@@ -7,15 +7,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../apple_auth.dart';
 import '../auth_error.dart';
 import '../auth_gates.dart';
 import '../auth_validation.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../legal_links.dart';
 import '../widgets/password_field.dart';
-import '../widgets/top_banner.dart';
 
 /// Email/password account-creation screen with Google + Apple OAuth.
 ///
@@ -62,24 +61,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   // GDPR Art 7(2): the consent request must let the user read the Terms +
   // Privacy Policy before accepting, so the label carries tappable links.
   late final TapGestureRecognizer _termsTap = TapGestureRecognizer()
-    ..onTap = () => _openLegal('terms');
+    ..onTap = () => openLegalDoc(context, LegalDoc.terms);
   late final TapGestureRecognizer _privacyTap = TapGestureRecognizer()
-    ..onTap = () => _openLegal('privacy');
-
-  Future<void> _openLegal(String path) async {
-    final url = 'https://threkir.com/$path';
-    try {
-      final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        showTopBanner(context, AppLocalizations.of(context).signUpCouldNotOpen(url));
-      }
-    } catch (e) {
-      debugPrint('sign_up: opening $url failed: $e');
-      if (mounted) {
-        showTopBanner(context, AppLocalizations.of(context).signUpCouldNotOpen(url));
-      }
-    }
-  }
+    ..onTap = () => openLegalDoc(context, LegalDoc.privacy);
 
   @override
   void dispose() {
@@ -404,7 +388,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       onSubmitted: (_) => _passwordFocus.requestFocus(),
                       decoration: InputDecoration(
                         labelText: l10n.authEmailLabel,
-                        border: const OutlineInputBorder(),
                         errorText: _emailError,
                       ),
                     ),
@@ -413,7 +396,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       controller: _passwordController,
                       focusNode: _passwordFocus,
                       labelText: l10n.authPasswordLabel,
-                      border: const OutlineInputBorder(),
                       errorText: _passwordError,
                       autofillHints: const [AutofillHints.newPassword],
                       textInputAction: TextInputAction.next,
@@ -425,7 +407,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       controller: _confirmPasswordController,
                       focusNode: _confirmPasswordFocus,
                       labelText: l10n.signUpConfirmPasswordLabel,
-                      border: const OutlineInputBorder(),
                       autofillHints: const [AutofillHints.newPassword],
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) {
@@ -468,7 +449,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     children: [
                       TextSpan(text: l10n.signUpAcceptPrefix),
                       TextSpan(
-                        text: l10n.signUpTermsLink,
+                        text: l10n.legalTerms,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.primary,
                           decoration: TextDecoration.underline,
@@ -477,7 +458,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                       TextSpan(text: l10n.signUpAcceptConjunction),
                       TextSpan(
-                        text: l10n.signUpPrivacyLink,
+                        text: l10n.legalPrivacy,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.primary,
                           decoration: TextDecoration.underline,

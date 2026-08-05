@@ -8,6 +8,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
 import '../preferences.dart';
+import '../widgets/gym_compose_sheet.dart';
 import 'gym_exercise_screen.dart';
 import 'gym_screen.dart' show gymSetHistory;
 
@@ -42,6 +43,14 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _log() async {
+    await showGymComposeSheet(
+      context: context,
+      store: widget.store,
+      api: widget.api,
+    );
+  }
+
   void _open(ExerciseRecord r) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -65,6 +74,8 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
           ? EmptyState(
               icon: Icons.emoji_events_outlined,
               title: l10n.gymRecordsEmpty,
+              ctaLabel: l10n.gymLog,
+              onCta: _log,
             )
           : ListView.separated(
               padding: const EdgeInsets.all(16),
