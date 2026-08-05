@@ -311,7 +311,12 @@
 						</a>
 					{:else}
 						{@const eng = engagement.get(entry.id) ?? { kudos_count: 0, viewer_has_kudos: false, comment_count: 0 }}
-						<a class="entry-body" href="/runs/{entry.id}">
+						<!-- /runs/[id] reads owner-scoped (fetchRunById filters on the
+						     viewer's user_id), so a followed runner's entry would open
+						     a "Run not found" page. The public share page is the run
+						     surface a non-owner can actually read — same target the
+						     lift card above and mobile's PublicRunScreen use. -->
+						<a class="entry-body" href="/share/run/{entry.id}">
 							{#if entry.has_track}
 								<div class="entry-map">
 									<!-- public_runs dropped track_url; the non-owner clip
@@ -357,7 +362,7 @@
 								</span>
 								<span>{eng.kudos_count}</span>
 							</button>
-							<a class="comment-pill" href="/runs/{entry.id}" aria-label={m('socialFeed.viewComments')}>
+							<a class="comment-pill" href="/share/run/{entry.id}" aria-label={m('socialFeed.viewComments')}>
 								<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
 								<span>{eng.comment_count}</span>
 							</a>
