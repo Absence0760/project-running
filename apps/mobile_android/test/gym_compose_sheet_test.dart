@@ -10,6 +10,24 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/widgets/gym_compose_sheet.dart';
 
+/// Flush the real event loop until [ready] holds, then settle the route pop.
+///
+/// The composer's save awaits a real atomic file write, so the store's row only
+/// appears once the real zone has run. A fixed `Future.delayed` is a guess at
+/// how long that takes: it passed on a developer machine and failed on a slower
+/// CI runner, and the `finally` that deletes the temp directory then raced the
+/// write still in flight. Waiting on the condition itself ends as soon as the
+/// write lands and only reports a failure when the save is genuinely broken.
+Future<void> _settleUntil(WidgetTester tester, bool Function() ready) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (!ready() && DateTime.now().isBefore(deadline)) {
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)));
+    await tester.pump();
+  }
+  await tester.pump(const Duration(milliseconds: 350));
+}
+
 Future<({LocalGymStore store, Directory dir})> _store(String tag) async {
   final dir = Directory.systemTemp.createTempSync('gym_compose_$tag');
   final store = LocalGymStore();
@@ -113,10 +131,8 @@ void main() {
       // revision bump invalidates it.
       await tester.runAsync(() async {
         await tester.tap(find.text('Save workout'));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
       });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
       expect(f.store.workouts, hasLength(1));
     } finally {
       f.dir.deleteSync(recursive: true);
@@ -142,10 +158,7 @@ void main() {
       await tester.tap(find.text('Save workout'));
       // The composer's save awaits a real file write (createLocal) — flush the
       // real event loop so it completes, then settle the route pop.
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
 
       expect(f.store.workouts, hasLength(1));
       final w = f.store.workouts.first;
@@ -182,10 +195,7 @@ void main() {
       await tester.tap(find.byType(FilledButton));
 
       // Now let the real file write complete and settle the route pop.
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
 
       expect(f.store.workouts, hasLength(1));
     } finally {
@@ -211,9 +221,10 @@ void main() {
       await tester.enterText(fields.at(2), '5'); // reps
 
       await tester.tap(find.text('Save workout'));
-      // createLocal throws synchronously-ish; drain then rebuild the error text.
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      // The failing store rejects inside the same async chain, so wait on the
+      // rendered error rather than on a duration.
+      await _settleUntil(
+          tester, () => find.text("Couldn't save workout.").evaluate().isNotEmpty);
       await tester.pump();
 
       expect(find.text("Couldn't save workout."), findsOneWidget);
@@ -256,10 +267,7 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.text('Save workout'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;
@@ -295,10 +303,7 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.text('Save workout'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;
@@ -358,10 +363,7 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.text('Save workout'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;
@@ -428,10 +430,7 @@ void main() {
       await tester.enterText(fields.at(5), '90'); // duration seconds
 
       await tester.tap(find.text('Save workout'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
 
       expect(f.store.workouts, hasLength(1));
       final w = f.store.workouts.first;
@@ -469,10 +468,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Save workout'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
+      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;
