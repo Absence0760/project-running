@@ -2413,6 +2413,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailSegDismiss => 'Descartar';
 
   @override
+  String get publicRunLiveTitle => 'En directo ahora';
+
+  @override
+  String get publicRunLiveSub =>
+      'Esta carrera sigue en curso. Síguela en el rastreador en directo.';
+
+  @override
+  String get publicRunWatchLive => 'Ver en directo';
+
+  @override
   String get publicRunTitle => 'Carrera';
 
   @override

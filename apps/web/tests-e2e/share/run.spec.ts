@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
-import { USER_B } from '../fixtures/users';
+import { deleteRun, insertRun } from '../fixtures/simulate';
+import { USER_A, USER_B } from '../fixtures/users';
 
 /**
  * /share/run/[id] — public run share page (anon + authed paths).
@@ -351,5 +352,58 @@ test.describe('/share/run/[id] — authed non-owner', () => {
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByText('No photos on this run.')).toHaveCount(0);
 		await expect(page.getByRole('heading', { name: 'Photos' })).toHaveCount(0);
+	});
+});
+
+test.describe('/share/run/[id] — a still-running broadcast (issue #666 A2)', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	let liveRunId: string;
+
+	test.beforeAll(async () => {
+		// The recorder's pre-created stub: 0 duration, 0 distance, public,
+		// never concluded. Before the CTA, this page presented it as a
+		// finished run of nothing with no route to the tracker.
+		liveRunId = await insertRun({
+			user_id: USER_A.id,
+			duration_s: 0,
+			distance_m: 0,
+			is_public: true,
+			concluded_at: null,
+			metadata: { in_progress: true }
+		});
+	});
+
+	test.afterAll(async () => {
+		if (liveRunId) await deleteRun(liveRunId);
+	});
+
+	test('offers a Watch live CTA pointing at the live tracker', async ({ page }) => {
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+		await page.goto(`/share/run/${liveRunId}`);
+
+		const cta = page.getByTestId('share-run-live-cta');
+		await expect(cta).toBeVisible({ timeout: 10_000 });
+		await expect(cta.locator('a')).toHaveAttribute('href', `/live/${liveRunId}`);
+	});
+
+	test('a finished run shows no live CTA', async ({ page }) => {
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+
+		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('share-run-live-cta')).toHaveCount(0);
 	});
 });

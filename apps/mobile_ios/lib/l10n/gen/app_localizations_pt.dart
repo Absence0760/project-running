@@ -2409,6 +2409,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailSegDismiss => 'Dispensar';
 
   @override
+  String get publicRunLiveTitle => 'Ao vivo agora';
+
+  @override
+  String get publicRunLiveSub =>
+      'Esta corrida ainda está a decorrer. Acompanhe no rastreador ao vivo.';
+
+  @override
+  String get publicRunWatchLive => 'Ver ao vivo';
+
+  @override
   String get publicRunTitle => 'Corrida';
 
   @override
@@ -14890,6 +14900,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailSegDismiss => 'Dispensar';
+
+  @override
+  String get publicRunLiveTitle => 'Ao vivo agora';
+
+  @override
+  String get publicRunLiveSub =>
+      'Esta corrida ainda está em andamento. Acompanhe no rastreador ao vivo.';
+
+  @override
+  String get publicRunWatchLive => 'Assistir ao vivo';
 
   @override
   String get publicRunTitle => 'Corrida';

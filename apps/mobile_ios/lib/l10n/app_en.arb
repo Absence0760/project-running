@@ -3183,6 +3183,18 @@
   "@runDetailSegDismiss": {
     "description": "Tooltip on the segment card's close button"
   },
+  "publicRunLiveTitle": "Live right now",
+  "@publicRunLiveTitle": {
+    "description": "Heading on the public run view when the run is still being broadcast live"
+  },
+  "publicRunLiveSub": "This run is still in progress. Follow it on the live tracker.",
+  "@publicRunLiveSub": {
+    "description": "Sub-line explaining why the public run view shows no distance or time yet"
+  },
+  "publicRunWatchLive": "Watch live",
+  "@publicRunWatchLive": {
+    "description": "Button that opens the live spectator screen for an in-progress run"
+  },
   "publicRunTitle": "Run",
   "@publicRunTitle": {
     "description": "AppBar title for the read-only public run view"

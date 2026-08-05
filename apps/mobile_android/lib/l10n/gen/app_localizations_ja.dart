@@ -2297,6 +2297,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailSegDismiss => '閉じる';
 
   @override
+  String get publicRunLiveTitle => 'ただいまライブ中';
+
+  @override
+  String get publicRunLiveSub => 'このランはまだ進行中です。ライブトラッカーで追いかけましょう。';
+
+  @override
+  String get publicRunWatchLive => 'ライブで見る';
+
+  @override
   String get publicRunTitle => 'ラン';
 
   @override

@@ -2420,6 +2420,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDetailSegDismiss => 'Ignorer';
 
   @override
+  String get publicRunLiveTitle => 'En direct maintenant';
+
+  @override
+  String get publicRunLiveSub =>
+      'Cette course est toujours en cours. Suivez-la sur le suivi en direct.';
+
+  @override
+  String get publicRunWatchLive => 'Suivre en direct';
+
+  @override
   String get publicRunTitle => 'Course';
 
   @override

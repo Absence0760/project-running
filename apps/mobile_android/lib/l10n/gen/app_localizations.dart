@@ -4127,6 +4127,24 @@ abstract class AppLocalizations {
   /// **'Dismiss'**
   String get runDetailSegDismiss;
 
+  /// Heading on the public run view when the run is still being broadcast live
+  ///
+  /// In en, this message translates to:
+  /// **'Live right now'**
+  String get publicRunLiveTitle;
+
+  /// Sub-line explaining why the public run view shows no distance or time yet
+  ///
+  /// In en, this message translates to:
+  /// **'This run is still in progress. Follow it on the live tracker.'**
+  String get publicRunLiveSub;
+
+  /// Button that opens the live spectator screen for an in-progress run
+  ///
+  /// In en, this message translates to:
+  /// **'Watch live'**
+  String get publicRunWatchLive;
+
   /// AppBar title for the read-only public run view
   ///
   /// In en, this message translates to:

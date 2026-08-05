@@ -2418,6 +2418,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runDetailSegDismiss => 'Verwerfen';
 
   @override
+  String get publicRunLiveTitle => 'Jetzt live';
+
+  @override
+  String get publicRunLiveSub =>
+      'Dieser Lauf läuft noch. Verfolge ihn im Live-Tracker.';
+
+  @override
+  String get publicRunWatchLive => 'Live ansehen';
+
+  @override
   String get publicRunTitle => 'Lauf';
 
   @override

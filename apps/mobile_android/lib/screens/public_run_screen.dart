@@ -6,9 +6,11 @@ import 'package:ui_kit/ui_kit.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../live_broadcast.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
+import 'live_spectator_screen.dart';
 import '../widgets/run_gear_chips.dart';
 import '../widgets/run_photos.dart';
 import '../widgets/report_sheet.dart';
@@ -185,6 +187,12 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
             followRunner: false,
           ),
         ),
+        // A run still being broadcast is a 0 km / 0:00 stub here, and
+        // LiveSpectatorScreen had no in-app entry at all — the tracker was
+        // only reachable by opening the shared web link in a browser. This is
+        // the seam: the spectator arrives from the feed, sees the run IS live,
+        // and gets there. Mirrors the /share/run/[id] CTA on web.
+        if (isLiveBroadcast(row)) _LiveBanner(runId: row.id, api: widget.api),
         if (_author != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -286,6 +294,70 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
       return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     }
     return '$m:${s.toString().padLeft(2, '0')}';
+  }
+}
+
+/// The in-app entry to [LiveSpectatorScreen]. Before this the spectator screen
+/// was an orphan: nothing in the app pushed it, and the runner's shared
+/// `/live/{id}` URL opens the web page in a browser rather than the app.
+class _LiveBanner extends StatelessWidget {
+  final String runId;
+  final ApiClient api;
+  const _LiveBanner({required this.runId, required this.api});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final live = AppSemanticColors.of(context).success;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: live.withValues(alpha: 0.12),
+        border: Border.all(color: live),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: live),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                l10n.publicRunLiveTitle,
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700, color: live),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            l10n.publicRunLiveSub,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              icon: const Icon(Icons.sensors, size: 18),
+              label: Text(l10n.publicRunWatchLive),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LiveSpectatorScreen(api: api, runId: runId),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
