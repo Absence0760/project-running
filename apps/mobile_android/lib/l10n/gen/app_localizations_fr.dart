@@ -6452,6 +6452,20 @@ class AppLocalizationsFr extends AppLocalizations {
   String get legalHealthDataNotice => 'Confidentialité des données de santé';
 
   @override
+  String get mapAttributionSemantics =>
+      'Attribution des données cartographiques';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© les contributeurs $name';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return 'Impossible d\'ouvrir $url';
   }

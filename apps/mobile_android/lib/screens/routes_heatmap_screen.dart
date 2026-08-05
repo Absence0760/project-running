@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
@@ -17,8 +16,13 @@ import '../geocoding.dart';
 import '../heatmap_clustering.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart' show formatDistanceForPref;
-import '../tile_cache.dart';
-import '../widgets/live_run_map.dart' show currentTileUrl;
+import '../widgets/live_run_map.dart'
+    show
+        basemapTileLayer,
+        basemapVoidColour,
+        currentBasemapIsDark,
+        currentTileUrl;
+import '../widgets/map_attribution.dart';
 import '../widgets/top_banner.dart';
 import 'public_route_screen.dart';
 
@@ -677,6 +681,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final darkBasemap = currentBasemapIsDark(context);
     return Scaffold(
       appBar: AppBar(
         title: TextField(
@@ -717,6 +722,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
+              backgroundColor: basemapVoidColour(darkBasemap: darkBasemap),
               initialCenter: const LatLng(51.5074, -0.1276),
               initialZoom: widget.initialZoom ?? 11,
               onMapReady: () {
@@ -740,15 +746,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
               onTap: _onMapTap,
             ),
             children: [
-              TileLayer(
-                urlTemplate: currentTileUrl(context),
-                userAgentPackageName: 'com.threkir.app',
-                tileProvider: CachedTileProvider(
-                  store: TileCache.store,
-                  maxStale: const Duration(days: 30),
-                  dio: TileCache.dio,
-                ),
-              ),
+              basemapTileLayer(urlTemplate: currentTileUrl(context)),
               // Heat-density background (stacked low-opacity dots) —
               // opt-in via the Filters sheet.
               if (_showHeat)
@@ -863,6 +861,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     ),
                   ],
                 ),
+              MapAttribution(darkBasemap: darkBasemap),
             ],
           ),
           // Search-results dropdown — overlays without pushing content.

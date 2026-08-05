@@ -8591,6 +8591,28 @@
   "@legalHealthDataNotice": {
     "description": "Label for the consumer health data privacy notice link on the settings About screen"
   },
+  "mapAttributionSemantics": "Map data attribution",
+  "@mapAttributionSemantics": {
+    "description": "Accessibility label for the credit strip shown over every map"
+  },
+  "mapAttributionProvider": "© {name}",
+  "@mapAttributionProvider": {
+    "description": "Credit for the company that renders the basemap tiles. {name} is a company name and is never translated.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "mapAttributionOsmContributors": "© {name} contributors",
+  "@mapAttributionOsmContributors": {
+    "description": "ODbL credit for the map data. {name} is the OpenStreetMap project name and is never translated; the word for the people who contribute to it is.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "legalCouldNotOpen": "Could not open {url}",
   "@legalCouldNotOpen": {
     "description": "Banner shown when a legal-document link fails to open",

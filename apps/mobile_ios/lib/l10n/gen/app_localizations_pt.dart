@@ -6431,6 +6431,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get legalHealthDataNotice => 'Privacidade dos dados de saúde';
 
   @override
+  String get mapAttributionSemantics => 'Atribuição dos dados do mapa';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© colaboradores do $name';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return 'Não foi possível abrir $url';
   }
@@ -18886,6 +18899,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get legalHealthDataNotice => 'Privacidade dos dados de saúde';
+
+  @override
+  String get mapAttributionSemantics => 'Atribuição dos dados do mapa';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© colaboradores do $name';
+  }
 
   @override
   String legalCouldNotOpen(String url) {

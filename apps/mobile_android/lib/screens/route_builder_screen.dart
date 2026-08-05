@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
@@ -27,9 +26,14 @@ import '../route_overlap.dart';
 import '../routing.dart';
 import '../social_service.dart';
 import '../run_stats.dart' show haversineMetres;
-import '../tile_cache.dart';
 import '../widgets/confirm_discard.dart';
-import '../widgets/live_run_map.dart' show currentTileUrl;
+import '../widgets/live_run_map.dart'
+    show
+        basemapTileLayer,
+        basemapVoidColour,
+        currentBasemapIsDark,
+        currentTileUrl;
+import '../widgets/map_attribution.dart';
 import '../widgets/snap_to_start.dart';
 import '../widgets/top_banner.dart';
 
@@ -888,6 +892,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final darkBasemap = currentBasemapIsDark(context);
     final waypointLatLngs = [
       for (final w in _waypoints) LatLng(w.lat, w.lng),
     ];
@@ -1029,6 +1034,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
           FlutterMap(
             mapController: _map,
             options: MapOptions(
+              backgroundColor: basemapVoidColour(darkBasemap: darkBasemap),
               initialCenter: center,
               initialZoom: 14,
               minZoom: 3,
@@ -1036,16 +1042,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
               onTap: _onMapTap,
             ),
             children: [
-              TileLayer(
+              basemapTileLayer(
                 urlTemplate: _tileUrl,
-                userAgentPackageName: 'com.threkir.app',
                 maxNativeZoom: 19,
                 maxZoom: 22,
-                tileProvider: CachedTileProvider(
-                  store: TileCache.store,
-                  maxStale: const Duration(days: 30),
-                  dio: TileCache.dio,
-                ),
               ),
               // Base polyline.
               if (polylineLatLngs.length >= 2)
@@ -1118,6 +1118,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                       ),
                   ],
                 ),
+              MapAttribution(darkBasemap: darkBasemap),
             ],
           ),
           // Top status pill — distance + elevation gain + spinner.

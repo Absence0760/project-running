@@ -6069,6 +6069,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get legalHealthDataNotice => '健康データのプライバシー';
 
   @override
+  String get mapAttributionSemantics => '地図データの帰属表示';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© $name コントリビューター';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return '$url を開けませんでした';
   }

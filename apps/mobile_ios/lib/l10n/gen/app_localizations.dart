@@ -10569,6 +10569,24 @@ abstract class AppLocalizations {
   /// **'Health data privacy'**
   String get legalHealthDataNotice;
 
+  /// Accessibility label for the credit strip shown over every map
+  ///
+  /// In en, this message translates to:
+  /// **'Map data attribution'**
+  String get mapAttributionSemantics;
+
+  /// Credit for the company that renders the basemap tiles. {name} is a company name and is never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'© {name}'**
+  String mapAttributionProvider(String name);
+
+  /// ODbL credit for the map data. {name} is the OpenStreetMap project name and is never translated; the word for the people who contribute to it is.
+  ///
+  /// In en, this message translates to:
+  /// **'© {name} contributors'**
+  String mapAttributionOsmContributors(String name);
+
   /// Banner shown when a legal-document link fails to open
   ///
   /// In en, this message translates to:

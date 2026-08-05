@@ -6367,6 +6367,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get legalHealthDataNotice => 'Health data privacy';
 
   @override
+  String get mapAttributionSemantics => 'Map data attribution';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© $name contributors';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return 'Could not open $url';
   }
