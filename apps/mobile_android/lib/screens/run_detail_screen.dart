@@ -1892,7 +1892,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         ),
                       ),
                     SizedBox(
-                      width: 36,
+                      width: MediaQuery.textScalerOf(context).scale(36),
                       child: Text(
                         '${b.pct}%',
                         textAlign: TextAlign.right,
@@ -2047,6 +2047,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ];
     }
 
+    final scaler = MediaQuery.textScalerOf(context);
+    final tickLane = scaler.scale(36);
+    final durationLane = scaler.scale(54);
+
     // Find fastest and slowest for highlighting + bar scaling.
     final splitSeconds = splits.map((s) => s.duration.inSeconds).toList();
     final fastestSec = splitSeconds.reduce(math.min);
@@ -2078,7 +2082,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         child: Row(
           children: [
             SizedBox(
-              width: 36,
+              // Both side lanes hold text, so they are text-derived
+              // dimensions and track the OS text scale rather than sitting
+              // at a fixed 36/54: a scaled lane keeps every row's bar
+              // aligned (which a per-row intrinsic width would not) while
+              // still fitting the label. At 2x the split time needs 72 px
+              // and was being cropped inside the 54.
+              width: tickLane,
               child: Text(
                 '${s.tick}',
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -2107,13 +2117,21 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     ),
                     alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      _activityType.usesSpeed
-                          ? UnitFormat.speed(paceSecPerKm, unit)
-                          : UnitFormat.pace(paceSecPerKm, unit),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: barTextColor,
-                        fontWeight: FontWeight.w600,
+                    // The bar's WIDTH encodes the pace ranking, so it cannot
+                    // grow to hold the label the way its height can. On a
+                    // 320 dp screen at 2x the slowest bar is 6 px short of
+                    // the label and the ClipRRect cropped it silently.
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        _activityType.usesSpeed
+                            ? UnitFormat.speed(paceSecPerKm, unit)
+                            : UnitFormat.pace(paceSecPerKm, unit),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: barTextColor,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -2122,7 +2140,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             ),
             const SizedBox(width: 8),
             SizedBox(
-              width: 54,
+              width: durationLane,
               child: Text(
                 _formatDuration(s.duration),
                 style: theme.textTheme.bodyMedium?.copyWith(

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart' hide Route;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1139,6 +1140,113 @@ void main() {
       // burst horizontally at 2x. Round 9 made that strip a Wrap, so the
       // screen is now clean at 2x and the exception is an assertion.
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('run-detail numeric lanes at OS text scale (issue #666, horizontal)',
+      () {
+    /// The `SizedBox` lane wrapping [text], and the width it was given.
+    ({double lane, double wanted}) _lane(WidgetTester tester, String text) {
+      final box = find
+          .ancestor(
+            of: find.text(text),
+            matching: find.byWidgetPredicate(
+                (w) => w is SizedBox && w.width != null && w.child is Text),
+          )
+          .first;
+      final para = tester.renderObject<RenderParagraph>(
+          find.descendant(of: box, matching: find.byType(Text)));
+      return (
+        lane: tester.getSize(box).width,
+        wanted: para.getMaxIntrinsicWidth(double.infinity),
+      );
+    }
+
+    testWidgets('the split lanes scale with the text they hold',
+        (tester) async {
+      // 30 s per 100 m makes every split 05:00, which in Roboto wants 72.3
+      // px of the 54 px lane at 2x and was cropped with no overflow stripe.
+      // The assertion is the derivation, not an absolute fit: this harness
+      // renders in a fixed-advance test font, so only the ratio between the
+      // lane and the text it holds is a font-independent claim.
+      final run = _run(track: _straightTrack(3));
+      tester.view.physicalSize = const Size(400, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, run);
+      final tickAt1x = _lane(tester, '1');
+      final durationAt1x = _lane(tester, '05:00');
+      expect(tickAt1x.lane, 36);
+      expect(durationAt1x.lane, 54);
+
+      await _pump(tester, run, textScale: 2.0);
+      final tick = _lane(tester, '1');
+      final duration = _lane(tester, '05:00');
+      for (final (before, after) in [
+        (tickAt1x, tick),
+        (durationAt1x, duration),
+      ]) {
+        expect(after.lane / before.lane, 2.0);
+        expect(after.wanted,
+            lessThanOrEqualTo(before.wanted * (after.lane / before.lane) + 0.05));
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the pace label is fitted to the bar, never cropped by it',
+        (tester) async {
+      // The bar's width encodes the pace ranking, so unlike its height it
+      // cannot grow: on a 320 dp screen at 2x the label was 6.1 px wider
+      // than the bar and the enclosing ClipRRect swallowed the difference.
+      final run = _run(track: _straightTrack(3));
+      tester.view.physicalSize = const Size(320, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, run, textScale: 2.0);
+      final bar = find.byWidgetPredicate(
+          (w) => w is Container && w.constraints?.minHeight == 26);
+      final fitted =
+          find.descendant(of: bar.first, matching: find.byType(FittedBox));
+      expect(fitted, findsOneWidget);
+      // 8 px of padding on each side of the label inside the bar.
+      expect(tester.getSize(fitted).width + 16,
+          lessThanOrEqualTo(tester.getSize(bar.first).width + 0.05));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the HR-zone percentage lane scales too', (tester) async {
+      final run = Run(
+        id: 'run-hr',
+        startedAt: DateTime.utc(2026, 4, 15, 7, 30),
+        duration: const Duration(minutes: 25),
+        distanceMetres: 5000,
+        source: RunSource.app,
+        metadata: const {'activity_type': 'run'},
+        track: [
+          for (final e in const [110, 135, 160, 175])
+            Waypoint(
+              lat: -37.8136,
+              lng: 144.9631,
+              timestamp: DateTime.utc(2026, 4, 15, 7, 30),
+              bpm: e,
+            ),
+        ],
+      );
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, run);
+      final at1x = _lane(tester, '25%');
+      expect(at1x.lane, 36);
+
+      await _pump(tester, run, textScale: 2.0);
+      final pct = _lane(tester, '25%');
+      expect(pct.lane / at1x.lane, 2.0);
+      expect(pct.wanted,
+          lessThanOrEqualTo(at1x.wanted * (pct.lane / at1x.lane) + 0.05));
     });
   });
 }
