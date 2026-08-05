@@ -659,6 +659,12 @@ abstract class AppLocalizations {
   /// **'Clear search'**
   String get commonClearSearch;
 
+  /// Generic cancel action for a destructive-confirm dialog whose surface has no cancel label of its own
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
+
   /// Generic tooltip for a dismiss / close icon button
   ///
   /// In en, this message translates to:
@@ -4126,6 +4132,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dismiss'**
   String get runDetailSegDismiss;
+
+  /// Heading on the public run view when the run is still being broadcast live
+  ///
+  /// In en, this message translates to:
+  /// **'Live right now'**
+  String get publicRunLiveTitle;
+
+  /// Sub-line explaining why the public run view shows no distance or time yet
+  ///
+  /// In en, this message translates to:
+  /// **'This run is still in progress. Follow it on the live tracker.'**
+  String get publicRunLiveSub;
+
+  /// Button that opens the live spectator screen for an in-progress run
+  ///
+  /// In en, this message translates to:
+  /// **'Watch live'**
+  String get publicRunWatchLive;
 
   /// AppBar title for the read-only public run view
   ///
@@ -9121,8 +9145,32 @@ abstract class AppLocalizations {
   /// Drawer subtitle on an archived thread row
   ///
   /// In en, this message translates to:
-  /// **'Tap to view · swipe to delete'**
+  /// **'Tap to view'**
   String get coachArchiveTapToView;
+
+  /// Tooltip for the overflow menu on an archived coach conversation row
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation actions'**
+  String get coachArchiveActions;
+
+  /// Overflow action + confirm label for deleting an archived coach conversation
+  ///
+  /// In en, this message translates to:
+  /// **'Delete conversation'**
+  String get coachArchiveDelete;
+
+  /// Title of the delete-archived-conversation confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this conversation?'**
+  String get coachArchiveDeleteTitle;
+
+  /// Body of the delete-archived-conversation confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This archived conversation is deleted for good.'**
+  String get coachArchiveDeleteBody;
 
   /// Context-strip chip when no plan is active
   ///

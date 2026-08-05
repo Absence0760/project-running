@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/main.dart' show pendingPushTarget, routePushOpen;
 import '../lib/push_messaging_bridge.dart';
+import '../lib/push_target.dart';
 
 class _FakeApi extends ApiClient {
   final List<Map<String, dynamic>> registrations = [];
@@ -69,10 +71,22 @@ class _FakeMessaging implements PushMessaging {
   @override
   Stream<PushOpenedMessage> get onMessageOpenedApp => _opened.stream;
 
+  /// The tap that cold-started the app, if any.
+  PushOpenedMessage? initialMessage;
+  bool throwOnInitialMessage = false;
+
+  @override
+  Future<PushOpenedMessage?> getInitialMessage() async {
+    if (throwOnInitialMessage) throw Exception('boom');
+    return initialMessage;
+  }
+
   @override
   Future<void> deleteToken() async => deleted = true;
 
   void emitRefresh(String t) => _refresh.add(t);
+
+  void emitOpened(PushOpenedMessage m) => _opened.add(m);
 
   void dispose() {
     _refresh.close();
@@ -122,5 +136,120 @@ void main() {
     final bridge = PushMessagingBridge(messaging: messaging, api: api)..attach();
     expect(PushMessagingBridge.instance, same(bridge));
     messaging.dispose();
+  });
+
+  group('notification-tap routing (issue #666 A1)', () {
+    test('a tap while the app is alive reaches onOpenNotification', () async {
+      final messaging = _FakeMessaging();
+      final opened = <String?>[];
+      PushMessagingBridge(
+        messaging: messaging,
+        api: _FakeApi(),
+        onOpenNotification: (m) => opened.add(m.url),
+      ).attach();
+
+      messaging.emitOpened(
+          const PushOpenedMessage(url: 'https://threkir.com/runs/r1'));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(opened, ['https://threkir.com/runs/r1']);
+      messaging.dispose();
+    });
+
+    test('the tap that COLD-STARTED the app reaches onOpenNotification',
+        () async {
+      // onMessageOpenedApp never replays the launch message, so without the
+      // getInitialMessage read a push tapped from a terminated app opened the
+      // dashboard and dropped its target.
+      final messaging = _FakeMessaging()
+        ..initialMessage =
+            const PushOpenedMessage(url: 'https://threkir.com/clubs/c9');
+      final opened = <String?>[];
+      PushMessagingBridge(
+        messaging: messaging,
+        api: _FakeApi(),
+        onOpenNotification: (m) => opened.add(m.url),
+      ).attach();
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(opened, ['https://threkir.com/clubs/c9']);
+      messaging.dispose();
+    });
+
+    test('no launch message → the callback is never invoked', () async {
+      final messaging = _FakeMessaging();
+      var calls = 0;
+      PushMessagingBridge(
+        messaging: messaging,
+        api: _FakeApi(),
+        onOpenNotification: (_) => calls++,
+      ).attach();
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, 0);
+      messaging.dispose();
+    });
+
+    test('a throwing launch-message read never escapes attach()', () async {
+      final messaging = _FakeMessaging()..throwOnInitialMessage = true;
+      var calls = 0;
+      expect(
+        () => PushMessagingBridge(
+          messaging: messaging,
+          api: _FakeApi(),
+          onOpenNotification: (_) => calls++,
+        ).attach(),
+        returnsNormally,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, 0);
+      messaging.dispose();
+    });
+
+    test('a throwing host callback is contained (L4)', () async {
+      final messaging = _FakeMessaging();
+      PushMessagingBridge(
+        messaging: messaging,
+        api: _FakeApi(),
+        onOpenNotification: (_) => throw Exception('router blew up'),
+      ).attach();
+
+      messaging
+          .emitOpened(const PushOpenedMessage(url: 'https://threkir.com/plans'));
+      await Future<void>.delayed(Duration.zero);
+      // No unhandled error: the stream stays live for the next tap.
+      messaging.emitOpened(const PushOpenedMessage(url: null));
+      await Future<void>.delayed(Duration.zero);
+      messaging.dispose();
+    });
+
+    test('routePushOpen parks the mapped target for HomeScreen to drain', () {
+      addTearDown(() => pendingPushTarget.value = null);
+
+      routePushOpen(const PushOpenedMessage(url: 'https://threkir.com/u/u7'));
+      expect(pendingPushTarget.value,
+          const PushTarget(PushTargetKind.profile, 'u7'));
+
+      // A push with no url still parks a target — the inbox — so the tap
+      // opens something rather than being dropped.
+      routePushOpen(const PushOpenedMessage());
+      expect(pendingPushTarget.value, PushTarget.inbox);
+    });
+
+    test('an unavailable messaging impl never reads the launch message',
+        () async {
+      final messaging = _FakeMessaging(available: false)
+        ..initialMessage =
+            const PushOpenedMessage(url: 'https://threkir.com/runs/r1');
+      var calls = 0;
+      PushMessagingBridge(
+        messaging: messaging,
+        api: _FakeApi(),
+        onOpenNotification: (_) => calls++,
+      ).attach();
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, 0);
+      messaging.dispose();
+    });
   });
 }

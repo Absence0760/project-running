@@ -10,6 +10,7 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/live_spectator_screen.dart';
+import 'realtime_drain.dart';
 
 /// Drives the predictive next-cutoff card on `live_spectator_screen.dart`.
 /// The fake api returns a live (non-terminal) run linked to a public route
@@ -38,8 +39,7 @@ class _FakeApi extends ApiClient {
   @override
   Future<({cm.Route? route, String? ownerId})> fetchRouteById(
     String routeId,
-  ) async =>
-      (route: route, ownerId: route?.userId);
+  ) async => (route: route, ownerId: route?.userId);
 
   @override
   Future<List<RouteMarkerRow>> fetchRouteMarkers(String routeId) async =>
@@ -50,46 +50,43 @@ class _FakeApi extends ApiClient {
 /// saved duration) so the screen takes the predictive path, not a terminal
 /// freeze.
 RunRow _liveRun(String routeId) => RunRow(
-      id: 'r1',
-      userId: 'u1',
-      startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
-      durationS: 0,
-      distanceM: 2000,
-      source: 'app',
-      activityType: 'run',
-      isDnf: false,
-      routeId: routeId,
-    );
+  id: 'r1',
+  userId: 'u1',
+  startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+  durationS: 0,
+  distanceM: 2000,
+  source: 'app',
+  activityType: 'run',
+  isDnf: false,
+  routeId: routeId,
+);
 
 /// A ~6.6 km west→east line at the equator. 0.06° of longitude ≈ 6677 m, so
 /// a position fix near 0.018° lng projects to ~2000 m along the route.
 cm.Route _route(String id) => cm.Route(
-      id: id,
-      userId: 'u1',
-      name: 'Cutoff course',
-      distanceMetres: 6677,
-      isPublic: true,
-      waypoints: const [
-        Waypoint(lat: 0, lng: 0),
-        Waypoint(lat: 0, lng: 0.06),
-      ],
-    );
+  id: id,
+  userId: 'u1',
+  name: 'Cutoff course',
+  distanceMetres: 6677,
+  isPublic: true,
+  waypoints: const [Waypoint(lat: 0, lng: 0), Waypoint(lat: 0, lng: 0.06)],
+);
 
 /// One cutoff marker placed 4000 m along the line, with an elapsed-from-start
 /// limit of [limitS] seconds.
 RouteMarkerRow _cutoff({required int limitS}) => RouteMarkerRow(
-      id: 'm1',
-      routeId: 'route-1',
-      userId: 'u1',
-      kind: 'cutoff',
-      label: 'Aid 1',
-      lat: 0,
-      lng: 0.036,
-      positionM: 4000,
-      meta: {'cutoff_elapsed_s': limitS},
-      createdAt: DateTime.utc(2026),
-      updatedAt: DateTime.utc(2026),
-    );
+  id: 'm1',
+  routeId: 'route-1',
+  userId: 'u1',
+  kind: 'cutoff',
+  label: 'Aid 1',
+  lat: 0,
+  lng: 0.036,
+  positionM: 4000,
+  meta: {'cutoff_elapsed_s': limitS},
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
 
 /// The same marker, but expressing its limit the way BOTH editors actually
 /// author one: a wall-clock `cutoff_clock`. Resolving this to an elapsed
@@ -120,14 +117,13 @@ Map<String, dynamic> _ping({
   required DateTime at,
   required double distanceM,
   required int elapsedS,
-}) =>
-    {
-      'lat': 0.0,
-      'lng': 0.018,
-      'distance_m': distanceM,
-      'elapsed_s': elapsedS,
-      'at': at.toUtc().toIso8601String(),
-    };
+}) => {
+  'lat': 0.0,
+  'lng': 0.018,
+  'distance_m': distanceM,
+  'elapsed_s': elapsedS,
+  'at': at.toUtc().toIso8601String(),
+};
 
 bool _supabaseReady = false;
 
@@ -157,39 +153,45 @@ void main() {
   setUpAll(_ensureSupabase);
 
   group('LiveSpectatorScreen — next-cutoff card', () {
-    testWidgets('a fresh runner shows the cutoff card with a margin chip',
-        (tester) async {
-      // Two pings two minutes apart → recent pace derivable. The cutoff limit
-      // is generous (3 h elapsed) so the projection lands comfortably "on",
-      // surfacing the green "to spare" chip. runAsync because the live path
-      // opens the Supabase realtime channel (a real heartbeat Timer).
-      final now = DateTime.now();
-      final api = _FakeApi(
-        run: _liveRun('route-1'),
-        route: _route('route-1'),
-        markers: [_cutoff(limitS: 3 * 3600)],
-        pings: [
-          _ping(
-            at: now.subtract(const Duration(minutes: 2)),
-            distanceM: 1500,
-            elapsedS: 480,
-          ),
-          _ping(at: now, distanceM: 2000, elapsedS: 600),
-        ],
-      );
-      await tester.runAsync(() async {
-        await _pump(tester, api);
-        await tester.pump();
-        await tester.pump();
-        expect(find.text('Aid 1'), findsOneWidget);
-        expect(find.textContaining('to spare'), findsOneWidget);
-        expect(find.textContaining('Waiting for a fresh signal'), findsNothing);
-        await tester.pumpWidget(const SizedBox());
-      });
-    });
+    realtimeWidgetTest(
+      'a fresh runner shows the cutoff card with a margin chip',
+      (tester) async {
+        // Two pings two minutes apart → recent pace derivable. The cutoff limit
+        // is generous (3 h elapsed) so the projection lands comfortably "on",
+        // surfacing the green "to spare" chip. runAsync because the live path
+        // opens the Supabase realtime channel (a real heartbeat Timer).
+        final now = DateTime.now();
+        final api = _FakeApi(
+          run: _liveRun('route-1'),
+          route: _route('route-1'),
+          markers: [_cutoff(limitS: 3 * 3600)],
+          pings: [
+            _ping(
+              at: now.subtract(const Duration(minutes: 2)),
+              distanceM: 1500,
+              elapsedS: 480,
+            ),
+            _ping(at: now, distanceM: 2000, elapsedS: 600),
+          ],
+        );
+        await tester.runAsync(() async {
+          await _pump(tester, api);
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('Aid 1'), findsOneWidget);
+          expect(find.textContaining('to spare'), findsOneWidget);
+          expect(
+            find.textContaining('Waiting for a fresh signal'),
+            findsNothing,
+          );
+          await tester.pumpWidget(const SizedBox());
+        });
+      },
+    );
 
-    testWidgets('a wall-clock cutoff resolves against the run start',
-        (tester) async {
+    realtimeWidgetTest('a wall-clock cutoff resolves against the run start', (
+      tester,
+    ) async {
       // Regression: the screen built the roadbook without `startClockMin`, so
       // a `cutoff_clock` marker produced no cutoff leg at all and the card
       // silently never mounted — for every cut-off either editor can author,
@@ -219,79 +221,84 @@ void main() {
       });
     });
 
-    testWidgets(
-        'a stale fixture suppresses the verdict with the signal-lost line',
-        (tester) async {
-      // The only ping is > 90 s old → freshness is stale → nextCutoffEta
-      // returns `unknown`. The suppressed state must read "signal lost"
-      // (amber, mirroring the DELAYED treatment), not the still-connecting
-      // "waiting" copy — a runner who went dark mid-race isn't starting up.
-      final api = _FakeApi(
-        run: _liveRun('route-1'),
-        route: _route('route-1'),
-        markers: [_cutoff(limitS: 3 * 3600)],
-        pings: [
-          _ping(
-            at: DateTime.now().subtract(const Duration(minutes: 3)),
-            distanceM: 2000,
-            elapsedS: 600,
-          ),
-        ],
-      );
-      await tester.runAsync(() async {
-        await _pump(tester, api);
-        await tester.pump();
-        await tester.pump();
-        expect(find.text('Aid 1'), findsOneWidget);
-        expect(find.textContaining('Signal lost'), findsOneWidget);
-        expect(find.textContaining('Waiting for a fresh signal'), findsNothing);
-        expect(find.textContaining('to spare'), findsNothing);
-        expect(find.textContaining('behind'), findsNothing);
-        final lost = tester.widget<Text>(
-          find.textContaining('Signal lost'),
+    realtimeWidgetTest(
+      'a stale fixture suppresses the verdict with the signal-lost line',
+      (tester) async {
+        // The only ping is > 90 s old → freshness is stale → nextCutoffEta
+        // returns `unknown`. The suppressed state must read "signal lost"
+        // (amber, mirroring the DELAYED treatment), not the still-connecting
+        // "waiting" copy — a runner who went dark mid-race isn't starting up.
+        final api = _FakeApi(
+          run: _liveRun('route-1'),
+          route: _route('route-1'),
+          markers: [_cutoff(limitS: 3 * 3600)],
+          pings: [
+            _ping(
+              at: DateTime.now().subtract(const Duration(minutes: 3)),
+              distanceM: 2000,
+              elapsedS: 600,
+            ),
+          ],
         );
-        expect(lost.style?.color, AppSemanticColors.light.warning);
-        await tester.pumpWidget(const SizedBox());
-      });
-    });
+        await tester.runAsync(() async {
+          await _pump(tester, api);
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('Aid 1'), findsOneWidget);
+          expect(find.textContaining('Signal lost'), findsOneWidget);
+          expect(
+            find.textContaining('Waiting for a fresh signal'),
+            findsNothing,
+          );
+          expect(find.textContaining('to spare'), findsNothing);
+          expect(find.textContaining('behind'), findsNothing);
+          final lost = tester.widget<Text>(find.textContaining('Signal lost'));
+          expect(lost.style?.color, AppSemanticColors.light.warning);
+          await tester.pumpWidget(const SizedBox());
+        });
+      },
+    );
 
-    testWidgets(
-        'a fresh fix with no pace yet keeps the neutral waiting line',
-        (tester) async {
-      // A single just-arrived ping is fresh but yields no recent pace →
-      // nextCutoffEta returns `unknown` for the still-connecting cause, so
-      // the card keeps the muted "waiting" copy — not the signal-lost alarm.
-      final api = _FakeApi(
-        run: _liveRun('route-1'),
-        route: _route('route-1'),
-        markers: [_cutoff(limitS: 3 * 3600)],
-        pings: [
-          _ping(at: DateTime.now(), distanceM: 2000, elapsedS: 600),
-        ],
-      );
-      await tester.runAsync(() async {
-        await _pump(tester, api);
-        await tester.pump();
-        await tester.pump();
-        expect(find.text('Aid 1'), findsOneWidget);
-        expect(find.textContaining('Waiting for a fresh signal'),
-            findsOneWidget);
-        expect(find.textContaining('Signal lost'), findsNothing);
-        expect(find.textContaining('to spare'), findsNothing);
-        await tester.pumpWidget(const SizedBox());
-      });
-    });
+    realtimeWidgetTest(
+      'a fresh fix with no pace yet keeps the neutral waiting line',
+      (tester) async {
+        // A single just-arrived ping is fresh but yields no recent pace →
+        // nextCutoffEta returns `unknown` for the still-connecting cause, so
+        // the card keeps the muted "waiting" copy — not the signal-lost alarm.
+        final api = _FakeApi(
+          run: _liveRun('route-1'),
+          route: _route('route-1'),
+          markers: [_cutoff(limitS: 3 * 3600)],
+          pings: [_ping(at: DateTime.now(), distanceM: 2000, elapsedS: 600)],
+        );
+        await tester.runAsync(() async {
+          await _pump(tester, api);
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('Aid 1'), findsOneWidget);
+          expect(
+            find.textContaining('Waiting for a fresh signal'),
+            findsOneWidget,
+          );
+          expect(find.textContaining('Signal lost'), findsNothing);
+          expect(find.textContaining('to spare'), findsNothing);
+          await tester.pumpWidget(const SizedBox());
+        });
+      },
+    );
 
-    testWidgets('no card when the run is not linked to a route',
-        (tester) async {
+    realtimeWidgetTest('no card when the run is not linked to a route', (
+      tester,
+    ) async {
       // A live run without a route_id can't resolve cutoff legs, so the
       // predictive card never mounts — only the trace + freshness baseline.
       final api = _FakeApi(
         run: RunRow(
           id: 'r1',
           userId: 'u1',
-          startedAt:
-              DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+          startedAt: DateTime.now().toUtc().subtract(
+            const Duration(minutes: 5),
+          ),
           durationS: 0,
           distanceM: 2000,
           source: 'app',

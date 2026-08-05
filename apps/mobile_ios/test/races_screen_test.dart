@@ -68,9 +68,14 @@ RaceListingView _listing(String id, String name,
       distanceMAway: null,
     );
 
-Widget _app(RaceService service) => MaterialApp(
+Widget _app(RaceService service, {double textScale = 1.0}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: RacesScreen(service: service),
     );
 
@@ -254,5 +259,24 @@ void main() {
     expect(find.text("Couldn't open that link."), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets(
+      'the distance-band chip rail takes its height from the chips, not a '
+      'literal 40 px lane (issue #666 V12)', (tester) async {
+    final service = _FakeRaceService(results: const []);
+
+    await tester.pumpWidget(_app(service));
+    await tester.pump();
+    final chip = find.byType(ChoiceChip).first;
+    final small = tester.getSize(chip).height;
+    // A Material chip's own tap target is 48; the old 40 px lane squeezed it.
+    expect(small, greaterThanOrEqualTo(48));
+
+    await tester.pumpWidget(_app(service, textScale: 2.0));
+    await tester.pump();
+    // Pre-fix the chip measured exactly 40.0 here while needing 58, so its
+    // label was cropped inside the rail.
+    expect(tester.getSize(chip).height, greaterThan(small));
   });
 }

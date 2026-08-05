@@ -192,11 +192,17 @@ class _KudosFailApi extends _FakeApi {
   }
 }
 
-Future<void> _pump(WidgetTester tester, ApiClient api) {
+Future<void> _pump(WidgetTester tester, ApiClient api,
+    {double textScale = 1.0}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: FeedScreen(api: api),
     ),
   );
@@ -442,6 +448,28 @@ void main() {
       await _pump(tester, api);
       await _settle(tester);
       expect(find.byType(ActionChip), findsNothing);
+    });
+
+    testWidgets(
+        'the strip takes its height from the chips, not a literal 40 px lane '
+        '(issue #666 V12)', (tester) async {
+      final api = _FakeApi(
+        entries: [_runEntry()],
+        badgeAwards: [_badgeAward(authorName: 'Alex Runner')],
+      );
+
+      await _pump(tester, api);
+      await _settle(tester);
+      final chip = find.byType(ActionChip).first;
+      final small = tester.getSize(chip).height;
+      // A Material chip's own tap target is 48; the old 40 px lane squeezed it.
+      expect(small, greaterThanOrEqualTo(48));
+
+      await _pump(tester, api, textScale: 2.0);
+      await _settle(tester);
+      // Pre-fix the chip measured exactly 40.0 here while needing 58, so its
+      // label was cropped inside the rail.
+      expect(tester.getSize(chip).height, greaterThan(small));
     });
   });
 

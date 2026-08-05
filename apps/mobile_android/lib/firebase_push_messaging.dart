@@ -90,6 +90,19 @@ class FirebasePushMessaging implements PushMessaging {
   }
 
   @override
+  Future<PushOpenedMessage?> getInitialMessage() async {
+    if (!_firebaseReady) return null;
+    try {
+      final m = await FirebaseMessaging.instance.getInitialMessage();
+      if (m == null) return null;
+      return PushOpenedMessage(url: m.data['url'] as String?);
+    } catch (e) {
+      debugPrint('FirebasePushMessaging: getInitialMessage failed: $e');
+      return null;
+    }
+  }
+
+  @override
   Future<void> deleteToken() async {
     if (!_firebaseReady) return;
     try {

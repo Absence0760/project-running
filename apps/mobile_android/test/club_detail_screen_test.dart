@@ -12,6 +12,7 @@ import '../lib/screens/club_detail_screen.dart';
 import '../lib/widgets/error_state.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
+import 'realtime_drain.dart';
 
 bool _supabaseReady = false;
 
@@ -41,22 +42,23 @@ Future<void> _pump(WidgetTester tester) {
 }
 
 ClubView _memberClub() => ClubView(
-      row: ClubRow(shadowHidden: false, 
-        id: 'club-1',
-        ownerId: 'owner',
-        name: 'Track Club',
-        slug: 'track-club',
-        isPublic: true,
-        joinPolicy: 'open',
-        memberCount: 5,
-        isVerified: false,
-        requiresActivityWaiver: false,
-      ),
-      memberCount: 5,
-      viewerRole: 'member',
-      viewerStatus: 'active',
-      joinPolicy: 'open',
-    );
+  row: ClubRow(
+    shadowHidden: false,
+    id: 'club-1',
+    ownerId: 'owner',
+    name: 'Track Club',
+    slug: 'track-club',
+    isPublic: true,
+    joinPolicy: 'open',
+    memberCount: 5,
+    isVerified: false,
+    requiresActivityWaiver: false,
+  ),
+  memberCount: 5,
+  viewerRole: 'member',
+  viewerStatus: 'active',
+  joinPolicy: 'open',
+);
 
 class _FakeSocial extends SocialService {
   @override
@@ -64,10 +66,13 @@ class _FakeSocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
-      const [];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => const [];
   @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
+      const [];
   @override
   RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
       Supabase.instance.client.channel('test-$clubId');
@@ -82,8 +87,9 @@ class _FakeApi extends ApiClient {
   @override
   String? get userId => 'u-viewer';
   @override
-  Future<List<GymRoutineRow>> fetchClubGymRoutineTemplates(String clubId) async =>
-      routines;
+  Future<List<GymRoutineRow>> fetchClubGymRoutineTemplates(
+    String clubId,
+  ) async => routines;
   @override
   Future<List<SessionPlanRow>> fetchClubSessionTemplates(String clubId) async =>
       const [];
@@ -91,26 +97,28 @@ class _FakeApi extends ApiClient {
 
 class _FakeTraining extends TrainingService {
   @override
-  Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async => const [];
+  Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async =>
+      const [];
 }
 
 ClubView _adminClub() => ClubView(
-      row: ClubRow(shadowHidden: false, 
-        id: 'club-1',
-        ownerId: 'owner',
-        name: 'Track Club',
-        slug: 'track-club',
-        isPublic: true,
-        joinPolicy: 'request',
-        memberCount: 5,
-        isVerified: false,
-        requiresActivityWaiver: false,
-      ),
-      memberCount: 5,
-      viewerRole: 'admin',
-      viewerStatus: 'active',
-      joinPolicy: 'request',
-    );
+  row: ClubRow(
+    shadowHidden: false,
+    id: 'club-1',
+    ownerId: 'owner',
+    name: 'Track Club',
+    slug: 'track-club',
+    isPublic: true,
+    joinPolicy: 'request',
+    memberCount: 5,
+    isVerified: false,
+    requiresActivityWaiver: false,
+  ),
+  memberCount: 5,
+  viewerRole: 'admin',
+  viewerStatus: 'active',
+  joinPolicy: 'request',
+);
 
 /// Admin club with one pending request and a gated approve so the in-flight
 /// window stays open while the test taps a second time.
@@ -123,10 +131,13 @@ class _PendingSocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
-      const [];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => const [];
   @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
+      const [
         ClubMemberRow(
           clubId: 'club-1',
           userId: 'pendinguser-0001',
@@ -158,10 +169,13 @@ class _DenySocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
-      const [];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => const [];
   @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
+      const [
         ClubMemberRow(
           clubId: 'club-1',
           userId: 'pendinguser-0001',
@@ -193,24 +207,30 @@ class _ReplySocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async => [
-        ClubPostView(
-          row: ClubPostRow(
-            id: 'post-1',
-            clubId: 'club-1',
-            authorId: 'someone',
-            body: 'Saturday long run?',
-            createdAt: DateTime.utc(2026, 5, 1),
-          ),
-          authorName: 'Sam',
-          replyCount: 0,
-        ),
-      ];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => [
+    ClubPostView(
+      row: ClubPostRow(
+        id: 'post-1',
+        clubId: 'club-1',
+        authorId: 'someone',
+        body: 'Saturday long run?',
+        createdAt: DateTime.utc(2026, 5, 1),
+      ),
+      authorName: 'Sam',
+      replyCount: 0,
+    ),
+  ];
   @override
-  Future<List<ClubPostView>> fetchPostReplies(String parentId, {int limit = 200}) async =>
+  Future<List<ClubPostView>> fetchPostReplies(
+    String parentId, {
+    int limit = 200,
+  }) async => const [];
+  @override
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
       const [];
-  @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
   @override
   Future<void> createPost({
     required String clubId,
@@ -239,10 +259,13 @@ class _ComposeSocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
-      const [];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => const [];
   @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
+      const [];
   @override
   Future<void> createPost({
     required String clubId,
@@ -268,21 +291,21 @@ class _AdoptTraining extends TrainingService {
 
   @override
   Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async => [
-        TrainingPlanRow(
-          id: 'tmpl-1',
-          userId: 'owner',
-          name: 'Club 10k Plan',
-          goalEvent: 'distance_10k',
-          goalDistanceM: 10000,
-          startDate: DateTime(2026, 5, 1),
-          endDate: DateTime(2026, 7, 1),
-          daysPerWeek: 4,
-          status: 'active',
-          source: 'generated',
-          isTemplate: true,
-          isPublicTemplate: false,
-        ),
-      ];
+    TrainingPlanRow(
+      id: 'tmpl-1',
+      userId: 'owner',
+      name: 'Club 10k Plan',
+      goalEvent: 'distance_10k',
+      goalDistanceM: 10000,
+      startDate: DateTime(2026, 5, 1),
+      endDate: DateTime(2026, 7, 1),
+      daysPerWeek: 4,
+      status: 'active',
+      source: 'generated',
+      isTemplate: true,
+      isPublicTemplate: false,
+    ),
+  ];
 
   @override
   Future<String> clonePlanTemplate({
@@ -296,22 +319,24 @@ class _AdoptTraining extends TrainingService {
 }
 
 GymRoutineRow _routine(String id, String title, int count) => GymRoutineRow(
-      id: id,
-      authorId: 'author',
-      clubId: 'club-1',
-      title: title,
-      periodisation: 'none',
-      exerciseCount: count,
-      isPublicTemplate: false,
-      lastModifiedAt: DateTime.utc(2026, 5, 1),
-      createdAt: DateTime.utc(2026, 5, 1),
-    );
+  id: id,
+  authorId: 'author',
+  clubId: 'club-1',
+  title: title,
+  periodisation: 'none',
+  exerciseCount: count,
+  isPublicTemplate: false,
+  lastModifiedAt: DateTime.utc(2026, 5, 1),
+  createdAt: DateTime.utc(2026, 5, 1),
+);
 
 void main() {
   setUpAll(_ensureSupabase);
 
   group('ClubDetailScreen — initial render', () {
-    testWidgets('first frame shows the full-body loader', (tester) async {
+    realtimeWidgetTest('first frame shows the full-body loader', (
+      tester,
+    ) async {
       // Reason: while _loading is true the screen returns a bare
       // Scaffold carrying nothing but the loader.
       await _pump(tester);
@@ -319,15 +344,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     });
 
-    testWidgets('initial Scaffold has no AppBar yet', (tester) async {
+    realtimeWidgetTest('initial Scaffold has no AppBar yet', (tester) async {
       await _pump(tester);
       expect(find.byType(AppBar), findsNothing);
     });
   });
 
   group('ClubDetailScreen — Templates tab gym routines', () {
-    testWidgets('renders a gym-routine template row with Adopt',
-        (tester) async {
+    realtimeWidgetTest('renders a gym-routine template row with Adopt', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -357,48 +383,51 @@ void main() {
       expect(find.text('Adopt'), findsWidgets);
     });
 
-    testWidgets('double-tapping a plan-template Adopt clones only once',
-        (tester) async {
-      final training = _AdoptTraining();
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ClubDetailScreen(
-            social: _FakeSocial(),
-            training: training,
-            apiClient: _FakeApi(const []),
-            slug: 'track-club',
+    realtimeWidgetTest(
+      'double-tapping a plan-template Adopt clones only once',
+      (tester) async {
+        final training = _AdoptTraining();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ClubDetailScreen(
+              social: _FakeSocial(),
+              training: training,
+              apiClient: _FakeApi(const []),
+              slug: 'track-club',
+            ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(find.text('Templates'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(find.text('Templates'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      expect(find.text('Club 10k Plan'), findsOneWidget);
-      final adopt = find.widgetWithText(FilledButton, 'Adopt');
-      expect(adopt, findsOneWidget);
+        expect(find.text('Club 10k Plan'), findsOneWidget);
+        final adopt = find.widgetWithText(FilledButton, 'Adopt');
+        expect(adopt, findsOneWidget);
 
-      await tester.tap(adopt);
-      await tester.pump();
-      // Second tap while the gated clone is in flight — button disabled now.
-      await tester.tap(adopt, warnIfMissed: false);
-      await tester.pump();
+        await tester.tap(adopt);
+        await tester.pump();
+        // Second tap while the gated clone is in flight — button disabled now.
+        await tester.tap(adopt, warnIfMissed: false);
+        await tester.pump();
 
-      expect(training.cloneCalls, 1);
-      // Gate left pending intentionally: completing it would navigate to
-      // PlanDetailScreen (unstubbed). cloneCalls is the assertion.
-    });
+        expect(training.cloneCalls, 1);
+        // Gate left pending intentionally: completing it would navigate to
+        // PlanDetailScreen (unstubbed). cloneCalls is the assertion.
+      },
+    );
   });
 
   group('ClubDetailScreen — pending approve double-submit guard', () {
-    testWidgets('rapid double-tap of Approve only fires the RPC once',
-        (tester) async {
+    realtimeWidgetTest('rapid double-tap of Approve only fires the RPC once', (
+      tester,
+    ) async {
       final social = _PendingSocial();
       await tester.pumpWidget(
         MaterialApp(
@@ -459,22 +488,24 @@ void main() {
       return social;
     }
 
-    testWidgets('tapping Deny opens a confirm dialog instead of denying',
-        (tester) async {
-      final social = await openMembers(tester);
-      final denyBtn = find.widgetWithText(TextButton, 'Deny');
-      expect(denyBtn, findsOneWidget);
-      await tester.ensureVisible(denyBtn);
-      await tester.pump();
-      await tester.tap(denyBtn);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byType(AlertDialog), findsOneWidget);
-      expect(find.text('Reject join request'), findsOneWidget);
-      expect(social.denyCalls, 0);
-    });
+    realtimeWidgetTest(
+      'tapping Deny opens a confirm dialog instead of denying',
+      (tester) async {
+        final social = await openMembers(tester);
+        final denyBtn = find.widgetWithText(TextButton, 'Deny');
+        expect(denyBtn, findsOneWidget);
+        await tester.ensureVisible(denyBtn);
+        await tester.pump();
+        await tester.tap(denyBtn);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(find.text('Reject join request'), findsOneWidget);
+        expect(social.denyCalls, 0);
+      },
+    );
 
-    testWidgets('cancelling the dialog does not deny', (tester) async {
+    realtimeWidgetTest('cancelling the dialog does not deny', (tester) async {
       final social = await openMembers(tester);
       final denyBtn = find.widgetWithText(TextButton, 'Deny');
       expect(denyBtn, findsOneWidget);
@@ -483,17 +514,19 @@ void main() {
       await tester.tap(denyBtn);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.widgetWithText(TextButton, 'Cancel'),
-      ));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextButton, 'Cancel'),
+        ),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(AlertDialog), findsNothing);
       expect(social.denyCalls, 0);
     });
 
-    testWidgets('confirming the dialog denies once', (tester) async {
+    realtimeWidgetTest('confirming the dialog denies once', (tester) async {
       final social = await openMembers(tester);
       final denyBtn = find.widgetWithText(TextButton, 'Deny');
       expect(denyBtn, findsOneWidget);
@@ -503,10 +536,12 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       await tester.runAsync(() async {
-        await tester.tap(find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.widgetWithText(FilledButton, 'Deny'),
-        ));
+        await tester.tap(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.widgetWithText(FilledButton, 'Deny'),
+          ),
+        );
       });
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
@@ -515,97 +550,106 @@ void main() {
   });
 
   group('ClubDetailScreen — reply double-submit guard', () {
-    testWidgets('rapid double-tap of reply Send only fires createPost once',
-        (tester) async {
-      final social = _ReplySocial();
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ClubDetailScreen(
-            social: social,
-            training: _FakeTraining(),
-            slug: 'track-club',
+    realtimeWidgetTest(
+      'rapid double-tap of reply Send only fires createPost once',
+      (tester) async {
+        final social = _ReplySocial();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ClubDetailScreen(
+              social: social,
+              training: _FakeTraining(),
+              slug: 'track-club',
+            ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      // Feed is the default tab; expand the post's reply thread to reveal
-      // the composer (replyCount == 0 → the toggle reads "Reply").
-      await tester.tap(find.text('Reply'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        // Feed is the default tab; expand the post's reply thread to reveal
+        // the composer (replyCount == 0 → the toggle reads "Reply").
+        await tester.tap(find.text('Reply'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.enterText(
-          find.widgetWithText(TextField, 'Write a reply…'), 'On for 7am');
-      await tester.pump();
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Write a reply…'),
+          'On for 7am',
+        );
+        await tester.pump();
 
-      final sendBtn = find.widgetWithText(FilledButton, 'Send');
-      expect(sendBtn, findsOneWidget);
+        final sendBtn = find.widgetWithText(FilledButton, 'Send');
+        expect(sendBtn, findsOneWidget);
 
-      await tester.tap(sendBtn);
-      await tester.pump();
-      // Second tap while the first createPost is still gated in flight —
-      // the button is now disabled, so the tap is expected to miss.
-      await tester.tap(sendBtn, warnIfMissed: false);
-      await tester.pump();
+        await tester.tap(sendBtn);
+        await tester.pump();
+        // Second tap while the first createPost is still gated in flight —
+        // the button is now disabled, so the tap is expected to miss.
+        await tester.tap(sendBtn, warnIfMissed: false);
+        await tester.pump();
 
-      expect(social.createCalls, 1);
+        expect(social.createCalls, 1);
 
-      // Release the gate so no future leaks.
-      social.createGate.complete();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-    });
+        // Release the gate so no future leaks.
+        social.createGate.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      },
+    );
   });
 
   group('ClubDetailScreen — compose double-submit guard', () {
-    testWidgets('rapid double-tap of compose Post only fires createPost once',
-        (tester) async {
-      final social = _ComposeSocial();
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ClubDetailScreen(
-            social: social,
-            training: _FakeTraining(),
-            slug: 'track-club',
+    realtimeWidgetTest(
+      'rapid double-tap of compose Post only fires createPost once',
+      (tester) async {
+        final social = _ComposeSocial();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ClubDetailScreen(
+              social: social,
+              training: _FakeTraining(),
+              slug: 'track-club',
+            ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      // Feed is the default tab; the member composer renders inline.
-      await tester.enterText(
-          find.widgetWithText(TextField, 'Share an update…'), 'Long run Sat 7am');
-      await tester.pump();
+        // Feed is the default tab; the member composer renders inline.
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Share an update…'),
+          'Long run Sat 7am',
+        );
+        await tester.pump();
 
-      final postBtn = find.widgetWithText(FilledButton, 'Post');
-      expect(postBtn, findsOneWidget);
+        final postBtn = find.widgetWithText(FilledButton, 'Post');
+        expect(postBtn, findsOneWidget);
 
-      await tester.tap(postBtn);
-      await tester.pump();
-      // Second tap while the first createPost is still gated in flight — the
-      // button is now disabled, so the tap is expected to miss.
-      await tester.tap(postBtn, warnIfMissed: false);
-      await tester.pump();
+        await tester.tap(postBtn);
+        await tester.pump();
+        // Second tap while the first createPost is still gated in flight — the
+        // button is now disabled, so the tap is expected to miss.
+        await tester.tap(postBtn, warnIfMissed: false);
+        await tester.pump();
 
-      expect(social.createCalls, 1);
+        expect(social.createCalls, 1);
 
-      // Release the gate so no future leaks.
-      social.createGate.complete();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-    });
+        // Release the gate so no future leaks.
+        social.createGate.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      },
+    );
   });
 
   group('ClubDetailScreen — load failure / not-found', () {
-    testWidgets('a null club renders the not-found state with Retry',
-        (tester) async {
+    realtimeWidgetTest('a null club renders the not-found state with Retry', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -624,8 +668,9 @@ void main() {
       expect(find.text('Retry'), findsOneWidget);
     });
 
-    testWidgets('a thrown load renders the error message + Retry',
-        (tester) async {
+    realtimeWidgetTest('a thrown load renders the error message + Retry', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -645,8 +690,9 @@ void main() {
   });
 
   group('ClubDetailScreen — header + membership CTA', () {
-    testWidgets('a member club renders the name + the five tabs',
-        (tester) async {
+    realtimeWidgetTest('a member club renders the name + the five tabs', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -670,8 +716,9 @@ void main() {
       expect(find.text('Templates'), findsOneWidget);
     });
 
-    testWidgets('an admin sees the Edit-club action in the AppBar',
-        (tester) async {
+    realtimeWidgetTest('an admin sees the Edit-club action in the AppBar', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -689,8 +736,9 @@ void main() {
       expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
     });
 
-    testWidgets('a plain member does NOT see the Edit-club action',
-        (tester) async {
+    realtimeWidgetTest('a plain member does NOT see the Edit-club action', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -708,120 +756,129 @@ void main() {
       expect(find.byIcon(Icons.edit_outlined), findsNothing);
     });
 
-    testWidgets('an admin sees the Create-event button on the Events tab',
-        (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ClubDetailScreen(
-            social: _AdminSocial(),
-            training: _FakeTraining(),
-            apiClient: _FakeApi(const []),
-            slug: 'track-club',
+    realtimeWidgetTest(
+      'an admin sees the Create-event button on the Events tab',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ClubDetailScreen(
+              social: _AdminSocial(),
+              training: _FakeTraining(),
+              apiClient: _FakeApi(const []),
+              slug: 'track-club',
+            ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(find.text('Events'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      // Empty events + admin → the create-event CTA renders.
-      expect(find.text('Create event'), findsWidgets);
-    });
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(find.text('Events'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        // Empty events + admin → the create-event CTA renders.
+        expect(find.text('Create event'), findsWidgets);
+      },
+    );
   });
 
   group('ClubDetailScreen — join non-member', () {
-    testWidgets('a non-member sees Join and tapping it calls joinClub once',
-        (tester) async {
-      final social = _NonMemberSocial();
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ClubDetailScreen(
-            social: social,
-            training: _FakeTraining(),
-            apiClient: _FakeApi(const []),
-            slug: 'track-club',
+    realtimeWidgetTest(
+      'a non-member sees Join and tapping it calls joinClub once',
+      (tester) async {
+        final social = _NonMemberSocial();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ClubDetailScreen(
+              social: social,
+              training: _FakeTraining(),
+              apiClient: _FakeApi(const []),
+              slug: 'track-club',
+            ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      final join = find.widgetWithText(FilledButton, 'Join');
-      expect(join, findsOneWidget);
-      await tester.tap(join);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(social.joinCalls, 1);
-    });
+        final join = find.widgetWithText(FilledButton, 'Join');
+        expect(join, findsOneWidget);
+        await tester.tap(join);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(social.joinCalls, 1);
+      },
+    );
   });
 
   group('ClubDetailScreen — post failure retry (issue #666 U8/U9)', () {
-    testWidgets(
-        'a failed compose post shows a Retry banner (not the inline strip) '
-        'and tapping Retry re-submits the kept text', (tester) async {
-      final social = _PostFailSocial();
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: ClubDetailScreen(
-            social: social,
-            training: _FakeTraining(),
-            slug: 'track-club',
+    realtimeWidgetTest(
+      'a failed compose post shows a Retry banner (not the inline strip) '
+      'and tapping Retry re-submits the kept text',
+      (tester) async {
+        final social = _PostFailSocial();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ClubDetailScreen(
+              social: social,
+              training: _FakeTraining(),
+              slug: 'track-club',
+            ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.enterText(
-          find.widgetWithText(TextField, 'Share an update…'), 'Long run Sat');
-      await tester.pump();
-      await tester.tap(find.widgetWithText(FilledButton, 'Post'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Share an update…'),
+          'Long run Sat',
+        );
+        await tester.pump();
+        await tester.tap(find.widgetWithText(FilledButton, 'Post'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      expect(social.createCalls, 1);
-      // The mutation failure surfaces as a transient banner with a Retry
-      // action — no static errorContainer strip in the body.
-      final retry = find.widgetWithText(TextButton, 'Retry');
-      expect(retry, findsOneWidget);
-      // The composer keeps the text (cleared only on success).
-      expect(find.text('Long run Sat'), findsOneWidget);
+        expect(social.createCalls, 1);
+        // The mutation failure surfaces as a transient banner with a Retry
+        // action — no static errorContainer strip in the body.
+        final retry = find.widgetWithText(TextButton, 'Retry');
+        expect(retry, findsOneWidget);
+        // The composer keeps the text (cleared only on success).
+        expect(find.text('Long run Sat'), findsOneWidget);
 
-      await tester.tap(retry);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(retry);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      expect(social.createCalls, 2);
-      // Drain the replacement banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
-    });
+        expect(social.createCalls, 2);
+        // Drain the replacement banner's auto-dismiss timer.
+        await tester.pump(const Duration(seconds: 6));
+      },
+    );
   });
 }
 
 ClubView _nonMemberClub() => ClubView(
-      row: ClubRow(shadowHidden: false, 
-        id: 'club-1',
-        ownerId: 'owner',
-        name: 'Track Club',
-        slug: 'track-club',
-        isPublic: true,
-        joinPolicy: 'open',
-        memberCount: 5,
-        isVerified: false,
-        requiresActivityWaiver: false,
-      ),
-      memberCount: 5,
-      viewerRole: null,
-      viewerStatus: null,
-      joinPolicy: 'open',
-    );
+  row: ClubRow(
+    shadowHidden: false,
+    id: 'club-1',
+    ownerId: 'owner',
+    name: 'Track Club',
+    slug: 'track-club',
+    isPublic: true,
+    joinPolicy: 'open',
+    memberCount: 5,
+    isVerified: false,
+    requiresActivityWaiver: false,
+  ),
+  memberCount: 5,
+  viewerRole: null,
+  viewerStatus: null,
+  joinPolicy: 'open',
+);
 
 class _NotFoundSocial extends SocialService {
   @override
@@ -846,10 +903,13 @@ class _AdminSocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
-      const [];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => const [];
   @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
+      const [];
   @override
   RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
       Supabase.instance.client.channel('test-$clubId');
@@ -865,10 +925,13 @@ class _PostFailSocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
-      const [];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => const [];
   @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
+      const [];
   @override
   Future<void> createPost({
     required String clubId,
@@ -893,10 +956,13 @@ class _NonMemberSocial extends SocialService {
   @override
   Future<List<EventView>> fetchUpcomingEvents(String clubId) async => const [];
   @override
-  Future<List<ClubPostView>> fetchClubPosts(String clubId, {int limit = 20}) async =>
-      const [];
+  Future<List<ClubPostView>> fetchClubPosts(
+    String clubId, {
+    int limit = 20,
+  }) async => const [];
   @override
-  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async => const [];
+  Future<List<ClubMemberRow>> fetchPendingRequests(String clubId) async =>
+      const [];
   @override
   Future<String> joinClub(String clubId, String policy) async {
     joinCalls++;

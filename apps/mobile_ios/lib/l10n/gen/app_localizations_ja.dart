@@ -364,6 +364,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get commonClearSearch => '検索をクリア';
 
   @override
+  String get commonCancel => 'キャンセル';
+
+  @override
   String get commonDismiss => '閉じる';
 
   @override
@@ -2295,6 +2298,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runDetailSegDismiss => '閉じる';
+
+  @override
+  String get publicRunLiveTitle => 'ただいまライブ中';
+
+  @override
+  String get publicRunLiveSub => 'このランはまだ進行中です。ライブトラッカーで追いかけましょう。';
+
+  @override
+  String get publicRunWatchLive => 'ライブで見る';
 
   @override
   String get publicRunTitle => 'ラン';
@@ -5212,7 +5224,19 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get coachArchiveTapToView => 'タップで表示 · スワイプで削除';
+  String get coachArchiveTapToView => 'タップで表示';
+
+  @override
+  String get coachArchiveActions => '会話の操作';
+
+  @override
+  String get coachArchiveDelete => '会話を削除';
+
+  @override
+  String get coachArchiveDeleteTitle => 'この会話を削除しますか？';
+
+  @override
+  String get coachArchiveDeleteBody => 'このアーカイブされた会話は完全に削除されます。';
 
   @override
   String get coachContextNoPlan => 'プランなし';

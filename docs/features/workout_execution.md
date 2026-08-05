@@ -134,6 +134,8 @@ The `_onSnapshot` handler in `run_screen.dart` remains free of `setState` — st
 
 One new widget: `apps/mobile_android/lib/widgets/workout_execution_band.dart`. Mounted at the top of the map stack in `run_screen.dart`, above the existing off-route banner.
 
+**Where it actually sits (issue #666).** The band shipped as its own `Positioned` anchored on the status-bar inset, while every other top overlay composed into the single `top: 56` column from round 4 — so an armed workout painted the band straight over the live-share and route-remaining badges. It is now the first slot of `RunTopOverlay` (in `run_screen.dart`), which owns the one anchor for the band, the badge row and `RunTopBanners`, and takes the larger of 56 and the device's top inset so the band still clears a tall cutout. The band's shell dropped its own outer margin — the column supplies it. Adding a new top overlay means adding a slot there, not another `Positioned`; `run_screen_top_banners_test.dart` pins the non-overlapping rects, armed and unarmed.
+
 ```
 ┌────────────────────────────────────────────────┐
 │ Rep 3/6 · 400 m @ 4:00/km         ● ahead −6s │

@@ -368,35 +368,42 @@ class _FeedScreenState extends State<FeedScreen> {
     final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: SizedBox(
-        height: 40,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: _badgeAwards.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (context, i) {
-            final a = _badgeAwards[i];
-            final tierColor = badgeTierColor(a.badge.tier);
-            final name = a.authorName ?? l10n.badgesARunner;
-            final label = badgeLabelFor(l10n, a.badge.badgeKey, a.badge.tier);
-            final icon = badgeIconData(
-              tierFor(a.badge.badgeKey, a.badge.tier)?.icon ?? 'military_tech',
-            );
-            return ActionChip(
-              avatar: Icon(icon, size: 18, color: tierColor),
-              label: Text(
-                l10n.badgesFeedEarned(name, label),
-                overflow: TextOverflow.ellipsis,
-              ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      ProfileScreen(api: widget.api, userId: a.authorId),
-                ),
-              ),
-            );
-          },
+      // A scrolling Row rather than a horizontal ListView in a fixed-height
+      // box: the strip is capped at six awards, and a literal lane height
+      // squeezed the chips out of their 48 dp tap target at 1.0x and cropped
+      // their labels outright at 2x OS text scale.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final (i, a) in _badgeAwards.indexed) ...[
+              if (i > 0) const SizedBox(width: 8),
+              _badgeChip(l10n, a),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _badgeChip(AppLocalizations l10n, BadgeAwardEntry a) {
+    final name = a.authorName ?? l10n.badgesARunner;
+    final label = badgeLabelFor(l10n, a.badge.badgeKey, a.badge.tier);
+    return ActionChip(
+      avatar: Icon(
+        badgeIconData(
+            tierFor(a.badge.badgeKey, a.badge.tier)?.icon ?? 'military_tech'),
+        size: 18,
+        color: badgeTierColor(a.badge.tier),
+      ),
+      label: Text(
+        l10n.badgesFeedEarned(name, label),
+        overflow: TextOverflow.ellipsis,
+      ),
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ProfileScreen(api: widget.api, userId: a.authorId),
         ),
       ),
     );
@@ -413,24 +420,23 @@ class _FeedScreenState extends State<FeedScreen> {
         children: [
           // A SegmentedButton can't fit six icon+label segments on a
           // ~400dp phone — labels wrap letter-per-line. Scrollable
-          // chips match the run-list filter idiom instead.
-          SizedBox(
-            height: 40,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final a in _activities) ...[
-                    ChoiceChip(
-                      avatar: Icon(a.icon, size: 18),
-                      label: Text(_activityLabel(l10n, a.value)),
-                      selected: _activityFilter == a.value,
-                      onSelected: (_) => _setActivity(a.value),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
+          // chips match the run-list filter idiom instead. The rail takes
+          // its height from the chips, not a literal: a chip needs 58 px at
+          // 2x OS text scale and was being cropped to 40.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final a in _activities) ...[
+                  ChoiceChip(
+                    avatar: Icon(a.icon, size: 18),
+                    label: Text(_activityLabel(l10n, a.value)),
+                    selected: _activityFilter == a.value,
+                    onSelected: (_) => _setActivity(a.value),
+                  ),
+                  const SizedBox(width: 8),
                 ],
-              ),
+              ],
             ),
           ),
           DropdownButton<String>(

@@ -10,27 +10,29 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/event_detail_screen.dart';
 import '../lib/session_steps.dart';
 import '../lib/social_service.dart';
+import 'realtime_drain.dart';
 
 ClubView _club(String? viewerRole) => ClubView(
-      row: ClubRow(shadowHidden: false, 
-        id: 'club-1',
-        slug: 'club-1',
-        name: 'Club',
-        description: null,
-        locationLabel: null,
-        isPublic: true,
-        joinPolicy: 'open',
-        ownerId: 'owner-1',
-        createdAt: DateTime(2026, 1, 1),
-        memberCount: 1,
-        isVerified: false,
-        requiresActivityWaiver: false,
-      ),
-      memberCount: 1,
-      viewerRole: viewerRole,
-      viewerStatus: viewerRole == null ? null : 'active',
-      joinPolicy: 'open',
-    );
+  row: ClubRow(
+    shadowHidden: false,
+    id: 'club-1',
+    slug: 'club-1',
+    name: 'Club',
+    description: null,
+    locationLabel: null,
+    isPublic: true,
+    joinPolicy: 'open',
+    ownerId: 'owner-1',
+    createdAt: DateTime(2026, 1, 1),
+    memberCount: 1,
+    isVerified: false,
+    requiresActivityWaiver: false,
+  ),
+  memberCount: 1,
+  viewerRole: viewerRole,
+  viewerStatus: viewerRole == null ? null : 'active',
+  joinPolicy: 'open',
+);
 
 /// Renders one upcoming athletic event (so the RSVP row shows) and throws
 /// on the RSVP write to drive the swallowed-failure banner.
@@ -45,31 +47,45 @@ class _RsvpFailSocial extends SocialService {
   Future<ClubView?> fetchClubBySlug(String slug) async => null;
   @override
   Future<EventView?> fetchEventById(String eventId) async => EventView(
-        row: EventRow(
-          id: 'e1',
-          clubId: 'club-1',
-          title: 'Saturday Long Run',
-          startsAt: DateTime.utc(2026, 6, 20, 8),
-          authorId: 'host',
-          category: 'run',
-          isPublic: true,
-        ),
-        byday: null,
-        attendeeCount: 0,
-        viewerRsvp: null,
-        nextInstanceStart: DateTime.utc(2026, 6, 20, 8),
-      );
+    row: EventRow(
+      id: 'e1',
+      clubId: 'club-1',
+      title: 'Saturday Long Run',
+      startsAt: DateTime.utc(2026, 6, 20, 8),
+      authorId: 'host',
+      category: 'run',
+      isPublic: true,
+    ),
+    byday: null,
+    attendeeCount: 0,
+    viewerRsvp: null,
+    nextInstanceStart: DateTime.utc(2026, 6, 20, 8),
+  );
   @override
-  Future<List<AttendeeView>> fetchAttendees(String eventId, DateTime instance) async => const [];
+  Future<List<AttendeeView>> fetchAttendees(
+    String eventId,
+    DateTime instance,
+  ) async => const [];
   @override
-  Future<List<EventResultView>> fetchEventResults(String eventId, DateTime instance) async =>
-      const [];
+  Future<List<EventResultView>> fetchEventResults(
+    String eventId,
+    DateTime instance,
+  ) async => const [];
   @override
-  Future<RaceSessionRow?> fetchRaceSession(String eventId, DateTime instance) async => null;
+  Future<RaceSessionRow?> fetchRaceSession(
+    String eventId,
+    DateTime instance,
+  ) async => null;
   @override
-  Future<({double lat, double lng})?> fetchEventMeetPoint(String eventId) async => null;
+  Future<({double lat, double lng})?> fetchEventMeetPoint(
+    String eventId,
+  ) async => null;
   @override
-  Future<void> rsvpEvent(String eventId, String status, DateTime instance) async {
+  Future<void> rsvpEvent(
+    String eventId,
+    String status,
+    DateTime instance,
+  ) async {
     rsvpCalls++;
     throw Exception('network down');
   }
@@ -103,43 +119,50 @@ class _EventSocial extends SocialService {
   Future<ClubView?> fetchClubBySlug(String slug) async => club;
   @override
   Future<EventView?> fetchEventById(String eventId) async => EventView(
-        row: EventRow(
-          id: 'e1',
-          clubId: 'club-1',
-          title: 'Saturday Long Run',
-          startsAt: DateTime.utc(2026, 6, 20, 8),
-          authorId: 'host',
-          category: category,
-          distanceM: 21097,
-          isPublic: true,
-        ),
-        byday: null,
-        attendeeCount: attendees.length,
-        viewerRsvp: viewerRsvp,
-        nextInstanceStart: DateTime.utc(2026, 6, 20, 8),
-      );
+    row: EventRow(
+      id: 'e1',
+      clubId: 'club-1',
+      title: 'Saturday Long Run',
+      startsAt: DateTime.utc(2026, 6, 20, 8),
+      authorId: 'host',
+      category: category,
+      distanceM: 21097,
+      isPublic: true,
+    ),
+    byday: null,
+    attendeeCount: attendees.length,
+    viewerRsvp: viewerRsvp,
+    nextInstanceStart: DateTime.utc(2026, 6, 20, 8),
+  );
   @override
   Future<Set<DateTime>> fetchCancelledInstances(String eventId) async =>
       cancelled;
 
   @override
   Future<List<AttendeeView>> fetchAttendees(
-          String eventId, DateTime instance) async =>
-      attendees;
+    String eventId,
+    DateTime instance,
+  ) async => attendees;
   @override
   Future<List<EventResultView>> fetchEventResults(
-          String eventId, DateTime instance) async =>
-      const [];
+    String eventId,
+    DateTime instance,
+  ) async => const [];
   @override
   Future<RaceSessionRow?> fetchRaceSession(
-          String eventId, DateTime instance) async =>
-      null;
+    String eventId,
+    DateTime instance,
+  ) async => null;
   @override
   Future<({double lat, double lng})?> fetchEventMeetPoint(
-          String eventId) async =>
-      null;
+    String eventId,
+  ) async => null;
   @override
-  Future<void> rsvpEvent(String eventId, String status, DateTime instance) async {
+  Future<void> rsvpEvent(
+    String eventId,
+    String status,
+    DateTime instance,
+  ) async {
     rsvpCalls++;
     lastRsvpStatus = status;
   }
@@ -151,8 +174,10 @@ class _EventSocial extends SocialService {
 
   @override
   RealtimeChannel subscribeToEvent(
-          String eventId, String clubId, void Function() onChange) =>
-      Supabase.instance.client.channel('test-$eventId');
+    String eventId,
+    String clubId,
+    void Function() onChange,
+  ) => Supabase.instance.client.channel('test-$eventId');
 }
 
 /// Drives the Submit-time sheet's failure path: a recent-runs fetch that
@@ -227,7 +252,9 @@ void main() {
   setUpAll(_ensureSupabase);
 
   group('EventDetailScreen — initial render', () {
-    testWidgets('first frame shows the full-body loader', (tester) async {
+    realtimeWidgetTest('first frame shows the full-body loader', (
+      tester,
+    ) async {
       // Reason: while _loading is true the screen returns a bare
       // Scaffold carrying nothing but the loader.
       await _pump(tester);
@@ -235,7 +262,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     });
 
-    testWidgets('initial Scaffold has no AppBar yet', (tester) async {
+    realtimeWidgetTest('initial Scaffold has no AppBar yet', (tester) async {
       await _pump(tester);
       expect(find.byType(AppBar), findsNothing);
     });
@@ -243,9 +270,10 @@ void main() {
 
   group('EventDetailScreen — cancelled occurrence', () {
     Future<_EventSocial> pumpWith(
-        WidgetTester tester, Set<DateTime> cancelled) async {
-      final social =
-          _EventSocial(club: _club('member'), cancelled: cancelled);
+      WidgetTester tester,
+      Set<DateTime> cancelled,
+    ) async {
+      final social = _EventSocial(club: _club('member'), cancelled: cancelled);
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -261,16 +289,18 @@ void main() {
       return social;
     }
 
-    testWidgets('a cancelled occurrence says so and withholds the RSVP row',
-        (tester) async {
-      // event_exceptions was never read on mobile, so a cancelled occurrence
-      // stayed selectable and RSVP-able with nothing saying it was called off.
-      await pumpWith(tester, {DateTime.utc(2026, 6, 20, 8)});
-      expect(find.text('This occurrence was cancelled.'), findsOneWidget);
-      expect(find.text("I'm in"), findsNothing);
-    });
+    realtimeWidgetTest(
+      'a cancelled occurrence says so and withholds the RSVP row',
+      (tester) async {
+        // event_exceptions was never read on mobile, so a cancelled occurrence
+        // stayed selectable and RSVP-able with nothing saying it was called off.
+        await pumpWith(tester, {DateTime.utc(2026, 6, 20, 8)});
+        expect(find.text('This occurrence was cancelled.'), findsOneWidget);
+        expect(find.text("I'm in"), findsNothing);
+      },
+    );
 
-    testWidgets('a live occurrence keeps the RSVP row', (tester) async {
+    realtimeWidgetTest('a live occurrence keeps the RSVP row', (tester) async {
       await pumpWith(tester, const {});
       expect(find.text('This occurrence was cancelled.'), findsNothing);
       expect(find.text("I'm in"), findsOneWidget);
@@ -294,8 +324,9 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('a demoted RSVP reads as waitlisted, not as no answer',
-        (tester) async {
+    realtimeWidgetTest('a demoted RSVP reads as waitlisted, not as no answer', (
+      tester,
+    ) async {
       // enforce_event_capacity silently rewrites a full event's `going` to
       // `waitlisted`. That matches none of the three chips, so the row looked
       // exactly like it does for someone who never responded.
@@ -303,46 +334,53 @@ void main() {
       expect(find.text('Waitlisted'), findsOneWidget);
     });
 
-    testWidgets('an ordinary RSVP shows no waitlist line', (tester) async {
+    realtimeWidgetTest('an ordinary RSVP shows no waitlist line', (
+      tester,
+    ) async {
       await pumpWith(tester, 'going');
       expect(find.text('Waitlisted'), findsNothing);
     });
 
-    testWidgets('no RSVP shows no waitlist line', (tester) async {
+    realtimeWidgetTest('no RSVP shows no waitlist line', (tester) async {
       await pumpWith(tester, null);
       expect(find.text('Waitlisted'), findsNothing);
     });
   });
 
   group('EventDetailScreen — RSVP failure', () {
-    testWidgets('a failed RSVP surfaces a banner instead of silently reverting',
-        (tester) async {
-      final social = _RsvpFailSocial();
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: EventDetailScreen(
-            social: social,
-            clubSlug: 'club-1',
-            eventId: 'e1',
+    realtimeWidgetTest(
+      'a failed RSVP surfaces a banner instead of silently reverting',
+      (tester) async {
+        final social = _RsvpFailSocial();
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: EventDetailScreen(
+              social: social,
+              clubSlug: 'club-1',
+              eventId: 'e1',
+            ),
           ),
-        ),
-      );
-      // Let _load resolve (two Future.wait batches).
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        );
+        // Let _load resolve (two Future.wait batches).
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      final going = find.widgetWithText(OutlinedButton, "I'm in");
-      expect(going, findsOneWidget);
-      await tester.tap(going);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        final going = find.widgetWithText(OutlinedButton, "I'm in");
+        expect(going, findsOneWidget);
+        await tester.tap(going);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      expect(social.rsvpCalls, 1);
-      expect(find.textContaining("Couldn't update your RSVP"), findsOneWidget);
-      await tester.pump(const Duration(seconds: 4)); // drain banner timer
-    });
+        expect(social.rsvpCalls, 1);
+        expect(
+          find.textContaining("Couldn't update your RSVP"),
+          findsOneWidget,
+        );
+        await tester.pump(const Duration(seconds: 4)); // drain banner timer
+      },
+    );
   });
 
   group('EventDisciplineLabel — slice E class display', () {
@@ -351,21 +389,20 @@ void main() {
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: EventDisciplineLabel(discipline: discipline),
-          ),
+          home: Scaffold(body: EventDisciplineLabel(discipline: discipline)),
         ),
       );
     }
 
-    testWidgets('shows the CLASS eyebrow and the free-text discipline',
-        (tester) async {
+    realtimeWidgetTest('shows the CLASS eyebrow and the free-text discipline', (
+      tester,
+    ) async {
       await pumpLabel(tester, 'Vinyasa Yoga');
       expect(find.text('CLASS'), findsOneWidget);
       expect(find.text('Vinyasa Yoga'), findsOneWidget);
     });
 
-    testWidgets('renders no athletic affordances', (tester) async {
+    realtimeWidgetTest('renders no athletic affordances', (tester) async {
       await pumpLabel(tester, 'Pilates');
       // A class label is attendance-only: no distance / target-pace metric,
       // no results leaderboard, no Submit-my-time button.
@@ -374,16 +411,18 @@ void main() {
       expect(find.byType(EventResultsSection), findsNothing);
     });
 
-    testWidgets('a long discipline is bounded + ellipsised (no overflow)',
-        (tester) async {
-      const longDiscipline =
-          'Restorative candlelit Vinyasa flow with breathwork and '
-          'progressive myofascial release for deep recovery';
-      await pumpLabel(tester, longDiscipline);
-      final value = tester.widget<Text>(find.text(longDiscipline));
-      expect(value.maxLines, 2);
-      expect(value.overflow, TextOverflow.ellipsis);
-    });
+    realtimeWidgetTest(
+      'a long discipline is bounded + ellipsised (no overflow)',
+      (tester) async {
+        const longDiscipline =
+            'Restorative candlelit Vinyasa flow with breathwork and '
+            'progressive myofascial release for deep recovery';
+        await pumpLabel(tester, longDiscipline);
+        final value = tester.widget<Text>(find.text(longDiscipline));
+        expect(value.maxLines, 2);
+        expect(value.overflow, TextOverflow.ellipsis);
+      },
+    );
   });
 
   group('slice E gating predicate', () {
@@ -413,26 +452,29 @@ void main() {
   }
 
   group('EventDetailScreen — RSVP success', () {
-    testWidgets('a successful RSVP calls rsvpEvent once + shows no banner',
-        (tester) async {
-      final social = _EventSocial(club: _club('member'));
-      await pumpEvent(tester, social);
+    realtimeWidgetTest(
+      'a successful RSVP calls rsvpEvent once + shows no banner',
+      (tester) async {
+        final social = _EventSocial(club: _club('member'));
+        await pumpEvent(tester, social);
 
-      final going = find.widgetWithText(OutlinedButton, "I'm in");
-      expect(going, findsOneWidget);
-      await tester.tap(going);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        final going = find.widgetWithText(OutlinedButton, "I'm in");
+        expect(going, findsOneWidget);
+        await tester.tap(going);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      expect(social.rsvpCalls, 1);
-      expect(social.lastRsvpStatus, 'going');
-      expect(find.textContaining("Couldn't update your RSVP"), findsNothing);
-    });
+        expect(social.rsvpCalls, 1);
+        expect(social.lastRsvpStatus, 'going');
+        expect(find.textContaining("Couldn't update your RSVP"), findsNothing);
+      },
+    );
   });
 
   group('EventDetailScreen — attendee rendering', () {
-    testWidgets('attendee names render in the attendees section',
-        (tester) async {
+    realtimeWidgetTest('attendee names render in the attendees section', (
+      tester,
+    ) async {
       final social = _EventSocial(
         club: _club('member'),
         attendees: const [
@@ -446,8 +488,9 @@ void main() {
       expect(find.byType(IdentityAvatar), findsNWidgets(2));
     });
 
-    testWidgets('an event with no RSVPs shows the no-RSVPs hint',
-        (tester) async {
+    realtimeWidgetTest('an event with no RSVPs shows the no-RSVPs hint', (
+      tester,
+    ) async {
       final social = _EventSocial(club: _club('member'), attendees: const []);
       await pumpEvent(tester, social);
       // eventNoRsvps copy.
@@ -456,23 +499,27 @@ void main() {
   });
 
   group('EventDetailScreen — Race control permission gating', () {
-    testWidgets('a race director sees the Race control panel on an athletic event',
-        (tester) async {
-      final social = _EventSocial(club: _club('owner'), category: 'run');
-      await pumpEvent(tester, social);
-      // The race-control status line shows "Not armed" for a fresh race.
-      expect(find.text('Not armed'), findsOneWidget);
-    });
+    realtimeWidgetTest(
+      'a race director sees the Race control panel on an athletic event',
+      (tester) async {
+        final social = _EventSocial(club: _club('owner'), category: 'run');
+        await pumpEvent(tester, social);
+        // The race-control status line shows "Not armed" for a fresh race.
+        expect(find.text('Not armed'), findsOneWidget);
+      },
+    );
 
-    testWidgets('a plain member does NOT see the Race control panel',
-        (tester) async {
+    realtimeWidgetTest('a plain member does NOT see the Race control panel', (
+      tester,
+    ) async {
       final social = _EventSocial(club: _club('member'), category: 'run');
       await pumpEvent(tester, social);
       expect(find.text('Not armed'), findsNothing);
     });
 
-    testWidgets('a class event hides Race control even for an organiser',
-        (tester) async {
+    realtimeWidgetTest('a class event hides Race control even for an organiser', (
+      tester,
+    ) async {
       // A class is attendance-only — no athletic affordances regardless of role.
       final social = _EventSocial(club: _club('owner'), category: 'class');
       await pumpEvent(tester, social);
@@ -481,28 +528,30 @@ void main() {
   });
 
   group('logWorkoutSeed — session-derived Log-as-workout prefill', () {
-    ExpandedSession sampleSession() => expandSessionSteps(SessionPlanInput(
-          blocks: const [],
-          items: const [
-            SessionPlanItemInput(
-              id: 'i1',
-              blockId: null,
-              position: 0,
-              movementName: 'Downward Dog',
-              kind: SessionItemKind.hold,
-              durationS: 30,
-            ),
-            SessionPlanItemInput(
-              id: 'i2',
-              blockId: null,
-              position: 1,
-              movementName: 'Warrior II',
-              kind: SessionItemKind.reps,
-              reps: 10,
-              perSide: true,
-            ),
-          ],
-        ));
+    ExpandedSession sampleSession() => expandSessionSteps(
+      SessionPlanInput(
+        blocks: const [],
+        items: const [
+          SessionPlanItemInput(
+            id: 'i1',
+            blockId: null,
+            position: 0,
+            movementName: 'Downward Dog',
+            kind: SessionItemKind.hold,
+            durationS: 30,
+          ),
+          SessionPlanItemInput(
+            id: 'i2',
+            blockId: null,
+            position: 1,
+            movementName: 'Warrior II',
+            kind: SessionItemKind.reps,
+            reps: 10,
+            perSide: true,
+          ),
+        ],
+      ),
+    );
 
     test('no expansion → title-only from the flat gym_template path', () {
       final seed = logWorkoutSeed(
@@ -524,43 +573,47 @@ void main() {
       expect(seed.sets, isNull);
     });
 
-    test('with an attached session plan → one seeded set per expanded step',
-        () {
-      final seed = logWorkoutSeed(
-        gymTemplate: null,
-        eventTitle: 'Morning Class',
-        discipline: 'Vinyasa Yoga',
-        expansion: sampleSession(),
-        sessionPlanTitle: 'Flow',
-      );
-      // Title prefers the class discipline over the flat title.
-      expect(seed.title, 'Vinyasa Yoga');
-      // Hold + per-side reps (left + right) = 3 seeded sets.
-      final sets = seed.sets;
-      expect(sets, isNotNull);
-      expect(sets!.length, 3);
-      expect(sets[0].exerciseName, 'Downward Dog');
-      expect(sets[0].durationS, 30); // timed hold carries through
-      expect(sets[0].reps, isNull);
-      // The per-side reps item expands to two rows carrying the reps target.
-      expect(sets[1].exerciseName, 'Warrior II');
-      expect(sets[1].reps, 10);
-      expect(sets[2].exerciseName, 'Warrior II');
-      expect(sets[2].reps, 10);
-    });
+    test(
+      'with an attached session plan → one seeded set per expanded step',
+      () {
+        final seed = logWorkoutSeed(
+          gymTemplate: null,
+          eventTitle: 'Morning Class',
+          discipline: 'Vinyasa Yoga',
+          expansion: sampleSession(),
+          sessionPlanTitle: 'Flow',
+        );
+        // Title prefers the class discipline over the flat title.
+        expect(seed.title, 'Vinyasa Yoga');
+        // Hold + per-side reps (left + right) = 3 seeded sets.
+        final sets = seed.sets;
+        expect(sets, isNotNull);
+        expect(sets!.length, 3);
+        expect(sets[0].exerciseName, 'Downward Dog');
+        expect(sets[0].durationS, 30); // timed hold carries through
+        expect(sets[0].reps, isNull);
+        // The per-side reps item expands to two rows carrying the reps target.
+        expect(sets[1].exerciseName, 'Warrior II');
+        expect(sets[1].reps, 10);
+        expect(sets[2].exerciseName, 'Warrior II');
+        expect(sets[2].reps, 10);
+      },
+    );
 
-    test('title falls back to the flat gym_template title when no discipline',
-        () {
-      final seed = logWorkoutSeed(
-        gymTemplate: null,
-        eventTitle: 'Morning Class',
-        discipline: null,
-        expansion: sampleSession(),
-        sessionPlanTitle: null,
-      );
-      expect(seed.title, 'Morning Class');
-      expect(seed.sets, isNotNull);
-    });
+    test(
+      'title falls back to the flat gym_template title when no discipline',
+      () {
+        final seed = logWorkoutSeed(
+          gymTemplate: null,
+          eventTitle: 'Morning Class',
+          discipline: null,
+          expansion: sampleSession(),
+          sessionPlanTitle: null,
+        );
+        expect(seed.title, 'Morning Class');
+        expect(seed.sets, isNotNull);
+      },
+    );
   });
 
   group('M6 attendance — host-gating predicate', () {
@@ -584,114 +637,119 @@ void main() {
   });
 
   group('Submit-time sheet — recent-runs load failure', () {
-    testWidgets(
-        'a fetchRecentRuns failure shows the error + retry, not a stuck spinner',
-        (tester) async {
-      final social = _RecentRunsFailSocial(club: _club('member'));
-      await pumpEvent(tester, social);
+    realtimeWidgetTest(
+      'a fetchRecentRuns failure shows the error + retry, not a stuck spinner',
+      (tester) async {
+        final social = _RecentRunsFailSocial(club: _club('member'));
+        await pumpEvent(tester, social);
 
-      final submit = find.widgetWithText(FilledButton, 'Submit my time');
-      expect(submit, findsOneWidget);
-      await tester.tap(submit);
-      await tester.pump(); // start the bottom-sheet route transition
-      await tester.pump(const Duration(milliseconds: 300));
+        final submit = find.widgetWithText(FilledButton, 'Submit my time');
+        expect(submit, findsOneWidget);
+        await tester.tap(submit);
+        await tester.pump(); // start the bottom-sheet route transition
+        await tester.pump(const Duration(milliseconds: 300));
 
-      expect(social.fetchRecentRunsCalls, 1);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.text("Couldn't load your recent runs."), findsOneWidget);
+        expect(social.fetchRecentRunsCalls, 1);
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(find.text("Couldn't load your recent runs."), findsOneWidget);
 
-      final retry = find.widgetWithText(TextButton, 'Retry');
-      expect(retry, findsOneWidget);
-      await tester.tap(retry);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        final retry = find.widgetWithText(TextButton, 'Retry');
+        expect(retry, findsOneWidget);
+        await tester.tap(retry);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      expect(social.fetchRecentRunsCalls, 2);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.text("Couldn't load your recent runs."), findsOneWidget);
-    });
+        expect(social.fetchRecentRunsCalls, 2);
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(find.text("Couldn't load your recent runs."), findsOneWidget);
+      },
+    );
   });
 
   group('EventDetailScreen — result submit failure retry (issue #666 U8)', () {
-    testWidgets(
-        'a failed submit shows a Retry banner that re-sends the picked '
-        'result without re-opening the sheet', (tester) async {
-      final social = _SubmitFailSocial(club: _club('member'));
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: EventDetailScreen(
-            social: social,
-            clubSlug: 'club-1',
-            eventId: 'e1',
+    realtimeWidgetTest(
+      'a failed submit shows a Retry banner that re-sends the picked '
+      'result without re-opening the sheet',
+      (tester) async {
+        final social = _SubmitFailSocial(club: _club('member'));
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: EventDetailScreen(
+              social: social,
+              clubSlug: 'club-1',
+              eventId: 'e1',
+            ),
           ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      final submit = find.widgetWithText(FilledButton, 'Submit my time');
-      expect(submit, findsOneWidget);
-      await tester.tap(submit);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        final submit = find.widgetWithText(FilledButton, 'Submit my time');
+        expect(submit, findsOneWidget);
+        await tester.tap(submit);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      // Pick the DNF shortcut so the sheet pops with a concrete choice.
-      await tester.tap(find.widgetWithText(TextButton, 'Record DNF'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        // Pick the DNF shortcut so the sheet pops with a concrete choice.
+        await tester.tap(find.widgetWithText(TextButton, 'Record DNF'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      expect(social.submitCalls, 1);
-      expect(find.textContaining('Submit failed'), findsOneWidget);
-      final retry = find.widgetWithText(TextButton, 'Retry');
-      expect(retry, findsOneWidget);
-      // The sheet must not have re-opened.
-      expect(find.text('Submit your time'), findsNothing);
+        expect(social.submitCalls, 1);
+        expect(find.textContaining('Submit failed'), findsOneWidget);
+        final retry = find.widgetWithText(TextButton, 'Retry');
+        expect(retry, findsOneWidget);
+        // The sheet must not have re-opened.
+        expect(find.text('Submit your time'), findsNothing);
 
-      await tester.tap(retry);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(retry);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      expect(social.submitCalls, 2);
-      expect(find.text('Submit your time'), findsNothing);
-      // Drain the replacement banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
-    });
+        expect(social.submitCalls, 2);
+        expect(find.text('Submit your time'), findsNothing);
+        // Drain the replacement banner's auto-dismiss timer.
+        await tester.pump(const Duration(seconds: 6));
+      },
+    );
   });
 
   group('EventDetailScreen — narrow-width overflow (issue #666 V7)', () {
-    testWidgets(
-        'renders at a narrow width with the RSVP buttons in a Wrap so '
-        'long localized labels flow to a second line instead of striping',
-        (tester) async {
-      // 400, not 320: below ~400 the EventPhotos add-photo row (a separate
-      // widget file outside this fix's scope) still overflows under the
-      // test Ahem font and would fail this test for an unrelated reason.
-      tester.view.physicalSize = const Size(400, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+    realtimeWidgetTest(
+      'renders at a narrow width with the RSVP buttons in a Wrap so '
+      'long localized labels flow to a second line instead of striping',
+      (tester) async {
+        // 400, not 320: below ~400 the EventPhotos add-photo row (a separate
+        // widget file outside this fix's scope) still overflows under the
+        // test Ahem font and would fail this test for an unrelated reason.
+        tester.view.physicalSize = const Size(400, 1200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
 
-      final social = _EventSocial(club: _club('member'));
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: EventDetailScreen(
-            social: social,
-            clubSlug: 'fake-slug',
-            eventId: 'fake-event-id',
+        final social = _EventSocial(club: _club('member'));
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: EventDetailScreen(
+              social: social,
+              clubSlug: 'fake-slug',
+              eventId: 'fake-event-id',
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(
-        find.ancestor(
+        expect(
+          find.ancestor(
             of: find.widgetWithText(OutlinedButton, "I'm in"),
-            matching: find.byType(Wrap)),
-        findsWidgets,
-      );
-    });
+            matching: find.byType(Wrap),
+          ),
+          findsWidgets,
+        );
+      },
+    );
   });
 }

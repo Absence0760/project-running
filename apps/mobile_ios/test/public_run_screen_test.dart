@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/live_broadcast.dart';
+import '../lib/screens/live_spectator_screen.dart';
 import '../lib/screens/public_run_screen.dart';
 
 /// Test seam: returns a canned public run + author profile so `_load`
@@ -50,6 +52,19 @@ RunRow _ultraRun() => RunRow(
       startedAt: DateTime(2026, 6, 1, 8),
       durationS: 376331,
       distanceM: 386243,
+      source: 'app',
+      activityType: 'run',
+      isDnf: false,
+    );
+
+/// The stub row `beginLiveBroadcast` upserts: 0 duration, 0 distance, public,
+/// never concluded.
+RunRow _liveStub() => RunRow(
+      id: 'r1',
+      userId: 'u1',
+      startedAt: DateTime(2026, 6, 1, 8),
+      durationS: 0,
+      distanceM: 0,
       source: 'app',
       activityType: 'run',
       isDnf: false,
@@ -163,6 +178,66 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(tester.takeException(), isNull);
+    });
+  });
+
+
+  group('isLiveBroadcast', () {
+    test('a 0-duration, never-concluded stub is live', () {
+      expect(isLiveBroadcast(_liveStub()), isTrue);
+    });
+
+    test('a finished run is not live', () {
+      expect(isLiveBroadcast(_run()), isFalse);
+    });
+
+    test('concluded_at wins over a stale zero duration', () {
+      final concluded = RunRow(
+        id: 'r1',
+        userId: 'u1',
+        startedAt: DateTime(2026, 6, 1, 8),
+        durationS: 0,
+        distanceM: 0,
+        source: 'app',
+        activityType: 'run',
+        isDnf: false,
+        concludedAt: DateTime(2026, 6, 1, 9),
+      );
+      expect(isLiveBroadcast(concluded), isFalse);
+    });
+
+    test('a null row is not live', () {
+      expect(isLiveBroadcast(null), isFalse);
+    });
+  });
+
+  group('PublicRunScreen — in-progress broadcast (issue #666 A2)', () {
+    testWidgets('offers the only in-app entry to the live spectator screen',
+        (tester) async {
+      await _pumpApi(
+        tester,
+        _FakeApi(run: _liveStub(), author: _author('Al')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Live right now'), findsOneWidget);
+      final cta = find.widgetWithText(FilledButton, 'Watch live');
+      expect(cta, findsOneWidget);
+
+      await tester.tap(cta);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(LiveSpectatorScreen), findsOneWidget);
+    });
+
+    testWidgets('a finished run shows no live banner', (tester) async {
+      await _pumpApi(tester, _FakeApi(run: _run(), author: _author('Al')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Live right now'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Watch live'), findsNothing);
     });
   });
 }

@@ -29,6 +29,7 @@ import 'offline_store_wipe.dart';
 import 'offline_sync_store.dart';
 import 'preferences.dart';
 import 'push_messaging_bridge.dart';
+import 'push_target.dart';
 import 'race_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -525,6 +526,10 @@ void main() async {
     _pushBridge = PushMessagingBridge(
       messaging: FirebasePushMessaging(),
       api: apiNonNull,
+      // Park the tapped notification's target; HomeScreen drains it. Without
+      // this the seam existed but nothing consumed it, so every push tap
+      // opened wherever the app already was and discarded the deep link.
+      onOpenNotification: routePushOpen,
     )..attach();
     final devEmail = dotenv.env['DEV_USER_EMAIL'];
     final devPassword = dotenv.env['DEV_USER_PASSWORD'];
@@ -671,6 +676,21 @@ final ValueNotifier<cm.PlanWorkoutRow?> pendingStartWorkout =
 /// threading an `onStartRun` callback down every push path.
 final ValueNotifier<cm.Route?> pendingStartRunWithRoute =
     ValueNotifier<cm.Route?>(null);
+
+/// Cross-screen handoff for "a push notification was tapped, open its
+/// target". Set by [PushMessagingBridge]'s open callback; HomeScreen listens
+/// and navigates. A notifier rather than a direct navigation because the tap
+/// that COLD-STARTS the app is delivered before any Navigator exists — the
+/// target parks here and HomeScreen drains it on its first frame, the same
+/// shape [incomingRouteImport] uses for a GPX opened from a closed app.
+final ValueNotifier<PushTarget?> pendingPushTarget =
+    ValueNotifier<PushTarget?>(null);
+
+/// The bridge's open-notification callback: map the tapped notification's URL
+/// onto a target and park it for HomeScreen. Named (not an inline closure) so
+/// the seam between the push payload and the notifier is directly testable.
+void routePushOpen(PushOpenedMessage msg) =>
+    pendingPushTarget.value = pushTargetFromUrl(msg.url);
 
 class RunApp extends StatefulWidget {
   final ApiClient? apiClient;

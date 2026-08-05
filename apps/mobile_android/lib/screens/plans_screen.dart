@@ -13,6 +13,7 @@ import '../local_run_store.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 import 'plan_detail_screen.dart';
@@ -199,10 +200,12 @@ class _PlansScreenState extends State<PlansScreen> {
                               }
                             : null,
                         onDelete: () async {
-                          final ok = await _confirm(
+                          final ok = await confirmDestructive(
                             context,
-                            l10n.plansDeleteTitle(p.name),
-                            l10n.plansDeleteBody,
+                            title: l10n.plansDeleteTitle(p.name),
+                            body: l10n.plansDeleteBody,
+                            confirmLabel: l10n.plansDelete,
+                            cancelLabel: l10n.plansCancel,
                           );
                           if (ok) {
                             await _runPlanAction(
@@ -218,7 +221,7 @@ class _PlansScreenState extends State<PlansScreen> {
 }
 
 Future<bool> _confirm(BuildContext context, String title, String body,
-    {String? confirmLabel}) async {
+    {required String confirmLabel}) async {
   final res = await showDialog<bool>(
     context: context,
     builder: (ctx) {
@@ -233,7 +236,7 @@ Future<bool> _confirm(BuildContext context, String title, String body,
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(confirmLabel ?? l10n.plansDelete),
+            child: Text(confirmLabel),
           ),
         ],
       );

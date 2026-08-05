@@ -410,7 +410,21 @@ On the Flutter apps, every "add / edit X" form presents as a full-screen dialog 
 
 ## Mobile status colours — `AppSemanticColors`, not new hex literals
 
-On the Flutter apps, good/warning/bad/crown colouring comes from the `AppSemanticColors` theme extension in `packages/ui_kit` (`AppSemanticColors.of(context)` / `.ofTheme(theme)` — `success`/`warning`/`danger`/`crown` + their `on*`, AA-guarded per brightness by `app_semantic_colors_test.dart`; [decisions.md § 477](decisions.md)). **Don't add new Tailwind/Material hex literals for a status role**, and never pair a status fill with `Colors.white` — use the token's `on*`. (`colorScheme.error`/`onError` fails AA as a *fill* pair — 3.85:1 — it is a foreground-on-surface colour; see § 477.) The issue #666 V3 sweep migrated the legacy literals, and `status_color_literal_guard_test.dart` (both mobile twins) now fails any banned status hex or `Colors.green`/`amber`/`red` swatch outside its allowlists: the fixed-PNG share cards (`run_share_card`, `route_share_card`, `finisher_certificate_card`, which deliberately don't follow the device theme) plus count-pinned chart/map DATA palettes (pace ramp, heat scales, HR/intensity zone bands, map markers, training-load series) — data colours are not status roles, so they keep fixed hues.
+On the Flutter apps, good/warning/bad/crown colouring comes from the `AppSemanticColors` theme extension in `packages/ui_kit` (`AppSemanticColors.of(context)` / `.ofTheme(theme)` — `success`/`warning`/`danger`/`crown` + their `on*`, AA-guarded per brightness by `app_semantic_colors_test.dart`; [decisions.md § 477](decisions.md)). **Don't add new Tailwind/Material hex literals for a status role**, and never pair a status fill with `Colors.white` — use the token's `on*`. (`colorScheme.error`/`onError` fails AA as a *fill* pair — 3.85:1 — it is a foreground-on-surface colour; see § 477.) The issue #666 V3 sweep migrated the legacy literals, and `status_color_literal_guard_test.dart` (both mobile twins) now fails any banned status hex or `Colors.green`/`amber`/`red` swatch outside its allowlists: the fixed-PNG share cards (`run_share_card`, `route_share_card`, `finisher_certificate_card`, which deliberately don't follow the device theme) plus count-pinned chart/map DATA palettes (pace ramp, heat scales, map markers) — data colours are not status roles, so they keep fixed hues. A base token is used as a bare **foreground** too (the signed readiness delta), so `app_semantic_colors_test.dart` holds each base to 4.5:1 as text on the card and the scaffold, not only 3:1 as a banner fill.
+
+## Chart and band palettes — per brightness, separated by luminance, computed
+
+A DATA palette (chart series, a segmented band) is still bound by WCAG 1.4.11: every mark carrying meaning alone owes **3:1 against the surface it is drawn on**, in *both* brightnesses. One fixed set of hues almost never clears that in both — so a data palette is declared **per brightness** (web: tokens in `app.css`'s three theme blocks; mobile: a `light` / `dark` pair resolved off `theme.brightness`) and the two platforms carry the same values, checked by a lockstep test rather than by comment.
+
+Separate the marks by **luminance, not hue**: a WCAG ratio is computed from relative luminance alone, so a luminance ladder *is* a greyscale ladder, which is what survives red-green colour-vision deficiency. Ramp direction inverts with the background ([decisions.md § 489](decisions.md)).
+
+Pairwise 3:1 between marks is often unreachable — *n* marks need 3^(n−1) and sRGB offers 21:1, so four bands are the ceiling and five are impossible. When it is, say so and pick the mechanism that does work: for a segmented bar, hold every band to 3:1 against the surface and draw the gaps between segments **in that surface colour**, so each boundary is delineated by a separator guaranteed visible against both its neighbours. The current pairs are `--chart-fitness/-fatigue/-form` ↔ `TrainingLoadPalette` and `--zone-1..5` ↔ `hr_zone_palette.dart`.
+
+**Never assert a ratio you did not compute**, in code, comment, or commit message — every figure in this section was measured against the real tokens, and the audit that prompted them was wrong in both directions more than once.
+
+## Chart scales — a normalised plot must still show magnitude
+
+A min/max-normalised series drawn without an axis shows shape and hides scale: CTL 45 and CTL 450 render pixel-identically. Any plot that normalises to its own extremes owes a labelled y-scale — a gutter, round ticks off a 1/2/5×10^n ladder, and gridlines. On web, y labels go in a **CSS gutter beside** the SVG when the chart uses `preserveAspectRatio="none"`; text inside that viewBox is stretched horizontally at every viewport width.
 
 ## Mobile component themes — style in `AppTheme`, not at the call site
 
@@ -564,6 +578,25 @@ Use the shared `smartBack` helper (`$lib/util/smart_back`): it registers an `aft
 ```
 
 Keep the `href` — it is the deep-link / hard-load fallback and the link's semantics. Pass a `match` predicate only when a page must keep its static parent for arrivals from unrelated surfaces; the default (no predicate) pops to any in-app referrer, which is what "back to where I came from" means. The helper is the single home for the `afterNavigate` + `history.back()` idiom that used to be copy-pasted into `runs/[id]`, `clubs/[slug]`, `routes/new`, etc.
+
+## Linking another user's row — never to an owner-scoped route
+
+Several read paths are deliberately scoped to the viewer: `fetchRunById` filters `.eq('user_id', userId)`, so `/runs/[id]` only ever resolves the viewer's own run and renders its "Run not found" empty state for anyone else's — a real, public run presented as deleted. The same is true of every `/gym/[id]`-style owner surface.
+
+So: **a surface that renders someone else's row links to the public twin, not the owner surface.** `/share/run/[id]`, `/share/workout/[id]`, `/share/event/[id]`, `/u/[id]`. The social feed, a club roster, a challenge leaderboard, a segment board, a notification about a followee's activity — all of these are other-people surfaces. Only `/history`, `/runs`, `/dashboard` and friends list the viewer's own rows and may use the owner route.
+
+This is not a cosmetic difference: the failure is silent and looks exactly like a deleted row, so it survives review and reads as correct in a screenshot taken by the owner. `apps/web/src/lib/cross_user_link_guards.test.ts` pins the feed; extend it when a new cross-user surface ships.
+
+The same rule reaches the Go worker's notification deep links — `run_completed` fires at a *followee's followers*, so it links to `/share/run/{id}`. See `docs/features/email.md § Architecture` for the deep-link contract and its route-tree guard.
+
+## Deep links that leave the app must resolve forever
+
+A URL in an email, a push payload, an SMS, or a share sheet is **outside our deploy**. Once sent it cannot be corrected: it sits in an inbox or a notification tray and a later fix only changes what *future* links say. Two rules follow.
+
+1. **Assert that the target resolves, not that the string matches.** A test pinning `base + "/notifications"` passes forever while `/notifications` is not a route. Guards should check the emitted path against the real route tree (`apps/job_worker/internal/notification_link_guard_test.go` walks `apps/web/src/routes` for exactly this) or exercise it end-to-end.
+2. **Changing what a link emits is only half a fix.** Add the redirect route so the already-sent shape keeps resolving, and treat that route as permanent.
+
+Prefer emitting a **stable id** and letting web resolve it (`/events/[id]` → `/clubs/{slug}/events/{id}`) over baking a mutable slug into a link that will outlive the rename.
 
 ## Commit and PR conventions
 

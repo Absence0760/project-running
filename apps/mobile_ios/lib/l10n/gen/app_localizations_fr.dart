@@ -376,6 +376,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get commonClearSearch => 'Effacer la recherche';
 
   @override
+  String get commonCancel => 'Annuler';
+
+  @override
   String get commonDismiss => 'Fermer';
 
   @override
@@ -2418,6 +2421,16 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get runDetailSegDismiss => 'Ignorer';
+
+  @override
+  String get publicRunLiveTitle => 'En direct maintenant';
+
+  @override
+  String get publicRunLiveSub =>
+      'Cette course est toujours en cours. Suivez-la sur le suivi en direct.';
+
+  @override
+  String get publicRunWatchLive => 'Suivre en direct';
 
   @override
   String get publicRunTitle => 'Course';
@@ -5540,8 +5553,20 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get coachArchiveTapToView =>
-      'Toucher pour voir · glisser pour supprimer';
+  String get coachArchiveTapToView => 'Toucher pour voir';
+
+  @override
+  String get coachArchiveActions => 'Actions de la conversation';
+
+  @override
+  String get coachArchiveDelete => 'Supprimer la conversation';
+
+  @override
+  String get coachArchiveDeleteTitle => 'Supprimer cette conversation ?';
+
+  @override
+  String get coachArchiveDeleteBody =>
+      'Cette conversation archivée sera définitivement supprimée.';
 
   @override
   String get coachContextNoPlan => 'Aucun plan';

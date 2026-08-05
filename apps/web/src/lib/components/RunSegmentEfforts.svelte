@@ -271,13 +271,18 @@
 		background: var(--color-bg-tertiary);
 		color: var(--color-text-secondary);
 	}
+	/* Both medal fills are fixed metal hues, so their foregrounds are fixed
+	   too — the pill is opaque and what sits under it never reaches the text.
+	   Silver is a LIGHT metal: it carries dark ink (6.16:1), not the white it
+	   shipped with (2.56:1). Bronze is dark enough for white (5.02:1). Gold
+	   alone is theme-aware, through the shared crown token. */
 	.rank-pill.gold {
-		background: #f59e0b;
-		color: white;
+		background: var(--color-crown);
+		color: var(--color-on-crown);
 	}
 	.rank-pill.silver {
 		background: #94a3b8;
-		color: white;
+		color: #1f2328;
 	}
 	.rank-pill.bronze {
 		background: #b45309;

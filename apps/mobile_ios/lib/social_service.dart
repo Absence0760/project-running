@@ -536,6 +536,46 @@ class SocialService extends ChangeNotifier {
     }
   }
 
+  /// The slug for a club id. Push notifications carry entity UUIDs
+  /// (`/clubs/<club_id>`) while [ClubDetailScreen] is slug-addressed, so a
+  /// tapped push resolves the slug here first. Returns null when the row is
+  /// gone or RLS hides it, so the caller degrades to the clubs hub instead of
+  /// opening a screen that can never load. Never rethrows — a deep link is an
+  /// auxiliary effect.
+  Future<String?> fetchClubSlugById(String clubId) async {
+    try {
+      final row = await _c
+          .from('clubs')
+          .select(ClubRow.colSlug)
+          .eq(ClubRow.colId, clubId)
+          .maybeSingle();
+      final slug = row?[ClubRow.colSlug] as String?;
+      return (slug == null || slug.isEmpty) ? null : slug;
+    } catch (e) {
+      debugPrint('fetchClubSlugById failed: $e');
+      return null;
+    }
+  }
+
+  /// The slug of the club owning an event — [EventDetailScreen] is addressed
+  /// by `(clubSlug, eventId)` but a push only carries the event id. Same
+  /// null-on-miss contract as [fetchClubSlugById].
+  Future<String?> fetchClubSlugForEvent(String eventId) async {
+    try {
+      final row = await _c
+          .from(EventRow.table)
+          .select(EventRow.colClubId)
+          .eq(EventRow.colId, eventId)
+          .maybeSingle();
+      final clubId = row?[EventRow.colClubId] as String?;
+      if (clubId == null || clubId.isEmpty) return null;
+      return fetchClubSlugById(clubId);
+    } catch (e) {
+      debugPrint('fetchClubSlugForEvent failed: $e');
+      return null;
+    }
+  }
+
   Future<List<ClubView>> _enrichClubs(List<dynamic> rawRows) async {
     final rows = rawRows.cast<Map<String, dynamic>>();
     if (rows.isEmpty) return const [];

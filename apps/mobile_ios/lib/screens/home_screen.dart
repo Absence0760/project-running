@@ -13,8 +13,10 @@ import '../local_gear_store.dart';
 import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
-import '../main.dart' show pendingStartWorkout, pendingStartRunWithRoute;
+import '../main.dart'
+    show pendingStartWorkout, pendingStartRunWithRoute, pendingPushTarget;
 import '../preferences.dart';
+import '../push_target.dart';
 import '../race_controller.dart';
 import '../settings_sync.dart';
 import '../shared_file_import.dart' show incomingRouteImport;
@@ -24,12 +26,19 @@ import '../widgets/billing_issue_banner.dart';
 import '../widgets/log_sheet.dart';
 import '../widgets/log_speed_dial.dart';
 import '../widgets/top_banner.dart';
+import 'challenges_screen.dart';
+import 'club_detail_screen.dart';
+import 'clubs_screen.dart';
 import 'dashboard_screen.dart';
+import 'event_detail_screen.dart';
 import 'fitness_hub_screen.dart';
 import '../onboarding.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
 import 'plan_new_screen.dart';
+import 'plans_screen.dart';
+import 'profile_screen.dart';
+import 'public_run_screen.dart';
 import 'route_detail_screen.dart';
 import 'run_screen.dart';
 import 'setup_wizard_screen.dart';
@@ -161,11 +170,16 @@ class _HomeScreenState extends State<HomeScreen>
     pendingStartWorkout.addListener(_onPendingStartWorkout);
     pendingStartRunWithRoute.addListener(_onPendingStartRunWithRoute);
     incomingRouteImport.addListener(_onIncomingRouteImport);
+    pendingPushTarget.addListener(_onPendingPushTarget);
     // A GPX/KML opened while the app was closed sets the notifier during
     // main() before this screen mounts, so drain any already-present value
     // once the first frame is up (the listener only fires on later shares).
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _onIncomingRouteImport());
+    // A notification tap that cold-started the app lands the same way — the
+    // push bridge reads the launch message with no Navigator yet in the tree.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onIncomingRouteImport();
+      _onPendingPushTarget();
+    });
     // Surface the recovery banner from main.dart's in-progress
     // evaluation. Casual #3: this also fires on DISCARD ("Discarded a
     // 38 m partial recording...") — pre-fix that path was silent and
@@ -301,6 +315,85 @@ class _HomeScreenState extends State<HomeScreen>
     if (route == null || !mounted) return;
     pendingStartRunWithRoute.value = null;
     _startRunWithRoute(route);
+  }
+
+  /// A push notification was tapped. Drain the parked target and open the
+  /// surface it names. Every arm is an L4 auxiliary effect — a failure here
+  /// must never take startup or the shell with it, so the whole body is
+  /// guarded. A club or event whose slug won't resolve falls back to the clubs
+  /// hub rather than opening a screen that can never load; the mapper has
+  /// already sent anything it couldn't place to the inbox.
+  Future<void> _onPendingPushTarget() async {
+    final target = pendingPushTarget.value;
+    if (target == null || !mounted) return;
+    pendingPushTarget.value = null;
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      await _openPushTarget(api, target);
+    } catch (e) {
+      debugPrint('push target navigation failed: $e');
+    }
+  }
+
+  Future<void> _openPushTarget(ApiClient api, PushTarget target) async {
+    switch (target.kind) {
+      case PushTargetKind.notifications:
+        final me = api.userId;
+        if (me == null) return;
+        await _pushScreen(ProfileScreen(
+          api: api,
+          userId: me,
+          initialTab: ProfileTab.notifications,
+        ));
+      case PushTargetKind.profile:
+        await _pushScreen(ProfileScreen(api: api, userId: target.id!));
+      case PushTargetKind.run:
+        await _pushScreen(PublicRunScreen(api: api, runId: target.id!));
+      case PushTargetKind.plans:
+        await _pushScreen(PlansScreen(
+          training: widget.training,
+          apiClient: api,
+          runStore: widget.runStore,
+        ));
+      case PushTargetKind.challenges:
+        await _pushScreen(ChallengesScreen(social: widget.social));
+      case PushTargetKind.clubs:
+        await _pushClubsHub(api);
+      case PushTargetKind.club:
+        final slug = await widget.social.fetchClubSlugById(target.id!);
+        if (!mounted) return;
+        if (slug == null) return _pushClubsHub(api);
+        await _pushScreen(ClubDetailScreen(
+          social: widget.social,
+          training: widget.training,
+          apiClient: api,
+          routeStore: widget.routeStore,
+          slug: slug,
+        ));
+      case PushTargetKind.event:
+        final slug = await widget.social.fetchClubSlugForEvent(target.id!);
+        if (!mounted) return;
+        if (slug == null) return _pushClubsHub(api);
+        await _pushScreen(EventDetailScreen(
+          social: widget.social,
+          clubSlug: slug,
+          eventId: target.id!,
+        ));
+    }
+  }
+
+  Future<void> _pushClubsHub(ApiClient api) => _pushScreen(ClubsScreen(
+        social: widget.social,
+        training: widget.training,
+        apiClient: api,
+        routeStore: widget.routeStore,
+      ));
+
+  Future<void> _pushScreen(Widget screen) {
+    if (!mounted) return Future<void>.value();
+    return Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   /// A GPX/KML handed to the app by another app (WhatsApp "Open with" /
@@ -440,6 +533,7 @@ class _HomeScreenState extends State<HomeScreen>
     pendingStartWorkout.removeListener(_onPendingStartWorkout);
     pendingStartRunWithRoute.removeListener(_onPendingStartRunWithRoute);
     incomingRouteImport.removeListener(_onIncomingRouteImport);
+    pendingPushTarget.removeListener(_onPendingPushTarget);
     _pageController.dispose();
     _currentIndex.dispose();
     super.dispose();

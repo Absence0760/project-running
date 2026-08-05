@@ -11,6 +11,7 @@ import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/photo_lightbox.dart';
 import '../widgets/top_banner.dart';
+import 'confirm_destructive.dart';
 
 /// Map a picked filename to the extension we'll store the upload under.
 /// `jpeg` collapses to `jpg` (Storage path stays consistent regardless of
@@ -244,24 +245,13 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
 
   Future<void> _deletePhoto(RoutePhotoRow p) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.routePhotosDeleteTitle),
-            content: Text(l10n.routePhotosDeleteBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.routePhotosCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(l10n.routePhotosDeleteConfirm),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.routePhotosDeleteTitle,
+      body: l10n.routePhotosDeleteBody,
+      confirmLabel: l10n.routePhotosDeleteConfirm,
+      cancelLabel: l10n.routePhotosCancel,
+    );
     if (!ok) return;
     try {
       await widget.api.deleteRoutePhoto(p);

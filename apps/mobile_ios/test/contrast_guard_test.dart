@@ -10,6 +10,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gear_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/gear_screen.dart';
+import '../lib/widgets/run_segment_efforts.dart';
 import '../lib/widgets/workout_review_section.dart';
 
 /// Mobile contrast guard — the Dart counterpart to web's
@@ -138,6 +139,23 @@ void main() {
           expect(ratio, greaterThanOrEqualTo(4.5),
               reason:
                   'hint text onSurfaceVariant contrast $ratio in ${entry.key} fails AA');
+        }
+      });
+    }
+  });
+
+  group('segment rank pills meet WCAG AA', () {
+    // The medal pills are opaque fills carrying labelMedium (12sp) text, so
+    // the 4.5:1 normal-text floor applies to every rank band, in both
+    // brightnesses. Silver shipped as white-on-#94A3B8 (2.56:1); bronze,
+    // which the audit reported as failing alongside it, was already 5.02:1.
+    for (final entry in {'light': AppTheme.light, 'dark': AppTheme.dark}.entries) {
+      test('every rank band in ${entry.key}', () {
+        for (final rank in [1, 2, 3, 4, 10, 11, 50]) {
+          final (bg, fg) = rankPillColors(entry.value, rank);
+          final ratio = _contrast(fg, bg);
+          expect(ratio, greaterThanOrEqualTo(4.5),
+              reason: 'rank #$rank pill contrast $ratio in ${entry.key} fails AA');
         }
       });
     }

@@ -10,9 +10,11 @@
 	import { env } from '$env/dynamic/public';
 	import { buildClubShareCanonical } from '$lib/share/share_club_meta';
 	import { supabase } from '$lib/core/supabase';
+	import { isEntityId } from '$lib/core/entity_id';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		fetchClubBySlug,
+		fetchClubSlugById,
 		fetchUpcomingEvents,
 		fetchPastEvents,
 		fetchClubMembers,
@@ -161,10 +163,31 @@
 	let canManageEvents = $derived(isAdmin || club?.viewer_role === 'event_organiser');
 	let isMember = $derived(club?.viewer_role != null);
 
-	async function load() {
+	// `target` is passed explicitly through the id → slug forward below rather
+	// than re-read from the reactive `slug`: after `goto` resolves, the derived
+	// has not necessarily propagated yet, so a recursive pass that re-read it
+	// could see the uuid again, forward again, and never settle — leaving the
+	// canonical URL on screen with the club still null.
+	async function load(target: string = slug) {
 		loading = true;
-		club = await fetchClubBySlug(slug);
+		club = await fetchClubBySlug(target);
 		if (!club) {
+			// The notification worker addresses a club by id — its row
+			// projection has no slug to join — so a uuid can arrive in this
+			// slot from an email or push CTA. Resolve it and forward to the
+			// canonical slug URL rather than showing "club not found".
+			const canonical = isEntityId(target) ? await fetchClubSlugById(target) : null;
+			if (canonical && canonical !== target) {
+				await goto(`/clubs/${canonical}`, { replaceState: true });
+				// Same route, different param: SvelteKit reuses this component
+				// rather than remounting it, so onMount — the only thing that
+				// calls load() on arrival — never fires again and the page
+				// would sit on "Loading club…" forever. Re-enter under the now
+				// canonical slug. Bounded: only a uuid forwards, and a slug is
+				// never a uuid, so the second pass cannot forward again.
+				await load(canonical);
+				return;
+			}
 			loading = false;
 			return;
 		}

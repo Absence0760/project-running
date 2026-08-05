@@ -26,6 +26,7 @@ import '../route_overlap.dart';
 import '../routing.dart';
 import '../social_service.dart';
 import '../run_stats.dart' show haversineMetres;
+import '../widgets/confirm_destructive.dart';
 import '../widgets/confirm_discard.dart';
 import '../widgets/live_run_map.dart'
     show
@@ -698,27 +699,14 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     // Confirm before discarding a route the user has actually started — Undo
     // only steps back one waypoint, so a stray Clear tap is total work loss.
     if (_waypoints.length >= 2) {
-      final ok = await showDialog<bool>(
-            context: context,
-            builder: (ctx) {
-              final l = AppLocalizations.of(ctx);
-              return AlertDialog(
-                title: Text(l.routeBuilderClearConfirmTitle),
-                content: Text(l.routeBuilderClearConfirmBody),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: Text(l.routeBuilderCancel),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: Text(l.routeBuilderClear),
-                  ),
-                ],
-              );
-            },
-          ) ??
-          false;
+      final l = AppLocalizations.of(context);
+      final ok = await confirmDestructive(
+        context,
+        title: l.routeBuilderClearConfirmTitle,
+        body: l.routeBuilderClearConfirmBody,
+        confirmLabel: l.routeBuilderClear,
+        cancelLabel: l.routeBuilderCancel,
+      );
       if (!ok) return;
     }
     _segmentCache.clear();

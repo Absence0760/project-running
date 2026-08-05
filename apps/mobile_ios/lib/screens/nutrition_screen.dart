@@ -1146,15 +1146,25 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   color: ringColor,
                 ),
               ),
+              // The value lives inside the arc, so the ring bounds it: a
+              // four-digit calorie count already fills 50 of the 56 px at
+              // 1.0x, and at 2x it was being wrapped and cropped.
               if (over)
-                Text('+${r.budget!.over}',
-                    style: theme.textTheme.labelMedium
-                        ?.copyWith(color: theme.colorScheme.error))
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('+${r.budget!.over}',
+                      style: theme.textTheme.labelMedium
+                          ?.copyWith(color: theme.colorScheme.error)),
+                )
               else if (reached)
                 Icon(Icons.check,
                     size: 18, color: theme.colorScheme.primary)
               else
-                Text('${r.consumed}', style: theme.textTheme.labelMedium),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('${r.consumed}',
+                      style: theme.textTheme.labelMedium),
+                ),
             ],
           ),
         ),
@@ -1388,6 +1398,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
     // Bars + the goal reference line share one scale; include the goal so its
     // line stays on-chart even when no logged day reaches it.
     const barArea = 72.0;
+    // The lane under the bars holds a bodySmall day label, so it is a
+    // text-derived dimension and has to track the OS text scale: a fixed 24
+    // overflowed the chart by 12 px per column at 2x.
+    final labelLane = MediaQuery.textScalerOf(context).scale(24.0);
     final maxCal = [
       1.0,
       days.map((d) => d.calories).fold(0.0, math.max),
@@ -1416,14 +1430,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: barArea + 24,
+              height: barArea + labelLane,
               child: Stack(
                 children: [
                   if (goal != null)
                     Positioned(
                       left: 0,
                       right: 0,
-                      bottom: 20 + (goal / maxCal) * barArea,
+                      bottom: (labelLane - 4) + (goal / maxCal) * barArea,
                       child: Tooltip(
                         message: '${l10n.nutritionGoalLine}: $goal kcal',
                         child: Container(

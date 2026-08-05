@@ -2,6 +2,7 @@
 	import RunShareView from '$lib/components/RunShareView.svelte';
 	import SharePageShell from '$lib/components/SharePageShell.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { isLiveBroadcast } from '$lib/runs/live_broadcast';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		buildRunJsonLd,
@@ -42,6 +43,10 @@
 		(((data.run?.metadata as Record<string, unknown> | null)?.title as string) ?? '').trim()
 	);
 	let hasRun = $derived(!!data.run);
+	// A run still being broadcast is a 0 km / 0:00 stub here — without this the
+	// page presented it as a finished run of nothing and gave the spectator no
+	// route to the tracker they actually came for.
+	let live = $derived(isLiveBroadcast(data.run));
 </script>
 
 <svelte:head>
@@ -76,6 +81,14 @@
 				{#if heroDate}{heroDate}{/if}
 			</p>
 		</section>
+
+		{#if live}
+			<section class="live-cta" data-testid="share-run-live-cta">
+				<p class="kicker"><span class="live-dot" aria-hidden="true"></span>{m('shareRun.liveKicker')}</p>
+				<p class="live-sub">{m('shareRun.liveSub')}</p>
+				<a class="btn btn-primary" href="/live/{data.id}">{m('shareRun.liveWatch')}</a>
+			</section>
+		{/if}
 
 		<main class="content">
 			<RunShareView runId={data.id} headerless hideAnonCta />
@@ -142,6 +155,35 @@
 	.dot {
 		color: var(--color-text-tertiary);
 		margin: 0 0.3rem;
+	}
+
+	.live-cta {
+		max-width: 48rem;
+		margin: 0 auto;
+		width: 100%;
+		padding: var(--space-lg) var(--space-md);
+		text-align: center;
+		background: var(--color-success-light);
+		border-block: 1px solid var(--color-success);
+	}
+
+	.live-cta .kicker {
+		color: var(--color-success-text);
+	}
+
+	.live-dot {
+		display: inline-block;
+		inline-size: 0.5rem;
+		block-size: 0.5rem;
+		border-radius: 50%;
+		background: var(--color-success);
+		margin-inline-end: 0.4rem;
+	}
+
+	.live-sub {
+		font-size: 0.95rem;
+		color: var(--color-text-secondary);
+		margin: 0 0 var(--space-md);
 	}
 
 	.content {

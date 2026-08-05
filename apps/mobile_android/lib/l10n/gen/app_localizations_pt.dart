@@ -376,6 +376,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get commonClearSearch => 'Limpar busca';
 
   @override
+  String get commonCancel => 'Cancelar';
+
+  @override
   String get commonDismiss => 'Dispensar';
 
   @override
@@ -2407,6 +2410,16 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runDetailSegDismiss => 'Dispensar';
+
+  @override
+  String get publicRunLiveTitle => 'Ao vivo agora';
+
+  @override
+  String get publicRunLiveSub =>
+      'Esta corrida ainda está a decorrer. Acompanhe no rastreador ao vivo.';
+
+  @override
+  String get publicRunWatchLive => 'Ver ao vivo';
 
   @override
   String get publicRunTitle => 'Corrida';
@@ -5527,7 +5540,20 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get coachArchiveTapToView => 'Toque para ver · deslize para excluir';
+  String get coachArchiveTapToView => 'Toque para ver';
+
+  @override
+  String get coachArchiveActions => 'Ações da conversa';
+
+  @override
+  String get coachArchiveDelete => 'Excluir conversa';
+
+  @override
+  String get coachArchiveDeleteTitle => 'Excluir esta conversa?';
+
+  @override
+  String get coachArchiveDeleteBody =>
+      'Esta conversa arquivada será excluída definitivamente.';
 
   @override
   String get coachContextNoPlan => 'Sem plano';
@@ -12860,6 +12886,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get commonClearSearch => 'Limpar busca';
 
   @override
+  String get commonCancel => 'Cancelar';
+
+  @override
   String get commonDismiss => 'Dispensar';
 
   @override
@@ -14890,6 +14919,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailSegDismiss => 'Dispensar';
+
+  @override
+  String get publicRunLiveTitle => 'Ao vivo agora';
+
+  @override
+  String get publicRunLiveSub =>
+      'Esta corrida ainda está em andamento. Acompanhe no rastreador ao vivo.';
+
+  @override
+  String get publicRunWatchLive => 'Assistir ao vivo';
 
   @override
   String get publicRunTitle => 'Corrida';
@@ -18010,7 +18049,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get coachArchiveTapToView => 'Toque para ver · deslize para excluir';
+  String get coachArchiveTapToView => 'Toque para ver';
+
+  @override
+  String get coachArchiveActions => 'Ações da conversa';
+
+  @override
+  String get coachArchiveDelete => 'Excluir conversa';
+
+  @override
+  String get coachArchiveDeleteTitle => 'Excluir esta conversa?';
+
+  @override
+  String get coachArchiveDeleteBody =>
+      'Esta conversa arquivada será excluída definitivamente.';
 
   @override
   String get coachContextNoPlan => 'Sem plano';

@@ -531,6 +531,10 @@
   "@commonClearSearch": {
     "description": "Generic tooltip for a clear-search icon button"
   },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Generic cancel action for a destructive-confirm dialog whose surface has no cancel label of its own"
+  },
   "commonDismiss": "Dismiss",
   "@commonDismiss": {
     "description": "Generic tooltip for a dismiss / close icon button"
@@ -3182,6 +3186,18 @@
   "runDetailSegDismiss": "Dismiss",
   "@runDetailSegDismiss": {
     "description": "Tooltip on the segment card's close button"
+  },
+  "publicRunLiveTitle": "Live right now",
+  "@publicRunLiveTitle": {
+    "description": "Heading on the public run view when the run is still being broadcast live"
+  },
+  "publicRunLiveSub": "This run is still in progress. Follow it on the live tracker.",
+  "@publicRunLiveSub": {
+    "description": "Sub-line explaining why the public run view shows no distance or time yet"
+  },
+  "publicRunWatchLive": "Watch live",
+  "@publicRunWatchLive": {
+    "description": "Button that opens the live spectator screen for an in-progress run"
   },
   "publicRunTitle": "Run",
   "@publicRunTitle": {
@@ -7409,9 +7425,25 @@
       }
     }
   },
-  "coachArchiveTapToView": "Tap to view · swipe to delete",
+  "coachArchiveTapToView": "Tap to view",
   "@coachArchiveTapToView": {
     "description": "Drawer subtitle on an archived thread row"
+  },
+  "coachArchiveActions": "Conversation actions",
+  "@coachArchiveActions": {
+    "description": "Tooltip for the overflow menu on an archived coach conversation row"
+  },
+  "coachArchiveDelete": "Delete conversation",
+  "@coachArchiveDelete": {
+    "description": "Overflow action + confirm label for deleting an archived coach conversation"
+  },
+  "coachArchiveDeleteTitle": "Delete this conversation?",
+  "@coachArchiveDeleteTitle": {
+    "description": "Title of the delete-archived-conversation confirm dialog"
+  },
+  "coachArchiveDeleteBody": "This archived conversation is deleted for good.",
+  "@coachArchiveDeleteBody": {
+    "description": "Body of the delete-archived-conversation confirm dialog"
   },
   "coachContextNoPlan": "No plan",
   "@coachContextNoPlan": {

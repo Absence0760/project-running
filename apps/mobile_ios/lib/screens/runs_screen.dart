@@ -2705,11 +2705,17 @@ class _MonthGrid extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Text(
-              '$day',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onPrimary,
-                fontWeight: FontWeight.w600,
+            // The dot's diameter comes from the seven-column grid cell, not
+            // from its label, so the day number is bounded by the graphic:
+            // bodyMedium needs 40 px at 2x OS text scale inside a 36 px dot.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '$day',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -2729,11 +2735,14 @@ class _MonthGrid extends StatelessWidget {
                   )
                 : null,
             alignment: Alignment.center,
-            child: Text(
-              '$day',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: inRange ? cs.onPrimaryContainer : cs.onSurface,
-                fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '$day',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: inRange ? cs.onPrimaryContainer : cs.onSurface,
+                  fontWeight: isToday ? FontWeight.w600 : FontWeight.w400,
+                ),
               ),
             ),
           ),

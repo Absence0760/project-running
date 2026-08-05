@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:api_client/api_client.dart';
@@ -3958,14 +3959,28 @@ class _RunScreenState extends State<RunScreen> {
                               ),
                             ],
                           ),
+                          // The circle is a fixed 140 px, so its label is
+                          // bounded by the graphic. "START" already fills
+                          // 117.5 of the 124 px interior in English at 1.0x —
+                          // French "DÉMARRER" and German "STARTEN" were being
+                          // broken mid-word, and 2x cropped every locale.
                           child: Center(
-                            child: Text(
-                              l10n.runStart,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                color: semantic.onSuccess,
-                                letterSpacing: 1.5,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  l10n.runStart,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: semantic.onSuccess,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -4138,44 +4153,28 @@ class _RunScreenState extends State<RunScreen> {
         // during countdown.
         if (!isCountdown) ...[
 
-        // Structured-workout band — only mounts when the run was
-        // started from a planned workout. Reads through its own
-        // ValueListenable so the band rebuilds on transitions /
-        // progress without forcing a Stack-wide rebuild.
-        if (_workoutRunner != null)
-          Positioned(
-            top: MediaQuery.of(context).padding.top,
-            left: 0,
-            right: 0,
-            child: WorkoutExecutionBand(
-              state: _workoutBand,
-              onSkip: _onSkipWorkoutStep,
-              onRewind: _onRewindWorkoutStep,
-              onAbandon: _onAbandonWorkout,
-            ),
-          ),
-
-        // Top overlay band — the two badges then every conditional banner
-        // composed in ONE Positioned Column, mirroring the bottom-anchored
-        // utility stack below: fixed per-widget offsets overlapped the
-        // moment two showed at once (off-route + GPS-lost were both pinned
-        // to top: 60, and the centred cards crossed the top: 56 badges).
-        Positioned(
-          top: 56,
-          left: 12,
-          right: 12,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Persistent live-share indicator on the left while a
-              // broadcast is active (issue #613) — standing confirmation
-              // the feed is on, and the only mid-run tap target to
-              // re-share the link or stop sharing. "X to go" badge on the
-              // right when a route is selected. Each reads its own
-              // notifier so it updates at attach/detach or GPS rate
-              // without a Stack-wide rebuild.
-              Padding(
+        // Every top-anchored overlay in ONE column — see [RunTopOverlay].
+        RunTopOverlay(
+          // Structured-workout band — only mounts when the run was
+          // started from a planned workout. Reads through its own
+          // ValueListenable so the band rebuilds on transitions /
+          // progress without forcing a Stack-wide rebuild.
+          workoutBand: _workoutRunner == null
+              ? null
+              : WorkoutExecutionBand(
+                  state: _workoutBand,
+                  onSkip: _onSkipWorkoutStep,
+                  onRewind: _onRewindWorkoutStep,
+                  onAbandon: _onAbandonWorkout,
+                ),
+          // Persistent live-share indicator on the left while a
+          // broadcast is active (issue #613) — standing confirmation
+          // the feed is on, and the only mid-run tap target to
+          // re-share the link or stop sharing. "X to go" badge on the
+          // right when a route is selected. Each reads its own
+          // notifier so it updates at attach/detach or GPS rate
+          // without a Stack-wide rebuild.
+          badges: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -4231,26 +4230,21 @@ class _RunScreenState extends State<RunScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 4),
-              ValueListenableBuilder<_LiveStats>(
-                valueListenable: _statsNotifier,
-                builder: (context, stats, _) {
-                  final off = stats.offRouteDistance;
-                  return RunTopBanners(
-                    offRouteMetres:
-                        off != null && off > _offRouteThresholdMetres
-                            ? off
-                            : null,
-                    permissionLost: _permissionLost,
-                    gpsLost: _gpsLost,
-                    weakGps: _weakGps,
-                    safetyNudgeVisible: _safetyNudgeVisible,
-                    onSafetyNudgeShare: _onSafetyNudgeShare,
-                    onSafetyNudgeDismiss: _dismissSafetyNudge,
-                  );
-                },
-              ),
-            ],
+          banners: ValueListenableBuilder<_LiveStats>(
+            valueListenable: _statsNotifier,
+            builder: (context, stats, _) {
+              final off = stats.offRouteDistance;
+              return RunTopBanners(
+                offRouteMetres:
+                    off != null && off > _offRouteThresholdMetres ? off : null,
+                permissionLost: _permissionLost,
+                gpsLost: _gpsLost,
+                weakGps: _weakGps,
+                safetyNudgeVisible: _safetyNudgeVisible,
+                onSafetyNudgeShare: _onSafetyNudgeShare,
+                onSafetyNudgeDismiss: _dismissSafetyNudge,
+              );
+            },
           ),
         ),
         // Bottom-anchored utility stack above the stats overlay: the
@@ -4973,6 +4967,62 @@ class _TargetMarker {
 /// (issue #666 V10; the bottom-anchored utility stack got the same
 /// treatment first). Public so the composition is widget-testable without
 /// pumping the whole run screen.
+/// Every top-anchored recording overlay, composed into ONE `Positioned`
+/// column so their real heights stack.
+///
+/// Fixed per-widget offsets overlapped the moment two showed at once: the
+/// off-route and GPS-lost banners were both pinned to `top: 60` and the
+/// centred cards crossed the `top: 56` badges (issue #666 V10), and the
+/// workout band — anchored separately at the status-bar inset — sat on top of
+/// the badge row whenever a run was started from a planned workout. Adding a
+/// new top overlay means adding a slot here, not another `Positioned`.
+///
+/// [Positioned] is returned rather than wrapped around this widget so the
+/// single anchor lives with the composition; it still applies to the host
+/// [Stack] because parent-data widgets walk up to the nearest render object.
+class RunTopOverlay extends StatelessWidget {
+  const RunTopOverlay({
+    super.key,
+    this.workoutBand,
+    required this.badges,
+    required this.banners,
+  });
+
+  /// The structured-workout band, or null when no workout is armed.
+  final WorkoutExecutionBand? workoutBand;
+
+  /// The live-share indicator + route-remaining badge row.
+  final Widget badges;
+
+  /// The conditional banner stack ([RunTopBanners]).
+  final Widget banners;
+
+  /// Clearance from the top of the screen. The column carries the whole top
+  /// band now, so it takes the larger of this and the device's status-bar
+  /// inset — the band used to anchor on the inset itself and must not end up
+  /// under a tall cutout.
+  static const topInset = 56.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: math.max(topInset, MediaQuery.of(context).padding.top),
+      left: 12,
+      right: 12,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (workoutBand != null) workoutBand!,
+          badges,
+          const SizedBox(height: 4),
+          banners,
+        ],
+      ),
+    );
+  }
+}
+
 class RunTopBanners extends StatelessWidget {
   const RunTopBanners({
     super.key,

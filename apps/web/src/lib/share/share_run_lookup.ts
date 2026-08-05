@@ -22,6 +22,10 @@ export interface SharedRun {
 	started_at: string | null;
 	source: string | null;
 	metadata: Record<string, unknown> | null;
+	/// Positive live-finish marker (migration 20270427_001). Together with a
+	/// zero `duration_s` it is what tells a share page the run is happening
+	/// RIGHT NOW rather than being a finished 0 km one.
+	concluded_at: string | null;
 }
 
 export interface SharedRunLookup {
@@ -54,7 +58,9 @@ export async function lookupSharedRun(
 		});
 		const { data: run, error } = await supabase
 			.from('public_runs')
-			.select('id, user_id, distance_m, duration_s, started_at, source, metadata')
+			.select(
+				'id, user_id, distance_m, duration_s, started_at, source, metadata, concluded_at',
+			)
 			.eq('id', id)
 			.maybeSingle();
 		// A non-null error (as opposed to a clean data:null not-found) means

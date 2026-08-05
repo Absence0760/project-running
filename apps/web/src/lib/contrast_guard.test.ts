@@ -290,3 +290,225 @@ test('status text-on-tint keeps each --color-<status> mix share AA-safe in both 
 			offenders.join('\n'),
 	);
 });
+
+// The leaderboard medal pills (RunSegmentEfforts) and the segment-crown icon.
+// Gold rides the theme-aware --color-crown / --color-on-crown pair (mobile's
+// AppSemanticColors.crown/onCrown, mirrored); silver and bronze are fixed
+// metal fills whose foregrounds are therefore fixed too. Every pair is text on
+// an opaque fill, so the 4.5:1 normal-text floor applies; --color-crown is
+// additionally used as a bare icon colour, which is WCAG 1.4.11 non-text at
+// 3:1. The pre-fix values: gold #f59e0b + white 2.15:1, silver #94a3b8 + white
+// 2.56:1, crown icon #f5b30a on the light surface 1.85:1.
+const AA_NON_TEXT = 3;
+for (const { label, marker } of THEMES) {
+	test(`crown token pairs AA as pill text and 3:1 as an icon — ${label}`, () => {
+		const crown = resolveToken(marker, 'color-crown');
+		const onCrown = resolveToken(marker, 'color-on-crown');
+		const pill = contrastRatio(onCrown, crown);
+		assert.ok(
+			pill >= AA_NORMAL,
+			`--color-on-crown (${onCrown}) on --color-crown (${crown}) is ${pill.toFixed(2)}:1 in ${label}; the rank-1 pill needs >=${AA_NORMAL}:1.`,
+		);
+		for (const surfaceName of ['color-surface', 'color-bg']) {
+			const surface = resolveToken(marker, surfaceName);
+			const icon = contrastRatio(crown, surface);
+			assert.ok(
+				icon >= AA_NON_TEXT,
+				`--color-crown (${crown}) on --${surfaceName} (${surface}) is ${icon.toFixed(2)}:1 in ${label}; the crown icon carries meaning alone and needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+			);
+		}
+	});
+}
+
+test('fixed medal rank pills meet WCAG AA', () => {
+	const source = readFileSync(
+		resolve(__dirname, 'components/RunSegmentEfforts.svelte'),
+		'utf-8',
+	);
+	for (const medal of ['silver', 'bronze']) {
+		const rule = source.match(
+			new RegExp(`\\.rank-pill\\.${medal}\\s*\\{([^}]*)\\}`),
+		);
+		assert.ok(rule, `RunSegmentEfforts.svelte has no .rank-pill.${medal} rule`);
+		const body = rule![1];
+		const bg = body.match(/background:\s*(#[0-9A-Fa-f]{6})/)?.[1];
+		const fgRaw = body.match(/(?<![a-z-])color:\s*(#[0-9A-Fa-f]{6}|white)/)?.[1];
+		assert.ok(bg, `.rank-pill.${medal} has no literal background`);
+		assert.ok(fgRaw, `.rank-pill.${medal} has no literal colour`);
+		const fg = fgRaw === 'white' ? '#FFFFFF' : fgRaw!;
+		const ratio = contrastRatio(fg, bg!);
+		assert.ok(
+			ratio >= AA_NORMAL,
+			`.rank-pill.${medal} renders ${fg} on ${bg} = ${ratio.toFixed(2)}:1; WCAG AA requires >=${AA_NORMAL}:1.`,
+		);
+	}
+});
+
+// Fitness / Fatigue / Form chart series. Each stroke is a graphical object
+// carrying meaning alone, so each owes WCAG 1.4.11's 3:1 to the surface it is
+// drawn on, in every theme. The single fixed trio this replaced was 2.57:1
+// (indigo on the dark surface) and 2.15:1 (amber on white). Pairwise 3:1 across
+// three series is unreachable once each also owes 3:1 to its surface, so what
+// is pinned between them is a strictly monotone LUMINANCE ladder — that, not
+// hue, is what survives greyscale and red-green colour-vision deficiency.
+const CHART_SERIES = ['chart-fitness', 'chart-fatigue', 'chart-form'];
+for (const { label, marker } of THEMES) {
+	test(`training-load series clear 3:1 and separate by luminance — ${label}`, () => {
+		const hexes = CHART_SERIES.map((n) => ({ name: n, hex: resolveToken(marker, n) }));
+		for (const surfaceName of ['color-surface', 'color-bg']) {
+			const surface = resolveToken(marker, surfaceName);
+			for (const { name, hex } of hexes) {
+				const ratio = contrastRatio(hex, surface);
+				assert.ok(
+					ratio >= AA_NON_TEXT,
+					`--${name} (${hex}) on --${surfaceName} (${surface}) is ${ratio.toFixed(2)}:1 in ${label}; a plotted series needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+				);
+			}
+		}
+		assert.equal(new Set(hexes.map((h) => h.hex)).size, 3, `series hues collide in ${label}`);
+		const ladder = hexes.map((h) => relativeLuminance(h.hex)).sort((a, b) => a - b);
+		for (let i = 0; i + 1 < ladder.length; i++) {
+			const ratio = (ladder[i + 1] + 0.05) / (ladder[i] + 0.05);
+			assert.ok(
+				ratio >= 1.7,
+				`adjacent series separate by only ${ratio.toFixed(2)}:1 in ${label}; the luminance ladder is what carries the plot in greyscale.`,
+			);
+		}
+	});
+}
+
+// The mobile TrainingLoadPalette is the same palette by value — a Dart file
+// cannot import a CSS custom property, so the lockstep is checked here.
+test('training-load series match mobile TrainingLoadPalette', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../mobile_android/lib/widgets/training_load_chart.dart'),
+		'utf-8',
+	);
+	const expected: Array<[string, string, string]> = [
+		[':root {', 'light', 'chart-fitness'],
+		[':root {', 'light', 'chart-fatigue'],
+		[':root {', 'light', 'chart-form'],
+		[':root[data-theme="dark"]', 'dark', 'chart-fitness'],
+		[':root[data-theme="dark"]', 'dark', 'chart-fatigue'],
+		[':root[data-theme="dark"]', 'dark', 'chart-form'],
+	];
+	for (const [marker, brightness, token] of expected) {
+		const series = token.replace('chart-', '');
+		const body = dart.match(
+			new RegExp(`static const ${brightness} = TrainingLoadPalette\\(([\\s\\S]*?)\\n  \\);`),
+		);
+		assert.ok(body, `training_load_chart.dart has no ${brightness} palette`);
+		const hex = body![1].match(new RegExp(`${series}: Color\\(0xFF([0-9A-Fa-f]{6})\\)`))?.[1];
+		assert.ok(hex, `${brightness} palette has no ${series} colour`);
+		assert.equal(
+			resolveToken(marker, token).toUpperCase(),
+			`#${hex!.toUpperCase()}`,
+			`--${token} in ${marker} has drifted from TrainingLoadPalette.${brightness}.${series}.`,
+		);
+	}
+});
+
+// The five heart-rate zone bands. Each band owes WCAG 1.4.11's 3:1 to the
+// surface behind the bar — that is exactly what makes the surface-coloured gap
+// between segments visible against every band, which is how the boundaries are
+// delineated at all: four steps of 3:1 need 81:1 and sRGB offers 21:1, so five
+// pairwise-3:1 bands do not exist. What is pinned between the bands instead is
+// a strictly monotone LUMINANCE ladder, because a green-to-red ramp collapses
+// under red-green colour-vision deficiency. The two palettes this replaced had
+// z1 and z5 at 1.03:1 (identical in greyscale) and 2.11:1 respectively.
+const ZONE_TOKENS = ['zone-1', 'zone-2', 'zone-3', 'zone-4', 'zone-5'];
+for (const { label, marker } of THEMES) {
+	test(`HR zone bands clear 3:1 and step monotonically — ${label}`, () => {
+		const hexes = ZONE_TOKENS.map((n) => resolveToken(marker, n));
+		for (const surfaceName of ['color-surface', 'color-bg']) {
+			const surface = resolveToken(marker, surfaceName);
+			hexes.forEach((hex, i) => {
+				const ratio = contrastRatio(hex, surface);
+				assert.ok(
+					ratio >= AA_NON_TEXT,
+					`--${ZONE_TOKENS[i]} (${hex}) on --${surfaceName} (${surface}) is ${ratio.toFixed(2)}:1 in ${label}; a band the separator has to show through needs >=${AA_NON_TEXT}:1.`,
+				);
+			});
+		}
+		const ls = hexes.map(relativeLuminance);
+		const rising = ls[1] > ls[0];
+		for (let i = 0; i + 1 < ls.length; i++) {
+			assert.ok(
+				rising ? ls[i + 1] > ls[i] : ls[i + 1] < ls[i],
+				`the zone ramp is not monotone in ${label} at z${i + 1}->z${i + 2}; the ordering is what survives greyscale.`,
+			);
+			const step = rising
+				? (ls[i + 1] + 0.05) / (ls[i] + 0.05)
+				: (ls[i] + 0.05) / (ls[i + 1] + 0.05);
+			assert.ok(
+				step >= 1.35,
+				`z${i + 1}->z${i + 2} steps only ${step.toFixed(2)}:1 in ${label}.`,
+			);
+		}
+	});
+}
+
+// The run-detail band must read the tokens, not a literal — the two mobile
+// surfaces and this one carried three different lists before.
+test('run-detail HR zone defs read the shared zone tokens', () => {
+	const page = readFileSync(
+		resolve(__dirname, '../routes/runs/[id]/+page.svelte'),
+		'utf-8',
+	);
+	for (let i = 1; i <= 5; i++) {
+		assert.ok(
+			page.includes(`color: 'var(--zone-${i})'`),
+			`runs/[id] zoneDefs entry ${i} does not read --zone-${i}.`,
+		);
+	}
+});
+
+// Mobile cannot import a CSS custom property, so the lockstep is checked here.
+test('HR zone tokens match the mobile hr_zone_palette', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../mobile_android/lib/hr_zone_palette.dart'),
+		'utf-8',
+	);
+	for (const [marker, symbol] of [
+		[':root {', 'hrZoneColoursLight'],
+		[':root[data-theme="dark"]', 'hrZoneColoursDark'],
+	] as const) {
+		const body = dart.match(
+			new RegExp(`const ${symbol} = <Color>\\[([\\s\\S]*?)\\];`),
+		);
+		assert.ok(body, `hr_zone_palette.dart has no ${symbol}`);
+		const hexes = [...body![1].matchAll(/Color\(0xFF([0-9A-Fa-f]{6})\)/g)].map(
+			(m) => `#${m[1].toUpperCase()}`,
+		);
+		assert.equal(hexes.length, 5, `${symbol} does not carry five bands`);
+		hexes.forEach((hex, i) => {
+			assert.equal(
+				resolveToken(marker, `zone-${i + 1}`).toUpperCase(),
+				hex,
+				`--zone-${i + 1} in ${marker} has drifted from ${symbol}[${i}].`,
+			);
+		});
+	}
+});
+
+// --color-success-text / --color-danger-text. Same shape as the ACCENT_TEXT
+// trio above but checked on the plain surfaces rather than a chip tint: the
+// signed readiness delta is bare text on the card. The base tokens they
+// replace are 3.28:1 (success on white) and 4.14:1 (danger on the page) —
+// tuned for fills and borders, below AA as text. They carry the same values as
+// mobile's AppSemanticColors so the delta reads identically on both platforms.
+for (const { label, marker } of THEMES) {
+	test(`success/danger -text tokens meet WCAG AA as text — ${label}`, () => {
+		for (const name of ['color-success-text', 'color-danger-text']) {
+			const fg = resolveToken(marker, name);
+			for (const surfaceName of SURFACE_TOKENS) {
+				const surface = resolveToken(marker, surfaceName);
+				const ratio = contrastRatio(fg, surface);
+				assert.ok(
+					ratio >= AA_NORMAL,
+					`--${name} (${fg}) on --${surfaceName} (${surface}) is ${ratio.toFixed(2)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
+				);
+			}
+		}
+	});
+}

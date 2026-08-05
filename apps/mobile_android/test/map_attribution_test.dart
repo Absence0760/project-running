@@ -201,6 +201,51 @@ void main() {
       expect(find.byType(GestureDetector), findsNWidgets(2));
       expect(find.bySemanticsLabel('Map data attribution'), findsOneWidget);
     });
+
+    // Round 7 shipped the strip at fontSize 10 — under the 11 px micro-label
+    // floor § 482 declared — on text that is also a link, and left the call
+    // open. Round 8 settles it: the floor applies, and the basemap-derived
+    // ink (§ 491) is what must not be swapped for a theme colour.
+    testWidgets('credit type sits at the micro-label floor', (tester) async {
+      await _pump(
+        tester,
+        MapAttribution(
+          darkBasemap: true,
+          creditsOverride: basemapCreditsFor(const {'MAPTILER_KEY': 'abc'}),
+        ),
+      );
+      for (final label in ['© MapTiler', '© OpenStreetMap contributors']) {
+        final style = tester.widget<Text>(find.text(label)).style!;
+        expect(style.fontSize, greaterThanOrEqualTo(11.0),
+            reason: '"$label" renders under the 11 px floor');
+        expect(style.color, attributionInk(darkBasemap: true),
+            reason: '"$label" must ink from the basemap, not the theme');
+      }
+    });
+
+    testWidgets('each credit link reaches the 24 dp minimum target',
+        (tester) async {
+      // WCAG 2.2 SC 2.5.8. The two links sit 6 dp apart, so the
+      // undersized-target spacing exception cannot be claimed.
+      for (final dark in const [true, false]) {
+        await _pump(
+          tester,
+          MapAttribution(
+            darkBasemap: dark,
+            creditsOverride: basemapCreditsFor(const {'MAPTILER_KEY': 'abc'}),
+          ),
+        );
+        final links = find.byType(GestureDetector);
+        expect(links, findsNWidgets(2));
+        for (var i = 0; i < 2; i++) {
+          final size = tester.getSize(links.at(i));
+          expect(size.height, greaterThanOrEqualTo(24.0),
+              reason: 'link $i is ${size.height} dp tall (darkBasemap=$dark)');
+          expect(size.width, greaterThanOrEqualTo(24.0),
+              reason: 'link $i is ${size.width} dp wide (darkBasemap=$dark)');
+        }
+      }
+    });
   });
 
   group('the credit stays legible over whatever the basemap paints', () {

@@ -339,7 +339,16 @@ func renderNotificationEmail(n NotificationRow, baseURL, locale string) Email {
 }
 
 // pathForKind maps a notification kind to its deep link. One place so a new
-// kind is a single edit alongside its catalogue entry.
+// kind is a single edit alongside its catalogue entry, shared by the email,
+// web-push and native-push renders.
+//
+// Every arm must yield a path that resolves against apps/web/src/routes —
+// notification_link_guard_test.go asserts that against the real route tree, and
+// requires an explicit case per kind so a new kind can't inherit the fallback
+// silently. The projection carries only the row's own FK columns, so anything
+// needing a join (an event's club slug, a club's slug) is emitted as the stable
+// id URL and resolved by web; see the id-resolution routes /events/[id] and the
+// UUID fallback on /clubs/[slug].
 func pathForKind(kind, base string, n NotificationRow) string {
 	switch kind {
 	case "event_reminder", "event_cancel", "event_rsvp":
@@ -353,19 +362,29 @@ func pathForKind(kind, base string, n NotificationRow) string {
 		return base + "/messages"
 	case "club_post":
 		return clubPath(base, n)
-	case "run_completed", "kudos", "comment", "comment_reply":
+	case "kudos", "comment", "comment_reply":
+		// The recipient owns the run these fire on, so the owner-scoped
+		// /runs/{id} detail page is correct.
 		return runPath(base, n)
+	case "run_completed":
+		// Fires on a followee's run, so the recipient is NOT the owner —
+		// /runs/{id} fetches owner-scoped and renders "run not found" for
+		// them. The public share page is the only run surface a non-owner
+		// can read, matching notificationLinkFor on web.
+		return sharedRunPath(base, n)
 	case "follow":
 		// The recipient's own profile (/u/{id}), where their followers are
 		// shown — there is no /profile route, so the old target 404'd.
 		return profilePath(base, n)
 	case "challenge_complete":
 		return base + "/challenges"
+	case "achievement", "content_hidden":
+		// Neither has dedicated email copy yet (both fall through to the
+		// generic "you have a new notification" catalogue entry), so the
+		// inbox matches what the message actually says.
+		return inboxPath(base, n)
 	default:
-		// achievement + any future kind: the notifications inbox. (There is
-		// no dedicated /achievements surface yet; a real kind that gains one
-		// should get its own case here, per the comment above.)
-		return base + "/notifications"
+		return inboxPath(base, n)
 	}
 }
 
@@ -376,7 +395,18 @@ func profilePath(base string, n NotificationRow) string {
 	if n.UserID != "" {
 		return base + "/u/" + n.UserID
 	}
-	return base + "/notifications"
+	return inboxPath(base, n)
+}
+
+// inboxPath deep-links to the recipient's notification inbox, which is a tab on
+// their own profile — there is no /notifications route, so the old target was a
+// dead link on every channel at once. A row with no user_id is malformed; the
+// app root is the honest landing spot rather than a "/u/?tab=…" dead end.
+func inboxPath(base string, n NotificationRow) string {
+	if n.UserID != "" {
+		return base + "/u/" + n.UserID + "?tab=notifications"
+	}
+	return base
 }
 
 // ─────────────────── lifecycle templates (pure) ───────────────────
@@ -748,6 +778,10 @@ func lifecycleCtaURL(template, base string) string {
 	}
 }
 
+// eventPath emits the stable-id event URL. The canonical in-app event page is
+// nested under its club's slug (/clubs/{slug}/events/{id}) and the notification
+// projection carries no slug, so /events/{id} is the id-resolution route web
+// owns — which also keeps the link stable across a club rename.
 func eventPath(base string, n NotificationRow) string {
 	if n.EventID != nil {
 		return base + "/events/" + *n.EventID
@@ -755,6 +789,9 @@ func eventPath(base string, n NotificationRow) string {
 	return base + "/clubs"
 }
 
+// clubPath emits the club id into the /clubs/[slug] slot. The page looks a club
+// up by slug first and falls back to an id lookup, redirecting to the canonical
+// slug URL — same id-resolution split as eventPath.
 func clubPath(base string, n NotificationRow) string {
 	if n.ClubID != nil {
 		return base + "/clubs/" + *n.ClubID
@@ -766,5 +803,12 @@ func runPath(base string, n NotificationRow) string {
 	if n.RunID != nil {
 		return base + "/runs/" + *n.RunID
 	}
-	return base + "/notifications"
+	return inboxPath(base, n)
+}
+
+func sharedRunPath(base string, n NotificationRow) string {
+	if n.RunID != nil {
+		return base + "/share/run/" + *n.RunID
+	}
+	return inboxPath(base, n)
 }

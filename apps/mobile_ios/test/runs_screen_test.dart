@@ -110,11 +110,17 @@ Future<void> _pump(
   required LocalRunStore runStore,
   required LocalRouteStore routeStore,
   required Preferences prefs,
+  double textScale = 1.0,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: RunsScreen(
         apiClient: null,
         runStore: runStore,
@@ -1228,6 +1234,57 @@ void main() {
       expect(api.syncCalls, 2);
       // Drain the replacement banner's auto-dismiss timer.
       await tester.pump(const Duration(seconds: 6));
+    });
+  });
+
+  group('RunsScreen — range calendar at OS text scale (issue #666 V12)', () {
+    testWidgets('the day number stays inside its 36 px dot', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      _runsDir = Directory.systemTemp.createTempSync('runs_screen_cal_');
+      final runStore = LocalRunStore()..debugSeed(_makeRuns(3), dir: _runsDir);
+
+      await _pump(
+        tester,
+        runStore: runStore,
+        routeStore: LocalRouteStore(),
+        prefs: prefs,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.byTooltip('Date range'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Custom…').last);
+      await tester.pumpAndSettle();
+
+      // Day 15 exists in every month the sheet can open on.
+      final digit = find.ancestor(
+          of: find.text('15'), matching: find.byType(FittedBox));
+      final at1x = tester.getSize(digit.first);
+
+      // Re-pump the same tree at 2x — the open sheet rides the rebuild, so
+      // this measures the very same cells under the larger OS text size.
+      await _pump(
+        tester,
+        runStore: runStore,
+        routeStore: LocalRouteStore(),
+        prefs: prefs,
+        textScale: 2.0,
+      );
+      await tester.pumpAndSettle();
+
+      // Pre-fix bodyMedium needed 56.5 x 40 at 2x and was cropped to the
+      // 36 px dot; the dot's diameter comes from the seven-column grid, so
+      // the number scales down into it rather than the dot growing.
+      final at2x = tester.getSize(digit.first);
+      expect(at2x.width, lessThanOrEqualTo(36));
+      expect(at2x.height, lessThanOrEqualTo(36));
+      expect(at2x.height, greaterThan(at1x.height));
+
+      // Material pins its own PopupMenuItem ListTile at 56 px, which stripes
+      // at 2x. That is a framework-managed internal, explicitly out of scope
+      // per decisions §486; consume it so this test speaks only to the dot.
+      tester.takeException();
     });
   });
 }

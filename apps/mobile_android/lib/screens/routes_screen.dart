@@ -1443,50 +1443,47 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
           // (people flip the watch-starred set far more often
           // than they re-pick a surface or sort order), so it
           // earns the leftmost slot. The four chips reflow into
-          // a horizontal scroll if the device is too narrow.
-          SizedBox(
-            height: 40,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  FilterChip(
-                    label: Text(l10n.routesStarred),
-                    avatar: Icon(
-                      widget.starredOnly
-                          ? Icons.star
-                          : Icons.star_border,
-                      size: 18,
-                      color: widget.starredOnly
-                          ? AppSemanticColors.of(context).crown
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    selected: widget.starredOnly,
-                    onSelected: (_) => widget.onStarredOnlyToggled(),
+          // a horizontal scroll if the device is too narrow. The rail takes
+          // its height from the chips, not a literal: a chip needs 58 px at
+          // 2x OS text scale and was being cropped to 40.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                FilterChip(
+                  label: Text(l10n.routesStarred),
+                  avatar: Icon(
+                    widget.starredOnly ? Icons.star : Icons.star_border,
+                    size: 18,
+                    color: widget.starredOnly
+                        ? AppSemanticColors.of(context).crown
+                        : theme.colorScheme.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 8),
-                  _DropdownChip<_SurfaceFilter>(
-                    value: widget.surfaceFilter,
-                    items: _SurfaceFilter.values,
-                    labelOf: (v) => _surfaceLabel(l10n, v),
-                    onChanged: widget.onSurfaceChanged,
-                  ),
-                  const SizedBox(width: 8),
-                  _DropdownChip<_DistanceBucket>(
-                    value: widget.distanceFilter,
-                    items: _DistanceBucket.values,
-                    labelOf: (v) => _distanceLabel(l10n, v),
-                    onChanged: widget.onDistanceChanged,
-                  ),
-                  const SizedBox(width: 8),
-                  _DropdownChip<_RouteSort>(
-                    value: widget.sort,
-                    items: _RouteSort.values,
-                    labelOf: (v) => _sortLabel(l10n, v),
-                    onChanged: widget.onSortChanged,
-                  ),
-                ],
-              ),
+                  selected: widget.starredOnly,
+                  onSelected: (_) => widget.onStarredOnlyToggled(),
+                ),
+                const SizedBox(width: 8),
+                _DropdownChip<_SurfaceFilter>(
+                  value: widget.surfaceFilter,
+                  items: _SurfaceFilter.values,
+                  labelOf: (v) => _surfaceLabel(l10n, v),
+                  onChanged: widget.onSurfaceChanged,
+                ),
+                const SizedBox(width: 8),
+                _DropdownChip<_DistanceBucket>(
+                  value: widget.distanceFilter,
+                  items: _DistanceBucket.values,
+                  labelOf: (v) => _distanceLabel(l10n, v),
+                  onChanged: widget.onDistanceChanged,
+                ),
+                const SizedBox(width: 8),
+                _DropdownChip<_RouteSort>(
+                  value: widget.sort,
+                  items: _RouteSort.values,
+                  labelOf: (v) => _sortLabel(l10n, v),
+                  onChanged: widget.onSortChanged,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

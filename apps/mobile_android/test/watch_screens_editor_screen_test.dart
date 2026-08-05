@@ -355,6 +355,22 @@ void main() {
       expect(find.text('Remove screen 1?'), findsOneWidget);
       expect(find.text('Its 2 metric(s) go with it.'), findsOneWidget);
 
+      // Routed through confirmDestructive: cancel first and unstyled, the
+      // confirm carrying the error colour.
+      final actions = tester
+          .widgetList<TextButton>(find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(TextButton),
+          ))
+          .toList();
+      expect(actions, hasLength(2));
+      expect((actions.first.child! as Text).data, 'Cancel');
+      expect(actions.first.style?.foregroundColor, isNull);
+      expect(
+        actions.last.style?.foregroundColor?.resolve({}),
+        Theme.of(tester.element(find.byType(AlertDialog))).colorScheme.error,
+      );
+
       await tester.tap(find.descendant(
         of: find.byType(AlertDialog),
         matching: find.text('Cancel'),

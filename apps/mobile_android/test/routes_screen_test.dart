@@ -37,14 +37,22 @@ Future<Preferences> _makePrefs() async {
 }
 
 Future<void> _pump(WidgetTester tester,
-    {required Preferences prefs, ApiClient? api}) {
+    {required Preferences prefs,
+    ApiClient? api,
+    LocalRouteStore? routeStore,
+    double textScale = 1.0}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: RoutesScreen(
         apiClient: api,
-        routeStore: LocalRouteStore(),
+        routeStore: routeStore ?? LocalRouteStore(),
         preferences: prefs,
       ),
     ),
@@ -596,6 +604,31 @@ void main() {
             of: find.text('Discover'), matching: find.byType(Expanded)),
         findsWidgets,
       );
+    });
+  });
+
+  group('RoutesScreen — OS text scaling (issue #666 V12)', () {
+    testWidgets(
+        'the filter chip rail takes its height from the chips, not a literal '
+        '40 px lane', (tester) async {
+      final prefs = await _makePrefs();
+      // The filter header is the first row of the populated list — the
+      // zero-routes empty state renders instead of it.
+      // ignore: invalid_use_of_visible_for_testing_member
+      final store = LocalRouteStore()..debugSeed(_makeRoutes(1));
+
+      await _pump(tester, prefs: prefs, routeStore: store);
+      await tester.pump();
+      final chip = find.byType(FilterChip).first;
+      final small = tester.getSize(chip).height;
+      // A Material chip's own tap target is 48; the old 40 px lane squeezed it.
+      expect(small, greaterThanOrEqualTo(48));
+
+      await _pump(tester, prefs: prefs, routeStore: store, textScale: 2.0);
+      await tester.pump();
+      // Pre-fix the chip measured exactly 40.0 here while needing 58, so its
+      // label was cropped inside the rail.
+      expect(tester.getSize(chip).height, greaterThan(small));
     });
   });
 }

@@ -51,6 +51,49 @@
 	--color-warning-text: var(--color-warning-strong);
 	--color-secondary-text: #A24A2C;
 	--color-accent-cyan-text: #3A7385;
+	/* Same shape for success / danger, and the same values as mobile's
+	   AppSemanticColors so a signed delta reads identically on both. The base
+	   tokens are 3.28:1 and 4.58:1 on white and 2.97:1 / 4.14:1 on the page —
+	   fine as fills and borders, below AA as text. */
+	--color-success-text: #2E6B3C;
+	--color-danger-text: #A93B2E;
+
+	/* Rank-1 / segment-crown gold, as a fill + its own foreground. Mirrors
+	   mobile's AppSemanticColors.crown / onCrown so a leaderboard pill reads
+	   the same on both platforms. Theme-aware because a single gold cannot be
+	   both: the bright #F5B30A this replaces was 1.85:1 as an icon on the light
+	   surface and 2.15:1 under the white pill text it carried. */
+	--color-crown: #7A5C10;
+	--color-on-crown: #F7F3EC;
+
+	/* Fitness / Fatigue / Form series hues, in lockstep with mobile's
+	   TrainingLoadPalette. One fixed trio could not clear WCAG 1.4.11's 3:1
+	   non-text floor in both themes (the old indigo was 2.57:1 on the dark
+	   surface, the old amber 2.15:1 on the light one), so each theme carries
+	   its own triple, separated by LUMINANCE rather than hue so the plot
+	   survives greyscale and red-green colour-vision deficiency — the §489
+	   reasoning. Pairwise 3:1 across three series is unreachable once each
+	   also owes 3:1 to its own surface. */
+	--chart-fitness: #1F1A6B;
+	--chart-fatigue: #B4801F;
+	--chart-form: #A62020;
+
+	/* Five heart-rate zone bands, in lockstep with mobile's hr_zone_palette.
+	   The run-detail band and the mobile intensity card used to carry two
+	   different lists, neither of which any surface here defined. The bands
+	   separate by LUMINANCE, not hue: a green-to-red ramp collapses under
+	   red-green colour-vision deficiency, and the old lists proved it — z1 and
+	   z5 were 1.03:1 apart on one and the whole ramp spanned 2.11:1 on the
+	   other. Five bands cannot be pairwise 3:1 (four steps of 3:1 need 81:1
+	   and sRGB offers 21:1), so what each band owes is 3:1 against the surface
+	   behind the bar, which is what makes the surface-coloured gap between
+	   segments visible against every band. z1 -> z5 on white:
+	   16.79 / 11.25 / 7.72 / 5.24 / 3.59. */
+	--zone-1: #0C1E34;
+	--zone-2: #174326;
+	--zone-3: #6B4E0D;
+	--zone-4: #AF5111;
+	--zone-5: #E9544F;
 
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #E8B89A;
@@ -165,6 +208,21 @@
 		--color-warning-text: var(--color-warning);
 		--color-secondary-text: var(--color-secondary);
 		--color-accent-cyan-text: var(--color-accent-cyan);
+		--color-success-text: var(--color-success);
+		--color-danger-text: var(--color-danger);
+
+		--color-crown: #E0BE4E;
+		--color-on-crown: #120D22;
+
+		--chart-fitness: #E8E5FF;
+		--chart-fatigue: #E59105;
+		--chart-form: #DE1F17;
+
+		--zone-1: #E4EEF9;
+		--zone-2: #91D8A9;
+		--zone-3: #D8A01B;
+		--zone-4: #E56917;
+		--zone-5: #E2231C;
 
 		--color-bg: #120D22;
 		--color-bg-secondary: #0C0818;
@@ -219,6 +277,21 @@
 	--color-warning-text: var(--color-warning);
 	--color-secondary-text: var(--color-secondary);
 	--color-accent-cyan-text: var(--color-accent-cyan);
+	--color-success-text: var(--color-success);
+	--color-danger-text: var(--color-danger);
+
+	--color-crown: #E0BE4E;
+	--color-on-crown: #120D22;
+
+	--chart-fitness: #E8E5FF;
+	--chart-fatigue: #E59105;
+	--chart-form: #DE1F17;
+
+	--zone-1: #E4EEF9;
+	--zone-2: #91D8A9;
+	--zone-3: #D8A01B;
+	--zone-4: #E56917;
+	--zone-5: #E2231C;
 
 	--color-bg: #120D22;
 	--color-bg-secondary: #0C0818;

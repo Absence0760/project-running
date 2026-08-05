@@ -13,7 +13,10 @@
 	// preserveAspectRatio so points stay legible at any width.
 	const W = 600;
 	const H = 200;
-	const PAD_L = 40;
+	// The y labels live in a real CSS gutter beside the SVG, not inside it:
+	// preserveAspectRatio="none" stretches the viewBox horizontally, which
+	// would distort any <text> drawn in it.
+	const PAD_L = 4;
 	const PAD_R = 8;
 	const PAD_T = 16;
 	const PAD_B = 24;
@@ -55,6 +58,29 @@
 	}
 
 	let zeroY = $derived(yAt(0));
+
+	/// Round tick step on the 1 / 2 / 5 x 10^n ladder. The plot is
+	/// min/max-normalised, so without labelled ticks CTL 45 and CTL 450 draw
+	/// pixel-identically — shape without magnitude. Mirrors mobile's
+	/// `trainingLoadTickStep`.
+	function tickStep(span: number, maxTicks = 4): number {
+		if (!Number.isFinite(span) || span <= 0) return 1;
+		const raw = span / maxTicks;
+		const mag = 10 ** Math.floor(Math.log10(raw));
+		const norm = raw / mag;
+		const mult = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+		return mult * mag;
+	}
+
+	let ticks = $derived.by(() => {
+		const { min, max } = valueRange;
+		const step = tickStep(max - min);
+		const out: Array<{ value: number; y: number }> = [];
+		for (let v = Math.ceil(min / step) * step; v <= max + step * 0.001; v += step) {
+			out.push({ value: Math.round(v), y: yAt(v) });
+		}
+		return out;
+	});
 
 	let last = $derived(points.at(-1));
 	// Honest signal that gym load is folded into these curves — the
@@ -112,33 +138,51 @@
 		</div>
 
 		<div class="chart-wrap">
-			<!--
-				audit/accessibility (May 2026) Medium — WCAG 1.1.1.
-				Three series (CTL / ATL / TSB) over 90 days with no
-				text alternative; screen readers traversed every
-				<path> + <line> individually. role="img" + a one-line
-				summary aria-label collapses it into a single
-				landmark; the in-component legend above the chart
-				gives the per-series detail.
-			-->
-			<svg
-				viewBox="0 0 {W} {H}"
-				preserveAspectRatio="none"
-				class="chart-svg"
-				role="img"
-				aria-label={t('trainingLoad.chartAriaLabel')}
-			>
-				<line
-					x1={PAD_L}
-					y1={zeroY}
-					x2={W - PAD_R}
-					y2={zeroY}
-					class="zero-line"
-				/>
-				<path d={pathFor('ctl')} class="line fitness" />
-				<path d={pathFor('atl')} class="line fatigue" />
-				<path d={pathFor('tsb')} class="line form" />
-			</svg>
+			<div class="plot">
+				<div class="y-axis" aria-hidden="true">
+					{#each ticks as tick (tick.value)}
+						<span class="y-tick" style="top: {(tick.y / H) * 100}%">{tick.value}</span>
+					{/each}
+				</div>
+				<!--
+					audit/accessibility (May 2026) Medium — WCAG 1.1.1.
+					Three series (CTL / ATL / TSB) over 90 days with no
+					text alternative; screen readers traversed every
+					<path> + <line> individually. role="img" + a one-line
+					summary aria-label collapses it into a single
+					landmark; the in-component legend above the chart
+					gives the per-series detail.
+				-->
+				<svg
+					viewBox="0 0 {W} {H}"
+					preserveAspectRatio="none"
+					class="chart-svg"
+					role="img"
+					aria-label={t('trainingLoad.chartAriaLabel')}
+				>
+					{#each ticks as tick (tick.value)}
+						{#if tick.value !== 0}
+							<line
+								x1={PAD_L}
+								y1={tick.y}
+								x2={W - PAD_R}
+								y2={tick.y}
+								class="grid-line"
+							/>
+						{/if}
+					{/each}
+					<line
+						x1={PAD_L}
+						y1={zeroY}
+						x2={W - PAD_R}
+						y2={zeroY}
+						class="zero-line"
+					/>
+					<path d={pathFor('ctl')} class="line fitness" />
+					<path d={pathFor('atl')} class="line fatigue" />
+					<path d={pathFor('tsb')} class="line form" />
+				</svg>
+			</div>
 			<div class="x-labels">
 				<span>{fmtDateLabel(firstDate)}</span>
 				<span>{fmtDateLabel(lastDate)}</span>
@@ -203,14 +247,14 @@
 		border-radius: 2px;
 	}
 
-	.fitness .swatch { background: #4f46e5; }
-	.fatigue .swatch { background: #f59e0b; }
+	.fitness .swatch { background: var(--chart-fitness); }
+	.fatigue .swatch { background: var(--chart-fatigue); }
 	/* No sign colouring: one stroke cannot change hue at every zero
 	   crossing of the window it spans, so a key recoloured by the last
 	   TSB would name a colour the line never draws. The sign is carried
 	   by the dashed zero line, the signed value beside this key, and the
 	   reading below the plot. */
-	.form .swatch { background: #ef4444; }
+	.form .swatch { background: var(--chart-form); }
 
 	.chart-wrap {
 		display: flex;
@@ -218,10 +262,40 @@
 		gap: 0.3rem;
 	}
 
-	.chart-svg {
-		width: 100%;
+	.plot {
+		display: flex;
+		align-items: stretch;
 		height: 12rem;
+	}
+
+	/* Real CSS gutter: the SVG stretches horizontally, so a <text> inside it
+	   would be squashed at every viewport width. */
+	.y-axis {
+		position: relative;
+		flex: 0 0 2.4rem;
+		font-size: 0.7rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.y-tick {
+		position: absolute;
+		inset-inline-end: 0.35rem;
+		transform: translateY(-50%);
+		line-height: 1;
+	}
+
+	.chart-svg {
+		flex: 1 1 auto;
+		min-width: 0;
+		height: 100%;
 		display: block;
+	}
+
+	.grid-line {
+		stroke: var(--color-border);
+		stroke-width: 1;
+		vector-effect: non-scaling-stroke;
 	}
 
 	.zero-line {
@@ -240,13 +314,14 @@
 		vector-effect: non-scaling-stroke;
 	}
 
-	.line.fitness { stroke: #4f46e5; }
-	.line.fatigue { stroke: #f59e0b; }
-	.line.form { stroke: #ef4444; }
+	.line.fitness { stroke: var(--chart-fitness); }
+	.line.fatigue { stroke: var(--chart-fatigue); }
+	.line.form { stroke: var(--chart-form); }
 
 	.x-labels {
 		display: flex;
 		justify-content: space-between;
+		padding-inline-start: 2.4rem;
 		font-size: 0.75rem;
 		color: var(--color-text-tertiary);
 	}

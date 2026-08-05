@@ -69,11 +69,18 @@ Future<({
   );
 }
 
-Future<void> _pump(WidgetTester tester, dynamic s) async {
+Future<void> _pump(WidgetTester tester, dynamic s,
+    {double textScale = 1.0, Locale? locale}) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: RunScreen(
         apiClient: null,
         runStore: s.runStore,
@@ -398,6 +405,33 @@ void main() {
       expect(find.byType(RunDetailScreen), findsOneWidget,
           reason: 'tapping the card opens the run detail for that run');
       semantics.dispose();
+    });
+  });
+
+  group('RunScreen — Start label fits its circle (issue #666 V12)', () {
+    // The 140 px circle has a 124 px interior. The label is bounded by the
+    // graphic: "START" already measures 117.5 wide in English at 1.0x, so a
+    // longer locale or a larger OS text size used to break the word mid-glyph.
+    Finder labelBox(String text) =>
+        find.ancestor(of: find.text(text), matching: find.byType(FittedBox));
+
+    testWidgets('English at 2x text scale stays inside the circle',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s, textScale: 2.0);
+      final size = tester.getSize(labelBox('START').first);
+      expect(size.width, lessThanOrEqualTo(124 - 16));
+      expect(size.height, lessThanOrEqualTo(124));
+    });
+
+    testWidgets('a long localized label stays on one line at 1.0x',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s, locale: const Locale('fr'));
+      // "DÉMARRER" is wider than the circle interior; pre-fix it wrapped
+      // mid-word rather than scaling.
+      final size = tester.getSize(labelBox('DÉMARRER').first);
+      expect(size.width, lessThanOrEqualTo(124 - 16));
     });
   });
 }

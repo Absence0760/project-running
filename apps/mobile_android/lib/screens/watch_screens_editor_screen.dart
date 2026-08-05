@@ -21,6 +21,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../reactive_ble_watch_transport.dart';
 import '../sim_watch_sync.dart';
 import '../watch_screens.dart';
+import '../widgets/confirm_destructive.dart';
 
 /// Where the composed set is kept between visits. Device-local: the set is a
 /// property of one watch, not of the account.
@@ -282,25 +283,14 @@ class _WatchScreensEditorScreenState extends State<WatchScreensEditorScreen> {
 
   Future<void> _removeScreen(int index) async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.watchScreensRemoveTitle(index + 1)),
-        content: Text(
-            l10n.watchScreensRemoveBody(_drafts[index].metrics.length)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.watchScreensCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.watchScreensRemoveConfirm),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDestructive(
+      context,
+      title: l10n.watchScreensRemoveTitle(index + 1),
+      body: l10n.watchScreensRemoveBody(_drafts[index].metrics.length),
+      confirmLabel: l10n.watchScreensRemoveConfirm,
+      cancelLabel: l10n.watchScreensCancel,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     setState(() => _drafts.removeAt(index));
     unawaited(_persist());
   }
@@ -311,28 +301,18 @@ class _WatchScreensEditorScreenState extends State<WatchScreensEditorScreen> {
     if (next.slots < draft.metrics.length) {
       final l10n = AppLocalizations.of(context);
       final dropped = draft.metrics.sublist(next.slots);
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(l10n.watchScreensShrinkTitle(dropped.length)),
-          content: Text(l10n.watchScreensShrinkBody(
-            watchLayoutLabel(l10n, next),
-            next.slots,
-            dropped.map((m) => watchMetricLabel(l10n, m)).join(', '),
-          )),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(l10n.watchScreensCancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(l10n.watchScreensShrinkConfirm),
-            ),
-          ],
+      final confirmed = await confirmDestructive(
+        context,
+        title: l10n.watchScreensShrinkTitle(dropped.length),
+        body: l10n.watchScreensShrinkBody(
+          watchLayoutLabel(l10n, next),
+          next.slots,
+          dropped.map((m) => watchMetricLabel(l10n, m)).join(', '),
         ),
+        confirmLabel: l10n.watchScreensShrinkConfirm,
+        cancelLabel: l10n.watchScreensCancel,
       );
-      if (confirmed != true || !mounted) return;
+      if (!confirmed || !mounted) return;
       setState(() {
         draft.layout = next;
         draft.metrics = draft.metrics.sublist(0, next.slots);

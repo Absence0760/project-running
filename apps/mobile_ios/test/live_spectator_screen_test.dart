@@ -10,6 +10,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/live_spectator_screen.dart';
 import '../lib/widgets/error_state.dart';
+import 'realtime_drain.dart';
 
 /// Test seam: returns a canned public-run row + ping backlog so the
 /// terminal-state branch in `_hydrate` can be driven without a backend.
@@ -76,10 +77,7 @@ Future<void> _pump(WidgetTester tester) {
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: LiveSpectatorScreen(
-        api: ApiClient(),
-        runId: 'fake-run-id',
-      ),
+      home: LiveSpectatorScreen(api: ApiClient(), runId: 'fake-run-id'),
     ),
   );
 }
@@ -103,12 +101,16 @@ void main() {
   // it's the cheapest smoke test — confirms the screen mounts at all,
   // routes the constructor args, and wires the AppBar.
   group('LiveSpectatorScreen — initial render', () {
-    testWidgets('renders the Live tracking app-bar title', (tester) async {
+    realtimeWidgetTest('renders the Live tracking app-bar title', (
+      tester,
+    ) async {
       await _pump(tester);
       expect(find.text('Live tracking'), findsOneWidget);
     });
 
-    testWidgets('shows the spinner before _hydrate resolves', (tester) async {
+    realtimeWidgetTest('shows the spinner before _hydrate resolves', (
+      tester,
+    ) async {
       // initState calls _hydrate which awaits the network. The first
       // pump (no settle) catches the pre-resolution loading frame.
       // Without this guard, a refactor that flips _loading=false at
@@ -118,7 +120,9 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
-    testWidgets('status badge reads "Connecting" while hydrating', (tester) async {
+    realtimeWidgetTest('status badge reads "Connecting" while hydrating', (
+      tester,
+    ) async {
       // The badge's three states (Connecting / Idle / Live) are the
       // only visible signal of realtime channel health on this screen.
       // Pin the initial label so a refactor that re-orders the switch
@@ -145,7 +149,9 @@ void main() {
   //   3. ErrorState's Retry button is present + tappable. Without
   //      Retry the only recovery affordance is full app restart.
   group('LiveSpectatorScreen — hydrate failure', () {
-    testWidgets('renders ErrorState after the network call fails', (tester) async {
+    realtimeWidgetTest('renders ErrorState after the network call fails', (
+      tester,
+    ) async {
       await _pump(tester);
       // Let _hydrate's Future resolve into the catch branch.
       await tester.pumpAndSettle();
@@ -153,7 +159,7 @@ void main() {
       expect(find.text('Could not connect.'), findsOneWidget);
     });
 
-    testWidgets('ErrorState exposes a Retry button', (tester) async {
+    realtimeWidgetTest('ErrorState exposes a Retry button', (tester) async {
       // The retry path is what flips a stale-link spectator out of
       // an error state if the runner reconnects. Pin the affordance
       // by name — a copy change ("Try again", "Reload") is the kind
@@ -163,7 +169,7 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
     });
 
-    testWidgets(
+    realtimeWidgetTest(
       'does not show the spinner OR the waiting-for-pings copy after failure',
       (tester) async {
         // The three visible-body states are mutually exclusive (loading
@@ -205,7 +211,10 @@ void main() {
       expect(formatLiveDuration(const Duration(minutes: 1)), '1:00');
     });
     test('just-under one hour stays in M:SS', () {
-      expect(formatLiveDuration(const Duration(minutes: 59, seconds: 59)), '59:59');
+      expect(
+        formatLiveDuration(const Duration(minutes: 59, seconds: 59)),
+        '59:59',
+      );
     });
     test('exactly one hour flips to H:MM:SS', () {
       expect(formatLiveDuration(const Duration(hours: 1)), '1:00:00');
@@ -279,8 +288,10 @@ void main() {
       final start = DateTime.utc(2026, 1, 1, 10);
       // ends at 10:30; "now" is 10:40 → 10 min past the end.
       expect(
-        runIsFinished(_run(durationS: 1800, startedAt: start),
-            now: DateTime.utc(2026, 1, 1, 10, 40)),
+        runIsFinished(
+          _run(durationS: 1800, startedAt: start),
+          now: DateTime.utc(2026, 1, 1, 10, 40),
+        ),
         isTrue,
       );
     });
@@ -288,8 +299,10 @@ void main() {
       final start = DateTime.utc(2026, 1, 1, 10);
       // ends at 10:30; "now" is 10:31 → only 1 min past, within slack.
       expect(
-        runIsFinished(_run(durationS: 1800, startedAt: start),
-            now: DateTime.utc(2026, 1, 1, 10, 31)),
+        runIsFinished(
+          _run(durationS: 1800, startedAt: start),
+          now: DateTime.utc(2026, 1, 1, 10, 31),
+        ),
         isFalse,
       );
     });
@@ -306,7 +319,9 @@ void main() {
   // Finished/DNF are terminal (no realtime, frozen totals) and outrank
   // the live/stale freshness axis; Delayed is NOT terminal.
   group('LiveSpectatorScreen — terminal vs live vs stale', () {
-    testWidgets('a finished run shows the Finished badge, not Live', (tester) async {
+    realtimeWidgetTest('a finished run shows the Finished badge, not Live', (
+      tester,
+    ) async {
       // Empty pings keep the map off the tree (no trace) so the assertion
       // is a clean badge check — the terminal verdict comes from the run
       // row, not the ping backlog. pumpAndSettle drains _hydrate.
@@ -323,7 +338,9 @@ void main() {
       expect(find.text('DNF'), findsNothing);
     });
 
-    testWidgets('a race-marked DNF run shows the DNF badge', (tester) async {
+    realtimeWidgetTest('a race-marked DNF run shows the DNF badge', (
+      tester,
+    ) async {
       final api = _FakeApi(
         run: _run(
           durationS: 1800,
@@ -338,29 +355,34 @@ void main() {
       expect(find.text('Live'), findsNothing);
     });
 
-    testWidgets(
-        'a concluded_at run (recent start) shows the conclusion card + CTA',
-        (tester) async {
-      // Started 3 min ago with a projected 60-min duration, so the
-      // duration-staleness inference (runIsFinished) is false. Only the
-      // positive concluded_at marker makes it finished — proving the
-      // marker, not ping absence, drives the conclusion view. The card +
-      // its "view the full run" CTA render.
-      final api = _FakeApi(
-        run: _run(
-          durationS: 3600,
-          startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 3)),
-          concludedAt: DateTime.now().toUtc(),
-        ),
-      );
-      await _pumpApi(tester, api);
-      await tester.pumpAndSettle();
-      expect(find.text('Finished'), findsOneWidget);
-      expect(find.byKey(const Key('conclusion-card')), findsOneWidget);
-      expect(find.text('View the full run'), findsOneWidget);
-    });
+    realtimeWidgetTest(
+      'a concluded_at run (recent start) shows the conclusion card + CTA',
+      (tester) async {
+        // Started 3 min ago with a projected 60-min duration, so the
+        // duration-staleness inference (runIsFinished) is false. Only the
+        // positive concluded_at marker makes it finished — proving the
+        // marker, not ping absence, drives the conclusion view. The card +
+        // its "view the full run" CTA render.
+        final api = _FakeApi(
+          run: _run(
+            durationS: 3600,
+            startedAt: DateTime.now().toUtc().subtract(
+              const Duration(minutes: 3),
+            ),
+            concludedAt: DateTime.now().toUtc(),
+          ),
+        );
+        await _pumpApi(tester, api);
+        await tester.pumpAndSettle();
+        expect(find.text('Finished'), findsOneWidget);
+        expect(find.byKey(const Key('conclusion-card')), findsOneWidget);
+        expect(find.text('View the full run'), findsOneWidget);
+      },
+    );
 
-    testWidgets('a still-running run with a fresh ping shows Live', (tester) async {
+    realtimeWidgetTest('a still-running run with a fresh ping shows Live', (
+      tester,
+    ) async {
       // Run is not yet finished (started 5 min ago, no duration) and the
       // last ping is current → Live, distinct from the terminal states.
       // Wrapped in runAsync because the live (non-terminal) path opens the
@@ -369,7 +391,9 @@ void main() {
       final api = _FakeApi(
         run: _run(
           durationS: 0,
-          startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+          startedAt: DateTime.now().toUtc().subtract(
+            const Duration(minutes: 5),
+          ),
         ),
         pings: [_ping(DateTime.now())],
       );
@@ -385,13 +409,17 @@ void main() {
       });
     });
 
-    testWidgets('a live run whose last ping is stale shows Delayed', (tester) async {
+    realtimeWidgetTest('a live run whose last ping is stale shows Delayed', (
+      tester,
+    ) async {
       // Same not-finished run, but the only ping is > 90 s old → the
       // position can't be trusted as current. Delayed is NOT terminal.
       final api = _FakeApi(
         run: _run(
           durationS: 0,
-          startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+          startedAt: DateTime.now().toUtc().subtract(
+            const Duration(minutes: 5),
+          ),
         ),
         pings: [_ping(DateTime.now().subtract(const Duration(minutes: 3)))],
       );
@@ -407,66 +435,73 @@ void main() {
       });
     });
 
-    testWidgets('a live run whose last ping is coarse shows Approximate', (tester) async {
-      // The privacy-zone last-seen carve-out (migration 20270121_001):
-      // the latest ping is a ~1 km-coarsened in-zone fix flagged
-      // coarse=true. The badge must read "Approximate" (not "Live") and
-      // the approximate sub-line must surface, so a SAR watcher can't
-      // read the dot as a precise current position.
-      final api = _FakeApi(
-        run: _run(
-          durationS: 0,
-          startedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
-        ),
-        pings: [_ping(DateTime.now(), coarse: true)],
-      );
-      await tester.runAsync(() async {
-        await _pumpApi(tester, api);
-        await tester.pump(); // resolve _hydrate
-        await tester.pump();
-        expect(find.text('Approximate'), findsOneWidget);
-        expect(find.byKey(const Key('coarse-sub')), findsOneWidget);
-        expect(find.text('Live'), findsNothing);
-        await tester.pumpWidget(const SizedBox());
-      });
-    });
+    realtimeWidgetTest(
+      'a live run whose last ping is coarse shows Approximate',
+      (tester) async {
+        // The privacy-zone last-seen carve-out (migration 20270121_001):
+        // the latest ping is a ~1 km-coarsened in-zone fix flagged
+        // coarse=true. The badge must read "Approximate" (not "Live") and
+        // the approximate sub-line must surface, so a SAR watcher can't
+        // read the dot as a precise current position.
+        final api = _FakeApi(
+          run: _run(
+            durationS: 0,
+            startedAt: DateTime.now().toUtc().subtract(
+              const Duration(minutes: 5),
+            ),
+          ),
+          pings: [_ping(DateTime.now(), coarse: true)],
+        );
+        await tester.runAsync(() async {
+          await _pumpApi(tester, api);
+          await tester.pump(); // resolve _hydrate
+          await tester.pump();
+          expect(find.text('Approximate'), findsOneWidget);
+          expect(find.byKey(const Key('coarse-sub')), findsOneWidget);
+          expect(find.text('Live'), findsNothing);
+          await tester.pumpWidget(const SizedBox());
+        });
+      },
+    );
   });
 
   group('LiveSpectatorScreen — metric row at a narrow width', () {
-    testWidgets('an ultra-length distance/time/pace does not overflow the row',
-        (tester) async {
-      final view = tester.view;
-      view.physicalSize = const Size(720, 1280);
-      view.devicePixelRatio = 2.0;
-      addTearDown(view.reset);
+    realtimeWidgetTest(
+      'an ultra-length distance/time/pace does not overflow the row',
+      (tester) async {
+        final view = tester.view;
+        view.physicalSize = const Size(720, 1280);
+        view.devicePixelRatio = 2.0;
+        addTearDown(view.reset);
 
-      // Mid-ultra at hour 100: the spectator's runner is 240 miles in, which
-      // is the widest the metric cells ever get. The values come off the
-      // ping, not the run row (the run row only feeds them once finished).
-      final now = DateTime.now().toUtc();
-      await _pumpApi(
-        tester,
-        _FakeApi(
-          run: _run(durationS: 376331, distanceM: 386243, startedAt: now),
-          pings: [
-            {
-              'lat': -37.8136,
-              'lng': 144.9631,
-              'distance_m': 386243,
-              'elapsed_s': 376331,
-              'at': now.toIso8601String(),
-              'coarse': false,
-            },
-          ],
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+        // Mid-ultra at hour 100: the spectator's runner is 240 miles in, which
+        // is the widest the metric cells ever get. The values come off the
+        // ping, not the run row (the run row only feeds them once finished).
+        final now = DateTime.now().toUtc();
+        await _pumpApi(
+          tester,
+          _FakeApi(
+            run: _run(durationS: 376331, distanceM: 386243, startedAt: now),
+            pings: [
+              {
+                'lat': -37.8136,
+                'lng': 144.9631,
+                'distance_m': 386243,
+                'elapsed_s': 376331,
+                'at': now.toIso8601String(),
+                'coarse': false,
+              },
+            ],
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
 
-      // Prove the row actually rendered the ultra values before asserting
-      // on overflow — a zeroed row would pass vacuously.
-      expect(find.textContaining('386'), findsWidgets);
-      expect(tester.takeException(), isNull);
-    });
+        // Prove the row actually rendered the ultra values before asserting
+        // on overflow — a zeroed row would pass vacuously.
+        expect(find.textContaining('386'), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }

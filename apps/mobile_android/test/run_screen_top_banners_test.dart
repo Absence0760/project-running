@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:run_recorder/run_recorder.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/run_screen.dart';
 import '../lib/widgets/safety_nudge_banner.dart';
+import '../lib/widgets/workout_execution_band.dart';
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -88,4 +90,108 @@ void main() {
     expect(find.byType(Card), findsNothing);
     expect(find.byType(SafetyNudgeBanner), findsNothing);
   });
+
+  group('RunTopOverlay — the armed-workout case (issue #666 A3)', () {
+    testWidgets('the workout band stacks above the badges and the banners, '
+        'never over them', (tester) async {
+      await _pumpOverlay(tester, armed: true, offRouteMetres: 120,
+          gpsLost: true);
+
+      final band = tester.getRect(find.byType(WorkoutExecutionBand));
+      final badge = tester.getRect(find.byKey(_badgeKey));
+      final offRoute = _cardOf(tester, _offRoute);
+      final gps = _cardOf(tester, _gpsLost);
+
+      // Pre-fix the band was its own Positioned anchored on the status-bar
+      // inset, so it painted straight over the top: 56 badge row.
+      expect(band.overlaps(badge), isFalse);
+      expect(band.overlaps(offRoute), isFalse);
+      expect(band.overlaps(gps), isFalse);
+      expect(band.bottom, lessThanOrEqualTo(badge.top));
+      expect(badge.bottom, lessThanOrEqualTo(offRoute.top));
+      expect(offRoute.bottom, lessThanOrEqualTo(gps.top));
+    });
+
+    testWidgets('no workout armed leaves the badges at the column top',
+        (tester) async {
+      await _pumpOverlay(tester, armed: false, offRouteMetres: 120);
+      expect(find.byType(WorkoutExecutionBand), findsNothing);
+      final badge = tester.getRect(find.byKey(_badgeKey));
+      expect(badge.top, RunTopOverlay.topInset);
+    });
+
+    testWidgets('the column clears a status-bar inset taller than the default',
+        (tester) async {
+      const tall = RunTopOverlay.topInset + 20;
+      await _pumpOverlay(tester, armed: true, topPadding: tall);
+      expect(tester.getRect(find.byType(WorkoutExecutionBand)).top, tall);
+    });
+  });
+}
+
+const _badgeKey = ValueKey<String>('badges');
+
+WorkoutBandState _bandState() => WorkoutBandState(
+      step: WorkoutStep(
+        kind: WorkoutStepKind.rep,
+        targetDistanceMetres: 400,
+        targetPaceSecPerKm: 240,
+        label: 'Rep 3/6',
+        repIndex: 3,
+        repTotal: 6,
+      ),
+      totalSteps: 14,
+      currentIndex: 4,
+      progress: 0.25,
+      remainingMetres: 300,
+      actualPaceSecPerKm: 235,
+      adherence: PaceAdherence.ahead,
+      complete: false,
+      abandoned: false,
+    );
+
+Future<void> _pumpOverlay(
+  WidgetTester tester, {
+  required bool armed,
+  double? offRouteMetres,
+  bool gpsLost = false,
+  double topPadding = 0,
+}) {
+  final notifier = ValueNotifier<WorkoutBandState>(_bandState());
+  addTearDown(notifier.dispose);
+  return tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: MediaQuery(
+        data: MediaQueryData(padding: EdgeInsets.only(top: topPadding)),
+        child: Scaffold(
+          body: Stack(
+            children: [
+              RunTopOverlay(
+                workoutBand: armed
+                    ? WorkoutExecutionBand(
+                        state: notifier,
+                        onSkip: () {},
+                        onRewind: () {},
+                        onAbandon: () {},
+                      )
+                    : null,
+                badges: const SizedBox(key: _badgeKey, height: 40),
+                banners: RunTopBanners(
+                  offRouteMetres: offRouteMetres,
+                  permissionLost: false,
+                  gpsLost: gpsLost,
+                  weakGps: false,
+                  safetyNudgeVisible: false,
+                  onSafetyNudgeShare: () {},
+                  onSafetyNudgeDismiss: () {},
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
