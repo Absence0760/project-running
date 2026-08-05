@@ -269,6 +269,10 @@ test.describe('/clubs/new', () => {
 		await page.locator('textarea').fill('Should never persist');
 
 		await page.getByRole('link', { name: /Back to clubs/ }).click();
+		// The unsaved-changes guard intercepts the back link on a dirty form;
+		// confirming Discard is what lets the navigation through.
+		await page.getByTestId('unsaved-changes-dialog').waitFor({ timeout: 10_000 });
+		await page.getByRole('button', { name: 'Discard' }).click();
 		await page.waitForURL(/\/social/, { timeout: 10_000 });
 
 		const after = await admin
@@ -337,6 +341,11 @@ test.describe('/clubs/new', () => {
 			.first()
 			.fill(uniqueName('e2e-cancel'));
 		await page.getByRole('button', { name: 'Cancel' }).click();
+		// Cancel is an exit like any other, so it meets the unsaved-changes
+		// guard rather than routing around it (decisions.md § 478 / § 493).
+		const guard = page.getByTestId('unsaved-changes-dialog');
+		await guard.waitFor({ timeout: 10_000 });
+		await guard.getByRole('button', { name: 'Discard' }).click();
 		await page.waitForURL(/\/social/, { timeout: 10_000 });
 
 		const after = await admin

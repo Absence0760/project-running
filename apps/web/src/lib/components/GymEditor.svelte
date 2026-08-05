@@ -13,6 +13,8 @@
 	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ExerciseCataloguePicker from '$lib/components/ExerciseCataloguePicker.svelte';
+	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
+	import { trackDirty } from '$lib/core/form_dirty';
 
 	interface Props {
 		existing?: GymWorkoutWithSets | null;
@@ -190,6 +192,12 @@
 	let saving = $state(false);
 	let error = $state('');
 
+	const dirty = trackDirty(() => ({
+		title,
+		isPublic,
+		exercises: exercises.map((ex) => ({ name: ex.name, sets: ex.sets.map((s) => ({ ...s })) })),
+	}));
+
 	function addExercise() {
 		exercises = [...exercises, { name: '', sets: [emptySet()] }];
 	}
@@ -257,10 +265,12 @@
 					sets,
 				);
 				showToast(t('gym.updated'));
+				dirty.rebaseline();
 				onupdated?.();
 			} else {
 				await createGymWorkout({ title: title.trim() || null, is_public: isPublic, sets });
 				showToast(t('gym.created'));
+				dirty.rebaseline();
 				oncreated?.();
 			}
 		} catch (e) {
@@ -271,6 +281,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <div class="editor-form gym-editor">
 	<label class="field">

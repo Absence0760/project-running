@@ -4,6 +4,9 @@ export const messages = {
 	// Common / shared UI (confirm dialogs, etc.)
 	'common.cancel': 'キャンセル',
 	'common.confirm': '確認',
+	'common.unsavedTitle': '変更を破棄しますか？',
+	'common.unsavedBody': '保存していない変更があります。保存せずに移動しますか？',
+	'common.discard': '破棄',
 	'nav.dashboard': 'ダッシュボード',
 	'nav.history': '履歴',
 	'nav.runs': 'ラン',
@@ -930,6 +933,7 @@ export const messages = {
 	"routeNew.untitledRoute": "無題のルート",
 	"routeNew.nameRequiredError": "ルートに名前を付けてください。",
 	"routeNew.savedToast": "ルートを保存しました。",
+	"routeNew.unsavedBody": "このルートはまだ保存されていません。移動して配置した地点を破棄しますか？",
 	"routeNew.saveFailedError": "ルートの保存に失敗しました",
 	"routesPage.pageTitle": "ルート",
 	"routesPage.sectionLabel": "ルートセクション",

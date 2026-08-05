@@ -4,6 +4,9 @@ export const messages = {
 	// Common / shared UI (confirm dialogs, etc.)
 	'common.cancel': 'Abbrechen',
 	'common.confirm': 'Bestätigen',
+	'common.unsavedTitle': 'Änderungen verwerfen?',
+	'common.unsavedBody': 'Du hast ungespeicherte Änderungen. Ohne Speichern verlassen?',
+	'common.discard': 'Verwerfen',
 	'nav.dashboard': 'Übersicht',
 	'nav.history': 'Verlauf',
 	'nav.runs': 'Läufe',
@@ -935,6 +938,7 @@ export const messages = {
 	"routeNew.untitledRoute": "Unbenannte Route",
 	"routeNew.nameRequiredError": "Gib deiner Route einen Namen.",
 	"routeNew.savedToast": "Route gespeichert.",
+	"routeNew.unsavedBody": "Diese Route wurde noch nicht gespeichert. Verlassen und die gesetzten Punkte verlieren?",
 	"routeNew.saveFailedError": "Route konnte nicht gespeichert werden",
 	"routesPage.pageTitle": "Routen",
 	"routesPage.sectionLabel": "Routen-Bereich",

@@ -4,6 +4,9 @@ export const messages = {
 	// Common / shared UI (confirm dialogs, etc.)
 	'common.cancel': 'Annuler',
 	'common.confirm': 'Confirmer',
+	'common.unsavedTitle': 'Abandonner les modifications ?',
+	'common.unsavedBody': 'Vous avez des modifications non enregistrées. Quitter sans enregistrer ?',
+	'common.discard': 'Abandonner',
 	'nav.dashboard': 'Tableau de bord',
 	'nav.history': 'Historique',
 	'nav.runs': 'Courses',
@@ -935,6 +938,7 @@ export const messages = {
 	"routeNew.untitledRoute": "Itinéraire sans titre",
 	"routeNew.nameRequiredError": "Donne un nom à ton itinéraire.",
 	"routeNew.savedToast": "Itinéraire enregistré.",
+	"routeNew.unsavedBody": "Cet itinéraire n'a pas encore été enregistré. Quitter et perdre les points placés ?",
 	"routeNew.saveFailedError": "Échec de l'enregistrement de l'itinéraire",
 	"routesPage.pageTitle": "Itinéraires",
 	"routesPage.sectionLabel": "Section itinéraires",

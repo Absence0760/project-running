@@ -13,6 +13,9 @@ export const en = {
 	// Common / shared UI (confirm dialogs, etc.)
 	'common.cancel': 'Cancel',
 	'common.confirm': 'Confirm',
+	'common.unsavedTitle': 'Discard changes?',
+	'common.unsavedBody': 'You have unsaved changes. Leave without saving?',
+	'common.discard': 'Discard',
 	'nav.dashboard': 'Dashboard',
 	'nav.history': 'History',
 	'nav.runs': 'Runs',
@@ -943,6 +946,7 @@ export const en = {
 	"routeNew.untitledRoute": "Untitled Route",
 	"routeNew.nameRequiredError": "Give your route a name.",
 	"routeNew.savedToast": "Route saved.",
+	"routeNew.unsavedBody": "This route hasn't been saved yet. Leave and lose the points you placed?",
 	"routeNew.saveFailedError": "Failed to save route",
 	"routesPage.pageTitle": "Routes",
 	"routesPage.sectionLabel": "Routes section",

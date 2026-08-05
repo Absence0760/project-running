@@ -9,6 +9,8 @@
 	import { assignSupersetGroups } from '$lib/gym/routine_editor_build';
 	import { floatOrNull, intOrNull } from '$lib/gym/numeric_input';
 	import type { GymExerciseModality, GymProgressionScheme, GymSetType } from '$lib/types';
+	import { trackDirty } from '$lib/core/form_dirty';
+	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	interface Props {
 		/// Optional in-memory blocks to seed the editor with (e.g. the output of
@@ -116,6 +118,12 @@
 	let saving = $state(false);
 	let error = $state('');
 
+	const dirty = trackDirty(() => ({
+		title,
+		notes,
+		exercises: exercises.map((ex) => ({ ...ex, sets: ex.sets.map((s) => ({ ...s })) })),
+	}));
+
 	function addExercise() {
 		exercises = [...exercises, emptyExercise()];
 	}
@@ -207,6 +215,7 @@
 		try {
 			const routine = await createGymRoutine(input);
 			showToast(t('gym.routine.created'));
+			dirty.rebaseline();
 			oncreated?.(routine.id);
 		} catch (e) {
 			console.error('routine save failed', e);
@@ -222,6 +231,8 @@
 		<option value={name}></option>
 	{/each}
 </datalist>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <div class="editor-form routine-editor">
 	<label class="field">

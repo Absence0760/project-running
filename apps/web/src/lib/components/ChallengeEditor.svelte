@@ -10,6 +10,8 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { untrack } from 'svelte';
+	import { trackDirty } from '$lib/core/form_dirty';
+	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	interface Props {
 		existing?: Challenge;
@@ -52,6 +54,19 @@
 	let isPublic = $state(untrack(() => existing?.is_public ?? true));
 	let busy = $state(false);
 
+	const dirty = trackDirty(() => ({
+		title,
+		description,
+		metric,
+		scope,
+		goalValue,
+		activityType,
+		clubId,
+		startsAt,
+		endsAt,
+		isPublic,
+	}));
+
 	let adminClubs = $state<ClubWithMeta[]>([]);
 	$effect(() => {
 		fetchMyClubs()
@@ -93,6 +108,7 @@
 					ends_at: new Date(endsAt).toISOString(),
 					is_public: isPublic
 				});
+				dirty.rebaseline();
 				onsaved?.();
 			} else {
 				const created = await createChallenge({
@@ -107,7 +123,8 @@
 					ends_at: new Date(endsAt).toISOString(),
 					is_public: isPublic
 				});
-				oncreated?.({ id: created.id });
+				dirty.rebaseline();
+			oncreated?.({ id: created.id });
 			}
 		} catch (err) {
 			console.error(err);
@@ -117,6 +134,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <form class="editor-form" onsubmit={submit}>
 	<label>

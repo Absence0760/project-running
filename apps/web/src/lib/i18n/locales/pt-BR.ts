@@ -4,6 +4,9 @@ export const messages = {
 	// Common / shared UI (confirm dialogs, etc.)
 	'common.cancel': 'Cancelar',
 	'common.confirm': 'Confirmar',
+	'common.unsavedTitle': 'Descartar as alterações?',
+	'common.unsavedBody': 'Você tem alterações não salvas. Sair sem salvar?',
+	'common.discard': 'Descartar',
 	'nav.dashboard': 'Painel',
 	'nav.history': 'Histórico',
 	'nav.runs': 'Corridas',
@@ -934,6 +937,7 @@ export const messages = {
 	"routeNew.untitledRoute": "Rota sem título",
 	"routeNew.nameRequiredError": "Dê um nome à sua rota.",
 	"routeNew.savedToast": "Rota salva.",
+	"routeNew.unsavedBody": "Esta rota ainda não foi salva. Sair e perder os pontos marcados?",
 	"routeNew.saveFailedError": "Falha ao salvar a rota",
 	"routesPage.pageTitle": "Rotas",
 	"routesPage.sectionLabel": "Seção de rotas",

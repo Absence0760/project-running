@@ -9,6 +9,8 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import type { Route } from '$lib/types';
+	import { trackDirty } from '$lib/core/form_dirty';
+	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	interface Props {
 		oncreated?: (run: { id: string }) => void;
@@ -41,6 +43,18 @@
 	let isPublic = $state(false);
 	let touched = $state(false);
 
+	const dirty = trackDirty(() => ({
+		unit,
+		startedAt,
+		durationMin,
+		durationSec,
+		distance,
+		activityType,
+		notes,
+		routeId,
+		isPublic,
+	}));
+
 	let distanceLabel = $derived(m('runEditor.distanceLabel', { unit }));
 
 	onMount(async () => {
@@ -65,6 +79,10 @@
 		} catch (_) {
 			routes = [];
 		}
+		// The unit + privacy-default seeds land after the form is built, so they
+		// would otherwise read as user edits and prompt on every exit. `touched`
+		// is the same flag that stops the seed clobbering a real choice.
+		if (!touched) dirty.rebaseline();
 	});
 
 	async function handleSubmit(e: Event) {
@@ -91,6 +109,7 @@
 				isPublic
 			});
 			showToast(m('runEditor.runAdded'), 'success');
+			dirty.rebaseline();
 			oncreated?.({ id });
 		} catch (err) {
 			showToast(m('runEditor.addRunFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
@@ -99,6 +118,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <form class="editor-form run-editor" onsubmit={handleSubmit}>
 	<label class="field">
