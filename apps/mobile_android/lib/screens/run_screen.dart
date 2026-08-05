@@ -5453,7 +5453,7 @@ class _LastRunCard extends StatelessWidget {
                     ),
                     child: Icon(
                       Icons.directions_run,
-                      color: theme.colorScheme.primary.withOpacity(0.6),
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                 const SizedBox(width: 14),
@@ -5727,9 +5727,7 @@ class _FirstRunPrompt extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.primary.withOpacity(0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.primary.withOpacity(0.18),
-        ),
+        border: Border.all(color: theme.colorScheme.primary),
       ),
       child: Row(
         children: [

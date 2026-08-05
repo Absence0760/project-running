@@ -2788,7 +2788,7 @@ class _ElevationPacePainter extends CustomPainter {
         Offset(tx, 0),
         Offset(tx, size.height),
         Paint()
-          ..color = theme.colorScheme.onSurface.withOpacity(0.4)
+          ..color = theme.colorScheme.outline
           ..strokeWidth = 1,
       );
       canvas.drawCircle(

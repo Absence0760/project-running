@@ -53,6 +53,13 @@ const _markHosts = {
   'DecoratedBox', 'ColoredBox', 'CircleAvatar', 'Chip', 'Card', 'Material',
   'LinearGradient', 'RadialGradient', 'Paint', 'CircularProgressIndicator',
   'LinearProgressIndicator', 'Checkbox', 'Switch', 'Radio', 'Slider',
+  // A `Canvas.draw*` colour is a painted mark by construction, and the
+  // idiomatic `Paint()..color = …` cascade puts `Paint` out of the walk's
+  // reach — the paren has already closed, so the draw call is the encloser.
+  // `drawParagraph` is deliberately absent: it is the one draw op that paints
+  // type, and it must keep failing.
+  'drawLine', 'drawPath', 'drawCircle', 'drawRect', 'drawRRect', 'drawOval',
+  'drawArc', 'drawPoints', 'drawVertices', 'drawShadow', 'drawDRRect',
 };
 
 enum _Use { text, mark, derived }
@@ -145,6 +152,16 @@ const _fixtures = <(String, _Use)>[
   ("OutlineInputBorder(\n"
       "  borderSide: BorderSide(color: t.colorScheme.outline),\n"
       ")", _Use.mark),
+  // The `Paint()..color = …` cascade: `Paint(` has closed, so the draw call is
+  // what must cast the verdict.
+  ("canvas.drawLine(a, b, Paint()\n"
+      "  ..color = t.colorScheme.outline\n"
+      "  ..strokeWidth = 1)", _Use.mark),
+  // A paragraph's colour always reaches the canvas through a `TextStyle`, so
+  // the inner host decides and `drawParagraph` never needs to be consulted —
+  // which is why it is absent from the mark set rather than listed there.
+  ("canvas.drawParagraph(build(TextStyle(color: t.colorScheme.outline)), o)",
+      _Use.text),
   // The reason the depth walk exists: a CLOSED text style earlier in the
   // same argument list is not an encloser. A backwards regex flags this.
   ("Row(children: [\n"
