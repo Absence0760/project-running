@@ -126,7 +126,10 @@ func TestPathForKind_RoutesResolve(t *testing.T) {
 		name string
 		row  NotificationRow
 	}{
-		{"all FKs set", NotificationRow{UserID: id, RunID: &id, EventID: &id, ClubID: &id, CommentID: &id}},
+		{"all FKs set", NotificationRow{
+			UserID: id, RunID: &id, EventID: &id, ClubID: &id, CommentID: &id,
+			PlanID: &id, AchievementID: &id, ChallengeID: &id,
+		}},
 		{"no FKs", NotificationRow{UserID: id}},
 		{"no user_id", NotificationRow{}},
 	}

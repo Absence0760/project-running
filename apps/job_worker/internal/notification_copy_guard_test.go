@@ -62,6 +62,36 @@ func TestRenderNotificationEmail_NoKindRendersTheDefault(t *testing.T) {
 	}
 }
 
+// TestPathForKind_FKSpecificTargets pins the entity-scoped deep links against
+// apps/web's notificationLinkFor, so the two routing tables can't drift. The
+// route-resolution guard next door proves these paths exist; this one proves the
+// worker points at the SAME entity the in-app bell does rather than a list page.
+func TestPathForKind_FKSpecificTargets(t *testing.T) {
+	const base = "https://threkir.test"
+	id := "9f1c3a52-0000-4000-8000-000000000001"
+	cases := []struct {
+		kind string
+		row  NotificationRow
+		want string
+	}{
+		{"plan_assigned", NotificationRow{UserID: id, PlanID: &id}, base + "/plans/" + id},
+		{"plan_update", NotificationRow{UserID: id, PlanID: &id}, base + "/plans/" + id},
+		{"achievement", NotificationRow{UserID: id, AchievementID: &id}, base + "/share/badge/" + id},
+		{"challenge_complete", NotificationRow{UserID: id, ChallengeID: &id}, base + "/challenges/" + id},
+		// The FK is nullable on every kind; a row missing it must degrade to a
+		// list page or the inbox, never to a "/plans/" dead end.
+		{"plan_assigned", NotificationRow{UserID: id}, base + "/plans"},
+		{"achievement", NotificationRow{UserID: id}, base + "/u/" + id + "?tab=notifications"},
+		{"challenge_complete", NotificationRow{UserID: id}, base + "/challenges"},
+	}
+	for _, c := range cases {
+		c.row.Kind = c.kind
+		if got := pathForKind(c.kind, base, c.row); got != c.want {
+			t.Errorf("pathForKind(%q) = %q, want %q", c.kind, got, c.want)
+		}
+	}
+}
+
 // TestInAppOnlyKinds_AreRealKinds keeps the exemption list from going stale: an
 // entry for a kind the union no longer carries would silently exempt nothing
 // while reading as a considered decision.
