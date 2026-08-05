@@ -92,6 +92,7 @@
   "peopleSearchHint": "Läufer nach Namen suchen",
   "peopleClearSearchTooltip": "Suche löschen",
   "commonClearSearch": "Suche löschen",
+  "commonCancel": "Abbrechen",
   "commonDismiss": "Schließen",
   "settingsDevicesRemoveOverride": "Überschreibung entfernen",
   "peopleSearchResultsHeader": "Suchergebnisse",

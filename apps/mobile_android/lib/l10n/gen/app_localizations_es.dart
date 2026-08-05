@@ -376,6 +376,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonClearSearch => 'Borrar búsqueda';
 
   @override
+  String get commonCancel => 'Cancelar';
+
+  @override
   String get commonDismiss => 'Descartar';
 
   @override

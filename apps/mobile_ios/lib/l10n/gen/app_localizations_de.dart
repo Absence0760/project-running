@@ -377,6 +377,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get commonClearSearch => 'Suche löschen';
 
   @override
+  String get commonCancel => 'Abbrechen';
+
+  @override
   String get commonDismiss => 'Schließen';
 
   @override

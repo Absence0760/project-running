@@ -376,6 +376,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get commonClearSearch => 'Effacer la recherche';
 
   @override
+  String get commonCancel => 'Annuler';
+
+  @override
   String get commonDismiss => 'Fermer';
 
   @override

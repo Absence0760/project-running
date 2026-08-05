@@ -92,6 +92,7 @@
   "peopleSearchHint": "Buscar corredores por nombre",
   "peopleClearSearchTooltip": "Borrar búsqueda",
   "commonClearSearch": "Borrar búsqueda",
+  "commonCancel": "Cancelar",
   "commonDismiss": "Descartar",
   "settingsDevicesRemoveOverride": "Quitar ajuste",
   "peopleSearchResultsHeader": "Resultados de búsqueda",

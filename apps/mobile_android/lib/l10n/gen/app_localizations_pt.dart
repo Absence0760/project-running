@@ -376,6 +376,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get commonClearSearch => 'Limpar busca';
 
   @override
+  String get commonCancel => 'Cancelar';
+
+  @override
   String get commonDismiss => 'Dispensar';
 
   @override
@@ -12858,6 +12861,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get commonClearSearch => 'Limpar busca';
+
+  @override
+  String get commonCancel => 'Cancelar';
 
   @override
   String get commonDismiss => 'Dispensar';

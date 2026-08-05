@@ -364,6 +364,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get commonClearSearch => '検索をクリア';
 
   @override
+  String get commonCancel => 'キャンセル';
+
+  @override
   String get commonDismiss => '閉じる';
 
   @override

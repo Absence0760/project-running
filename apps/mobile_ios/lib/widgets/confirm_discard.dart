@@ -1,34 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import 'confirm_destructive.dart';
 
 /// Confirm leaving a form whose unsaved edits would be lost. Resolves `true`
 /// when the user chooses to discard, `false` on cancel / barrier dismiss.
 /// [body] swaps the generic message for a surface-specific one (e.g. the
 /// privacy-zones editor's).
-Future<bool> confirmDiscard(BuildContext context, {String? body}) async {
+Future<bool> confirmDiscard(BuildContext context, {String? body}) {
   final l10n = AppLocalizations.of(context);
-  return await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(l10n.discardChangesTitle),
-          content: Text(body ?? l10n.discardChangesBody),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(l10n.discardChangesCancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error,
-              ),
-              child: Text(l10n.discardChangesDiscard),
-            ),
-          ],
-        ),
-      ) ??
-      false;
+  return confirmDestructive(
+    context,
+    title: l10n.discardChangesTitle,
+    body: body ?? l10n.discardChangesBody,
+    confirmLabel: l10n.discardChangesDiscard,
+    cancelLabel: l10n.discardChangesCancel,
+  );
 }
 
 /// Blocks a route pop while [isDirty] reports unsaved edits: the pop attempt

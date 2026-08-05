@@ -531,6 +531,10 @@
   "@commonClearSearch": {
     "description": "Generic tooltip for a clear-search icon button"
   },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Generic cancel action for a destructive-confirm dialog whose surface has no cancel label of its own"
+  },
   "commonDismiss": "Dismiss",
   "@commonDismiss": {
     "description": "Generic tooltip for a dismiss / close icon button"

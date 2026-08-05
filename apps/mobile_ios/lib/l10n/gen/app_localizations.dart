@@ -659,6 +659,12 @@ abstract class AppLocalizations {
   /// **'Clear search'**
   String get commonClearSearch;
 
+  /// Generic cancel action for a destructive-confirm dialog whose surface has no cancel label of its own
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
+
   /// Generic tooltip for a dismiss / close icon button
   ///
   /// In en, this message translates to:
