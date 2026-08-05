@@ -168,7 +168,7 @@
 	}
 
 	.live-cta .kicker {
-		color: var(--color-success-strong);
+		color: var(--color-success-text);
 	}
 
 	.live-dot {
