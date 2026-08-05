@@ -40,9 +40,17 @@
 	deliberately NOT in here: a ticking number would re-announce on every
 	tick. WCAG 2.2.1 is met by the `undo_window_s` preference, which can
 	turn the limit off entirely; hover/focus additionally pauses it.
+
+	`data-modal-trap-include` puts the bar's buttons inside `Modal.svelte`'s
+	Tab ring while a modal is open. Without it the trap — which the page
+	behind still needs, there is no `inert` — leaves the only undo
+	affordance reachable by pointer alone, which is why round 11 reverted
+	the first in-modal adoption. Tabbing in also pauses the countdown, so
+	arriving by keyboard does not cost the window.
 -->
 <div
 	class="undo-region"
+	data-modal-trap-include
 	role="status"
 	aria-live="polite"
 	aria-atomic="true"

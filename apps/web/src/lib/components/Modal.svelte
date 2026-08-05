@@ -38,6 +38,16 @@
 	let dialogEl = $state<HTMLDivElement | null>(null);
 	let prevFocus: HTMLElement | null = null;
 
+	const FOCUSABLE =
+		'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
+		'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+	function focusablesIn(root: ParentNode): HTMLElement[] {
+		return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+			(el) => el.getClientRects().length > 0,
+		);
+	}
+
 	$effect(() => {
 		if (!open) return;
 		// Save focus + lock body scroll while open. Restore both on close.
@@ -55,29 +65,48 @@
 			// still in the DOM (no inert), so without this a keyboard user
 			// tabs out of the last control straight into the obscured page.
 			if (e.key !== 'Tab' || !dialogEl) return;
-			const focusable = [
-				...dialogEl.querySelectorAll<HTMLElement>(
-					'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
-						'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-				),
-			].filter((el) => el.getClientRects().length > 0);
-			if (focusable.length === 0) {
+			const dialogRing = focusablesIn(dialogEl);
+			// An element marked `data-modal-trap-include` joins the ring even
+			// though it sits outside the dialog. It exists for a transient
+			// global affordance a modal action PRODUCES — the undo bar — which
+			// the trap would otherwise make mouse-only. It joins at the END:
+			// the offer is a consequence of what the user just did in the
+			// dialog, so that is where it reads (WCAG 2.4.3), independent of
+			// where in the layout the host happens to be mounted. Nothing
+			// pending means no focusables, so the ring is bit-for-bit the
+			// dialog's own.
+			const outerRing = [
+				...document.querySelectorAll<HTMLElement>('[data-modal-trap-include]'),
+			]
+				.filter((host) => !dialogEl.contains(host))
+				.flatMap(focusablesIn);
+			const ring = [...dialogRing, ...outerRing];
+			if (ring.length === 0) {
 				e.preventDefault();
 				dialogEl.focus();
 				return;
 			}
-			const first = focusable[0];
-			const last = focusable[focusable.length - 1];
+			const first = ring[0];
+			const last = ring[ring.length - 1];
+			const dialogLast = dialogRing[dialogRing.length - 1];
 			const active = document.activeElement as HTMLElement | null;
-			const inside = active != null && dialogEl.contains(active);
-			if (e.shiftKey) {
-				if (!inside || active === first || active === dialogEl) {
-					e.preventDefault();
-					last.focus();
-				}
-			} else if (!inside || active === last) {
+			const offRing = active == null || ring.indexOf(active) < 0;
+			const hop = e.shiftKey
+				? offRing || active === first
+					? last
+					: active === outerRing[0]
+						? dialogLast
+						: null
+				: offRing
+					? first
+					: active === last
+						? first
+						: active === dialogLast
+							? outerRing[0]
+							: null;
+			if (hop) {
 				e.preventDefault();
-				first.focus();
+				hop.focus();
 			}
 		};
 		window.addEventListener('keydown', onKey);
