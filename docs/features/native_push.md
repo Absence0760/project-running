@@ -237,6 +237,43 @@ The device-led leg — token registration + foreground/background display:
     `apps/web/CLAUDE.md`). Wrap every platform-channel call in its own
     try/catch + `debugPrint` (L4 auxiliary-effect resilience — a push-init
     failure must never break sign-in or any core flow).
+
+    **Shipped 2026-08-05 (issue #666).** The seam existed from the first cut but
+    `main.dart` built the bridge without an `onOpenNotification`, so every tap
+    opened the app wherever it already was and dropped the target. The wiring
+    now is:
+
+    | Piece | Where |
+    |---|---|
+    | URL → typed target (pure, host-tested, never throws) | `apps/mobile_*/lib/push_target.dart` — `pushTargetFromUrl` |
+    | Bridge callback → parked target | `main.dart` `routePushOpen` → the `pendingPushTarget` notifier |
+    | Drain + navigate | `HomeScreen._onPendingPushTarget` (listener **plus** a first-frame drain) |
+    | Cold start | `PushMessaging.getInitialMessage()`, read once in `attach()` |
+
+    Two things are easy to get wrong here. First, `onMessageOpenedApp` does
+    **not** replay the tap that launched a terminated app — that message is
+    delivered exactly once via `getInitialMessage()`, so a fix wired only to the
+    stream works warm and silently fails cold. Second, the tap can arrive before
+    any Navigator exists, which is why the target parks in a notifier that
+    HomeScreen drains on its first frame (the same shape `incomingRouteImport`
+    uses for a GPX opened from a closed app) rather than navigating inline.
+
+    Targets follow `pathForKind` (`apps/job_worker/internal/mailer.go`):
+    `/events/{id}`, `/clubs`, `/clubs/{id}`, `/plans`, `/messages`,
+    `/runs/{id}`, `/u/{id}`, `/challenges`, `/notifications`. The mobile club
+    and event screens are slug-addressed while the push carries a UUID, so
+    `SocialService.fetchClubSlugById` / `fetchClubSlugForEvent` resolve it and
+    degrade to the clubs hub on a miss. `/messages` has no mobile surface
+    (web-only per §24) and lands on the inbox, as does any unrecognised or
+    malformed URL — mirroring `pathForKind`'s own `default:` arm.
+
+    **Known gap on the web side of the same contract:** `/events/{id}` and
+    `/notifications` are not routes on web (`apps/web/src/routes/` has neither;
+    the inbox lives at `/u/{id}?tab=notifications` and events at
+    `/clubs/{slug}/events/{id}`), so the email CTA and web-push deep link for
+    the event kinds and for every `default:` kind currently 404. Mobile routes
+    both correctly. Fixing it means either redirect routes on web or teaching
+    `pathForKind` the canonical paths — see `mailer.go:341` + `mailer.go:751`.
   - Gate the whole bridge on `firebase_messaging` being initialisable; if
     Firebase isn't configured (no `google-services.json`), `attach()` is a
     best-effort no-op (compiles + runs in dev without credentials).
