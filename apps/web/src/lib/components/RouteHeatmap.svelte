@@ -408,7 +408,13 @@
 				source: ROUTE_HL_SOURCE,
 				paint: {
 					'circle-radius': 16,
-					'circle-color': `color-mix(in srgb, ${mapHoverLine(darkBasemap)} 16%, transparent)`,
+					// MapLibre parses paint colours with its own parser, which has no
+					// `color-mix()` — an invalid value throws out of `addLayer` and
+					// takes the rest of the map wiring with it. The 16% wash is the
+					// fill's own opacity instead, which leaves the stroke opaque
+					// exactly as the previous `rgba(…, 0.16)` + solid stroke did.
+					'circle-color': mapHoverLine(darkBasemap),
+					'circle-opacity': 0.16,
 					'circle-stroke-color': mapHoverLine(darkBasemap),
 					'circle-stroke-width': 2,
 				},
