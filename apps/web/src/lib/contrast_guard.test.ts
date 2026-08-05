@@ -692,6 +692,23 @@ for (const { label, marker } of THEMES) {
 			assert.ok(
 				step >= 1.18,
 				`--kind-${i + 1} -> --kind-${i + 2} steps only ${step.toFixed(3)} in ${label}; the ladder is what carries the marks in greyscale.`,
+// --color-border is the one LINE token, and its entire guarantee is WCAG
+// 1.4.11's 3:1 floor against every surface a boundary is drawn on. It shipped
+// at 1.458:1 on the light card and 1.328:1 on the dark one, so web had no token
+// that guaranteed a visible boundary at all while mobile's whole card/divider
+// grammar rests on one (§ 487). In light the card fill is #FFFFFF on a #F7F3EC
+// page — 1.116:1 apart — so the hairline is the only separation there is, which
+// is exactly the "visual information required to identify a UI component"
+// 1.4.11 sets at 3:1.
+for (const { label, marker } of THEMES) {
+	test(`the line token clears the 3:1 boundary floor on every surface — ${label}`, () => {
+		const line = resolveToken(marker, 'color-border');
+		for (const surfaceName of SURFACE_TOKENS) {
+			const surface = resolveToken(marker, surfaceName);
+			const ratio = contrastRatio(line, surface);
+			assert.ok(
+				ratio >= AA_NON_TEXT,
+				`--color-border (${line}) on --${surfaceName} (${surface}) is ${ratio.toFixed(3)}:1 in ${label}; a boundary needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
 			);
 		}
 	});
@@ -749,6 +766,334 @@ test('workout-kind tokens match mobile ChartPalette.kinds', () => {
 			);
 		});
 	}
+});
+
+// Mobile pinned the same token per brightness in § 487 and web's surfaces ARE
+// mobile's (parchment / parchmentDim / duskDeep / midnight are --color-bg /
+// --color-bg-tertiary / --color-surface / --color-bg), so the two hairlines
+// must be the same colour or a card reads apart on one platform and not the
+// other. A Dart file cannot import a CSS custom property, so the lockstep is
+// checked here, the same way the chart, zone and semantic palettes already are.
+test('the line token matches mobile AppTheme.parchmentLine / duskLine', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/app_theme.dart'),
+		'utf-8',
+	);
+	for (const [marker, symbol] of [
+		[':root {', 'parchmentLine'],
+		[':root[data-theme="dark"]', 'duskLine'],
+	] as const) {
+		const hex = dart.match(
+			new RegExp(`static const Color ${symbol} = Color\\(0xFF([0-9A-Fa-f]{6})\\)`),
+		)?.[1];
+		assert.ok(hex, `app_theme.dart has no ${symbol}`);
+		assert.equal(
+			resolveToken(marker, 'color-border').toUpperCase(),
+			`#${hex!.toUpperCase()}`,
+			`--color-border in ${marker} has drifted from AppTheme.${symbol}.`,
+		);
+	}
+});
+
+// The other half of the split: --color-fill-subtle holds the value the border
+// token shipped with, and its contract is the opposite one — text ON it must
+// clear AA. It is what the neutral metadata chip, the progress-bar tracks and
+// the button hover took when --color-border became a 3:1 line. Its own
+// separation from the surface is deliberately NOT pinned: a track is identified
+// by the fill inside it, not by its own edge (measured 1.162-1.622:1, recorded
+// in decisions rather than raised, because deepening a progress track is a
+// visual-design decision on five surfaces and not a boundary defect).
+for (const { label, marker } of THEMES) {
+	test(`the neutral chip's label clears AA on the subtle fill — ${label}`, () => {
+		const fg = resolveToken(marker, 'chip-fg');
+		const bg = resolveToken(marker, 'chip-bg');
+		const ratio = contrastRatio(fg, bg);
+		assert.ok(
+			ratio >= AA_NORMAL,
+			`--chip-fg (${fg}) on --chip-bg (${bg}) is ${ratio.toFixed(3)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
+		);
+	});
+}
+
+// The rule the split creates, and the only direction it can regress in: a FILL
+// token drawn as a border re-creates the sub-3:1 hairline the line token exists
+// to remove, silently, at a call site that reads as deliberate. Scoped to the
+// CSS border/outline longhands and shorthands, which are unambiguously a
+// component boundary. `background` is NOT in scope in either direction — eight
+// dividers here are drawn as a 1px background or a grid `gap` show-through and
+// legitimately take --color-border — and `stroke` is not either, because a
+// chart gridline is reference ornament inside a graphic rather than a component
+// edge and is the one class deliberately left below the floor.
+const BOUNDARY_PROPERTY =
+	'(?:border|border-(?:top|bottom|left|right|inline|block)(?:-(?:start|end))?|border-(?:top|bottom|left|right|inline-start|inline-end|block-start|block-end)?-?color|outline|outline-color)';
+const FILL_AS_BOUNDARY = new RegExp(
+	`(?<![a-z-])${BOUNDARY_PROPERTY}\\s*:[^;]*var\\(\\s*--color-fill-subtle\\s*[,)]`,
+);
+
+test('no source file draws a border or outline in the subtle FILL token', () => {
+	const hits = scanSource((line) => FILL_AS_BOUNDARY.test(line));
+	assert.equal(
+		hits.length,
+		0,
+		`A boundary is drawn in --color-fill-subtle, which sits at 1.162-1.622:1 against ` +
+			`the surfaces it lands on — the invisible hairline --color-border was raised to ` +
+			`3:1 to remove. Use --color-border:\n${hits.join('\n')}`,
+	);
+});
+
+// And the mirror: a boundary token is not text. It guarantees 3:1, not 4.5:1,
+// so painting type in it is a WCAG 1.4.3 failure that the boundary floor above
+// cannot catch — the plan surfaces' "rest" workout label did exactly this,
+// reading 1.458:1 light / 1.328:1 dark before the token moved and still only
+// 3.906 / 3.330 after. Muted type is --color-text-tertiary (5.782 / 5.510).
+//
+// A QUOTED reference is banned outright rather than classified, because syntax
+// cannot decide it: `rest: 'var(--color-border)'` was handed to a `--kind`
+// component custom property that the consumer applied to a 3px stripe AND to
+// the label's `color:`, so one entry was a boundary and text at once. That is
+// § 510's "derived" verdict — and unlike mobile's it needs no count-pinned
+// allowlist, because after the routing none is left and an entry matching
+// nothing would fail the "can only shrink" rule anyway.
+const BOUNDARY_TOKEN_AS_TEXT = new RegExp(
+	`(?<![a-z-])(?:color|-webkit-text-fill-color)\\s*:\\s*var\\(\\s*--color-border\\s*[,)]` +
+		`|['"]\\s*var\\(\\s*--color-border\\s*\\)\\s*['"]`,
+);
+
+test('no source file uses the line token as a text colour', () => {
+	const hits = scanSource((line) => BOUNDARY_TOKEN_AS_TEXT.test(line));
+	assert.equal(
+		hits.length,
+		0,
+		`--color-border is a 3:1 boundary token used as text, which cannot reach WCAG AA's ` +
+			`4.5:1 (3.906:1 light / 3.330:1 dark on the card). Use --color-text-tertiary:\n${hits.join('\n')}`,
+	);
+});
+
+// A boundary token has no headroom at all — its whole guarantee is the floor,
+// so any thinning spends it (§ 510, arrived at on mobile). Mixing it with an
+// ACCENT is not a thinning and must be spared: the 19 `color-mix(<accent> N%,
+// var(--color-border))` borders here all move contrast UP, because the accent
+// is darker than the line in light and lighter than it in dark. Mixing toward
+// `transparent` or toward a surface token is the thinning, and it is banned.
+const LINE_TOKEN_THINNED = new RegExp(
+	`color-mix\\([^;]*var\\(\\s*--color-border\\s*\\)[^;]*?,\\s*(?:transparent|var\\(\\s*--color-(?:bg|bg-secondary|bg-tertiary|surface)\\s*\\))|` +
+		`color-mix\\([^;]*(?:transparent|var\\(\\s*--color-(?:bg|bg-secondary|bg-tertiary|surface)\\s*\\))[^;]*var\\(\\s*--color-border\\s*\\)\\s*\\d`,
+);
+
+test('the line token is never thinned toward a surface or transparent', () => {
+	const hits = scanSource((line) => LINE_TOKEN_THINNED.test(line));
+	assert.equal(
+		hits.length,
+		0,
+		`--color-border is mixed toward a surface or transparent. Its entire guarantee is ` +
+			`the 3:1 floor, so a thinning spends it — 0.18 of it computed to 1.229:1 on the ` +
+			`mobile side of the same finding. Draw the softer line in --color-fill-subtle if ` +
+			`it is genuinely decorative:\n${hits.join('\n')}`,
+	);
+});
+
+// All three scans, both directions. The line-vs-fill split is exactly what the
+// property boundary decides, so a future tightening that reached `background`
+// would flag the eight legitimate divider-as-a-fill sites, and one that dropped
+// the `(?<![a-z-])` lookbehind would read `background-color` as a boundary.
+const LINE_TOKEN_FIXTURES: Array<[re: RegExp, flagged: boolean, line: string]> = [
+	// --- fill drawn as a boundary ---
+	[FILL_AS_BOUNDARY, true, '\tborder: 1px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-top: 1px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-inline-start: 3px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-color: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-bottom-color: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\toutline: 2px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder: 1px solid var(--color-fill-subtle, #DDD5C5);'],
+	[FILL_AS_BOUNDARY, false, '\tbackground: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, false, '\tbackground-color: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, false, '\tstroke: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, false, '\tborder: 1px solid var(--color-border);'],
+	[FILL_AS_BOUNDARY, false, '\t--color-fill-subtle: #DDD5C5;'],
+	// --- boundary token as text ---
+	[BOUNDARY_TOKEN_AS_TEXT, true, '\tcolor: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, true, "\t\trest: 'var(--color-border)'"],
+	[BOUNDARY_TOKEN_AS_TEXT, true, '\t-webkit-text-fill-color: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tborder-color: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tbackground-color: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tcolor: var(--color-text-tertiary);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, "\t\trest: 'var(--color-text-tertiary)'"],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tstyle="--kind: {KIND_COLOR[wo.kind]}"'],
+	// --- thinning ---
+	[LINE_TOKEN_THINNED, true, '\tborder-color: color-mix(in srgb, var(--color-border) 40%, transparent);'],
+	[LINE_TOKEN_THINNED, true, '\tborder-color: color-mix(in srgb, var(--color-border) 60%, var(--color-surface));'],
+	[LINE_TOKEN_THINNED, true, '\tborder-color: color-mix(in srgb, var(--color-bg) 70%, var(--color-border) 30%);'],
+	[LINE_TOKEN_THINNED, false, '\tborder-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));'],
+	[LINE_TOKEN_THINNED, false, '\tborder: 1px dashed color-mix(in srgb, var(--color-secondary) 35%, var(--color-border));'],
+	[LINE_TOKEN_THINNED, false, '\tbackground: color-mix(in srgb, var(--color-primary) 14%, var(--color-fill-subtle));'],
+];
+test('the line/fill scans split on the CSS property, not on the token alone', () => {
+	for (const [re, flagged, line] of LINE_TOKEN_FIXTURES) {
+		assert.equal(
+			re.test(line),
+			flagged,
+			flagged ? `the scan misses \`${line.trim()}\`` : `the scan wrongly flags \`${line.trim()}\``,
+		);
+	}
+});
+
+// The race-day hero is a FIXED canvas — it paints its own gradient and follows
+// no theme — so its colours cannot be checked against a surface token and were
+// therefore never checked at all: `color: white` sat at 2.803:1 on the orange
+// stop, the .feasibility inks at 1.989-3.021:1 on the veil they actually paint
+// over (the 2.295-3.572:1 in the source comment was measured on the BARE
+// gradient, § 503's trap one more time), and the toggle's edge at 1.494:1.
+//
+// The floor is derived from the panel's own declarations rather than from a
+// pinned number: the gradient stops must be the two theme-INDEPENDENT "-strong"
+// fills (already held to white-on-AA above and forbidden a dark override), and
+// then every white veil the panel layers on top is composited over the WORST
+// stop — including the midpoint, which neither end measures.
+test('every ink on the race-day fixed canvas clears AA over its own veil', () => {
+	const source = readFileSync(resolve(__dirname, 'components/RaceDayPanel.svelte'), 'utf-8');
+	const panel = source.match(/\.race-day-panel \{([\s\S]*?)\n\t\}/)?.[1];
+	assert.ok(panel, 'RaceDayPanel has no .race-day-panel rule');
+	const gradient = panel!.match(/background:\s*(linear-gradient\([\s\S]*?\));/)?.[1];
+	assert.ok(gradient, '.race-day-panel declares no gradient background');
+	const stopTokens = [...gradient!.matchAll(/var\(\s*--([\w-]+)\s*\)/g)].map((m) => m[1]);
+	assert.deepEqual(
+		stopTokens,
+		['color-warning-strong', 'color-danger-strong'],
+		'the hero gradient must be built from the theme-independent "-strong" fills, whose ' +
+			'white-on-AA is pinned by the test above; a theme surface token would resolve to ' +
+			'the wrong side on a canvas that does not follow the theme.',
+	);
+	const ends = stopTokens.map((n) => resolveToken(':root {', n));
+	const stops = [ends[0], mixOverHex(ends[0], 50, ends[1]), ends[1]];
+
+	// Rule -> the veil it fills with (white OR black — an inset sub-panel is the
+	// deeper one) and the ink it sets. A rule that declares no ink of its own
+	// takes whatever its class siblings declare, because the verdict and
+	// confidence inks live in sibling rules that set only a `color:`; only when
+	// no sibling declares one either does it inherit the panel's white.
+	const WHITE = '#FFFFFF';
+	const offenders: string[] = [];
+	for (const rule of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+		const [, selector, body] = rule;
+		const veil = body.match(/background:\s*rgba\((255,\s*255,\s*255|0,\s*0,\s*0),\s*([0-9.]+)\)/);
+		if (veil == null) continue;
+		const [, channel, alpha] = veil;
+		const over = channel.startsWith('0') ? '#000000' : WHITE;
+		const backings = stops.map((s) => mixOverHex(over, Number(alpha) * 100, s));
+		const inks = [...body.matchAll(/(?<![a-z-])color:\s*(#[0-9A-Fa-f]{6}|white)/g)].map((m) =>
+			m[1] === 'white' ? WHITE : m[1],
+		);
+		const base = selector.trim().split(/[\s.:]+/).filter(Boolean)[0];
+		const siblingInks = [
+			...source.matchAll(
+				new RegExp(`\\.${base}[^{}]*\\{[^{}]*?(?<![a-z-])color:\\s*(#[0-9A-Fa-f]{6}|white)`, 'g'),
+			),
+		].map((m) => (m[1] === 'white' ? WHITE : m[1]));
+		const resolved = [...new Set([...inks, ...siblingInks])];
+		for (const ink of resolved.length ? resolved : [WHITE]) {
+			for (const backing of backings) {
+				const ratio = contrastRatio(ink, backing);
+				if (ratio < AA_NORMAL) {
+					offenders.push(
+						`${selector.trim()}: ${ink} on rgba(${channel},${alpha}) over ${backing} is ${ratio.toFixed(3)}:1`,
+					);
+				}
+			}
+		}
+	}
+	assert.equal(
+		offenders.length,
+		0,
+		`An ink on the race-day fixed canvas fails WCAG AA over the veil it paints on. ` +
+			`Deepen the veil or darken the ink — the panel follows no theme, so there is no ` +
+			`token to route to:\n${offenders.join('\n')}`,
+	);
+
+	// A thinned foreground on this canvas is the same class of defect one step
+	// removed: 0.85 composited to 3.693:1 over the 0.10 veil beneath it.
+	// Comments stripped first: the rule that explains why a thinning was removed
+	// quotes the value it removed, and flagging that would push the next editor
+	// toward deleting the reasoning.
+	const thin = [...source.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/opacity:\s*(0\.\d+)/g)]
+		.map((m) => Number(m[1]))
+		.filter((o) => o < 0.9);
+	assert.deepEqual(thin, [], 'a foreground on the hero may not be thinned below 0.9.');
+});
+
+// The public landing's four feature-icon accents. Each is a base token's tint
+// under a theme-aware ink, and the rules are READ OUT OF THE SOURCE so the pair
+// cannot drift apart or be re-frozen as a hex: the four literals they replace
+// (#4F46E5 / #EC4899 / #10B981 / #F97316) each failed in exactly one theme
+// because a fixed hue cannot suit both a near-white and a dark-violet card.
+// Marketing copy is still content, so the 4.5:1 floor applies rather than 3:1.
+for (const { label, marker } of THEMES) {
+	test(`landing feature-icon accents meet AA on their own tint — ${label}`, () => {
+		const page = readFileSync(resolve(__dirname, '../routes/+page.svelte'), 'utf-8');
+		const rules = [
+			...page.matchAll(
+				/\.feature:nth-child\((\d)\) \.feature-icon \{\s*background:\s*color-mix\(in srgb, var\(--([\w-]+)\) (\d+)%, var\(--([\w-]+)\)\);\s*color:\s*var\(--([\w-]+)\);/g,
+			),
+		];
+		assert.equal(rules.length, 4, 'the landing must declare four token-based feature accents');
+		for (const [, nth, base, pct, surfaceName, ink] of rules) {
+			const tint = mixOverHex(
+				resolveToken(marker, base),
+				Number(pct),
+				resolveToken(marker, surfaceName),
+			);
+			const ratio = contrastRatio(resolveToken(marker, ink), tint);
+			assert.ok(
+				ratio >= AA_NORMAL,
+				`feature card ${nth}: --${ink} on --${base}@${pct}% over --${surfaceName} (${tint}) is ${ratio.toFixed(3)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
+			);
+		}
+	});
+}
+
+// The identity-avatar disc. A gradient is the one fill a foreground hex cannot
+// be reasoned about by eye, and --gradient-primary proved it: white on its light
+// light-mode third stop and its two dark-mode stops read 2.081 / 2.153:1, which
+// is § 481's finding on the web side. --gradient-avatar exists so the disc's
+// stops are ALL AA-safe under --color-on-primary rather than only some of them,
+// and this checks every stop rather than the pair it was written with.
+for (const { label, marker } of THEMES) {
+	test(`every --gradient-avatar stop pairs AA with --color-on-primary — ${label}`, () => {
+		const rootBlock = block(':root {');
+		const value = rootBlock.match(/--gradient-avatar:\s*([\s\S]*?);/)?.[1];
+		assert.ok(value, 'app.css declares no --gradient-avatar');
+		const stops = [
+			...[...value!.matchAll(/var\(\s*--([\w-]+)\s*\)/g)].map((m) => resolveToken(marker, m[1])),
+			...(value!.match(/#[0-9A-Fa-f]{6}/g) ?? []),
+		];
+		assert.ok(stops.length >= 2, `--gradient-avatar resolved to ${stops.length} stop(s)`);
+		const ink = resolveToken(marker, 'color-on-primary');
+		for (const stop of stops) {
+			const ratio = contrastRatio(ink, stop);
+			assert.ok(
+				ratio >= AA_NORMAL,
+				`--color-on-primary (${ink}) on the --gradient-avatar stop ${stop} is ${ratio.toFixed(3)}:1 in ${label}; the initial is text and needs >=${AA_NORMAL}:1. A gradient whose stops straddle the mid-luminance band has no legible single foreground — narrow the stops.`,
+			);
+		}
+	});
+}
+
+// The seeded (per-entity hue) branch of the same component takes no theme token
+// at all, so its floor is asserted over the hue wheel in format/avatar.test.ts.
+// What is pinned here is that the component still routes through the clamp — a
+// literal `color: white` beside a per-entity hue is the exact defect § 481 named.
+test('Avatar paints no fixed foreground beside a per-entity or gradient fill', () => {
+	const source = readFileSync(resolve(__dirname, 'components/Avatar.svelte'), 'utf-8');
+	assert.match(
+		source,
+		/color:\s*var\(--av-fg\)/,
+		'Avatar.svelte must take its foreground from --av-fg, not a literal.',
+	);
+	assert.match(source, /seedForeground\(/, 'the seeded branch must pick its ink by contrast.');
+	assert.doesNotMatch(
+		source,
+		/(?<![a-z-])color:\s*(?:white|#[0-9A-Fa-f]{3,8})\s*;/,
+		'Avatar.svelte carries a fixed foreground literal.',
+	);
 });
 
 // --color-success-text / --color-danger-text, checked on every plain surface

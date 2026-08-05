@@ -127,7 +127,7 @@
 		height: var(--h, 6%);
 		min-height: 3px;
 		border-radius: 2px;
-		background: var(--color-border);
+		background: var(--color-fill-subtle);
 	}
 	.week-cell.active {
 		background: var(--color-primary);

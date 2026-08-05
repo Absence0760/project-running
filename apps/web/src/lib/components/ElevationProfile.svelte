@@ -343,7 +343,7 @@
 		vector-effect: non-scaling-stroke;
 	}
 	.grid {
-		stroke: var(--color-border);
+		stroke: var(--color-fill-subtle);
 		stroke-width: 1;
 		stroke-dasharray: 2 4;
 		opacity: 0.5;

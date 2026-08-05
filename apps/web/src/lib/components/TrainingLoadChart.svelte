@@ -293,7 +293,7 @@
 	}
 
 	.grid-line {
-		stroke: var(--color-border);
+		stroke: var(--color-fill-subtle);
 		stroke-width: 1;
 		vector-effect: non-scaling-stroke;
 	}

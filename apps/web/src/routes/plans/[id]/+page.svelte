@@ -872,7 +872,7 @@
 	/// as a real fill, not a static border. The static `5px` border was
 	/// indistinguishable from a chrome flourish.
 	let progressGradient = $derived(
-		`conic-gradient(var(--color-primary) ${pct * 3.6}deg, color-mix(in srgb, var(--color-primary) 14%, var(--color-border)) 0deg)`
+		`conic-gradient(var(--color-primary) ${pct * 3.6}deg, color-mix(in srgb, var(--color-primary) 14%, var(--color-fill-subtle)) 0deg)`
 	);
 
 	function dayOfWeek(iso: string): string {

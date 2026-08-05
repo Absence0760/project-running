@@ -1326,7 +1326,7 @@
 		flex: 1;
 		height: 6px;
 		border-radius: 999px;
-		background: var(--color-border);
+		background: var(--color-fill-subtle);
 		overflow: hidden;
 	}
 	.course-progress-fill {
