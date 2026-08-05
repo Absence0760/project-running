@@ -39,7 +39,10 @@ import 'package:flutter/material.dart';
 ///
 /// Web's `--chart-fitness` / `--chart-fatigue` / `--chart-form` and
 /// `--zone-1`..`--zone-5` in `apps/web/src/app.css` are [series] and [zones] by
-/// value, per brightness. Web has no sequential-ramp token yet.
+/// value, per brightness, and `--heat-1`..`--heat-3` are [ramp]. All three
+/// locksteps are asserted from the web side, by scale name, in
+/// `apps/web/src/lib/contrast_guard.test.ts` — renaming a scale here breaks a
+/// guard in the other language's suite.
 @immutable
 class ChartPalette {
   const ChartPalette({
