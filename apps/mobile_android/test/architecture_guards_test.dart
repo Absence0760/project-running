@@ -5126,4 +5126,54 @@ void main() {
       );
     });
   });
+
+  group('remote images always carry a failure path', () {
+    // Every avatar in the app used to be hand-rolled, and four of the six
+    // painted the picture through a `DecorationImage` — which has no error
+    // hook at all — while gating the initial-letter child on the URL being
+    // absent. A failed load therefore suppressed the fallback and rendered
+    // a solid coloured circle with nothing in it. The same trap exists on
+    // `CircleAvatar.backgroundImage`, which paints over its child rather
+    // than under it. ui_kit's IdentityAvatar layers the picture over the
+    // initial instead, so a decode or network failure degrades to the
+    // letter (decisions.md § 492).
+    late List<File> sources;
+    setUpAll(() {
+      sources = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .toList();
+    });
+
+    test('no surface paints a remote image through DecorationImage', () {
+      final offenders = <String>[
+        for (final f in sources)
+          if (f.readAsStringSync().contains('DecorationImage(')) f.path,
+      ];
+      expect(offenders, isEmpty,
+          reason: 'DecorationImage cannot report a load failure — layer an '
+              'Image with an errorBuilder over the fallback instead');
+    });
+
+    test('no CircleAvatar hides its fallback behind a backgroundImage', () {
+      final offenders = <String>[
+        for (final f in sources)
+          if (f.readAsStringSync().contains('backgroundImage:')) f.path,
+      ];
+      expect(offenders, isEmpty,
+          reason: 'CircleAvatar paints backgroundImage over its child, so a '
+              'failed load shows an empty disc — use IdentityAvatar');
+    });
+
+    test('every avatar routes through ui_kit IdentityAvatar', () {
+      final offenders = <String>[
+        for (final f in sources)
+          if (f.readAsStringSync().contains('NetworkImage(')) f.path,
+      ];
+      expect(offenders, isEmpty,
+          reason: 'a bare NetworkImage has no errorBuilder of its own — use '
+              'IdentityAvatar for identities, Image.network elsewhere');
+    });
+  });
 }

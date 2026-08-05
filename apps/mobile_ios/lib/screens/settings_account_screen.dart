@@ -9,7 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, IdentityAvatar;
 
 import '../auth_change_aware.dart';
 import '../auth_error.dart';
@@ -899,16 +899,11 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
             ),
             if (signedIn)
               ListTile(
-                leading: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  backgroundImage:
-                      (_avatarUrl != null && _avatarUrl!.isNotEmpty)
-                          ? NetworkImage(_avatarUrl!)
-                          : null,
-                  child: (_avatarUrl == null || _avatarUrl!.isEmpty)
-                      ? Text(email.isNotEmpty ? email[0].toUpperCase() : '?')
-                      : null,
+                leading: IdentityAvatar(
+                  seed: widget.apiClient?.userId ?? email,
+                  name: email,
+                  size: 40,
+                  imageUrl: _avatarUrl,
                 ),
                 title: Text(l10n.settingsAccountAvatar),
                 subtitle: Text(l10n.settingsAccountAvatarHint),
