@@ -8,7 +8,10 @@ build/
 .idea/
 .pub-cache/
 .pub/
-pubspec.lock
+# pubspec.lock is COMMITTED. These are applications, not libraries, so the
+# lockfile is what makes CI, a fresh worktree and this checkout resolve the
+# same code. Ignoring it meant a third-party publish could turn main red with
+# no commit of ours -- which is exactly what happened on 2026-08-05.
 
 # Node.js
 node_modules/
