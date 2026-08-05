@@ -4816,4 +4816,18 @@ export const en = {
 	"trends.noChange": "No change",
 	"trends.new": "New",
 	"trends.footnote": "Change vs the same point in the previous week and month.",
+	// Deferred-commit undo bar (UndoBar.svelte) + the undo-window preference
+	"undo.action": "Undo",
+	"undo.dismiss": "Dismiss",
+	"undo.hint": "Press Undo to bring it back.",
+	"undo.restored": "Restored",
+	"nutrition.entryRemoved": "{item} removed",
+	"settingsGear.wearLogRemoved": "Wear note removed",
+	"routeConditions.removed": "Report removed",
+	"runSocial.commentRemoved": "Comment removed",
+	"prefs.undoWindow": "Undo window",
+	"prefs.undoWindowHelp": "How long Undo stays available after you remove something.",
+	"prefs.undoWindow8s": "8 seconds",
+	"prefs.undoWindow30s": "30 seconds",
+	"prefs.undoWindowManual": "Until I dismiss it",
 } satisfies Record<string, string>;

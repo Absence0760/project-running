@@ -4796,4 +4796,18 @@ export const messages = {
 	"trends.noChange": "Sin cambios",
 	"trends.new": "Nuevo",
 	"trends.footnote": "Cambio respecto al mismo punto de la semana y el mes anteriores.",
+	// Barra de deshacer (UndoBar.svelte) + preferencia de ventana
+	"undo.action": "Deshacer",
+	"undo.dismiss": "Cerrar",
+	"undo.hint": "Pulsa Deshacer para recuperarlo.",
+	"undo.restored": "Restaurado",
+	"nutrition.entryRemoved": "{item} eliminado",
+	"settingsGear.wearLogRemoved": "Nota de desgaste eliminada",
+	"routeConditions.removed": "Informe eliminado",
+	"runSocial.commentRemoved": "Comentario eliminado",
+	"prefs.undoWindow": "Ventana para deshacer",
+	"prefs.undoWindowHelp": "Cuánto tiempo sigue disponible Deshacer después de eliminar algo.",
+	"prefs.undoWindow8s": "8 segundos",
+	"prefs.undoWindow30s": "30 segundos",
+	"prefs.undoWindowManual": "Hasta que lo cierre",
 } satisfies Messages;

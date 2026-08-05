@@ -4796,4 +4796,18 @@ export const messages = {
 	"trends.noChange": "Keine Änderung",
 	"trends.new": "Neu",
 	"trends.footnote": "Veränderung gegenüber demselben Zeitpunkt der Vorwoche und des Vormonats.",
+	// Rückgängig-Leiste (UndoBar.svelte) + Zeitfenster-Einstellung
+	"undo.action": "Widerrufen",
+	"undo.dismiss": "Schließen",
+	"undo.hint": "Zum Wiederherstellen „Widerrufen“ drücken.",
+	"undo.restored": "Wiederhergestellt",
+	"nutrition.entryRemoved": "{item} entfernt",
+	"settingsGear.wearLogRemoved": "Verschleißnotiz entfernt",
+	"routeConditions.removed": "Meldung entfernt",
+	"runSocial.commentRemoved": "Kommentar entfernt",
+	"prefs.undoWindow": "Widerruf-Zeitfenster",
+	"prefs.undoWindowHelp": "Wie lange „Widerrufen“ nach dem Entfernen verfügbar bleibt.",
+	"prefs.undoWindow8s": "8 Sekunden",
+	"prefs.undoWindow30s": "30 Sekunden",
+	"prefs.undoWindowManual": "Bis ich es schließe",
 } satisfies Messages;

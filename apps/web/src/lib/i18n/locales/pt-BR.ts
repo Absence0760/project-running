@@ -4795,4 +4795,18 @@ export const messages = {
 	"trends.noChange": "Sem mudança",
 	"trends.new": "Novo",
 	"trends.footnote": "Variação em relação ao mesmo ponto da semana e do mês anteriores.",
+	// Barra de desfazer (UndoBar.svelte) + preferência de janela
+	"undo.action": "Desfazer",
+	"undo.dismiss": "Fechar",
+	"undo.hint": "Pressione Desfazer para restaurar.",
+	"undo.restored": "Restaurado",
+	"nutrition.entryRemoved": "{item} removido",
+	"settingsGear.wearLogRemoved": "Nota de desgaste removida",
+	"routeConditions.removed": "Relato removido",
+	"runSocial.commentRemoved": "Comentário removido",
+	"prefs.undoWindow": "Janela para desfazer",
+	"prefs.undoWindowHelp": "Por quanto tempo Desfazer fica disponível após remover algo.",
+	"prefs.undoWindow8s": "8 segundos",
+	"prefs.undoWindow30s": "30 segundos",
+	"prefs.undoWindowManual": "Até eu fechar",
 } satisfies Messages;

@@ -4796,4 +4796,18 @@ export const messages = {
 	"trends.noChange": "Aucun changement",
 	"trends.new": "Nouveau",
 	"trends.footnote": "Évolution par rapport au même point de la semaine et du mois précédents.",
+	// Barre d’annulation (UndoBar.svelte) + préférence de délai
+	"undo.action": "Annuler",
+	"undo.dismiss": "Fermer",
+	"undo.hint": "Appuyez sur Annuler pour le restaurer.",
+	"undo.restored": "Restauré",
+	"nutrition.entryRemoved": "{item} supprimé",
+	"settingsGear.wearLogRemoved": "Note d’usure supprimée",
+	"routeConditions.removed": "Signalement supprimé",
+	"runSocial.commentRemoved": "Commentaire supprimé",
+	"prefs.undoWindow": "Délai d’annulation",
+	"prefs.undoWindowHelp": "Durée pendant laquelle Annuler reste disponible après une suppression.",
+	"prefs.undoWindow8s": "8 secondes",
+	"prefs.undoWindow30s": "30 secondes",
+	"prefs.undoWindowManual": "Jusqu’à ce que je le ferme",
 } satisfies Messages;

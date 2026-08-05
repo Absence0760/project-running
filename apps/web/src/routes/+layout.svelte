@@ -20,6 +20,8 @@
 	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
 	import CookieConsentBanner from '$lib/components/CookieConsentBanner.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import UndoBar from '$lib/components/UndoBar.svelte';
+	import { setUndoWindowS } from '$lib/stores/undo.svelte';
 	import NotificationBell from '$lib/components/NotificationBell.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { m, initLocale } from '$lib/i18n/store.svelte';
@@ -134,6 +136,7 @@
 					effective<string>(settings, 'weight_unit') ??
 						defaultWeightUnitForDistanceUnit(distanceUnit),
 				);
+				setUndoWindowS(effective<number>(settings, 'undo_window_s'));
 			} catch (_) {
 				/* silent — falls back to default */
 			}
@@ -401,6 +404,7 @@
 </svelte:head>
 
 <ToastContainer />
+<UndoBar />
 <CookieConsentBanner />
 
 {#if isOffline}

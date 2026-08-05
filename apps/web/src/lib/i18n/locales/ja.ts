@@ -4791,4 +4791,18 @@ export const messages = {
 	"trends.noChange": "変化なし",
 	"trends.new": "新規",
 	"trends.footnote": "前週・前月の同時点との比較です。",
+	// 元に戻すバー (UndoBar.svelte) と時間設定
+	"undo.action": "元に戻す",
+	"undo.dismiss": "閉じる",
+	"undo.hint": "「元に戻す」を押すと復元できます。",
+	"undo.restored": "復元しました",
+	"nutrition.entryRemoved": "{item} を削除しました",
+	"settingsGear.wearLogRemoved": "摩耗メモを削除しました",
+	"routeConditions.removed": "レポートを削除しました",
+	"runSocial.commentRemoved": "コメントを削除しました",
+	"prefs.undoWindow": "元に戻せる時間",
+	"prefs.undoWindowHelp": "削除後に「元に戻す」を表示しておく時間です。",
+	"prefs.undoWindow8s": "8秒",
+	"prefs.undoWindow30s": "30秒",
+	"prefs.undoWindowManual": "自分で閉じるまで",
 } satisfies Messages;
