@@ -231,7 +231,6 @@
 							size="2.5rem"
 							font="1.1rem"
 							bg="seed"
-							sat={50}
 							seedHue={hashHue(club.id)}
 						/>
 						<div class="card-title">

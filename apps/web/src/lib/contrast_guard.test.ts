@@ -838,6 +838,52 @@ test('the line/fill scans split on the CSS property, not on the token alone', ()
 	}
 });
 
+// The identity-avatar disc. A gradient is the one fill a foreground hex cannot
+// be reasoned about by eye, and --gradient-primary proved it: white on its light
+// light-mode third stop and its two dark-mode stops read 2.081 / 2.153:1, which
+// is § 481's finding on the web side. --gradient-avatar exists so the disc's
+// stops are ALL AA-safe under --color-on-primary rather than only some of them,
+// and this checks every stop rather than the pair it was written with.
+for (const { label, marker } of THEMES) {
+	test(`every --gradient-avatar stop pairs AA with --color-on-primary — ${label}`, () => {
+		const rootBlock = block(':root {');
+		const value = rootBlock.match(/--gradient-avatar:\s*([\s\S]*?);/)?.[1];
+		assert.ok(value, 'app.css declares no --gradient-avatar');
+		const stops = [
+			...[...value!.matchAll(/var\(\s*--([\w-]+)\s*\)/g)].map((m) => resolveToken(marker, m[1])),
+			...(value!.match(/#[0-9A-Fa-f]{6}/g) ?? []),
+		];
+		assert.ok(stops.length >= 2, `--gradient-avatar resolved to ${stops.length} stop(s)`);
+		const ink = resolveToken(marker, 'color-on-primary');
+		for (const stop of stops) {
+			const ratio = contrastRatio(ink, stop);
+			assert.ok(
+				ratio >= AA_NORMAL,
+				`--color-on-primary (${ink}) on the --gradient-avatar stop ${stop} is ${ratio.toFixed(3)}:1 in ${label}; the initial is text and needs >=${AA_NORMAL}:1. A gradient whose stops straddle the mid-luminance band has no legible single foreground — narrow the stops.`,
+			);
+		}
+	});
+}
+
+// The seeded (per-entity hue) branch of the same component takes no theme token
+// at all, so its floor is asserted over the hue wheel in format/avatar.test.ts.
+// What is pinned here is that the component still routes through the clamp — a
+// literal `color: white` beside a per-entity hue is the exact defect § 481 named.
+test('Avatar paints no fixed foreground beside a per-entity or gradient fill', () => {
+	const source = readFileSync(resolve(__dirname, 'components/Avatar.svelte'), 'utf-8');
+	assert.match(
+		source,
+		/color:\s*var\(--av-fg\)/,
+		'Avatar.svelte must take its foreground from --av-fg, not a literal.',
+	);
+	assert.match(source, /seedForeground\(/, 'the seeded branch must pick its ink by contrast.');
+	assert.doesNotMatch(
+		source,
+		/(?<![a-z-])color:\s*(?:white|#[0-9A-Fa-f]{3,8})\s*;/,
+		'Avatar.svelte carries a fixed foreground literal.',
+	);
+});
+
 // --color-success-text / --color-danger-text, checked on every plain surface
 // (the signed readiness delta is bare text on the card) AND on the deepest
 // same-hue chip tint the source actually paints — which is the tightest case,

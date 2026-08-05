@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { initial, hashHue } from '$lib/format/avatar';
+	import { initial, hashHue, seedBackground, seedForeground } from '$lib/format/avatar';
 	import { safeImageSrc } from '$lib/util/safe_image_src';
 
 	type BgMode = 'gradient' | 'primary' | 'seed';
@@ -10,8 +10,6 @@
 		size,
 		font,
 		bg = 'gradient',
-		/** Saturation % for the `seed` background (50 or 55 in existing call sites). */
-		sat = 55,
 		/** Hue (0–359) for `bg="seed"`. Pass `hashHue(id)` for per-entity colour;
 		 *  omit for the fixed default. */
 		seedHue = null,
@@ -21,24 +19,29 @@
 		size: string;
 		font: string;
 		bg?: BgMode;
-		sat?: number;
 		seedHue?: number | null;
 	} = $props();
 
 	const safeUrl = $derived(safeImageSrc(url));
 
+	const hue = $derived(seedHue ?? 260);
 	const background = $derived(
 		bg === 'seed'
-			? `hsl(${seedHue ?? 260}, ${sat}%, 55%)`
+			? seedBackground(hue)
 			: bg === 'primary'
 				? 'var(--color-primary)'
-				: 'var(--gradient-primary)',
+				: 'var(--gradient-avatar)',
+	);
+	// The two theme-token modes pair with --color-on-primary; a seeded hue is
+	// theme-independent and picks its own ink by computed contrast (§ 481).
+	const foreground = $derived(
+		bg === 'seed' ? seedForeground(hue) : 'var(--color-on-primary)',
 	);
 </script>
 
 <span
 	class="avatar"
-	style="--av-size: {size}; --av-font: {font}; --av-bg: {background};"
+	style="--av-size: {size}; --av-font: {font}; --av-bg: {background}; --av-fg: {foreground};"
 	aria-hidden="true"
 >
 	{#if safeUrl}
@@ -55,7 +58,7 @@
 		flex-shrink: 0;
 		border-radius: 50%;
 		background: var(--av-bg);
-		color: white;
+		color: var(--av-fg);
 		display: grid;
 		place-items: center;
 		font-weight: 700;

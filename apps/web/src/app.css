@@ -159,6 +159,19 @@
 
 	/* Gradients */
 	--gradient-primary: linear-gradient(135deg, #2C5F6E 0%, #4F8090 50%, #F2A07B 100%);
+	/* Identity-avatar disc. Distinct from --gradient-primary because that one
+	   carries a LIGHT stop in both themes (its light third stop and its dark
+	   first two), so white on it read 2.081 / 2.153:1 and no foreground hex
+	   fixes a gradient spanning that range. Two stops instead of three, both
+	   drawn from token pairs that flip together with --color-on-primary, so one
+	   declaration resolves per theme: white on #2C5F6E / #A24A2C is 7.073 /
+	   5.912, and #120D22 on #F2A07B / #B9A7E8 is 9.120 / 8.818. Every stop is
+	   AA-checked against --color-on-primary in contrast_guard.test.ts. */
+	--gradient-avatar: linear-gradient(
+		135deg,
+		var(--color-primary) 0%,
+		var(--color-secondary-text) 100%
+	);
 	--gradient-surface: linear-gradient(135deg, rgba(44, 95, 110, 0.04) 0%, rgba(242, 160, 123, 0.04) 100%);
 	--gradient-sidebar: linear-gradient(180deg, #FFFFFF 0%, #F1ECE0 100%);
 
