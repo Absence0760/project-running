@@ -89,7 +89,8 @@ class TrainingLoadChart extends StatelessWidget {
                   painter: _ChartPainter(
                     points: points,
                     series: _seriesOf(context),
-                    axisColor: theme.colorScheme.outline.withValues(alpha: 0.5),
+                    gridColor: theme.dividerColor,
+                    zeroColor: theme.colorScheme.onSurfaceVariant,
                     labelStyle: theme.textTheme.labelSmall!.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -241,13 +242,15 @@ double trainingLoadTickStep(double span, {int maxTicks = 4}) {
 class _ChartPainter extends CustomPainter {
   final List<TrainingLoadPoint> points;
   final List<Color> series;
-  final Color axisColor;
+  final Color gridColor;
+  final Color zeroColor;
   final TextStyle labelStyle;
 
   _ChartPainter({
     required this.points,
     required this.series,
-    required this.axisColor,
+    required this.gridColor,
+    required this.zeroColor,
     required this.labelStyle,
   });
 
@@ -291,9 +294,13 @@ class _ChartPainter extends CustomPainter {
       return padT + plotH * (1 - (v - minV) / (maxV - minV));
     }
 
-    // Labelled gridlines — the magnitude the shape alone never carried.
+    // Labelled gridlines — the magnitude the shape alone never carried, so
+    // they are a graphical object owing 1.4.11's 3:1 and they take the line
+    // token §487 already holds there. Drawn at outline * 0.5 * 0.45 they were
+    // 1.297:1 on the light card and 1.410:1 on the dark one: the ticks were
+    // labelled but the lines they labelled could not be seen.
     final gridPaint = Paint()
-      ..color = axisColor.withValues(alpha: axisColor.a * 0.45)
+      ..color = gridColor
       ..strokeWidth = 1;
     final step = trainingLoadTickStep(maxV - minV);
     for (var tick = (minV / step).ceil() * step;
@@ -317,9 +324,11 @@ class _ChartPainter extends CustomPainter {
       );
     }
 
-    // Zero line — dashed, so the TSB sign stays distinct from the grid.
+    // Zero line — dashed, so the TSB sign stays distinct from the grid without
+    // needing a second hue. It reads stronger than a gridline because it is the
+    // reference datum, not a scale mark (1.852 / 2.284:1 before).
     final zeroPaint = Paint()
-      ..color = axisColor
+      ..color = zeroColor
       ..strokeWidth = 1;
     final zeroY = yAt(0);
     _drawDashedLine(
@@ -371,7 +380,8 @@ class _ChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ChartPainter old) =>
       !identical(old.points, points) ||
-      old.axisColor != axisColor ||
+      old.gridColor != gridColor ||
+      old.zeroColor != zeroColor ||
       old.labelStyle != labelStyle ||
       old.series.first != series.first;
 }

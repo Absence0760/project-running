@@ -133,6 +133,49 @@ void main() {
       }
     }
 
+    // Issue #666 round 10: §495 added labelled gridlines so a min/max-normalised
+    // plot carried a magnitude, but drew them at outline * 0.5 * 0.45 — 1.297:1
+    // on the light card and 1.410:1 on the dark one, so the ticks were labelled
+    // and the lines they labelled could not be seen. The grid takes §487's line
+    // token (3.531 / 3.330:1) and the zero datum onSurfaceVariant (8.459 /
+    // 9.474:1), which the dashed stroke still distinguishes.
+    for (final (name, theme) in [
+      ('light', AppTheme.light),
+      ('dark', AppTheme.dark),
+    ]) {
+      testWidgets('gridlines and the zero datum are visible in $name',
+          (tester) async {
+        await _pump(
+          tester,
+          theme: theme,
+          points: [
+            for (var i = 0; i < 6; i++)
+              _point(
+                date: DateTime(2026, 4, 1 + i),
+                atl: 30 + i * 8,
+                ctl: 40 + i * 4,
+                tsb: 10 - i * 5,
+              ),
+          ],
+          hasHr: true,
+        );
+        final painter = find.byKey(const Key('trainingLoadChartPainter'));
+        for (final token in [
+          theme.dividerColor,
+          theme.colorScheme.onSurfaceVariant,
+        ]) {
+          expect(
+            painter,
+            paints
+              ..something((symbol, args) =>
+                  symbol == #drawLine &&
+                  (args.last as Paint).color.toARGB32() == token.toARGB32()),
+            reason: 'no line drawn in $token',
+          );
+        }
+      });
+    }
+
     // The series values, their 3:1 floors on each card and the luminance
     // ladder between them are pinned once in
     // packages/ui_kit/test/chart_palette_test.dart, where the palette lives.
