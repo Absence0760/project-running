@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ui_kit/ui_kit.dart' show EmptyState;
 
 import '../goals.dart';
 import '../l10n/date_format.dart';
@@ -357,7 +358,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
           _buildStatsCard(theme, unit, stats),
           const SizedBox(height: 24),
           if (_periodRuns.isEmpty)
-            _buildEmptyState(theme)
+            _buildEmptyState()
           else ...[
             Text(
               l10n.historyCount(_periodRuns.length),
@@ -508,24 +509,13 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
     );
   }
 
-  Widget _buildEmptyState(ThemeData theme) {
+  Widget _buildEmptyState() {
     final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          Icon(Icons.event_busy, size: 48, color: theme.colorScheme.outline),
-          const SizedBox(height: 12),
-          Text(
-            _period == PeriodType.week
-                ? l10n.periodEmptyWeek
-                : l10n.periodEmptyMonth,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-        ],
-      ),
+    return EmptyState(
+      icon: Icons.event_busy,
+      title: _period == PeriodType.week
+          ? l10n.periodEmptyWeek
+          : l10n.periodEmptyMonth,
     );
   }
 

@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
+import 'package:ui_kit/ui_kit.dart' show EmptyState, ListSkeleton;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/watch_screens_editor_screen.dart';
@@ -196,9 +196,19 @@ void main() {
     testWidgets('an empty store lands on the empty state, not a blank list',
         (tester) async {
       await _pumpEditor(tester);
+      expect(find.byType(EmptyState), findsOneWidget);
       expect(find.text('No screens composed'), findsOneWidget);
       expect(find.text('0 of 4 screens'), findsOneWidget);
       expect(find.text('Screen 1'), findsNothing);
+      // Unbounded host: the shared EmptyState must NOT nest its own
+      // scrollable inside the editor's ListView, which owns the scrolling.
+      expect(
+        find.descendant(
+          of: find.byType(EmptyState),
+          matching: find.byType(SingleChildScrollView),
+        ),
+        findsNothing,
+      );
     });
 
     testWidgets('adding a screen seeds a single-slot draft', (tester) async {
