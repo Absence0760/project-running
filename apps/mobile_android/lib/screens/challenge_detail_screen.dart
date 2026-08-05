@@ -5,6 +5,7 @@ import '../challenge_progress.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../social_service.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
@@ -111,18 +112,14 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
 
   Future<void> _leave() async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.challengesLeaveConfirmTitle),
-        content: Text(l10n.challengesLeaveConfirm),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.checkpointCancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.challengesLeave)),
-        ],
-      ),
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.challengesLeaveConfirmTitle,
+      body: l10n.challengesLeaveConfirm,
+      confirmLabel: l10n.challengesLeave,
+      cancelLabel: l10n.checkpointCancel,
     );
-    if (ok != true || _busy) return;
+    if (!ok || _busy) return;
     setState(() => _busy = true);
     try {
       await widget.social.leaveChallenge(widget.challengeId);
@@ -136,18 +133,14 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
 
   Future<void> _delete() async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.challengesDeleteConfirmTitle),
-        content: Text(l10n.challengesDeleteConfirm),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.checkpointCancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.challengesDelete)),
-        ],
-      ),
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.challengesDeleteConfirmTitle,
+      body: l10n.challengesDeleteConfirm,
+      confirmLabel: l10n.challengesDelete,
+      cancelLabel: l10n.checkpointCancel,
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await widget.social.deleteChallenge(widget.challengeId);
       if (mounted) Navigator.of(context).pop();

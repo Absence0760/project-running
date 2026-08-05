@@ -376,6 +376,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get commonClearSearch => 'Limpar busca';
 
   @override
+  String get commonCancel => 'Cancelar';
+
+  @override
   String get commonDismiss => 'Dispensar';
 
   @override
@@ -5537,7 +5540,20 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get coachArchiveTapToView => 'Toque para ver · deslize para excluir';
+  String get coachArchiveTapToView => 'Toque para ver';
+
+  @override
+  String get coachArchiveActions => 'Ações da conversa';
+
+  @override
+  String get coachArchiveDelete => 'Excluir conversa';
+
+  @override
+  String get coachArchiveDeleteTitle => 'Excluir esta conversa?';
+
+  @override
+  String get coachArchiveDeleteBody =>
+      'Esta conversa arquivada será excluída definitivamente.';
 
   @override
   String get coachContextNoPlan => 'Sem plano';
@@ -12870,6 +12886,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get commonClearSearch => 'Limpar busca';
 
   @override
+  String get commonCancel => 'Cancelar';
+
+  @override
   String get commonDismiss => 'Dispensar';
 
   @override
@@ -18030,7 +18049,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get coachArchiveTapToView => 'Toque para ver · deslize para excluir';
+  String get coachArchiveTapToView => 'Toque para ver';
+
+  @override
+  String get coachArchiveActions => 'Ações da conversa';
+
+  @override
+  String get coachArchiveDelete => 'Excluir conversa';
+
+  @override
+  String get coachArchiveDeleteTitle => 'Excluir esta conversa?';
+
+  @override
+  String get coachArchiveDeleteBody =>
+      'Esta conversa arquivada será excluída definitivamente.';
 
   @override
   String get coachContextNoPlan => 'Sem plano';

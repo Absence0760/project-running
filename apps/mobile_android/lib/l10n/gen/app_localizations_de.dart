@@ -377,6 +377,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get commonClearSearch => 'Suche löschen';
 
   @override
+  String get commonCancel => 'Abbrechen';
+
+  @override
   String get commonDismiss => 'Schließen';
 
   @override
@@ -5546,8 +5549,20 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get coachArchiveTapToView =>
-      'Zum Ansehen tippen · zum Löschen wischen';
+  String get coachArchiveTapToView => 'Zum Ansehen tippen';
+
+  @override
+  String get coachArchiveActions => 'Aktionen für die Unterhaltung';
+
+  @override
+  String get coachArchiveDelete => 'Unterhaltung löschen';
+
+  @override
+  String get coachArchiveDeleteTitle => 'Diese Unterhaltung löschen?';
+
+  @override
+  String get coachArchiveDeleteBody =>
+      'Diese archivierte Unterhaltung wird endgültig gelöscht.';
 
   @override
   String get coachContextNoPlan => 'Kein Plan';

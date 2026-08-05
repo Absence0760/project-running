@@ -23,6 +23,7 @@ import '../local_run_store.dart';
 import '../password_change.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/password_field.dart';
 import '../widgets/top_banner.dart';
 import 'import_screen.dart';
@@ -254,24 +255,13 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     final api = widget.apiClient;
     final l10n = AppLocalizations.of(context);
     if (api == null) return;
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text(l10n.settingsAccountAvatarRemoveTitle),
-            content: Text(l10n.settingsAccountAvatarRemoveConfirm),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(l10n.settingsAccountCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(l10n.settingsAccountAvatarRemove),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.settingsAccountAvatarRemoveTitle,
+      body: l10n.settingsAccountAvatarRemoveConfirm,
+      confirmLabel: l10n.settingsAccountAvatarRemove,
+      cancelLabel: l10n.settingsAccountCancel,
+    );
     if (!ok) return;
     if (!mounted) return;
     setState(() => _avatarBusy = true);

@@ -11,6 +11,7 @@ import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/photo_lightbox.dart';
 import '../widgets/top_banner.dart';
+import 'confirm_destructive.dart';
 
 /// Map a picked filename to the extension we'll store the upload under.
 /// `jpeg` collapses to `jpg`, `heif` collapses to `heic`, and anything
@@ -225,24 +226,13 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
 
   Future<void> _deletePhoto(ClubPhotoRow p) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.clubPhotosDeleteTitle),
-            content: Text(l10n.clubPhotosDeleteBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.clubPhotosCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(l10n.clubPhotosDeleteConfirm),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.clubPhotosDeleteTitle,
+      body: l10n.clubPhotosDeleteBody,
+      confirmLabel: l10n.clubPhotosDeleteConfirm,
+      cancelLabel: l10n.clubPhotosCancel,
+    );
     if (!ok) return;
     try {
       await widget.api.deleteClubPhoto(p);

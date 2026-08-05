@@ -9,6 +9,7 @@ import '../preferences.dart';
 import '../route_geometry.dart';
 import '../route_markers.dart';
 import '../route_snap.dart';
+import 'confirm_destructive.dart';
 import 'live_run_map.dart';
 import 'top_banner.dart';
 
@@ -256,24 +257,14 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
 
   Future<void> _confirmDelete(RouteMarkerRow row) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.routeMarkerDeleteConfirmTitle),
-        content: Text(l10n.routeMarkerDeleteConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.routeMarkerCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(l10n.routeMarkerDelete),
-          ),
-        ],
-      ),
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.routeMarkerDeleteConfirmTitle,
+      body: l10n.routeMarkerDeleteConfirmMessage,
+      confirmLabel: l10n.routeMarkerDelete,
+      cancelLabel: l10n.routeMarkerCancel,
     );
-    if (ok != true) return;
+    if (!ok) return;
     final api = widget.api;
     if (api == null) return;
     try {

@@ -6,6 +6,7 @@ import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
@@ -147,28 +148,16 @@ class _DevicesScreenState extends State<DevicesScreen> {
   Future<void> _remove(UserDeviceSettingRow d) async {
     final l10n = AppLocalizations.of(context);
     final isCurrent = d.deviceId == widget.currentDeviceId;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.devicesRemoveTitle),
-        content: Text(
-          isCurrent
-              ? l10n.devicesRemoveBodyCurrent
-              : l10n.devicesRemoveBodyOther,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.devicesCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.devicesRemove),
-          ),
-        ],
-      ),
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.devicesRemoveTitle,
+      body: isCurrent
+          ? l10n.devicesRemoveBodyCurrent
+          : l10n.devicesRemoveBodyOther,
+      confirmLabel: l10n.devicesRemove,
+      cancelLabel: l10n.devicesCancel,
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await widget.api.removeDevice(d.deviceId);
       _load();

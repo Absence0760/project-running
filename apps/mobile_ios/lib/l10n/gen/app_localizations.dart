@@ -659,6 +659,12 @@ abstract class AppLocalizations {
   /// **'Clear search'**
   String get commonClearSearch;
 
+  /// Generic cancel action for a destructive-confirm dialog whose surface has no cancel label of its own
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
+
   /// Generic tooltip for a dismiss / close icon button
   ///
   /// In en, this message translates to:
@@ -9139,8 +9145,32 @@ abstract class AppLocalizations {
   /// Drawer subtitle on an archived thread row
   ///
   /// In en, this message translates to:
-  /// **'Tap to view · swipe to delete'**
+  /// **'Tap to view'**
   String get coachArchiveTapToView;
+
+  /// Tooltip for the overflow menu on an archived coach conversation row
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation actions'**
+  String get coachArchiveActions;
+
+  /// Overflow action + confirm label for deleting an archived coach conversation
+  ///
+  /// In en, this message translates to:
+  /// **'Delete conversation'**
+  String get coachArchiveDelete;
+
+  /// Title of the delete-archived-conversation confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this conversation?'**
+  String get coachArchiveDeleteTitle;
+
+  /// Body of the delete-archived-conversation confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This archived conversation is deleted for good.'**
+  String get coachArchiveDeleteBody;
 
   /// Context-strip chip when no plan is active
   ///
