@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/coach_screen.dart';
 import '../lib/training_service.dart';
+import 'realtime_drain.dart';
 
 /// Drives the empty-state suggestion branch: a consented viewer with a
 /// configurable run count and no plan, so `_buildScroll` picks the
@@ -53,7 +54,10 @@ Future<void> _pump(WidgetTester tester, {required int runs}) {
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: CoachScreen(api: _FakeApi(runs: runs), training: TrainingService()),
+      home: CoachScreen(
+        api: _FakeApi(runs: runs),
+        training: TrainingService(),
+      ),
     ),
   );
 }
@@ -68,13 +72,15 @@ void main() {
   setUpAll(_ensureSupabase);
 
   group('CoachScreen — empty-state suggestions', () {
-    testWidgets('a brand-new runner (zero runs, no plan) sees the '
+    realtimeWidgetTest('a brand-new runner (zero runs, no plan) sees the '
         'new-runner chips, not the tempo / last-run prompts', (tester) async {
       await _pump(tester, runs: 0);
       await _settle(tester);
 
-      expect(find.text("I've never run before — where do I start?"),
-          findsOneWidget);
+      expect(
+        find.text("I've never run before — where do I start?"),
+        findsOneWidget,
+      );
       expect(find.text('Is it OK to walk during my runs?'), findsOneWidget);
       // The jargon / no-history prompts must NOT show for a zero-run user.
       expect(find.text('What is a tempo run?'), findsNothing);
@@ -83,16 +89,20 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     });
 
-    testWidgets('a runner with history + no plan keeps the no-plan chips',
-        (tester) async {
-      await _pump(tester, runs: 12);
-      await _settle(tester);
+    realtimeWidgetTest(
+      'a runner with history + no plan keeps the no-plan chips',
+      (tester) async {
+        await _pump(tester, runs: 12);
+        await _settle(tester);
 
-      expect(find.text('What is a tempo run?'), findsOneWidget);
-      expect(find.text("I've never run before — where do I start?"),
-          findsNothing);
+        expect(find.text('What is a tempo run?'), findsOneWidget);
+        expect(
+          find.text("I've never run before — where do I start?"),
+          findsNothing,
+        );
 
-      await tester.pump(const Duration(milliseconds: 100));
-    });
+        await tester.pump(const Duration(milliseconds: 100));
+      },
+    );
   });
 }

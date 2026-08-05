@@ -8,6 +8,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/coach_screen.dart';
 import '../lib/widgets/sign_in_required_state.dart';
 import '../lib/training_service.dart';
+import 'realtime_drain.dart';
 
 /// Reports a non-null consent timestamp so the screen renders its main
 /// (consented) Scaffold — the one whose left drawer used to swallow the
@@ -63,14 +64,14 @@ class _ArchiveFailApi extends ApiClient {
 
   @override
   Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) async => [
-        CoachMessageRow(
-          id: 'm1',
-          userId: 'u-viewer',
-          role: 'user',
-          content: 'How was my week?',
-          createdAt: DateTime.utc(2026, 6, 1),
-        ),
-      ];
+    CoachMessageRow(
+      id: 'm1',
+      userId: 'u-viewer',
+      role: 'user',
+      content: 'How was my week?',
+      createdAt: DateTime.utc(2026, 6, 1),
+    ),
+  ];
 
   @override
   Future<List<DateTime>> listCoachArchives({String? planId}) async => const [];
@@ -105,8 +106,9 @@ class _ArchivesApi extends ApiClient {
       const [];
 
   @override
-  Future<List<DateTime>> listCoachArchives({String? planId}) async =>
-      [archivedAt];
+  Future<List<DateTime>> listCoachArchives({String? planId}) async => [
+    archivedAt,
+  ];
 
   @override
   Future<int> getCoachUsage() async => 0;
@@ -128,10 +130,7 @@ class _ArchivesApi extends ApiClient {
 /// `RealtimeChannel.unsubscribe`, and realtime_client arms a 50 s pending
 /// disconnect from inside that call — so the timer does not exist until the
 /// tree is torn down, and no amount of pumping beforehand can drain it.
-Future<void> _drain(WidgetTester tester) async {
-  await tester.pumpWidget(const SizedBox.shrink());
-  await tester.pump(const Duration(seconds: 60));
-}
+Future<void> _drain(WidgetTester tester) => drainRealtimeTimers(tester);
 
 Future<void> _pump(WidgetTester tester, {ApiClient? api}) {
   return tester.pumpWidget(
@@ -174,15 +173,17 @@ void main() {
       await _drain(tester);
     });
 
-    testWidgets('does not render the plan-switcher dropdown when there is at most one plan',
-        (tester) async {
-      // Reason: the title-row dropdown only mounts when _plans has
-      // more than one entry — in tests there's no Supabase data so
-      // the list stays empty and the dropdown stays hidden.
-      await _pump(tester);
-      expect(find.byType(DropdownButton<String>), findsNothing);
-      await _drain(tester);
-    });
+    testWidgets(
+      'does not render the plan-switcher dropdown when there is at most one plan',
+      (tester) async {
+        // Reason: the title-row dropdown only mounts when _plans has
+        // more than one entry — in tests there's no Supabase data so
+        // the list stays empty and the dropdown stays hidden.
+        await _pump(tester);
+        expect(find.byType(DropdownButton<String>), findsNothing);
+        await _drain(tester);
+      },
+    );
 
     testWidgets('a signed-out viewer gets the sign-in state, not the chat '
         '(issue #237)', (tester) async {
@@ -210,13 +211,15 @@ void main() {
       expect(
         find.text('Before you chat with Coach'),
         findsOneWidget,
-        reason: 'consent disclosure must be visible when '
+        reason:
+            'consent disclosure must be visible when '
             'coach_consent_at is null — see audit/gdpr (2026-05-25).',
       );
       expect(
         find.text('I consent — start Coach'),
         findsOneWidget,
-        reason: 'the I-consent CTA must be reachable from the '
+        reason:
+            'the I-consent CTA must be reachable from the '
             'gate so the user can accept.',
       );
       await _drain(tester);
@@ -224,8 +227,7 @@ void main() {
   });
 
   group('CoachScreen — archive failure retry (issue #666 U9)', () {
-    testWidgets(
-        'a failed new-conversation archive shows a Retry banner that '
+    testWidgets('a failed new-conversation archive shows a Retry banner that '
         're-runs the mutation without re-prompting', (tester) async {
       final api = _ArchiveFailApi();
       await tester.pumpWidget(
@@ -284,8 +286,9 @@ void main() {
       return api;
     }
 
-    testWidgets('the archive row is not swipeable and teaches no swipe',
-        (tester) async {
+    testWidgets('the archive row is not swipeable and teaches no swipe', (
+      tester,
+    ) async {
       await openDrawer(tester);
       expect(find.byType(Dismissible), findsNothing);
       expect(find.textContaining('swipe'), findsNothing);
@@ -293,26 +296,30 @@ void main() {
       await _drain(tester);
     });
 
-    testWidgets('the overflow delete asks before erasing, and cancel keeps it',
-        (tester) async {
-      final api = await openDrawer(tester);
+    testWidgets(
+      'the overflow delete asks before erasing, and cancel keeps it',
+      (tester) async {
+        final api = await openDrawer(tester);
 
-      await tester.tap(find.byTooltip('Conversation actions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete conversation'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Conversation actions'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete conversation'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Delete this conversation?'), findsOneWidget);
-      expect(api.deleteCalls, 0);
+        expect(find.text('Delete this conversation?'), findsOneWidget);
+        expect(api.deleteCalls, 0);
 
-      await tester.tap(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('Cancel'),
-      ));
-      await tester.pumpAndSettle();
-      expect(api.deleteCalls, 0);
-      await _drain(tester);
-    });
+        await tester.tap(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text('Cancel'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(api.deleteCalls, 0);
+        await _drain(tester);
+      },
+    );
 
     testWidgets('confirming deletes once and drops the row', (tester) async {
       final api = await openDrawer(tester);
@@ -321,10 +328,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete conversation'));
       await tester.pumpAndSettle();
-      await tester.tap(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.text('Delete conversation'),
-      ));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Delete conversation'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(api.deleteCalls, 1);
