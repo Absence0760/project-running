@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
@@ -684,5 +686,58 @@ void main() {
     } finally {
       f.dir.deleteSync(recursive: true);
     }
+  });
+
+  group('GymComposeSheet — the set-number lane holds its localized label', () {
+    // "Set N" sat in a 44px box. French/Portuguese "Série 12" needs 50.5px in
+    // real Roboto at bodySmall and Spanish "Serie 12" the same, so the label
+    // reflowed inside its box at 1.0x, before the OS text scale entered it.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane that clears its
+    // label's intrinsic width here clears it on a device too.
+    // The default 800dp surface, deliberately: the sheet's set-type dropdown
+    // and exercise header carry their own narrow-width overflows under the
+    // fixed-advance test font, which this round does not own.
+    Future<void> pumpFrench(WidgetTester tester, LocalGymStore store) async {
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('fr'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.0)),
+          child: child!,
+        ),
+        home: Scaffold(body: GymComposeSheet(store: store)),
+      ));
+      await tester.pump();
+    }
+
+    Finder setLane() => find.ancestor(
+          of: find.text('Série 1'),
+          matching: find.byType(TextLane),
+        );
+
+    testWidgets('the lane widens to the label instead of reflowing it',
+        (tester) async {
+      final f = await _store('lane_');
+      try {
+        await pumpFrench(tester, f.store);
+        expect(setLane(), findsOneWidget);
+        final label = tester.renderObject<RenderParagraph>(find.text('Série 1'));
+        expect(
+          tester.getSize(setLane()).width,
+          greaterThanOrEqualTo(label.getMaxIntrinsicWidth(double.infinity)),
+        );
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
+
+    // The text-scale half of the derivation is pinned on the sibling lane in
+    // gym_detail_screen_test: this sheet's Cancel/Save row overflows at 2x on
+    // its own account (a §486 end-aligned action row that never became an
+    // OverflowBar), which this round does not own.
   });
 }

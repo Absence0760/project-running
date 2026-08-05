@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 
 import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -550,7 +551,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                     Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    SizedBox(
+                    TextLane(
                       width: 44,
                       child: Text(
                         l10n.gymSetN(si + 1),
