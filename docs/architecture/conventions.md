@@ -634,11 +634,16 @@ Keep the `href` — it is the deep-link / hard-load fallback and the link's sema
 
 ## Linking another user's row — never to an owner-scoped route
 
-Several read paths are deliberately scoped to the viewer: `fetchRunById` filters `.eq('user_id', userId)`, so `/runs/[id]` only ever resolves the viewer's own run and renders its "Run not found" empty state for anyone else's — a real, public run presented as deleted. The same is true of every `/gym/[id]`-style owner surface.
+Several read paths are deliberately scoped to the viewer: `fetchRunById` filters `.eq('user_id', userId)`, because it is the only read path that downloads the **unclipped** GPS track. A page whose only row source is such a fetch renders its "Run not found" empty state for anyone else's row — a real, public row presented as deleted. That is still the shape of every `/gym/[id]`-style owner surface.
 
-So: **a surface that renders someone else's row links to the public twin, not the owner surface.** `/share/run/[id]`, `/share/workout/[id]`, `/share/event/[id]`, `/u/[id]`. The social feed, a club roster, a challenge leaderboard, a segment board, a notification about a followee's activity — all of these are other-people surfaces. Only `/history`, `/runs`, `/dashboard` and friends list the viewer's own rows and may use the owner route.
+So: **a surface that renders someone else's row links to the public twin, not the owner surface.** `/share/run/[id]`, `/share/workout/[id]`, `/share/event/[id]`, `/u/[id]`. The social feed, a club roster, a challenge leaderboard, a segment board, a notification about a followee's activity — all of these are other-people surfaces, and the public twin is additionally the right target because it is anon-reachable and indexable while the app routes sit behind the layout auth-gate. Only `/history`, `/runs`, `/dashboard` and friends list the viewer's own rows and may use the owner route.
 
 This is not a cosmetic difference: the failure is silent and looks exactly like a deleted row, so it survives review and reads as correct in a screenshot taken by the owner. `apps/web/src/lib/cross_user_link_guards.test.ts` pins the feed; extend it when a new cross-user surface ships.
+
+**The other half of the rule: an owner surface a stranger can plausibly reach needs a non-owner branch, not a 404.** People paste the URL out of their address bar. `/runs/[id]` used to 404 a public run for everyone but its owner — the only signed-in surface where a follower could comment on a run was `/share/run/[id]`, which is why several e2e specs navigated there (issue #666). It now resolves entitlement separately from the owner read (`fetchPublicRunAttribution` → a `public_runs` row, i.e. `is_public = true`) and mounts `RunShareView` for a non-owner. Two structural rules make that safe, and both are pinned in `cross_user_link_guards.test.ts`:
+
+- **The non-owner row never enters the owner state.** `run` is assigned only from `fetchRunById`; a non-owner takes a sibling `{#if}` branch. Every owner affordance (edit, delete, visibility, gear, save-as-route, rematch) lives inside the owner branch, so suppression is structural rather than a list of `{#if isOwner}` guards that a later edit can forget.
+- **The non-owner branch renders through the existing public component**, so the privacy-zone clip stays single-sourced: `RunShareView` is the one place that calls `fetchClippedTrackForRun` (decisions §33). A hand-rolled non-owner renderer would be one `fetchTrackByPath` away from serving the unclipped trace.
 
 The same rule reaches the Go worker's notification deep links — `run_completed` fires at a *followee's followers*, so it links to `/share/run/{id}`. See `docs/features/email.md § Architecture` for the deep-link contract and its route-tree guard.
 

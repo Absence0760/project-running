@@ -12,6 +12,8 @@
 	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
+	import RunShareView from '$lib/components/RunShareView.svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
@@ -24,6 +26,8 @@
 	import { formatDate, formatDuration } from '$lib/format/time';
 	import {
 		fetchRunById,
+		fetchPublicRunAttribution,
+		type PublicRunAttribution,
 		deleteRun,
 		setRunPublic,
 		updateRunMetadata,
@@ -64,7 +68,17 @@
 
 	let { data: pageData } = $props();
 
+	/// The OWNER's run row, with its unclipped track. Every owner-only
+	/// affordance on this page (edit, delete, visibility, gear, rematch,
+	/// save-as-route, GPX export) lives inside the `run` branch of the
+	/// template, so a non-owner view can never reach one: the non-owner
+	/// row is deliberately kept out of this state and held as
+	/// `otherRunOwner` instead.
 	let run = $state<Run | null>(null);
+	/// Set when the viewer doesn't own this run but the run is publicly
+	/// readable — carries only the owner's attribution. The row + the
+	/// privacy-zone-clipped track are fetched by RunShareView.
+	let otherRunOwner = $state<PublicRunAttribution | null>(null);
 	let loading = $state(true);
 
 	/// Track where the user came from so the in-page back button can
@@ -163,6 +177,19 @@
 		// on auth.loading misses it.
 		await auth.ready();
 		run = await fetchRunById(pageData.id);
+		if (!run) {
+			// Not the owner (or no such run). A publicly readable run gets
+			// the non-owner branch — the share view plus signed-in kudos +
+			// comments — rather than the not-found state a public run used
+			// to get here (issue #666; every "a runner you follow finished
+			// a run" link landed on "Run not found").
+			otherRunOwner = await fetchPublicRunAttribution(pageData.id);
+			loading = false;
+			// None of the background work below is reachable for a
+			// non-owner: the matched track, route suggestion, linked
+			// workout and HR-zone settings are all owner-surface inputs.
+			return;
+		}
 		loading = false;
 		// Best-effort matched-track fetch in the background. The map
 		// will swap to the matched line once it lands; until then it
@@ -1113,6 +1140,45 @@
 			</div>
 		</div>
 	</div>
+{:else if otherRunOwner}
+	<!--
+		Non-owner branch. The viewer is entitled to read this run (it is in
+		`public_runs`) but owns none of it, so the whole owner surface below
+		is skipped and RunShareView renders instead: the same component
+		/share/run/[id] uses, which routes a non-owner track through the
+		clip-public-track Edge Function (decisions §33). Signed-in kudos +
+		comments come along because RunShareView mounts RunSocial when
+		auth.loggedIn. No edit / delete / visibility / gear-assign /
+		save-as-route / rematch control exists on this path — they all live
+		inside the `run` branch, which a non-owner never enters.
+	-->
+	<div class="run-detail">
+		<div class="other-run">
+			<a href="/u/{otherRunOwner.ownerId}" class="back-link page-back">
+				<span class="material-symbols">arrow_back</span>
+				{m('runDetail.otherRunProfileLink', {
+					name: otherRunOwner.displayName ?? m('runDetail.otherRunAthleteFallback'),
+				})}
+			</a>
+			<div class="other-run-header">
+				<Avatar
+					url={otherRunOwner.avatarUrl}
+					name={otherRunOwner.displayName}
+					size="2.5rem"
+					font="1rem"
+				/>
+				<div class="other-run-attribution">
+					<p class="other-run-owner">
+						{m('runDetail.otherRunBy', {
+							name: otherRunOwner.displayName ?? m('runDetail.otherRunAthleteFallback'),
+						})}
+					</p>
+					<p class="other-run-note">{m('runDetail.otherRunViewerNote')}</p>
+				</div>
+			</div>
+			<RunShareView runId={pageData.id} />
+		</div>
+	</div>
 {:else if !run}
 	<div class="run-detail">
 		<a href="/runs" class="back-link page-back">
@@ -2031,6 +2097,36 @@
 		color: var(--color-text-secondary);
 	}
 	.not-found h1 { color: var(--color-text); margin: 0; }
+
+	.other-run {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-lg);
+		padding: var(--space-lg);
+		max-width: 60rem;
+		width: 100%;
+		margin-inline: auto;
+		overflow-y: auto;
+	}
+	.other-run-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+	}
+	.other-run-attribution {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		min-width: 0;
+	}
+	.other-run-owner {
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.other-run-note {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
 
 	.run-detail {
 		display: flex;

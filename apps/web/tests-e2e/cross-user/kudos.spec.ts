@@ -21,10 +21,10 @@ test.describe('cross-user kudos', () => {
 	test('alex kudos runner public run via /share/run/ → reload persists → rescind', async ({
 		page
 	}) => {
-		// /runs/[id] is owner-only (fetchRunById hits the runs table
-		// directly and RLS hides cross-user rows). /share/run/[id] is
-		// the path real visitors take — public_runs view + RunSocial
-		// mounts when auth.loggedIn.
+		// /share/run/[id] is the path real (often logged-out) visitors
+		// take — public_runs view + RunSocial mounts when auth.loggedIn.
+		// The signed-in /runs/[id] equivalent is pinned separately in
+		// cross-user/run-detail-non-owner.spec.ts.
 		await page.route('**/functions/v1/clip-public-track', (route) =>
 			route.fulfill({
 				status: 200,
