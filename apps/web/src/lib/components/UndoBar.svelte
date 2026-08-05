@@ -30,62 +30,69 @@
 	}
 </script>
 
-{#if pending}
-	<!--
-		role="status" + aria-live="polite" + aria-atomic so the whole
-		offer — what was removed AND that undo exists — is announced once
-		without stealing focus. The countdown is deliberately NOT in the
-		announcement: a ticking number here would re-announce every tick.
-		WCAG 2.2.1 is met by the `undo_window_s` preference, which can
-		turn the limit off entirely; hover/focus additionally pauses it.
-	-->
-	<div
-		class="undo-bar"
-		role="status"
-		aria-live="polite"
-		aria-atomic="true"
-		data-testid="undo-bar"
-		onmouseenter={undoStore.pause}
-		onmouseleave={undoStore.resume}
-		onfocusin={undoStore.pause}
-		onfocusout={undoStore.resume}
-	>
-		<p class="undo-message">
-			{pending.message}<span class="visually-hidden"> {m('undo.hint')}</span>
-		</p>
-		<div class="undo-actions">
-			<button type="button" class="undo-action" data-testid="undo-action" onclick={undo}>
-				{m('undo.action')}
-			</button>
-			<button
-				type="button"
-				class="undo-dismiss"
-				data-testid="undo-dismiss"
-				aria-label={m('undo.dismiss')}
-				onclick={() => void undoStore.flush()}
-			>
-				<span class="material-symbols" aria-hidden="true">close</span>
-			</button>
+<!--
+	The role="status" + aria-live="polite" region is ALWAYS in the DOM,
+	with only the bar inside it conditional: most screen readers do not
+	announce a live region that enters the document already carrying its
+	content, so a `{#if}` around the region itself would announce
+	nothing. aria-atomic re-reads the whole offer — what was removed AND
+	that undo exists — without stealing focus. The countdown is
+	deliberately NOT in here: a ticking number would re-announce on every
+	tick. WCAG 2.2.1 is met by the `undo_window_s` preference, which can
+	turn the limit off entirely; hover/focus additionally pauses it.
+-->
+<div
+	class="undo-region"
+	role="status"
+	aria-live="polite"
+	aria-atomic="true"
+	onmouseenter={undoStore.pause}
+	onmouseleave={undoStore.resume}
+	onfocusin={undoStore.pause}
+	onfocusout={undoStore.resume}
+>
+	{#if pending}
+		<div class="undo-bar" data-testid="undo-bar">
+			<p class="undo-message">
+				{pending.message}<span class="visually-hidden"> {m('undo.hint')}</span>
+			</p>
+			<div class="undo-actions">
+				<button type="button" class="undo-action" data-testid="undo-action" onclick={undo}>
+					{m('undo.action')}
+				</button>
+				<button
+					type="button"
+					class="undo-dismiss"
+					data-testid="undo-dismiss"
+					aria-label={m('undo.dismiss')}
+					onclick={() => void undoStore.flush()}
+				>
+					<span class="material-symbols" aria-hidden="true">close</span>
+				</button>
+			</div>
+			{#if pending.windowMs > 0}
+				{#key pending.id}
+					<div
+						class="undo-progress"
+						class:paused={pending.paused}
+						style:animation-duration={`${pending.windowMs}ms`}
+						aria-hidden="true"
+					></div>
+				{/key}
+			{/if}
 		</div>
-		{#if pending.windowMs > 0}
-			{#key pending.id}
-				<div
-					class="undo-progress"
-					class:paused={pending.paused}
-					style:animation-duration={`${pending.windowMs}ms`}
-					aria-hidden="true"
-				></div>
-			{/key}
-		{/if}
-	</div>
-{/if}
+	{/if}
+</div>
 
 <style>
-	.undo-bar {
+	.undo-region {
 		position: fixed;
 		bottom: var(--space-lg);
 		inset-inline-start: var(--space-lg);
 		z-index: var(--z-toast);
+	}
+	.undo-bar {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: var(--space-lg);
