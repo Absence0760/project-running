@@ -121,13 +121,16 @@ void main() {
         expect(_contrast(s.outline, card), greaterThanOrEqualTo(_aaMark));
         if (name == 'light') {
           // 2.006:1 thinned — and the finding that decided the token, rather
-          // than merely the alpha: `secondary` is coralDeep on parchment,
-          // 2.767:1 at FULL strength, so un-thinning would have left the mark
+          // than merely the alpha: light `secondary` was coralDeep, 2.767:1 on
+          // parchment at FULL strength, so un-thinning would have left the mark
           // failing. A thinning is not always a thinning problem. Dark read
-          // 4.402:1 thinned, so only light ever failed.
-          expect(_contrast(_thin(s.secondary, 0.7, card), card),
+          // 4.402:1 thinned, so only light ever failed. The colour is named
+          // directly because light `secondary` has since moved to coralMark:
+          // that repaired the token, it did not make the old figure untrue, and
+          // the line keeps `outline` because a boundary is what it draws.
+          expect(_contrast(_thin(AppTheme.coralDeep, 0.7, card), card),
               lessThan(_aaMark));
-          expect(_contrast(s.secondary, card), lessThan(_aaMark));
+          expect(_contrast(AppTheme.coralDeep, card), lessThan(_aaMark));
         }
       });
 

@@ -6,7 +6,25 @@ class AppTheme {
   static const Color duskDeep = Color(0xFF241B3D);
   static const Color midnight = Color(0xFF120D22);
   static const Color coral = Color(0xFFF2A07B);
+
+  /// Coral as a FILL on a light surface, and only ever that: the FAB's
+  /// background and the navigation bar's indicator tint. It reads 2.767:1
+  /// against parchment, so it can carry neither a mark nor type — use
+  /// [coralMark] for either.
   static const Color coralDeep = Color(0xFFD97A54);
+
+  /// Coral deep enough to be a MARK on parchment — the light theme's accent
+  /// foreground, and `colorScheme.secondary` in light for that reason.
+  ///
+  /// The value is the one web's `--color-secondary-text` already holds, so the
+  /// two platforms' accent foreground is a single measured colour rather than
+  /// two guesses at the same idea; the lockstep is asserted from the web side
+  /// in `apps/web/src/lib/contrast_guard.test.ts`. Dark needs no twin: its
+  /// `secondary` is [lilac], which is already a legible foreground (>= 4.330:1
+  /// on every dark surface), which is also why web's dark `-text` token aliases
+  /// straight to its base.
+  static const Color coralMark = Color(0xFFA24A2C);
+
   static const Color lilac = Color(0xFFB9A7E8);
   static const Color parchment = Color(0xFFF7F3EC);
   static const Color parchmentDim = Color(0xFFEBE5D8);
@@ -44,7 +62,7 @@ class AppTheme {
     ).copyWith(
       primary: dusk,
       onPrimary: parchment,
-      secondary: coralDeep,
+      secondary: coralMark,
       onSecondary: parchment,
       surface: parchment,
       onSurface: ink,
@@ -148,9 +166,12 @@ class AppTheme {
           letterSpacing: 0.5,
         ),
       ),
+      // The glyph, not the fill, is what owes 1.4.11's 3:1 here — the FAB
+      // carries its own elevation and shadow — and parchment on coralDeep was
+      // 2.767:1. Dark's pairing is already 9.120:1 and keeps its coral fill.
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: coralDeep,
-        foregroundColor: parchment,
+        foregroundColor: ink,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: Colors.transparent,
@@ -174,9 +195,12 @@ class AppTheme {
         backgroundColor: parchment,
         indicatorColor: coralDeep.withOpacity(0.18),
         surfaceTintColor: Colors.transparent,
+        // The selected icon sits INSIDE the indicator, so the tint is the
+        // background it owes 3:1 against, not the bar: coralDeep on the pill
+        // was 2.337:1, worse than the 2.767:1 it reads on bare parchment.
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
-            color: states.contains(WidgetState.selected) ? coralDeep : haze,
+            color: states.contains(WidgetState.selected) ? coralMark : haze,
             size: 24,
           ),
         ),
