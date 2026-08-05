@@ -1138,7 +1138,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0.25rem;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
 	}
 
 	/* The no-track placeholder. Subtle gradient + a map-outline icon
