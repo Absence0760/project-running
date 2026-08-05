@@ -105,12 +105,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   /// Single source of tab order — the TabBar labels, the TabBarView
   /// children, and the deep-link index all read it, so they cannot drift.
   List<ProfileTab> get _tabOrder => [
-        ProfileTab.runs,
-        ProfileTab.badges,
-        ProfileTab.followers,
-        ProfileTab.following,
-        if (_isSelf) ProfileTab.notifications,
-      ];
+    ProfileTab.runs,
+    ProfileTab.badges,
+    ProfileTab.followers,
+    ProfileTab.following,
+    if (_isSelf) ProfileTab.notifications,
+  ];
 
   @override
   void initState() {
@@ -187,8 +187,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       _runsError = null;
     });
     try {
-      final runs =
-          await widget.api.fetchPublicRunsByUser(widget.userId, limit: 30);
+      final runs = await widget.api.fetchPublicRunsByUser(
+        widget.userId,
+        limit: 30,
+      );
       if (!mounted) return;
       setState(() {
         _runs = runs;
@@ -212,8 +214,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       _followersError = null;
     });
     try {
-      final followers =
-          await widget.api.fetchFollowers(widget.userId, limit: _kFollowsPageSize);
+      final followers = await widget.api.fetchFollowers(
+        widget.userId,
+        limit: _kFollowsPageSize,
+      );
       if (!mounted) return;
       setState(() {
         _followers = followers;
@@ -236,8 +240,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       _followingError = null;
     });
     try {
-      final following =
-          await widget.api.fetchFollowing(widget.userId, limit: _kFollowsPageSize);
+      final following = await widget.api.fetchFollowing(
+        widget.userId,
+        limit: _kFollowsPageSize,
+      );
       if (!mounted) return;
       setState(() {
         _following = following;
@@ -314,8 +320,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       debugPrint('Load more followers failed: $e');
       if (mounted) {
-        showTopBanner(context,
-            AppLocalizations.of(context).profileLoadMoreFollowersFailed);
+        showTopBanner(
+          context,
+          AppLocalizations.of(context).profileLoadMoreFollowersFailed,
+        );
       }
     } finally {
       if (mounted) setState(() => _loadingMoreFollowers = false);
@@ -339,8 +347,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       debugPrint('Load more following failed: $e');
       if (mounted) {
-        showTopBanner(context,
-            AppLocalizations.of(context).profileLoadMoreFollowingFailed);
+        showTopBanner(
+          context,
+          AppLocalizations.of(context).profileLoadMoreFollowingFailed,
+        );
       }
     } finally {
       if (mounted) setState(() => _loadingMoreFollowing = false);
@@ -350,8 +360,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _toggleFollow() async {
     final summary = _summary;
     if (summary == null || _isSelf || _followBusy) return;
-    if (!await ensureSignedIn(context,
-        viewerId: widget.api.userId, api: widget.api, onSignedIn: _load)) {
+    if (!await ensureSignedIn(
+      context,
+      viewerId: widget.api.userId,
+      api: widget.api,
+      onSignedIn: _load,
+    )) {
       return;
     }
     if (!mounted) return;
@@ -382,9 +396,11 @@ class _ProfileScreenState extends State<ProfileScreen>
       // Roll back on failure.
       setState(() => _summary = summary);
       showTopBanner(
-          context,
-          AppLocalizations.of(context).profileFollowUpdateFailed(
-              friendlyError(AppLocalizations.of(context), e)));
+        context,
+        AppLocalizations.of(context).profileFollowUpdateFailed(
+          friendlyError(AppLocalizations.of(context), e),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
@@ -450,14 +466,20 @@ class _ProfileScreenState extends State<ProfileScreen>
         );
       });
       showTopBanner(
-          context,
-          AppLocalizations.of(context).profileBlocked(summary.displayName ??
-              AppLocalizations.of(context).profileRunnerNoun));
+        context,
+        AppLocalizations.of(context).profileBlocked(
+          summary.displayName ?? AppLocalizations.of(context).profileRunnerNoun,
+        ),
+      );
     } catch (e) {
       debugPrint('profile block failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).profileBlockFailed(friendlyError(AppLocalizations.of(context), e)));
+        context,
+        AppLocalizations.of(
+          context,
+        ).profileBlockFailed(friendlyError(AppLocalizations.of(context), e)),
+      );
     } finally {
       if (mounted) setState(() => _blockBusy = false);
     }
@@ -472,14 +494,20 @@ class _ProfileScreenState extends State<ProfileScreen>
       setState(() => _blocked = false);
       showTopBanner(
         context,
-        AppLocalizations.of(context).profileUnblocked(summary?.displayName ??
-            AppLocalizations.of(context).profileRunnerNoun),
+        AppLocalizations.of(context).profileUnblocked(
+          summary?.displayName ??
+              AppLocalizations.of(context).profileRunnerNoun,
+        ),
       );
     } catch (e) {
       debugPrint('profile unblock failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).profileUnblockFailed(friendlyError(AppLocalizations.of(context), e)));
+        context,
+        AppLocalizations.of(
+          context,
+        ).profileUnblockFailed(friendlyError(AppLocalizations.of(context), e)),
+      );
     } finally {
       if (mounted) setState(() => _blockBusy = false);
     }
@@ -490,26 +518,28 @@ class _ProfileScreenState extends State<ProfileScreen>
     final now = DateTime.now();
     setState(() {
       _notifications = _notifications
-          .map((n) => n.row.id == item.row.id
-              ? NotificationView(
-                  row: NotificationRow(
-                    id: n.row.id,
-                    userId: n.row.userId,
-                    actorId: n.row.actorId,
-                    kind: n.row.kind,
-                    runId: n.row.runId,
-                    commentId: n.row.commentId,
-                    readAt: now,
-                    createdAt: n.row.createdAt,
-                    eventId: n.row.eventId,
-                  ),
-                  actor: n.actor,
-                  runDistanceM: n.runDistanceM,
-                  commentExcerpt: n.commentExcerpt,
-                  eventTitle: n.eventTitle,
-                  eventClubSlug: n.eventClubSlug,
-                )
-              : n)
+          .map(
+            (n) => n.row.id == item.row.id
+                ? NotificationView(
+                    row: NotificationRow(
+                      id: n.row.id,
+                      userId: n.row.userId,
+                      actorId: n.row.actorId,
+                      kind: n.row.kind,
+                      runId: n.row.runId,
+                      commentId: n.row.commentId,
+                      readAt: now,
+                      createdAt: n.row.createdAt,
+                      eventId: n.row.eventId,
+                    ),
+                    actor: n.actor,
+                    runDistanceM: n.runDistanceM,
+                    commentExcerpt: n.commentExcerpt,
+                    eventTitle: n.eventTitle,
+                    eventClubSlug: n.eventClubSlug,
+                  )
+                : n,
+          )
           .toList();
     });
     try {
@@ -526,31 +556,37 @@ class _ProfileScreenState extends State<ProfileScreen>
       final now = DateTime.now();
       setState(() {
         _notifications = _notifications
-            .map((n) => NotificationView(
-                  row: NotificationRow(
-                    id: n.row.id,
-                    userId: n.row.userId,
-                    actorId: n.row.actorId,
-                    kind: n.row.kind,
-                    runId: n.row.runId,
-                    commentId: n.row.commentId,
-                    readAt: n.row.readAt ?? now,
-                    createdAt: n.row.createdAt,
-                    eventId: n.row.eventId,
-                  ),
-                  actor: n.actor,
-                  runDistanceM: n.runDistanceM,
-                  commentExcerpt: n.commentExcerpt,
-                  eventTitle: n.eventTitle,
-                  eventClubSlug: n.eventClubSlug,
-                ))
+            .map(
+              (n) => NotificationView(
+                row: NotificationRow(
+                  id: n.row.id,
+                  userId: n.row.userId,
+                  actorId: n.row.actorId,
+                  kind: n.row.kind,
+                  runId: n.row.runId,
+                  commentId: n.row.commentId,
+                  readAt: n.row.readAt ?? now,
+                  createdAt: n.row.createdAt,
+                  eventId: n.row.eventId,
+                ),
+                actor: n.actor,
+                runDistanceM: n.runDistanceM,
+                commentExcerpt: n.commentExcerpt,
+                eventTitle: n.eventTitle,
+                eventClubSlug: n.eventClubSlug,
+              ),
+            )
             .toList();
       });
     } catch (e) {
       debugPrint('profile mark all read failed: $e');
       if (!mounted) return;
       showTopBanner(
-          context, AppLocalizations.of(context).profileMarkAllReadFailed(friendlyError(AppLocalizations.of(context), e)));
+        context,
+        AppLocalizations.of(context).profileMarkAllReadFailed(
+          friendlyError(AppLocalizations.of(context), e),
+        ),
+      );
     }
   }
 
@@ -587,7 +623,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           debugPrint('profile dismiss failed: $e');
           if (!mounted) return;
           showTopBanner(
-              context, l10n.profileDismissFailed(friendlyError(l10n, e)));
+            context,
+            l10n.profileDismissFailed(friendlyError(l10n, e)),
+          );
         },
       ),
     );
@@ -648,26 +686,23 @@ class _ProfileScreenState extends State<ProfileScreen>
               ],
             )
           : _loadError != null
-              ? ErrorState(
-                  message: l10n.profileLoadError,
-                  onRetry: _load,
-                )
-              : _summary == null
-                  ? Center(child: Text(l10n.profileNotFound))
-                  : Column(
-                      children: [
-                        _buildHeader(theme),
-                        const Divider(height: 1),
-                        Expanded(
-                          child: TabBarView(
-                            controller: _tabs,
-                            children: [
-                              for (final tab in order) _tabView(theme, l10n, tab)
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+          ? ErrorState(message: l10n.profileLoadError, onRetry: _load)
+          : _summary == null
+          ? Center(child: Text(l10n.profileNotFound))
+          : Column(
+              children: [
+                _buildHeader(theme),
+                const Divider(height: 1),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabs,
+                    children: [
+                      for (final tab in order) _tabView(theme, l10n, tab),
+                    ],
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
@@ -691,8 +726,9 @@ class _ProfileScreenState extends State<ProfileScreen>
               children: [
                 Text(
                   s.displayName ?? l10n.profileRunnerFallback,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 // The user_follows select is authenticated-only, so a
                 // signed-out viewer's counts are always zero — hide the
@@ -713,7 +749,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             FilledButton.tonal(
               onPressed: _followBusy ? null : _toggleFollow,
               child: Text(
-                  s.viewerFollows ? l10n.profileFollowing : l10n.profileFollow),
+                s.viewerFollows ? l10n.profileFollowing : l10n.profileFollow,
+              ),
             ),
         ],
       ),
@@ -721,57 +758,57 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   String _tabLabel(AppLocalizations l10n, ProfileTab tab) => switch (tab) {
-        ProfileTab.runs => l10n.profileTabRuns,
-        ProfileTab.badges => l10n.badgesSectionTitle,
-        ProfileTab.followers => l10n.profileTabFollowers,
-        ProfileTab.following => l10n.profileTabFollowing,
-        ProfileTab.notifications => l10n.profileTabNotifications,
-      };
+    ProfileTab.runs => l10n.profileTabRuns,
+    ProfileTab.badges => l10n.badgesSectionTitle,
+    ProfileTab.followers => l10n.profileTabFollowers,
+    ProfileTab.following => l10n.profileTabFollowing,
+    ProfileTab.notifications => l10n.profileTabNotifications,
+  };
 
   Widget _tabView(ThemeData theme, AppLocalizations l10n, ProfileTab tab) =>
       switch (tab) {
         ProfileTab.runs => _tabScope(
-            loading: _runsLoading,
-            error: _runsError,
-            onRetry: _loadRuns,
-            child: () => _buildRunsTab(theme),
-          ),
+          loading: _runsLoading,
+          error: _runsError,
+          onRetry: _loadRuns,
+          child: () => _buildRunsTab(theme),
+        ),
         ProfileTab.badges => _tabScope(
-            loading: _badgesLoading,
-            error: _badgesError,
-            onRetry: _loadBadges,
-            child: () => BadgeGrid(badges: _badges, isOwner: _isSelf),
-          ),
+          loading: _badgesLoading,
+          error: _badgesError,
+          onRetry: _loadBadges,
+          child: () => BadgeGrid(badges: _badges, isOwner: _isSelf),
+        ),
         ProfileTab.followers => _tabScope(
-            loading: _followersLoading,
-            error: _followersError,
-            onRetry: _loadFollowers,
-            child: () => _buildPeopleTab(
-              _followers,
-              l10n.profileFollowersEmpty,
-              hasMore: _followersHasMore,
-              loadingMore: _loadingMoreFollowers,
-              onLoadMore: _loadMoreFollowers,
-            ),
+          loading: _followersLoading,
+          error: _followersError,
+          onRetry: _loadFollowers,
+          child: () => _buildPeopleTab(
+            _followers,
+            l10n.profileFollowersEmpty,
+            hasMore: _followersHasMore,
+            loadingMore: _loadingMoreFollowers,
+            onLoadMore: _loadMoreFollowers,
           ),
+        ),
         ProfileTab.following => _tabScope(
-            loading: _followingLoading,
-            error: _followingError,
-            onRetry: _loadFollowing,
-            child: () => _buildPeopleTab(
-              _following,
-              l10n.profileFollowingEmpty,
-              hasMore: _followingHasMore,
-              loadingMore: _loadingMoreFollowing,
-              onLoadMore: _loadMoreFollowing,
-            ),
+          loading: _followingLoading,
+          error: _followingError,
+          onRetry: _loadFollowing,
+          child: () => _buildPeopleTab(
+            _following,
+            l10n.profileFollowingEmpty,
+            hasMore: _followingHasMore,
+            loadingMore: _loadingMoreFollowing,
+            onLoadMore: _loadMoreFollowing,
           ),
+        ),
         ProfileTab.notifications => _tabScope(
-            loading: _notificationsLoading,
-            error: _notificationsError,
-            onRetry: _loadNotifications,
-            child: () => _buildNotificationsTab(theme),
-          ),
+          loading: _notificationsLoading,
+          error: _notificationsError,
+          onRetry: _loadNotifications,
+          child: () => _buildNotificationsTab(theme),
+        ),
       };
 
   Widget _tabScope({
@@ -837,8 +874,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                     )
                   : CircleAvatar(
                       backgroundColor: theme.colorScheme.primaryContainer,
-                      child: Icon(activity.icon,
-                          color: theme.colorScheme.primary),
+                      child: Icon(
+                        activity.icon,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
             ),
           );
@@ -846,19 +885,18 @@ class _ProfileScreenState extends State<ProfileScreen>
             leading: leading,
             title: Row(
               children: [
-                Icon(activity.icon,
-                    size: 16, color: theme.colorScheme.outline),
+                Icon(activity.icon, size: 16, color: theme.colorScheme.outline),
                 const SizedBox(width: 6),
                 Text(dist),
               ],
             ),
             subtitle: Text(
-                '${formatDateMed(r.startedAt, localeToTag(Localizations.localeOf(context)))}  ·  $paceLine'),
+              '${formatDateMed(r.startedAt, localeToTag(Localizations.localeOf(context)))}  ·  $paceLine',
+            ),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    PublicRunScreen(api: widget.api, runId: r.id),
+                builder: (_) => PublicRunScreen(api: widget.api, runId: r.id),
               ),
             ),
           );
@@ -875,10 +913,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     required Future<void> Function() onLoadMore,
   }) {
     if (people.isEmpty) {
-      return EmptyState(
-        icon: Icons.people_outline,
-        title: emptyMessage,
-      );
+      return EmptyState(icon: Icons.people_outline, title: emptyMessage);
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -902,8 +937,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                     : OutlinedButton.icon(
                         onPressed: onLoadMore,
                         icon: const Icon(Icons.expand_more),
-                        label: Text(AppLocalizations.of(context)
-                            .profileLoadMore(_kFollowsPageSize)),
+                        label: Text(
+                          AppLocalizations.of(
+                            context,
+                          ).profileLoadMore(_kFollowsPageSize),
+                        ),
                       ),
               ),
             );
@@ -916,14 +954,15 @@ class _ProfileScreenState extends State<ProfileScreen>
               size: 40,
               imageUrl: p.avatarUrl,
             ),
-            title: Text(p.displayName ??
-                AppLocalizations.of(context).profileRunnerFallback),
+            title: Text(
+              p.displayName ??
+                  AppLocalizations.of(context).profileRunnerFallback,
+            ),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      ProfileScreen(api: widget.api, userId: p.id),
+                  builder: (_) => ProfileScreen(api: widget.api, userId: p.id),
                 ),
               );
             },
@@ -935,16 +974,15 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildNotificationsTab(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
-    final visible = (_notifFilter == 'unread'
-            ? _notifications.where((n) => n.row.readAt == null)
-            : _notifications)
-        .where((n) => !_dismissedNotifIds.contains(n.row.id))
-        .toList();
-    final hasUnread =
-        _notifications.any((n) => n.row.readAt == null);
+    final visible =
+        (_notifFilter == 'unread'
+                ? _notifications.where((n) => n.row.readAt == null)
+                : _notifications)
+            .where((n) => !_dismissedNotifIds.contains(n.row.id))
+            .toList();
+    final hasUnread = _notifications.any((n) => n.row.readAt == null);
     final viewById = {for (final v in visible) v.row.id: v};
-    final groups =
-        groupNotifications(visible.map((v) => v.row).toList());
+    final groups = groupNotifications(visible.map((v) => v.row).toList());
     final entries = <({NotificationGroup? group, NotificationView? sub})>[];
     for (final g in groups) {
       entries.add((group: g, sub: null));
@@ -967,9 +1005,13 @@ class _ProfileScreenState extends State<ProfileScreen>
               SegmentedButton<String>(
                 segments: [
                   ButtonSegment(
-                      value: 'all', label: Text(l10n.profileNotifAll)),
+                    value: 'all',
+                    label: Text(l10n.profileNotifAll),
+                  ),
                   ButtonSegment(
-                      value: 'unread', label: Text(l10n.profileNotifUnread)),
+                    value: 'unread',
+                    label: Text(l10n.profileNotifUnread),
+                  ),
                 ],
                 selected: {_notifFilter},
                 onSelectionChanged: (s) =>
@@ -1005,8 +1047,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     itemBuilder: (_, i) {
                       final e = entries[i];
                       if (e.group != null) {
-                        return _buildNotifGroupRow(
-                            theme, e.group!, viewById);
+                        return _buildNotifGroupRow(theme, e.group!, viewById);
                       }
                       return _buildNotifRow(theme, e.sub!, isSub: true);
                     },
@@ -1017,141 +1058,162 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildNotifRow(ThemeData theme, NotificationView item,
-      {bool isSub = false}) {
+  Widget _buildNotifRow(
+    ThemeData theme,
+    NotificationView item, {
+    bool isSub = false,
+  }) {
     final unread = item.row.readAt == null;
-    return Container(
-      color: unread
+    return ListTile(
+      // The unread tint is the tile's own `tileColor`, not an enclosing
+      // coloured box: a ListTile paints its background AND its ink splash onto
+      // the nearest Material ancestor, so a box around it swallows the tap
+      // feedback. Flutter asserts on the shape, which is why this only ever
+      // failed on CI's newer stable.
+      tileColor: unread
           ? theme.colorScheme.primary.withValues(alpha: 0.06)
           : null,
-      child: ListTile(
-        contentPadding: isSub
-            ? const EdgeInsets.only(left: 40, right: 8)
-            : null,
-        leading: IdentityAvatar(
-          seed: item.actor?.id ?? item.row.id,
-          name: item.actor?.displayName,
-          size: isSub ? 32 : 40,
-          imageUrl: item.actor?.avatarUrl,
-        ),
-        title: Text(_verbFor(AppLocalizations.of(context), item)),
-        subtitle: item.commentExcerpt != null
-            ? Text(
-                '"${item.commentExcerpt}"',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
-              )
-            : null,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The row tint composites to 1.109:1 light / 1.087:1 dark against
-            // the page, so it cannot be the only unread signal. The grouped
-            // sibling row already carries a count badge; a single
-            // notification has no count, so it takes the dot.
-            if (unread)
-              Semantics(
-                label: AppLocalizations.of(context).profileNotifUnread,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: theme.colorScheme.primary,
-                  ),
+
+      contentPadding: isSub ? const EdgeInsets.only(left: 40, right: 8) : null,
+      leading: IdentityAvatar(
+        seed: item.actor?.id ?? item.row.id,
+        name: item.actor?.displayName,
+        size: isSub ? 32 : 40,
+        imageUrl: item.actor?.avatarUrl,
+      ),
+      title: Text(_verbFor(AppLocalizations.of(context), item)),
+      subtitle: item.commentExcerpt != null
+          ? Text(
+              '"${item.commentExcerpt}"',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            )
+          : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The row tint composites to 1.109:1 light / 1.087:1 dark against
+          // the page, so it cannot be the only unread signal. The grouped
+          // sibling row already carries a count badge; a single
+          // notification has no count, so it takes the dot.
+          if (unread)
+            Semantics(
+              label: AppLocalizations.of(context).profileNotifUnread,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: theme.colorScheme.primary,
                 ),
               ),
-            IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              tooltip: AppLocalizations.of(context).profileDismiss,
-              onPressed: () => _dismissNotifs(
-                  [item.row.id], AppLocalizations.of(context).undoDismissed(1)),
             ),
-          ],
-        ),
-        onTap: () => _onNotifTap(item),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: AppLocalizations.of(context).profileDismiss,
+            onPressed: () => _dismissNotifs([
+              item.row.id,
+            ], AppLocalizations.of(context).undoDismissed(1)),
+          ),
+        ],
       ),
+      onTap: () => _onNotifTap(item),
     );
   }
 
-  Widget _buildNotifGroupRow(ThemeData theme, NotificationGroup group,
-      Map<String, NotificationView> viewById) {
+  Widget _buildNotifGroupRow(
+    ThemeData theme,
+    NotificationGroup group,
+    Map<String, NotificationView> viewById,
+  ) {
     final l10n = AppLocalizations.of(context);
     final lead = viewById[group.lead.id];
     if (lead == null) return const SizedBox.shrink();
     final unread = group.unreadCount > 0;
     final expanded = _expandedGroups.contains(group.key);
     final title = group.otherCount > 0
-        ? _verbFor(l10n, lead,
+        ? _verbFor(
+            l10n,
+            lead,
             nameOverride: l10n.profileNotifNameAndOthers(
-                _notifName(l10n, lead), group.otherCount))
+              _notifName(l10n, lead),
+              group.otherCount,
+            ),
+          )
         : _verbFor(l10n, lead);
-    return Container(
-      color: unread
+    return ListTile(
+      // The unread tint is the tile's own `tileColor`, not an enclosing
+      // coloured box: a ListTile paints its background AND its ink splash onto
+      // the nearest Material ancestor, so a box around it swallows the tap
+      // feedback. Flutter asserts on the shape, which is why this only ever
+      // failed on CI's newer stable.
+      tileColor: unread
           ? theme.colorScheme.primary.withValues(alpha: 0.06)
           : null,
-      child: ListTile(
-        leading: IdentityAvatar(
-          seed: lead.actor?.id ?? lead.row.id,
-          name: lead.actor?.displayName,
-          size: 40,
-          imageUrl: lead.actor?.avatarUrl,
-        ),
-        title: Text(title),
-        subtitle: lead.commentExcerpt != null
-            ? Text(
-                '"${lead.commentExcerpt}"',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
-              )
-            : null,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (unread)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${group.unreadCount}',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onPrimary),
-                ),
-              ),
-            if (group.otherCount > 0)
-              IconButton(
-                icon: Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20),
-                tooltip: expanded
-                    ? l10n.profileNotifShowLess
-                    : l10n.profileNotifAndOthers(group.otherCount),
-                onPressed: () => setState(() {
-                  _expandedGroups = expanded
-                      ? (_expandedGroups.difference({group.key}))
-                      : ({..._expandedGroups, group.key});
-                }),
-              ),
-            IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              tooltip: l10n.profileDismiss,
-              onPressed: () => _dismissGroup(group),
-            ),
-          ],
-        ),
-        onTap: () => _openGroup(group, viewById),
+
+      leading: IdentityAvatar(
+        seed: lead.actor?.id ?? lead.row.id,
+        name: lead.actor?.displayName,
+        size: 40,
+        imageUrl: lead.actor?.avatarUrl,
       ),
+      title: Text(title),
+      subtitle: lead.commentExcerpt != null
+          ? Text(
+              '"${lead.commentExcerpt}"',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            )
+          : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (unread)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '${group.unreadCount}',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onPrimary,
+                ),
+              ),
+            ),
+          if (group.otherCount > 0)
+            IconButton(
+              icon: Icon(
+                expanded ? Icons.expand_less : Icons.expand_more,
+                size: 20,
+              ),
+              tooltip: expanded
+                  ? l10n.profileNotifShowLess
+                  : l10n.profileNotifAndOthers(group.otherCount),
+              onPressed: () => setState(() {
+                _expandedGroups = expanded
+                    ? (_expandedGroups.difference({group.key}))
+                    : ({..._expandedGroups, group.key});
+              }),
+            ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: l10n.profileDismiss,
+            onPressed: () => _dismissGroup(group),
+          ),
+        ],
+      ),
+      onTap: () => _openGroup(group, viewById),
     );
   }
 
-  Future<void> _openGroup(NotificationGroup group,
-      Map<String, NotificationView> viewById) async {
+  Future<void> _openGroup(
+    NotificationGroup group,
+    Map<String, NotificationView> viewById,
+  ) async {
     final lead = viewById[group.lead.id];
     if (lead == null) return;
     for (final o in group.others) {
@@ -1205,7 +1267,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-
   static String _formatDuration(Duration d) {
     final h = d.inHours;
     final m = d.inMinutes % 60;
@@ -1222,8 +1283,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   String _notifName(AppLocalizations l10n, NotificationView item) =>
       item.actor?.displayName ?? l10n.profileNotifSomeone;
 
-  String _verbFor(AppLocalizations l10n, NotificationView item,
-      {String? nameOverride}) {
+  String _verbFor(
+    AppLocalizations l10n,
+    NotificationView item, {
+    String? nameOverride,
+  }) {
     final name = nameOverride ?? _notifName(l10n, item);
     final dist = item.runDistanceM != null
         ? formatDistanceForPref(item.runDistanceM!)
@@ -1268,11 +1332,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       case 'run_completed':
         return item.runDistanceM != null
             ? l10n.profileNotifRunCompletedDist(
-                name, formatDistanceForPref(item.runDistanceM!))
+                name,
+                formatDistanceForPref(item.runDistanceM!),
+              )
             : l10n.profileNotifRunCompleted(name);
       default:
         return l10n.profileNotifGeneric(name);
     }
   }
 }
-
