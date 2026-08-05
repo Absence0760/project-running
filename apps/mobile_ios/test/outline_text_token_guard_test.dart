@@ -27,9 +27,9 @@
 // Only a genuinely mark-only derived colour earns an allowlist entry, and it
 // must state where every use of the value lands.
 
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
+
+import 'source_scan.dart';
 
 /// Roots scanned. `ui_kit` is shared (no twin), and both twins scan it: the
 /// widgets in it paint text on the same tokens the screens do, and §505 moved
@@ -94,47 +94,17 @@ const _thinningFixtures = <(String, bool)>[
 ];
 
 /// The verdict for the occurrence at [at], read off the innermost enclosing
-/// constructor. Walks backwards tracking bracket depth so only brackets still
-/// OPEN at [at] count as enclosing — that is the whole boundary between this
-/// and a backwards regex, and fixtures pin it from both sides.
+/// constructor `enclosingHosts` reports.
 _Use classify(String src, int at) {
-  var depth = 0;
-  for (var i = at - 1; i >= 0; i--) {
-    final c = src[i];
-    if (c == ')' || c == ']' || c == '}') {
-      depth++;
-    } else if (c == '(' || c == '[' || c == '{') {
-      if (depth > 0) {
-        depth--;
-        continue;
-      }
-      var j = i - 1;
-      while (j >= 0 && _isSpace(src[j])) {
-        j--;
-      }
-      var k = j;
-      while (k >= 0 && _isNamePart(src[k])) {
-        k--;
-      }
-      final parts = src
-          .substring(k + 1, j + 1)
-          .replaceAll(RegExp(r'[?!]'), '')
-          .split('.');
-      // The trailing segment decides type (`…bodySmall?.copyWith`); a mark
-      // may be reached through a named factory, so any segment counts
-      // (`Border.all`, `BoxDecoration.lerp`).
-      if (_textHosts.contains(parts.last)) return _Use.text;
-      if (parts.any(_markHosts.contains)) return _Use.mark;
-    }
+  for (final parts in enclosingHosts(src, at)) {
+    // The trailing segment decides type (`…bodySmall?.copyWith`); a mark
+    // may be reached through a named factory, so any segment counts
+    // (`Border.all`, `BoxDecoration.lerp`).
+    if (_textHosts.contains(parts.last)) return _Use.text;
+    if (parts.any(_markHosts.contains)) return _Use.mark;
   }
   return _Use.derived;
 }
-
-bool _isSpace(String c) => c == ' ' || c == '\n' || c == '\t' || c == '\r';
-
-final _namePart = RegExp(r'[A-Za-z0-9_$.?!]');
-
-bool _isNamePart(String c) => _namePart.hasMatch(c);
 
 /// Fixtures. `_Use.derived` cases are the ones the classifier cannot decide
 /// from syntax and must therefore refuse.
@@ -207,63 +177,6 @@ const _fixtures = <(String, _Use)>[
       "    : (semantic.success, Icons.check_circle);", _Use.derived),
 ];
 
-/// Comments and string literals blanked to spaces, so offsets and therefore
-/// reported line numbers survive. A prose mention of the token in a doc
-/// comment is not a use of it — `chart_card_header.dart` explains in its own
-/// header why it does not use `outline`.
-String blankNonCode(String src) {
-  final out = List<String>.from(src.split(''));
-  void blank(int from, int to) {
-    for (var i = from; i < to && i < out.length; i++) {
-      if (out[i] != '\n') out[i] = ' ';
-    }
-  }
-
-  var i = 0;
-  while (i < src.length) {
-    if (src.startsWith('//', i)) {
-      final end = src.indexOf('\n', i);
-      blank(i, end < 0 ? src.length : end);
-      i = end < 0 ? src.length : end;
-    } else if (src.startsWith('/*', i)) {
-      final end = src.indexOf('*/', i + 2);
-      blank(i, end < 0 ? src.length : end + 2);
-      i = end < 0 ? src.length : end + 2;
-    } else if (src[i] == "'" || src[i] == '"') {
-      final q = src[i];
-      final triple = src.startsWith(q * 3, i);
-      final delim = triple ? q * 3 : q;
-      final raw = i > 0 && src[i - 1] == 'r';
-      var j = i + delim.length;
-      while (j < src.length) {
-        if (!raw && src[j] == r'\') {
-          j += 2;
-          continue;
-        }
-        if (src.startsWith(delim, j)) break;
-        if (!triple && src[j] == '\n') break;
-        j++;
-      }
-      blank(i + delim.length, j);
-      i = j + delim.length;
-    } else {
-      i++;
-    }
-  }
-  return out.join();
-}
-
-List<File> _dartFiles(String root) {
-  final dir = Directory(root);
-  if (!dir.existsSync()) return const [];
-  return dir
-      .listSync(recursive: true)
-      .whereType<File>()
-      .where((f) => f.path.endsWith('.dart'))
-      .toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
-}
-
 void main() {
   test('the classifier decides every fixture the way the rule says', () {
     final wrong = <String>[];
@@ -313,7 +226,7 @@ void main() {
   test('no boundary token is thinned by an alpha', () {
     final violations = <String>[];
     for (final root in _roots) {
-      for (final file in _dartFiles(root)) {
+      for (final file in dartFiles(root)) {
         final src = blankNonCode(file.readAsStringSync());
         for (final m in _thinnedBoundary.allMatches(src)) {
           final line = src.substring(0, m.start).split('\n').length;
@@ -329,7 +242,7 @@ void main() {
 
   test('every scanned root exists', () {
     for (final root in _roots) {
-      expect(Directory(root).existsSync(), isTrue,
+      expect(rootExists(root), isTrue,
           reason: '$root is scanned but missing — if the package moved, move '
               'this entry with it so the scan stays whole.');
     }
@@ -339,7 +252,7 @@ void main() {
     final violations = <String>[];
     final derivedSeen = <String, int>{};
     for (final root in _roots) {
-      for (final file in _dartFiles(root)) {
+      for (final file in dartFiles(root)) {
         final src = blankNonCode(file.readAsStringSync());
         for (final m in _token.allMatches(src)) {
           final use = classify(src, m.start);
