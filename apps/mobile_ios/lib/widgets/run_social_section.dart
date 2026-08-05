@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show IdentityAvatar;
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton;
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -279,10 +279,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator()),
-      );
+      return ListSkeleton.section(label: l10n.commonLoading, rows: 3);
     }
 
     final topLevel = <RunCommentWithAuthor>[];

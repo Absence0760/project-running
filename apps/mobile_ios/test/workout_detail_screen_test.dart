@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/rendering.dart';
-import 'package:ui_kit/ui_kit.dart' show FullBodyLoader, TextLane;
+import 'package:ui_kit/ui_kit.dart' show FullBodyLoader, ListSkeleton, TextLane;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -26,10 +28,13 @@ PlanWorkoutRow _completedWorkout({String? completedRunId = 'run-current'}) {
 class _FakeTraining extends TrainingService {
   final PlanWorkoutRow workout;
   final List<RelinkCandidateRun> candidates;
+
+  /// Held open so a test can observe the picker's loading frame.
+  final Completer<void>? gateCandidates;
   String? lastMarkRunId;
   bool markCalled = false;
 
-  _FakeTraining(this.workout, this.candidates);
+  _FakeTraining(this.workout, this.candidates, {this.gateCandidates});
 
   @override
   Future<PlanWorkoutRow?> fetchWorkout(String id) async => workout;
@@ -37,8 +42,10 @@ class _FakeTraining extends TrainingService {
   @override
   Future<List<RelinkCandidateRun>> fetchRelinkCandidates(
     PlanWorkoutRow workout,
-  ) async =>
-      candidates;
+  ) async {
+    await gateCandidates?.future;
+    return candidates;
+  }
 
   @override
   Future<void> markCompleted(String workoutId, String? runId,
@@ -144,6 +151,38 @@ void main() {
 
       expect(training.markCalled, isTrue);
       expect(training.lastMarkRunId, 'run-other');
+    });
+
+    testWidgets('picker holds the row layout with a section skeleton while '
+        'candidates load', (tester) async {
+      final gate = Completer<void>();
+      final training = _FakeTraining(
+        _completedWorkout(),
+        [_cand('run-current', '2026-04-05T07:00:00Z')],
+        gateCandidates: gate,
+      );
+      await _pumpWith(tester, training);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Re-link'));
+      // Indeterminate-free: the skeleton pulses forever, so pumpAndSettle
+      // would never return.
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final skeleton = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(ListSkeleton),
+      );
+      expect(skeleton, findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      // A skeleton that overflows its dialog is worse than the spinner it
+      // replaced.
+      expect(tester.takeException(), isNull);
+
+      gate.complete();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(skeleton, findsNothing);
+      expect(find.byType(ListTile), findsOneWidget);
     });
 
     testWidgets('picker shows the empty state when no candidates', (tester) async {

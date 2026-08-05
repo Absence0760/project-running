@@ -512,9 +512,11 @@ class _RelinkPickerDialogState extends State<_RelinkPickerDialog> {
 
     Widget body;
     if (_loading) {
-      body = const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator()),
+      body = ListSkeleton.section(
+        label: l10n.commonLoading,
+        rows: 3,
+        rowHeight: 56,
+        hasLeading: false,
       );
     } else if (_error) {
       body = Text(l10n.workoutRelinkError);
