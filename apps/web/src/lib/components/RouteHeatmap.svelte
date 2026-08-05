@@ -880,33 +880,30 @@
 	/// each, so the wire size is negligible compared to the heatmap
 	/// densification. Each layer updates independently; a failure
 	/// in one doesn't cancel the other.
-	// Frame the map on the loaded route pins. Runs at most once, and only
-	// when geolocation has bowed out (wantDataFit) — so a working fix still
-	// wins, but a denied / unavailable / absent one lands the user on the
-	// route data (e.g. the Virginia routes) instead of the world view.
+	// Frame the map on the discoverable route data. Runs at most once, and
+	// only when geolocation has bowed out (wantDataFit) — so a working fix
+	// still wins, but a denied / unavailable / absent one lands the user on
+	// the route data instead of the world view.
 	async function fitToRoutePins() {
 		if (!map || didInitialFit || !wantDataFit) return;
-		// Prefer the pins already loaded for the current viewport. But the
-		// initial [0,30] world view doesn't span the whole globe (its bounds
-		// are roughly the Atlantic basin), so a user whose routes sit outside
-		// it (e.g. North America) would have an EMPTY viewport set and nothing
-		// to frame — leaving them stranded at the world view, the bug this
-		// fallback exists to fix. When the viewport carries no pins, fetch a
-		// global set so there's always something to frame.
-		let pins = routePins;
-		if (pins.length === 0) {
-			try {
-				pins = await fetchDiscoverableRoutesInBbox({
-					minLng: -180,
-					minLat: -85,
-					maxLng: 180,
-					maxLat: 85,
-					filter: routeFilter,
-					bands: selectedBands,
-				});
-			} catch {
-				pins = [];
-			}
+		// Always frame the GLOBAL set, never the viewport's. routePins is
+		// populated only once refreshPins has returned, so preferring it
+		// framed the same page two different ways depending on which
+		// callback landed first — and at the initial world view it is not
+		// the set the user is asking about anyway.
+		let pins: DiscoverableRoutePin[];
+		try {
+			pins = await fetchDiscoverableRoutesInBbox({
+				minLng: -180,
+				minLat: -85,
+				maxLng: 180,
+				maxLat: 85,
+				filter: routeFilter,
+				bands: selectedBands,
+			});
+		} catch {
+			// Leave didInitialFit false so the refreshPins call site retries.
+			return;
 		}
 		if (!map || didInitialFit || pins.length === 0) return;
 		const bounds = new maplibregl.LngLatBounds();
