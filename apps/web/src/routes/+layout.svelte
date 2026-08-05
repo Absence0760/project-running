@@ -20,6 +20,8 @@
 	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
 	import CookieConsentBanner from '$lib/components/CookieConsentBanner.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import UndoBar from '$lib/components/UndoBar.svelte';
+	import { setUndoWindowS } from '$lib/stores/undo.svelte';
 	import NotificationBell from '$lib/components/NotificationBell.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { m, initLocale } from '$lib/i18n/store.svelte';
@@ -134,6 +136,7 @@
 					effective<string>(settings, 'weight_unit') ??
 						defaultWeightUnitForDistanceUnit(distanceUnit),
 				);
+				setUndoWindowS(effective<number>(settings, 'undo_window_s'));
 			} catch (_) {
 				/* silent — falls back to default */
 			}
@@ -401,6 +404,7 @@
 </svelte:head>
 
 <ToastContainer />
+<UndoBar />
 <CookieConsentBanner />
 
 {#if isOffline}
@@ -582,7 +586,7 @@
 		z-index: var(--z-toast, 100);
 		/* WCAG 2.2 AA: white on --color-warning (#E6A96B) was 2.05:1.
 		   --color-warning-strong (#9A5B0A) is 5.42:1. */
-		background: var(--color-warning-strong, #9A5B0A);
+		background: var(--color-warning-strong);
 		color: white;
 		padding: 0.5rem var(--space-md);
 		font-size: 0.85rem;

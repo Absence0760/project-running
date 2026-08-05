@@ -194,7 +194,7 @@ $effect(() => {
 | --- | --- | --- |
 | Many similar items, each navigable | Card grid `minmax(22rem, 1fr)` with whole-card click | `/runs`, `/plans`, `/clubs`, `/routes` |
 | Chronological feed | Wide-column card grid with per-card track preview | `/feed` |
-| Items × time | Calendar heatmap | `/dashboard` (`CalendarHeatmap`) |
+| Items × time | Calendar heatmap | none on web — `/dashboard` retired it for the Training intensity card (decisions § 513) |
 | Each item has rich detail + workflow state | Master/detail split (list 36% / inspector 64%, sticky right pane) | Not in-repo; introduce only if needed |
 | Workflow cards + time-sensitive subset | Card grid + "needs attention" band on top | `/plans` is the closest |
 | Tabbed sub-views over one entity | `.tabs` strip + `?tab=` URL state | `/clubs`, `/routes`, `/u/[id]` |

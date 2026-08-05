@@ -589,7 +589,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 
@@ -880,7 +880,7 @@
 	}
 	.starred-toggle.active .material-symbols {
 		font-variation-settings: 'FILL' 1;
-		color: #f59e0b;
+		color: var(--color-crown);
 	}
 	.toolbar-actions {
 		display: inline-flex;

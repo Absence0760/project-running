@@ -92,14 +92,20 @@ test.describe('comment report/delete icon buttons meet the 44px tap-target minim
 			expect(deleteBox!.height).toBeGreaterThanOrEqual(MIN_TAP);
 
 			// Owner cleans up the comment so the seed state survives. The
-			// per-row close opens a ConfirmDialog (mis-tap guard); confirm it.
+			// per-row close defers the delete behind the undo bar (the mis-tap
+			// guard); dismiss it so the mutation commits.
 			await deleteBtn.click();
-			const confirm = runner.locator('.modal', {
-				hasText: 'Delete this comment?'
-			});
-			await expect(confirm).toBeVisible({ timeout: 5_000 });
-			await confirm.getByRole('button', { name: 'Delete comment' }).click();
 			await expect(article).toHaveCount(0, { timeout: 5_000 });
+			const undoDismiss = runner.getByTestId('undo-dismiss');
+			await expect(undoDismiss).toBeVisible({ timeout: 5_000 });
+			// The undo bar's own dismiss must also clear the 44 px tap-target
+			// floor this spec exists to police.
+			const undoBox = await undoDismiss.boundingBox();
+			expect(undoBox).not.toBeNull();
+			expect(undoBox!.width).toBeGreaterThanOrEqual(MIN_TAP);
+			expect(undoBox!.height).toBeGreaterThanOrEqual(MIN_TAP);
+			await undoDismiss.click();
+			await expect(runner.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 		} finally {
 			await ctxAlex.close();
 			await ctxRunner.close();

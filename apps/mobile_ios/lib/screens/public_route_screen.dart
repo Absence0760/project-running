@@ -2,7 +2,12 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart'
-    show ActivityLoaderKind, AppSemanticColors, FullBodyLoader;
+    show
+        ActivityLoaderKind,
+        AppSemanticColors,
+        FullBodyLoader,
+        StatGrid,
+        StatTile;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -270,21 +275,20 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
           ),
         Padding(
           padding: const EdgeInsets.all(20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _Stat(
+          child: StatGrid(
+            cells: [
+              StatTile.large(
                 label: l10n.publicRouteStatDistance,
                 value: UnitFormat.distanceValue(
                     route.distanceMetres, activeDistanceUnit),
                 unit: UnitFormat.distanceLabel(activeDistanceUnit),
               ),
-              _Stat(
+              StatTile.large(
                 label: l10n.publicRouteStatElevation,
                 value: '${route.elevationGainMetres.round()}',
                 unit: 'm',
               ),
-              _Stat(
+              StatTile.large(
                 label: l10n.publicRouteStatWaypoints,
                 value: '${_waypoints.length}',
               ),
@@ -320,42 +324,3 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
   }
 }
 
-class _Stat extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? unit;
-  const _Stat({required this.label, required this.value, this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(value,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                )),
-            if (unit != null) ...[
-              const SizedBox(width: 4),
-              Text(unit!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  )),
-            ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            )),
-      ],
-    );
-  }
-}

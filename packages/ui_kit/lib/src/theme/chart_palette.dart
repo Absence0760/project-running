@@ -39,7 +39,11 @@ import 'package:flutter/material.dart';
 ///
 /// Web's `--chart-fitness` / `--chart-fatigue` / `--chart-form` and
 /// `--zone-1`..`--zone-5` in `apps/web/src/app.css` are [series] and [zones] by
-/// value, per brightness. Web has no sequential-ramp token yet.
+/// value, per brightness; both locksteps are asserted from the web side, by
+/// scale name, in `apps/web/src/lib/contrast_guard.test.ts` — renaming a scale
+/// here breaks a guard in the other language's suite. [ramp] has no web twin
+/// and is not owed one: web retired its only sequential surface, the dashboard
+/// calendar heatmap, in favour of the Training intensity card (§ 515).
 @immutable
 class ChartPalette {
   const ChartPalette({

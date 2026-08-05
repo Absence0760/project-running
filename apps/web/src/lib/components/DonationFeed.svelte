@@ -46,7 +46,7 @@
 	}
 	li {
 		padding: var(--space-sm) 0;
-		border-bottom: 1px solid var(--color-border, #e5e7eb);
+		border-bottom: 1px solid var(--color-border);
 	}
 	.row {
 		display: flex;

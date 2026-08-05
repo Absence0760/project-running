@@ -549,7 +549,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 	.link-list {
@@ -683,20 +683,20 @@
 		font-weight: 700;
 	}
 	.risk-high {
-		background: rgba(239, 68, 68, 0.15);
-		color: #b91c1c;
+		background: var(--color-danger-light);
+		color: var(--color-danger-text);
 	}
 	.risk-elevated {
-		background: rgba(245, 158, 11, 0.16);
-		color: #b45309;
+		background: var(--color-warning-light);
+		color: var(--color-warning-text);
 	}
 	.risk-optimal {
-		background: rgba(34, 197, 94, 0.15);
-		color: #15803d;
+		background: var(--color-success-light);
+		color: var(--color-success-text);
 	}
 	.risk-low {
-		background: rgba(59, 130, 246, 0.14);
-		color: #1d4ed8;
+		background: var(--color-primary-light);
+		color: var(--color-primary);
 	}
 	.risk-insufficient {
 		background: var(--color-bg);

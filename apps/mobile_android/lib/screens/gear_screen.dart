@@ -347,7 +347,7 @@ class _GearScreenState extends State<GearScreen> {
                           Text(
                             l10n.gearRetired,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                               letterSpacing: 1.1,
                             ),
                           ),
@@ -459,7 +459,7 @@ class _GearScreenState extends State<GearScreen> {
                     if (brandModel.isNotEmpty)
                       Text(brandModel,
                           style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.outline)),
+                              color: theme.colorScheme.onSurfaceVariant)),
                     const SizedBox(height: 6),
                     if (hasTarget)
                       ClipRRect(
@@ -485,7 +485,7 @@ class _GearScreenState extends State<GearScreen> {
                             l10n.gearRunCount(runCount),
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline),
+                                color: theme.colorScheme.onSurfaceVariant),
                           ),
                         ),
                       ],

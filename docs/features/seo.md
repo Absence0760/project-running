@@ -26,7 +26,7 @@ indexed anyway).
 | Surface | Mode | `<head>` owner | Structured data |
 |---|---|---|---|
 | `/` landing | prerendered | `SeoHead.svelte` + `+page.ts` | `Organization` + `WebSite` |
-| `/learn`, `/learn/[slug]`, `/learn/category/[c]` | prerendered (`entries()`) | inline `<svelte:head>` | `Article` + `BreadcrumbList` |
+| `/learn`, `/learn/[slug]`, `/learn/category/[category]` | prerendered (`entries()`) | inline `<svelte:head>` | `Article` + `BreadcrumbList` |
 | `/sitemap.xml` | prerendered | — | — |
 | `/share/run/[id]`, `/og/run/[id].png` | Lambda-SSR (`share-run`) | `share_run_meta` | `WebPage` + breadcrumb |
 | `/share/route/[id]`, `/og/route/[id].png` | Lambda-SSR (`share-route`) | `share_route_meta` | `WebPage` + breadcrumb |
@@ -36,7 +36,26 @@ indexed anyway).
 | `/share/profile/[id]` | Lambda-SSR (`share-entity`) | `share_profile_meta` | `ProfilePage` + `Person` |
 | `/share/club/[slug]` | Lambda-SSR (`share-entity`) | `share_club_meta` | `SportsOrganization` |
 | `/share/race/[id]` | Lambda-SSR (`share-entity`) | `share_race_meta` | `SportsEvent` |
-| dashboard / runs / `/u/[id]` / `/clubs/*` / `/races` / feed / … | CSR (app shell) | generic shell | — (auth-gated, not indexed) |
+| `/share/session/[id]`, `/share/workout/[id]` | CSR (no injector) | inline `<svelte:head>` | — |
+| `/runs/[id]`, `/routes/[id]`, `/u/[id]`, `/races` | CSR (app shell) | generic shell + canonical | — (auth-gated) |
+| `/clubs/[slug]`, `/clubs/[slug]/events/[id]`, `/events/[id]`, `/live/[id]`, `/recap/[year]` | CSR (app shell) | generic shell + canonical | — (anon-reachable, shell-only) |
+| dashboard / feed / settings / … | CSR (app shell) | generic shell | — (auth-gated) |
+
+Two rows above are easy to misread, and both were wrong in this table before:
+
+- **`/clubs/*`, `/events/[id]`, `/live/[id]`, `/recap/*` are NOT auth-gated.**
+  The layout's `isAnonAllowed` lets anon through (public clubs + their events
+  are RLS-visible to anon), so a crawler *does* reach them — they stay out of
+  the index because they serve the empty shell and canonical to their share
+  twin, not because a gate turns the crawler away. Do not "simplify" these
+  back into the auth-gated row.
+- **`/share/session/[id]` + `/share/workout/[id]` have no SSR injector.**
+  They are real public routes with real inline heads, but no Lambda dispatches
+  them and they are not in the `share-entity` set, so in prod an unfurler gets
+  the shell. They also emit no canonical and their in-app twins
+  (`/sessions/[id]`, `/gym/[id]`) hand-roll a `location.origin` share URL
+  instead of a `build<X>ShareCanonical`. Either finish them (step 2 of *Adding
+  a new indexable surface*) or stop calling them share surfaces.
 
 ## Canonical consolidation (in-app → share twin)
 
@@ -47,14 +66,28 @@ the two URLs splitting ranking signal, each in-app page emits a
 
 | In-app page | canonical → |
 |---|---|
+| `/runs/[id]` | `/share/run/[id]` |
 | `/routes/[id]` | `/share/route/[id]` |
 | `/u/[id]` | `/share/profile/[id]` |
 | `/clubs/[slug]` | `/share/club/[slug]` |
 | `/clubs/[slug]/events/[id]` | `/share/event/[id]` |
 
 The canonical derives from the URL param (via `build<X>ShareCanonical`),
-so it's present even before/without the client data load. Runs already
-carry this on `/runs/[id]` → `/share/run/[id]`.
+so it's present even before/without the client data load.
+
+**An auth-gated in-app page still emits one.** Three of the five rows sit
+behind the layout auth-gate, so the crawler-consolidation argument does not
+by itself carry them — but the tag is not only for crawlers. It is the
+machine-readable statement of "the public home of this content is *there*",
+which is what a link-preview fetcher reads, what a future prerendered or
+anon-reachable variant of the surface inherits for free, and what keeps one
+rule instead of a per-route judgement about who can reach what. It costs one
+`$derived` string and no data load. `/runs/[id]` was the one row where the
+doc claimed a fold that no code performed; §508 (a signed-in non-owner now
+sees a public run there, so the URL circulates like a share URL) is the
+merits case, but consistency with the four siblings would have been enough.
+`seo_render_map_guard.test.ts` now fails if this table and the routes drift
+apart in either direction.
 
 ## The shared entity-SSR Lambda
 

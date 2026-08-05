@@ -307,7 +307,7 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
                   child: Text(
                     l10n.bodyMetricsTargetsHint,
                     style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ),
                 Padding(

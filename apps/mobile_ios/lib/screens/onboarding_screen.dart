@@ -175,7 +175,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   p.description,
                                   textAlign: TextAlign.center,
                                   style: theme.textTheme.bodyLarge?.copyWith(
-                                    color: theme.colorScheme.outline,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                     height: 1.5,
                                   ),
                                 ),
@@ -201,7 +201,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   decoration: BoxDecoration(
                     color: i == _page
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.outline.withValues(alpha: 0.3),
+                        : theme.dividerColor,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );
@@ -269,7 +269,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             l10n.onboardingPrivacyBody,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.outline, height: 1.4),
+                ?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
           ),
           const SizedBox(height: 20),
           for (final o in options)
@@ -280,7 +283,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 side: BorderSide(
                   color: _privacyDefault == o.value
                       ? theme.colorScheme.primary
-                      : theme.colorScheme.outline.withValues(alpha: 0.25),
+                      : theme.dividerColor,
                   width: _privacyDefault == o.value ? 2 : 1,
                 ),
               ),

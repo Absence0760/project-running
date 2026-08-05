@@ -88,7 +88,7 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
                     child: Text(
                       l10n.gymRecordsSubtitle,
                       style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   );
                 }
@@ -147,12 +147,12 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
                         _formatLast(r.lastPerformedAt, tag),
                       ),
                       style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   Text(
                     l10n.gymRecordsSessions(r.sessionCount),
                     style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -178,7 +178,7 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
                 letterSpacing: 0.8,
               ),
             ),

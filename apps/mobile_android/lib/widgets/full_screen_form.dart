@@ -90,7 +90,7 @@ class FormSectionLabel extends StatelessWidget {
       child: Text(
         text.toUpperCase(),
         style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.outline,
+          color: theme.colorScheme.onSurfaceVariant,
           letterSpacing: 1.1,
           fontWeight: FontWeight.w600,
         ),

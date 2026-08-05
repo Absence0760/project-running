@@ -18,10 +18,23 @@
 // When this test fails: route the colour through
 // AppSemanticColors.of(context) (or .ofTheme(theme)) instead of adding an
 // allowlist entry. Only a genuine new DATA palette earns an entry here.
+//
+// The scan covers the shared UI package as well as the app. It used to walk
+// `lib` alone, and §505 then moved two data palettes into
+// `packages/ui_kit/lib/src/theme/chart_palette.dart` — which took their hexes
+// out of reach without changing the allowlist, because a file that is no longer
+// scanned needs no exemption. Nothing was unguarded (`chart_palette_test.dart`
+// pins those by computed contrast), but the ban on NEW status hexes had a blind
+// spot exactly where shared colour lives.
 
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+// Roots scanned, relative to the package under test. `ui_kit` is the only
+// shared package that carries colour at all; the other four hold no `Color`.
+// Both twins scan it, which is the price of one home for the rule.
+const _roots = ['lib', '../../packages/ui_kit/lib'];
 
 const _bannedHexes = [
   // greens
@@ -79,12 +92,21 @@ final _hexPattern = RegExp(
 final _swatchPattern = RegExp(r'Colors\.(green|amber|red)\b');
 
 void main() {
-  final dartFiles = Directory('lib')
-      .listSync(recursive: true)
-      .whereType<File>()
-      .where((f) => f.path.endsWith('.dart'))
-      .toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
+  final dartFiles = [
+    for (final root in _roots)
+      ...Directory(root)
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+  ]..sort((a, b) => a.path.compareTo(b.path));
+
+  test('every scanned root exists', () {
+    for (final root in _roots) {
+      expect(Directory(root).existsSync(), isTrue,
+          reason: '$root is scanned but missing — if the package moved, move '
+              'this entry with it, or the ban silently stops covering it.');
+    }
+  });
 
   test('exempt share-card files still exist at their allowlisted paths', () {
     for (final path in _exemptFiles) {

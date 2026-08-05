@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show EmptyState;
+import 'package:ui_kit/ui_kit.dart' show EmptyState, StatGrid, StatTile;
 
 import '../goals.dart';
 import '../l10n/date_format.dart';
@@ -433,7 +433,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                         PeriodType.all => l10n.periodSwitchToWeekly,
                       },
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -472,19 +472,19 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _SummaryStat(
+            StatGrid(
+              cells: [
+                StatTile.large(
                   label: l10n.periodStatDistance,
-                  value: UnitFormat.distanceValue(stats.totalDistanceMetres, unit),
+                  value:
+                      UnitFormat.distanceValue(stats.totalDistanceMetres, unit),
                   unit: UnitFormat.distanceLabel(unit),
                 ),
-                _SummaryStat(
+                StatTile.large(
                   label: l10n.periodStatRuns,
                   value: '${stats.runCount}',
                 ),
-                _SummaryStat(
+                StatTile.large(
                   label: l10n.periodStatTime,
                   value: dur,
                 ),
@@ -492,15 +492,10 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             ),
             if (stats.avgPaceSecPerKm != null) ...[
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _SummaryStat(
-                    label: l10n.periodStatAvgPace,
-                    value: UnitFormat.pace(stats.avgPaceSecPerKm, unit),
-                    unit: UnitFormat.paceLabel(unit),
-                  ),
-                ],
+              StatTile.large(
+                label: l10n.periodStatAvgPace,
+                value: UnitFormat.pace(stats.avgPaceSecPerKm, unit),
+                unit: UnitFormat.paceLabel(unit),
               ),
             ],
           ],
@@ -523,44 +518,6 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
 
 // ── Reusable widgets ───────────────────────────────────────────────────
 
-class _SummaryStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? unit;
-  const _SummaryStat({required this.label, required this.value, this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                )),
-            if (unit != null) ...[
-              const SizedBox(width: 4),
-              Text(unit!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  )),
-            ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            )),
-      ],
-    );
-  }
-}
 
 class _RunTile extends StatelessWidget {
   final Run run;

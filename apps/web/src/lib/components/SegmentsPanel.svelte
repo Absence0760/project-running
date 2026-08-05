@@ -486,7 +486,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.3rem;
 	}
 	.create {
@@ -665,8 +665,8 @@
 		gap: 0.4rem;
 		margin: 0;
 		padding: var(--space-sm) var(--space-md);
-		background: color-mix(in srgb, #f5b30a 12%, transparent);
-		border: 1px solid color-mix(in srgb, #f5b30a 35%, transparent);
+		background: color-mix(in srgb, var(--color-crown) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-crown) 35%, transparent);
 		border-radius: var(--radius-sm);
 		font-size: 0.85rem;
 		font-weight: 600;

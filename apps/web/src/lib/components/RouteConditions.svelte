@@ -8,10 +8,10 @@
 	import type { RouteCondition, RouteConditionKind, RouteConditionSeverity } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { deferDestructive } from '$lib/stores/undo.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { formatRelativeTime } from '$lib/format/time';
 	import { formatDistance } from '$lib/format/units.svelte';
-	import ConfirmDialog from './ConfirmDialog.svelte';
 
 	interface Props {
 		routeId: string;
@@ -44,7 +44,6 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let submitting = $state(false);
-	let confirmDelete = $state<RouteCondition | null>(null);
 
 	let composerOpen = $state(false);
 	let kind = $state<RouteConditionKind>('muddy');
@@ -138,15 +137,24 @@
 		}
 	}
 
-	async function doDelete(c: RouteCondition) {
-		try {
-			await deleteRouteCondition(c.id);
-			conditions = conditions.filter((x) => x.id !== c.id);
-		} catch (e: any) {
-			showToast(m('routeConditions.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
-		} finally {
-			confirmDelete = null;
-		}
+	// A condition report is one tap to re-file and the reporter is the only
+	// one who can remove their own, so it takes the undo path rather than a
+	// modal: the row leaves the list at once and the delete is held.
+	function removeCondition(c: RouteCondition) {
+		const before = conditions;
+		conditions = conditions.filter((x) => x.id !== c.id);
+		deferDestructive({
+			message: m('routeConditions.removed'),
+			commit: () => deleteRouteCondition(c.id),
+			restore: () => {
+				conditions = before;
+			},
+			onCommitError: (e) =>
+				showToast(
+					m('routeConditions.deleteFailed', { error: e instanceof Error ? e.message : String(e) }),
+					'error',
+				),
+		});
 	}
 </script>
 
@@ -235,7 +243,7 @@
 								class="delete-btn"
 								title={m('routeConditions.delete')}
 								aria-label={m('routeConditions.delete')}
-								onclick={() => (confirmDelete = c)}>×</button
+								onclick={() => removeCondition(c)}>×</button
 							>
 						{/if}
 					</div>
@@ -247,20 +255,6 @@
 		</ul>
 	{/if}
 </section>
-
-<ConfirmDialog
-	open={confirmDelete != null}
-	title={m('routeConditions.deleteTitle')}
-	message={m('routeConditions.deleteConfirm')}
-	confirmLabel={m('routeConditions.delete')}
-	danger
-	onconfirm={() => {
-		if (confirmDelete) doDelete(confirmDelete);
-	}}
-	oncancel={() => {
-		confirmDelete = null;
-	}}
-/>
 
 <style>
 	.conditions-header {
@@ -388,7 +382,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.3rem;
 	}
 </style>

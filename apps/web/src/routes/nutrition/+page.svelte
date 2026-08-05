@@ -45,6 +45,7 @@
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { deferDestructive } from '$lib/stores/undo.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import FoodLogEditor from '$lib/components/FoodLogEditor.svelte';
@@ -52,8 +53,6 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let showLog = $state(false);
-	let confirmDeleteEntry = $state<FoodEntry | null>(null);
-	let deletingEntry = $state(false);
 	let entries = $state<FoodEntry[]>([]);
 	let targets = $state<NutritionTargets | null>(null);
 	let exerciseKcal = $state(0);
@@ -376,19 +375,26 @@
 		localStorage.setItem(waterStorageKey(), String(waterMl));
 	}
 
-	async function removeEntry() {
-		const entry = confirmDeleteEntry;
-		if (!entry || deletingEntry) return;
-		deletingEntry = true;
-		try {
-			await deleteFoodEntry(entry.id);
-			entries = entries.filter((e) => e.id !== entry.id);
-			confirmDeleteEntry = null;
-		} catch (e) {
-			showToast(m('nutrition.deleteFailed', { error: (e as Error).message }), 'error');
-		} finally {
-			deletingEntry = false;
-		}
+	// A logged entry is the app's most frequently deleted row and is
+	// re-typed in seconds, so it takes the undo path rather than a modal:
+	// the delete is deferred, not confirmed. The saved-meal and recipe
+	// deletes below keep their confirms — those are authored, reusable
+	// artefacts, deleted rarely.
+	function removeEntry(entry: FoodEntry) {
+		const before = entries;
+		entries = entries.filter((e) => e.id !== entry.id);
+		deferDestructive({
+			message: m('nutrition.entryRemoved', { item: entry.item_name }),
+			commit: () => deleteFoodEntry(entry.id),
+			restore: () => {
+				entries = before;
+			},
+			onCommitError: (e) =>
+				showToast(
+					m('nutrition.deleteFailed', { error: e instanceof Error ? e.message : String(e) }),
+					'error',
+				),
+		});
 	}
 
 	// Ring geometry — circumference of an r=26 circle.
@@ -718,7 +724,7 @@
 											{/if}
 										</div>
 										<span class="item-kcal-wrap"><span class="item-kcal">{e.calories ?? 0}</span><span class="item-kcal-unit">kcal</span></span>
-										<button class="icon-btn" type="button" onclick={() => (confirmDeleteEntry = e)} aria-label={`${m('nutrition.delete')} ${e.item_name}`}>
+										<button class="icon-btn" type="button" onclick={() => removeEntry(e)} aria-label={`${m('nutrition.delete')} ${e.item_name}`}>
 											<span class="material-symbols" aria-hidden="true">close</span>
 										</button>
 									</li>
@@ -816,16 +822,6 @@
 <Modal open={showLog} title={m('nutrition.logHeading')} narrow onclose={() => (showLog = false)}>
 	<FoodLogEditor oncreated={onLogged} />
 </Modal>
-
-<ConfirmDialog
-	open={confirmDeleteEntry !== null}
-	title={m('nutrition.deleteEntryTitle')}
-	message={m('nutrition.deleteEntryMessage', { item: confirmDeleteEntry?.item_name ?? '' })}
-	confirmLabel={m('nutrition.delete')}
-	onconfirm={removeEntry}
-	oncancel={() => (confirmDeleteEntry = null)}
-	danger
-/>
 
 <Modal open={showSaveMeal} title={m('nutrition.saveAsMealTitle')} narrow onclose={() => (showSaveMeal = false)}>
 	<form
@@ -1280,7 +1276,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.load-error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 	.empty {

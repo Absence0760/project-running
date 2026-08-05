@@ -335,7 +335,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   Widget _section(ThemeData theme, String label) {
     return Text(label.toUpperCase(),
         style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.outline,
+          color: theme.colorScheme.onSurfaceVariant,
           letterSpacing: 0.7,
           fontWeight: FontWeight.w700,
         ));
@@ -348,7 +348,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       children: [
         Text(label.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 0.6,
             )),
         Row(
@@ -362,7 +362,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
               const SizedBox(width: 4),
               Text('±${tolerance}s',
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   )),
             ],
             if (zone != null && zone.isNotEmpty) ...[

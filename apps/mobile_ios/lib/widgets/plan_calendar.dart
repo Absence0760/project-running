@@ -126,7 +126,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
                       // 2026-01-05 is a Monday; step i days for a Monday-first row.
                       formatDow(DateTime(2026, 1, 5).add(Duration(days: i)), tag),
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.6,
                       ),
@@ -218,9 +218,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
             child: Text(
               '${cell.day}',
               style: theme.textTheme.labelSmall?.copyWith(
-                color: outOfMonth
-                    ? theme.colorScheme.outline.withValues(alpha: 0.4)
-                    : theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -270,7 +268,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
     switch (k) {
       case WorkoutKind.easy:
       case WorkoutKind.recovery:
-        return theme.colorScheme.outline;
+        return theme.colorScheme.onSurfaceVariant;
       case WorkoutKind.long:
       case WorkoutKind.race:
         return theme.colorScheme.primary;

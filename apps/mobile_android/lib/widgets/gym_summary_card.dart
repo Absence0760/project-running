@@ -39,7 +39,7 @@ class GymSummaryCard extends StatelessWidget {
                     Text(
                       l10n.homeTodaysLift,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                         letterSpacing: 0.6,
                       ),
                     ),
@@ -58,7 +58,7 @@ class GymSummaryCard extends StatelessWidget {
                               '${WeightFormat.label(activeWeightUnit)}'
                           : l10n.gymExercisesShort(exercises),
                       style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),

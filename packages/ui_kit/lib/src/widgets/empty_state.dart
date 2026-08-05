@@ -51,7 +51,7 @@ class EmptyState extends StatelessWidget {
                 body!,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ],
             if (ctaLabel != null) ...[

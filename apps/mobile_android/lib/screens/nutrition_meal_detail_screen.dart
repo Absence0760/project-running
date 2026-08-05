@@ -136,7 +136,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
               alignment: Alignment.centerLeft,
               child: Text(formatDateMed(_dayStart, tag),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   )),
             ),
           ),
@@ -172,7 +172,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline)),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           ],
         );
     return Container(
@@ -194,7 +194,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
               const SizedBox(width: 3),
               Text('kcal',
                   style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             ],
           ),
           const SizedBox(width: 16),
@@ -235,7 +235,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
           if (entries.isEmpty)
             Text(l10n.nutritionMealNoItems,
                 style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline))
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant))
           else
             for (final e in entries)
               Padding(
@@ -250,7 +250,9 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                                 style: theme.textTheme.bodyMedium)),
                         Text('${(e.calories ?? 0).round()} kcal',
                             style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.outline)),
+                                ?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                )),
                       ],
                     ),
                     if (_extendedLine(l10n, e) case final line?)
@@ -258,7 +260,9 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(line,
                             style: theme.textTheme.labelSmall
-                                ?.copyWith(color: theme.colorScheme.outline)),
+                                ?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                )),
                       ),
                   ],
                 ),
@@ -321,7 +325,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                       children: [
                         Text('${t.calories.round()}',
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             )),
                         const SizedBox(height: 2),
                         Container(
@@ -338,7 +342,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                         const SizedBox(height: 4),
                         Text(formatDowNarrow(t.day, tag),
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             )),
                       ],
                     ),

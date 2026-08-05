@@ -27,7 +27,7 @@ Distance unit conversion is *not* a finding. Everything else is.
 3. **Date / time formatting.** Grep for hand-rolled formatters: `Intl.DateTimeFormat`, `.toLocaleDateString`, `.toLocaleTimeString`, hard-coded `dd/mm/yyyy` strings, `formatDate(...)` helpers. Verify every render uses the user's locale or at least UTC + `Intl`.
 4. **Number formatting.** `.toLocaleString` vs hand-rolled `String(n)`. Pace `5:30` is a non-localisable convention; that's fine. Distance `5.21 km` — the decimal separator (`.` vs `,`) should follow locale. Audit `paceFormat` / `distanceFormat` callers.
 5. **Currency.** `/compare`, `/settings/upgrade`, every Pro price tag. Hard-coded `$4.99` is broken in EU.
-6. **Week start.** Plan calendar + dashboard heatmap. ISO 8601 (Mon) vs en-US (Sun). Walk `apps/web/src/lib/components/PlanCalendar.svelte` + `CalendarHeatmap.svelte`.
+6. **Week start.** Plan calendar + dashboard heatmap. ISO 8601 (Mon) vs en-US (Sun). Walk `apps/web/src/lib/components/PlanCalendar.svelte` (web has no calendar heatmap — decisions § 513).
 7. **Accept-Language.** Server-side: does `hooks.server.ts` parse `Accept-Language` to set a `locals.locale`? Today probably not.
 8. **RTL.** Any `text-align: left`, `padding-left`, `margin-right`, `flex-direction: row` that doesn't have a `text-align: start` / `padding-inline-start` / etc. equivalent. CSS logical properties solve this; `flex-direction` with `dir="rtl"` works automatically.
 9. **Font fallback.** Are non-Latin glyphs (Cyrillic, Japanese, Arabic) covered by the bundled font stack? Walk `app.css` + font preloads.

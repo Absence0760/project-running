@@ -1058,7 +1058,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                         _targets!.exerciseKcal,
                       ),
                       style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ),
                 ],
@@ -1069,7 +1069,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
               Text(
                 l10n.nutritionNoTargets,
                 style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
               if (activePreferences != null) ...[
@@ -1172,7 +1172,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
         Text(
           r.target != null ? '${r.label} / ${r.target} ${r.unit}' : r.label,
           style:
-              theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+              theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
         ),
       ],
     );
@@ -1313,7 +1315,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
                             style: theme.textTheme.titleSmall)),
                     Text('${g.calories} kcal',
                         style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.outline)),
+                            ?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            )),
                     Icon(Icons.chevron_right,
                         size: 18, color: theme.colorScheme.outline),
                   ],
@@ -1333,7 +1337,9 @@ class _NutritionScreenState extends State<NutritionScreen> {
                           Text(
                             _macroLine(e),
                             style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.outline),
+                                ?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ),
@@ -1463,9 +1469,12 @@ class _NutritionScreenState extends State<NutritionScreen> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(d.label,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.outline)),
+                              Text(
+                                d.label,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                             ],
                           ),
                         ),

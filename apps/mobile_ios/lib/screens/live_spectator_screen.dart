@@ -598,14 +598,20 @@ class _StatusBadge extends StatelessWidget {
     final (label, color) = switch (status) {
       'dnf' => (l10n.liveSpectatorBadgeDnf, theme.colorScheme.error),
       'finished' =>
-        (l10n.liveSpectatorBadgeFinished, theme.colorScheme.outline),
+        (l10n.liveSpectatorBadgeFinished, theme.colorScheme.onSurfaceVariant),
       'live' when coarse =>
         (l10n.liveSpectatorBadgeApproximate, semantic.warning),
       'live' when stale =>
         (l10n.liveSpectatorBadgeStale, semantic.warning),
       'live' => (l10n.liveSpectatorBadgeLive, semantic.success),
-      'idle' => (l10n.liveSpectatorBadgeIdle, theme.colorScheme.outline),
-      _ => (l10n.liveSpectatorBadgeConnecting, theme.colorScheme.outline),
+      'idle' => (
+          l10n.liveSpectatorBadgeIdle,
+          theme.colorScheme.onSurfaceVariant,
+        ),
+      _ => (
+          l10n.liveSpectatorBadgeConnecting,
+          theme.colorScheme.onSurfaceVariant,
+        ),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

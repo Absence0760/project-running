@@ -2004,7 +2004,7 @@
 	   doesn't think their work was lost. */
 	.routing-error.routing-warning {
 		/* WCAG AA: white on --color-warning was 2.05:1; -strong is 5.42:1. */
-		background: var(--color-warning-strong, #9A5B0A);
+		background: var(--color-warning-strong);
 	}
 	/* The 3-way loop-poor choice needs room for up to three action buttons. */
 	.routing-error-wide {

@@ -218,30 +218,21 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
           ),
         Padding(
           padding: const EdgeInsets.all(20),
-          // Expanded, not spaceAround: an intrinsically-sized cell has no
-          // bound for its FittedBox to scale against, so a long value
-          // overflowed the row instead of shrinking.
-          child: Row(
-            children: [
-              Expanded(
-                child: _StatBlock(
-                  label: l10n.publicRunStatDistance,
-                  value: UnitFormat.distanceValue(row.distanceM, unit),
-                  unit: UnitFormat.distanceLabel(unit),
-                ),
+          child: StatGrid(
+            cells: [
+              StatTile.large(
+                label: l10n.publicRunStatDistance,
+                value: UnitFormat.distanceValue(row.distanceM, unit),
+                unit: UnitFormat.distanceLabel(unit),
               ),
-              Expanded(
-                child: _StatBlock(
-                  label: l10n.publicRunStatTime,
-                  value: _fmtDuration(Duration(seconds: row.durationS)),
-                ),
+              StatTile.large(
+                label: l10n.publicRunStatTime,
+                value: _fmtDuration(Duration(seconds: row.durationS)),
               ),
-              Expanded(
-                child: _StatBlock(
-                  label: l10n.publicRunStatPace,
-                  value: pace > 0 ? UnitFormat.pace(pace, unit) : '—',
-                  unit: pace > 0 ? UnitFormat.paceLabel(unit) : null,
-                ),
+              StatTile.large(
+                label: l10n.publicRunStatPace,
+                value: pace > 0 ? UnitFormat.pace(pace, unit) : '—',
+                unit: pace > 0 ? UnitFormat.paceLabel(unit) : null,
               ),
             ],
           ),
@@ -361,50 +352,3 @@ class _LiveBanner extends StatelessWidget {
   }
 }
 
-class _StatBlock extends StatelessWidget {
-  final String label;
-  final String value;
-  final String? unit;
-  const _StatBlock({required this.label, required this.value, this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // An ultra's value ("104:32:11", "240.00 mi") is far wider than a
-        // 5K's, so scale it down to the cell rather than overflow the row.
-        // Mirrors _StatBig on run_detail_screen.
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(value,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  )),
-              if (unit != null) ...[
-                const SizedBox(width: 4),
-                Text(unit!,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    )),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
-      ],
-    );
-  }
-}

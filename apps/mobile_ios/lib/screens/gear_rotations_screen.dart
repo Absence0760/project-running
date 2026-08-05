@@ -197,7 +197,7 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
                     child: Text(
                       l10n.gearRotationsEmpty,
                       style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   )
                 else
@@ -309,7 +309,7 @@ class _RotationMembersSheetState extends State<_RotationMembersSheet> {
               child: Text(
                 l10n.gearRotationNoGear,
                 style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.outline),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             )
           else

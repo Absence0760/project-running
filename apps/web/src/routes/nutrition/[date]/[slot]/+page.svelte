@@ -323,7 +323,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.load-error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 </style>

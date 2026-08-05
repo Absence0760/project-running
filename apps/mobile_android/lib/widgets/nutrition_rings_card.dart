@@ -62,7 +62,7 @@ class NutritionRingsCard extends StatelessWidget {
                   Expanded(
                     child: Text(l10n.nutritionTitle,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.onSurfaceVariant,
                           letterSpacing: 0.6,
                         )),
                   ),
@@ -137,7 +137,9 @@ class NutritionRingsCard extends StatelessWidget {
         Text(
           r.label,
           style:
-              theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+              theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
         ),
       ],
     );

@@ -502,6 +502,7 @@ The `monthly_funding` table stays in the schema but is no longer read by the pag
 
 - `ConfirmDialog.svelte` — styled modal for destructive-action confirmations. Focus trap, escape-to-dismiss, configurable title/message/buttons. Resolves a promise so callers can `await` it.
 - `ToastContainer.svelte` + `toast.svelte.ts` — corner notification stack for transient success/error/info messages. Auto-dismiss with configurable duration.
+- `UndoBar.svelte` + `undo.svelte.ts` / `core/undo_queue.ts` — the **alternative** to a confirm for reversible destructive actions. The row leaves the list at once while the server mutation is *deferred* for the `undo_window_s` window, so Undo cancels a pending timer instead of compensating for a completed delete. One slot; the window commits on expiry, dismiss, a second destruction, or a navigation. Adopted on the `/nutrition` food-entry, route-condition-report, and run-comment/reply deletes. Rule + when to keep the confirm instead: [conventions.md § Web destructive actions](../architecture/conventions.md).
 
 Used across: account deletion, run deletion, club leave, event cancel, RSVP changes, and all server-error feedback.
 

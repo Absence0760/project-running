@@ -1934,7 +1934,7 @@
 		box-shadow: inset 3px 0 0 var(--color-primary);
 	}
 	.result-row.featured {
-		border-inline-start: 3px solid #facc15;
+		border-inline-start: 3px solid var(--color-crown);
 	}
 	.result-name {
 		font-size: 0.88rem;
@@ -1942,7 +1942,7 @@
 		line-height: 1.25;
 	}
 	.result-star {
-		color: #facc15;
+		color: var(--color-crown);
 	}
 	.result-meta {
 		display: flex;
@@ -2178,7 +2178,7 @@
 		line-height: 1.2;
 	}
 	:global(.heatmap-cluster-popup .cluster-route-star) {
-		color: #facc15;
+		color: var(--color-crown);
 		margin-inline-end: 0.2rem;
 	}
 	:global(.heatmap-cluster-popup .cluster-route-meta) {

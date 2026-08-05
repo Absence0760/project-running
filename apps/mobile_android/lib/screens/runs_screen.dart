@@ -1119,7 +1119,7 @@ class _RunsScreenState extends State<RunsScreen> {
                 Text(
                   l10n.historyCount(visibleCount),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
               ],
@@ -1676,7 +1676,7 @@ class _MonthHeaderRow extends StatelessWidget {
         style: theme.textTheme.labelMedium?.copyWith(
           fontWeight: FontWeight.w700,
           letterSpacing: 0.08,
-          color: theme.colorScheme.outline,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
@@ -1936,7 +1936,7 @@ class _EmptyRuns extends StatelessWidget {
           Text(
             l10n.historyEmptyBody,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

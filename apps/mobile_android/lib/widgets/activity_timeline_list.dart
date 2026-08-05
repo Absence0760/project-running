@@ -78,7 +78,7 @@ class ActivityTimelineList extends StatelessWidget {
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.08,
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),

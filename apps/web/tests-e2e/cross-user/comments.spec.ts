@@ -62,12 +62,12 @@ test.describe('cross-user comments', () => {
 		});
 
 		// Delete (rescind), so the spec is idempotent across runs. The
-		// per-row × opens a ConfirmDialog (mis-tap guard); confirm it.
+		// per-row × is undo-backed (the mis-tap guard), so dismiss the bar
+		// to commit the delete before asserting the count.
 		await page.getByRole('button', { name: 'Delete comment' }).first().click();
-		const confirm = page.locator('.modal', { hasText: 'Delete this comment?' });
-		await expect(confirm).toBeVisible({ timeout: 5_000 });
-		await confirm.getByRole('button', { name: 'Delete comment' }).click();
 		await expect(page.locator('.comment')).toHaveCount(0);
+		await page.getByTestId('undo-dismiss').click();
+		await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 		await expect(page.locator('.comment-count')).toContainText('0 comments');
 	});
 
@@ -125,18 +125,24 @@ test.describe('cross-user comments', () => {
 		});
 		await expect(replyP).toBeVisible();
 
-		// Cleanup: deleting the parent cascades the reply. The per-row ×
-		// opens a ConfirmDialog (mis-tap guard); confirm it.
+		// Cleanup: deleting the parent cascades the reply. The per-row × is
+		// undo-backed — the parent AND its reply leave the list at once
+		// (mirroring the DB cascade), and dismissing commits the delete.
 		await parentArticle
 			.getByRole('button', { name: 'Delete comment' })
 			.click();
-		const confirm = page.locator('.modal', { hasText: 'Delete this comment?' });
-		await expect(confirm).toBeVisible({ timeout: 5_000 });
-		await confirm.getByRole('button', { name: 'Delete comment' }).click();
+		await expect(replyP).toHaveCount(0);
+		await page.getByTestId('undo-dismiss').click();
+		await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 		await expect(
 			page.locator('article.comment', {
 				has: page.locator('p', { hasText: parentBody })
 			})
 		).toHaveCount(0, { timeout: 5_000 });
+		// The cascade really happened server-side, not just on screen.
+		await page.reload();
+		await expect(page.locator('.reply p', { hasText: replyBody })).toHaveCount(0, {
+			timeout: 10_000,
+		});
 	});
 });

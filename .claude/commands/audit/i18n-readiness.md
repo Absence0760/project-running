@@ -14,7 +14,7 @@ The audit's job is to enumerate every surface that needs work, grouped by platfo
 
 The `i18n-readiness-auditor` agent has the full per-platform checklist. Headline buckets:
 
-- **Web (SvelteKit)**: hard-coded strings in components + routes; `Intl.DateTimeFormat` vs hand-rolled dates; currency on `/compare` + `/settings/upgrade`; week-start in `PlanCalendar` + `CalendarHeatmap`; `Accept-Language` handling in `hooks.server.ts`; CSS logical properties for RTL.
+- **Web (SvelteKit)**: hard-coded strings in components + routes; `Intl.DateTimeFormat` vs hand-rolled dates; currency on `/compare` + `/settings/upgrade`; week-start in `PlanCalendar`; `Accept-Language` handling in `hooks.server.ts`; CSS logical properties for RTL.
 - **Flutter (mobile_android = mobile_ios)**: every `Text('...')` literal in `lib/`; `MaterialApp` localisation delegates; `intl/intl.dart` DateFormat usage; `flutter_tts.setLanguage`; `EdgeInsetsDirectional` vs `EdgeInsets`.
 - **Wear OS (Compose-for-Wear)**: `stringResource(R.string.x)` vs `Text("literal")`; `res/values-XX/strings.xml` per target locale.
 - **watchOS (SwiftUI)**: `LocalizedStringKey` / `NSLocalizedString` vs hard-coded literals; `Localizable.strings` per locale.

@@ -294,7 +294,7 @@ class _PlanTile extends StatelessWidget {
                       letterSpacing: 0.4,
                       color: plan.status == 'active'
                           ? theme.colorScheme.onPrimaryContainer
-                          : theme.colorScheme.outline,
+                          : theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -350,7 +350,7 @@ class _PlanTile extends StatelessWidget {
         const SizedBox(width: 3),
         Text(text,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             )),
       ],
     );
@@ -382,7 +382,7 @@ class _SignInPrompt extends StatelessWidget {
               l10n.plansSignInBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -415,7 +415,7 @@ class _Empty extends StatelessWidget {
               l10n.plansEmptyBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],

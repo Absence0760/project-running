@@ -1312,15 +1312,18 @@
 	/* Block button: outline by default, switches to a red-tinted fill
 	   when the viewer has the target blocked. The colour cue is the
 	   only signal that the toggle is in the active state — the icon
-	   stays the same (Material `block`). */
+	   stays the same (Material `block`). Both tints mix against an
+	   OPAQUE surface, not `transparent`: the label is
+	   --color-danger-text, and over the darker page background the 22%
+	   hover tint drops it to 4.250:1, under AA (§ 503). */
 	.btn-block.active {
-		background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+		background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
 		border-color: var(--color-danger);
 		color: var(--color-danger-text);
 	}
 
 	.btn-block.active:hover {
-		background: color-mix(in srgb, var(--color-danger, #d33) 22%, transparent);
+		background: color-mix(in srgb, var(--color-danger) 22%, var(--color-surface));
 	}
 
 	.tabs {
@@ -1970,7 +1973,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 </style>

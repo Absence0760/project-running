@@ -250,7 +250,9 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
                         Text(
                           formatDateMed(r.lastModifiedAt.toLocal(), tag),
                           style: theme.textTheme.bodySmall
-                              ?.copyWith(color: theme.colorScheme.outline),
+                              ?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ),
@@ -258,7 +260,7 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
                   Text(
                     l10n.gymRoutineExerciseCount(r.exerciseCount),
                     style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                   Icon(Icons.chevron_right, color: theme.colorScheme.outline),
                 ],

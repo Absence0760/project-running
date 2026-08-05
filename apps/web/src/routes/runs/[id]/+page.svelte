@@ -64,9 +64,20 @@
 	import { supabase } from '$lib/core/supabase';
 	import { TABLES, METADATA_KEYS } from '$lib/core/schema';
 	import { m } from '$lib/i18n/store.svelte';
+	import { buildRunShareCanonical } from '$lib/share/share_meta';
 	import type { Run } from '$lib/types';
 
 	let { data: pageData } = $props();
+
+	// This in-app surface and the public /share/run/[id] page render the same
+	// run — and since §508 this one renders public runs for signed-in
+	// non-owners too, so its URL now circulates the way a share URL does.
+	// Point the canonical at the public page, the anon-readable, sitemap-listed
+	// copy, exactly as /routes/[id], /u/[id], and /clubs/* already do. Derived
+	// from the param so it is present before any client fetch resolves.
+	let canonicalUrl = $derived(
+		buildRunShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', pageData.id)
+	);
 
 	/// The OWNER's run row, with its unclipped track. Every owner-only
 	/// affordance on this page (edit, delete, visibility, gear, rematch,
@@ -1121,6 +1132,10 @@
 		);
 	});
 </script>
+
+<svelte:head>
+	<link rel="canonical" href={canonicalUrl} />
+</svelte:head>
 
 {#if loading}
 	<div class="run-detail">
@@ -2781,18 +2796,18 @@
 	}
 
 	.workout-adherence-completed {
-		background: rgba(16, 185, 129, 0.12);
-		color: #10b981;
+		background: var(--color-success-light);
+		color: var(--color-success-text);
 	}
 
 	.workout-adherence-partial {
-		background: rgba(245, 158, 11, 0.12);
-		color: #d97706;
+		background: var(--color-warning-light);
+		color: var(--color-warning-text);
 	}
 
 	.workout-adherence-abandoned {
-		background: rgba(239, 68, 68, 0.12);
-		color: #ef4444;
+		background: var(--color-danger-light);
+		color: var(--color-danger-text);
 	}
 
 	.workout-name {
@@ -2845,9 +2860,9 @@
 		font-weight: 600;
 	}
 
-	.pace-delta-on { color: #10b981; }
-	.pace-delta-amber { color: #d97706; }
-	.pace-delta-off { color: #ef4444; }
+	.pace-delta-on { color: var(--color-success-text); }
+	.pace-delta-amber { color: var(--color-warning-text); }
+	.pace-delta-off { color: var(--color-danger-text); }
 	.pace-delta-neutral { color: var(--color-text-tertiary); }
 
 	.split-elev.negative {

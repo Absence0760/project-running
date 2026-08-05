@@ -229,7 +229,7 @@
 	   .modal-body live in app.css. */
 
 	.error {
-		background: var(--color-danger-light, #fef2f2);
+		background: var(--color-danger-light);
 		border: 1px solid rgba(229, 57, 53, 0.3);
 		color: var(--color-danger-text);
 		padding: var(--space-sm) var(--space-md);

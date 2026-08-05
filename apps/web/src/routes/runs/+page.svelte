@@ -1293,7 +1293,7 @@
 	}
 	.load-error .empty-icon {
 		background: rgba(239, 68, 68, 0.12);
-		color: #ef4444;
+		color: var(--color-danger-text);
 	}
 	.load-error-detail {
 		font-size: 0.78rem;

@@ -91,7 +91,7 @@ class RecentLiftsCard extends StatelessWidget {
                     Text(
                       formatDateMed(started.toLocal(), tag),
                       style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                 ],
               ),
@@ -104,13 +104,13 @@ class RecentLiftsCard extends StatelessWidget {
                 Text(
                   l10n.gymExercisesShort(gymExerciseCount(w)),
                   style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
                 if (volume > 0)
                   Text(
                     '${WeightFormat.toDisplay(volume.toDouble(), activeWeightUnit).round()} ${WeightFormat.label(activeWeightUnit)}',
                     style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
               ],
             ),

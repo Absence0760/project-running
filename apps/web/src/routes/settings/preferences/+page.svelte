@@ -16,6 +16,8 @@
 	import { setUnit, setWeightUnit } from '$lib/format/units.svelte';
 	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
 	import { setMapStyle } from '$lib/routes/map-style.svelte';
+	import { setUndoWindowS } from '$lib/stores/undo.svelte';
+	import { undoWindowSFromPref, DEFAULT_UNDO_WINDOW_S } from '$lib/core/undo_queue';
 	import {
 		fetchLatestWeightKg,
 		recordWeightKg,
@@ -79,6 +81,9 @@
 	let weekStartDay = $state<'monday' | 'sunday'>('monday');
 	let mapStyle = $state<'streets' | 'satellite' | 'outdoors' | 'dark'>('streets');
 	let privacyDefault = $state<'public' | 'followers' | 'private'>('followers');
+	// WCAG 2.2.1 "Turn off": the 0 choice removes the undo window's time
+	// limit entirely, so reaching Undo never means beating a countdown.
+	let undoWindowS = $state<number>(DEFAULT_UNDO_WINDOW_S);
 	let weeklyMileageGoal = $state('');
 	// Race-fueling intake rates — the per-hour carbs + fluid the roadbook fuel
 	// plan scales onto each leg. Defaults 60 g/hr + 500 ml/hr (fuel_plan.ts).
@@ -409,6 +414,8 @@
 				'monday';
 			mapStyle = effective(settings, 'map_style', 'streets') ?? 'streets';
 			setMapStyle(mapStyle);
+			undoWindowS = undoWindowSFromPref(effective<number>(settings, 'undo_window_s'));
+			setUndoWindowS(undoWindowS);
 			privacyDefault = effective(settings, 'privacy_default', 'followers') ?? 'followers';
 			weeklyMileageGoal = (effective<number>(settings, 'weekly_mileage_goal_m') ?? '')?.toString() ?? '';
 			carbsPerHour = (effective<number>(settings, 'carbs_per_hour', 60) ?? 60).toString();
@@ -753,6 +760,22 @@
 						>{m('prefs.themeDark')}</button>
 					</div>
 				</div>
+				<label>
+					<span class="label-text">{m('prefs.undoWindow')}</span>
+					<select
+						bind:value={undoWindowS}
+						data-testid="undo-window-select"
+						onchange={() => {
+							setUndoWindowS(undoWindowS);
+							autoSave({ undo_window_s: undoWindowS });
+						}}
+					>
+						<option value={8}>{m('prefs.undoWindow8s')}</option>
+						<option value={30}>{m('prefs.undoWindow30s')}</option>
+						<option value={0}>{m('prefs.undoWindowManual')}</option>
+					</select>
+					<span class="hint">{m('prefs.undoWindowHelp')}</span>
+				</label>
 			</div>
 			<label class="checkbox-row">
 				<input type="checkbox" bind:checked={showCalories} onchange={() => autoSave({ show_calories: showCalories })} />
@@ -1398,7 +1421,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.load-error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); }

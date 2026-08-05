@@ -294,7 +294,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                     child: Text(
                       l10n.gymRoutineNotFound,
                       style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   )
                 : _body(r, theme, l10n),
@@ -347,7 +347,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         Text(
           l10n.gymRoutineExerciseCount(r.exerciseCount),
           style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.outline),
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         if (notes != null && notes.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -391,7 +391,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         Text(
           l10n.gymRoutinePublishLabel,
           style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.outline),
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 8),
         Row(
@@ -437,7 +437,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         Text(
           l10n.gymRoutinePublishPublicLabel,
           style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.outline),
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 4),
         if (isPublic)
@@ -457,7 +457,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           Text(
             l10n.gymRoutinePublishPublicHint,
             style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.outline),
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         const SizedBox(height: 8),
         OutlinedButton(
@@ -513,21 +513,21 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                   child: Text(
                     l10n.gymRoutineSetType,
                     style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ),
                 Expanded(
                   child: Text(
                     l10n.gymRoutineTargetReps,
                     style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ),
                 Expanded(
                   child: Text(
                     l10n.gymRoutineRestLabel,
                     style: theme.textTheme.labelSmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ),
               ],

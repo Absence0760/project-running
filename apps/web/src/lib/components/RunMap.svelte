@@ -1096,7 +1096,7 @@
 		width: 12px;
 		height: 12px;
 		border-radius: 50%;
-		background: var(--color-primary, #3b82f6);
+		background: var(--color-primary);
 		border: 2px solid white;
 		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 1px 4px rgba(0, 0, 0, 0.3);
 		pointer-events: none;
