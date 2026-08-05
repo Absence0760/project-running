@@ -90,7 +90,7 @@
 		align-items: center;
 		gap: var(--space-lg);
 		max-width: min(28rem, calc(100vw - 2 * var(--space-lg)));
-		padding: var(--space-sm) var(--space-md) var(--space-sm) var(--space-lg);
+		padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) var(--space-lg);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
@@ -110,6 +110,13 @@
 		margin-inline-start: auto;
 	}
 	.undo-action {
+		/* 44 px floor — the same tap-target minimum comment-tap-targets.spec
+		   polices on the row buttons that open this bar. */
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-inline-size: 44px;
+		min-block-size: 44px;
 		padding: var(--space-xs) var(--space-sm);
 		border: none;
 		border-radius: var(--radius-sm);
@@ -125,7 +132,10 @@
 	}
 	.undo-dismiss {
 		display: flex;
-		padding: var(--space-2xs);
+		align-items: center;
+		justify-content: center;
+		min-inline-size: 44px;
+		min-block-size: 44px;
 		border: none;
 		border-radius: var(--radius-sm);
 		background: transparent;

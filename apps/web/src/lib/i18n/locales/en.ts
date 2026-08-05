@@ -2862,8 +2862,6 @@ export const en = {
 	"runSocial.runnerFallback": "Runner",
 	"runSocial.reportComment": "Report comment",
 	"runSocial.deleteComment": "Delete comment",
-	"runSocial.deleteCommentTitle": "Delete this comment?",
-	"runSocial.deleteCommentMessage": "This comment will be permanently removed. This can't be undone.",
 	"runSocial.reply": "Reply",
 	"runSocial.reportReply": "Report reply",
 	"runSocial.deleteReply": "Delete reply",

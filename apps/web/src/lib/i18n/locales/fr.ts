@@ -2854,8 +2854,6 @@ export const messages = {
 	"runSocial.runnerFallback": "Coureur",
 	"runSocial.reportComment": "Signaler le commentaire",
 	"runSocial.deleteComment": "Supprimer le commentaire",
-	"runSocial.deleteCommentTitle": "Supprimer ce commentaire ?",
-	"runSocial.deleteCommentMessage": "Ce commentaire sera définitivement supprimé. Cette action est irréversible.",
 	"runSocial.reply": "Répondre",
 	"runSocial.reportReply": "Signaler la réponse",
 	"runSocial.deleteReply": "Supprimer la réponse",
