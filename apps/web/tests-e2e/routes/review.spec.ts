@@ -99,28 +99,40 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 			.single();
 		expect((edited.data as { rating: number }).rating).toBe(5);
 
-		// Delete through the UI: the author's own card carries a delete
-		// button, gated behind the shared ConfirmDialog.
+		// Delete through the UI: one click on the author's own delete button,
+		// no confirm — the mutation is DEFERRED for the undo window
+		// (decisions § 514), so dismissing the bar is what commits it.
 		await editedCard.locator('.review-delete-btn').click();
-		const dialog = page.getByTestId('review-delete-confirm-dialog');
-		await expect(dialog).toBeVisible();
-		await dialog.getByRole('button', { name: 'Delete review' }).click();
-
 		await expect(
 			page.locator('.review-card', { hasText: comment })
 		).toHaveCount(0, { timeout: 10_000 });
 		await expect(page.locator('.no-reviews')).toBeVisible();
+		await page.getByTestId('undo-dismiss').click();
+		await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 
 		// The row is actually gone, not just hidden client-side.
-		const remaining = await admin
-			.from('route_reviews')
-			.select('id')
-			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
-			.eq('user_id', USER_A.id);
-		expect(remaining.data).toEqual([]);
+		await expect
+			.poll(
+				async () => {
+					const { data } = await admin
+						.from('route_reviews')
+						.select('id')
+						.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+						.eq('user_id', USER_A.id);
+					return data ?? [];
+				},
+				{ timeout: 5_000 }
+			)
+			.toEqual([]);
 	});
 
-	test('cancelling the delete confirm keeps the review', async ({ page }) => {
+	// Replaces the old "cancelling the delete confirm keeps the review":
+	// the confirm is gone, and the guard it was really providing — that a
+	// single tap cannot lose the review — is now Undo's job. This asserts
+	// the stronger property the confirm never had: the server row was never
+	// touched, so the restore hands back the same row.
+	test('Undo after a delete restores the review, server row untouched', async ({ page }) => {
+		const admin = getAdminClient();
 		const comment = `e2e keep review ${Date.now()}`;
 
 		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
@@ -130,14 +142,29 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 
 		const card = page.locator('.review-card', { hasText: comment });
 		await expect(card).toBeVisible({ timeout: 10_000 });
+		const before = await admin
+			.from('route_reviews')
+			.select('id')
+			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+			.eq('user_id', USER_A.id)
+			.single();
 
 		await card.locator('.review-delete-btn').click();
-		const dialog = page.getByTestId('review-delete-confirm-dialog');
-		await expect(dialog).toBeVisible();
-		await dialog.getByRole('button', { name: 'Cancel' }).click();
+		await expect(card).toHaveCount(0);
+		await expect(page.getByTestId('undo-bar')).toBeVisible();
 
-		await expect(dialog).toBeHidden();
-		await expect(card).toBeVisible();
+		await page.getByTestId('undo-action').click();
+		await expect(card).toBeVisible({ timeout: 5_000 });
+
+		// Same id, not a re-insert: nothing was destroyed while the offer
+		// stood, which is the whole point of the deferred contract.
+		const after = await admin
+			.from('route_reviews')
+			.select('id')
+			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+			.eq('user_id', USER_A.id)
+			.single();
+		expect((after.data as { id: string }).id).toBe((before.data as { id: string }).id);
 	});
 
 	test('Submit disables while the upsert is in flight (no double-submit)', async ({ page }) => {

@@ -30,6 +30,7 @@
 	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
 	import { trackDirty } from '$lib/core/form_dirty';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { deferDestructive } from '$lib/stores/undo.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	let gear = $state<GearWithDistance[]>([]);
@@ -55,10 +56,6 @@
 	let wearNote = $state('');
 	let wearArea = $state<GearWearArea | ''>('');
 	let addingWear = $state(false);
-	// Gate the wear-log delete behind a confirm like the gear + rotation
-	// deletes on this page — a stray tap must not silently lose an
-	// observation.
-	let confirmingWearDelete = $state<GearWearLog | null>(null);
 
 	const WEAR_AREAS: GearWearArea[] = ['outsole', 'midsole', 'upper', 'other'];
 	function wearAreaLabel(area: GearWearArea): string {
@@ -99,16 +96,29 @@
 		}
 	}
 
-	async function handleDeleteWear() {
-		const log = confirmingWearDelete;
-		if (!log) return;
-		confirmingWearDelete = null;
-		try {
-			await deleteGearWearLog(log.id);
-			wearLogs = wearLogs.filter((l) => l.id !== log.id);
-		} catch (e) {
-			showToast(t('settingsGear.wearLogDeleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
-		}
+	// An observation is one line the owner typed themselves, with nothing
+	// hanging off it, so it takes the undo path rather than a confirm. The
+	// affordance lives inside the edit Modal — reachable by keyboard only
+	// because the bar joins the dialog's Tab ring (`data-modal-trap-include`
+	// on UndoBar's region). The gear + rotation deletes on this page keep
+	// their confirms: those cascade.
+	function removeWearLog(log: GearWearLog) {
+		const before = wearLogs;
+		wearLogs = wearLogs.filter((l) => l.id !== log.id);
+		deferDestructive({
+			message: t('settingsGear.wearLogRemoved'),
+			commit: () => deleteGearWearLog(log.id),
+			restore: () => {
+				wearLogs = before;
+			},
+			onCommitError: (e) =>
+				showToast(
+					t('settingsGear.wearLogDeleteFailed', {
+						error: e instanceof Error ? e.message : String(e),
+					}),
+					'error',
+				),
+		});
 	}
 
 	// Rotations — named multi-pair groupings, distinct from the single
@@ -792,7 +802,7 @@
 									type="button"
 									class="wear-del"
 									aria-label={t('settingsGear.wearLogDelete')}
-									onclick={() => (confirmingWearDelete = log)}
+									onclick={() => removeWearLog(log)}
 								>
 									<span class="material-symbols" aria-hidden="true">close</span>
 								</button>
@@ -824,16 +834,6 @@
 	danger={true}
 	onconfirm={handleDelete}
 	oncancel={() => (confirmingDelete = null)}
-/>
-
-<ConfirmDialog
-	open={confirmingWearDelete !== null}
-	title={t('settingsGear.wearLogDelete')}
-	message={t('settingsGear.wearLogDeleteMessage')}
-	confirmLabel={t('settingsGear.delete')}
-	danger={true}
-	onconfirm={handleDeleteWear}
-	oncancel={() => (confirmingWearDelete = null)}
 />
 
 <style>

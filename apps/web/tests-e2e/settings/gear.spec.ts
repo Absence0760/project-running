@@ -470,22 +470,33 @@ test.describe('/settings/gear — wear log', () => {
 				)
 				.toEqual([{ note, area: 'outsole' }]);
 
-			// Delete it — now gated by a ConfirmDialog (matching the gear +
-			// rotation deletes on this page). The delete icon only OPENS the
-			// confirm; the row must survive until the user confirms.
+			// Delete it — one click, no confirm, and the mutation is DEFERRED
+			// for the undo window (decisions § 514). The row leaves the list
+			// at once but the backend row must still be there while the offer
+			// stands, which is what makes Undo unable to fail.
 			await item.getByRole('button', { name: 'Delete observation' }).click();
-			// The confirm dialog (scoped by its .confirm-body) is the only new
-			// surface — its "Delete" confirm button appears.
-			const wearConfirm = page
-				.locator('.confirm-body')
-				.getByRole('button', { name: 'Delete', exact: true });
-			await expect(wearConfirm).toBeVisible({ timeout: 5_000 });
-			// Still present — a mere tap didn't destroy the observation.
-			await expect(wearLog.locator('.wear-item', { hasText: note })).toHaveCount(1);
-			await wearConfirm.click();
 			await expect(wearLog.locator('.wear-item', { hasText: note })).toHaveCount(0, {
 				timeout: 5_000
 			});
+			const bar = page.getByTestId('undo-bar');
+			await expect(bar).toBeVisible();
+			await page.getByTestId('undo-action').click();
+			await expect(wearLog.locator('.wear-item', { hasText: note })).toHaveCount(1, {
+				timeout: 5_000
+			});
+			// Asserted AFTER the undo so it cannot race the window: the row
+			// never left the database, so the restore is byte-identical.
+			const { count: afterUndo } = await admin
+				.from('gear_wear_logs')
+				.select('id', { count: 'exact', head: true })
+				.eq('gear_id', gear!.id);
+			expect(afterUndo).toBe(1);
+
+			// Dismiss commits the held delete.
+			await item.getByRole('button', { name: 'Delete observation' }).click();
+			await expect(bar).toBeVisible();
+			await page.getByTestId('undo-dismiss').click();
+			await expect(bar).toBeHidden({ timeout: 5_000 });
 			await expect
 				.poll(
 					async () => {
@@ -500,6 +511,68 @@ test.describe('/settings/gear — wear log', () => {
 				.toBe(0);
 		} finally {
 			await admin.from('gear').delete().eq('id', gear!.id); // cascades wear logs
+		}
+	});
+
+	// The reason round 11 reverted this very adoption: the affordance lives
+	// inside a Modal, whose Tab trap made the undo bar pointer-only. This
+	// spec drives the whole flow from the KEYBOARD — no click on the undo
+	// bar at all — so a regression in Modal's ring fails here.
+	test('the in-modal undo bar is reachable and operable by keyboard alone', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const name = `E2E Wear Kbd ${Date.now()}`;
+		const { data: gear } = await admin
+			.from('gear')
+			.insert({ owner_id: USER_A.id, kind: 'shoe', name })
+			.select('id')
+			.single();
+		const note = `keyboard undo ${Date.now()}`;
+		const { error: seedErr } = await admin
+			.from('gear_wear_logs')
+			.insert({ gear_id: gear!.id, owner_id: USER_A.id, note, area: 'upper' });
+		expect(seedErr, `seeding the wear log failed: ${seedErr?.message}`).toBeNull();
+
+		try {
+			await page.goto('/settings/gear');
+			const row = page.locator('.gear-row', { hasText: name });
+			await expect(row).toBeVisible({ timeout: 10_000 });
+			await row.locator('.gear-main').click();
+			const dialog = page.locator('.modal');
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			const item = dialog.getByTestId('wear-log').locator('.wear-item', { hasText: note });
+			await expect(item).toBeVisible({ timeout: 5_000 });
+
+			// Delete by keyboard, from inside the trap.
+			const del = item.getByRole('button', { name: 'Delete observation' });
+			await del.focus();
+			await page.keyboard.press('Enter');
+			await expect(item).toHaveCount(0, { timeout: 5_000 });
+			await expect(page.getByTestId('undo-bar')).toBeVisible();
+
+			// Tab forward until focus lands on Undo. Before the ring change
+			// this loop never reaches it — the trap cycles inside the dialog
+			// forever — so the assertion below is the whole point of the spec.
+			const undoAction = page.getByTestId('undo-action');
+			let reached = false;
+			for (let i = 0; i < 40 && !reached; i++) {
+				await page.keyboard.press('Tab');
+				reached = await undoAction.evaluate((el) => el === document.activeElement);
+			}
+			expect(reached, 'Tab never reached the undo action inside the modal trap').toBe(true);
+
+			await page.keyboard.press('Enter');
+			await expect(
+				dialog.getByTestId('wear-log').locator('.wear-item', { hasText: note })
+			).toHaveCount(1, { timeout: 5_000 });
+			const { count } = await admin
+				.from('gear_wear_logs')
+				.select('id', { count: 'exact', head: true })
+				.eq('gear_id', gear!.id);
+			expect(count).toBe(1);
+		} finally {
+			await admin.from('gear').delete().eq('id', gear!.id);
 		}
 	});
 });

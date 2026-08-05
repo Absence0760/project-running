@@ -7,6 +7,7 @@
 	import type { RouteMarker } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { deferDestructive } from '$lib/stores/undo.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
@@ -69,7 +70,6 @@
 	let reviewRating = $state(4);
 	let reviewComment = $state('');
 	let reviewSubmitting = $state(false);
-	let confirmDeleteReview = $state<string | null>(null);
 
 	let avgRating = $derived(
 		reviews.length > 0
@@ -124,19 +124,26 @@
 		}
 	}
 
-	async function deleteOwnReview() {
-		const target = confirmDeleteReview;
-		if (!route || !target) return;
-		confirmDeleteReview = null;
-		try {
-			await deleteRouteReview(route.id);
-			reviews = await getRouteReviews(route.id);
-			reviewsError = false;
-			showReviewForm = false;
-			reviewComment = '';
-		} catch (e) {
-			showToast(m('routeDetail.reviewDeleteFailed', { error: `${e}` }), 'error');
-		}
+	// A review is a rating plus a sentence its author can re-file in one
+	// tap, and `deleteRouteReview` is scoped to their own (route_id, user_id)
+	// row with nothing hanging off it — so it takes the undo path and drops
+	// the confirm.
+	function removeOwnReview(reviewId: string) {
+		const routeId = route?.id;
+		if (!routeId) return;
+		const before = reviews;
+		reviews = reviews.filter((r) => r.id !== reviewId);
+		showReviewForm = false;
+		reviewComment = '';
+		deferDestructive({
+			message: m('routeDetail.reviewRemoved'),
+			commit: () => deleteRouteReview(routeId),
+			restore: () => {
+				reviews = before;
+			},
+			onCommitError: (e) =>
+				showToast(m('routeDetail.reviewDeleteFailed', { error: `${e}` }), 'error'),
+		});
 	}
 
 	let shareLink = $state('');
@@ -648,7 +655,12 @@
 							{route.is_public ? m('routeDetail.public') : m('routeDetail.private')}
 						</button>
 					{/if}
-					<button class="btn btn-primary btn-sm" onclick={handleShare} disabled={sharing}>{m('routeDetail.share')}</button>
+					<button
+						class="btn btn-primary btn-sm"
+						data-testid="route-share-btn"
+						onclick={handleShare}
+						disabled={sharing}>{m('routeDetail.share')}</button
+					>
 					{#if !isOwner && auth.user}
 						<button
 							class="btn btn-outline btn-sm"
@@ -847,7 +859,7 @@
 										class="review-delete-btn"
 										aria-label={m('routeDetail.deleteReview')}
 										title={m('routeDetail.deleteReview')}
-										onclick={() => (confirmDeleteReview = review.id)}
+										onclick={() => removeOwnReview(review.id)}
 									>
 										<span class="material-symbols" aria-hidden="true">delete</span>
 									</button>
@@ -913,16 +925,6 @@
 		targetKind="route_review"
 		targetId={reportReviewId ?? ''}
 		onclose={() => (reportReviewId = null)}
-	/>
-	<ConfirmDialog
-		open={confirmDeleteReview !== null}
-		data-testid="review-delete-confirm-dialog"
-		title={m('routeDetail.deleteReviewConfirmTitle')}
-		message={m('routeDetail.deleteReviewConfirmBody')}
-		confirmLabel={m('routeDetail.deleteReviewConfirmCta')}
-		danger
-		onconfirm={deleteOwnReview}
-		oncancel={() => (confirmDeleteReview = null)}
 	/>
 	<ConfirmDialog
 		open={showShareConfirm}
