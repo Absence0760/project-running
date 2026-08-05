@@ -7413,9 +7413,25 @@
       }
     }
   },
-  "coachArchiveTapToView": "Tap to view · swipe to delete",
+  "coachArchiveTapToView": "Tap to view",
   "@coachArchiveTapToView": {
     "description": "Drawer subtitle on an archived thread row"
+  },
+  "coachArchiveActions": "Conversation actions",
+  "@coachArchiveActions": {
+    "description": "Tooltip for the overflow menu on an archived coach conversation row"
+  },
+  "coachArchiveDelete": "Delete conversation",
+  "@coachArchiveDelete": {
+    "description": "Overflow action + confirm label for deleting an archived coach conversation"
+  },
+  "coachArchiveDeleteTitle": "Delete this conversation?",
+  "@coachArchiveDeleteTitle": {
+    "description": "Title of the delete-archived-conversation confirm dialog"
+  },
+  "coachArchiveDeleteBody": "This archived conversation is deleted for good.",
+  "@coachArchiveDeleteBody": {
+    "description": "Body of the delete-archived-conversation confirm dialog"
   },
   "coachContextNoPlan": "No plan",
   "@coachContextNoPlan": {

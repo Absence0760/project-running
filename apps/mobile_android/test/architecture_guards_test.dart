@@ -5361,6 +5361,27 @@ void main() {
       }
     });
 
+    test('no list row hides a destructive action behind a swipe', () {
+      // Swipe-to-delete existed on exactly one surface (the coach archive
+      // drawer), which taught a gesture that worked nowhere else and hid
+      // deletion from anyone who never tried it — and its confirmDismiss ran
+      // the delete rather than asking. Rows use the overflow menu instead;
+      // top_banner's Dismissible dismisses a banner, which destroys nothing
+      // (issue #666 U7).
+      final offenders = <String>[
+        for (final f in Directory('lib')
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart')))
+          if (f.path != 'lib/widgets/top_banner.dart' &&
+              f.readAsStringSync().contains('Dismissible('))
+            f.path,
+      ];
+      expect(offenders, isEmpty,
+          reason: 'a swipe is undiscoverable and unlabelled — put the '
+              'destructive action in a PopupMenuButton and confirm it');
+    });
+
     test('confirmDestructive is the only destructive-dialog builder', () {
       final src =
           File('lib/widgets/confirm_destructive.dart').readAsStringSync();

@@ -5215,7 +5215,19 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get coachArchiveTapToView => 'タップで表示 · スワイプで削除';
+  String get coachArchiveTapToView => 'タップで表示';
+
+  @override
+  String get coachArchiveActions => '会話の操作';
+
+  @override
+  String get coachArchiveDelete => '会話を削除';
+
+  @override
+  String get coachArchiveDeleteTitle => 'この会話を削除しますか？';
+
+  @override
+  String get coachArchiveDeleteBody => 'このアーカイブされた会話は完全に削除されます。';
 
   @override
   String get coachContextNoPlan => 'プランなし';

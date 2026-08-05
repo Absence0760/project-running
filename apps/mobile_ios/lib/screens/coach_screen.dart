@@ -20,6 +20,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../training_service.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
@@ -794,6 +795,19 @@ class _CoachScreenState extends State<CoachScreen> {
     }
   }
 
+  Future<void> _confirmDeleteArchive(DateTime t) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.coachArchiveDeleteTitle,
+      body: l10n.coachArchiveDeleteBody,
+      confirmLabel: l10n.coachArchiveDelete,
+      cancelLabel: l10n.coachArchiveCancel,
+    );
+    if (!ok) return;
+    if (await _deleteArchive(t) && mounted) _onArchiveDismissed(t);
+  }
+
   void _onArchiveDismissed(DateTime t) {
     final wasViewing = _viewingArchiveAt == t;
     setState(() {
@@ -1102,23 +1116,33 @@ class _CoachScreenState extends State<CoachScreen> {
                     },
                   ),
                   for (final t in _archives)
-                    Dismissible(
+                    ListTile(
                       key: ValueKey(t.toIso8601String()),
-                      background: Container(
-                        color: AppSemanticColors.of(context).danger,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 16),
-                        child: Icon(Icons.delete,
-                            color: AppSemanticColors.of(context).onDanger),
-                      ),
-                      direction: DismissDirection.endToStart,
-                      confirmDismiss: (_) => _deleteArchive(t),
-                      onDismissed: (_) => _onArchiveDismissed(t),
-                      child: ListTile(
-                        title: Text(_archiveLabel(t)),
-                        subtitle: Text(l10n.coachArchiveTapToView),
-                        selected: _viewingArchiveAt == t,
-                        onTap: () => _viewArchive(t),
+                      title: Text(_archiveLabel(t)),
+                      subtitle: Text(l10n.coachArchiveTapToView),
+                      selected: _viewingArchiveAt == t,
+                      onTap: () => _viewArchive(t),
+                      trailing: PopupMenuButton<String>(
+                        tooltip: l10n.coachArchiveActions,
+                        onSelected: (v) {
+                          if (v == 'delete') _confirmDeleteArchive(t);
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.delete_outline,
+                                  color: AppSemanticColors.of(context).danger),
+                              title: Text(
+                                l10n.coachArchiveDelete,
+                                style: TextStyle(
+                                    color:
+                                        AppSemanticColors.of(context).danger),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                 ],

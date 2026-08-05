@@ -5478,7 +5478,20 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get coachArchiveTapToView => 'Tap to view · swipe to delete';
+  String get coachArchiveTapToView => 'Tap to view';
+
+  @override
+  String get coachArchiveActions => 'Conversation actions';
+
+  @override
+  String get coachArchiveDelete => 'Delete conversation';
+
+  @override
+  String get coachArchiveDeleteTitle => 'Delete this conversation?';
+
+  @override
+  String get coachArchiveDeleteBody =>
+      'This archived conversation is deleted for good.';
 
   @override
   String get coachContextNoPlan => 'No plan';

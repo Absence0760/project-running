@@ -88,6 +88,51 @@ class _ArchiveFailApi extends ApiClient {
   }
 }
 
+/// Consented, with one archived thread so the history drawer renders a row —
+/// drives the archive-row overflow delete + its confirm.
+class _ArchivesApi extends ApiClient {
+  int deleteCalls = 0;
+  final archivedAt = DateTime.utc(2026, 6, 1, 8);
+
+  @override
+  String? get userId => 'u-viewer';
+
+  @override
+  Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+
+  @override
+  Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) async =>
+      const [];
+
+  @override
+  Future<List<DateTime>> listCoachArchives({String? planId}) async =>
+      [archivedAt];
+
+  @override
+  Future<int> getCoachUsage() async => 0;
+
+  @override
+  Future<bool> isPro() async => false;
+
+  @override
+  Future<void> deleteCoachArchive({
+    required DateTime archivedAt,
+    String? planId,
+  }) async {
+    deleteCalls++;
+  }
+}
+
+/// Unmount the screen, then pump past the disconnect timer its realtime
+/// unsubscribe schedules. `CoachScreen.dispose` calls
+/// `RealtimeChannel.unsubscribe`, and realtime_client arms a 50 s pending
+/// disconnect from inside that call — so the timer does not exist until the
+/// tree is torn down, and no amount of pumping beforehand can drain it.
+Future<void> _drain(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(seconds: 60));
+}
+
 Future<void> _pump(WidgetTester tester, {ApiClient? api}) {
   return tester.pumpWidget(
     MaterialApp(
@@ -108,10 +153,7 @@ void main() {
     testWidgets('renders the Coach app-bar title', (tester) async {
       await _pump(tester);
       expect(find.text('Coach'), findsOneWidget);
-      // The screen schedules a 50ms post-frame timer for streaming;
-      // pump past it before the test ends so the framework's
-      // pending-timer invariant doesn't trip.
-      await tester.pump(const Duration(milliseconds: 100));
+      await _drain(tester);
     });
 
     testWidgets('the consented view renders an explicit back button (the left '
@@ -129,6 +171,7 @@ void main() {
       // The archive drawer is reachable from an explicit history action
       // instead, so the leading slot stays a real back affordance.
       expect(find.byType(BackButton), findsOneWidget);
+      await _drain(tester);
     });
 
     testWidgets('does not render the plan-switcher dropdown when there is at most one plan',
@@ -138,7 +181,7 @@ void main() {
       // the list stays empty and the dropdown stays hidden.
       await _pump(tester);
       expect(find.byType(DropdownButton<String>), findsNothing);
-      await tester.pump(const Duration(milliseconds: 100));
+      await _drain(tester);
     });
 
     testWidgets('a signed-out viewer gets the sign-in state, not the chat '
@@ -176,8 +219,7 @@ void main() {
         reason: 'the I-consent CTA must be reachable from the '
             'gate so the user can accept.',
       );
-      // Settle pending timers before exit.
-      await tester.pump(const Duration(milliseconds: 200));
+      await _drain(tester);
     });
   });
 
@@ -216,8 +258,78 @@ void main() {
       expect(api.archiveCalls, 2);
       // Retry re-runs the mutation directly — no second confirm dialog.
       expect(find.text('Start a new conversation?'), findsNothing);
-      // Drain the replacement banner's auto-dismiss timer.
       await tester.pump(const Duration(seconds: 6));
+      await _drain(tester);
+    });
+  });
+
+  group('CoachScreen — archived-conversation delete (issue #666 U7)', () {
+    // The archive list was the app's only swipe-to-delete surface, and its
+    // `confirmDismiss` ran the delete instead of asking: a stray swipe erased
+    // a conversation with no confirm and no undo. It now uses the same
+    // overflow-menu idiom as every other row in the app.
+    Future<_ArchivesApi> openDrawer(WidgetTester tester) async {
+      final api = _ArchivesApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: CoachScreen(api: api, training: TrainingService()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.tap(find.byTooltip('Chat history'));
+      await tester.pumpAndSettle();
+      return api;
+    }
+
+    testWidgets('the archive row is not swipeable and teaches no swipe',
+        (tester) async {
+      await openDrawer(tester);
+      expect(find.byType(Dismissible), findsNothing);
+      expect(find.textContaining('swipe'), findsNothing);
+      expect(find.text('Tap to view'), findsOneWidget);
+      await _drain(tester);
+    });
+
+    testWidgets('the overflow delete asks before erasing, and cancel keeps it',
+        (tester) async {
+      final api = await openDrawer(tester);
+
+      await tester.tap(find.byTooltip('Conversation actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete conversation'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete this conversation?'), findsOneWidget);
+      expect(api.deleteCalls, 0);
+
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Cancel'),
+      ));
+      await tester.pumpAndSettle();
+      expect(api.deleteCalls, 0);
+      await _drain(tester);
+    });
+
+    testWidgets('confirming deletes once and drops the row', (tester) async {
+      final api = await openDrawer(tester);
+
+      await tester.tap(find.byTooltip('Conversation actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete conversation'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Delete conversation'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(api.deleteCalls, 1);
+      expect(find.byTooltip('Conversation actions'), findsNothing);
+      await _drain(tester);
     });
   });
 }
