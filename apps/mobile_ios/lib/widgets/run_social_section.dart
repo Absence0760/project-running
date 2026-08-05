@@ -9,6 +9,8 @@ import '../screens/profile_screen.dart';
 import '../social_service.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/top_banner.dart';
+import '../widgets/undo_bar.dart';
+import '../undo_queue.dart';
 
 /// Run-detail kudos pill + one-level comment thread + composer. Mirrors
 /// the web `RunSocial.svelte` component.
@@ -201,45 +203,57 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     }
   }
 
-  final Set<String> _deletingComments = {};
-
-  Future<void> _deleteComment(String commentId) async {
-    if (_deletingComments.contains(commentId)) return;
+  /// One behaviour for both the author's own delete and the run owner's
+  /// MODERATION delete: with the mutation deferred the actor can put the
+  /// comment back untouched, which is more than the old modal offered once
+  /// dismissed, and a button that asks on some rows and not others reads as a
+  /// bug (decisions § 514).
+  ///
+  /// The optimistic filter drops the replies with the parent, mirroring the
+  /// `parent_comment_id ON DELETE CASCADE` the commit will trigger — and it is
+  /// exactly why the mutation has to be DEFERRED rather than compensated: once
+  /// the cascade has run, no re-insert could bring those replies back.
+  void _deleteComment(String commentId) {
     final l10n = AppLocalizations.of(context);
-    final ok =
-        await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.runSocialDeleteCommentTitle),
-            content: Text(l10n.runSocialDeleteCommentMessage),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.runSocialCancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: Text(l10n.runSocialDelete),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!ok) return;
-    _deletingComments.add(commentId);
-    try {
-      await widget.api.deleteRunComment(commentId);
-      await _load();
-    } catch (e) {
-      debugPrint('run social delete error: $e');
-      if (!mounted) return;
-      showTopBanner(context, l10n.runSocialDeleteError(friendlyError(l10n, e)));
-    } finally {
-      _deletingComments.remove(commentId);
-    }
+    final api = widget.api;
+    final snapshot = _comments;
+    final eng = _eng;
+    final dropped = {
+      commentId,
+      for (final c in _comments)
+        if (c.comment.parentCommentId == commentId) c.comment.id,
+    };
+    setState(() {
+      _comments = _comments
+          .where((c) => !dropped.contains(c.comment.id))
+          .toList(growable: false);
+      _eng = EngagementSummary(
+        kudosCount: _eng.kudosCount,
+        viewerHasKudos: _eng.viewerHasKudos,
+        commentCount: (_eng.commentCount - dropped.length)
+            .clamp(0, _eng.commentCount),
+      );
+    });
+    deferDestructive(
+      context,
+      DeferredDestruction(
+        message: l10n.runSocialCommentRemoved,
+        commit: () => api.deleteRunComment(commentId),
+        restore: () {
+          if (!mounted) return;
+          setState(() {
+            _comments = snapshot;
+            _eng = eng;
+          });
+        },
+        onCommitError: (e) {
+          debugPrint('run social delete error: $e');
+          if (!mounted) return;
+          showTopBanner(
+              context, l10n.runSocialDeleteError(friendlyError(l10n, e)));
+        },
+      ),
+    );
   }
 
   bool _canDelete(RunCommentRow c) {

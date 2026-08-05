@@ -3197,16 +3197,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeDetailDeleteReview => 'Supprimer votre avis';
 
   @override
-  String get routeDetailDeleteReviewTitle => 'Supprimer votre avis ?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Votre note et votre commentaire seront retirés de cet itinéraire. Vous pourrez laisser un nouvel avis ensuite.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Supprimer l\'avis';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'Impossible de supprimer l\'avis : $error';
   }
@@ -7733,13 +7723,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runSocialReportReply => 'Signaler la réponse';
 
   @override
-  String get runSocialDeleteCommentTitle => 'Supprimer ce commentaire ?';
-
-  @override
-  String get runSocialDeleteCommentMessage =>
-      'Ce commentaire sera définitivement supprimé. Cette action est irréversible.';
-
-  @override
   String get runSocialPost => 'Publier';
 
   @override
@@ -10077,14 +10060,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nutritionDelete => 'Supprimer';
 
   @override
-  String get nutritionDeleteEntryTitle => 'Supprimer cette entrée ?';
-
-  @override
-  String nutritionDeleteEntryMessage(String item) {
-    return '$item sera retiré du journal d\'aujourd\'hui.';
-  }
-
-  @override
   String nutritionDeleteFailed(String error) {
     return 'Impossible de supprimer l’entrée : $error';
   }
@@ -10900,13 +10875,6 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Supprimer le repère ?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Cela supprime définitivement le repère du parcours.';
-
-  @override
   String get routeMarkerKindAidStation => 'Ravitaillement';
 
   @override
@@ -11498,13 +11466,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeConditionsDelete => 'Supprimer';
 
   @override
-  String get routeConditionsDeleteTitle => 'Supprimer le signalement ?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'Cela supprime définitivement le signalement.';
-
-  @override
   String get routeConditionsDeleteFailed =>
       'Impossible de supprimer le signalement';
 
@@ -11962,16 +11923,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gymEditorRemoveExerciseConfirm => 'Supprimer';
-
-  @override
-  String get gearWearLogDeleteTitle => 'Supprimer cette note ?';
-
-  @override
-  String get gearWearLogDeleteBody =>
-      'Cette note d\'usure sera définitivement supprimée.';
-
-  @override
-  String get gearWearLogDeleteConfirm => 'Supprimer';
 
   @override
   String get eventSubmitRunsLoadError =>
@@ -12583,4 +12534,60 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get commonMore => 'Plus';
+
+  @override
+  String get undoAction => 'Annuler';
+
+  @override
+  String get undoDismiss => 'Fermer';
+
+  @override
+  String get undoHint =>
+      'L’annulation reste possible pendant un court instant.';
+
+  @override
+  String get undoRestored => 'Rétabli';
+
+  @override
+  String get prefsUndoWindow => 'Délai d’annulation';
+
+  @override
+  String get prefsUndoWindow8s => '8 secondes';
+
+  @override
+  String get prefsUndoWindow30s => '30 secondes';
+
+  @override
+  String get prefsUndoWindowManual => 'Jusqu’à ce que je le ferme';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notifications supprimées',
+      one: 'Notification supprimée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeConditionsRemoved => 'Signalement supprimé';
+
+  @override
+  String get gearWearLogRemoved => 'Observation supprimée';
+
+  @override
+  String nutritionEntryRemoved(String item) {
+    return '$item supprimé';
+  }
+
+  @override
+  String get runSocialCommentRemoved => 'Commentaire supprimé';
+
+  @override
+  String get routeDetailReviewRemoved => 'Avis supprimé';
+
+  @override
+  String get routeMarkerRemoved => 'Repère supprimé';
 }

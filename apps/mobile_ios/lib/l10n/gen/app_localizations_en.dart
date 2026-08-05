@@ -3163,16 +3163,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailDeleteReview => 'Delete your review';
 
   @override
-  String get routeDetailDeleteReviewTitle => 'Delete your review?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Your rating and comment will be removed from this route. You can leave a new review afterwards.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Delete review';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'Couldn\'t delete the review: $error';
   }
@@ -7635,13 +7625,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runSocialReportReply => 'Report reply';
 
   @override
-  String get runSocialDeleteCommentTitle => 'Delete this comment?';
-
-  @override
-  String get runSocialDeleteCommentMessage =>
-      'This comment will be permanently removed. This can\'t be undone.';
-
-  @override
   String get runSocialPost => 'Post';
 
   @override
@@ -9952,14 +9935,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionDelete => 'Delete';
 
   @override
-  String get nutritionDeleteEntryTitle => 'Delete this entry?';
-
-  @override
-  String nutritionDeleteEntryMessage(String item) {
-    return '$item will be removed from today\'s log.';
-  }
-
-  @override
   String nutritionDeleteFailed(String error) {
     return 'Couldn’t delete the entry: $error';
   }
@@ -10765,13 +10740,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Delete marker?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'This removes the marker from the route permanently.';
-
-  @override
   String get routeMarkerKindAidStation => 'Aid station';
 
   @override
@@ -11359,13 +11327,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeConditionsDelete => 'Delete';
 
   @override
-  String get routeConditionsDeleteTitle => 'Delete report?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'This removes the condition report permanently.';
-
-  @override
   String get routeConditionsDeleteFailed => 'Could not delete report';
 
   @override
@@ -11815,16 +11776,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gymEditorRemoveExerciseConfirm => 'Remove';
-
-  @override
-  String get gearWearLogDeleteTitle => 'Delete this note?';
-
-  @override
-  String get gearWearLogDeleteBody =>
-      'This wear-log note will be permanently deleted.';
-
-  @override
-  String get gearWearLogDeleteConfirm => 'Delete';
 
   @override
   String get eventSubmitRunsLoadError => 'Couldn\'t load your recent runs.';
@@ -12425,4 +12376,59 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonMore => 'More';
+
+  @override
+  String get undoAction => 'Undo';
+
+  @override
+  String get undoDismiss => 'Dismiss';
+
+  @override
+  String get undoHint => 'Undo is available for a short time.';
+
+  @override
+  String get undoRestored => 'Restored';
+
+  @override
+  String get prefsUndoWindow => 'Undo window';
+
+  @override
+  String get prefsUndoWindow8s => '8 seconds';
+
+  @override
+  String get prefsUndoWindow30s => '30 seconds';
+
+  @override
+  String get prefsUndoWindowManual => 'Until I dismiss it';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notifications dismissed',
+      one: 'Notification dismissed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeConditionsRemoved => 'Condition report removed';
+
+  @override
+  String get gearWearLogRemoved => 'Observation removed';
+
+  @override
+  String nutritionEntryRemoved(String item) {
+    return '$item removed';
+  }
+
+  @override
+  String get runSocialCommentRemoved => 'Comment removed';
+
+  @override
+  String get routeDetailReviewRemoved => 'Review removed';
+
+  @override
+  String get routeMarkerRemoved => 'Marker removed';
 }

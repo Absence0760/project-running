@@ -35,6 +35,7 @@ import '../sim_watch_sync.dart'
     show WatchBleTransport, WatchPushRejected, WatchSyncClient;
 import '../social_service.dart' show ClubView, SocialService;
 import '../tile_pack.dart' show TileBbox;
+import '../undo_queue.dart';
 import '../watch_course.dart';
 import '../watch_roadbook.dart';
 import 'roadbook_screen.dart';
@@ -49,6 +50,7 @@ import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
+import '../widgets/undo_bar.dart';
 
 /// Pure helper — filter the viewer's club memberships down to clubs
 /// they can transfer a route into (owner or admin). Mirrors the
@@ -838,44 +840,37 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   /// the client rather than by review id, so the call can't be aimed at
   /// another user's row; the route_reviews delete RLS policy is the hard
   /// gate behind it.
-  Future<void> _deleteOwnReview() async {
+  /// The review has no children and no Storage object, and the delete is
+  /// scoped by the table's own `(route_id, user_id)` key rather than by a
+  /// passed id — so it takes undo instead of a confirm (decisions § 514). The
+  /// deferred mutation is also what keeps the SAME row: a compensating
+  /// re-insert would mint a new `id` and a new `created_at`.
+  void _deleteOwnReview() {
     final api = widget.apiClient;
     if (api == null) return;
 
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.routeDetailDeleteReviewTitle),
-        content: Text(l10n.routeDetailDeleteReviewBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.routeDetailCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppSemanticColors.of(ctx).danger,
-              foregroundColor: AppSemanticColors.of(ctx).onDanger,
-            ),
-            child: Text(l10n.routeDetailDeleteReviewCta),
-          ),
-        ],
+    final viewerId = api.userId;
+    final snapshot = _reviews;
+    setState(() => _reviews =
+        _reviews.where((r) => r.userId != viewerId).toList(growable: false));
+    deferDestructive(
+      context,
+      DeferredDestruction(
+        message: l10n.routeDetailReviewRemoved,
+        commit: () => api.deleteRouteReview(widget.route.id),
+        restore: () {
+          if (!mounted) return;
+          setState(() => _reviews = snapshot);
+        },
+        onCommitError: (e) {
+          debugPrint('route detail review delete failed: $e');
+          if (!mounted) return;
+          showTopBanner(context,
+              l10n.routeDetailReviewDeleteFailed(friendlyError(l10n, e)));
+        },
       ),
     );
-    if (ok != true) return;
-
-    try {
-      await api.deleteRouteReview(widget.route.id);
-      await _fetchReviews();
-    } catch (e) {
-      debugPrint('route detail review delete failed: $e');
-      if (mounted) {
-        showTopBanner(
-            context, AppLocalizations.of(context).routeDetailReviewDeleteFailed(friendlyError(AppLocalizations.of(context), e)));
-      }
-    }
   }
 
   @override

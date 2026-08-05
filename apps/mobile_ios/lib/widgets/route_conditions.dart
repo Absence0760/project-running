@@ -6,8 +6,9 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../social_service.dart';
-import 'confirm_destructive.dart';
+import '../undo_queue.dart';
 import 'top_banner.dart';
+import 'undo_bar.dart';
 
 const List<String> kRouteConditionKinds = [
   'clear',
@@ -163,25 +164,31 @@ class _RouteConditionsState extends State<RouteConditions> {
     }
   }
 
-  Future<void> _delete(RouteConditionRow c) async {
+  /// One tap to re-file, author-or-owner scoped, no children — so the delete
+  /// is deferred and undoable rather than confirmed (decisions § 514: confirm
+  /// and undo are alternatives, not partners). `restore` puts back the list
+  /// SNAPSHOT, not an insert-at-index, so ordering survives.
+  void _delete(RouteConditionRow c) {
     final l10n = AppLocalizations.of(context);
-    final ok = await confirmDestructive(
+    final api = widget.api;
+    final snapshot = _conditions;
+    setState(() =>
+        _conditions = _conditions.where((q) => q.id != c.id).toList());
+    deferDestructive(
       context,
-      title: l10n.routeConditionsDeleteTitle,
-      body: l10n.routeConditionsDeleteConfirm,
-      confirmLabel: l10n.routeConditionsDelete,
-      cancelLabel: l10n.routeConditionsCancel,
+      DeferredDestruction(
+        message: l10n.routeConditionsRemoved,
+        commit: () => api.deleteRouteCondition(c.id),
+        restore: () {
+          if (!mounted) return;
+          setState(() => _conditions = snapshot);
+        },
+        onCommitError: (_) {
+          if (!mounted) return;
+          showTopBanner(context, l10n.routeConditionsDeleteFailed);
+        },
+      ),
     );
-    if (!ok) return;
-    try {
-      await widget.api.deleteRouteCondition(c.id);
-      if (!mounted) return;
-      setState(() =>
-          _conditions = _conditions.where((q) => q.id != c.id).toList());
-    } catch (_) {
-      if (!mounted) return;
-      showTopBanner(context, l10n.routeConditionsDeleteFailed);
-    }
   }
 
   @override

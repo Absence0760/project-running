@@ -6,8 +6,10 @@ import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../preferences.dart';
+import '../undo_queue.dart';
 import 'full_screen_form.dart';
 import 'top_banner.dart';
+import 'undo_bar.dart';
 
 /// Full-screen dialog for creating or editing a gear row. Returns
 /// a [GearFormResult] carrying the saved row's id + the purchased_at
@@ -199,43 +201,38 @@ class _GearFormSheetState extends State<_GearFormSheet> {
     }
   }
 
-  Future<void> _deleteWearLog(GearWearLogRow log) async {
+  /// A wear-log observation is one line of text its owner typed, with no
+  /// children and no Storage object, so it takes undo rather than a confirm
+  /// (decisions § 514). This affordance lives inside a full-screen form
+  /// route — the case web had to widen a Tab trap for (§ 521). On this
+  /// platform the undo pill is a ROOT overlay entry, which lands above the
+  /// modal barrier and therefore stays in the semantics tree, so a TalkBack
+  /// user can reach it; `undo_bar_test.dart` pins that, and pins that a
+  /// SnackBar in the same position would not be reachable.
+  void _deleteWearLog(GearWearLogRow log) {
     final api = widget.api;
     if (api == null) return;
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.gearWearLogDeleteTitle),
-            content: Text(l10n.gearWearLogDeleteBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.gearFormCancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error),
-                child: Text(l10n.gearWearLogDeleteConfirm),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!ok) return;
-    try {
-      await api.deleteGearWearLog(log.id);
-      if (mounted) {
-        setState(() =>
-            _wearLogs = _wearLogs.where((l) => l.id != log.id).toList());
-      }
-    } catch (e) {
-      debugPrint('gear wear log delete error: $e');
-      if (!mounted) return;
-      showTopBanner(
-          context, AppLocalizations.of(context).gearWearLogDeleteError(friendlyError(AppLocalizations.of(context), e)));
-    }
+    final snapshot = _wearLogs;
+    setState(() =>
+        _wearLogs = _wearLogs.where((l) => l.id != log.id).toList());
+    deferDestructive(
+      context,
+      DeferredDestruction(
+        message: l10n.gearWearLogRemoved,
+        commit: () => api.deleteGearWearLog(log.id),
+        restore: () {
+          if (!mounted) return;
+          setState(() => _wearLogs = snapshot);
+        },
+        onCommitError: (e) {
+          debugPrint('gear wear log delete error: $e');
+          if (!mounted) return;
+          showTopBanner(
+              context, l10n.gearWearLogDeleteError(friendlyError(l10n, e)));
+        },
+      ),
+    );
   }
 
   String _wearAreaLabel(AppLocalizations l10n, String area) {

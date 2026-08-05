@@ -21,6 +21,7 @@ import '../meal_template.dart';
 import '../nutrition_budget.dart';
 import '../nutrition_targets.dart';
 import '../preferences.dart';
+import '../undo_queue.dart';
 import '../recipe.dart';
 import '../nutrition_totals.dart';
 import '../nutrition_week.dart';
@@ -28,6 +29,7 @@ import '../settings_sync.dart';
 import '../widgets/nutrition_log_sheet.dart';
 import '../widgets/pending_sync_banner.dart';
 import '../widgets/top_banner.dart';
+import '../widgets/undo_bar.dart';
 import 'nutrition_meal_detail_screen.dart';
 import 'settings_body_metrics_screen.dart';
 
@@ -770,43 +772,49 @@ class _NutritionScreenState extends State<NutritionScreen> {
     }
   }
 
-  Future<void> _delete(FoodEntry e) async {
+  /// The app's most frequently deleted row, and one re-typed in seconds — so
+  /// it drops its confirm for undo (decisions § 514).
+  ///
+  /// The list here is derived from [LocalFoodStore], not held in state, so the
+  /// optimistic removal is a hidden-id set rather than a list snapshot: the
+  /// stored row is not touched at all while the offer stands, which is a
+  /// stronger form of the same contract — the entry comes back bit for bit,
+  /// including its pending sync state.
+  void _delete(FoodEntry e) {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.nutritionDeleteEntryTitle),
-            content: Text(l10n.nutritionDeleteEntryMessage(e.itemName)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.nutritionCancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error),
-                child: Text(l10n.nutritionDelete),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!ok) return;
-    try {
-      await widget.store.deleteLocal(e.id);
-      await _maybeSync();
-    } catch (err) {
-      debugPrint('nutrition delete failed: $err');
-      if (mounted) {
-        showTopBanner(context, l10n.nutritionDeleteFailed(friendlyError(l10n, err)));
-      }
-    }
+    final store = widget.store;
+    setState(() => _deferredDeleteIds = {..._deferredDeleteIds, e.id});
+    deferDestructive(
+      context,
+      DeferredDestruction(
+        message: l10n.nutritionEntryRemoved(e.itemName),
+        commit: () async {
+          await store.deleteLocal(e.id);
+          await _maybeSync();
+        },
+        restore: () {
+          if (!mounted) return;
+          setState(() =>
+              _deferredDeleteIds = _deferredDeleteIds.difference({e.id}));
+        },
+        onCommitError: (err) {
+          debugPrint('nutrition delete failed: $err');
+          if (!mounted) return;
+          showTopBanner(
+              context, l10n.nutritionDeleteFailed(friendlyError(l10n, err)));
+        },
+      ),
+    );
   }
+
+  /// Entries whose delete is deferred behind an open undo offer. They are
+  /// hidden from every read of the list while the offer stands; the stored row
+  /// itself is untouched until the window closes.
+  Set<String> _deferredDeleteIds = {};
 
   List<FoodEntry> get _todayEntries => [
         for (final r in widget.store.entriesForRange(_todayStart, _tomorrow))
-          FoodEntry.fromRow(r),
+          if (!_deferredDeleteIds.contains(r['id'])) FoodEntry.fromRow(r),
       ];
 
   bool get _anyPending =>

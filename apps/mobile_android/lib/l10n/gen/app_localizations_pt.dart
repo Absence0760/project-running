@@ -3186,16 +3186,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeDetailDeleteReview => 'Excluir sua avaliação';
 
   @override
-  String get routeDetailDeleteReviewTitle => 'Excluir sua avaliação?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Sua nota e seu comentário serão removidos desta rota. Você poderá deixar uma nova avaliação depois.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Excluir avaliação';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'Não foi possível excluir a avaliação: $error';
   }
@@ -7708,13 +7698,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runSocialReportReply => 'Denunciar resposta';
 
   @override
-  String get runSocialDeleteCommentTitle => 'Excluir este comentário?';
-
-  @override
-  String get runSocialDeleteCommentMessage =>
-      'Este comentário será removido permanentemente. Não é possível desfazer.';
-
-  @override
   String get runSocialPost => 'Publicar';
 
   @override
@@ -10049,14 +10032,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionDelete => 'Excluir';
 
   @override
-  String get nutritionDeleteEntryTitle => 'Excluir este item?';
-
-  @override
-  String nutritionDeleteEntryMessage(String item) {
-    return '$item será removido do registro de hoje.';
-  }
-
-  @override
   String nutritionDeleteFailed(String error) {
     return 'Não foi possível eliminar a entrada: $error';
   }
@@ -10870,13 +10845,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Excluir marcador?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Isso remove o marcador do percurso permanentemente.';
-
-  @override
   String get routeMarkerKindAidStation => 'Posto de apoio';
 
   @override
@@ -11471,13 +11439,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeConditionsDelete => 'Excluir';
 
   @override
-  String get routeConditionsDeleteTitle => 'Excluir relato?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'Isso remove o relato permanentemente.';
-
-  @override
   String get routeConditionsDeleteFailed => 'Não foi possível excluir o relato';
 
   @override
@@ -11934,16 +11895,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gymEditorRemoveExerciseConfirm => 'Remover';
-
-  @override
-  String get gearWearLogDeleteTitle => 'Excluir esta nota?';
-
-  @override
-  String get gearWearLogDeleteBody =>
-      'Esta nota de desgaste será excluída permanentemente.';
-
-  @override
-  String get gearWearLogDeleteConfirm => 'Excluir';
 
   @override
   String get eventSubmitRunsLoadError =>
@@ -12551,6 +12502,61 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get commonMore => 'Mais';
+
+  @override
+  String get undoAction => 'Desfazer';
+
+  @override
+  String get undoDismiss => 'Fechar';
+
+  @override
+  String get undoHint => 'Desfazer fica disponível por um curto período.';
+
+  @override
+  String get undoRestored => 'Restaurado';
+
+  @override
+  String get prefsUndoWindow => 'Janela para desfazer';
+
+  @override
+  String get prefsUndoWindow8s => '8 segundos';
+
+  @override
+  String get prefsUndoWindow30s => '30 segundos';
+
+  @override
+  String get prefsUndoWindowManual => 'Até eu fechar';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notificações descartadas',
+      one: 'Notificação descartada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeConditionsRemoved => 'Relato de condição removido';
+
+  @override
+  String get gearWearLogRemoved => 'Observação removida';
+
+  @override
+  String nutritionEntryRemoved(String item) {
+    return '$item removido';
+  }
+
+  @override
+  String get runSocialCommentRemoved => 'Comentário removido';
+
+  @override
+  String get routeDetailReviewRemoved => 'Avaliação removida';
+
+  @override
+  String get routeMarkerRemoved => 'Marcador removido';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -15732,16 +15738,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeDetailDeleteReview => 'Excluir sua avaliação';
-
-  @override
-  String get routeDetailDeleteReviewTitle => 'Excluir sua avaliação?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Sua nota e seu comentário serão removidos desta rota. Você poderá deixar uma nova avaliação depois.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Excluir avaliação';
 
   @override
   String routeDetailReviewDeleteFailed(String error) {
@@ -20255,13 +20251,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get runSocialReportReply => 'Denunciar resposta';
 
   @override
-  String get runSocialDeleteCommentTitle => 'Excluir este comentário?';
-
-  @override
-  String get runSocialDeleteCommentMessage =>
-      'Este comentário será removido permanentemente. Não é possível desfazer.';
-
-  @override
   String get runSocialPost => 'Publicar';
 
   @override
@@ -22596,14 +22585,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get nutritionDelete => 'Excluir';
 
   @override
-  String get nutritionDeleteEntryTitle => 'Excluir este item?';
-
-  @override
-  String nutritionDeleteEntryMessage(String item) {
-    return '$item será removido do registro de hoje.';
-  }
-
-  @override
   String nutritionDeleteFailed(String error) {
     return 'Não foi possível excluir a entrada: $error';
   }
@@ -23417,13 +23398,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Excluir marcador?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Isso remove o marcador do percurso permanentemente.';
-
-  @override
   String get routeMarkerKindAidStation => 'Posto de apoio';
 
   @override
@@ -24017,13 +23991,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get routeConditionsDelete => 'Excluir';
 
   @override
-  String get routeConditionsDeleteTitle => 'Excluir relato?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'Isso remove o relato permanentemente.';
-
-  @override
   String get routeConditionsDeleteFailed => 'Não foi possível excluir o relato';
 
   @override
@@ -24480,16 +24447,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymEditorRemoveExerciseConfirm => 'Remover';
-
-  @override
-  String get gearWearLogDeleteTitle => 'Excluir esta nota?';
-
-  @override
-  String get gearWearLogDeleteBody =>
-      'Esta nota de desgaste será excluída permanentemente.';
-
-  @override
-  String get gearWearLogDeleteConfirm => 'Excluir';
 
   @override
   String get eventSubmitRunsLoadError =>
@@ -25095,4 +25052,59 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get commonMore => 'Mais';
+
+  @override
+  String get undoAction => 'Desfazer';
+
+  @override
+  String get undoDismiss => 'Fechar';
+
+  @override
+  String get undoHint => 'Desfazer fica disponível por um curto período.';
+
+  @override
+  String get undoRestored => 'Restaurado';
+
+  @override
+  String get prefsUndoWindow => 'Janela para desfazer';
+
+  @override
+  String get prefsUndoWindow8s => '8 segundos';
+
+  @override
+  String get prefsUndoWindow30s => '30 segundos';
+
+  @override
+  String get prefsUndoWindowManual => 'Até eu fechar';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notificações descartadas',
+      one: 'Notificação descartada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeConditionsRemoved => 'Relato de condição removido';
+
+  @override
+  String get gearWearLogRemoved => 'Observação removida';
+
+  @override
+  String nutritionEntryRemoved(String item) {
+    return '$item removido';
+  }
+
+  @override
+  String get runSocialCommentRemoved => 'Comentário removido';
+
+  @override
+  String get routeDetailReviewRemoved => 'Avaliação removida';
+
+  @override
+  String get routeMarkerRemoved => 'Marcador removido';
 }

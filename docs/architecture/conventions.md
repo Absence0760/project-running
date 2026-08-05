@@ -627,7 +627,7 @@ Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.mod
 
 `ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
 
-## Web destructive actions — confirm OR undo, never both, and never a fake undo
+## Destructive actions — confirm OR undo, never both, and never a fake undo
 
 A destructive action gets **exactly one** guard. Pick it by asking whether the
 action can honestly be reversed:
@@ -684,10 +684,43 @@ setting. The list is the optimistic surface; a server-sourced aggregate is not.
 
 **A timed undo is an accessibility surface.** WCAG 2.2.1 requires the limit be
 turnable-off, adjustable, or extendable; the `undo_window_s` preference
-(`/settings/preferences`, registered in [settings.md](../backend/settings.md))
-carries a `0` = *no time limit* choice, and hover/focus pauses a running window.
-Keep the countdown out of the `aria-live` region — a ticking number re-announces
-on every tick — and never let the bar steal focus.
+(`/settings/preferences` on web, Settings → Preferences on mobile, registered in
+[settings.md](../backend/settings.md)) carries a `0` = *no time limit* choice, and
+hover/focus (web) or backgrounding (mobile) pauses a running window. Keep the
+countdown out of the announced region — a ticking number re-announces on every
+tick — and never let the bar steal focus. A platform that only *reads* the pref
+fails 2.2.1: whatever surface offers a timed undo has to offer the adjust route
+too.
+
+### On mobile the same rules hold, with a different host
+
+`deferDestructive` lives in `lib/widgets/undo_bar.dart` and takes the same
+`DeferredDestruction { message, commit, restore, onCommitError }`. Three things
+are mobile-specific:
+
+- **The host is a root `Overlay` entry, never a `SnackBar`.** A snack bar is
+  rendered inside its route's `Scaffold`, and a modal route's barrier carries
+  `BlockSemantics`, which drops the whole route beneath it from the compiled
+  semantics tree. Measured in `undo_bar_test.dart`: a snack bar raised while a
+  dialog is up produces **no semantics node at all**, so TalkBack and VoiceOver
+  can neither announce nor reach it — WCAG 2.1.1, the same violation web fixed by
+  widening its Tab ring. An `Overlay.insert` entry lands above every existing
+  entry including the barrier, so it stays reachable. This is why an in-sheet
+  delete needs no exemption on this platform, and `showSnackBar` is separately
+  banned in `lib/screens` / `lib/widgets` by an architecture guard.
+- **A route pop does not flush.** The queue is a top-level singleton and its
+  timer belongs to it, not to a `State`, so a pop cannot discard a pending
+  commit — the mutation still lands. Web flushes on navigation because its bar
+  describes a list the user has left; forcing an early commit here would be the
+  only way to *lose* the offer, so we don't.
+- **Therefore `commit` may not touch a `BuildContext` and `restore` must be
+  mount-guarded.** Resolve `message` and any error copy before the call, capture
+  app-scoped services (the api client, a store) in the closures, and open
+  `restore` with `if (!mounted) return;`. Each adopting list is rebuilt from the
+  server (or from the local store) on its next load, so an undo whose surface has
+  gone self-heals. All three are pinned per call site by the
+  `deferred-commit undo outlives its surface` group in
+  `architecture_guards_test.dart`.
 
 ## Web cards — `.card-elevated` is the shared elevated panel
 

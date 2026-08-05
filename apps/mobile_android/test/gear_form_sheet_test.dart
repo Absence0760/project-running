@@ -10,6 +10,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gear_store.dart';
 import '../lib/preferences.dart';
 import '../lib/widgets/gear_form_sheet.dart';
+import '../lib/widgets/undo_bar.dart';
 
 /// Fakes the gear wear-log endpoints only; every other ApiClient method
 /// is unused by this sheet when [existing] carries an id + [api] is
@@ -95,6 +96,8 @@ Future<void> _open(WidgetTester tester, Widget app) async {
 }
 
 void main() {
+  tearDown(debugResetUndo);
+
   testWidgets(
       'opens as a full-screen dialog with the Add shoes heading + Name field',
       (tester) async {
@@ -164,10 +167,13 @@ void main() {
     }
   });
 
+  // Issue #666 U8, mobile half: the wear-log delete dropped its confirm dialog
+  // for a deferred, undoable delete (decisions § 514). These two replace the
+  // Cancel-keeps-it / confirm-deletes-it pair that pinned the dialog.
   testWidgets(
-      'wear-log delete: Cancel in the confirm dialog keeps the note and '
-      'calls no api delete', (tester) async {
-    final f = await _setup('wearlog_cancel');
+      'wear-log delete: Undo keeps the note and calls no api delete',
+      (tester) async {
+    final f = await _setup('wearlog_undo');
     final api = _WearLogApi([_wearLog()]);
     try {
       await _open(
@@ -180,28 +186,27 @@ void main() {
 
       await tester.tap(find.byTooltip('Delete observation'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byType(AlertDialog), findsOneWidget);
-
-      await tester.tap(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.widgetWithText(TextButton, 'Cancel'),
-      ));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
       expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('resoled outsole'), findsNothing);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pump();
+
       expect(find.text('resoled outsole'), findsOneWidget);
       expect(api.deleteCalls, 0);
+      await tester.pump(const Duration(seconds: 9));
+      expect(api.deleteCalls, 0);
+      // Drain the Restored banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
     } finally {
       f.dir.deleteSync(recursive: true);
     }
   });
 
   testWidgets(
-      'wear-log delete: confirming the dialog deletes the note via the api',
+      'wear-log delete: the window closing deletes the note via the api',
       (tester) async {
-    final f = await _setup('wearlog_confirm');
+    final f = await _setup('wearlog_commit');
     final api = _WearLogApi([_wearLog()]);
     try {
       await _open(
@@ -214,16 +219,10 @@ void main() {
 
       await tester.tap(find.byTooltip('Delete observation'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+      expect(api.deleteCalls, 0,
+          reason: 'nothing is destroyed while undo is on offer');
 
-      await tester.tap(find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.widgetWithText(TextButton, 'Delete'),
-      ));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.byType(AlertDialog), findsNothing);
+      await tester.pump(const Duration(seconds: 9));
       expect(find.text('resoled outsole'), findsNothing);
       expect(api.deleteCalls, 1);
     } finally {

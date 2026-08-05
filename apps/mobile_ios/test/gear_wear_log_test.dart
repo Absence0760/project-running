@@ -10,6 +10,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gear_store.dart';
 import '../lib/preferences.dart';
 import '../lib/widgets/gear_form_sheet.dart';
+import '../lib/widgets/undo_bar.dart';
 
 GearWearLogRow _log({
   String id = 'l1',
@@ -121,7 +122,64 @@ Future<void> _open(WidgetTester tester, Widget app) async {
   await tester.pump(const Duration(milliseconds: 400));
 }
 
+/// The armed undo window owns a real Timer; a test that ends with it pending
+/// fails on `!timersPending`.
+Future<void> _drain(WidgetTester tester) =>
+    tester.pump(const Duration(seconds: 9));
+
 void main() {
+  tearDown(debugResetUndo);
+
+  // Issue #666 U8, mobile half. This delete is the in-modal case § 521 had to
+  // widen web's Tab trap for: the affordance lives inside a full-screen form
+  // route. Mobile's pill is a root overlay entry, so it lands ABOVE the modal
+  // barrier and stays reachable — see undo_bar_test.dart for the semantics
+  // measurement, and the pill's reachability here for the wiring.
+  group('deleting an observation offers undo instead of a confirm', () {
+    testWidgets('the delete is deferred, and the pill is reachable over the '
+        'form route', (tester) async {
+      final f = await _setup('undo_defer');
+      final api = _WearApi(seed: [_log(note: 'lugs gone')]);
+      try {
+        await _open(tester, _opener(f.store, f.prefs, api, _existing()));
+        await tester.ensureVisible(find.byTooltip('Delete observation'));
+        await tester.tap(find.byTooltip('Delete observation'));
+        await tester.pump();
+
+        expect(find.byType(AlertDialog), findsNothing,
+            reason: 'confirm and undo are alternatives, not partners');
+        expect(find.text('lugs gone'), findsNothing);
+        expect(find.text('Observation removed'), findsOneWidget);
+        expect(find.text('Undo'), findsOneWidget);
+        expect(api.deleteCalls, 0);
+
+        await _drain(tester);
+        expect(api.deleteCalls, 1);
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
+
+    testWidgets('Undo puts the observation back untouched', (tester) async {
+      final f = await _setup('undo_restore');
+      final api = _WearApi(seed: [_log(note: 'lugs gone')]);
+      try {
+        await _open(tester, _opener(f.store, f.prefs, api, _existing()));
+        await tester.ensureVisible(find.byTooltip('Delete observation'));
+        await tester.tap(find.byTooltip('Delete observation'));
+        await tester.pump();
+        await tester.tap(find.text('Undo'));
+        await tester.pump();
+
+        expect(find.text('lugs gone'), findsOneWidget);
+        await _drain(tester);
+        expect(api.deleteCalls, 0);
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
+  });
+
   testWidgets('wear log renders seeded observations on the edit form',
       (tester) async {
     final f = await _setup('render');
