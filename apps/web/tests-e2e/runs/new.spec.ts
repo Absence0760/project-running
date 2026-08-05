@@ -451,6 +451,11 @@ test.describe('/runs/new', () => {
 		await page.locator('textarea').fill('Should never persist');
 
 		await page.getByRole('link', { name: /Back to runs/ }).click();
+		// The unsaved-changes guard intercepts the back link on a dirty form;
+		// confirming Discard is what lets the navigation through.
+		const guard = page.getByTestId('unsaved-changes-dialog');
+		await guard.waitFor({ timeout: 10_000 });
+		await guard.getByRole('button', { name: 'Discard' }).click();
 		await page.waitForURL(/\/runs(\?.*)?$/, { timeout: 10_000 });
 
 		const afterCount = await admin
