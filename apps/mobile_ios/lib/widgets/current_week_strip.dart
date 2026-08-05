@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show ChartCardHeader;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -83,20 +84,9 @@ class CurrentWeekStrip extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(l10n.planDetailCurrentWeek,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-              ),
-              Text('$done / $active',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
-            ],
+          child: ChartCardHeader(
+            title: l10n.planDetailCurrentWeek,
+            note: '$done / $active',
           ),
         ),
         Row(

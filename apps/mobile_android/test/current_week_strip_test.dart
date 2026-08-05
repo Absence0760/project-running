@@ -52,9 +52,10 @@ void main() {
       workouts: [_wo('a', DateTime(2024, 4, 2), 'tempo', 10000)],
     );
     expect(find.text('This week'), findsOneWidget);
-    // Seven Expanded cells (one per day of the anchored week), plus the
-    // overflow-bounded header title.
-    expect(find.byType(Expanded), findsNWidgets(8));
+    // Seven Expanded cells, one per day of the anchored week. The header
+    // contributes none — ChartCardHeader reflows in a Wrap rather than
+    // bounding its title with an Expanded.
+    expect(find.byType(Expanded), findsNWidgets(7));
     expect(find.text('TEMPO'), findsOneWidget);
   });
 
@@ -77,9 +78,9 @@ void main() {
       ),
     ));
     await tester.pump();
-    // Title + done/active counter share one row; at 220 the title must
-    // ellipsize instead of throwing a RenderFlex overflow (the harness
-    // fails the test on one).
+    // Title + done/active counter share one run; at 220 the counter must
+    // drop to its own line instead of throwing a RenderFlex overflow (the
+    // harness fails the test on one) — and neither text is truncated.
     expect(find.text('This week'), findsOneWidget);
   });
 
