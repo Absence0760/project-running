@@ -446,34 +446,50 @@ for (const { label, marker } of THEMES) {
 	});
 }
 
-// The mobile TrainingLoadPalette is the same palette by value — a Dart file
-// cannot import a CSS custom property, so the lockstep is checked here.
-test('training-load series match mobile TrainingLoadPalette', () => {
+// Both mobile chart scales are the same palettes by value — a Dart file cannot
+// import a CSS custom property, so the lockstep is checked here. Reading the
+// scale by NAME rather than by ordinal position is what makes this survive a
+// relocation: the two scales lived in a screen and a top-level palette file
+// until they moved into ui_kit's ChartPalette, and a positional match would
+// have gone on passing against whatever list happened to come first.
+function dartChartScale(
+	brightness: 'light' | 'dark',
+	scale: 'series' | 'zones',
+): string[] {
 	const dart = readFileSync(
-		resolve(__dirname, '../../../mobile_android/lib/widgets/training_load_chart.dart'),
+		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/chart_palette.dart'),
 		'utf-8',
 	);
-	const expected: Array<[string, string, string]> = [
-		[':root {', 'light', 'chart-fitness'],
-		[':root {', 'light', 'chart-fatigue'],
-		[':root {', 'light', 'chart-form'],
-		[':root[data-theme="dark"]', 'dark', 'chart-fitness'],
-		[':root[data-theme="dark"]', 'dark', 'chart-fatigue'],
-		[':root[data-theme="dark"]', 'dark', 'chart-form'],
+	const palette = dart.match(
+		new RegExp(`static const ${brightness} = ChartPalette\\(([\\s\\S]*?)\\n  \\);`),
+	);
+	assert.ok(palette, `chart_palette.dart has no ${brightness} palette`);
+	const body = palette![1].match(new RegExp(`${scale}: \\[([\\s\\S]*?)\\]`));
+	assert.ok(body, `ChartPalette.${brightness} has no ${scale} scale`);
+	return [...body![1].matchAll(/Color\(0xFF([0-9A-Fa-f]{6})\)/g)].map(
+		(m) => `#${m[1].toUpperCase()}`,
+	);
+}
+
+test('training-load series match mobile ChartPalette.series', () => {
+	const expected: Array<[string, 'light' | 'dark']> = [
+		[':root {', 'light'],
+		[':root[data-theme="dark"]', 'dark'],
 	];
-	for (const [marker, brightness, token] of expected) {
-		const series = token.replace('chart-', '');
-		const body = dart.match(
-			new RegExp(`static const ${brightness} = TrainingLoadPalette\\(([\\s\\S]*?)\\n  \\);`),
-		);
-		assert.ok(body, `training_load_chart.dart has no ${brightness} palette`);
-		const hex = body![1].match(new RegExp(`${series}: Color\\(0xFF([0-9A-Fa-f]{6})\\)`))?.[1];
-		assert.ok(hex, `${brightness} palette has no ${series} colour`);
+	for (const [marker, brightness] of expected) {
+		const hexes = dartChartScale(brightness, 'series');
 		assert.equal(
-			resolveToken(marker, token).toUpperCase(),
-			`#${hex!.toUpperCase()}`,
-			`--${token} in ${marker} has drifted from TrainingLoadPalette.${brightness}.${series}.`,
+			hexes.length,
+			3,
+			`ChartPalette.${brightness}.series does not carry three curves`,
 		);
+		['chart-fitness', 'chart-fatigue', 'chart-form'].forEach((token, i) => {
+			assert.equal(
+				resolveToken(marker, token).toUpperCase(),
+				hexes[i],
+				`--${token} in ${marker} has drifted from ChartPalette.${brightness}.series[${i}].`,
+			);
+		});
 	}
 });
 
@@ -610,28 +626,22 @@ test('the intensity split bar reads the ends of the shared zone ladder', () => {
 });
 
 // Mobile cannot import a CSS custom property, so the lockstep is checked here.
-test('HR zone tokens match the mobile hr_zone_palette', () => {
-	const dart = readFileSync(
-		resolve(__dirname, '../../../mobile_android/lib/hr_zone_palette.dart'),
-		'utf-8',
-	);
-	for (const [marker, symbol] of [
-		[':root {', 'hrZoneColoursLight'],
-		[':root[data-theme="dark"]', 'hrZoneColoursDark'],
+test('HR zone tokens match mobile ChartPalette.zones', () => {
+	for (const [marker, brightness] of [
+		[':root {', 'light'],
+		[':root[data-theme="dark"]', 'dark'],
 	] as const) {
-		const body = dart.match(
-			new RegExp(`const ${symbol} = <Color>\\[([\\s\\S]*?)\\];`),
+		const hexes = dartChartScale(brightness, 'zones');
+		assert.equal(
+			hexes.length,
+			5,
+			`ChartPalette.${brightness}.zones does not carry five bands`,
 		);
-		assert.ok(body, `hr_zone_palette.dart has no ${symbol}`);
-		const hexes = [...body![1].matchAll(/Color\(0xFF([0-9A-Fa-f]{6})\)/g)].map(
-			(m) => `#${m[1].toUpperCase()}`,
-		);
-		assert.equal(hexes.length, 5, `${symbol} does not carry five bands`);
 		hexes.forEach((hex, i) => {
 			assert.equal(
 				resolveToken(marker, `zone-${i + 1}`).toUpperCase(),
 				hex,
-				`--zone-${i + 1} in ${marker} has drifted from ${symbol}[${i}].`,
+				`--zone-${i + 1} in ${marker} has drifted from ChartPalette.${brightness}.zones[${i}].`,
 			);
 		});
 	}
