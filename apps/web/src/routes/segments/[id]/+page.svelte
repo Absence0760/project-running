@@ -361,7 +361,7 @@
 		color: var(--color-text-secondary);
 	}
 	.crown-icon {
-		color: #facc15;
+		color: var(--color-crown);
 		font-size: 1.1rem;
 	}
 	ol {

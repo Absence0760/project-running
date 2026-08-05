@@ -214,8 +214,8 @@
 		>
 			<defs>
 				<linearGradient id="elev-fill" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0%" stop-color="var(--color-primary, #3b82f6)" stop-opacity="0.35" />
-					<stop offset="100%" stop-color="var(--color-primary, #3b82f6)" stop-opacity="0.04" />
+					<stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.35" />
+					<stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.04" />
 				</linearGradient>
 			</defs>
 
@@ -336,7 +336,7 @@
 	}
 	.line {
 		fill: none;
-		stroke: var(--color-primary, #3b82f6);
+		stroke: var(--color-primary);
 		stroke-width: 2;
 		stroke-linejoin: round;
 		stroke-linecap: round;
@@ -351,16 +351,16 @@
 	}
 	.y-label {
 		font-size: 11px;
-		fill: var(--color-text-tertiary, #999);
+		fill: var(--color-text-tertiary);
 		text-anchor: end;
 	}
 	.x-label {
 		font-size: 11px;
-		fill: var(--color-text-tertiary, #999);
+		fill: var(--color-text-tertiary);
 	}
 	.empty-label {
 		font-size: 13px;
-		fill: var(--color-text-tertiary, #999);
+		fill: var(--color-text-tertiary);
 	}
 	.extreme-pill {
 		fill: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));

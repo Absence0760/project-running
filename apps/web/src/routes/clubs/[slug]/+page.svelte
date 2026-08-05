@@ -2507,7 +2507,7 @@
 		cursor: pointer;
 	}
 	.route-remove:hover {
-		background: var(--color-danger, #ef4444);
+		background: var(--color-danger);
 	}
 
 	.transfer-form {

@@ -160,8 +160,8 @@
 		gap: 0.3rem;
 	}
 	.price-card.us {
-		border-color: #2e7d32;
-		background: color-mix(in srgb, #2e7d32 8%, var(--color-surface));
+		border-color: var(--color-success);
+		background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
 	}
 	.price-label {
 		font-size: 0.8rem;
@@ -211,10 +211,10 @@
 	.feature-note { font-size: 0.82rem; color: var(--color-text-tertiary); margin-top: 0.2rem; }
 	.cell { text-align: center; font-size: 1.2rem; }
 	.cell-mobile-label { display: none; font-size: 0.85rem; font-weight: 500; }
-	.cell-yes { color: #2e7d32; }
-	.cell-partial { color: #f59e0b; }
+	.cell-yes { color: var(--color-success-text); }
+	.cell-partial { color: var(--color-warning-text); }
 	.cell-no { color: var(--color-text-tertiary); }
-	.cell.ours { background: color-mix(in srgb, #2e7d32 5%, transparent); }
+	.cell.ours { background: color-mix(in srgb, var(--color-success) 5%, transparent); }
 	.sr-only {
 		position: absolute;
 		width: 1px;
@@ -301,7 +301,7 @@
 		.cmp-table th { background: #eee !important; color: #000 !important; }
 		.cmp-table tbody td { border-top: 1px solid #ccc; }
 		.cell-yes { color: #1b5e20 !important; }
-		.cell-partial { color: #b26a00 !important; }
+		.cell-partial { color: #9E5C00 !important; }
 		.cell-no { color: #888 !important; }
 		.cmp-footer { display: none; }
 	}

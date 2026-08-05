@@ -83,13 +83,13 @@
 <style>
 	.route-history {
 		padding: 1rem;
-		border: 1px solid var(--color-border, #e5e5e5);
+		border: 1px solid var(--color-border);
 		border-radius: 0.5rem;
-		background: var(--color-surface, #fff);
+		background: var(--color-surface);
 	}
 	.route-history.is-pb {
-		border-color: #eab308;
-		background: rgba(234, 179, 8, 0.05);
+		border-color: var(--color-crown);
+		background: color-mix(in srgb, var(--color-crown) 8%, transparent);
 	}
 	.row {
 		display: flex;
@@ -101,7 +101,7 @@
 		font-size: 1.1rem;
 	}
 	.is-pb .headline {
-		color: #b8860b;
+		color: var(--color-crown);
 	}
 	.meta {
 		margin-top: 0.25rem;

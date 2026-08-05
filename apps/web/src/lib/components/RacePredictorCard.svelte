@@ -113,9 +113,9 @@
 		letter-spacing: 0.03em;
 		cursor: help;
 	}
-	.confidence-chip.conf-high { background: #d1fae5; color: #047857; }
-	.confidence-chip.conf-moderate { background: #fef3c7; color: #b45309; }
-	.confidence-chip.conf-low { background: #fee2e2; color: #b91c1c; }
+	.confidence-chip.conf-high { background: var(--color-success-light); color: var(--color-success-text); }
+	.confidence-chip.conf-moderate { background: var(--color-warning-light); color: var(--color-warning-text); }
+	.confidence-chip.conf-low { background: var(--color-danger-light); color: var(--color-danger-text); }
 	.footnote {
 		margin: var(--space-md) 0 0;
 		font-size: 0.78rem;

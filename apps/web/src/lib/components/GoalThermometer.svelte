@@ -59,7 +59,7 @@
 	}
 	.fill {
 		height: 100%;
-		background: var(--color-primary, #2563eb);
+		background: var(--color-primary);
 		border-radius: 999px;
 		transition: width 0.4s ease;
 	}

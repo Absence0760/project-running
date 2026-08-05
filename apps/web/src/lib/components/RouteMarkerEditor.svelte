@@ -948,7 +948,7 @@
 	}
 	.marker-hint .material-symbols {
 		font-size: 1.1rem;
-		color: var(--color-primary, #4f46e5);
+		color: var(--color-primary);
 	}
 	.snap-row {
 		margin-bottom: var(--space-xs);

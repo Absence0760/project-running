@@ -2796,18 +2796,18 @@
 	}
 
 	.workout-adherence-completed {
-		background: rgba(16, 185, 129, 0.12);
-		color: #10b981;
+		background: var(--color-success-light);
+		color: var(--color-success-text);
 	}
 
 	.workout-adherence-partial {
-		background: rgba(245, 158, 11, 0.12);
-		color: #d97706;
+		background: var(--color-warning-light);
+		color: var(--color-warning-text);
 	}
 
 	.workout-adherence-abandoned {
-		background: rgba(239, 68, 68, 0.12);
-		color: #ef4444;
+		background: var(--color-danger-light);
+		color: var(--color-danger-text);
 	}
 
 	.workout-name {
@@ -2860,9 +2860,9 @@
 		font-weight: 600;
 	}
 
-	.pace-delta-on { color: #10b981; }
-	.pace-delta-amber { color: #d97706; }
-	.pace-delta-off { color: #ef4444; }
+	.pace-delta-on { color: var(--color-success-text); }
+	.pace-delta-amber { color: var(--color-warning-text); }
+	.pace-delta-off { color: var(--color-danger-text); }
 	.pace-delta-neutral { color: var(--color-text-tertiary); }
 
 	.split-elev.negative {

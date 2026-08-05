@@ -412,8 +412,8 @@
 		font-weight: 600;
 		border-radius: 9999px;
 		padding: 1px 10px;
-		background: color-mix(in srgb, var(--color-primary, #4f46e5) 16%, transparent);
-		color: var(--color-primary, #4f46e5);
+		background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+		color: var(--color-primary);
 	}
 	.cannot-assign {
 		margin: var(--space-md) 0 0;
@@ -448,7 +448,7 @@
 	}
 	.compliance-fill {
 		height: 100%;
-		background: var(--color-primary, #4f46e5);
+		background: var(--color-primary);
 		border-radius: 9999px;
 	}
 	.compliance-stats {
@@ -519,11 +519,11 @@
 		padding: 1px 10px;
 	}
 	.status-pill.status-done {
-		background: color-mix(in srgb, var(--color-primary, #4f46e5) 18%, transparent);
-		color: var(--color-primary, #4f46e5);
+		background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+		color: var(--color-primary);
 	}
 	.status-pill.status-missed {
-		background: color-mix(in srgb, var(--color-danger, #dc2626) 16%, transparent);
+		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
 		color: var(--color-danger-text);
 	}
 	.status-pill.status-upcoming {
@@ -557,7 +557,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.error-banner .material-symbols {
-		color: #ef4444;
+		color: var(--color-danger-text);
 		font-size: 1.4rem;
 	}
 </style>

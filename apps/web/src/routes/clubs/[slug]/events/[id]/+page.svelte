@@ -3485,7 +3485,7 @@
 		margin: 0.3rem 0;
 	}
 	.race-state.armed { color: var(--color-primary); }
-	.race-state.running { color: #2e7d32; }
+	.race-state.running { color: var(--color-success-text); }
 	.dot {
 		width: 0.6rem;
 		height: 0.6rem;
@@ -3494,7 +3494,7 @@
 	}
 	.armed-dot { background: var(--color-primary); }
 	.running-dot {
-		background: #2e7d32;
+		background: var(--color-success);
 		animation: pulse 1s infinite;
 	}
 	@keyframes pulse {
@@ -3522,15 +3522,15 @@
 	.result.pending { opacity: 0.7; }
 	.result.pending .rank { color: var(--color-text-tertiary); }
 	.pending-tag {
-		background: #fff3cd;
-		color: #856404;
+		background: var(--color-warning-light);
+		color: var(--color-warning-text);
 		font-size: 0.7rem;
 		font-weight: 700;
 		padding: 0.1rem 0.35rem;
 		border-radius: var(--radius-sm);
 		letter-spacing: 0.04em;
 	}
-	.btn-link.approve { color: #2e7d32; }
+	.btn-link.approve { color: var(--color-success-text); }
 	.btn-link.reject { color: var(--color-danger-text); }
 
 	.photo-add {
