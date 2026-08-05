@@ -964,8 +964,8 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                 const SizedBox(width: 2),
                 Text(
                   '${_pinnedIds.length}',
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: const Color(0xFF8B5CF6)),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
             ],
@@ -1026,7 +1026,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     setSheet(() {});
                   },
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF8B5CF6),
+                    foregroundColor: theme.colorScheme.primary,
                     visualDensity: VisualDensity.compact,
                   ),
                   child: Text(l10n.heatmapClearKept(_pinnedIds.length)),
@@ -1187,7 +1187,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                         ? l10n.heatmapKept
                         : l10n.heatmapKeep),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF8B5CF6),
+                      foregroundColor: theme.colorScheme.primary,
                       side: const BorderSide(color: Color(0xFF8B5CF6)),
                     ),
                   ),
