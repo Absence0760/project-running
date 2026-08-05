@@ -6,6 +6,7 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, IdentityAvatar;
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
+import 'confirm_destructive.dart';
 import 'error_state.dart';
 import 'top_banner.dart';
 
@@ -200,24 +201,14 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
 
   Future<void> _confirmDelete(SegmentRow seg) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.segmentsPanelDeleteTitle),
-        content: Text(l10n.segmentsPanelDeleteBody(seg.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.segmentsPanelCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.segmentsPanelDeleteConfirm),
-          ),
-        ],
-      ),
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.segmentsPanelDeleteTitle,
+      body: l10n.segmentsPanelDeleteBody(seg.name),
+      confirmLabel: l10n.segmentsPanelDeleteConfirm,
+      cancelLabel: l10n.segmentsPanelCancel,
     );
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await widget.api.deleteSegment(seg.id);
       if (!mounted) return;

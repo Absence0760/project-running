@@ -6,6 +6,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../social_service.dart';
+import 'confirm_destructive.dart';
 import 'top_banner.dart';
 
 const List<String> kRouteConditionKinds = [
@@ -164,24 +165,13 @@ class _RouteConditionsState extends State<RouteConditions> {
 
   Future<void> _delete(RouteConditionRow c) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.routeConditionsDeleteTitle),
-            content: Text(l10n.routeConditionsDeleteConfirm),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.routeConditionsCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(l10n.routeConditionsDelete),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.routeConditionsDeleteTitle,
+      body: l10n.routeConditionsDeleteConfirm,
+      confirmLabel: l10n.routeConditionsDelete,
+      cancelLabel: l10n.routeConditionsCancel,
+    );
     if (!ok) return;
     try {
       await widget.api.deleteRouteCondition(c.id);

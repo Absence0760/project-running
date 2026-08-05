@@ -23,6 +23,7 @@ import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
 import '../widgets/club_photos.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
 import '../widgets/event_form_sheet.dart';
 import '../widgets/report_sheet.dart';
@@ -189,24 +190,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   Future<void> _leave() async {
     final c = _club;
     if (c == null || _busy) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-            AppLocalizations.of(context).clubDetailLeaveTitle(c.row.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppLocalizations.of(context).clubDetailCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppLocalizations.of(context).clubDetailLeave),
-          ),
-        ],
-      ),
+    final l10n = AppLocalizations.of(context);
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.clubDetailLeaveTitle(c.row.name),
+      confirmLabel: l10n.clubDetailLeave,
+      cancelLabel: l10n.clubDetailCancel,
     );
-    if (ok != true) return;
+    if (!ok) return;
     await _doLeave();
   }
 

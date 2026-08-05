@@ -11,6 +11,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/top_banner.dart';
 import 'coaching_athlete_screen.dart';
 
@@ -125,7 +126,7 @@ class _CoachingScreenState extends State<CoachingScreen> {
     final l10n = AppLocalizations.of(context);
     final ok = await _confirm(l10n.coachingRevokeTitle, l10n.coachingRevokeBody,
         l10n.coachingRevoke);
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await widget.api.revokeCoachInvite(inv.id);
       if (!mounted) return;
@@ -142,7 +143,7 @@ class _CoachingScreenState extends State<CoachingScreen> {
     final name = link.displayName ?? l10n.coachingThisAthlete;
     final ok = await _confirm(l10n.coachingRemoveAthleteTitle,
         l10n.coachingRemoveAthleteBody(name), l10n.coachingRemove);
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await widget.api.endCoachLink(link.id);
       if (!mounted) return;
@@ -160,7 +161,7 @@ class _CoachingScreenState extends State<CoachingScreen> {
     final name = link.displayName ?? l10n.coachingThisCoach;
     final ok = await _confirm(l10n.coachingLeaveCoachTitle,
         l10n.coachingLeaveCoachBody(name), l10n.coachingLeave);
-    if (ok != true) return;
+    if (!ok) return;
     try {
       await widget.api.endCoachLink(link.id);
       if (!mounted) return;
@@ -172,24 +173,13 @@ class _CoachingScreenState extends State<CoachingScreen> {
     }
   }
 
-  Future<bool?> _confirm(String title, String body, String confirmLabel) {
-    final l10n = AppLocalizations.of(context);
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(l10n.coachingCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
-      ),
+  Future<bool> _confirm(String title, String body, String confirmLabel) {
+    return confirmDestructive(
+      context,
+      title: title,
+      body: body,
+      confirmLabel: confirmLabel,
+      cancelLabel: AppLocalizations.of(context).coachingCancel,
     );
   }
 

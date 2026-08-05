@@ -13,6 +13,7 @@ import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/photo_lightbox.dart';
 import '../widgets/top_banner.dart';
+import 'confirm_destructive.dart';
 
 /// Map a picked filename to the extension we'll store the upload under.
 /// `jpeg` collapses to `jpg` (Storage path stays consistent regardless of
@@ -268,24 +269,13 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
 
   Future<void> _deletePhoto(RunPhotoRow p) async {
     final l10n = AppLocalizations.of(context);
-    final ok = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(l10n.runPhotosDeleteTitle),
-            content: Text(l10n.runPhotosDeleteBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(l10n.runPhotosCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(l10n.runPhotosDeleteConfirm),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.runPhotosDeleteTitle,
+      body: l10n.runPhotosDeleteBody,
+      confirmLabel: l10n.runPhotosDeleteConfirm,
+      cancelLabel: l10n.runPhotosCancel,
+    );
     if (!ok) return;
     try {
       await widget.api.deleteRunPhoto(p);
