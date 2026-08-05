@@ -64,9 +64,20 @@
 	import { supabase } from '$lib/core/supabase';
 	import { TABLES, METADATA_KEYS } from '$lib/core/schema';
 	import { m } from '$lib/i18n/store.svelte';
+	import { buildRunShareCanonical } from '$lib/share/share_meta';
 	import type { Run } from '$lib/types';
 
 	let { data: pageData } = $props();
+
+	// This in-app surface and the public /share/run/[id] page render the same
+	// run — and since §508 this one renders public runs for signed-in
+	// non-owners too, so its URL now circulates the way a share URL does.
+	// Point the canonical at the public page, the anon-readable, sitemap-listed
+	// copy, exactly as /routes/[id], /u/[id], and /clubs/* already do. Derived
+	// from the param so it is present before any client fetch resolves.
+	let canonicalUrl = $derived(
+		buildRunShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', pageData.id)
+	);
 
 	/// The OWNER's run row, with its unclipped track. Every owner-only
 	/// affordance on this page (edit, delete, visibility, gear, rematch,
@@ -1121,6 +1132,10 @@
 		);
 	});
 </script>
+
+<svelte:head>
+	<link rel="canonical" href={canonicalUrl} />
+</svelte:head>
 
 {#if loading}
 	<div class="run-detail">

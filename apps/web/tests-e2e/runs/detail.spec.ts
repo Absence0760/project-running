@@ -39,6 +39,19 @@ test.describe('/runs/[id]', () => {
 		).toBeVisible();
 	});
 
+	test('canonical link points at the public /share/run surface', async ({ page }) => {
+		// This page and /share/run/[id] render the same run, so it canonicals
+		// there — the anon-readable, sitemap-listed copy. Derived from the URL
+		// param, so it must be present without waiting on the run fetch, but
+		// it is rendered client-side in <svelte:head>, so wait for hydration.
+		await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			new RegExp(`/share/run/${RUNNER_PUBLIC_RUN_ID}$`)
+		);
+	});
+
 	test('inline edit title — save persists across reload, restore', async ({
 		page
 	}) => {
