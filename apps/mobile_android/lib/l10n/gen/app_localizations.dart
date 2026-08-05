@@ -6604,6 +6604,54 @@ abstract class AppLocalizations {
   /// **'{name} completed a run'**
   String profileNotifRunCompleted(String name);
 
+  /// Notification text for a coach assigning the athlete a training plan
+  ///
+  /// In en, this message translates to:
+  /// **'{name} assigned you a training plan'**
+  String profileNotifPlanAssigned(String name);
+
+  /// Notification text for a cancelled event occurrence, when the event title is known
+  ///
+  /// In en, this message translates to:
+  /// **'An occurrence of \"{title}\" was cancelled'**
+  String profileNotifEventCancelTitled(String title);
+
+  /// Notification text for a cancelled event occurrence, when the title is unavailable
+  ///
+  /// In en, this message translates to:
+  /// **'An event occurrence you RSVP\'d to was cancelled'**
+  String get profileNotifEventCancel;
+
+  /// Notification text for an upcoming event reminder, when the event title is known
+  ///
+  /// In en, this message translates to:
+  /// **'\"{title}\" is coming up'**
+  String profileNotifEventReminderTitled(String title);
+
+  /// Notification text for an upcoming event reminder, when the title is unavailable
+  ///
+  /// In en, this message translates to:
+  /// **'An event you\'re going to is coming up'**
+  String get profileNotifEventReminder;
+
+  /// Notification text for earning a new achievement
+  ///
+  /// In en, this message translates to:
+  /// **'You earned a new achievement'**
+  String get profileNotifAchievement;
+
+  /// Notification text for completing a challenge
+  ///
+  /// In en, this message translates to:
+  /// **'You completed a challenge'**
+  String get profileNotifChallengeComplete;
+
+  /// Notification text for one of the user's own posts being hidden after reports
+  ///
+  /// In en, this message translates to:
+  /// **'One of your posts was hidden after being reported'**
+  String get profileNotifContentHidden;
+
   /// Fallback notification text for unknown kinds
   ///
   /// In en, this message translates to:

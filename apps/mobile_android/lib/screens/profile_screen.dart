@@ -1183,8 +1183,24 @@ class _ProfileScreenState extends State<ProfileScreen>
         return item.eventTitle != null
             ? l10n.profileNotifEventRsvpTitled(name, item.eventTitle!)
             : l10n.profileNotifEventRsvp(name);
+      case 'event_cancel':
+        return item.eventTitle != null
+            ? l10n.profileNotifEventCancelTitled(item.eventTitle!)
+            : l10n.profileNotifEventCancel;
+      case 'event_reminder':
+        return item.eventTitle != null
+            ? l10n.profileNotifEventReminderTitled(item.eventTitle!)
+            : l10n.profileNotifEventReminder;
       case 'plan_update':
         return l10n.profileNotifPlanUpdate(name);
+      case 'plan_assigned':
+        return l10n.profileNotifPlanAssigned(name);
+      case 'achievement':
+        return l10n.profileNotifAchievement;
+      case 'challenge_complete':
+        return l10n.profileNotifChallengeComplete;
+      case 'content_hidden':
+        return l10n.profileNotifContentHidden;
       case 'message':
         return l10n.profileNotifMessage(name);
       case 'club_post':

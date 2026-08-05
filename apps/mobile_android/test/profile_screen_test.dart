@@ -246,6 +246,46 @@ void main() {
     });
   });
 
+  group('_verbFor — every NotificationKind is rendered explicitly', () {
+    // The inbox switch fell through to profileNotifGeneric ("{name} interacted
+    // with your activity") for event_cancel, event_reminder, plan_assigned,
+    // achievement, challenge_complete and content_hidden — a line that is not
+    // merely vague but wrong: nobody interacted with anything when a plan is
+    // assigned or a moderation system hides a post.
+    //
+    // The two groups above pin one kind each by name, which is what let the
+    // next six arrive unrendered. This reads the NotificationKind union from
+    // apps/web/src/lib/types.ts — the same source the worker's Go copy guard
+    // and web's notification_kind_coverage guard read — so a kind added to the
+    // union without an arm here fails, rather than degrading in production.
+    final source =
+        File('lib/screens/profile_screen.dart').readAsStringSync();
+    final decl = File('../web/src/lib/types.ts')
+        .readAsStringSync()
+        .split('export type NotificationKind')[1]
+        .split(';')[0];
+    final kinds = RegExp("'([a-z_]+)'")
+        .allMatches(decl)
+        .map((m) => m.group(1)!)
+        .toList();
+
+    test('the union parsed', () {
+      expect(kinds.length, greaterThanOrEqualTo(15),
+          reason: 'expected the full NotificationKind union, got $kinds');
+    });
+
+    for (final kind in kinds) {
+      test('$kind has an explicit case in the inbox verb switch', () {
+        expect(source.contains("case '$kind':"), isTrue,
+            reason:
+                "'$kind' falls through to profileNotifGeneric, which reads "
+                '"{name} interacted with your activity" — wrong for every '
+                'kind that is not a social interaction. Add an arm and a '
+                'localized string in all seven ARBs.');
+      });
+    }
+  });
+
   group('notification grouping wiring', () {
     // The inbox collapses same-kind + same-target notifications through
     // the notification_groups.dart parity helper. Pin the wiring so the
