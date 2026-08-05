@@ -692,6 +692,11 @@ for (const { label, marker } of THEMES) {
 			assert.ok(
 				step >= 1.18,
 				`--kind-${i + 1} -> --kind-${i + 2} steps only ${step.toFixed(3)} in ${label}; the ladder is what carries the marks in greyscale.`,
+			);
+		}
+	});
+}
+
 // --color-border is the one LINE token, and its entire guarantee is WCAG
 // 1.4.11's 3:1 floor against every surface a boundary is drawn on. It shipped
 // at 1.458:1 on the light card and 1.328:1 on the dark one, so web had no token
