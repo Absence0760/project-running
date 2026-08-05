@@ -130,10 +130,10 @@
 		background: var(--color-border);
 	}
 	.week-cell.active {
-		background: var(--color-primary, #2563eb);
+		background: var(--color-primary);
 	}
 	.week-cell.current {
-		outline: 2px solid var(--color-primary, #2563eb);
+		outline: 2px solid var(--color-primary);
 		outline-offset: 1px;
 	}
 	.consistency-stats {

@@ -83,9 +83,9 @@
 <style>
 	.route-history {
 		padding: 1rem;
-		border: 1px solid var(--color-border, #e5e5e5);
+		border: 1px solid var(--color-border);
 		border-radius: 0.5rem;
-		background: var(--color-surface, #fff);
+		background: var(--color-surface);
 	}
 	.route-history.is-pb {
 		border-color: var(--color-crown);

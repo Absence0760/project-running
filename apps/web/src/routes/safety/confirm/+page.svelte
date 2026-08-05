@@ -84,7 +84,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 1.5rem;
-		background: var(--color-bg, #f4f5f7);
+		background: var(--color-bg);
 	}
 	.card {
 		max-width: 440px;
@@ -102,17 +102,17 @@
 	p {
 		margin: 0 0 1.5rem;
 		line-height: 1.5;
-		color: var(--color-text, #374151);
+		color: var(--color-text);
 	}
 	p.ok {
-		color: var(--color-primary, #2c5f6e);
+		color: var(--color-primary);
 	}
 	p.bad {
 		color: var(--color-danger-text);
 	}
 	.btn-primary {
 		display: inline-block;
-		background: var(--color-primary, #2c5f6e);
+		background: var(--color-primary);
 		color: #fff;
 		text-decoration: none;
 		border: none;
@@ -129,7 +129,7 @@
 		justify-content: center;
 		margin: 0 0 1.25rem;
 		font-size: 0.92rem;
-		color: var(--color-text, #374151);
+		color: var(--color-text);
 		cursor: pointer;
 	}
 </style>

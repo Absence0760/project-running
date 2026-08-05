@@ -35,9 +35,12 @@
 // Only a genuine new data palette or fixed canvas earns one.
 //
 // Scope declared, so a future reader does not mistake silence for coverage:
-// this bans the 39 named six-digit status hues below (with an optional 8-digit
-// alpha suffix). It does not police 3-digit shorthands, rgb()/hsl() spellings,
-// or hues outside the list — the same bounded shape as the mobile twin.
+// the literal ban covers the 39 named six-digit status hues below (with an
+// optional 8-digit alpha suffix), the same bounded shape as the mobile twin —
+// it does not police 3-digit shorthands, rgb()/hsl() spellings, or hues
+// outside the list. The separate dead-fallback rule at the foot of this file
+// is NOT hue-scoped: it bans a hex fallback of any length on any global
+// app.css token, because there the defect is the frozen value, not the hue.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -332,6 +335,85 @@ test('no status-role hex literal outside the allowlists', () => {
 			`--color-crown / --color-on-crown). A literal opts out of the per-theme AA ` +
 			`guarantee contrast_guard.test.ts holds those tokens to. Violations:\n` +
 			violations.join('\n'),
+	);
+});
+
+// § 506 kept `var(--declared-token, #hex)` legal, and for the case it named
+// that is right: a fallback is the documented default for a component custom
+// property a parent sets per instance (`style:--x={...}`). That rationale does
+// not survive the token being GLOBAL. Nothing sets --color-primary per
+// instance, so the fallback can never apply, and 20 such fallbacks were each
+// frozen at a value the token had long since moved off — `#4f46e5` / `#3b82f6`
+// / `#2563eb` for a primary that is now teal, `#e5e7eb` for a cream border,
+// `#374151` for near-black text. Dead code that reads as the colour at the
+// call site is worse than no comment: the next editor believes the blue.
+//
+// The line, then, is WHERE the token is declared: a fallback on a token the
+// same file declares is a per-instance default and stays legal; a fallback on
+// an app.css theme token is dead and is deleted. Scoped to a HEX fallback of
+// any digit length, because a frozen COLOUR is what this item is about — the
+// remaining non-colour fallbacks on global tokens (spacing, radii, shadows,
+// z-index) and the nested `var(--a, var(--b))` chains are a separate class
+// this rule does not claim to cover.
+const GLOBAL_COLOUR_FALLBACK = /var\(\s*--([a-zA-Z0-9-]+)\s*,\s*#[0-9a-fA-F]{3,8}\s*\)/g;
+
+test('no hardcoded-colour var() fallback on a global app.css theme token', () => {
+	const appCss = readFileSync(join(SRC_ROOT, 'app.css'), 'utf-8');
+	const globalTokens = new Set(
+		[...appCss.matchAll(/^\s*--([a-zA-Z0-9-]+)\s*:/gm)].map((m) => m[1]),
+	);
+	const offenders: string[] = [];
+	for (const path of walkFiles(SRC_ROOT).sort()) {
+		const rel = relative(SRC_ROOT, path).split(sep).join('/');
+		if (rel === 'app.css') continue;
+		const source = readFileSync(path, 'utf-8');
+		const localTokens = new Set([
+			...[...source.matchAll(/--([a-zA-Z0-9-]+)\s*[:=]/g)].map((m) => m[1]),
+			...[...source.matchAll(/style:--([a-zA-Z0-9-]+)/g)].map((m) => m[1]),
+		]);
+		maskComments(source)
+			.split('\n')
+			.forEach((line, i) => {
+				for (const m of line.matchAll(GLOBAL_COLOUR_FALLBACK)) {
+					const name = m[1];
+					if (globalTokens.has(name) && !localTokens.has(name)) {
+						offenders.push(`${rel}:${i + 1}  ${m[0]}`);
+					}
+				}
+			});
+	}
+	assert.equal(
+		offenders.length,
+		0,
+		`A hardcoded-colour var() fallback on a token app.css declares globally is ` +
+			`dead code — the ` +
+			`token always resolves, so the fallback never paints, and it drifts from ` +
+			`the token silently. Drop the fallback. (A fallback on a token the SAME ` +
+			`file declares is a per-instance default and stays legal.)\n` +
+			offenders.join('\n'),
+	);
+});
+
+// Both directions for that rule, since it turns entirely on which set the
+// token name lands in.
+test('the global-colour-fallback scan spares a per-instance default', () => {
+	const globals = new Set(['color-primary', 'space-md']);
+	const check = (line: string, locals: Set<string> = new Set()): string[] =>
+		[...line.matchAll(GLOBAL_COLOUR_FALLBACK)]
+			.filter((m) => globals.has(m[1]) && !locals.has(m[1]))
+			.map((m) => m[1]);
+	assert.deepEqual(check('color: var(--color-primary, #4f46e5);'), ['color-primary'], 'a 6-digit hex fallback');
+	assert.deepEqual(check('fill: var(--color-primary, #999);'), ['color-primary'], 'a 3-digit hex fallback');
+	assert.deepEqual(check('color: var(--color-primary, #4f46e580);'), ['color-primary'], 'an 8-digit hex fallback');
+	assert.deepEqual(check('background: color-mix(in srgb, var(--color-primary, #d33) 22%, transparent);'), ['color-primary'], 'nested in a CSS function');
+	assert.deepEqual(check('padding: var(--space-md, 1rem);'), [], 'a non-colour fallback is a separate class');
+	assert.deepEqual(check('color: var(--color-primary, blue);'), [], 'a keyword fallback is not a hex literal');
+	assert.deepEqual(check('width: var(--bar-w, #fff);'), [], 'a token app.css does not declare');
+	assert.deepEqual(check('color: var(--color-primary);'), [], 'no fallback at all');
+	assert.deepEqual(
+		check('color: var(--color-primary, #4f46e5);', new Set(['color-primary'])),
+		[],
+		'the same file declares it, so the fallback is a per-instance default',
 	);
 });
 
