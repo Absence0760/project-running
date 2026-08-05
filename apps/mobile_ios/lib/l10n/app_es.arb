@@ -2054,6 +2054,7 @@
   "dashboardStreakAllTimeBest": "mejor de siempre",
   "dashboardStreakRestart": "corre hoy para reiniciarla",
   "dashboardStreakStart": "corre hoy para empezar una",
+  "dashboardHeatmapTitle": "ACTIVIDAD",
   "dashboardHeatmapLess": "Menos",
   "dashboardHeatmapMore": "Más",
   "dashboardHeatmapTapHint": "Toca una semana para ver su resumen",

@@ -12260,6 +12260,12 @@ abstract class AppLocalizations {
   /// **'run today to start one'**
   String get dashboardStreakStart;
 
+  /// Card header over the calendar activity heatmap on the dashboard
+  ///
+  /// In en, this message translates to:
+  /// **'ACTIVITY'**
+  String get dashboardHeatmapTitle;
+
   /// Low-intensity end label of the activity-heatmap legend
   ///
   /// In en, this message translates to:

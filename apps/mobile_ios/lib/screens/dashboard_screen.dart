@@ -2,7 +2,8 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart'
+    show AppSemanticColors, ChartCardHeader, ChartPalette;
 
 import '../adaptive_width.dart';
 import '../age_grade.dart';
@@ -933,16 +934,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           gapAfter: true,
         );
         addBlock(mileageCard, gapAfter: true);
-        addBlock(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _SectionHeader(l10n.dashboardSectionLast20Weeks),
-              heatmapCard,
-            ],
-          ),
-          gapAfter: true,
-        );
+        addBlock(heatmapCard, gapAfter: true);
         if (pbCard != null) {
           addBlock(
             Column(
@@ -1046,7 +1038,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             _kSectionGap,
             mileageCard,
             _kSectionGap,
-            _SectionHeader(l10n.dashboardSectionLast20Weeks),
             heatmapCard,
             _kSectionGap,
             if (pbCard != null) ...[
@@ -2039,17 +2030,17 @@ class _RunHeatmap extends StatelessWidget {
 
     final counts = heatmapDayCounts(runs, gridStart);
 
-    final emptyColour = theme.colorScheme.surfaceContainerHighest;
-    final l1Colour = theme.colorScheme.primary.withValues(alpha: 0.35);
-    final l2Colour = theme.colorScheme.primary.withValues(alpha: 0.65);
-    final l3Colour = theme.colorScheme.primary;
-
-    Color legendColour(int c) {
-      if (c <= 0) return emptyColour;
-      if (c == 1) return l1Colour;
-      if (c == 2) return l2Colour;
-      return l3Colour;
-    }
+    final ramp = ChartPalette.of(context).ramp;
+    // The zero tile is a track, not a level: it carries "no run", and what a
+    // reader needs from it is the calendar position that gives every filled
+    // tile its meaning. A tonal fill cannot do that — surfaceContainerHighest
+    // is 1.164:1 on the light card and 1.316:1 on the dark one, so the grid
+    // frame was invisible and the ramp's own first two steps (1.952 / 2.102:1
+    // as primary at 35 %) were under 1.4.11's floor. The frame is a hairline
+    // in the line token §487 already holds at 3:1, and the levels are the
+    // palette's ramp.
+    final emptyFill = theme.colorScheme.surfaceContainerHighest;
+    final emptyStroke = theme.dividerColor;
 
     return LayoutBuilder(builder: (context, constraints) {
       const gap = 2.0;
@@ -2061,6 +2052,11 @@ class _RunHeatmap extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ChartCardHeader(
+            title: l10n.dashboardHeatmapTitle,
+            note: l10n.dashboardSectionLast20Weeks,
+          ),
+          const SizedBox(height: 10),
           // Single CustomPaint replaces the previous 7×20=140 Container +
           // Builder + EdgeInsets allocations per dashboard rebuild.
           GestureDetector(
@@ -2078,6 +2074,7 @@ class _RunHeatmap extends StatelessWidget {
               width: gridWidth,
               height: gridHeight,
               child: CustomPaint(
+                key: const Key('dashboardHeatmapPainter'),
                 painter: _HeatmapPainter(
                   counts: counts,
                   gridStart: gridStart,
@@ -2085,10 +2082,9 @@ class _RunHeatmap extends StatelessWidget {
                   weeks: weeks,
                   cellSize: cellSize,
                   gap: gap,
-                  emptyColour: emptyColour,
-                  l1: l1Colour,
-                  l2: l2Colour,
-                  l3: l3Colour,
+                  emptyFill: emptyFill,
+                  emptyStroke: emptyStroke,
+                  ramp: ramp,
                 ),
               ),
             ),
@@ -2101,15 +2097,18 @@ class _RunHeatmap extends StatelessWidget {
                 child: Text(l10n.dashboardHeatmapLess,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline)),
+                        color: theme.colorScheme.onSurfaceVariant)),
               ),
               const SizedBox(width: 6),
-              for (final c in [0, 1, 2, 3]) ...[
+              for (final level in [-1, 0, 1, 2]) ...[
                 Container(
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: legendColour(c),
+                    color: level < 0 ? emptyFill : ramp[level],
+                    border: level < 0
+                        ? Border.all(color: emptyStroke)
+                        : null,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -2120,7 +2119,7 @@ class _RunHeatmap extends StatelessWidget {
                 child: Text(l10n.dashboardHeatmapMore,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline)),
+                        color: theme.colorScheme.onSurfaceVariant)),
               ),
             ],
           ),
@@ -2128,7 +2127,7 @@ class _RunHeatmap extends StatelessWidget {
             const SizedBox(height: 6),
             Text(l10n.dashboardHeatmapTapHint,
                 style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline)),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           ],
         ],
       );
@@ -2166,10 +2165,9 @@ class _HeatmapPainter extends CustomPainter {
   final int weeks;
   final double cellSize;
   final double gap;
-  final Color emptyColour;
-  final Color l1;
-  final Color l2;
-  final Color l3;
+  final Color emptyFill;
+  final Color emptyStroke;
+  final List<Color> ramp;
 
   _HeatmapPainter({
     required this.counts,
@@ -2178,19 +2176,20 @@ class _HeatmapPainter extends CustomPainter {
     required this.weeks,
     required this.cellSize,
     required this.gap,
-    required this.emptyColour,
-    required this.l1,
-    required this.l2,
-    required this.l3,
+    required this.emptyFill,
+    required this.emptyStroke,
+    required this.ramp,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final radius = const Radius.circular(2);
-    final emptyP = Paint()..color = emptyColour;
-    final l1P = Paint()..color = l1;
-    final l2P = Paint()..color = l2;
-    final l3P = Paint()..color = l3;
+    final emptyP = Paint()..color = emptyFill;
+    final framePaint = Paint()
+      ..color = emptyStroke
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final levelPaints = [for (final c in ramp) Paint()..color = c];
 
     for (var w = 0; w < weeks; w++) {
       for (var d = 0; d < 7; d++) {
@@ -2199,22 +2198,21 @@ class _HeatmapPainter extends CustomPainter {
         // weird with an "empty" tile shown.
         if (day.isAfter(today)) continue;
         final count = counts[_epochDay(day)] ?? 0;
-        final paint = count <= 0
-            ? emptyP
-            : count == 1
-                ? l1P
-                : count == 2
-                    ? l2P
-                    : l3P;
         final x = w * (cellSize + gap);
         final y = d * (cellSize + gap);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromLTWH(x, y, cellSize, cellSize),
-            radius,
-          ),
-          paint,
+        final rect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, y, cellSize, cellSize),
+          radius,
         );
+        if (count <= 0) {
+          canvas.drawRRect(rect, emptyP);
+          canvas.drawRRect(rect.deflate(0.5), framePaint);
+        } else {
+          canvas.drawRRect(
+            rect,
+            levelPaints[count > levelPaints.length ? levelPaints.length - 1 : count - 1],
+          );
+        }
       }
     }
   }
@@ -2226,8 +2224,7 @@ class _HeatmapPainter extends CustomPainter {
       old.today != today ||
       old.weeks != weeks ||
       old.cellSize != cellSize ||
-      old.emptyColour != emptyColour ||
-      old.l1 != l1 ||
-      old.l2 != l2 ||
-      old.l3 != l3;
+      old.emptyFill != emptyFill ||
+      old.emptyStroke != emptyStroke ||
+      old.ramp.last != ramp.last;
 }

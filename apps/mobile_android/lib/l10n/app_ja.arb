@@ -2054,6 +2054,7 @@
   "dashboardStreakAllTimeBest": "歴代最高",
   "dashboardStreakRestart": "今日走って再開しよう",
   "dashboardStreakStart": "今日走って始めよう",
+  "dashboardHeatmapTitle": "アクティビティ",
   "dashboardHeatmapLess": "少ない",
   "dashboardHeatmapMore": "多い",
   "dashboardHeatmapTapHint": "週をタップするとサマリーを表示",

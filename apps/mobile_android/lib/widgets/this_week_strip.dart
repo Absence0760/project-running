@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../current_week.dart';
 import '../l10n/date_format.dart';
@@ -35,7 +36,6 @@ class ThisWeekStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final tag = activeLocaleTag;
 
     final ws = weekStartDay == 'sunday' ? WeekStart.sunday : WeekStart.monday;
@@ -67,31 +67,9 @@ class ThisWeekStrip extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            // Wrap, not Row: at 2x OS text scale the title and the
-            // "10.00 km · 2 activities" summary together need more than a
-            // phone's width, and truncating either loses real information.
-            // Reflowing onto a second line keeps both whole.
-            child: SizedBox(
-              width: double.infinity,
-              child: Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 2,
-                children: [
-                  Text(
-                    l10n.dashboardWeekStripTitle,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    '$totalLabel · $countLabel',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+            child: ChartCardHeader(
+              title: l10n.dashboardWeekStripTitle,
+              note: '$totalLabel · $countLabel',
             ),
           ),
           // IntrinsicHeight, not a fixed cell height: the cells must stay
@@ -164,11 +142,14 @@ class _DayCell extends StatelessWidget {
     final distLabel =
         logged ? UnitFormat.distance(day.distanceM, unit) : null;
 
+    final palette = ChartPalette.of(context);
+    // "Today" is a state marker, not data, so it keeps the interaction accent —
+    // and staying off the chart palette is what keeps it from reading as a bar.
     final border = day.isToday
         ? Border.all(color: theme.colorScheme.primary, width: 1.5)
         : Border.all(color: theme.dividerColor);
     final bg = logged
-        ? theme.colorScheme.primary.withValues(alpha: 0.10)
+        ? palette.ramp.first.withValues(alpha: 0.18)
         : theme.colorScheme.surface;
 
     return Semantics(
@@ -209,7 +190,7 @@ class _DayCell extends StatelessWidget {
                     widthFactor: 0.5,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary,
+                        color: palette.bar,
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),

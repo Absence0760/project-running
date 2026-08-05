@@ -7064,6 +7064,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dashboardStreakStart => '今日走って始めよう';
 
   @override
+  String get dashboardHeatmapTitle => 'アクティビティ';
+
+  @override
   String get dashboardHeatmapLess => '少ない';
 
   @override

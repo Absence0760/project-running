@@ -7465,6 +7465,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get dashboardStreakStart => 'corra hoje para começar uma';
 
   @override
+  String get dashboardHeatmapTitle => 'ATIVIDADE';
+
+  @override
   String get dashboardHeatmapLess => 'Menos';
 
   @override
@@ -20007,6 +20010,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get dashboardStreakStart => 'corra hoje para começar uma';
+
+  @override
+  String get dashboardHeatmapTitle => 'ATIVIDADE';
 
   @override
   String get dashboardHeatmapLess => 'Menos';
