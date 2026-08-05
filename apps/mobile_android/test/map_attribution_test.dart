@@ -167,6 +167,28 @@ void main() {
       expect(find.text('© MapTiler'), findsOneWidget);
     });
 
+    testWidgets('anchors to the bottom start, clear of the locate FAB',
+        (tester) async {
+      // Every map's locate / re-centre control is a FAB, which Material
+      // anchors to the end. A credit a floating button covers is not a
+      // credit, so the strip takes the opposite corner — directionally, so
+      // the two stay opposite if an RTL locale is ever added.
+      await _pump(
+        tester,
+        MapAttribution(
+          darkBasemap: true,
+          creditsOverride: basemapCreditsFor(const {'MAPTILER_KEY': 'abc'}),
+        ),
+      );
+      final align = tester.widget<Align>(
+        find.descendant(
+          of: find.byType(MapAttribution),
+          matching: find.byType(Align),
+        ),
+      );
+      expect(align.alignment, AlignmentDirectional.bottomStart);
+    });
+
     testWidgets('each credit is an activatable link with an a11y label',
         (tester) async {
       await _pump(

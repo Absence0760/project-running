@@ -24,6 +24,12 @@ import 'top_banner.dart';
 /// layers. Ink and scrim key off the resolved basemap for the same reason
 /// the track casing does — the OSM fallback is light whatever the app
 /// theme is.
+///
+/// Anchored to the bottom START, not the bottom-right MapLibre defaults to
+/// on web: every locate / re-centre control in the app is a `FloatingAction
+/// Button`, which Material also anchors to the end, and a credit a floating
+/// button sits on top of is not a credit. Directional so the two stay on
+/// opposite corners if an RTL locale is ever added.
 class MapAttribution extends StatelessWidget {
   /// Whether the basemap underneath is dark, from `currentBasemapIsDark`.
   final bool darkBasemap;
@@ -77,9 +83,9 @@ class MapAttribution extends StatelessWidget {
     final scrim = attributionScrim(darkBasemap: darkBasemap);
 
     return Align(
-      alignment: Alignment.bottomRight,
+      alignment: AlignmentDirectional.bottomStart,
       child: Padding(
-        padding: EdgeInsets.only(right: 4, bottom: 4 + bottomInset),
+        padding: EdgeInsetsDirectional.only(start: 4, bottom: 4 + bottomInset),
         child: Semantics(
           container: true,
           label: l10n.mapAttributionSemantics,
