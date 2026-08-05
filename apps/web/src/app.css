@@ -60,6 +60,18 @@
 	--color-crown: #7A5C10;
 	--color-on-crown: #F7F3EC;
 
+	/* Fitness / Fatigue / Form series hues, in lockstep with mobile's
+	   TrainingLoadPalette. One fixed trio could not clear WCAG 1.4.11's 3:1
+	   non-text floor in both themes (the old indigo was 2.57:1 on the dark
+	   surface, the old amber 2.15:1 on the light one), so each theme carries
+	   its own triple, separated by LUMINANCE rather than hue so the plot
+	   survives greyscale and red-green colour-vision deficiency — the §489
+	   reasoning. Pairwise 3:1 across three series is unreachable once each
+	   also owes 3:1 to its own surface. */
+	--chart-fitness: #1F1A6B;
+	--chart-fatigue: #B4801F;
+	--chart-form: #A62020;
+
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
@@ -177,6 +189,10 @@
 		--color-crown: #E0BE4E;
 		--color-on-crown: #120D22;
 
+		--chart-fitness: #E8E5FF;
+		--chart-fatigue: #E59105;
+		--chart-form: #DE1F17;
+
 		--color-bg: #120D22;
 		--color-bg-secondary: #0C0818;
 		--color-bg-tertiary: #241B3D;
@@ -233,6 +249,10 @@
 
 	--color-crown: #E0BE4E;
 	--color-on-crown: #120D22;
+
+	--chart-fitness: #E8E5FF;
+	--chart-fatigue: #E59105;
+	--chart-form: #DE1F17;
 
 	--color-bg: #120D22;
 	--color-bg-secondary: #0C0818;

@@ -343,3 +343,67 @@ test('fixed medal rank pills meet WCAG AA', () => {
 		);
 	}
 });
+
+// Fitness / Fatigue / Form chart series. Each stroke is a graphical object
+// carrying meaning alone, so each owes WCAG 1.4.11's 3:1 to the surface it is
+// drawn on, in every theme. The single fixed trio this replaced was 2.57:1
+// (indigo on the dark surface) and 2.15:1 (amber on white). Pairwise 3:1 across
+// three series is unreachable once each also owes 3:1 to its surface, so what
+// is pinned between them is a strictly monotone LUMINANCE ladder — that, not
+// hue, is what survives greyscale and red-green colour-vision deficiency.
+const CHART_SERIES = ['chart-fitness', 'chart-fatigue', 'chart-form'];
+for (const { label, marker } of THEMES) {
+	test(`training-load series clear 3:1 and separate by luminance — ${label}`, () => {
+		const hexes = CHART_SERIES.map((n) => ({ name: n, hex: resolveToken(marker, n) }));
+		for (const surfaceName of ['color-surface', 'color-bg']) {
+			const surface = resolveToken(marker, surfaceName);
+			for (const { name, hex } of hexes) {
+				const ratio = contrastRatio(hex, surface);
+				assert.ok(
+					ratio >= AA_NON_TEXT,
+					`--${name} (${hex}) on --${surfaceName} (${surface}) is ${ratio.toFixed(2)}:1 in ${label}; a plotted series needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+				);
+			}
+		}
+		assert.equal(new Set(hexes.map((h) => h.hex)).size, 3, `series hues collide in ${label}`);
+		const ladder = hexes.map((h) => relativeLuminance(h.hex)).sort((a, b) => a - b);
+		for (let i = 0; i + 1 < ladder.length; i++) {
+			const ratio = (ladder[i + 1] + 0.05) / (ladder[i] + 0.05);
+			assert.ok(
+				ratio >= 1.7,
+				`adjacent series separate by only ${ratio.toFixed(2)}:1 in ${label}; the luminance ladder is what carries the plot in greyscale.`,
+			);
+		}
+	});
+}
+
+// The mobile TrainingLoadPalette is the same palette by value — a Dart file
+// cannot import a CSS custom property, so the lockstep is checked here.
+test('training-load series match mobile TrainingLoadPalette', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../mobile_android/lib/widgets/training_load_chart.dart'),
+		'utf-8',
+	);
+	const expected: Array<[string, string, string]> = [
+		[':root {', 'light', 'chart-fitness'],
+		[':root {', 'light', 'chart-fatigue'],
+		[':root {', 'light', 'chart-form'],
+		[':root[data-theme="dark"]', 'dark', 'chart-fitness'],
+		[':root[data-theme="dark"]', 'dark', 'chart-fatigue'],
+		[':root[data-theme="dark"]', 'dark', 'chart-form'],
+	];
+	for (const [marker, brightness, token] of expected) {
+		const series = token.replace('chart-', '');
+		const body = dart.match(
+			new RegExp(`static const ${brightness} = TrainingLoadPalette\\(([\\s\\S]*?)\\n  \\);`),
+		);
+		assert.ok(body, `training_load_chart.dart has no ${brightness} palette`);
+		const hex = body![1].match(new RegExp(`${series}: Color\\(0xFF([0-9A-Fa-f]{6})\\)`))?.[1];
+		assert.ok(hex, `${brightness} palette has no ${series} colour`);
+		assert.equal(
+			resolveToken(marker, token).toUpperCase(),
+			`#${hex!.toUpperCase()}`,
+			`--${token} in ${marker} has drifted from TrainingLoadPalette.${brightness}.${series}.`,
+		);
+	}
+});

@@ -78,9 +78,6 @@ const _dataPalettes = <String, Map<String, int>>{
   },
   // Intensity-zone band palette (z3).
   'lib/widgets/intensity_card.dart': {'F59E0B': 1},
-  // CTL/ATL/TSB chart series hues — one constant each, read by both the
-  // legend swatch and the painter.
-  'lib/widgets/training_load_chart.dart': {'F59E0B': 1, 'EF4444': 1},
 };
 
 final _hexPattern = RegExp(
