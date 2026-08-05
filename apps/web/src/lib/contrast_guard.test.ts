@@ -166,6 +166,7 @@ const ACCENT_TEXT: Array<{ text: string; base: string; chipPct: number }> = [
 	{ text: 'color-warning-text', base: 'color-warning', chipPct: 22 },
 	{ text: 'color-secondary-text', base: 'color-secondary', chipPct: 16 },
 	{ text: 'color-accent-cyan-text', base: 'color-accent-cyan', chipPct: 16 },
+	{ text: 'color-accent-orange-text', base: 'color-accent-orange', chipPct: 14 },
 ];
 for (const { label, marker } of THEMES) {
 	test(`accent/status -text tokens meet WCAG AA as text — ${label}`, () => {
@@ -191,31 +192,76 @@ for (const { label, marker } of THEMES) {
 // Every base accent / status token is tuned for tints, borders and dark-mode
 // use; as a bare `color:` (text/icon) on a LIGHT surface each fails WCAG 1.4.3.
 // Computed against the real tokens, worst light surface first:
+//   accent-pink   1.42-1.79:1    accent-orange 1.66-2.08:1
 //   warning       1.63-2.05:1    secondary     3.06:1
 //   accent-cyan   2.30:1         success       2.62-3.28:1
 //   danger        3.65-4.58:1
 // success and danger were the last two still spread across the tree (96 sites
 // on 46 files) — success sat below even the 3:1 non-text floor on the page
 // background. The theme-aware -text variants exist for foreground use; this
-// scan stops any base token creeping back as text. --color-primary is
-// deliberately absent: it computes to 6.40-7.07:1 in light and 7.77:1 in dark,
-// so it is a legitimate foreground and 236 sites use it as one. Quoted JS props
-// (`color: 'var(--color-accent-cyan)'`, the macro-ring stroke colours) are not
-// text and don't match (the `'` breaks `color:\s*var`).
-test('no source file uses a bare accent/status token as a text colour', () => {
-	// `color:` (rejecting `background-color:`/`border-color:` via the leading
-	// boundary) set to a base accent token, NOT its -text / -strong / -hover
-	// variant (the trailing `(?!-)` guards those).
-	const offender =
-		/(?<![a-z-])color:\s*var\(\s*--color-(?:warning|secondary|accent-cyan|success|danger)\)(?!-)/;
-	const hits = scanSource((line) => offender.test(line));
+// scan stops any base token creeping back as one.
+//
+// The list is every base accent/status token EXCEPT --color-primary, which
+// computes to 6.40-7.07:1 in light and 7.77:1 in dark and is a legitimate
+// foreground at its 236 sites. There is no --color-info token to check.
+//
+// A token is banned as a FOREGROUND, not banned outright: `background:`,
+// `background-color:`, `border-color:` and the -light tints are exactly what
+// these tokens are tuned for, and a solid `-strong` fill under white text is
+// the documented pairing. The leading `(?<![a-z-])` boundary is what draws
+// that line — it rejects every `*-color:` longhand — and MATCHER_FIXTURES
+// below pins both directions so a future tightening cannot over-reach.
+// Quoted JS props (`color: 'var(--color-accent-cyan)'`, the macro-ring stroke
+// colours) are data, not text, and don't match (the `'` breaks `:\s*var`).
+const FOREGROUND_TOKEN_OFFENDER =
+	/(?<![a-z-])(?:color|fill|stroke|-webkit-text-fill-color)\s*:\s*var\(\s*--color-(?:warning|secondary|accent-cyan|accent-orange|accent-pink|success|danger)\s*\)(?!-)/;
+
+test('no source file uses a bare accent/status token as a foreground colour', () => {
+	const hits = scanSource((line) => FOREGROUND_TOKEN_OFFENDER.test(line));
 	assert.equal(
 		hits.length,
 		0,
-		`A base accent/status token is used as a text colour; every one of them fails WCAG AA ` +
-			`on light surfaces (1.42-4.58:1). Use the theme-aware --color-<token>-text variant ` +
-			`instead:\n${hits.join('\n')}`,
+		`A base accent/status token is used as a foreground (text, icon glyph or SVG fill); ` +
+			`every one of them fails WCAG AA on light surfaces (1.42-4.58:1) and the palest ` +
+			`fail even the 3:1 non-text floor. Use the theme-aware --color-<token>-text ` +
+			`variant instead:\n${hits.join('\n')}`,
 	);
+});
+
+// The scan's own precision, pinned in both directions. Without this the guard
+// could be "fixed" into banning the tokens outright — which would flag the
+// fills and tints they exist for, and the white-on--strong pairing the toasts
+// and the offline banner are built on.
+const MATCHER_FIXTURES: Array<[flagged: boolean, line: string]> = [
+	[true, '\tcolor: var(--color-success);'],
+	[true, '\t.x:hover { color: var(--color-danger); }'],
+	[true, '\tcolor: var( --color-warning );'],
+	[true, '\tfill: var(--color-danger);'],
+	[true, '\tstroke: var(--color-success);'],
+	[true, '\t-webkit-text-fill-color: var(--color-accent-orange);'],
+	[false, '\tbackground: var(--color-success);'],
+	[false, '\tbackground-color: var(--color-danger);'],
+	[false, '\tborder-color: var(--color-danger);'],
+	[false, '\toutline-color: var(--color-warning);'],
+	[false, '\tbackground: var(--color-success-strong); color: #fff;'],
+	[false, '\tbackground: var(--color-danger-light);'],
+	[false, '\tbackground: color-mix(in srgb, var(--color-success) 16%, transparent);'],
+	[false, '\tcolor: var(--color-success-text);'],
+	[false, '\tcolor: var(--color-danger-strong);'],
+	[false, '\tcolor: var(--color-primary);'],
+	[false, '\tfill-opacity: var(--color-danger);'],
+	[false, '\t--color-success: #4A9F5A;'],
+];
+test('the foreground scan flags foregrounds and spares fills', () => {
+	for (const [flagged, line] of MATCHER_FIXTURES) {
+		assert.equal(
+			FOREGROUND_TOKEN_OFFENDER.test(line),
+			flagged,
+			flagged
+				? `the foreground scan misses \`${line.trim()}\``
+				: `the foreground scan wrongly flags \`${line.trim()}\` — these tokens are fills and tints, and only their FOREGROUND use is banned.`,
+		);
+	}
 });
 
 // Walk src/ and return `path:line  text` for every line the predicate flags.
@@ -665,7 +711,7 @@ test('success/danger -text tokens match mobile AppSemanticColors', () => {
 		);
 		assert.ok(body, `app_theme.dart has no ${symbol} AppSemanticColors`);
 		for (const status of ['success', 'danger']) {
-			const hex = body![1].match(new RegExp(`${status}: Color\\(0xFF([0-9A-Fa-f]{6})\\)`))?.[1];
+			const hex: string | undefined = body![1].match(new RegExp(`${status}: Color\\(0xFF([0-9A-Fa-f]{6})\\)`))?.[1];
 			assert.ok(hex, `${symbol} AppSemanticColors has no ${status}`);
 			assert.equal(
 				resolveToken(marker, `color-${status}-text`).toUpperCase(),

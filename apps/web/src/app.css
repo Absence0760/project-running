@@ -51,6 +51,11 @@
 	--color-warning-text: var(--color-warning-strong);
 	--color-secondary-text: #A24A2C;
 	--color-accent-cyan-text: #3A7385;
+	/* Completes the set so the guard can ban EVERY base accent token as a
+	   foreground rather than an ad-hoc subset: --color-accent-orange is the
+	   palest of them all at 2.08:1 on white, below even the 3:1 non-text floor.
+	   6.18:1 on white, 5.62:1 on its own 14% chip; dark reverts to the base. */
+	--color-accent-orange-text: #9B4A24;
 	/* Same shape for success / danger, and the same values as mobile's
 	   AppSemanticColors so a signed delta reads identically on both. The base
 	   tokens are 3.28:1 and 4.58:1 on white and 2.97:1 / 4.14:1 on the page —
@@ -215,6 +220,7 @@
 		--color-warning-text: var(--color-warning);
 		--color-secondary-text: var(--color-secondary);
 		--color-accent-cyan-text: var(--color-accent-cyan);
+		--color-accent-orange-text: var(--color-accent-orange);
 		--color-success-text: #8CC49B;
 		--color-danger-text: #EC8B7A;
 
@@ -286,6 +292,7 @@
 	--color-warning-text: var(--color-warning);
 	--color-secondary-text: var(--color-secondary);
 	--color-accent-cyan-text: var(--color-accent-cyan);
+	--color-accent-orange-text: var(--color-accent-orange);
 	--color-success-text: #8CC49B;
 	--color-danger-text: #EC8B7A;
 
