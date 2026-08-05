@@ -320,9 +320,9 @@ class _HomeScreenState extends State<HomeScreen>
   /// A push notification was tapped. Drain the parked target and open the
   /// surface it names. Every arm is an L4 auxiliary effect — a failure here
   /// must never take startup or the shell with it, so the whole body is
-  /// guarded and an unresolvable target degrades to the notifications inbox
-  /// (the same place `pathForKind` sends anything it can't place) rather than
-  /// dropping the tap.
+  /// guarded. A club or event whose slug won't resolve falls back to the clubs
+  /// hub rather than opening a screen that can never load; the mapper has
+  /// already sent anything it couldn't place to the inbox.
   Future<void> _onPendingPushTarget() async {
     final target = pendingPushTarget.value;
     if (target == null || !mounted) return;
