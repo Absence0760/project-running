@@ -81,22 +81,31 @@ class MapAttribution extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+              // A Wrap, not a Row: the credits are a legal requirement, so
+              // the strip may never crop one. Two credits at 2x OS text
+              // scale want 175 px more than a 320 dp map is wide, and a
+              // long enough single credit outgrows the map on its own —
+              // both reflow here instead, and the tap target becomes a
+              // floor rather than a fixed height so a credit that took two
+              // lines is not then cut off vertically.
+              child: Wrap(
+                spacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  for (var i = 0; i < credits.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 6),
+                  for (final credit in credits)
                     Semantics(
                       link: true,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => openMapCredit(context, credits[i]),
-                        child: SizedBox(
-                          height: kMapAttributionTapTarget,
+                        onTap: () => openMapCredit(context, credit),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minHeight: kMapAttributionTapTarget,
+                          ),
                           child: Center(
                             widthFactor: 1,
                             child: Text(
-                              mapCreditLabel(l10n, credits[i]),
+                              mapCreditLabel(l10n, credit),
                               style: TextStyle(
                                 fontSize: kMapAttributionFontSize,
                                 height: 1.3,
@@ -108,7 +117,6 @@ class MapAttribution extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ],
                 ],
               ),
             ),

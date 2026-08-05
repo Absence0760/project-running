@@ -1135,10 +1135,10 @@ void main() {
           find.descendant(of: bar.first, matching: find.byType(Text));
       expect(tester.getSize(label).height, lessThanOrEqualTo(grown));
 
-      // The map's attribution Row overflows horizontally at 2x. That is a
-      // separate, pre-existing finding (it reproduces against the unfixed
-      // screen); consume it so this test speaks only to the split bar.
-      tester.takeException();
+      // Round 8 had to consume an overflow here: the map's attribution Row
+      // burst horizontally at 2x. Round 9 made that strip a Wrap, so the
+      // screen is now clean at 2x and the exception is an assertion.
+      expect(tester.takeException(), isNull);
     });
   });
 }

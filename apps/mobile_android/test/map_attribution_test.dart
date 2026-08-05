@@ -65,11 +65,17 @@ Color _over(Color top, Color under) {
   );
 }
 
-Future<void> _pump(WidgetTester tester, Widget child, {Locale? locale}) =>
+Future<void> _pump(WidgetTester tester, Widget child,
+        {Locale? locale, double textScale = 1.0}) =>
     tester.pumpWidget(MaterialApp(
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, c) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: c!,
+      ),
       home: Scaffold(body: child),
     ));
 
@@ -243,6 +249,51 @@ void main() {
               reason: 'link $i is ${size.height} dp tall (darkBasemap=$dark)');
           expect(size.width, greaterThanOrEqualTo(24.0),
               reason: 'link $i is ${size.width} dp wide (darkBasemap=$dark)');
+        }
+      }
+    });
+
+    testWidgets('the strip reflows instead of cropping a credit at 2x',
+        (tester) async {
+      // Issue #666 round 9. The credits are a legal requirement, so the
+      // strip may never crop one. As a Row it overflowed a 320 dp map by
+      // 122 px in English and 175 px in Portuguese at 2x OS text scale —
+      // and 3.6 px even on a 411 dp map with the single OSM fallback.
+      addTearDown(tester.view.reset);
+      for (final width in const [411.0, 320.0]) {
+        for (final locale in const [
+          Locale('en'),
+          Locale('pt'),
+          Locale('fr'),
+        ]) {
+          for (final scale in const [1.0, 1.5, 2.0]) {
+            tester.view.physicalSize = Size(width, 400);
+            tester.view.devicePixelRatio = 1.0;
+            await tester.pumpWidget(const SizedBox.shrink());
+            await _pump(
+              tester,
+              MapAttribution(
+                darkBasemap: false,
+                creditsOverride:
+                    basemapCreditsFor(const {'MAPTILER_KEY': 'abc'}),
+              ),
+              locale: locale,
+              textScale: scale,
+            );
+            final where = '$width dp / $locale / ${scale}x';
+            expect(tester.takeException(), isNull, reason: where);
+            // Both credits still on screen, and inside the map.
+            final links = find.byType(GestureDetector);
+            expect(links, findsNWidgets(2), reason: where);
+            for (var i = 0; i < 2; i++) {
+              expect(tester.getBottomRight(links.at(i)).dx,
+                  lessThanOrEqualTo(width), reason: '$where link $i');
+              // A wrapped credit takes two lines; the tap target is a floor
+              // now, so the second line is not cut off.
+              expect(tester.getSize(links.at(i)).height,
+                  greaterThanOrEqualTo(24.0), reason: '$where link $i');
+            }
+          }
         }
       }
     });
