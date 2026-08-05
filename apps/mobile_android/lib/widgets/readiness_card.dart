@@ -144,10 +144,11 @@ class _ContributorChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final semantic = AppSemanticColors.ofTheme(theme);
     final color = contribution.delta > 0
-        ? const Color(0xFF2E7D32)
+        ? semantic.success
         : contribution.delta < 0
-            ? const Color(0xFFD32F2F)
+            ? semantic.danger
             : theme.colorScheme.outline;
     return Row(
       mainAxisSize: MainAxisSize.min,

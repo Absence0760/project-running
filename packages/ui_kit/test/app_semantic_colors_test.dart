@@ -76,6 +76,24 @@ void main() {
                   'as a banner');
         }
       });
+
+      // A base is also used as a bare foreground — the signed readiness
+      // delta, status icons — so 3:1 is not enough on its own. The raw
+      // literals that use replaced were 3.15:1 and 3.25:1 as text on the
+      // dark card (issue #666 round 8).
+      test('every base clears 4.5:1 as text on card and scaffold', () {
+        for (final p in _pairs(semantic!).entries) {
+          for (final bg in {
+            theme.colorScheme.surface,
+            theme.scaffoldBackgroundColor,
+          }) {
+            final ratio = _contrast(p.value.base, bg);
+            expect(ratio, greaterThanOrEqualTo(4.5),
+                reason: '${p.key} as text on $bg is '
+                    '${ratio.toStringAsFixed(2)} in ${entry.key}');
+          }
+        }
+      });
     });
   }
 

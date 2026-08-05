@@ -51,6 +51,12 @@
 	--color-warning-text: var(--color-warning-strong);
 	--color-secondary-text: #A24A2C;
 	--color-accent-cyan-text: #3A7385;
+	/* Same shape for success / danger, and the same values as mobile's
+	   AppSemanticColors so a signed delta reads identically on both. The base
+	   tokens are 3.28:1 and 4.58:1 on white and 2.97:1 / 4.14:1 on the page —
+	   fine as fills and borders, below AA as text. */
+	--color-success-text: #2E6B3C;
+	--color-danger-text: #A93B2E;
 
 	/* Rank-1 / segment-crown gold, as a fill + its own foreground. Mirrors
 	   mobile's AppSemanticColors.crown / onCrown so a leaderboard pill reads
@@ -202,6 +208,8 @@
 		--color-warning-text: var(--color-warning);
 		--color-secondary-text: var(--color-secondary);
 		--color-accent-cyan-text: var(--color-accent-cyan);
+		--color-success-text: var(--color-success);
+		--color-danger-text: var(--color-danger);
 
 		--color-crown: #E0BE4E;
 		--color-on-crown: #120D22;
@@ -269,6 +277,8 @@
 	--color-warning-text: var(--color-warning);
 	--color-secondary-text: var(--color-secondary);
 	--color-accent-cyan-text: var(--color-accent-cyan);
+	--color-success-text: var(--color-success);
+	--color-danger-text: var(--color-danger);
 
 	--color-crown: #E0BE4E;
 	--color-on-crown: #120D22;

@@ -490,3 +490,25 @@ test('HR zone tokens match the mobile hr_zone_palette', () => {
 		});
 	}
 });
+
+// --color-success-text / --color-danger-text. Same shape as the ACCENT_TEXT
+// trio above but checked on the plain surfaces rather than a chip tint: the
+// signed readiness delta is bare text on the card. The base tokens they
+// replace are 3.28:1 (success on white) and 4.14:1 (danger on the page) —
+// tuned for fills and borders, below AA as text. They carry the same values as
+// mobile's AppSemanticColors so the delta reads identically on both platforms.
+for (const { label, marker } of THEMES) {
+	test(`success/danger -text tokens meet WCAG AA as text — ${label}`, () => {
+		for (const name of ['color-success-text', 'color-danger-text']) {
+			const fg = resolveToken(marker, name);
+			for (const surfaceName of SURFACE_TOKENS) {
+				const surface = resolveToken(marker, surfaceName);
+				const ratio = contrastRatio(fg, surface);
+				assert.ok(
+					ratio >= AA_NORMAL,
+					`--${name} (${fg}) on --${surfaceName} (${surface}) is ${ratio.toFixed(2)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
+				);
+			}
+		}
+	});
+}

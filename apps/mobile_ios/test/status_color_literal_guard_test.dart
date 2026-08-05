@@ -25,11 +25,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _bannedHexes = [
   // greens
-  '22C55E', '16A34A', '10B981', '34D399', '047857', '4CAF50',
+  '22C55E', '16A34A', '10B981', '34D399', '047857', '4CAF50', '2E7D32',
   // ambers
   'F59E0B', 'FBBF24', 'EAB308', 'FACC15', 'D97706', 'FFC107',
   // reds
-  'EF4444', 'DC2626', 'B91C1C', 'F87171', 'F44336',
+  'EF4444', 'DC2626', 'B91C1C', 'F87171', 'F44336', 'D32F2F',
   // crown gold
   'F5B30A',
 ];
