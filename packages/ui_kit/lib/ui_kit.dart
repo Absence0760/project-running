@@ -10,4 +10,5 @@ export 'src/widgets/empty_state.dart';
 export 'src/widgets/identity_avatar.dart';
 export 'src/widgets/list_skeleton.dart';
 export 'src/widgets/import_sheet.dart';
+export 'src/widgets/text_lane.dart';
 export 'src/theme/app_theme.dart';
