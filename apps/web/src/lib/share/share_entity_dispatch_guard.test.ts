@@ -64,10 +64,14 @@ test('every path sent to the share-entity Lambda has a dispatcher branch', () =>
 		.map(([pattern]) => pattern.replace(/\/\*$/, ''));
 	assert.ok(entityPaths.length >= 6, 'the share-entity behaviour set lost paths');
 	// The dispatcher's ROUTES regexes are written as
-	// /^\/share\/session\/([^/]+)\/?$/ — match on the literal path prefix.
-	const missing = entityPaths.filter(
-		(p) => !dispatcher.includes(p.replace(/\//g, '\\/')),
-	);
+	// /^\/share\/session\/([^/]+)\/?$/, so the path prefix appears with its
+	// slashes escaped. Strip the backslashes out of the haystack rather than
+	// adding them to the needle: hand-rolling the escape is what CodeQL flags
+	// (an escaper that ignores `\` itself is incomplete), and normalising the
+	// source is both lossless for a prefix search and immune to however the
+	// dispatcher happens to spell its separators.
+	const flattened = dispatcher.replaceAll('\\', '');
+	const missing = entityPaths.filter((p) => !flattened.includes(p));
 	assert.deepEqual(
 		missing,
 		[],
