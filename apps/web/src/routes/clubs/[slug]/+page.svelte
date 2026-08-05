@@ -13,6 +13,7 @@
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		fetchClubBySlug,
+		fetchClubSlugById,
 		fetchUpcomingEvents,
 		fetchPastEvents,
 		fetchClubMembers,
@@ -165,6 +166,15 @@
 		loading = true;
 		club = await fetchClubBySlug(slug);
 		if (!club) {
+			// The notification worker addresses a club by id — its row
+			// projection has no slug to join — so a uuid can arrive in this
+			// slot from an email or push CTA. Resolve it and forward to the
+			// canonical slug URL rather than showing "club not found".
+			const canonical = await fetchClubSlugById(slug);
+			if (canonical && canonical !== slug) {
+				await goto(`/clubs/${canonical}`, { replaceState: true });
+				return;
+			}
 			loading = false;
 			return;
 		}

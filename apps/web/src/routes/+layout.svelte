@@ -239,7 +239,11 @@
 		// anon (clubs.is_public + events FK). The page-level guards on
 		// /clubs/new and /clubs/[slug]/events/new still kick non-admins,
 		// so adding the prefix here only unblocks the read surfaces.
-		(path.startsWith('/clubs/') && !clubsAuthRequired(path));
+		(path.startsWith('/clubs/') && !clubsAuthRequired(path)) ||
+		// /events/[id] only resolves the club slug and forwards to the
+		// nested page above; gating it tighter than its destination would
+		// bounce an anon visitor who could have read the event.
+		path.startsWith('/events/');
 
 	function isActive(href: string, path: string): boolean {
 		return path.startsWith(href);

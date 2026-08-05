@@ -579,6 +579,25 @@ Use the shared `smartBack` helper (`$lib/util/smart_back`): it registers an `aft
 
 Keep the `href` — it is the deep-link / hard-load fallback and the link's semantics. Pass a `match` predicate only when a page must keep its static parent for arrivals from unrelated surfaces; the default (no predicate) pops to any in-app referrer, which is what "back to where I came from" means. The helper is the single home for the `afterNavigate` + `history.back()` idiom that used to be copy-pasted into `runs/[id]`, `clubs/[slug]`, `routes/new`, etc.
 
+## Linking another user's row — never to an owner-scoped route
+
+Several read paths are deliberately scoped to the viewer: `fetchRunById` filters `.eq('user_id', userId)`, so `/runs/[id]` only ever resolves the viewer's own run and renders its "Run not found" empty state for anyone else's — a real, public run presented as deleted. The same is true of every `/gym/[id]`-style owner surface.
+
+So: **a surface that renders someone else's row links to the public twin, not the owner surface.** `/share/run/[id]`, `/share/workout/[id]`, `/share/event/[id]`, `/u/[id]`. The social feed, a club roster, a challenge leaderboard, a segment board, a notification about a followee's activity — all of these are other-people surfaces. Only `/history`, `/runs`, `/dashboard` and friends list the viewer's own rows and may use the owner route.
+
+This is not a cosmetic difference: the failure is silent and looks exactly like a deleted row, so it survives review and reads as correct in a screenshot taken by the owner. `apps/web/src/lib/cross_user_link_guards.test.ts` pins the feed; extend it when a new cross-user surface ships.
+
+The same rule reaches the Go worker's notification deep links — `run_completed` fires at a *followee's followers*, so it links to `/share/run/{id}`. See `docs/features/email.md § Architecture` for the deep-link contract and its route-tree guard.
+
+## Deep links that leave the app must resolve forever
+
+A URL in an email, a push payload, an SMS, or a share sheet is **outside our deploy**. Once sent it cannot be corrected: it sits in an inbox or a notification tray and a later fix only changes what *future* links say. Two rules follow.
+
+1. **Assert that the target resolves, not that the string matches.** A test pinning `base + "/notifications"` passes forever while `/notifications` is not a route. Guards should check the emitted path against the real route tree (`apps/job_worker/internal/notification_link_guard_test.go` walks `apps/web/src/routes` for exactly this) or exercise it end-to-end.
+2. **Changing what a link emits is only half a fix.** Add the redirect route so the already-sent shape keeps resolving, and treat that route as permanent.
+
+Prefer emitting a **stable id** and letting web resolve it (`/events/[id]` → `/clubs/{slug}/events/{id}`) over baking a mutable slug into a link that will outlive the rename.
+
 ## Commit and PR conventions
 
 - Branch: commit locally per-piece, but `origin/main` is protected — changes land only via a PR that passes the single required **CI gate** status check (0 required approvals, a green CI is the merge gate; PR mandatory and admin-enforced; no direct pushes; linear history; conversation resolution required).

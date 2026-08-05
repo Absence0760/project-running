@@ -3,6 +3,7 @@
  */
 import { supabase } from './supabase';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
+import { isEntityId } from './entity_id';
 import { loadSettings, effective } from '../settings/settings';
 import { privacyDefaultToIsPublic } from '../social/run_visibility';
 import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
@@ -2324,6 +2325,15 @@ export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null
 	return enriched;
 }
 
+/// Resolves a club id to its slug. The notification worker's row projection
+/// carries club_id and cannot join for the slug, so its deep links address the
+/// club by id and `/clubs/[slug]` forwards to the canonical URL from here.
+export async function fetchClubSlugById(id: string): Promise<string | null> {
+	if (!isEntityId(id)) return null;
+	const { data } = await supabase.from('clubs').select('slug').eq('id', id).maybeSingle();
+	return (data as { slug: string } | null)?.slug ?? null;
+}
+
 /** Attach viewer_role + viewer_status to clubs. member_count is the
  * trigger-maintained cache on the row (derived_state.md), not recomputed. */
 async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
@@ -2742,6 +2752,24 @@ export async function fetchPastEvents(clubId: string, limit = 12): Promise<Event
 		.order('starts_at', { ascending: false })
 		.limit(limit);
 	return enrichEvents((data as Event[]) ?? []);
+}
+
+/// Resolves an event id to its club's slug so the stable-id `/events/[id]`
+/// route can forward to the canonical `/clubs/{slug}/events/{id}`. That route
+/// exists because the notification worker addresses an event by id alone — its
+/// row projection has no slug to join — and because an id URL survives a club
+/// rename that would break every already-sent nested link.
+export async function fetchEventClubSlug(eventId: string): Promise<string | null> {
+	if (!isEntityId(eventId)) return null;
+	const { data } = await supabase
+		.from('events')
+		.select('id, clubs(slug)')
+		.eq('id', eventId)
+		.maybeSingle();
+	if (!data) return null;
+	const clubs = (data as { clubs: { slug: string } | { slug: string }[] | null }).clubs;
+	const club = Array.isArray(clubs) ? clubs[0] ?? null : clubs;
+	return club?.slug ?? null;
 }
 
 export async function fetchEventById(id: string): Promise<EventWithMeta | null> {

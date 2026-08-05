@@ -58,6 +58,25 @@ test.describe('/social?tab=feed — feed surface', () => {
 		});
 	});
 
+	test('a followed runner entry opens the public run page, not the owner-scoped one', async ({
+		page
+	}) => {
+		// The feed shows other people's runs. /runs/[id] loads through
+		// fetchRunById, which filters `.eq('user_id', viewer)`, so linking there
+		// showed a follower the "Run not found" empty state for a run that is
+		// public and exists. /share/run/[id] is the surface a non-owner can read.
+		await page.goto('/social?tab=feed');
+		const card = page.locator(`article.entry a.entry-body[href$="${plantedRunId}"]`);
+		await expect(card).toHaveAttribute('href', `/share/run/${plantedRunId}`, {
+			timeout: 10_000
+		});
+		await card.click();
+		await expect(page).toHaveURL(new RegExp(`/share/run/${plantedRunId}$`), {
+			timeout: 10_000
+		});
+		await expect(page.getByText(/Run not found/i)).toHaveCount(0);
+	});
+
 	test('activity-type filter narrows to a no-match empty state on Cycle', async ({
 		page
 	}) => {

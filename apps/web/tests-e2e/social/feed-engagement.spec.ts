@@ -161,10 +161,13 @@ test.describe('/social?tab=feed — kudos pill + comment count', () => {
 		await page.goto('/social?tab=feed');
 		const card = page.locator('article.entry').filter({ hasText: title });
 		await expect(card).toBeVisible({ timeout: 10_000 });
-		// The comment-pill links to /runs/<id> and shows the count.
+		// The comment-pill shows the count and links to the PUBLIC run page.
+		// The feed renders other people's runs, and /runs/[id] is owner-scoped
+		// (fetchRunById filters on the viewer's user_id), so it used to send a
+		// follower to a "Run not found" page.
 		const commentPill = card.locator('.comment-pill');
 		await expect(commentPill).toContainText('2', { timeout: 10_000 });
-		await expect(commentPill).toHaveAttribute('href', new RegExp(`/runs/${runId}`));
+		await expect(commentPill).toHaveAttribute('href', new RegExp(`/share/run/${runId}`));
 	});
 });
 

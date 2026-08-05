@@ -81,11 +81,12 @@ func TestRenderNotificationEmail_RunDeepLinkAndFallback(t *testing.T) {
 		t.Errorf("kudos should link to the run, got:\n%s", msg.Body)
 	}
 
-	// Missing FK → safe fallback path, never an empty/garbled link.
+	// Missing FK → safe fallback path, never an empty/garbled link. The inbox
+	// is a tab on the recipient's own profile; there is no /notifications route.
 	n2 := NotificationRow{ID: "n2", UserID: "u1", Kind: "kudos"}
 	msg2 := renderNotificationEmail(n2, "https://threkir.test", "en")
-	if !strings.Contains(msg2.Body, "https://threkir.test/notifications") {
-		t.Errorf("kudos with no run_id should fall back to /notifications, got:\n%s", msg2.Body)
+	if !strings.Contains(msg2.Body, "https://threkir.test/u/u1?tab=notifications") {
+		t.Errorf("kudos with no run_id should fall back to the inbox tab, got:\n%s", msg2.Body)
 	}
 }
 
@@ -112,14 +113,15 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 		{"plan_assigned", NotificationRow{Kind: "plan_assigned"}, base + "/plans"},
 		{"message", NotificationRow{Kind: "message"}, base + "/messages"},
 		{"club_post", NotificationRow{Kind: "club_post", ClubID: &club}, base + "/clubs/club-1"},
-		{"run_completed", NotificationRow{Kind: "run_completed", RunID: &run}, base + "/runs/run-1"},
+		{"run_completed", NotificationRow{Kind: "run_completed", UserID: "usr-1", RunID: &run}, base + "/share/run/run-1"},
 		{"kudos", NotificationRow{Kind: "kudos", RunID: &run}, base + "/runs/run-1"},
 		{"comment", NotificationRow{Kind: "comment", RunID: &run}, base + "/runs/run-1"},
 		{"comment_reply", NotificationRow{Kind: "comment_reply", RunID: &run}, base + "/runs/run-1"},
 		{"follow", NotificationRow{Kind: "follow", UserID: "usr-1"}, base + "/u/usr-1"},
 		{"challenge_complete", NotificationRow{Kind: "challenge_complete"}, base + "/challenges"},
-		{"achievement", NotificationRow{Kind: "achievement"}, base + "/notifications"},
-		{"unknown_future_kind", NotificationRow{Kind: "unknown_future_kind"}, base + "/notifications"},
+		{"achievement", NotificationRow{Kind: "achievement", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
+		{"content_hidden", NotificationRow{Kind: "content_hidden", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
+		{"unknown_future_kind", NotificationRow{Kind: "unknown_future_kind", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
 	}
 
 	for _, c := range cases {
@@ -174,16 +176,24 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 // native-push channels; a wrong target sends every channel to the wrong screen
 // at once. This pins the mapping and each nil/empty-id fallback with exact
 // equality (the AllKinds test only asserts the body *contains* the path).
+//
+// Exact strings alone are what let /events/{id} and /notifications survive:
+// both were pinned here and neither was a route. notification_link_guard_test.go
+// carries the property these cases can't — that each target resolves against
+// apps/web/src/routes.
 func TestPathForKind(t *testing.T) {
 	const base = "https://threkir.test"
 	ev, run, club := "e1", "r1", "c1"
+	const inbox = base + "/u/u1?tab=notifications"
 	cases := []struct {
 		name string
 		kind string
 		row  NotificationRow
 		want string
 	}{
-		// Event family → /events/{id}, else the clubs hub.
+		// Event family → the stable-id /events/{id} route, which resolves the
+		// club slug and forwards to /clubs/{slug}/events/{id}; the projection
+		// carries no slug. Nil id → the clubs hub.
 		{"event_reminder", "event_reminder", NotificationRow{EventID: &ev}, base + "/events/e1"},
 		{"event_cancel", "event_cancel", NotificationRow{EventID: &ev}, base + "/events/e1"},
 		{"event_rsvp", "event_rsvp", NotificationRow{EventID: &ev}, base + "/events/e1"},
@@ -192,25 +202,37 @@ func TestPathForKind(t *testing.T) {
 		// was a dead deep link).
 		{"plan_update → /plans", "plan_update", NotificationRow{}, base + "/plans"},
 		{"plan_assigned → /plans", "plan_assigned", NotificationRow{}, base + "/plans"},
-		// Club → /clubs/{id}, else the hub.
+		// Club → the club id in the /clubs/[slug] slot; that page falls back to
+		// an id lookup and redirects to the canonical slug URL.
 		{"club_post", "club_post", NotificationRow{ClubID: &club}, base + "/clubs/c1"},
 		{"club nil id → /clubs", "club_post", NotificationRow{}, base + "/clubs"},
-		// Run family → /runs/{id}, else the inbox. comment_reply folds to run.
-		{"run_completed", "run_completed", NotificationRow{RunID: &run}, base + "/runs/r1"},
+		// Engagement on the recipient's OWN run → the owner-scoped detail page.
+		// comment_reply folds to run.
 		{"kudos", "kudos", NotificationRow{RunID: &run}, base + "/runs/r1"},
 		{"comment", "comment", NotificationRow{RunID: &run}, base + "/runs/r1"},
 		{"comment_reply", "comment_reply", NotificationRow{RunID: &run}, base + "/runs/r1"},
-		{"run nil id → inbox", "kudos", NotificationRow{}, base + "/notifications"},
+		{"run nil id → inbox", "kudos", NotificationRow{UserID: "u1"}, inbox},
+		// A followee's run → the public share page. /runs/{id} reads
+		// owner-scoped, so it renders "run not found" for the follower this
+		// kind is addressed to.
+		{"run_completed → share", "run_completed", NotificationRow{RunID: &run}, base + "/share/run/r1"},
+		{"run_completed nil id → inbox", "run_completed", NotificationRow{UserID: "u1"}, inbox},
 		// Follow → recipient's own profile (there is NO /profile route).
 		{"follow → /u/{id}", "follow", NotificationRow{UserID: "u1"}, base + "/u/u1"},
-		{"follow empty user → inbox", "follow", NotificationRow{}, base + "/notifications"},
 		// Static targets.
 		{"message", "message", NotificationRow{}, base + "/messages"},
 		{"challenge_complete", "challenge_complete", NotificationRow{}, base + "/challenges"},
-		// Inbox fallback: achievement has no dedicated surface yet, and any
-		// unknown/future kind lands on the inbox.
-		{"achievement → inbox", "achievement", NotificationRow{}, base + "/notifications"},
-		{"unknown → inbox", "totally_new_kind", NotificationRow{}, base + "/notifications"},
+		// Inbox fallback: neither achievement nor content_hidden has dedicated
+		// copy or a surface yet, and any unknown/future kind lands there too.
+		// The inbox is a TAB on the recipient's profile — there is no
+		// /notifications route, which is what made the old fallback dead.
+		{"achievement → inbox", "achievement", NotificationRow{UserID: "u1"}, inbox},
+		{"content_hidden → inbox", "content_hidden", NotificationRow{UserID: "u1"}, inbox},
+		{"unknown → inbox", "totally_new_kind", NotificationRow{UserID: "u1"}, inbox},
+		// A row with no user_id can't address an inbox; the app root is the
+		// honest landing spot rather than a "/u/?tab=…" dead end.
+		{"no user_id → app root", "achievement", NotificationRow{}, base},
+		{"follow empty user → app root", "follow", NotificationRow{}, base},
 	}
 	for _, c := range cases {
 		c.row.Kind = c.kind
