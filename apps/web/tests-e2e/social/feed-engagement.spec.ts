@@ -161,10 +161,11 @@ test.describe('/social?tab=feed — kudos pill + comment count', () => {
 		await page.goto('/social?tab=feed');
 		const card = page.locator('article.entry').filter({ hasText: title });
 		await expect(card).toBeVisible({ timeout: 10_000 });
-		// The comment-pill shows the count and links to the PUBLIC run page.
-		// The feed renders other people's runs, and /runs/[id] is owner-scoped
-		// (fetchRunById filters on the viewer's user_id), so it used to send a
-		// follower to a "Run not found" page.
+		// The comment-pill shows the count and links to the PUBLIC run page —
+		// anon-reachable and indexable, unlike the auth-gated /runs/[id]. It
+		// used to point at /runs/[id], which sent a follower to a "Run not
+		// found" page (fixed both ways: the link moved, and /runs/[id] gained
+		// a non-owner branch in issue #666).
 		const commentPill = card.locator('.comment-pill');
 		await expect(commentPill).toContainText('2', { timeout: 10_000 });
 		await expect(commentPill).toHaveAttribute('href', new RegExp(`/share/run/${runId}`));

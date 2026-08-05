@@ -58,13 +58,14 @@ test.describe('/social?tab=feed — feed surface', () => {
 		});
 	});
 
-	test('a followed runner entry opens the public run page, not the owner-scoped one', async ({
+	test('a followed runner entry opens the public run page, not the auth-gated one', async ({
 		page
 	}) => {
-		// The feed shows other people's runs. /runs/[id] loads through
-		// fetchRunById, which filters `.eq('user_id', viewer)`, so linking there
-		// showed a follower the "Run not found" empty state for a run that is
-		// public and exists. /share/run/[id] is the surface a non-owner can read.
+		// The feed shows other people's runs. /share/run/[id] is the right
+		// destination because it is anon-reachable and indexable; /runs/[id]
+		// sits behind the layout auth-gate. (It no longer 404s a non-owner
+		// either — issue #666 gave it a non-owner branch — but the feed link
+		// must survive being opened by a logged-out visitor.)
 		await page.goto('/social?tab=feed');
 		const card = page.locator(`article.entry a.entry-body[href$="${plantedRunId}"]`);
 		await expect(card).toHaveAttribute('href', `/share/run/${plantedRunId}`, {

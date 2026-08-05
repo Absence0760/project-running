@@ -17,7 +17,8 @@ import { USER_A, USER_B } from '../fixtures/users';
  * /runs/[id] detail surface, where RunSocial mounts for the owner with
  * the kudos count + comment list visible (composer + reply controls
  * are gated, but the owner can read engagement and delete comments on
- * their own run).
+ * their own run). The non-owner half of /runs/[id] — where the composer
+ * IS offered — lives in cross-user/run-detail-non-owner.spec.ts.
  *
  * Plant a fresh run + kudos + comment via service-role so the assert
  * works against a known shape (no dependency on which seeded run

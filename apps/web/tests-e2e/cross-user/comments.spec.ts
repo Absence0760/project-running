@@ -8,6 +8,11 @@ import { USER_B } from '../fixtures/users';
  * starts with zero comments by design (the `id != '...'` filter in
  * seed.sql exempts it from the cross-user-engagement seeds).
  *
+ * The same flows on the signed-in /runs/[id] non-owner branch are pinned
+ * in run-detail-non-owner.spec.ts (issue #666); the depth here — replies,
+ * delete, cascade — stays on the public surface so it also covers the
+ * anon-reachable path.
+ *
  * Future depth: long-comment truncation + "see more" toggle, edit-
  * own-comment, run-owner deletes a non-owner comment, comment count
  * visible to anon viewers, comment-reply kudos.

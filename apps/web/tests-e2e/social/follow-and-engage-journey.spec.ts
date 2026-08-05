@@ -50,11 +50,12 @@ import { insertRun } from '../fixtures/simulate';
  *
  * NB: the feed/people/profile surfaces hold an open Supabase realtime
  * socket — never waitForLoadState('networkidle') here; rely on
- * auto-waiting assertions. RunSocial (/share/run) is a one-shot load and
- * the only surface a non-owner can comment on (/runs/[id] is owner-scoped
- * via fetchRunById, so a follower viewing it 404s — the public-run social
- * surface is /share/run/[id], which mounts the same RunSocial composer the
- * feed modal renders).
+ * auto-waiting assertions. This journey comments through /share/run/[id],
+ * the anon-reachable public surface, which mounts the same RunSocial
+ * composer the feed modal renders. Since issue #666 the signed-in
+ * /runs/[id] carries that composer too (its non-owner branch mounts
+ * RunShareView); that surface is covered by
+ * cross-user/run-detail-non-owner.spec.ts.
  */
 
 test.describe('social journey — discover → follow → feed → engage → unfollow', () => {

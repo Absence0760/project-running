@@ -252,9 +252,10 @@ test.describe('runs ↔ cross-user kudos', () => {
 			await expect(alexBtn).toHaveClass(/given/);
 			await expect(alexPage.locator('.kudos-count')).toHaveText('1');
 
-			// Now runner reads. /runs/[id] is the owner-only detail page;
-			// fetchRunById gates on user_id, RunSocial mounts and calls
-			// fetchRunKudos which reads run_kudos via is_run_visible_to.
+			// Now runner reads their OWN run at /runs/[id] — the owner
+			// branch, where fetchRunById returns the row and RunSocial
+			// calls fetchRunKudos, reading run_kudos via
+			// private.is_run_visible_to.
 			await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
 			await expect(page.getByRole('heading', { level: 1 })).toBeVisible({
 				timeout: 10_000
