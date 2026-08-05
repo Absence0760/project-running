@@ -34,13 +34,20 @@
 // When this test fails, route the colour onto the token — do not add an entry.
 // Only a genuine new data palette or fixed canvas earns one.
 //
-// Scope declared, so a future reader does not mistake silence for coverage:
-// the literal ban covers the 39 named six-digit status hues below (with an
-// optional 8-digit alpha suffix), the same bounded shape as the mobile twin —
-// it does not police 3-digit shorthands, rgb()/hsl() spellings, or hues
-// outside the list. The separate dead-fallback rule at the foot of this file
-// is NOT hue-scoped: it bans a hex fallback of any length on any global
-// app.css token, because there the defect is the frozen value, not the hue.
+// Scope declared, so a future reader does not mistake silence for coverage.
+// This file now holds THREE rules of widening reach:
+//  1. the status-hue ban below — the 39 named six-digit status hues (with an
+//     optional 8-digit alpha suffix), the mobile twin's shape, whose failure
+//     message says "route it onto the token" because for a status role that
+//     is always the answer;
+//  2. the dead-fallback rule in the middle, which is not hue-scoped at all:
+//     a hex fallback of any length on any global app.css token, because
+//     there the defect is the frozen value, not the hue;
+//  3. the COMPLETE REGISTER at the foot, which requires every six-digit
+//     literal outside app.css declarations to be recorded with a role and an
+//     exact count. That one subsumes (1)'s coverage — (1) is kept for its
+//     message, not its reach.
+// None of the three polices 3-digit shorthands or rgb()/hsl() spellings.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -397,4 +404,337 @@ test('app.css pairs a --color-primary fill with --color-on-primary, not a litera
 			'light coral in dark; its label must take --color-on-primary rather than a ' +
 			`frozen white. Rule was:\n${rule![0]}`,
 	);
+});
+
+// ---------------------------------------------------------------------------
+// The complete register.
+//
+// Everything above bans 39 NAMED status hues. § 511 was explicit that this
+// leaves a hole and logged its size: 172 literals across 29 files carrying
+// hues outside the status vocabulary, exempt by never having been in scope.
+// A named-hue ban cannot close that — the next frozen fill just picks a
+// fortieth hue — and it forced the second register § 511 declined to build,
+// when it considered a "no hex in a border" rule and rejected it as a
+// 12-entry allowlist duplicating this one.
+//
+// So the ban is inverted here: EVERY six-digit literal outside app.css's
+// declaration lines must appear below with an exact count and a role from a
+// closed vocabulary. That answers the border question by making it moot —
+// the register is keyed on the file and the hue, never on the CSS property,
+// so a border literal is an entry like any other and there is one register,
+// not two. It also removes the hue list's blind spot: a new literal fails
+// wherever it lands and whatever it paints.
+//
+// A role is not an excuse on its own. Where a contrast bar applies, the
+// entry's comment carries the measured figure and names the ground it was
+// measured against, because § 503's trap is measuring on a convenient
+// background and § 519 found two of § 511's own figure sets had moved.
+//
+// The roles, and what each claims:
+//  * 'cartographic'  drawn on the basemap. Graded against the real basemap
+//                    samples by basemap_contrast.test.ts, not exempted. A
+//                    pin FILL qualifies only when a basemap-keyed ring
+//                    carries its 3:1 — the fill is then identity data.
+//  * 'brand-mark'    a third party's logo geometry. Fixed by them, not by
+//                    us; the mark's own hues are not ours to re-tone. What
+//                    is still ours is whatever we draw ON it.
+//  * 'brand-hue'     a third party's colour reused as OUR paint. This is
+//                    NOT the same exemption: nothing about Strava's orange
+//                    requires it to be our label ink, so these owe their
+//                    bar like any other paint.
+//  * 'data'          the colour IS the datum — tier metals, medal metals,
+//                    chart series, workout-kind tints (§ 480's line).
+//  * 'fixed-canvas'  a surface that follows no device theme: the @media
+//                    print sheet, a rasterised share card, a fixed scrim.
+//                    Exempt from THEMING, never from contrast.
+//  * 'gradient-stop' a stop of a decorative ramp. Anything drawn over it is
+//                    measured by gradient_foreground_guard.test.ts.
+//  * 'svg-art'       illustration geometry with no text on it.
+//  * 'theme-pair'    a literal that IS theme-keyed, declared once per theme
+//                    as a local custom property. Wants a token; the entry
+//                    records the debt.
+type LiteralRole =
+	| 'cartographic'
+	| 'brand-mark'
+	| 'brand-hue'
+	| 'data'
+	| 'fixed-canvas'
+	| 'gradient-stop'
+	| 'svg-art'
+	| 'theme-pair';
+
+const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
+	// Running-shoe / apple loader illustration. No text on it.
+	'lib/components/ActivityLoader.svelte': {
+		'7C5A3A': [1, 'svg-art'], '4FB477': [1, 'svg-art'],
+		FF6B5B: [1, 'svg-art'], FF8C7E: [1, 'svg-art'],
+	},
+	// Badge tier metals: bronze / silver / gold / platinum, a four-rung
+	// ladder where the rung IS the datum.
+	'lib/components/BadgeGrid.svelte': {
+		B08D57: [1, 'data'], '9AA3AD': [1, 'data'], D4AF37: [1, 'data'], '7FD3E0': [1, 'data'],
+	},
+	'lib/components/SocialFeed.svelte': {
+		B08D57: [1, 'data'], '9AA3AD': [1, 'data'], D4AF37: [1, 'data'], '7FD3E0': [1, 'data'],
+	},
+	'routes/share/badge/[id]/+page.svelte': {
+		B08D57: [1, 'data'], '9AA3AD': [1, 'data'], D4AF37: [1, 'data'], '7FD3E0': [1, 'data'],
+	},
+	// Medal-rank pills. Each is an OPAQUE fill carrying the meaning, so its
+	// ink is fixed with it (§ 495): gold ink 9.381 / 5.612:1 across its two
+	// stops, silver 12.735 / 8.223, bronze 8.301 / 4.822 — measured on the
+	// stops themselves, which is where the ink lands.
+	'lib/components/ChallengeLeaderboard.svelte': {
+		'3A2E0A': [1, 'data'], F6D671: [1, 'data'], D4A017: [1, 'data'],
+		E4E7EB: [1, 'data'], B4BCC4: [1, 'data'], E6B27E: [1, 'data'], C08043: [1, 'data'],
+	},
+	// The other medal pair, on the segment-effort list. Silver ink reads
+	// 6.161:1 on its own fill, bronze's white 5.022:1; gold alone is
+	// theme-aware through --color-crown.
+	'lib/components/RunSegmentEfforts.svelte': {
+		'94A3B8': [1, 'data'], '1F2328': [1, 'data'], B45309: [1, 'data'],
+	},
+	// Four per-stat-card accent bars, 2px and text-free: chart series
+	// separated by hue.
+	'lib/components/PeriodSummary.svelte': {
+		'4F46E5': [1, 'gradient-stop'], '7C3AED': [1, 'gradient-stop'],
+		'10B981': [1, 'gradient-stop'], '06B6D4': [1, 'gradient-stop'],
+		F97316: [1, 'gradient-stop'], F59E0B: [1, 'gradient-stop'],
+		EC4899: [1, 'gradient-stop'], EF4444: [1, 'gradient-stop'],
+	},
+	// Privacy-zone centre marker, fill and outline. 4.208:1 on the light
+	// land sample, 3.560 on the dark, 3.011 over light-basemap water — the
+	// thinnest margin in the register, and the reason the water sample is
+	// asserted at all.
+	'lib/components/PrivacyZonePicker.svelte': { DC2626: [3, 'cartographic'] },
+	// Start / finish caps on the mini track preview and the roadbook course
+	// schedule. Painted on a track thumbnail, not on a live basemap, so
+	// these are the twin of mobile's own two allowlist entries.
+	'lib/components/TrackPreview.svelte': { '22C55E': [1, 'cartographic'], EF4444: [1, 'cartographic'] },
+	'routes/routes/[id]/roadbook/+page.svelte': { '22C55E': [1, 'cartographic'], EF4444: [1, 'cartographic'] },
+	// Route + club pin FILLS, whose basemap-keyed ring carries the 3:1
+	// (17.191:1 on dark ground, 13.930 on light). MapLibre paint cannot
+	// consume a CSS custom property, so a literal here is structural. The
+	// violet pair is the kept-route accent, declared once per theme.
+	'lib/components/RouteHeatmap.svelte': {
+		'7FB3C2': [1, 'cartographic'], F2A07B: [2, 'cartographic'],
+		'6D28D9': [1, 'theme-pair'], A78BFA: [2, 'theme-pair'],
+	},
+	// Marketing hero + closing-CTA ramps and the on-hero button. Every ink
+	// over them is measured by gradient_foreground_guard.test.ts.
+	'routes/+page.svelte': {
+		'0F172A': [1, 'gradient-stop'], '1E1B4B': [2, 'gradient-stop'],
+		'4F46E5': [3, 'gradient-stop'], '7C3AED': [1, 'gradient-stop'],
+		FFFFFF: [4, 'fixed-canvas'], F0EFFF: [1, 'fixed-canvas'],
+	},
+	// Header over that same hero: white hover ink, 5.699:1 on the ramp's
+	// palest stop.
+	'lib/components/PublicHeader.svelte': { FFFFFF: [2, 'fixed-canvas'] },
+	// Sign-in brand pane (a fixed canvas; ramp + white copy measured per
+	// veil by gradient_foreground_guard.test.ts), the Google "G" mark, and
+	// Apple's required black button plus its hairline.
+	'routes/login/+page.svelte': {
+		'2A4E5A': [1, 'gradient-stop'], '3A5A66': [1, 'gradient-stop'], '7E4527': [1, 'gradient-stop'],
+		FFFFFF: [2, 'fixed-canvas'],
+		'4285F4': [1, 'brand-mark'], '34A853': [1, 'brand-mark'],
+		FBBC05: [1, 'brand-mark'], EA4335: [1, 'brand-mark'],
+		'1A1A1A': [1, 'brand-mark'], '334155': [1, 'brand-mark'],
+	},
+	// The same two marks on the linked-accounts rows.
+	'routes/settings/account/+page.svelte': {
+		'4285F4': [2, 'brand-mark'], '34A853': [2, 'brand-mark'],
+		FBBC05: [2, 'brand-mark'], EA4335: [2, 'brand-mark'],
+		'1A1A1A': [1, 'brand-mark'],
+	},
+	// The 1080x1080 share card: rasterised to a PNG, so no device theme
+	// reaches it. Ramp + ink measured by gradient_foreground_guard; the
+	// match pill is a fixed near-black scrim over the basemap whose ink
+	// (8.022:1) and hairline (4.111:1) are fixed with it.
+	'routes/runs/[id]/+page.svelte': {
+		'9B4A24': [1, 'gradient-stop'], '6E4F94': [1, 'gradient-stop'], '5B4478': [1, 'gradient-stop'],
+		FFFFFF: [1, 'fixed-canvas'], F7F3EC: [1, 'fixed-canvas'], B5ADC3: [1, 'fixed-canvas'],
+	},
+	// The @media print sheet: white paper, where a theme token resolves to
+	// the SCREEN theme and prints dark-on-dark. The amber was deepened from
+	// #b26a00 (4.238:1 on paper) to #9E5C00 (5.270 on white, 5.031 on the
+	// mint price card) — a fixed canvas is exempt from theming, not from
+	// contrast.
+	'routes/compare/+page.svelte': {
+		F6FBF6: [1, 'fixed-canvas'], '1B5E20': [1, 'fixed-canvas'], '9E5C00': [1, 'fixed-canvas'],
+	},
+	// Gold star over a FIXED 0.65-black scrim on a route thumbnail.
+	// --color-crown is the deliberately dark light-mode gold and would read
+	// 1.123:1 here against 4.196 for this hue — the naive swap is 3.7x
+	// worse, § 503 pointing the other way for once.
+	'routes/routes/+page.svelte': { FBBF24: [1, 'fixed-canvas'] },
+	// Race-day brand hero: a fixed canvas, its verdict inks on the same
+	// white pill (4.862:1 worst across the ramp), and an active toggle whose
+	// #8F2F24 is deliberately NOT --color-danger-strong's value.
+	'lib/components/RaceDayPanel.svelte': {
+		'047857': [2, 'fixed-canvas'], '8A4A00': [2, 'fixed-canvas'],
+		'991B1B': [2, 'fixed-canvas'], '8F2F24': [1, 'fixed-canvas'],
+	},
+	// --- Registered and OPEN. Each is a measured failure, not an exemption;
+	// the figures and grounds are in OPEN_DEBTS below, which pins the set so
+	// it cannot grow quietly.
+	'routes/+layout.svelte': {
+		F2A07B: [2, 'data'], D97A54: [1, 'data'], '6FA8DC': [1, 'data'],
+		'8FBF9F': [1, 'data'], E8C07D: [1, 'data'], '7FB3C2': [1, 'data'],
+		C98ECF: [1, 'data'], '1B1628': [1, 'data'],
+	},
+	'routes/dashboard/+page.svelte': { '8FBF9F': [5, 'data'], '4E7C5E': [2, 'data'] },
+	'routes/history/+page.svelte': {
+		'4E7C5E': [1, 'data'], '8FBF9F': [1, 'data'],
+		'9A6B2F': [1, 'data'], D9A25A: [1, 'data'],
+	},
+	'routes/settings/integrations/+page.svelte': {
+		FC4C02: [1, 'brand-hue'], '0077C8': [1, 'brand-hue'], FC3D5A: [1, 'brand-hue'],
+		B85AAD: [1, 'brand-hue'], '3F7A4F': [1, 'brand-hue'], '2F7E7E': [1, 'brand-hue'],
+	},
+	'lib/components/VerifiedBadge.svelte': { '2563EB': [1, 'data'] },
+};
+
+// Every literal the register knows is still a measured FAILURE, with the
+// worst figure and the ground it was measured against. Recorded rather than
+// silently exempted: a register whose whole point is completeness has to be
+// able to say "known bad, not yet fixed" — otherwise the honest thing gets
+// dropped from the register to keep the suite green, which is how § 511's
+// hole opened in the first place. Pinned as an exact set, so closing one
+// forces its removal and a new failure cannot join without an edit here.
+const OPEN_DEBTS: Record<string, string> = {
+	// The per-section nav accent is the label INK on a 14% tint of itself.
+	// On the light sidebar (#FFFFFF → #F1ECE0) all seven read 1.460–2.655:1
+	// as text, worst #E8C07D at 1.460. The active pill is fine — dark ink on
+	// the FULL accent, 5.757–10.291:1 — so the defect is the tinted-idle
+	// state only. Wants a per-section *-text rung, like --color-*-text.
+	'routes/+layout.svelte': '1.460:1 (#E8C07D ink on its own 14% tint over #FFFFFF)',
+	// The gym accent as a 3px rail, an icon and a border on the light
+	// surface: 2.075:1, under even the 3:1 non-text floor. Its glyph ink
+	// #4E7C5E reads 2.348:1 on the dark surface's tinted chip.
+	'routes/dashboard/+page.svelte': '2.075:1 (#8FBF9F rail/icon on #FFFFFF)',
+	// The same two accents on the history timeline glyphs, plus the meal
+	// pair: 2.348 and 2.398:1 on the dark surface, 3.507 / 3.314 on the
+	// light hover fill.
+	'routes/history/+page.svelte': '2.348:1 (#4E7C5E on an 18% #8FBF9F chip over #241B3D)',
+	// A provider's brand hue is fixed for their MARK, which is why the
+	// Google "G" above is exempt — but these are the hue reused as our glyph
+	// ink on our own tinted disc, which the brand does not require. Five of
+	// six fail the 3:1 floor on the ground they land on: Strava 2.375,
+	// HealthKit 2.446, ultrasignup 2.799, runsignup 2.831, chronotrack
+	// 2.961. Garmin alone clears, at 3.087.
+	'routes/settings/integrations/+page.svelte': '2.375:1 (#FC4C02 glyph on its own 12% disc over #EBE5D8)',
+	// 5.169:1 in light, 3.127:1 on the dark surface — AA in one theme only,
+	// the exact shape § 511 described.
+	'lib/components/VerifiedBadge.svelte': '3.127:1 (#2563EB as text on #241B3D)',
+};
+
+const ANY_SIX_HEX = /#([0-9a-fA-F]{6})(?![0-9a-fA-F])/g;
+
+export function literalsOn(line: string, isAppCss = false): string[] {
+	if (isAppCss && TOKEN_DECLARATION.test(line.trim())) return [];
+	return [...line.matchAll(ANY_SIX_HEX)].map((m) => m[1].toUpperCase());
+}
+
+test('every six-digit literal is in the register at its exact count', () => {
+	const violations: string[] = [];
+	const seen = new Set<string>();
+	for (const path of walkFiles(SRC_ROOT).sort()) {
+		const rel = relative(SRC_ROOT, path).split(sep).join('/');
+		seen.add(rel);
+		const allowed = REGISTER[rel] ?? {};
+		const counts: Record<string, number> = {};
+		const lines: Record<string, number[]> = {};
+		maskComments(readFileSync(path, 'utf-8'))
+			.split('\n')
+			.forEach((line, i) => {
+				for (const hex of literalsOn(line, rel === 'app.css')) {
+					counts[hex] = (counts[hex] ?? 0) + 1;
+					(lines[hex] ??= []).push(i + 1);
+				}
+			});
+		for (const [hex, count] of Object.entries(counts)) {
+			const expected = allowed[hex]?.[0] ?? 0;
+			if (count !== expected) {
+				violations.push(
+					`${rel}: #${hex} x${count} (registered ${expected}) at line${
+						lines[hex].length > 1 ? 's' : ''
+					} ${lines[hex].join(', ')}`,
+				);
+			}
+		}
+		for (const [hex, [count]] of Object.entries(allowed)) {
+			if (!(hex in counts)) {
+				violations.push(
+					`${rel}: the register expects #${hex} x${count} but the file paints ` +
+						`none — swept? Remove the entry.`,
+				);
+			}
+		}
+	}
+	for (const rel of Object.keys(REGISTER)) {
+		assert.ok(seen.has(rel), `${rel} is registered but was not scanned`);
+	}
+	assert.equal(
+		violations.length,
+		0,
+		`Every six-digit hex literal in apps/web/src must be in REGISTER with a ` +
+			`role and an exact count — a role is a claim about WHY the value is ` +
+			`frozen, and where a contrast bar applies the entry carries the number ` +
+			`and the ground it was measured against. Prefer routing the colour onto ` +
+			`a token; only add an entry when the value genuinely cannot follow the ` +
+			`theme. Violations:\n${violations.join('\n')}`,
+	);
+});
+
+test('the open-debt set is exactly what is recorded', () => {
+	for (const rel of Object.keys(OPEN_DEBTS)) {
+		assert.ok(
+			rel in REGISTER,
+			`${rel} carries an open debt but is not in the register`,
+		);
+	}
+	// Frozen so closing one is a deliberate edit here, and so a future round
+	// cannot quietly reclassify a new failure as an old one.
+	assert.deepEqual(Object.keys(OPEN_DEBTS).sort(), [
+		'lib/components/VerifiedBadge.svelte',
+		'routes/+layout.svelte',
+		'routes/dashboard/+page.svelte',
+		'routes/history/+page.svelte',
+		'routes/settings/integrations/+page.svelte',
+	]);
+	for (const [rel, figure] of Object.entries(OPEN_DEBTS)) {
+		assert.match(
+			figure,
+			/^\d+\.\d{3}:1 \(.+\)$/,
+			`${rel}: an open debt must carry its measured figure AND the ground ` +
+				`it was measured against — § 503's trap is a convenient background`,
+		);
+	}
+});
+
+test('the register is keyed on the hue, never on the CSS property', () => {
+	// § 511 considered a "no hex in a border" rule and declined it because it
+	// would need a 12-entry allowlist duplicating the one above. This is the
+	// decision it deferred: because the register keys on (file, hue) and the
+	// scan reads every line whatever it declares, a border literal is an
+	// entry like any other. Both of the surviving border literals are
+	// registered, so there is one register and not two.
+	assert.equal(REGISTER['routes/runs/[id]/+page.svelte']?.B5ADC3?.[0], 1);
+	assert.equal(REGISTER['routes/login/+page.svelte']?.['334155']?.[0], 1);
+	// And the matcher itself has no property in it.
+	assert.deepEqual(literalsOn('\tborder: 1px solid #B5ADC3;'), ['B5ADC3']);
+	assert.deepEqual(literalsOn('\tcolor: #B5ADC3;'), ['B5ADC3']);
+});
+
+test('the universal matcher catches a hue the status list never named', () => {
+	// The hole this closes. `#1d4ed8` is not on BANNED_HEXES and never was.
+	assert.deepEqual(bannedHexesOn('\tcolor: #1d4ed8;'), []);
+	assert.deepEqual(literalsOn('\tcolor: #1d4ed8;'), ['1D4ED8']);
+	// app.css declarations stay the vocabulary's one home, in both rules.
+	assert.deepEqual(literalsOn('\t--color-primary: #2C5F6E;', true), []);
+	assert.deepEqual(literalsOn('\tcolor: #2C5F6E;', true), ['2C5F6E']);
+	// 3-digit shorthands and rgb() spellings remain out of scope, declared
+	// rather than assumed.
+	assert.deepEqual(literalsOn('\tcolor: #d33;'), []);
+	assert.deepEqual(literalsOn('\tcolor: rgb(200, 40, 40);'), []);
 });
