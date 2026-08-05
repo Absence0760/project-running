@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -395,9 +396,6 @@ class _PersonRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final initial = (person.displayName?.isNotEmpty ?? false)
-        ? person.displayName![0].toUpperCase()
-        : '?';
     final metaParts = <String>[
       l10n.peoplePublicRunCount(person.publicRunsCount),
       if (person.sharedClubs > 0) l10n.peopleSharedClubsCount(person.sharedClubs),
@@ -420,18 +418,11 @@ class _PersonRow extends StatelessWidget {
         : Text(metaParts.join(' · '));
     return ListTile(
       isThreeLine: hasHandle,
-      leading: CircleAvatar(
-        backgroundColor: theme.colorScheme.primary,
-        foregroundImage: (person.avatarUrl != null && person.avatarUrl!.isNotEmpty)
-            ? NetworkImage(person.avatarUrl!)
-            : null,
-        child: Text(
-          initial,
-          style: TextStyle(
-            color: theme.colorScheme.onPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+      leading: IdentityAvatar(
+        seed: person.id,
+        name: person.displayName,
+        size: 40,
+        imageUrl: person.avatarUrl,
       ),
       title: Text(person.displayName ?? l10n.peopleFallbackDisplayName),
       subtitle: subtitle,

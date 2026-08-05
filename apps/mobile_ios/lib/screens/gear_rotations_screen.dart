@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ListSkeleton;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -181,7 +181,7 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(label: l10n.commonLoading, hasLeading: false)
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

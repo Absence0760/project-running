@@ -113,5 +113,42 @@ void main() {
       );
       expect(find.text('?'), findsOneWidget);
     });
+
+    testWidgets('keeps the initial visible while an image is in flight',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: IdentityAvatar(
+              seed: 'user-3',
+              name: 'alice',
+              imageUrl: 'https://example.test/a.jpg',
+            ),
+          ),
+        ),
+      );
+      expect(find.text('A'), findsOneWidget);
+    });
+
+    testWidgets('shows the initial, not an empty disc, when the image fails',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: IdentityAvatar(
+              seed: 'user-4',
+              name: 'bob',
+              imageUrl: 'https://example.test/gone.jpg',
+            ),
+          ),
+        ),
+      );
+      // The test binding's mock HTTP client answers every request with a
+      // 400, so the network image resolves to an error.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('B'), findsOneWidget);
+      expect(find.byType(RawImage), findsNothing);
+    });
   });
 }

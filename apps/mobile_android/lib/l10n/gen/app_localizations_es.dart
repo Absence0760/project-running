@@ -12478,4 +12478,16 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => 'Reintentar';
+
+  @override
+  String get photoLightboxLoading => 'Cargando la foto…';
+
+  @override
+  String get photoLightboxError => 'No se ha podido cargar esta foto.';
+
+  @override
+  String get photoLightboxErrorHint => 'Toca en cualquier parte para cerrar.';
+
+  @override
+  String get commonLoading => 'Cargando…';
 }

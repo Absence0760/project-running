@@ -57,4 +57,22 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(CustomPaint), findsWidgets);
   });
+
+  testWidgets('FullBodyLoader centres the figure and carries its label',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: FullBodyLoader(
+          kind: ActivityLoaderKind.run,
+          label: 'Chargement…',
+        ),
+      ),
+    ));
+    expect(find.bySemanticsLabel('Chargement…'), findsOneWidget);
+    final loader = tester.widget<ActivityLoader>(find.byType(ActivityLoader));
+    expect(loader.size, 76);
+    expect(find.ancestor(of: find.byType(ActivityLoader),
+        matching: find.byType(Center)), findsWidgets);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
 }

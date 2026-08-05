@@ -12474,6 +12474,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => 'Tentar novamente';
+
+  @override
+  String get photoLightboxLoading => 'A carregar a fotografia…';
+
+  @override
+  String get photoLightboxError => 'Não foi possível carregar esta fotografia.';
+
+  @override
+  String get photoLightboxErrorHint => 'Toque em qualquer sítio para fechar.';
+
+  @override
+  String get commonLoading => 'A carregar…';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -24941,4 +24953,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get pendingSyncRetry => 'Tentar novamente';
+
+  @override
+  String get photoLightboxLoading => 'Carregando a foto…';
+
+  @override
+  String get photoLightboxError => 'Não foi possível carregar esta foto.';
+
+  @override
+  String get photoLightboxErrorHint => 'Toque em qualquer lugar para fechar.';
+
+  @override
+  String get commonLoading => 'Carregando…';
 }

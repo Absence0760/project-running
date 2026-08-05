@@ -12348,4 +12348,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => 'Retry';
+
+  @override
+  String get photoLightboxLoading => 'Loading photo…';
+
+  @override
+  String get photoLightboxError => 'This photo couldn\'t be loaded.';
+
+  @override
+  String get photoLightboxErrorHint => 'Tap anywhere to close.';
+
+  @override
+  String get commonLoading => 'Loading…';
 }

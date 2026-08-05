@@ -60,7 +60,7 @@ class _SessionsScreenState extends State<SessionsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.sessionTitle)),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(label: l10n.commonLoading, hasLeading: false)
           : _error
               ? ErrorState(message: l10n.sessionLoadError, onRetry: _load)
               : _plans.isEmpty

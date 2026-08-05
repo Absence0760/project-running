@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart' show RecentRunRow;
+import 'photo_lightbox.dart';
 import 'run_photos.dart' show extensionForFilename, contentTypeForExtension;
 import 'top_banner.dart';
 
@@ -251,20 +252,8 @@ class _EventPhotosState extends State<EventPhotos> {
     }
   }
 
-  void _openLightbox(EventPhotoView p) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (_) => GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: InteractiveViewer(
-          child: Center(
-            child: Image.network(_photoUrl(p.storagePath), fit: BoxFit.contain),
-          ),
-        ),
-      ),
-    );
-  }
+  void _openLightbox(EventPhotoView p) =>
+      showPhotoLightbox(context, url: _photoUrl(p.storagePath));
 
   String _dur(int s) {
     final h = s ~/ 3600;

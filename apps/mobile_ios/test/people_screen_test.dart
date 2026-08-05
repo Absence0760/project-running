@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/people_screen.dart';
@@ -31,10 +32,12 @@ PeopleSuggestion _person({
   int sharedClubs = 1,
   bool follows = false,
   String? handle,
+  String? avatarUrl,
 }) =>
     PeopleSuggestion(
       id: id,
       displayName: name,
+      avatarUrl: avatarUrl,
       publicRunsCount: runs,
       sharedClubs: sharedClubs,
       viewerFollows: follows,
@@ -151,6 +154,28 @@ void main() {
 
   group('PeopleScreen — widget behaviour', () {
     setUpAll(_ensureSupabase);
+
+    testWidgets('an avatar whose image fails still shows the initial',
+        (tester) async {
+      await tester.pumpWidget(_wrap(PeopleScreen(
+        api: _FakeApi(suggestions: [
+          _person(
+            id: 'a',
+            name: 'Casey Marathon',
+            avatarUrl: 'https://example.test/casey.jpg',
+          ),
+        ]),
+        embedded: true,
+      )));
+      await _settle(tester);
+      // The test binding answers every HTTP request with a 400, so the
+      // avatar image resolves to an error. The row must still identify
+      // its person rather than rendering an empty coloured disc.
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(IdentityAvatar), findsOneWidget);
+      expect(find.text('C'), findsOneWidget);
+      expect(find.byType(RawImage), findsNothing);
+    });
 
     testWidgets('suggestions render once the mount load resolves',
         (tester) async {

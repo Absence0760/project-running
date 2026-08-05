@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -214,7 +215,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.devicesTitle)),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(label: l10n.commonLoading)
           : _loadError != null
               ? ErrorState(message: l10n.devicesLoadError, onRetry: _load)
               : _devices.isEmpty

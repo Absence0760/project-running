@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, IdentityAvatar;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -776,9 +776,11 @@ class _LeaderboardRow extends StatelessWidget {
                     ),
                   ),
           ),
-          _MiniAvatar(
-            displayName: entry.athlete.displayName,
-            avatarUrl: entry.athlete.avatarUrl,
+          IdentityAvatar(
+            seed: entry.athlete.id,
+            name: entry.athlete.displayName,
+            size: 24,
+            imageUrl: entry.athlete.avatarUrl,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -810,49 +812,5 @@ class _LeaderboardRow extends StatelessWidget {
       return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     }
     return '$m:${s.toString().padLeft(2, '0')}';
-  }
-}
-
-class _MiniAvatar extends StatelessWidget {
-  final String? displayName;
-  final String? avatarUrl;
-  const _MiniAvatar({this.displayName, this.avatarUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final letter = (displayName?.isNotEmpty ?? false)
-        ? displayName![0].toUpperCase()
-        : '?';
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: theme.colorScheme.primary,
-        image: avatarUrl != null && avatarUrl!.isNotEmpty
-            ? DecorationImage(
-                // Avatar renders at 24 dp; decode at ~3× to keep
-                // memory bounded in segment leaderboards.
-                image: ResizeImage(
-                  NetworkImage(avatarUrl!),
-                  width: 72,
-                  height: 72,
-                ),
-                fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      alignment: Alignment.center,
-      child: avatarUrl == null || avatarUrl!.isEmpty
-          ? Text(
-              letter,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            )
-          : null,
-    );
   }
 }

@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/plans_screen.dart';
 import '../lib/training_service.dart';
@@ -93,14 +94,15 @@ void main() {
       expect(find.text('New plan'), findsNothing);
     });
 
-    testWidgets('does not render the loading spinner over the sign-in prompt',
+    testWidgets('does not render a loading treatment over the sign-in prompt',
         (tester) async {
       // Reason: the not-signed-in branch must short-circuit BEFORE the
-      // _loading flag has a chance to surface a CircularProgressIndicator.
+      // _loading flag has a chance to surface a loading treatment.
       final training = TrainingService();
       await _pump(tester, training: training);
       await tester.pump();
       expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(ListSkeleton), findsNothing);
     });
   });
 

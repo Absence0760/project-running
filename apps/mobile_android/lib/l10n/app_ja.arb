@@ -3635,5 +3635,9 @@
   "watchLiveSyncSubtitle": "ウォッチに記録されたランを取り込みます。その間、中継は一時停止します。",
   "pendingSyncOffline": "{count, plural, other{{count}件の変更をこの端末に保存しました — オンラインになったら同期します}}",
   "pendingSyncFailed": "{count, plural, other{{count}件の変更が同期されていません}}",
-  "pendingSyncRetry": "再試行"
+  "pendingSyncRetry": "再試行",
+  "photoLightboxLoading": "写真を読み込んでいます…",
+  "photoLightboxError": "この写真を読み込めませんでした。",
+  "photoLightboxErrorHint": "画面のどこかをタップすると閉じます。",
+  "commonLoading": "読み込み中…"
 }

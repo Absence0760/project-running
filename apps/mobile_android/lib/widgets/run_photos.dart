@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth_error.dart';
 import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../widgets/photo_lightbox.dart';
 import '../widgets/top_banner.dart';
 
 /// Map a picked filename to the extension we'll store the upload under.
@@ -337,45 +338,8 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
     }
   }
 
-  void _openLightbox(RunPhotoRow p) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (_) => GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            InteractiveViewer(
-              child: Image.network(
-                _photoUrl(p.storagePath),
-                fit: BoxFit.contain,
-              ),
-            ),
-            if (p.caption != null && p.caption!.isNotEmpty)
-              Positioned(
-                bottom: 32,
-                left: 24,
-                right: 24,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    p.caption!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  void _openLightbox(RunPhotoRow p) =>
+      showPhotoLightbox(context, url: _photoUrl(p.storagePath), caption: p.caption);
 
   @override
   Widget build(BuildContext context) {

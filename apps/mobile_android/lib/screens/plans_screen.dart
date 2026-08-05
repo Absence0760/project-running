@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -148,7 +149,7 @@ class _PlansScreenState extends State<PlansScreen> {
       body: !signedIn
           ? const _SignInPrompt()
           : _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(label: l10n.commonLoading, hasLeading: false)
           : _error != null
               ? ErrorState(
                   message: _error == _PlansLoadError.timeout

@@ -605,7 +605,12 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: FullBodyLoader(
+          kind: ActivityLoaderKind.run,
+          label: l10n.commonLoading,
+        ),
+      );
     }
     if (_error != null) {
       return Scaffold(

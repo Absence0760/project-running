@@ -343,7 +343,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: FullBodyLoader(
+          kind: ActivityLoaderKind.run,
+          label: AppLocalizations.of(context).commonLoading,
+        ),
+      );
     }
     final c = _club;
     if (c == null) {

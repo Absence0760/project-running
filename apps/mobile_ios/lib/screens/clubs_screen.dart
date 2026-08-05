@@ -220,7 +220,7 @@ class ClubsScreenState extends State<ClubsScreen> {
   Widget _buildList(List<ClubView> list) {
     final l10n = AppLocalizations.of(context);
     return _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(label: l10n.commonLoading)
           : _error != null
               ? ErrorState(
                   message: _error == _ClubsLoadError.timeout

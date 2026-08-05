@@ -143,9 +143,9 @@ class _RoutinePublicLibraryScreenState
           ),
           Expanded(
             child: _loading
-                ? const Center(
-                    child:
-                        ActivityLoader(kind: ActivityLoaderKind.train, size: 76),
+                ? FullBodyLoader(
+                    kind: ActivityLoaderKind.train,
+                    label: l10n.commonLoading,
                   )
                 : _signedOut
                     ? SignInRequiredState(api: widget.api, onSignedIn: _load)
@@ -384,8 +384,9 @@ class _RoutinePublicPreviewScreenState
                   _adopting ? l10n.gymLibraryAdopting : l10n.gymLibraryAdopt),
             ),
       body: _loading
-          ? const Center(
-              child: ActivityLoader(kind: ActivityLoaderKind.train, size: 76),
+          ? FullBodyLoader(
+              kind: ActivityLoaderKind.train,
+              label: l10n.commonLoading,
             )
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),

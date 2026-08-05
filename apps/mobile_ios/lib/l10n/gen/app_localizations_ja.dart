@@ -11898,4 +11898,16 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => '再試行';
+
+  @override
+  String get photoLightboxLoading => '写真を読み込んでいます…';
+
+  @override
+  String get photoLightboxError => 'この写真を読み込めませんでした。';
+
+  @override
+  String get photoLightboxErrorHint => '画面のどこかをタップすると閉じます。';
+
+  @override
+  String get commonLoading => '読み込み中…';
 }

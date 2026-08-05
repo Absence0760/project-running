@@ -650,7 +650,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: FullBodyLoader(
+          kind: ActivityLoaderKind.run,
+          label: l10n.commonLoading,
+        ),
+      );
     }
     if (_loadError != null) {
       return Scaffold(
