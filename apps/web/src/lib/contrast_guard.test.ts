@@ -454,7 +454,7 @@ for (const { label, marker } of THEMES) {
 // have gone on passing against whatever list happened to come first.
 function dartChartScale(
 	brightness: 'light' | 'dark',
-	scale: 'series' | 'zones',
+	scale: 'series' | 'zones' | 'ramp',
 ): string[] {
 	const dart = readFileSync(
 		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/chart_palette.dart'),
@@ -646,6 +646,80 @@ test('HR zone tokens match mobile ChartPalette.zones', () => {
 		});
 	}
 });
+
+// The third scale, added when the web heatmap stopped carrying a hardcoded
+// Tailwind indigo ramp (`#C7D2FE`..`#4F46E5`) that tracked neither theme nor
+// mobile. Same by-name read as the other two, for the same reason: the scales
+// have moved files before, and a positional match would have gone on passing.
+test('heat ramp tokens match mobile ChartPalette.ramp', () => {
+	for (const [marker, brightness] of [
+		[':root {', 'light'],
+		['@media (prefers-color-scheme: dark)', 'dark'],
+		[':root[data-theme="dark"]', 'dark'],
+	] as const) {
+		const hexes = dartChartScale(brightness, 'ramp');
+		assert.equal(
+			hexes.length,
+			3,
+			`ChartPalette.${brightness}.ramp does not carry three steps`,
+		);
+		hexes.forEach((hex, i) => {
+			assert.equal(
+				resolveToken(marker, `heat-${i + 1}`).toUpperCase(),
+				hex,
+				`--heat-${i + 1} in ${marker} has drifted from ChartPalette.${brightness}.ramp[${i}].`,
+			);
+		});
+	}
+});
+
+// A sequential ramp owes two separate things, and the two pull against each
+// other: every step must be visible ON the card (1.4.11's 3:1), and adjacent
+// steps must be separable FROM each other or the ladder reads as one blob.
+// The 1.7 floor is the same one the categorical series ladder uses.
+for (const { label, marker } of THEMES) {
+	test(`heat ramp steps are visible and separable — ${label}`, () => {
+		const steps = [1, 2, 3].map((i) => resolveToken(marker, `heat-${i}`));
+		for (const surfaceName of SURFACE_TOKENS) {
+			const surface = resolveToken(marker, surfaceName);
+			steps.forEach((hex, i) => {
+				const ratio = contrastRatio(hex, surface);
+				assert.ok(
+					ratio >= AA_NON_TEXT,
+					`--heat-${i + 1} (${hex}) on --${surfaceName} (${surface}) is ${ratio.toFixed(3)}:1 in ${label}; a heatmap cell needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+				);
+			});
+		}
+		const ladder = steps.map(relativeLuminance);
+		for (let i = 0; i + 1 < ladder.length; i++) {
+			const ratio = (Math.max(ladder[i], ladder[i + 1]) + 0.05) / (Math.min(ladder[i], ladder[i + 1]) + 0.05);
+			assert.ok(
+				ratio >= 1.7,
+				`--heat-${i + 1} and --heat-${i + 2} separate by only ${ratio.toFixed(3)}:1 in ${label}; the ramp is monotone, so luminance is the only channel carrying the level.`,
+			);
+		}
+		assert.ok(
+			ladder[0] !== ladder[1] && ladder[1] !== ladder[2],
+			`the heat ramp is not monotone in ${label}`,
+		);
+	});
+
+	// --heat-0 is the zero cell's frame, not a level. It still owes 3:1,
+	// because the tonal fill behind it cannot carry the grid on its own: in
+	// dark --color-bg-tertiary IS --color-surface, so without this hairline
+	// the whole calendar scaffold disappears on a card.
+	test(`the zero-cell frame is visible on every surface — ${label}`, () => {
+		const frame = resolveToken(marker, 'heat-0');
+		for (const surfaceName of SURFACE_TOKENS) {
+			const surface = resolveToken(marker, surfaceName);
+			const ratio = contrastRatio(frame, surface);
+			assert.ok(
+				ratio >= AA_NON_TEXT,
+				`--heat-0 (${frame}) on --${surfaceName} (${surface}) is ${ratio.toFixed(3)}:1 in ${label}; the grid frame needs >=${AA_NON_TEXT}:1.`,
+			);
+		}
+	});
+}
 
 // --color-success-text / --color-danger-text, checked on every plain surface
 // (the signed readiness delta is bare text on the card) AND on the deepest
