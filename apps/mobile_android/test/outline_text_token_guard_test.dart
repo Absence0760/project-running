@@ -132,8 +132,9 @@ _Use classify(String src, int at) {
 
 bool _isSpace(String c) => c == ' ' || c == '\n' || c == '\t' || c == '\r';
 
-bool _isNamePart(String c) =>
-    RegExp(r'[A-Za-z0-9_$.?!]').hasMatch(c);
+final _namePart = RegExp(r'[A-Za-z0-9_$.?!]');
+
+bool _isNamePart(String c) => _namePart.hasMatch(c);
 
 /// Fixtures. `_Use.derived` cases are the ones the classifier cannot decide
 /// from syntax and must therefore refuse.
