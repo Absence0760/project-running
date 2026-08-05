@@ -12,3 +12,4 @@ export 'src/widgets/list_skeleton.dart';
 export 'src/widgets/import_sheet.dart';
 export 'src/widgets/text_lane.dart';
 export 'src/theme/app_theme.dart';
+export 'src/theme/chart_palette.dart';
