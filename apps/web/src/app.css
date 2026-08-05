@@ -108,30 +108,6 @@
 	--zone-4: #AF5111;
 	--zone-5: #E9544F;
 
-	/* Sequential heat ramp, in lockstep with mobile's ChartPalette.ramp. Unlike
-	   the two scales above, this one encodes ONE quantity at increasing
-	   intensity (a heatmap cell, a single-series bar), so the steps are one
-	   hue, monotone, and read as an ordered ladder rather than as categories.
-	   Built as a tint ladder from the card toward --chart-fitness, so the top
-	   step and the most legible series colour are the same value and the app
-	   carries one intensity ladder rather than two. Each step clears 1.4.11's
-	   3:1 against every surface (4.310 / 7.994 / 14.806 on the white card) and
-	   adjacent steps sit ~1.85:1 apart. Three steps is the ceiling, not a
-	   choice: a fourth rung at that separation would also owe 3:1 to the card,
-	   and sRGB has no room for both.
-
-	   --heat-0 is the zero cell's hairline, NOT a level. Its job is calendar
-	   position — the grid frame that gives every filled cell its meaning — and
-	   the tonal fill alone cannot do it: --color-bg-tertiary is 1.255:1 on the
-	   light card and in dark it is byte-identical to --color-surface, so the
-	   grid vanishes entirely. Value is mobile's §487 line token (3.906:1 light,
-	   3.330:1 dark on the card); web has no general 3:1 line token yet, and
-	   minting one belongs to that sweep, not to this ramp. */
-	--heat-1: #7975A1;
-	--heat-2: #4E4987;
-	--heat-3: #1F1A6B;
-	--heat-0: #8A806A;
-
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
@@ -284,15 +260,6 @@
 		--zone-4: #E56917;
 		--zone-5: #E2231C;
 
-		/* See the :root note. Ramp direction inverts with the background: the
-		   ladder is still a tint toward --chart-fitness, which in dark is the
-		   light lavender, so intensity climbs toward the page rather than away
-		   from it. 3.859 / 7.126 / 13.149 on the dark card. */
-		--heat-1: #7E7896;
-		--heat-2: #ADA9C5;
-		--heat-3: #E8E5FF;
-		--heat-0: #786A9A;
-
 		--color-bg: #120D22;
 		--color-bg-secondary: #0C0818;
 		--color-bg-tertiary: #241B3D;
@@ -367,12 +334,6 @@
 	--zone-3: #D8A01B;
 	--zone-4: #E56917;
 	--zone-5: #E2231C;
-
-	/* See the :root note; 3.859 / 7.126 / 13.149 on the dark card. */
-	--heat-1: #7E7896;
-	--heat-2: #ADA9C5;
-	--heat-3: #E8E5FF;
-	--heat-0: #786A9A;
 
 	--color-bg: #120D22;
 	--color-bg-secondary: #0C0818;

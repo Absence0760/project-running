@@ -1970,25 +1970,15 @@ test('accessibility: chart svgs + map canvas carry role + aria-label', () => {
 	// individually (rects on heatmap, paths on train-load chart)
 	// and have no name for the maplibre canvas at all. Pin each
 	// surface's labelled-landmark wrapper.
-	const heatmap = read('src/lib/components/CalendarHeatmap.svelte');
 	const train = read('src/lib/components/TrainingLoadChart.svelte');
 	const map = read('src/lib/components/RunMap.svelte');
-	// CalendarHeatmap + TrainingLoadChart + RunMap had their accessible
-	// names extracted into the i18n catalogue, so assert the labelled-
-	// landmark wiring (via the m()/t() key) plus the English copy that
-	// names each.
-	assert.match(
-		heatmap,
-		/<svg[^>]*role="img"[^>]*aria-label=\{m\('calendarHeatmap\.label'\)\}/s,
-		'CalendarHeatmap.svelte <svg> must carry role="img" + an ' +
-			'aria-label (calendarHeatmap.label).',
-	);
+	// TrainingLoadChart + RunMap had their accessible names extracted into
+	// the i18n catalogue, so assert the labelled-landmark wiring (via the
+	// m()/t() key) plus the English copy that names each. CalendarHeatmap
+	// was the third surface here until round 11 deleted it — `/dashboard`
+	// retired that card in favour of the Training intensity card, so the
+	// component had no route and its only reader was this guard.
 	const en = read('src/lib/i18n/locales/en.ts');
-	assert.match(
-		en,
-		/"calendarHeatmap\.label":\s*"Activity calendar heatmap"/,
-		'calendarHeatmap.label copy must name the activity heatmap.',
-	);
 	assert.match(
 		train,
 		/<svg[^>]*role="img"[^>]*aria-label=\{t\('trainingLoad\.chartAriaLabel'\)\}/s,
