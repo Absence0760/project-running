@@ -498,13 +498,22 @@ test.describe('Heatmap hover-to-preview (web)', () => {
 		await expect(first).toHaveClass(/hovered/);
 		// ...and the map draws that one route's line + a halo on its dot.
 		await expect.poll(() => lineCount(page), { timeout: 5000 }).toBeGreaterThanOrEqual(1);
-		const halo = await page.evaluate(
-			() =>
-				(window as unknown as { __heatmapMap?: any }).__heatmapMap.querySourceFeatures(
-					'heatmap-route-hl',
-				).length,
-		);
-		expect(halo).toBeGreaterThanOrEqual(1);
+		// Polled like the line count above it: `querySourceFeatures` only returns
+		// features from source tiles the map has already processed, so a one-shot
+		// read races the hover's setData on a slower machine and reports 0 for a
+		// halo that is about to exist.
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						() =>
+							(
+								window as unknown as { __heatmapMap?: any }
+							).__heatmapMap.querySourceFeatures('heatmap-route-hl').length,
+					),
+				{ timeout: 5000 },
+			)
+			.toBeGreaterThanOrEqual(1);
 
 		// Moving off the row clears the preview (debounced).
 		await page.mouse.move(2, 2);
