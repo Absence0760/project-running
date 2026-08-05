@@ -2,9 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// The width a stat cell needs at 1.0x text scale before its value stops
-/// being readable. Scaled by the OS text scale, it is what [StatGrid] divides
-/// the available width by to decide a column count.
+/// Narrowest a stat cell may be at 1.0x text scale before its value stops
+/// being readable. The widest secondary value a run produces is a paced one —
+/// "10:24 /km", "1234 kcal" — needing roughly 64 dp at the 14 sp body size a
+/// [StatTile.small] draws its value in, so 72 leaves the value whole and lets
+/// only the label truncate. Scaled by the OS text scale, it is what [StatGrid]
+/// divides the available width by to decide a column count.
 const double kStatCellMinWidth = 72;
 
 /// Lays stat cells on a column grid whose column *count* is derived from the

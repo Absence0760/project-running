@@ -98,9 +98,10 @@ Future<void> _pump(
 /// mask the geometry these tests exist to measure.
 void _drainUnrelatedOverflow(WidgetTester tester) => tester.takeException();
 
-/// The stat cell holding [label] — the `Column` a stat widget is built from,
-/// which its parent (an `Expanded` before, a grid cell now) sizes tightly, so
-/// the same finder measures the real cell width under either layout.
+/// The stat cell holding [label] — the `Column` a `StatTile` is built from,
+/// which its parent (an `Expanded` before, a `StatGrid` cell now) sizes
+/// tightly, so the same finder measures the real cell width under either
+/// layout.
 Finder _cell(String label) =>
     find.ancestor(of: find.text(label), matching: find.byType(Column)).first;
 
