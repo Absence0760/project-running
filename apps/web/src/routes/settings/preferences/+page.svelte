@@ -1290,7 +1290,7 @@
 		margin: var(--space-xs) 0 0;
 		font-size: 0.8rem;
 		font-weight: 600;
-		color: var(--color-success, #2e7d32);
+		color: var(--color-success-text);
 	}
 	.save-status .material-symbols {
 		font-size: 1rem;

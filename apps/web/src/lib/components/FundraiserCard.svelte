@@ -79,10 +79,10 @@
 	}
 	.charity {
 		margin: var(--space-2xs) 0 0;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.closed {
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		font-weight: 600;
 	}
 	.fundraiser-card.compact header h3 {

@@ -618,7 +618,7 @@
 	}
 
 	.sidebar.collapsed {
-		width: var(--sidebar-collapsed-width, 4.5rem);
+		width: var(--sidebar-collapsed-width);
 	}
 
 	.sidebar-head {
@@ -997,7 +997,7 @@
 	}
 
 	.app-shell.sidebar-collapsed .main-content {
-		margin-inline-start: var(--sidebar-collapsed-width, 4.5rem);
+		margin-inline-start: var(--sidebar-collapsed-width);
 	}
 
 	/* Hide labels and trim spacing when collapsed. Icons keep their
@@ -1070,10 +1070,10 @@
 	   a 480px screen — the rail is the only viable shape. */
 	@media (max-width: 40rem) {
 		.sidebar {
-			width: var(--sidebar-collapsed-width, 4.5rem);
+			width: var(--sidebar-collapsed-width);
 		}
 		.main-content {
-			margin-inline-start: var(--sidebar-collapsed-width, 4.5rem);
+			margin-inline-start: var(--sidebar-collapsed-width);
 		}
 		.sidebar .nav-label,
 		.sidebar .user-details,
@@ -1108,9 +1108,9 @@
 		/* The popover is anchored to the left edge — pin it inside the
 		   viewport so it doesn't clip when the rail is only 4.5rem. */
 		.popover {
-			inset-inline-start: calc(var(--sidebar-collapsed-width, 4.5rem) + var(--space-xs));
+			inset-inline-start: calc(var(--sidebar-collapsed-width) + var(--space-xs));
 			min-width: 13rem;
-			max-width: calc(100vw - var(--sidebar-collapsed-width, 4.5rem) - var(--space-md));
+			max-width: calc(100vw - var(--sidebar-collapsed-width) - var(--space-md));
 		}
 	}
 </style>

@@ -39,7 +39,7 @@
 		font-size: 0.7rem;
 		font-weight: 700;
 		color: var(--color-primary);
-		background: var(--color-primary-subtle, var(--color-bg));
+		background: var(--color-primary-light);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
 		padding: 0.15rem 0.5rem;

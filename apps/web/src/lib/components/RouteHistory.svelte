@@ -105,7 +105,7 @@
 	}
 	.meta {
 		margin-top: 0.25rem;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		font-size: 0.875rem;
 	}
 </style>

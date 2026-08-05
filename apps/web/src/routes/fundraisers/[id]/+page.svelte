@@ -293,7 +293,7 @@
 		gap: var(--space-lg);
 	}
 	.state {
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.hero-head {
 		display: flex;
@@ -312,7 +312,7 @@
 	}
 	.charity {
 		margin: var(--space-xs) 0 0;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.thermometer-card,
 	.story,
@@ -331,14 +331,14 @@
 	}
 	.thanks {
 		padding: var(--space-md) var(--space-lg);
-		background: var(--color-success-bg, #ecfdf5);
-		border: 1px solid var(--color-success, #16a34a);
+		background: var(--color-success-light);
+		border: 1px solid var(--color-success);
 	}
 	.thanks p {
 		margin: var(--space-2xs) 0 0;
 	}
 	.closed {
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		font-weight: 600;
 		margin: 0;
 	}

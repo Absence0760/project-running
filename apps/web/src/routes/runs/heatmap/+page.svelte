@@ -47,7 +47,7 @@
 		flex-direction: column;
 		padding: var(--space-xl) var(--space-2xl);
 		gap: var(--space-lg);
-		height: calc(100vh - var(--app-header-h, 0px));
+		height: 100vh;
 		min-height: 32rem;
 	}
 	.page-head {

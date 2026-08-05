@@ -84,7 +84,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -92,18 +92,18 @@
 	}
 	.reached {
 		margin-inline-start: auto;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	input[type='range'] {
 		width: 100%;
-		accent-color: var(--accent, #4f46e5);
+		accent-color: var(--color-primary);
 		cursor: pointer;
 	}
 	.ends {
 		display: flex;
 		justify-content: space-between;
 		font-size: 11px;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		padding: 0 4px;
 	}
 </style>

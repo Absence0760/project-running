@@ -1695,7 +1695,7 @@
 		padding: 0 0.3rem;
 		font-size: 0.7rem;
 		font-weight: 700;
-		color: var(--color-on-primary, #fff);
+		color: var(--color-on-primary);
 		background: var(--color-primary);
 		border-radius: 999px;
 	}
@@ -1767,7 +1767,7 @@
 		border-color: var(--color-primary);
 	}
 	.chip.active {
-		color: var(--color-on-primary, #fff);
+		color: var(--color-on-primary);
 		background: var(--color-primary);
 		border-color: var(--color-primary);
 	}

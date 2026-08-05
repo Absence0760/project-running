@@ -132,8 +132,8 @@
 	.payouts-gate {
 		padding: var(--space-sm);
 		border-radius: var(--radius-md, 8px);
-		background: var(--color-surface-alt, #f3f4f6);
-		color: var(--color-text-muted, #6b7280);
+		background: var(--color-bg-secondary);
+		color: var(--color-text-secondary);
 	}
 	.actions {
 		display: flex;

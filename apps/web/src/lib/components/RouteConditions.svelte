@@ -316,7 +316,7 @@
 		font-size: 0.85rem;
 		padding: 0.1rem 0.5rem;
 		border-radius: 999px;
-		background: var(--color-surface-alt, rgba(0, 0, 0, 0.06));
+		background: var(--chip-bg);
 	}
 	.sev-tag {
 		font-size: 0.78rem;
@@ -324,10 +324,10 @@
 		letter-spacing: 0.02em;
 	}
 	.severity-info {
-		color: var(--color-text-muted, #667);
+		color: var(--color-text-secondary);
 	}
 	.severity-caution {
-		color: var(--color-warning, #b45309);
+		color: var(--color-warning-text);
 	}
 	.severity-impassable {
 		color: var(--color-danger, #b91c1c);
@@ -342,7 +342,7 @@
 	.at-km,
 	.age {
 		font-size: 0.8rem;
-		color: var(--color-text-muted, #667);
+		color: var(--color-text-secondary);
 	}
 	.age {
 		margin-inline-start: auto;
@@ -353,7 +353,7 @@
 		font-size: 1.1rem;
 		line-height: 1;
 		cursor: pointer;
-		color: var(--color-text-muted, #889);
+		color: var(--color-text-secondary);
 		padding: 0 0.25rem;
 	}
 	.delete-btn:hover {
@@ -364,7 +364,7 @@
 		font-size: 0.9rem;
 	}
 	.muted {
-		color: var(--color-text-muted, #667);
+		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 	}
 	.error-banner {

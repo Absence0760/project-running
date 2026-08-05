@@ -311,7 +311,7 @@
 	.bar-track {
 		height: 0.4rem;
 		background: var(--color-bg-tertiary);
-		border-radius: var(--radius-pill, 999px);
+		border-radius: var(--radius-pill);
 		overflow: hidden;
 	}
 	.bar-fill {

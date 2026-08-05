@@ -293,7 +293,7 @@
 	.match-hint {
 		margin: 0 0 var(--space-sm);
 		font-size: 0.85rem;
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 	}
 	.match-actions {
 		display: flex;

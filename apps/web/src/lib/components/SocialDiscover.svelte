@@ -431,7 +431,7 @@
 	.chip.active {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
-		color: var(--color-on-primary, #fff);
+		color: var(--color-on-primary);
 	}
 	.select-row {
 		display: flex;

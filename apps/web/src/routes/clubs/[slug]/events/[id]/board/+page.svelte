@@ -436,21 +436,21 @@
 		font-weight: 700;
 	}
 	.verdict-safe {
-		background: color-mix(in srgb, var(--success, #16a34a) 16%, transparent);
-		color: var(--success, #16a34a);
+		background: color-mix(in srgb, var(--color-success) 16%, transparent);
+		color: var(--color-success-text);
 	}
 	.verdict-tight {
-		background: color-mix(in srgb, var(--warning, #b45309) 18%, transparent);
-		color: var(--warning, #b45309);
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: var(--color-warning-text);
 	}
 	.verdict-miss {
-		background: color-mix(in srgb, var(--danger, #dc2626) 16%, transparent);
-		color: var(--danger, #dc2626);
+		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+		color: var(--color-danger-text);
 	}
 	.status-chip {
 		display: inline-block;
 		padding: 0.05rem 0.45rem;
-		border-radius: var(--radius-pill, 999px);
+		border-radius: var(--radius-pill);
 		font-size: 0.75rem;
 		font-weight: 700;
 	}
@@ -459,20 +459,20 @@
 		color: var(--color-text);
 	}
 	.status-finished {
-		background: color-mix(in srgb, var(--success, #16a34a) 16%, transparent);
-		color: var(--success, #16a34a);
+		background: color-mix(in srgb, var(--color-success) 16%, transparent);
+		color: var(--color-success-text);
 	}
 	.status-dnf {
-		background: color-mix(in srgb, var(--danger, #dc2626) 16%, transparent);
-		color: var(--danger, #dc2626);
+		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+		color: var(--color-danger-text);
 	}
 	.status-chip.hold {
 		margin-inline-start: 0.3rem;
-		background: color-mix(in srgb, var(--danger, #dc2626) 16%, transparent);
-		color: var(--danger, #dc2626);
+		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+		color: var(--color-danger-text);
 	}
 	.btn-link.danger {
-		color: var(--danger, #dc2626);
+		color: var(--color-danger-text);
 	}
 	.form-actions {
 		display: flex;

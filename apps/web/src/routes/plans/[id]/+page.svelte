@@ -1913,9 +1913,9 @@
 	}
 	.drift-over,
 	.missed-make_up {
-		background: color-mix(in srgb, var(--color-warning, #B45309) 12%, var(--color-bg));
-		border-color: color-mix(in srgb, var(--color-warning, #B45309) 35%, transparent);
-		color: var(--color-warning, #B45309);
+		background: color-mix(in srgb, var(--color-warning) 12%, var(--color-bg));
+		border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+		color: var(--color-warning-text);
 	}
 	.drift-under {
 		background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg));

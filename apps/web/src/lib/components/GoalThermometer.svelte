@@ -54,7 +54,7 @@
 	.bar {
 		height: 0.85rem;
 		border-radius: 999px;
-		background: var(--color-surface-alt, #e5e7eb);
+		background: var(--color-border);
 		overflow: hidden;
 	}
 	.fill {
@@ -64,7 +64,7 @@
 		transition: width 0.4s ease;
 	}
 	.fill.exceeded {
-		background: var(--color-success, #16a34a);
+		background: var(--color-success);
 	}
 	.stats {
 		display: flex;
@@ -73,17 +73,17 @@
 		font-weight: 600;
 	}
 	.pct {
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		font-variant-numeric: tabular-nums;
 	}
 	.sub {
 		display: flex;
 		justify-content: space-between;
 		font-size: 0.85rem;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.over {
-		color: var(--color-success, #16a34a);
+		color: var(--color-success-text);
 		font-weight: 600;
 	}
 </style>

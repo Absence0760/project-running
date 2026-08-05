@@ -475,7 +475,7 @@
 	}
 	.kind-tab.active {
 		background: var(--color-primary);
-		color: var(--color-on-primary, #fff);
+		color: var(--color-on-primary);
 	}
 	.club-target-note {
 		margin-bottom: var(--space-md);

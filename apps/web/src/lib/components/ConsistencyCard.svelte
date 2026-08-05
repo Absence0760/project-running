@@ -113,7 +113,7 @@
 	}
 	.headline-sub {
 		font-size: 0.9rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.consistency-strip {
 		display: flex;
@@ -127,7 +127,7 @@
 		height: var(--h, 6%);
 		min-height: 3px;
 		border-radius: 2px;
-		background: var(--border, #e5e7eb);
+		background: var(--color-border);
 	}
 	.week-cell.active {
 		background: var(--color-primary, #2563eb);
@@ -152,11 +152,11 @@
 	}
 	.stat-label {
 		font-size: 0.78rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.footnote {
 		margin: var(--space-md) 0 0;
 		font-size: 0.78rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 </style>

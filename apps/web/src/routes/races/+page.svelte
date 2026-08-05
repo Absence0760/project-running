@@ -392,7 +392,7 @@
 		gap: var(--space-md);
 	}
 	.subtitle {
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 		margin: 0.25rem 0 0;
 	}
 	.filters {
@@ -471,7 +471,7 @@
 		gap: var(--space-sm);
 	}
 	.state-msg {
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 	}
 	.races-error {
 		display: flex;
@@ -486,7 +486,7 @@
 	}
 	.paste-hint,
 	.unavailable {
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 		margin: 0;
 	}

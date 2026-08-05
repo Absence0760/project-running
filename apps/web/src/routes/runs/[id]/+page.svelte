@@ -2967,7 +2967,7 @@
 	.edit-public-hint {
 		margin: 0;
 		font-size: 0.75rem;
-		color: var(--color-warning, #b45309);
+		color: var(--color-warning-text);
 	}
 
 	.edit-public-hint-muted {

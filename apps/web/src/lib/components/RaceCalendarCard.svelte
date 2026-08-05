@@ -83,7 +83,7 @@
 	}
 	.race-meta {
 		font-size: 0.85rem;
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 	}
 	.race-away {
 		font-weight: 600;
@@ -96,7 +96,7 @@
 		padding: 0.1rem 0.45rem;
 		border-radius: 999px;
 		background: var(--color-border);
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 	}
 	.race-actions {
 		display: flex;
