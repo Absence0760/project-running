@@ -43,6 +43,48 @@ class _ThrowingLeaderboardApi extends ApiClient {
       throw StateError('leaderboard network down');
 }
 
+/// Segments list succeeds with one segment whose leaderboard puts the viewer
+/// second, so the viewer row and a plain row render side by side.
+class _ViewerLeaderboardApi extends ApiClient {
+  @override
+  String? get userId => 'viewer-1';
+  @override
+  Future<List<SegmentRow>> fetchSegmentsForRoute(String routeId,
+          {int limit = 100}) async =>
+      [
+        SegmentRow(
+          id: 'seg-1',
+          routeId: routeId,
+          name: 'Test Segment',
+          startDistanceM: 1000,
+          endDistanceM: 2000,
+          createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
+        ),
+      ];
+  @override
+  Future<List<SegmentLeaderboardEntry>> fetchSegmentLeaderboardTiered(
+      String segmentId,
+      {String? gender,
+      String? ageBand,
+      int limit = 50}) async {
+    SegmentLeaderboardEntry entry(String user, String name, int rank) =>
+        SegmentLeaderboardEntry(
+          effort: SegmentEffortRow(
+            id: 'e-$user',
+            segmentId: segmentId,
+            runId: 'r-$user',
+            userId: user,
+            timeSeconds: 300.0 + rank,
+            startedAt: DateTime.parse('2026-01-02T00:00:00Z'),
+            createdAt: DateTime.parse('2026-01-02T00:00:00Z'),
+          ),
+          athlete: PublicProfile(id: user, displayName: name),
+          rank: rank,
+        );
+    return [entry('other-1', 'Rival', 1), entry('viewer-1', 'Me', 2)];
+  }
+}
+
 /// Segments list resolves empty (no network); used to reach the create form.
 class _EmptyListApi extends ApiClient {
   @override
@@ -153,6 +195,30 @@ void main() {
 
       expect(find.text("Couldn't load the leaderboard"), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
+    });
+  });
+
+  group('SegmentsPanel — leaderboard viewer row', () {
+    // The viewer row's `primaryContainer@0.5` tint is 1.078:1 light / 1.013:1
+    // dark against the row above it, so WCAG 1.4.1 needs a cue that is not
+    // colour. The label reuses `navYou`; the weight is the second cue.
+    testWidgets('marks the viewer with a label and a weight, not just a tint',
+        (tester) async {
+      await tester.pumpWidget(_hostWithApi(_ViewerLeaderboardApi()));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.text('Test Segment'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Rival'), findsOneWidget);
+      expect(find.text('Me'), findsOneWidget);
+      expect(find.text('You'), findsOneWidget);
+
+      TextStyle styleOf(String name) =>
+          tester.widget<Text>(find.text(name)).style!;
+      expect(styleOf('Me').fontWeight, FontWeight.w700);
+      expect(styleOf('Rival').fontWeight, isNot(FontWeight.w700));
     });
   });
 

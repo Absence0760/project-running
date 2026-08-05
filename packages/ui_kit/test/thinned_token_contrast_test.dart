@@ -158,6 +158,38 @@ void main() {
       });
     });
 
+    // Two `primaryContainer@0.5` row fills whose PRESENCE is the state — the
+    // plan-detail "today" row and the segment leaderboard's viewer row. Both
+    // are indistinguishable from the row above them, so WCAG 1.4.1 needs a cue
+    // that is not colour: the numbers below are what forced a dot, a label and
+    // a weight rather than a deeper tint. The cue's own foreground still owes
+    // its floor ON the tint, which is the pairing §503 says to measure.
+    group('$name state-carrying row tints cannot be the cue', () {
+      test('the plan-detail today row is invisible against its neighbour', () {
+        final tint = _thin(s.primaryContainer, 0.5, sCHighest);
+        expect(_contrast(tint, sCHighest), lessThan(1.2),
+            reason: 'if a tint this faint were the only signal, nobody — not '
+                'just a colour-blind reader — would see the state');
+        expect(_contrast(s.primary, tint), greaterThanOrEqualTo(_aaMark),
+            reason: 'the dot');
+        expect(_contrast(s.onSurfaceVariant, tint),
+            greaterThanOrEqualTo(_aaText),
+            reason: 'the weekday abbreviation the weight thickens');
+      });
+
+      test('the leaderboard viewer row is invisible against its neighbour', () {
+        // The tint composites over the CARD here, not over the neighbouring
+        // row's own opaque fill, which is why the two rows differ by so little.
+        final tint = _thin(s.primaryContainer, 0.5, card);
+        expect(_contrast(tint, sCHighest), lessThan(1.2));
+        expect(_contrast(s.onSurfaceVariant, tint),
+            greaterThanOrEqualTo(_aaText),
+            reason: 'the "You" label');
+        expect(_contrast(s.onSurface, tint), greaterThanOrEqualTo(_aaText),
+            reason: 'the athlete name the weight thickens');
+      });
+    });
+
     // The nine translucent panels over the live map have no deterministic
     // background at all, so the floor is checked against the extremes a tile
     // can be. Passing at both bounds passes for every tile between them.

@@ -237,7 +237,119 @@ void main() {
         findsWidgets,
       );
     });
+
+    testWidgets(
+        'the today workout row carries a labelled dot and a heavier weekday, '
+        'because its tint is 1.003:1 against the row beside it', (tester) async {
+      tester.view.physicalSize = const Size(400, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanDetailScreen(
+            training: _TodayPlanTraining(),
+            planId: 'p1',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final weekCard = find.ancestor(
+        of: find.text('Week 1'),
+        matching: find.byType(Column),
+      );
+      final dots = find.descendant(
+        of: weekCard.first,
+        matching: find.byIcon(Icons.circle),
+      );
+      expect(dots, findsOneWidget,
+          reason: 'exactly one row in the week is today');
+      expect(tester.widget<Icon>(dots).size, 6);
+      expect(
+        find.ancestor(
+          of: dots,
+          matching: find.byWidgetPredicate(
+              (w) => w is Semantics && w.properties.label == 'TODAY'),
+        ),
+        findsOneWidget,
+        reason: 'a dot with no accessible name is a cue only a sighted user '
+            'gets',
+      );
+
+      final weights = tester
+          .widgetList<Text>(find.descendant(
+            of: weekCard.first,
+            matching: find.byType(Text),
+          ))
+          .where((t) => t.style?.fontWeight == FontWeight.w700)
+          .length;
+      expect(weights, greaterThanOrEqualTo(1),
+          reason: 'the weekday abbreviation of the today row');
+    });
   });
+}
+
+/// Serves one week holding two workouts: one dated today, one not. Lets the
+/// today-row cue be checked against a plain sibling in the same card.
+class _TodayPlanTraining extends TrainingService {
+  @override
+  Future<
+      ({
+        TrainingPlanRow? plan,
+        List<PlanWeekRow> weeks,
+        List<PlanWorkoutRow> workouts
+      })> fetchPlan(String id) async {
+    final today = DateTime.now();
+    return (
+      plan: TrainingPlanRow(
+        id: 'p1',
+        userId: 'someone-else',
+        name: 'Marathon Build',
+        goalEvent: 'marathon',
+        goalDistanceM: 42195,
+        startDate: DateTime(today.year, today.month, today.day),
+        endDate: DateTime(today.year, today.month, today.day)
+            .add(const Duration(days: 6)),
+        daysPerWeek: 4,
+        status: 'active',
+        source: 'generated',
+        isTemplate: false,
+        isPublicTemplate: false,
+      ),
+      weeks: const [
+        PlanWeekRow(
+          id: 'w1',
+          planId: 'p1',
+          weekIndex: 0,
+          phase: 'base',
+          targetVolumeM: 30000,
+        ),
+      ],
+      workouts: [
+        PlanWorkoutRow(
+          id: 'wo-today',
+          weekId: 'w1',
+          scheduledDate: DateTime(today.year, today.month, today.day),
+          kind: 'easy',
+          targetDistanceM: 8000,
+          manuallyCompleted: false,
+        ),
+        PlanWorkoutRow(
+          id: 'wo-later',
+          weekId: 'w1',
+          scheduledDate: DateTime(today.year, today.month, today.day)
+              .add(const Duration(days: 2)),
+          kind: 'tempo',
+          targetDistanceM: 10000,
+          manuallyCompleted: false,
+        ),
+      ],
+    );
+  }
 }
 
 /// Serves one canned single-week plan so the loaded body (week cards
