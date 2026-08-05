@@ -3920,8 +3920,6 @@ export const messages = {
 	"nutritionMeal.noItems": "Für diese Mahlzeit nichts erfasst.",
 	"nutritionMeal.trendHeading": "Letzte 7 Tage",
 	"nutrition.delete": "Löschen",
-	"nutrition.deleteEntryTitle": "Diesen Eintrag löschen?",
-	"nutrition.deleteEntryMessage": "{item} wird aus dem heutigen Protokoll entfernt.",
 	"nutrition.deleteFailed": "Löschen fehlgeschlagen: {error}",
 	"nutrition.addFailed": "Konnte nicht erfasst werden: {error}",
 	"nutrition.weeklyTrend": "Letzte 7 Tage",

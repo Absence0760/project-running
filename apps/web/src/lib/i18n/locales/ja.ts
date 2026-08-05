@@ -3915,8 +3915,6 @@ export const messages = {
 	"nutritionMeal.noItems": "この食事の記録はありません。",
 	"nutritionMeal.trendHeading": "過去7日間",
 	"nutrition.delete": "削除",
-	"nutrition.deleteEntryTitle": "この項目を削除しますか？",
-	"nutrition.deleteEntryMessage": "{item} を今日の記録から削除します。",
 	"nutrition.deleteFailed": "削除に失敗しました: {error}",
 	"nutrition.addFailed": "記録できませんでした: {error}",
 	"nutrition.weeklyTrend": "直近7日間",

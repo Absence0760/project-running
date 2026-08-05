@@ -3933,8 +3933,6 @@ export const en = {
 	"nutritionMeal.noItems": "Nothing logged for this meal.",
 	"nutritionMeal.trendHeading": "Last 7 days",
 	"nutrition.delete": "Delete",
-	"nutrition.deleteEntryTitle": "Delete this entry?",
-	"nutrition.deleteEntryMessage": "{item} will be removed from today's log.",
 	"nutrition.deleteFailed": "Delete failed: {error}",
 	"nutrition.addFailed": "Couldn't log that: {error}",
 	"nutrition.weeklyTrend": "Last 7 days",

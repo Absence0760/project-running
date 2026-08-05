@@ -3920,8 +3920,6 @@ export const messages = {
 	"nutritionMeal.noItems": "Nada registrado para esta comida.",
 	"nutritionMeal.trendHeading": "Últimos 7 días",
 	"nutrition.delete": "Eliminar",
-	"nutrition.deleteEntryTitle": "¿Eliminar esta entrada?",
-	"nutrition.deleteEntryMessage": "{item} se eliminará del registro de hoy.",
 	"nutrition.deleteFailed": "Error al eliminar: {error}",
 	"nutrition.addFailed": "No se pudo registrar: {error}",
 	"nutrition.weeklyTrend": "Últimos 7 días",
