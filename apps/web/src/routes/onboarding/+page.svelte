@@ -672,7 +672,7 @@
 	.field { display: flex; flex-direction: column; gap: 0.35rem; }
 	.label-text { font-size: 0.85rem; color: var(--color-text-secondary); font-weight: 500; }
 	.field-note { font-size: 0.78rem; color: var(--color-text-tertiary); line-height: 1.45; }
-	.field-error { font-size: 0.78rem; color: var(--color-danger); line-height: 1.45; }
+	.field-error { font-size: 0.78rem; color: var(--color-danger-text); line-height: 1.45; }
 	.field input, .field select {
 		padding: 0.6rem 0.7rem;
 		border: 1px solid var(--color-border);

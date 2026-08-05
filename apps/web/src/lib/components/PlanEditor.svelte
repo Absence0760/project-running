@@ -785,7 +785,7 @@
 		gap: 0.6rem;
 	}
 	.error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 		padding: 0.5rem 0.8rem;
 		border-radius: var(--radius-md);

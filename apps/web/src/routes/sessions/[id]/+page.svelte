@@ -365,7 +365,7 @@
 		padding: var(--space-sm) var(--space-md);
 		border: 1px solid var(--color-danger);
 		border-radius: var(--radius-md);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.back {
 		display: inline-block;

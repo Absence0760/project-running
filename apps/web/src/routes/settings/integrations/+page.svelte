@@ -800,7 +800,7 @@
 
 	.btn-disconnect:hover:not(:disabled) {
 		border-color: var(--color-danger);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.btn-group {
 		display: flex;

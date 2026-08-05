@@ -1251,7 +1251,7 @@
 	.archive-row:focus-within .thread-delete {
 		opacity: 1;
 	}
-	.thread-delete:hover { color: var(--color-danger); }
+	.thread-delete:hover { color: var(--color-danger-text); }
 	.thread-delete .material-symbols { font-size: 1rem; line-height: 1; }
 	.sidebar-toggle {
 		display: inline-flex;
@@ -1465,7 +1465,7 @@
 		resize: none; min-height: 2.4rem; max-height: 10rem; overflow-y: auto;
 	}
 	.error {
-		color: var(--color-danger); background: var(--color-danger-light);
+		color: var(--color-danger-text); background: var(--color-danger-light);
 		padding: 0.5rem 0.8rem; margin: 0.6rem; border-radius: var(--radius-md);
 		font-size: 0.88rem;
 	}
@@ -1490,7 +1490,7 @@
 		border-radius: var(--radius-md); margin: 0 var(--space-sm) var(--space-sm);
 		font-size: 0.82rem; color: var(--color-text-secondary);
 	}
-	.limit-bar .material-symbols { font-size: 1.1rem; color: var(--color-danger); }
+	.limit-bar .material-symbols { font-size: 1.1rem; color: var(--color-danger-text); }
 	.archive-banner {
 		display: flex; align-items: center; gap: 0.5rem;
 		padding: 0.5rem 0.8rem; margin: 0 var(--space-sm);

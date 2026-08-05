@@ -2478,11 +2478,11 @@
 	.visibility-chip.is-public {
 		background: var(--color-success-light);
 		border-color: transparent;
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 
 	.visibility-chip.is-public .material-symbols {
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 
 	.dnf-chip {
@@ -2490,13 +2490,13 @@
 		border-radius: 9999px;
 		background: var(--color-danger-light);
 		border: 1px solid transparent;
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-weight: 600;
 		font-size: 0.72rem;
 	}
 
 	.dnf-chip .material-symbols {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.incomplete-chip {
@@ -2665,7 +2665,7 @@
 	}
 
 	.split-elev.positive {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.workout-review .workout-header {
@@ -2905,7 +2905,7 @@
 
 	.icon-btn.danger:hover:not(:disabled) {
 		background: var(--color-danger-light);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: transparent;
 	}
 

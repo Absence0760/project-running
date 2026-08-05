@@ -54,7 +54,10 @@
 	/* Same shape for success / danger, and the same values as mobile's
 	   AppSemanticColors so a signed delta reads identically on both. The base
 	   tokens are 3.28:1 and 4.58:1 on white and 2.97:1 / 4.14:1 on the page —
-	   fine as fills and borders, below AA as text. */
+	   fine as fills and borders, below AA as text. Every status chip pairs one
+	   of these with a same-hue tint of its base, which is the tightest case:
+	   the tint pulls the background toward the text, so the guard measures the
+	   deepest share the source actually paints, not just the plain surface. */
 	--color-success-text: #2E6B3C;
 	--color-danger-text: #A93B2E;
 
@@ -204,12 +207,16 @@
 		--color-accent-cyan: #8FB8C7;
 
 		/* Dark surfaces: the base accent hues already pass as text (>=7.5:1),
-		   so the -text tokens revert to them. */
+		   so those -text tokens revert to them. Success and danger do NOT: the
+		   base green/red on a same-hue chip tint computes to 5.22 / 4.06:1 and
+		   the danger half fails AA, so both take mobile's
+		   AppSemanticColors.dark values — which is what the light half has
+		   always carried and the dark half only claimed to. */
 		--color-warning-text: var(--color-warning);
 		--color-secondary-text: var(--color-secondary);
 		--color-accent-cyan-text: var(--color-accent-cyan);
-		--color-success-text: var(--color-success);
-		--color-danger-text: var(--color-danger);
+		--color-success-text: #8CC49B;
+		--color-danger-text: #EC8B7A;
 
 		--color-crown: #E0BE4E;
 		--color-on-crown: #120D22;
@@ -273,12 +280,14 @@
 	--color-accent-pink: #B9A7E8;
 	--color-accent-cyan: #8FB8C7;
 
-	/* Dark surfaces: the base accent hues already pass as text; -text reverts. */
+	/* Dark surfaces: the base accent hues already pass as text; those -text
+	   tokens revert. Success and danger take mobile's AppSemanticColors.dark
+	   instead — the base pair fails AA on a same-hue chip tint. */
 	--color-warning-text: var(--color-warning);
 	--color-secondary-text: var(--color-secondary);
 	--color-accent-cyan-text: var(--color-accent-cyan);
-	--color-success-text: var(--color-success);
-	--color-danger-text: var(--color-danger);
+	--color-success-text: #8CC49B;
+	--color-danger-text: #EC8B7A;
 
 	--color-crown: #E0BE4E;
 	--color-on-crown: #120D22;
@@ -569,7 +578,7 @@ img {
 .btn-danger {
 	background: transparent;
 	border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
-	color: var(--color-danger);
+	color: var(--color-danger-text);
 }
 .btn-danger:hover:not(:disabled) {
 	background: var(--color-danger-light);
@@ -876,7 +885,7 @@ img {
 	margin-top: var(--space-md);
 }
 .editor-form .error {
-	color: var(--color-danger);
+	color: var(--color-danger-text);
 	background: var(--color-danger-light);
 	padding: 0.5rem 0.8rem;
 	border-radius: var(--radius-md);

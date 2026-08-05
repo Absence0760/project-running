@@ -465,7 +465,7 @@
 		gap: 0.6rem;
 		flex-wrap: wrap;
 		margin: 0;
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.material-symbols { font-family: 'Material Symbols Outlined'; }
 </style>

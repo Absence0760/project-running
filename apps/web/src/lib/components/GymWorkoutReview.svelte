@@ -310,7 +310,7 @@
 		background: var(--color-warning-light, rgba(230, 169, 107, 0.16));
 	}
 	.status-missed {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 	}
 	.status-extra {

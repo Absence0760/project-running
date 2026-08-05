@@ -1106,7 +1106,7 @@
 
 	.live-badge.active {
 		background: var(--color-success-light);
-		color: var(--color-success);
+		color: var(--color-success-text);
 		border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
 	}
 
@@ -1118,7 +1118,7 @@
 
 	.live-badge.not-found {
 		background: var(--color-danger-light);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
 	}
 
@@ -1354,7 +1354,7 @@
 	}
 	.conclusion-icon {
 		font-size: 2rem;
-		color: var(--color-success);
+		color: var(--color-success-text);
 		flex-shrink: 0;
 	}
 	.conclusion-text {
@@ -1468,7 +1468,7 @@
 	}
 	.cutoff-card.on .cutoff-chip {
 		background: var(--color-success-light);
-		color: var(--color-success);
+		color: var(--color-success-text);
 		border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
 	}
 	.cutoff-card.tight .cutoff-chip {
@@ -1478,7 +1478,7 @@
 	}
 	.cutoff-card.behind .cutoff-chip {
 		background: var(--color-danger-light);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
 	}
 	.cutoff-waiting {

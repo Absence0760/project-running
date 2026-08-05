@@ -366,7 +366,7 @@
 		opacity: 0.7;
 	}
 	.send-error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-size: 0.8rem;
 		padding: 0 var(--space-lg);
 		margin: 0;

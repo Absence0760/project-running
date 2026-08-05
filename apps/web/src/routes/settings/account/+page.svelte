@@ -1454,7 +1454,7 @@
 	.handle-help { display: block; font-size: 0.78rem; color: var(--color-text-tertiary); margin-top: var(--space-xs); }
 	.error-text { color: #ef5350; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.ok-text { color: #66bb6a; font-size: 0.85rem; margin-top: var(--space-sm); }
-	.danger-heading { color: var(--color-danger); }
+	.danger-heading { color: var(--color-danger-text); }
 	.material-symbols { font-family: 'Material Symbols Outlined'; font-size: 1.1rem; }
 	.muted { color: var(--color-text-tertiary); font-size: 0.9rem; }
 	.identity-list { list-style: none; padding: 0; margin: 0 0 var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); }

@@ -188,24 +188,33 @@ for (const { label, marker } of THEMES) {
 	});
 }
 
-// The base --color-warning / -secondary / -accent-cyan tokens are tuned for
-// tints, borders and dark-mode use; as a bare `color:` (text/icon) on a light
-// surface they fail WCAG 1.4.3 (issue #368). The theme-aware -text variants
-// exist for foreground use — this scan stops the bare tokens creeping back as
-// text. Quoted JS props (`color: 'var(--color-accent-cyan)'`, the macro-ring
-// stroke colours) are not text and don't match (the `'` breaks `color:\s*var`).
+// Every base accent / status token is tuned for tints, borders and dark-mode
+// use; as a bare `color:` (text/icon) on a LIGHT surface each fails WCAG 1.4.3.
+// Computed against the real tokens, worst light surface first:
+//   warning       1.63-2.05:1    secondary     3.06:1
+//   accent-cyan   2.30:1         success       2.62-3.28:1
+//   danger        3.65-4.58:1
+// success and danger were the last two still spread across the tree (96 sites
+// on 46 files) — success sat below even the 3:1 non-text floor on the page
+// background. The theme-aware -text variants exist for foreground use; this
+// scan stops any base token creeping back as text. --color-primary is
+// deliberately absent: it computes to 6.40-7.07:1 in light and 7.77:1 in dark,
+// so it is a legitimate foreground and 236 sites use it as one. Quoted JS props
+// (`color: 'var(--color-accent-cyan)'`, the macro-ring stroke colours) are not
+// text and don't match (the `'` breaks `color:\s*var`).
 test('no source file uses a bare accent/status token as a text colour', () => {
 	// `color:` (rejecting `background-color:`/`border-color:` via the leading
 	// boundary) set to a base accent token, NOT its -text / -strong / -hover
 	// variant (the trailing `(?!-)` guards those).
-	const offender = /(?<![a-z-])color:\s*var\(\s*--color-(?:warning|secondary|accent-cyan)\)(?!-)/;
+	const offender =
+		/(?<![a-z-])color:\s*var\(\s*--color-(?:warning|secondary|accent-cyan|success|danger)\)(?!-)/;
 	const hits = scanSource((line) => offender.test(line));
 	assert.equal(
 		hits.length,
 		0,
-		`A base accent token (--color-warning / -secondary / -accent-cyan) is used as a text ` +
-			`colour; it fails WCAG AA on light surfaces (2.05-3.06:1). Use the theme-aware ` +
-			`--color-<token>-text variant instead:\n${hits.join('\n')}`,
+		`A base accent/status token is used as a text colour; every one of them fails WCAG AA ` +
+			`on light surfaces (1.42-4.58:1). Use the theme-aware --color-<token>-text variant ` +
+			`instead:\n${hits.join('\n')}`,
 	);
 });
 
@@ -491,15 +500,16 @@ test('HR zone tokens match the mobile hr_zone_palette', () => {
 	}
 });
 
-// --color-success-text / --color-danger-text. Same shape as the ACCENT_TEXT
-// trio above but checked on the plain surfaces rather than a chip tint: the
-// signed readiness delta is bare text on the card. The base tokens they
-// replace are 3.28:1 (success on white) and 4.14:1 (danger on the page) —
-// tuned for fills and borders, below AA as text. They carry the same values as
-// mobile's AppSemanticColors so the delta reads identically on both platforms.
+// --color-success-text / --color-danger-text, checked on every plain surface
+// (the signed readiness delta is bare text on the card) AND on the deepest
+// same-hue chip tint the source actually paints — which is the tightest case,
+// because the tint pulls the background toward the text. The base tokens they
+// replace are 3.28:1 (success on white) and 4.14:1 (danger on the page); 96
+// sites across 46 files were still using them as bare text.
 for (const { label, marker } of THEMES) {
 	test(`success/danger -text tokens meet WCAG AA as text — ${label}`, () => {
-		for (const name of ['color-success-text', 'color-danger-text']) {
+		for (const status of ['success', 'danger'] as const) {
+			const name = `color-${status}-text`;
 			const fg = resolveToken(marker, name);
 			for (const surfaceName of SURFACE_TOKENS) {
 				const surface = resolveToken(marker, surfaceName);
@@ -509,6 +519,82 @@ for (const { label, marker } of THEMES) {
 					`--${name} (${fg}) on --${surfaceName} (${surface}) is ${ratio.toFixed(2)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
 				);
 			}
+			const base = resolveToken(marker, `color-${status}`);
+			for (const { pct, over } of deepestChipTints(status)) {
+				for (const surfaceName of over) {
+					const chip = mixOverHex(base, pct, resolveToken(marker, surfaceName));
+					const ratio = contrastRatio(fg, chip);
+					assert.ok(
+						ratio >= AA_NORMAL,
+						`--${name} (${fg}) on the deepest --color-${status} chip tint (${pct}% over --${surfaceName} = ${chip}) is ${ratio.toFixed(3)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1. Either retune the -text token or shallow the chip.`,
+					);
+				}
+			}
 		}
 	});
 }
+
+// The deepest same-hue tints a status chip paints, READ OUT OF THE SOURCE so
+// the floor above cannot go stale when someone deepens a chip. A tint mixed
+// against `transparent` composites over whatever happens to be behind it, so it
+// is measured over both the card and the page; one mixed against a named
+// surface token is opaque and is measured only over that surface. The
+// --color-<status>-light tokens are rgba, hence backing-agnostic too.
+// Nested tints are the one case this cannot see — a chip inside an already-
+// tinted chip composites to 1-(1-a)(1-b), which is why the three RSVP count
+// pills mix against --color-surface (opaque, so they cannot compound) rather
+// than against transparent.
+const UNKNOWN_BACKING = ['color-surface', 'color-bg'];
+function deepestChipTints(status: 'success' | 'danger'): Array<{ pct: number; over: string[] }> {
+	const deepest = new Map<string, number>();
+	const record = (pct: number, backing: string) =>
+		deepest.set(backing, Math.max(deepest.get(backing) ?? 0, pct));
+	const re = new RegExp(
+		`background(?:-color)?:\\s*color-mix\\([^;]*var\\(--color-${status}\\)\\s*(\\d+)%\\s*,\\s*(.*)$`,
+	);
+	for (const hit of scanSource((line) => re.test(line))) {
+		const m = hit.match(re)!;
+		record(Number(m[1]), m[2].trim().match(/var\(\s*--([\w-]+)\s*\)/)?.[1] ?? '');
+	}
+	for (const m of css.matchAll(
+		new RegExp(`--color-${status}-light:\\s*rgba\\([^)]*,\\s*([0-9.]+)\\s*\\)`, 'g'),
+	)) {
+		record(Number(m[1]) * 100, '');
+	}
+	assert.ok(deepest.size > 0, `no --color-${status} chip tint found to measure`);
+	return [...deepest].map(([backing, pct]) => ({
+		pct,
+		over: backing === '' ? UNKNOWN_BACKING : [backing],
+	}));
+}
+
+// The light values have always matched mobile's AppSemanticColors and the
+// token comment says so; the dark ones silently did not (web reverted to the
+// base hue, mobile carries its own pair) until the chip-tint floor above forced
+// the question. A Dart file cannot import a CSS custom property, so the lockstep
+// the comment claims is checked here, the same way the chart and zone palettes
+// already are.
+test('success/danger -text tokens match mobile AppSemanticColors', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/app_theme.dart'),
+		'utf-8',
+	);
+	for (const [marker, symbol] of [
+		[':root {', 'light'],
+		[':root[data-theme="dark"]', 'dark'],
+	] as const) {
+		const body = dart.match(
+			new RegExp(`static const AppSemanticColors ${symbol} = AppSemanticColors\\(([\\s\\S]*?)\\n  \\);`),
+		);
+		assert.ok(body, `app_theme.dart has no ${symbol} AppSemanticColors`);
+		for (const status of ['success', 'danger']) {
+			const hex = body![1].match(new RegExp(`${status}: Color\\(0xFF([0-9A-Fa-f]{6})\\)`))?.[1];
+			assert.ok(hex, `${symbol} AppSemanticColors has no ${status}`);
+			assert.equal(
+				resolveToken(marker, `color-${status}-text`).toUpperCase(),
+				`#${hex!.toUpperCase()}`,
+				`--color-${status}-text in ${marker} has drifted from AppSemanticColors.${symbol}.${status}.`,
+			);
+		}
+	}
+});

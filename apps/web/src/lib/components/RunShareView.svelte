@@ -226,7 +226,7 @@
 		border-radius: var(--radius-sm);
 	}
 	.report-btn:hover {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.report-btn .material-symbols {
 		font-size: 1.05rem;

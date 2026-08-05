@@ -1842,7 +1842,7 @@
 	}
 
 	.btn-secondary.danger {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: var(--color-danger-light);
 	}
 	.btn-secondary.danger:hover {
@@ -2177,7 +2177,7 @@
 	}
 
 	.icon-btn:hover {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 	}
 
@@ -2399,7 +2399,7 @@
 	}
 
 	.error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 		padding: 0.5rem 0.8rem;
 		border-radius: var(--radius-md);

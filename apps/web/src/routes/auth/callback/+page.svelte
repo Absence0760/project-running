@@ -90,6 +90,6 @@
 	}
 
 	.error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 </style>

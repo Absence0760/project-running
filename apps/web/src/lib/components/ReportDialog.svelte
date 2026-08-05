@@ -237,7 +237,7 @@
 	}
 
 	.error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 		padding: 0.5rem 0.7rem;
 		border-radius: var(--radius-md);

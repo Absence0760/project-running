@@ -2295,7 +2295,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.plan-hero-today-done {
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-weight: 600;
 	}
 	.plan-hero-today-arrow {
@@ -2339,7 +2339,7 @@
 		text-transform: uppercase;
 	}
 	.done-icon {
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-size: 1.75rem;
 	}
 	.plan-promo {
@@ -2604,8 +2604,8 @@
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
 	}
-	.fitness-value.tsb-neg { color: var(--color-danger); }
-	.fitness-value.tsb-pos { color: var(--color-success); }
+	.fitness-value.tsb-neg { color: var(--color-danger-text); }
+	.fitness-value.tsb-pos { color: var(--color-success-text); }
 
 	.recap-link {
 		display: inline-flex;
@@ -2654,7 +2654,7 @@
 	}
 	.readiness-card.readiness-high .readiness-band {
 		background: color-mix(in srgb, var(--color-success) 14%, transparent);
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	.readiness-card.readiness-moderate .readiness-band {
 		background: color-mix(in srgb, var(--color-warning) 22%, transparent);
@@ -2662,7 +2662,7 @@
 	}
 	.readiness-card.readiness-low .readiness-band {
 		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.readiness-score {
 		font-size: 2.75rem;
@@ -2884,7 +2884,7 @@
 		font-variant-numeric: tabular-nums;
 		line-height: 1;
 	}
-	.goal-card-done .goal-overall { color: var(--color-success); }
+	.goal-card-done .goal-overall { color: var(--color-success-text); }
 	.goal-card-done {
 		border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
 		background: color-mix(in srgb, var(--color-success) 4%, var(--color-surface));
@@ -2895,7 +2895,7 @@
 		gap: var(--space-2xs);
 		padding: var(--space-2xs) var(--space-sm);
 		background: color-mix(in srgb, var(--color-success) 16%, transparent);
-		color: var(--color-success);
+		color: var(--color-success-text);
 		border-radius: 9999px;
 		font-size: 0.72rem;
 		font-weight: 700;
@@ -3118,7 +3118,7 @@
 	.zone-row-1 .zone-name { color: var(--color-accent-cyan-text); }
 	.zone-row-3 .zone-name { color: var(--color-warning-text); }
 	.zone-row-4 .zone-name { color: var(--color-accent-orange); }
-	.zone-row-5 .zone-name { color: var(--color-danger); }
+	.zone-row-5 .zone-name { color: var(--color-danger-text); }
 	.zone-duration {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
