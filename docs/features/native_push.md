@@ -267,13 +267,18 @@ The device-led leg — token registration + foreground/background display:
     (web-only per §24) and lands on the inbox, as does any unrecognised or
     malformed URL — mirroring `pathForKind`'s own `default:` arm.
 
-    **Known gap on the web side of the same contract:** `/events/{id}` and
-    `/notifications` are not routes on web (`apps/web/src/routes/` has neither;
-    the inbox lives at `/u/{id}?tab=notifications` and events at
-    `/clubs/{slug}/events/{id}`), so the email CTA and web-push deep link for
-    the event kinds and for every `default:` kind currently 404. Mobile routes
-    both correctly. Fixing it means either redirect routes on web or teaching
-    `pathForKind` the canonical paths — see `mailer.go:341` + `mailer.go:751`.
+    **The web side of the same contract closed in this round.** `/events/{id}`
+    and `/notifications` used to 404 on web — the inbox lives at
+    `/u/{id}?tab=notifications` and events at `/clubs/{slug}/events/{id}` — so
+    both are now thin forwarding routes rather than a change to `pathForKind`
+    (an id URL already in a delivered inbox has to keep resolving). `/clubs/{id}`
+    is the third: `/clubs/[slug]` falls back to an id lookup and forwards to the
+    canonical slug. That last one is a **same-route** param change, so SvelteKit
+    reuses the component instead of remounting it and nothing re-runs the page's
+    onMount fetch — the forward has to re-enter it by hand or the page sits on
+    "Loading club…" forever. `tests-e2e/clubs/id-deep-links.spec.ts` walks all
+    three anonymously and asserts the resolved page's title, which is what
+    catches a forward that arrives at the right URL with no data behind it.
   - Gate the whole bridge on `firebase_messaging` being initialisable; if
     Firebase isn't configured (no `google-services.json`), `attach()` is a
     best-effort no-op (compiles + runs in dev without credentials).
