@@ -7437,6 +7437,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get dashboardStreakStart => 'corre hoy para empezar una';
 
   @override
+  String get dashboardHeatmapTitle => 'ACTIVIDAD';
+
+  @override
   String get dashboardHeatmapLess => 'Menos';
 
   @override

@@ -7444,6 +7444,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get dashboardStreakStart => 'Lauf heute, um eine zu starten';
 
   @override
+  String get dashboardHeatmapTitle => 'AKTIVITÄT';
+
+  @override
   String get dashboardHeatmapLess => 'Weniger';
 
   @override

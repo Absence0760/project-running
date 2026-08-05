@@ -2046,6 +2046,7 @@
   "dashboardStreakAllTimeBest": "Allzeit-Bestwert",
   "dashboardStreakRestart": "Lauf heute, um sie neu zu starten",
   "dashboardStreakStart": "Lauf heute, um eine zu starten",
+  "dashboardHeatmapTitle": "AKTIVITÄT",
   "dashboardHeatmapLess": "Weniger",
   "dashboardHeatmapMore": "Mehr",
   "dashboardHeatmapTapHint": "Tippe auf eine Woche für deren Zusammenfassung",

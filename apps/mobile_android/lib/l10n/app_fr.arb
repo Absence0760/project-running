@@ -2046,6 +2046,7 @@
   "dashboardStreakAllTimeBest": "record absolu",
   "dashboardStreakRestart": "cours aujourd'hui pour la relancer",
   "dashboardStreakStart": "cours aujourd'hui pour en commencer une",
+  "dashboardHeatmapTitle": "ACTIVITÉ",
   "dashboardHeatmapLess": "Moins",
   "dashboardHeatmapMore": "Plus",
   "dashboardHeatmapTapHint": "Appuie sur une semaine pour son résumé",

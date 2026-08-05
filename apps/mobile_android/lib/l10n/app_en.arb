@@ -9900,6 +9900,10 @@
   "@dashboardStreakStart": {
     "description": "Encouraging run-streak readout when the user has never had a streak"
   },
+  "dashboardHeatmapTitle": "ACTIVITY",
+  "@dashboardHeatmapTitle": {
+    "description": "Card header over the calendar activity heatmap on the dashboard"
+  },
   "dashboardHeatmapLess": "Less",
   "@dashboardHeatmapLess": {
     "description": "Low-intensity end label of the activity-heatmap legend"
