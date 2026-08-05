@@ -67,6 +67,32 @@ const _derivedAllowlist = <String, int>{
 
 final _token = RegExp(r'colorScheme\.outline\b');
 
+/// The three boundary tokens §487 sets at 3:1, thinned by an alpha. There is
+/// no allowlist because there is no headroom: the strongest multiplier found
+/// in the codebase, 0.6, already composites `outline` to 2.134:1 on the light
+/// card, so any thinning of a token whose whole guarantee is a 3:1 floor
+/// forfeits it. This is §505's "an alpha multiplier is not a contrast
+/// argument" made mechanical for the one token family where it is absolute.
+final _thinnedBoundary = RegExp(
+  r'(?:colorScheme\.outlineVariant|colorScheme\.outline|dividerColor)'
+  r'\s*\.\s*with(?:Values|Opacity)\s*\(',
+);
+
+const _thinningFixtures = <(String, bool)>[
+  // must flag
+  ('color: t.colorScheme.outline.withValues(alpha: 0.6)', true),
+  ('color: t.colorScheme.outline.withOpacity(0.18)', true),
+  ('color: t.colorScheme.outlineVariant.withValues(alpha: 0.5)', true),
+  ('color: t.dividerColor.withValues(alpha: 0.4)', true),
+  ('color: t.colorScheme.outline\n    .withValues(alpha: 0.25),', true),
+  // must spare: a token with its own foreground floor may be tinted into a
+  // FILL, and the bare boundary token is the correct use.
+  ('color: t.colorScheme.primary.withValues(alpha: 0.08)', false),
+  ('color: t.colorScheme.onSurfaceVariant.withValues(alpha: 0.12)', false),
+  ('color: t.colorScheme.outline', false),
+  ('color: t.dividerColor', false),
+];
+
 /// The verdict for the occurrence at [at], read off the innermost enclosing
 /// constructor. Walks backwards tracking bracket depth so only brackets still
 /// OPEN at [at] count as enclosing — that is the whole boundary between this
@@ -271,6 +297,33 @@ void main() {
     final hits = _token.allMatches(blanked).toList();
     expect(hits, hasLength(1));
     expect(blanked.substring(0, hits.single.start).split('\n').length, 2);
+  });
+
+  test('the thinning matcher decides every fixture the way the rule says', () {
+    final wrong = <String>[];
+    for (final (source, shouldFlag) in _thinningFixtures) {
+      if (_thinnedBoundary.hasMatch(source) != shouldFlag) {
+        wrong.add('expected flag=$shouldFlag for: $source');
+      }
+    }
+    expect(wrong, isEmpty, reason: wrong.join('\n'));
+  });
+
+  test('no boundary token is thinned by an alpha', () {
+    final violations = <String>[];
+    for (final root in _roots) {
+      for (final file in _dartFiles(root)) {
+        final src = blankNonCode(file.readAsStringSync());
+        for (final m in _thinnedBoundary.allMatches(src)) {
+          final line = src.substring(0, m.start).split('\n').length;
+          violations.add('${file.path}:$line thins a 3:1 boundary token — at '
+              'the strongest multiplier in the tree (0.6) `outline` reads '
+              '2.134:1 on the light card, so the floor is gone. Use the token '
+              'at full strength, or a token that guards the level you want.');
+        }
+      }
+    }
+    expect(violations, isEmpty, reason: violations.join('\n'));
   });
 
   test('every scanned root exists', () {

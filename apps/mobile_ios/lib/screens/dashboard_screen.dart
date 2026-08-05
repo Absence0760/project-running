@@ -1834,7 +1834,7 @@ class _PeriodStatCard extends StatelessWidget {
             child: Icon(
               Icons.chevron_right,
               size: 16,
-              color: theme0.colorScheme.outline.withValues(alpha: 0.6),
+              color: theme0.colorScheme.outline,
             ),
           ),
       ],
@@ -1844,14 +1844,14 @@ class _PeriodStatCard extends StatelessWidget {
       shape: isTappable
           ? RoundedRectangleBorder(
               side: BorderSide(
-                color: theme0.colorScheme.primary.withValues(alpha: 0.25),
+                color: theme0.colorScheme.primary,
                 width: 1,
               ),
               borderRadius: BorderRadius.circular(12),
             )
           : RoundedRectangleBorder(
               side: BorderSide(
-                color: theme0.colorScheme.outline.withValues(alpha: 0.18),
+                color: theme0.dividerColor,
                 width: 1,
               ),
               borderRadius: BorderRadius.circular(12),

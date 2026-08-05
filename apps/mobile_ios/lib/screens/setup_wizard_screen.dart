@@ -598,11 +598,9 @@ class _ProgressDots extends StatelessWidget {
             width: active ? 22 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: active
+              color: active || done
                   ? theme.colorScheme.primary
-                  : done
-                      ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                      : theme.colorScheme.outline.withValues(alpha: 0.3),
+                  : theme.dividerColor,
               borderRadius: BorderRadius.circular(4),
             ),
           );
@@ -634,7 +632,7 @@ class _OptionCard extends StatelessWidget {
         side: BorderSide(
           color: selected
               ? theme.colorScheme.primary
-              : theme.colorScheme.outline.withValues(alpha: 0.25),
+              : theme.dividerColor,
           width: selected ? 2 : 1,
         ),
       ),

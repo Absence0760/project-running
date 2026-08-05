@@ -201,7 +201,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   decoration: BoxDecoration(
                     color: i == _page
                         ? theme.colorScheme.primary
-                        : theme.colorScheme.outline.withValues(alpha: 0.3),
+                        : theme.dividerColor,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );
@@ -283,7 +283,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 side: BorderSide(
                   color: _privacyDefault == o.value
                       ? theme.colorScheme.primary
-                      : theme.colorScheme.outline.withValues(alpha: 0.25),
+                      : theme.dividerColor,
                   width: _privacyDefault == o.value ? 2 : 1,
                 ),
               ),
