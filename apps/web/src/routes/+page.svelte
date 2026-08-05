@@ -204,7 +204,10 @@
 
 	.hero-sub {
 		font-size: 1.25rem;
-		color: rgba(255, 255, 255, 0.65);
+		/* 20px normal weight is not WCAG large text, so this owes 4.5:1. At
+		   0.65 it read 3.284:1 against the hero's palest stop (#7C3AED) and
+		   3.582 against #4F46E5; 0.85 reads 4.534 and 5.004. */
+		color: rgba(255, 255, 255, 0.85);
 		max-width: 34rem;
 		margin-bottom: var(--space-2xl);
 		position: relative;

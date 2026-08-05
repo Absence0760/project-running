@@ -520,7 +520,13 @@
 			flex-direction: column;
 			justify-content: space-between;
 			padding: var(--space-2xl);
-			background: linear-gradient(150deg, #2C5F6E 0%, #4F8090 45%, #F2A07B 100%);
+			/* Deepened so the white copy clears AA at EVERY stop, under either
+			   radial veil below at its own peak: 5.222 / 4.635 / 4.780:1. The
+			   ramp it replaces ended on #F2A07B, where white reads 2.081:1 —
+			   the same figure § 511 found under .btn-primary and § 519 found
+			   over a gradient. A fixed brand canvas is exempt from THEMING,
+			   not from contrast (§ 511's print-sheet amber). */
+			background: linear-gradient(150deg, #2A4E5A 0%, #3A5A66 45%, #7E4527 100%);
 			color: #FFFFFF;
 			position: relative;
 			overflow: hidden;
@@ -851,9 +857,15 @@
 		outline-offset: 2px;
 	}
 
+	/* --gradient-primary passes through a pale stop in BOTH themes (#F2A07B
+	   light, #B9A7E8 dark), so no single ink clears it: white read 2.081:1
+	   light and 2.153:1 dark. A gradient is a fill and its palest stop sets
+	   the ink, so the primary-action button takes the solid pair § 506 minted
+	   for exactly this — 9.120:1 — the same fix § 511 applied to
+	   .btn-primary. */
 	.btn-email {
-		background: var(--gradient-primary);
-		color: #FFFFFF;
+		background: var(--color-primary);
+		color: var(--color-on-primary);
 		border: none;
 		font-weight: 600;
 		margin-top: var(--space-xs);

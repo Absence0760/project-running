@@ -3140,7 +3140,12 @@
 		left: -9999px;
 		width: 1080px;
 		height: 1080px;
-		background: linear-gradient(135deg, #F2A07B 0%, #B9A7E8 55%, #6B4C8A 100%);
+		/* Rasterised to a PNG that leaves the device, so the ramp is a fixed
+		   canvas — and still owes its foreground AA. The peach + lilac stops
+		   it replaces read 2.081 and 2.153:1 against the white copy, and the
+		   card centres its content on the middle one; these read 6.179 /
+		   6.544 / 8.258:1. */
+		background: linear-gradient(135deg, #9B4A24 0%, #6E4F94 55%, #5B4478 100%);
 		color: #FFFFFF;
 		display: flex;
 		align-items: center;
