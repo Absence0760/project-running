@@ -625,7 +625,7 @@
 	}
 	.completed-card {
 		background: color-mix(in srgb, var(--color-success) 14%, transparent);
-		color: var(--color-success);
+		color: var(--color-success-text);
 		padding: 0.55rem 0.85rem;
 		border: 1px solid color-mix(in srgb, var(--color-success) 35%, transparent);
 		border-radius: var(--radius-md);
@@ -663,7 +663,7 @@
 	.btn-ghost {
 		background: none;
 		border: none;
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-weight: 600;
 		text-decoration: underline;
 		cursor: pointer;
@@ -681,7 +681,7 @@
 		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 	}
-	.relink-error { color: var(--color-danger); }
+	.relink-error { color: var(--color-danger-text); }
 	.relink-list {
 		list-style: none;
 		padding: 0;
@@ -725,7 +725,7 @@
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 
 	.card {

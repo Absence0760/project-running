@@ -541,7 +541,7 @@
 		justify-content: center;
 	}
 	.icon-btn:hover {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 	}
 	.icon-btn:focus-visible {

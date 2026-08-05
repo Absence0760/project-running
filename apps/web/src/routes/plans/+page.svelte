@@ -627,7 +627,7 @@
 	}
 	.status-completed {
 		background: var(--color-success-light);
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	.status-abandoned {
 		background: var(--color-bg-tertiary);
@@ -736,7 +736,7 @@
 	.card-action-btn.danger:hover {
 		background: var(--color-danger-light);
 		border-color: var(--color-danger);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.empty {

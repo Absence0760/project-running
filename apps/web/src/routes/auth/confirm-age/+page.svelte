@@ -133,7 +133,7 @@
 		margin-top: 0.2rem;
 	}
 	.error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		margin: 0;
 	}
 	.fine {

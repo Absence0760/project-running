@@ -252,7 +252,7 @@
 	.error {
 		background: var(--color-danger-light);
 		border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		padding: var(--space-sm) var(--space-md);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;

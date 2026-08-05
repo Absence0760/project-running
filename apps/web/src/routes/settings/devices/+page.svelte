@@ -806,7 +806,7 @@
 		padding: 0.25rem;
 		border-radius: var(--radius-sm);
 	}
-	.remove-btn:hover { color: var(--color-danger); background: rgba(229, 57, 53, 0.08); }
+	.remove-btn:hover { color: var(--color-danger-text); background: var(--color-danger-light); }
 	.muted { color: var(--color-text-tertiary); }
 	.material-symbols { font-family: 'Material Symbols Outlined', system-ui; font-weight: normal; display: inline-block; line-height: 1; }
 
@@ -857,7 +857,7 @@
 		cursor: pointer;
 	}
 	.override-clear:hover {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: var(--color-danger);
 	}
 	.override-add-row {

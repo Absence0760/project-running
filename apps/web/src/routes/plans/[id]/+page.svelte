@@ -2116,7 +2116,7 @@
 	}
 	.today-icon.done {
 		background: color-mix(in srgb, var(--color-success) 18%, transparent);
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	.today-icon .material-symbols { font-size: 1.5rem; }
 	.today-static .today-icon {
@@ -2152,7 +2152,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.today-done {
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-weight: 600;
 	}
 	.today-notes {
@@ -2314,7 +2314,7 @@
 		position: absolute;
 		top: 0.3rem;
 		inset-inline-end: 0.3rem;
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-size: 1rem;
 	}
 	.day .skip-glyph {

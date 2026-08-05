@@ -665,7 +665,7 @@
 		flex-shrink: 0;
 	}
 	.icon-btn:hover {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 	}
 	.icon-btn:focus-visible {
@@ -678,7 +678,7 @@
 		border-top: 1px solid var(--color-border);
 	}
 	.form-error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		margin: 0;
 	}
 </style>

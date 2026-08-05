@@ -371,7 +371,7 @@
 		font-size: 1.6rem;
 	}
 	.pip-hit {
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	.pip-under {
 		color: var(--color-warning-text);
@@ -392,7 +392,7 @@
 		flex: 0 0 auto;
 	}
 	.timed .stopwatch.running {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: var(--color-danger);
 	}
 	.inputs {

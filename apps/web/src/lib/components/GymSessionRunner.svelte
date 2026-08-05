@@ -426,7 +426,7 @@
 	}
 	.save-failed {
 		margin: 0;
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-size: 0.9rem;
 	}
 	.finish-actions {

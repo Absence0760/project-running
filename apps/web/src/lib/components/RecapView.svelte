@@ -479,7 +479,7 @@
 	}
 	.badge-icon {
 		font-size: 2rem;
-		color: var(--color-accent-orange);
+		color: var(--color-accent-orange-text);
 		background: color-mix(in srgb, var(--color-accent-orange) 14%, transparent);
 		width: 3.25rem;
 		height: 3.25rem;

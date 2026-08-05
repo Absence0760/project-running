@@ -121,7 +121,7 @@
 <style>
 	.page { padding: var(--space-xl) var(--space-2xl); }
 
-	.load-error { margin: 0; color: var(--color-danger); }
+	.load-error { margin: 0; color: var(--color-danger-text); }
 
 	.back {
 		display: inline-flex;

@@ -1527,7 +1527,7 @@
 	.ai-request-error {
 		margin: 0;
 		font-size: 0.72rem;
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		line-height: 1.4;
 	}
 	.ai-request-applied {
@@ -1590,7 +1590,7 @@
 	.coord-error {
 		margin: 0 0 var(--space-sm);
 		font-size: 0.72rem;
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.point-btn {
@@ -2097,7 +2097,7 @@
 		background: var(--color-danger-light);
 		border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
 		border-radius: var(--radius-md);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-size: 0.85rem;
 	}
 	.save-actions {

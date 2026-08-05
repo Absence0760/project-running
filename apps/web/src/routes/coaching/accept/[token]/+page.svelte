@@ -190,7 +190,7 @@
 	}
 
 	.error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 		border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
 		padding: var(--space-sm) var(--space-md);
