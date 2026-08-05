@@ -865,7 +865,7 @@
 	.zip-bar {
 		width: 100%;
 		height: 6px;
-		background: var(--color-border);
+		background: var(--color-fill-subtle);
 		border-radius: 999px;
 		overflow: hidden;
 	}

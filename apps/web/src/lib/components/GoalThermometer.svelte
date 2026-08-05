@@ -54,7 +54,7 @@
 	.bar {
 		height: 0.85rem;
 		border-radius: 999px;
-		background: var(--color-border);
+		background: var(--color-fill-subtle);
 		overflow: hidden;
 	}
 	.fill {

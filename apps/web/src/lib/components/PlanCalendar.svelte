@@ -31,7 +31,7 @@
 		interval: '#D97A54',
 		marathon_pace: '#E6A96B',
 		race: 'var(--color-primary)',
-		rest: 'var(--color-border)'
+		rest: 'var(--color-text-tertiary)'
 	};
 
 	let workoutByDate = $derived.by(() => {

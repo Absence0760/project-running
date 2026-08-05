@@ -871,7 +871,7 @@
 	/// as a real fill, not a static border. The static `5px` border was
 	/// indistinguishable from a chrome flourish.
 	let progressGradient = $derived(
-		`conic-gradient(var(--color-primary) ${pct * 3.6}deg, color-mix(in srgb, var(--color-primary) 14%, var(--color-border)) 0deg)`
+		`conic-gradient(var(--color-primary) ${pct * 3.6}deg, color-mix(in srgb, var(--color-primary) 14%, var(--color-fill-subtle)) 0deg)`
 	);
 
 	const kindColor: Record<string, string> = {
@@ -882,7 +882,7 @@
 		interval: '#D97A54',
 		marathon_pace: '#E6A96B',
 		race: 'var(--color-primary)',
-		rest: 'var(--color-border)'
+		rest: 'var(--color-text-tertiary)'
 	};
 
 	function dayOfWeek(iso: string): string {

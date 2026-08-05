@@ -95,7 +95,7 @@
 		font-weight: 600;
 		padding: 0.1rem 0.45rem;
 		border-radius: 999px;
-		background: var(--color-border);
+		background: var(--color-fill-subtle);
 		color: var(--color-text-secondary);
 	}
 	.race-actions {

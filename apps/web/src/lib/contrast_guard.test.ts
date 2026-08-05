@@ -647,6 +647,197 @@ test('HR zone tokens match mobile ChartPalette.zones', () => {
 	}
 });
 
+// --color-border is the one LINE token, and its entire guarantee is WCAG
+// 1.4.11's 3:1 floor against every surface a boundary is drawn on. It shipped
+// at 1.458:1 on the light card and 1.328:1 on the dark one, so web had no token
+// that guaranteed a visible boundary at all while mobile's whole card/divider
+// grammar rests on one (§ 487). In light the card fill is #FFFFFF on a #F7F3EC
+// page — 1.116:1 apart — so the hairline is the only separation there is, which
+// is exactly the "visual information required to identify a UI component"
+// 1.4.11 sets at 3:1.
+for (const { label, marker } of THEMES) {
+	test(`the line token clears the 3:1 boundary floor on every surface — ${label}`, () => {
+		const line = resolveToken(marker, 'color-border');
+		for (const surfaceName of SURFACE_TOKENS) {
+			const surface = resolveToken(marker, surfaceName);
+			const ratio = contrastRatio(line, surface);
+			assert.ok(
+				ratio >= AA_NON_TEXT,
+				`--color-border (${line}) on --${surfaceName} (${surface}) is ${ratio.toFixed(3)}:1 in ${label}; a boundary needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+			);
+		}
+	});
+}
+
+// Mobile pinned the same token per brightness in § 487 and web's surfaces ARE
+// mobile's (parchment / parchmentDim / duskDeep / midnight are --color-bg /
+// --color-bg-tertiary / --color-surface / --color-bg), so the two hairlines
+// must be the same colour or a card reads apart on one platform and not the
+// other. A Dart file cannot import a CSS custom property, so the lockstep is
+// checked here, the same way the chart, zone and semantic palettes already are.
+test('the line token matches mobile AppTheme.parchmentLine / duskLine', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/app_theme.dart'),
+		'utf-8',
+	);
+	for (const [marker, symbol] of [
+		[':root {', 'parchmentLine'],
+		[':root[data-theme="dark"]', 'duskLine'],
+	] as const) {
+		const hex = dart.match(
+			new RegExp(`static const Color ${symbol} = Color\\(0xFF([0-9A-Fa-f]{6})\\)`),
+		)?.[1];
+		assert.ok(hex, `app_theme.dart has no ${symbol}`);
+		assert.equal(
+			resolveToken(marker, 'color-border').toUpperCase(),
+			`#${hex!.toUpperCase()}`,
+			`--color-border in ${marker} has drifted from AppTheme.${symbol}.`,
+		);
+	}
+});
+
+// The other half of the split: --color-fill-subtle holds the value the border
+// token shipped with, and its contract is the opposite one — text ON it must
+// clear AA. It is what the neutral metadata chip, the progress-bar tracks and
+// the button hover took when --color-border became a 3:1 line. Its own
+// separation from the surface is deliberately NOT pinned: a track is identified
+// by the fill inside it, not by its own edge (measured 1.162-1.622:1, recorded
+// in decisions rather than raised, because deepening a progress track is a
+// visual-design decision on five surfaces and not a boundary defect).
+for (const { label, marker } of THEMES) {
+	test(`the neutral chip's label clears AA on the subtle fill — ${label}`, () => {
+		const fg = resolveToken(marker, 'chip-fg');
+		const bg = resolveToken(marker, 'chip-bg');
+		const ratio = contrastRatio(fg, bg);
+		assert.ok(
+			ratio >= AA_NORMAL,
+			`--chip-fg (${fg}) on --chip-bg (${bg}) is ${ratio.toFixed(3)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
+		);
+	});
+}
+
+// The rule the split creates, and the only direction it can regress in: a FILL
+// token drawn as a border re-creates the sub-3:1 hairline the line token exists
+// to remove, silently, at a call site that reads as deliberate. Scoped to the
+// CSS border/outline longhands and shorthands, which are unambiguously a
+// component boundary. `background` is NOT in scope in either direction — eight
+// dividers here are drawn as a 1px background or a grid `gap` show-through and
+// legitimately take --color-border — and `stroke` is not either, because a
+// chart gridline is reference ornament inside a graphic rather than a component
+// edge and is the one class deliberately left below the floor.
+const BOUNDARY_PROPERTY =
+	'(?:border|border-(?:top|bottom|left|right|inline|block)(?:-(?:start|end))?|border-(?:top|bottom|left|right|inline-start|inline-end|block-start|block-end)?-?color|outline|outline-color)';
+const FILL_AS_BOUNDARY = new RegExp(
+	`(?<![a-z-])${BOUNDARY_PROPERTY}\\s*:[^;]*var\\(\\s*--color-fill-subtle\\s*[,)]`,
+);
+
+test('no source file draws a border or outline in the subtle FILL token', () => {
+	const hits = scanSource((line) => FILL_AS_BOUNDARY.test(line));
+	assert.equal(
+		hits.length,
+		0,
+		`A boundary is drawn in --color-fill-subtle, which sits at 1.162-1.622:1 against ` +
+			`the surfaces it lands on — the invisible hairline --color-border was raised to ` +
+			`3:1 to remove. Use --color-border:\n${hits.join('\n')}`,
+	);
+});
+
+// And the mirror: a boundary token is not text. It guarantees 3:1, not 4.5:1,
+// so painting type in it is a WCAG 1.4.3 failure that the boundary floor above
+// cannot catch — the plan surfaces' "rest" workout label did exactly this,
+// reading 1.458:1 light / 1.328:1 dark before the token moved and still only
+// 3.906 / 3.330 after. Muted type is --color-text-tertiary (5.782 / 5.510).
+//
+// A QUOTED reference is banned outright rather than classified, because syntax
+// cannot decide it: `rest: 'var(--color-border)'` was handed to a `--kind`
+// component custom property that the consumer applied to a 3px stripe AND to
+// the label's `color:`, so one entry was a boundary and text at once. That is
+// § 510's "derived" verdict — and unlike mobile's it needs no count-pinned
+// allowlist, because after the routing none is left and an entry matching
+// nothing would fail the "can only shrink" rule anyway.
+const BOUNDARY_TOKEN_AS_TEXT = new RegExp(
+	`(?<![a-z-])(?:color|-webkit-text-fill-color)\\s*:\\s*var\\(\\s*--color-border\\s*[,)]` +
+		`|['"]\\s*var\\(\\s*--color-border\\s*\\)\\s*['"]`,
+);
+
+test('no source file uses the line token as a text colour', () => {
+	const hits = scanSource((line) => BOUNDARY_TOKEN_AS_TEXT.test(line));
+	assert.equal(
+		hits.length,
+		0,
+		`--color-border is a 3:1 boundary token used as text, which cannot reach WCAG AA's ` +
+			`4.5:1 (3.906:1 light / 3.330:1 dark on the card). Use --color-text-tertiary:\n${hits.join('\n')}`,
+	);
+});
+
+// A boundary token has no headroom at all — its whole guarantee is the floor,
+// so any thinning spends it (§ 510, arrived at on mobile). Mixing it with an
+// ACCENT is not a thinning and must be spared: the 19 `color-mix(<accent> N%,
+// var(--color-border))` borders here all move contrast UP, because the accent
+// is darker than the line in light and lighter than it in dark. Mixing toward
+// `transparent` or toward a surface token is the thinning, and it is banned.
+const LINE_TOKEN_THINNED = new RegExp(
+	`color-mix\\([^;]*var\\(\\s*--color-border\\s*\\)[^;]*?,\\s*(?:transparent|var\\(\\s*--color-(?:bg|bg-secondary|bg-tertiary|surface)\\s*\\))|` +
+		`color-mix\\([^;]*(?:transparent|var\\(\\s*--color-(?:bg|bg-secondary|bg-tertiary|surface)\\s*\\))[^;]*var\\(\\s*--color-border\\s*\\)\\s*\\d`,
+);
+
+test('the line token is never thinned toward a surface or transparent', () => {
+	const hits = scanSource((line) => LINE_TOKEN_THINNED.test(line));
+	assert.equal(
+		hits.length,
+		0,
+		`--color-border is mixed toward a surface or transparent. Its entire guarantee is ` +
+			`the 3:1 floor, so a thinning spends it — 0.18 of it computed to 1.229:1 on the ` +
+			`mobile side of the same finding. Draw the softer line in --color-fill-subtle if ` +
+			`it is genuinely decorative:\n${hits.join('\n')}`,
+	);
+});
+
+// All three scans, both directions. The line-vs-fill split is exactly what the
+// property boundary decides, so a future tightening that reached `background`
+// would flag the eight legitimate divider-as-a-fill sites, and one that dropped
+// the `(?<![a-z-])` lookbehind would read `background-color` as a boundary.
+const LINE_TOKEN_FIXTURES: Array<[re: RegExp, flagged: boolean, line: string]> = [
+	// --- fill drawn as a boundary ---
+	[FILL_AS_BOUNDARY, true, '\tborder: 1px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-top: 1px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-inline-start: 3px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-color: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder-bottom-color: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\toutline: 2px solid var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, true, '\tborder: 1px solid var(--color-fill-subtle, #DDD5C5);'],
+	[FILL_AS_BOUNDARY, false, '\tbackground: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, false, '\tbackground-color: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, false, '\tstroke: var(--color-fill-subtle);'],
+	[FILL_AS_BOUNDARY, false, '\tborder: 1px solid var(--color-border);'],
+	[FILL_AS_BOUNDARY, false, '\t--color-fill-subtle: #DDD5C5;'],
+	// --- boundary token as text ---
+	[BOUNDARY_TOKEN_AS_TEXT, true, '\tcolor: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, true, "\t\trest: 'var(--color-border)'"],
+	[BOUNDARY_TOKEN_AS_TEXT, true, '\t-webkit-text-fill-color: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tborder-color: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tbackground-color: var(--color-border);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tcolor: var(--color-text-tertiary);'],
+	[BOUNDARY_TOKEN_AS_TEXT, false, "\t\trest: 'var(--color-text-tertiary)'"],
+	[BOUNDARY_TOKEN_AS_TEXT, false, '\tstyle="--kind: {KIND_COLOR[wo.kind]}"'],
+	// --- thinning ---
+	[LINE_TOKEN_THINNED, true, '\tborder-color: color-mix(in srgb, var(--color-border) 40%, transparent);'],
+	[LINE_TOKEN_THINNED, true, '\tborder-color: color-mix(in srgb, var(--color-border) 60%, var(--color-surface));'],
+	[LINE_TOKEN_THINNED, true, '\tborder-color: color-mix(in srgb, var(--color-bg) 70%, var(--color-border) 30%);'],
+	[LINE_TOKEN_THINNED, false, '\tborder-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));'],
+	[LINE_TOKEN_THINNED, false, '\tborder: 1px dashed color-mix(in srgb, var(--color-secondary) 35%, var(--color-border));'],
+	[LINE_TOKEN_THINNED, false, '\tbackground: color-mix(in srgb, var(--color-primary) 14%, var(--color-fill-subtle));'],
+];
+test('the line/fill scans split on the CSS property, not on the token alone', () => {
+	for (const [re, flagged, line] of LINE_TOKEN_FIXTURES) {
+		assert.equal(
+			re.test(line),
+			flagged,
+			flagged ? `the scan misses \`${line.trim()}\`` : `the scan wrongly flags \`${line.trim()}\``,
+		);
+	}
+});
+
 // --color-success-text / --color-danger-text, checked on every plain surface
 // (the signed readiness delta is bare text on the card) AND on the deepest
 // same-hue chip tint the source actually paints — which is the tightest case,
