@@ -11894,4 +11894,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get photoLightboxErrorHint => '画面のどこかをタップすると閉じます。';
+
+  @override
+  String get commonLoading => '読み込み中…';
 }

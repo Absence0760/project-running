@@ -12344,4 +12344,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photoLightboxErrorHint => 'Tap anywhere to close.';
+
+  @override
+  String get commonLoading => 'Loading…';
 }

@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
@@ -203,7 +204,7 @@ class _CoachingScreenState extends State<CoachingScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.coachingTitle)),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(label: l10n.commonLoading, hasLeading: false)
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(

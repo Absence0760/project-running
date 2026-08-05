@@ -270,13 +270,13 @@ void main() {
       expect(find.text('Retry'), findsOneWidget);
     });
 
-    testWidgets('a slow load shows the loading spinner before it resolves',
+    testWidgets('a slow load shows the list skeleton before it resolves',
         (tester) async {
       final social = _SlowSocial();
       await _pump(tester, social);
       await tester.pump();
-      // Load is gated → spinner persists until the gate completes.
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      // Load is gated → the skeleton persists until the gate completes.
+      expect(find.byType(ListSkeleton), findsOneWidget);
       // Release the gate so the .timeout(...) timer + future drain cleanly.
       social.gate.complete(const []);
       await tester.pump();

@@ -744,7 +744,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     required Widget Function() child,
   }) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return ListSkeleton(label: AppLocalizations.of(context).commonLoading);
     }
     if (error != null) {
       return ErrorState(

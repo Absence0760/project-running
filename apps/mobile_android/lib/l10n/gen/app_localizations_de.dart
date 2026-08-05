@@ -12482,4 +12482,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get photoLightboxErrorHint => 'Tippe irgendwo, um zu schließen.';
+
+  @override
+  String get commonLoading => 'Wird geladen…';
 }

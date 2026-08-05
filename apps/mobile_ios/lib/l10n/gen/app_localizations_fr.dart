@@ -12502,4 +12502,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get photoLightboxErrorHint => 'Touchez n\'importe où pour fermer.';
+
+  @override
+  String get commonLoading => 'Chargement…';
 }

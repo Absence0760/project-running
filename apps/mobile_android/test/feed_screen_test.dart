@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/adaptive_width.dart';
@@ -216,10 +217,10 @@ void main() {
       expect(find.text('Feed'), findsOneWidget);
     });
 
-    testWidgets('first frame shows the loading spinner', (tester) async {
+    testWidgets('first frame shows the list skeleton', (tester) async {
       await _pump(tester, _FakeApi());
-      // Don't settle — assert the spinner before the load resolves.
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      // Don't settle — assert the skeleton before the load resolves.
+      expect(find.byType(ListSkeleton), findsOneWidget);
     });
   });
 

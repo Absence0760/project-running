@@ -3635,5 +3635,6 @@
   "pendingSyncRetry": "Tentar novamente",
   "photoLightboxLoading": "Carregando a foto…",
   "photoLightboxError": "Não foi possível carregar esta foto.",
-  "photoLightboxErrorHint": "Toque em qualquer lugar para fechar."
+  "photoLightboxErrorHint": "Toque em qualquer lugar para fechar.",
+  "commonLoading": "Carregando…"
 }

@@ -12470,6 +12470,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get photoLightboxErrorHint => 'Toque em qualquer sítio para fechar.';
+
+  @override
+  String get commonLoading => 'A carregar…';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -24933,4 +24936,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get photoLightboxErrorHint => 'Toque em qualquer lugar para fechar.';
+
+  @override
+  String get commonLoading => 'Carregando…';
 }

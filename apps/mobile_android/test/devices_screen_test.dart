@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -41,9 +42,9 @@ void main() {
       expect(find.text('Devices'), findsOneWidget);
     });
 
-    testWidgets('first frame shows the loading spinner', (tester) async {
+    testWidgets('first frame shows the list skeleton', (tester) async {
       await _pump(tester);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(ListSkeleton), findsOneWidget);
     });
   });
 

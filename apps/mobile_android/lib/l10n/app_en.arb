@@ -15855,5 +15855,9 @@
   "photoLightboxErrorHint": "Tap anywhere to close.",
   "@photoLightboxErrorHint": {
     "description": "Hint under the photo lightbox error telling the user how to dismiss the viewer"
+  },
+  "commonLoading": "Loading…",
+  "@commonLoading": {
+    "description": "Generic screen-reader announcement for a surface that is still loading"
   }
 }

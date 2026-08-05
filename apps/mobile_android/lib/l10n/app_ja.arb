@@ -3635,5 +3635,6 @@
   "pendingSyncRetry": "再試行",
   "photoLightboxLoading": "写真を読み込んでいます…",
   "photoLightboxError": "この写真を読み込めませんでした。",
-  "photoLightboxErrorHint": "画面のどこかをタップすると閉じます。"
+  "photoLightboxErrorHint": "画面のどこかをタップすると閉じます。",
+  "commonLoading": "読み込み中…"
 }

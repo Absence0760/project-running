@@ -20857,6 +20857,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap anywhere to close.'**
   String get photoLightboxErrorHint;
+
+  /// Generic screen-reader announcement for a surface that is still loading
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get commonLoading;
 }
 
 class _AppLocalizationsDelegate

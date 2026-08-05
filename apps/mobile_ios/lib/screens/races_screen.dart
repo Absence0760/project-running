@@ -212,7 +212,9 @@ class _RacesScreenState extends State<RacesScreen> {
   }
 
   Widget _buildResults(AppLocalizations l) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return ListSkeleton(label: l.commonLoading, hasLeading: false);
+    }
     if (_error) {
       return ErrorState(message: l.racesSearchFailed, onRetry: _run);
     }

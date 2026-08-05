@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show IdentityAvatar;
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton;
 
 import '../adaptive_width.dart';
 import '../auth_error.dart';
@@ -246,7 +246,11 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _buildBody(ThemeData theme) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return ListSkeleton(
+        label: AppLocalizations.of(context).commonLoading,
+        rows: 3,
+        rowHeight: 168,
+      );
     }
     if (_loadError != null) {
       return ErrorState(

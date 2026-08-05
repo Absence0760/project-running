@@ -3635,5 +3635,6 @@
   "pendingSyncRetry": "Réessayer",
   "photoLightboxLoading": "Chargement de la photo…",
   "photoLightboxError": "Cette photo n'a pas pu être chargée.",
-  "photoLightboxErrorHint": "Touchez n'importe où pour fermer."
+  "photoLightboxErrorHint": "Touchez n'importe où pour fermer.",
+  "commonLoading": "Chargement…"
 }

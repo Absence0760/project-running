@@ -12474,4 +12474,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get photoLightboxErrorHint => 'Toca en cualquier parte para cerrar.';
+
+  @override
+  String get commonLoading => 'Cargando…';
 }
