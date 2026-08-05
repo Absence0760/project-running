@@ -506,18 +506,22 @@
 		max-width: 56rem;
 		padding: var(--space-xl) var(--space-2xl);
 
-		/* Per-kind tint applied to hero accent, step bars, and timeline.
-		   Defaults to the primary palette; specific kinds remap below. */
-		--kind-tint: var(--color-primary);
+		/* Per-kind tint for the hero accent, step bars and timeline — the same
+		   measured mark scale the plan calendar draws its cell edges in, so the
+		   two surfaces cannot drift. It is a FILL here: everything below mixes
+		   it into a background or paints a bar with it, and the two sites that
+		   used it as type (.kicker, .zone) read text tokens instead. */
+		--kind-tint: var(--kind-6);
 	}
-	.page[data-kind="tempo"]      { --kind-tint: #C98ECF; }
-	.page[data-kind="interval"]   { --kind-tint: #D97A54; }
-	.page[data-kind="marathon_pace"] { --kind-tint: #E6A96B; }
-	.page[data-kind="long"]       { --kind-tint: var(--color-primary); }
-	.page[data-kind="easy"]       { --kind-tint: var(--color-text-secondary); }
-	.page[data-kind="recovery"]   { --kind-tint: var(--color-text-tertiary); }
-	.page[data-kind="race"]       { --kind-tint: var(--color-primary); }
-	.page[data-kind="rest"]       { --kind-tint: var(--color-text-tertiary); }
+	.page[data-kind="easy"]       { --kind-tint: var(--kind-1); }
+	.page[data-kind="recovery"]   { --kind-tint: var(--kind-1); }
+	.page[data-kind="long"]       { --kind-tint: var(--kind-2); }
+	.page[data-kind="race"]       { --kind-tint: var(--kind-2); }
+	.page[data-kind="tempo"]      { --kind-tint: var(--kind-3); }
+	.page[data-kind="marathon_pace"] { --kind-tint: var(--kind-4); }
+	.page[data-kind="interval"]   { --kind-tint: var(--kind-5); }
+	.page[data-kind="walk_run"]   { --kind-tint: var(--kind-5); }
+	.page[data-kind="rest"]       { --kind-tint: var(--kind-6); }
 
 	.back {
 		display: inline-flex;
@@ -562,7 +566,7 @@
 	.kicker {
 		font-size: var(--font-size-section-label);
 		letter-spacing: 0.1em;
-		color: var(--kind-tint);
+		color: var(--color-text-secondary);
 		font-weight: 700;
 		text-transform: uppercase;
 	}
@@ -617,7 +621,7 @@
 		padding: 0.1rem 0.5rem;
 		border-radius: var(--radius-sm);
 		background: color-mix(in srgb, var(--kind-tint) 18%, transparent);
-		color: var(--kind-tint);
+		color: var(--color-text);
 		font-size: 0.7rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;
@@ -787,7 +791,7 @@
 		font-size: 0.85rem;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		color: var(--seg-color, var(--color-primary));
+		color: var(--color-text);
 	}
 	.step-body {
 		display: flex;

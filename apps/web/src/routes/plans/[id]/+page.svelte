@@ -29,6 +29,7 @@
 		type AdaptiveConfidence
 	} from '$lib/training/plan_adaptive_replan';
 	import { computeTrainingLoadSeries } from '$lib/training/training_load';
+	import { workoutKindMarkVar } from '$lib/training/workout_kind_color';
 	import { isAdaptiveFitnessGateEnabled } from '$lib/training/adaptive_fitness_flag';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -874,17 +875,6 @@
 		`conic-gradient(var(--color-primary) ${pct * 3.6}deg, color-mix(in srgb, var(--color-primary) 14%, var(--color-border)) 0deg)`
 	);
 
-	const kindColor: Record<string, string> = {
-		easy: 'var(--color-text-secondary)',
-		long: 'var(--color-primary)',
-		recovery: 'var(--color-text-tertiary)',
-		tempo: '#C98ECF',
-		interval: '#D97A54',
-		marathon_pace: '#E6A96B',
-		race: 'var(--color-primary)',
-		rest: 'var(--color-border)'
-	};
-
 	function dayOfWeek(iso: string): string {
 		const keys = [
 			'planDetail.dowSun',
@@ -1498,7 +1488,7 @@
 								class:skipped={isWorkoutSkipped(wo)}
 								class:rest={wo.kind === 'rest'}
 								class:past={wo.scheduled_date < today}
-								style="--kind-color: {kindColor[wo.kind] ?? 'var(--color-text-secondary)'}"
+								style="--kind-color: {workoutKindMarkVar(wo.kind)}"
 							>
 								<button
 									class="day-link"
@@ -2304,7 +2294,7 @@
 	}
 	.day .kind {
 		font-weight: 700;
-		color: var(--kind-color, var(--color-text));
+		color: var(--color-text);
 	}
 	.day .dist {
 		color: var(--color-text-secondary);
