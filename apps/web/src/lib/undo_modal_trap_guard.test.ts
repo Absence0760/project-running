@@ -97,3 +97,16 @@ test('the notification dismiss defers instead of deleting on click', () => {
 		'the dismiss must not delete straight from the click handler',
 	);
 });
+
+test('the route review delete defers and no longer confirms', () => {
+	// Reason: a review is a rating plus a sentence its author re-files in
+	// one tap, scoped by (route_id, user_id) with nothing hanging off it.
+	// It must not regain a modal in front of the undo bar.
+	const source = read('src/routes/routes/[id]/+page.svelte');
+	assert.match(source, /deferDestructive\(\{/, 'the review delete must defer');
+	assert.doesNotMatch(
+		source,
+		/confirmDeleteReview/,
+		'the review confirm was replaced by undo, not joined to it',
+	);
+});
