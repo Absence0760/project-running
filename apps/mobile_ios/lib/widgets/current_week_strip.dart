@@ -7,6 +7,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../training.dart';
 import '../training_labels.dart';
+import '../workout_kind_color.dart';
 
 /// Web `isWorkoutCompleted` twin — a planned workout is done when a tracked
 /// run is linked OR the runner manually marked it complete.
@@ -37,26 +38,6 @@ class CurrentWeekStrip extends StatelessWidget {
     final m = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
     return '$y-$m-$dd';
-  }
-
-  static Color _kindColor(ThemeData theme, WorkoutKind k) {
-    switch (k) {
-      case WorkoutKind.easy:
-      case WorkoutKind.recovery:
-        return theme.colorScheme.onSurfaceVariant;
-      case WorkoutKind.long:
-      case WorkoutKind.race:
-        return theme.colorScheme.primary;
-      case WorkoutKind.tempo:
-        return const Color(0xFFC98ECF);
-      case WorkoutKind.interval:
-      case WorkoutKind.walkRun:
-        return const Color(0xFFD97A54);
-      case WorkoutKind.marathonPace:
-        return const Color(0xFFE6A96B);
-      case WorkoutKind.rest:
-        return theme.dividerColor;
-    }
   }
 
   @override
@@ -118,7 +99,7 @@ class CurrentWeekStrip extends StatelessWidget {
   ) {
     final isToday = _toIso(day) == today;
     final kind = wo == null ? null : workoutKindFromDb(wo.kind);
-    final kindColor = kind == null ? null : _kindColor(theme, kind);
+    final kindMark = kind == null ? null : workoutKindMarkColor(theme, kind);
     final isDone = wo != null && _isWorkoutCompleted(wo);
 
     final base = Container(
@@ -139,7 +120,7 @@ class CurrentWeekStrip extends StatelessWidget {
       ),
       foregroundDecoration: wo != null
           ? BoxDecoration(
-              border: Border(left: BorderSide(color: kindColor!, width: 3)),
+              border: Border(left: BorderSide(color: kindMark!, width: 3)),
               borderRadius: BorderRadius.circular(6),
             )
           : null,
@@ -158,7 +139,7 @@ class CurrentWeekStrip extends StatelessWidget {
             Text(
               workoutKindLabel(l10n, kind!).toUpperCase(),
               style: theme.textTheme.labelSmall?.copyWith(
-                color: kindColor,
+                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.4,
               ),
