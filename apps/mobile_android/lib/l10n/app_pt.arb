@@ -3647,5 +3647,6 @@
   "photoLightboxLoading": "A carregar a fotografia…",
   "photoLightboxError": "Não foi possível carregar esta fotografia.",
   "photoLightboxErrorHint": "Toque em qualquer sítio para fechar.",
-  "commonLoading": "A carregar…"
+  "commonLoading": "A carregar…",
+  "commonMore": "Mais"
 }

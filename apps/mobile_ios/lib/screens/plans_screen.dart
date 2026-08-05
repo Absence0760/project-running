@@ -9,6 +9,7 @@ import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../fab_clearance.dart';
 import '../local_run_store.dart';
 import '../training.dart';
 import '../training_service.dart';
@@ -110,10 +111,6 @@ class _PlansScreenState extends State<PlansScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final signedIn = widget.apiClient?.userId != null;
-    // Samsung devices with the 3-button nav bar report a bottom viewPadding
-    // the Scaffold does NOT automatically pad FABs for (that auto-pad only
-    // applies when a bottomNavigationBar is present). Apply it manually.
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.plansTitle),
@@ -131,20 +128,16 @@ class _PlansScreenState extends State<PlansScreen> {
         ],
       ),
       floatingActionButton: signedIn
-          ? Padding(
-              padding: EdgeInsets.only(bottom: bottomInset),
-              child: FloatingActionButton.extended(
-                onPressed: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          PlanNewScreen(training: widget.training),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.add),
-                label: Text(l10n.plansNewPlan),
-              ),
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => PlanNewScreen(training: widget.training),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: Text(l10n.plansNewPlan),
             )
           : null,
       body: !signedIn
@@ -162,10 +155,8 @@ class _PlansScreenState extends State<PlansScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
-                    // Bottom padding = FAB clearance (80) + system nav
-                    // inset so the last card isn't trapped behind either.
                     padding: EdgeInsets.fromLTRB(
-                      16, 12, 16, 80 + bottomInset),
+                        16, 12, 16, fabScrollClearance(context)),
                     itemCount: _plans.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (ctx, i) {

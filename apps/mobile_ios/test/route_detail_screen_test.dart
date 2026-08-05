@@ -190,33 +190,53 @@ void main() {
       await tester.pump();
       await tester.pump(Duration.zero);
 
-      final appBar = find.byType(AppBar);
+      // The visibility toggle lives in the toolbar's overflow menu (#666 C4).
+      // A popup menu builds its rows once, at open time, so every check
+      // below reopens it rather than reading a stale route.
+      Future<void> openOverflow() async {
+        await tester.tap(find.byTooltip('More'));
+        // Timed pumps, not pumpAndSettle — LiveRunMap's pulse animation
+        // never settles.
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      Future<void> closeOverflow() async {
+        await tester.tap(find.byType(ModalBarrier).last, warnIfMissed: false);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      Finder row(String label) =>
+          find.widgetWithText(PopupMenuItem<int>, label);
+
       // First tap flips private → public and blocks on the cloud write.
-      await tester.tap(find.descendant(
-          of: appBar, matching: find.byIcon(Icons.public_off)));
+      await openOverflow();
+      await tester.tap(row('Make public'));
       await tester.pump();
       await tester.pump(Duration.zero);
       expect(api.publicCalls, 1);
 
       // Busy → the control is disabled; a second tap can't fire a second,
       // out-of-order visibility write.
-      final btn = tester.widget<IconButton>(find.ancestor(
-          of: find.byIcon(Icons.public), matching: find.byType(IconButton)));
-      expect(btn.onPressed, isNull,
-          reason: 'visibility control must be disabled while a write is in flight');
-      await tester.tap(
-          find.descendant(of: appBar, matching: find.byIcon(Icons.public)),
-          warnIfMissed: false);
+      await openOverflow();
+      expect(tester.widget<PopupMenuItem<int>>(row('Make private')).enabled,
+          isFalse,
+          reason:
+              'visibility control must be disabled while a write is in flight');
+      await tester.tap(row('Make private'), warnIfMissed: false);
       await tester.pump();
       expect(api.publicCalls, 1, reason: 'second tap must not fire another write');
+      await closeOverflow();
 
       // Completing the write re-enables the control.
       api.gate.complete();
       await tester.pump();
       await tester.pump(Duration.zero);
-      final btnAfter = tester.widget<IconButton>(find.ancestor(
-          of: find.byIcon(Icons.public), matching: find.byType(IconButton)));
-      expect(btnAfter.onPressed, isNotNull);
+      await openOverflow();
+      expect(tester.widget<PopupMenuItem<int>>(row('Make private')).enabled,
+          isTrue);
+      await closeOverflow();
 
       // Drain the "made public" banner timer.
       await tester.pump(const Duration(seconds: 4));

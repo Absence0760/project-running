@@ -11,6 +11,7 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../fab_clearance.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -833,13 +834,10 @@ class RoutesScreenState extends State<RoutesScreen> {
               ),
             )
           : ListView.builder(
-              // Bottom padding clears the dual-FAB column (Build +
-              // Import) — pre-fix the last route's star button + the
-              // chevron were covered by the bottom-right FABs. The
-              // 144 px reserves room for two stacked
-              // FloatingActionButton.extended (~56 dp each + 16 dp
-              // gap + 16 dp safe-area breathing room).
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 144),
+              // Clears the dual-FAB column (Build + Import) — pre-fix the
+              // last route's star button and chevron sat under them.
+              padding: EdgeInsets.fromLTRB(
+                  16, 16, 16, fabScrollClearance(context, fabCount: 2)),
               itemCount: 1 +
                   (emptyAfterFilter ? 1 : routes.length) +
                   (showLoadMore && !emptyAfterFilter ? 1 : 0),

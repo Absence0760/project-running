@@ -5398,4 +5398,56 @@ void main() {
       );
     });
   });
+
+  group('a FAB never covers the last row of the list it floats over', () {
+    // A `FloatingActionButton` is painted over the body, so a scroll view
+    // beneath one has to reserve room for it or its last row is unreachable.
+    // Round 9 of the issue #666 audit found four screens reserving none and
+    // six reserving four different guessed values, none of which matched what
+    // Scaffold actually does. `fabScrollClearance` is the measured answer.
+    test('every screen with a scrolling FAB body uses fabScrollClearance', () {
+      // Screens whose FAB floats over something that does not scroll — a map
+      // — have no last row to cover.
+      const nonScrolling = {
+        'lib/screens/privacy_zones_screen.dart',
+        'lib/screens/route_builder_screen.dart',
+      };
+      // Hosts that hoist a sub-screen's FAB into their own Scaffold. The
+      // clearance belongs to the list, which lives in the sub-screen.
+      const hoists = {
+        'lib/screens/home_screen.dart',
+        'lib/screens/social_screen.dart',
+      };
+      final offenders = [
+        for (final f in Directory('lib/screens')
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart')))
+          if (!nonScrolling.contains(f.path) && !hoists.contains(f.path))
+            if (f.readAsStringSync().contains('floatingActionButton:') &&
+                !f.readAsStringSync().contains('fabScrollClearance('))
+              f.path,
+      ];
+      expect(offenders, isEmpty,
+          reason: 'reserve fabScrollClearance(context) at the end of the '
+              'scroll view, or add the screen to one of the lists above');
+    });
+
+    test('no screen hard-codes its own FAB clearance', () {
+      final offenders = <String>[];
+      for (final f in Directory('lib/screens')
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))) {
+        final src = f.readAsStringSync();
+        if (!src.contains('fabScrollClearance(')) continue;
+        if (RegExp(r'viewPaddingOf\(context\)\.bottom').hasMatch(src)) {
+          offenders.add(f.path);
+        }
+      }
+      expect(offenders, isEmpty,
+          reason: 'fabScrollClearance already folds in the system inset — a '
+              'second viewPadding read double-counts it');
+    });
+  });
 }
