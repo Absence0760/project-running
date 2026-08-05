@@ -100,20 +100,12 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	// Cartographic: privacy-zone marker, its fill and its outline. Drawn on
 	// the basemap, not on a theme surface.
 	'lib/components/PrivacyZonePicker.svelte': { DC2626: 3 },
-	// Cartographic: waypoint colouring (implicated / start) plus the
-	// generate-by-distance start + end picker pins.
-	'lib/components/RouteBuilder.svelte': { EF4444: 1, '22C55E': 1, '16A34A': 1, DC2626: 1 },
-	// Cartographic: the featured-cluster gold halo on the heatmap pins.
-	'lib/components/RouteHeatmap.svelte': { FACC15: 1 },
 	// Painted start / finish caps on the mini track preview — the exact twin
 	// of mobile's track_preview.dart allowlist entry.
 	'lib/components/TrackPreview.svelte': { '22C55E': 1, EF4444: 1 },
 	// Course start / finish checkpoint hues, twin of mobile's
 	// roadbook_screen.dart entry.
 	'routes/routes/[id]/roadbook/+page.svelte': { '22C55E': 1, EF4444: 1 },
-	// Cartographic: the coarse (privacy-clipped) live position marker and its
-	// outline — the web twin of mobile's coarse-position ring.
-	'routes/live/event/[id]/[instance]/+page.svelte': { E6A96B: 2 },
 	// Fixed brand hero. The canvas follows no theme, so the ONE literal left is
 	// the verdict green shared by the confidence chip and the feasibility pill,
 	// which are the same "good" role on the same white pill (4.862:1 worst case

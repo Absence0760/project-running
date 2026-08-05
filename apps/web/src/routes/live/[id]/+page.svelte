@@ -4,7 +4,8 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv } from '$lib/routes/map-style.svelte';
+	import { basemapIsDarkFromEnv, mapStyleUrlFromEnv } from '$lib/routes/map-style.svelte';
+	import { mapLiveLine } from '$lib/routes/basemap_contrast';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { formatPace, formatDistance } from '$lib/core/mock-data';
 	import { formatDuration } from '$lib/format/time';
@@ -714,20 +715,27 @@
 		mapConsented = true;
 	}
 
+	function prefersDarkOs(): boolean {
+		return (
+			typeof window !== 'undefined' &&
+			window.matchMedia('(prefers-color-scheme: dark)').matches
+		);
+	}
+
+	// Whether the basemap resolved for this page is dark. NOT the OS
+	// preference: the map-style setting decouples the two (see
+	// `basemap_contrast.ts`), and the trace's 3:1 is owed to the ground.
+	function liveDarkBasemap(): boolean {
+		return basemapIsDarkFromEnv(PUBLIC_MAPTILER_KEY, prefersDarkOs());
+	}
+
 	function initMap() {
 		if (map || !mapContainer) return;
 		map = new maplibregl.Map({
 			container: mapContainer,
 			// Honours PUBLIC_TILE_STYLE_URL override the same way every
-			// other map surface does (decisions.md § 68). `prefersDark`
-			// isn't read here — the live spectator page renders dark
-			// the same way the run-detail map does (the helper handles
-			// the OS-preference path internally).
-			style: mapStyleUrlFromEnv(
-				PUBLIC_MAPTILER_KEY,
-				typeof window !== 'undefined' &&
-					window.matchMedia('(prefers-color-scheme: dark)').matches,
-			),
+			// other map surface does (decisions.md § 68).
+			style: mapStyleUrlFromEnv(PUBLIC_MAPTILER_KEY, prefersDarkOs()),
 			center: [fallbackLng, fallbackLat],
 			zoom: 15,
 		});
@@ -761,7 +769,7 @@
 				id: 'live-trace-line',
 				type: 'line',
 				source: 'live-trace',
-				paint: { 'line-color': '#2C5F6E', 'line-width': 3 },
+				paint: { 'line-color': mapLiveLine(liveDarkBasemap()), 'line-width': 3 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			if (traceCoords.length > 0) {

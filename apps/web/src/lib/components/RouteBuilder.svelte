@@ -38,6 +38,14 @@
 		validateRouteQuality,
 		type RoutedSegment,
 	} from '$lib/routes/routing_quality';
+	import {
+		mapDraftLine,
+		mapFinishColour,
+		mapHintLine,
+		mapOverlapLine,
+		mapOverlayOutline,
+		mapStartColour,
+	} from '$lib/routes/basemap_contrast';
 	import type { TrackPoint } from '$lib/types';
 
 	// Bound the recentre pan to a fixed, snappy duration. maplibre's default
@@ -215,6 +223,23 @@
 	// style so the style-switcher buttons in the route-builder UI
 	// still work (they just don't visually differ). On the MapTiler
 	// production path the three distinct slugs are used.
+	// Whether the basemap THIS switcher resolved to is dark, so overlay paint
+	// clears the ground it lands on rather than the OS theme (§ 491, and see
+	// `basemap_contrast.ts`). Deliberately local rather than
+	// `basemapIsDarkFromEnv`: the builder owns its own three-way switcher
+	// with its own slugs — `hybrid` for satellite, and a `terrain` key the
+	// shared `MapStyle` union has no member for — so routing it through the
+	// shared resolver would silently change which satellite tiles it
+	// requests. Same override rule, same classification of imagery as dark.
+	const darkBasemap = $derived.by(() => {
+		if (TILE_STYLE_OVERRIDE.length > 0)
+			return TILE_STYLE_OVERRIDE.toLowerCase().includes('dark');
+		if (PUBLIC_MAPTILER_KEY.trim().length === 0) return false;
+		if (mapStyle === 'satellite') return true;
+		if (mapStyle === 'terrain') return false;
+		return prefersDark;
+	});
+
 	const TILE_STYLE_OVERRIDE = (env.PUBLIC_TILE_STYLE_URL ?? '').trim();
 	const MAP_STYLES: Record<string, string> = TILE_STYLE_OVERRIDE.length > 0
 		? {
@@ -281,9 +306,9 @@
 	function getMarkerColor(index: number, implicated: boolean): string {
 		// Red wins over the green start-marker convention — the user's
 		// problem is more important to surface than "this is point 1".
-		if (implicated) return '#ef4444';
-		if (index === 0) return '#22c55e';
-		return '#3b82f6';
+		if (implicated) return mapFinishColour(darkBasemap);
+		if (index === 0) return mapStartColour(darkBasemap);
+		return mapDraftLine(darkBasemap);
 	}
 
 	function createWaypointMarker(
@@ -1990,22 +2015,22 @@
 
 		map.addLayer({
 			id: 'route-casing', type: 'line', source: 'route',
-			paint: { 'line-color': '#1d4ed8', 'line-width': 8, 'line-opacity': 0.25 },
+			paint: { 'line-color': mapOverlayOutline(darkBasemap), 'line-width': 8, 'line-opacity': 0.25 },
 			layout: { 'line-join': 'round', 'line-cap': 'round' }
 		});
 		map.addLayer({
 			id: 'route-line', type: 'line', source: 'route',
-			paint: { 'line-color': '#3b82f6', 'line-width': 4 },
+			paint: { 'line-color': mapDraftLine(darkBasemap), 'line-width': 4 },
 			layout: { 'line-join': 'round', 'line-cap': 'round' }
 		});
 		map.addLayer({
 			id: 'route-overlap-casing', type: 'line', source: 'route-overlap',
-			paint: { 'line-color': '#9333ea', 'line-width': 8, 'line-opacity': 0.25 },
+			paint: { 'line-color': mapOverlayOutline(darkBasemap), 'line-width': 8, 'line-opacity': 0.25 },
 			layout: { 'line-join': 'round', 'line-cap': 'round' }
 		});
 		map.addLayer({
 			id: 'route-overlap-line', type: 'line', source: 'route-overlap',
-			paint: { 'line-color': '#a855f7', 'line-width': 4 },
+			paint: { 'line-color': mapOverlapLine(darkBasemap), 'line-width': 4 },
 			layout: { 'line-join': 'round', 'line-cap': 'round' }
 		});
 		map.addLayer({
@@ -2015,16 +2040,16 @@
 				'text-field': '▶', 'text-size': 12,
 				'text-rotation-alignment': 'map', 'text-keep-upright': false
 			},
-			paint: { 'text-color': '#1d4ed8' }
+			paint: { 'text-color': mapDraftLine(darkBasemap) }
 		});
 		map.addLayer({
 			id: 'waypoint-lines', type: 'line', source: 'waypoint-lines',
-			paint: { 'line-color': '#3b82f6', 'line-width': 2.5, 'line-dasharray': [6, 4], 'line-opacity': 0.6 },
+			paint: { 'line-color': mapDraftLine(darkBasemap), 'line-width': 2.5, 'line-dasharray': [6, 4], 'line-opacity': 0.6 },
 			layout: { 'line-join': 'round', 'line-cap': 'round' }
 		});
 		map.addLayer({
 			id: 'preview-line', type: 'line', source: 'preview-line',
-			paint: { 'line-color': '#94a3b8', 'line-width': 2, 'line-dasharray': [4, 4] }
+			paint: { 'line-color': mapHintLine(darkBasemap), 'line-width': 2, 'line-dasharray': [4, 4] }
 		});
 	}
 
@@ -2144,7 +2169,13 @@
 	});
 </script>
 
-<div class="map-wrapper">
+<div
+	class="map-wrapper"
+	style:--map-outline={mapOverlayOutline(darkBasemap)}
+	style:--map-draft={mapDraftLine(darkBasemap)}
+	style:--map-start={mapStartColour(darkBasemap)}
+	style:--map-finish={mapFinishColour(darkBasemap)}
+>
 	{#if mapConsented}
 	<div class="search-box">
 		<div class="search-row">
@@ -2468,9 +2499,9 @@
 		width: 14px;
 		height: 14px;
 		border-radius: 50%;
-		background: #4285f4;
-		border: 2.5px solid white;
-		box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.3);
+		background: var(--map-draft);
+		border: 2.5px solid var(--map-outline);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--map-draft) 30%, transparent);
 		pointer-events: none;
 	}
 
@@ -2486,14 +2517,14 @@
 		height: 22px;
 		border-radius: 50% 50% 50% 0;
 		transform: rotate(-45deg);
-		border: 2.5px solid white;
+		border: 2.5px solid var(--map-outline);
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 		pointer-events: none;
 	}
 	:global(.generation-endpoint-start) {
-		background: #16a34a;
+		background: var(--map-start);
 	}
 	:global(.generation-endpoint-end) {
-		background: #dc2626;
+		background: var(--map-finish);
 	}
 </style>
