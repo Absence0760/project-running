@@ -355,5 +355,32 @@ void main() {
       expect(_contrast(light.last, _lightBasemapSample),
           greaterThan(_contrast(light.first, _lightBasemapSample)));
     });
+
+    test('the amber accent clears the floor on both basemaps', () {
+      // Issue #666 round 7. The selected-segment highlight, the coarse
+      // last-seen ring and the chart-hover dot all read `#F59E0B`, which
+      // § 489 left at 1.87:1 over the light land fill below (1.96:1 over a
+      // paler one) once non-dark basemaps became reachable.
+      expect(_contrast(mapAccentColour(darkBasemap: false), _lightBasemapSample),
+          greaterThanOrEqualTo(_overlayFloor));
+      expect(_contrast(mapAccentColour(darkBasemap: true), _darkBasemapSample),
+          greaterThanOrEqualTo(_overlayFloor));
+    });
+
+    test('the light accent also clears a light basemap water fill', () {
+      // Land is the pale end of a light basemap; water and parkland are
+      // darker, and an overlay that only clears the pale fill is not
+      // legible where a riverside route actually runs.
+      const water = Color(0xFFAAD3DF);
+      expect(_contrast(mapAccentColour(darkBasemap: false), water),
+          greaterThanOrEqualTo(_overlayFloor));
+    });
+
+    test('the pre-fix amber is what fails, so the two rungs differ', () {
+      const preFix = Color(0xFFF59E0B);
+      expect(_contrast(preFix, _lightBasemapSample), lessThan(2.0));
+      expect(mapAccentColour(darkBasemap: false), isNot(preFix));
+      expect(mapAccentColour(darkBasemap: true), preFix);
+    });
   });
 }

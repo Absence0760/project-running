@@ -269,6 +269,20 @@ TileLayer basemapTileLayer({
 Color mapOverlayOutline({required bool darkBasemap}) =>
     darkBasemap ? Colors.white : const Color(0xFF1E1B4B);
 
+/// Amber accent for the map's transient overlays — the selected-segment
+/// highlight, the coarse last-seen ring, and the elevation-chart hover dot.
+///
+/// One amber served every map while all seven were locked to the dark
+/// basemap. § 489 unlocked the light ones and left `#F59E0B` at 1.87:1
+/// against a representative light land fill (1.96:1 against a paler one) —
+/// under WCAG 1.4.11's 3:1 floor for a non-text element carrying meaning.
+/// The light-basemap rung is the first darker amber that clears it, at
+/// 4.38:1, and still holds 3.13:1 over a light basemap's water fill.
+/// `#F59E0B` stays on the dark basemap, where it reads 8.00:1.
+@visibleForTesting
+Color mapAccentColour({required bool darkBasemap}) =>
+    darkBasemap ? const Color(0xFFF59E0B) : const Color(0xFFB45309);
+
 /// Gradient stops for the recorded track, oldest → newest. Both ramps
 /// start at the same mid indigo and move away from the basemap, so the
 /// newest stretch is always the most prominent and every stop clears 3:1
@@ -943,6 +957,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
 
     final darkBasemap = currentBasemapIsDark(context);
     final outline = mapOverlayOutline(darkBasemap: darkBasemap);
+    final accent = mapAccentColour(darkBasemap: darkBasemap);
 
     return Stack(
       children: [
@@ -1060,7 +1075,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                       _selectedSegment!.endIdx + 1,
                     ),
                     strokeWidth: 9,
-                    color: const Color(0xFFF59E0B), // amber, matches web
+                    color: accent,
                   ),
                 ],
               ),
@@ -1151,6 +1166,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     child: _HoverMarkerDot(
                       animation: _pulseAnimation,
                       ringColour: outline,
+                      accent: accent,
                     ),
                   ),
                 ],
@@ -1233,7 +1249,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     width: 48,
                     height: 48,
                     child: widget.coarsePosition
-                        ? const _CoarseDot()
+                        ? _CoarseDot(accent: accent)
                         : _PulsingDot(
                             animation: _pulseAnimation,
                             ringColour: outline,
@@ -1391,7 +1407,8 @@ class _GhostDot extends StatelessWidget {
 /// Mirrors the web `.runner-dot.coarse` style. No pulse — it is a
 /// stale-but-retained last position, not a live fix.
 class _CoarseDot extends StatelessWidget {
-  const _CoarseDot();
+  final Color accent;
+  const _CoarseDot({required this.accent});
 
   @override
   Widget build(BuildContext context) {
@@ -1402,10 +1419,10 @@ class _CoarseDot extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.transparent,
-          border: Border.all(color: const Color(0xFFF59E0B), width: 3),
-          boxShadow: const [
+          border: Border.all(color: accent, width: 3),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x38F59E0B),
+              color: accent.withValues(alpha: 0.22),
               blurRadius: 4,
               spreadRadius: 8,
             ),
@@ -1478,7 +1495,12 @@ class _PulsingDot extends StatelessWidget {
 class _HoverMarkerDot extends StatelessWidget {
   final Animation<double> animation;
   final Color ringColour;
-  const _HoverMarkerDot({required this.animation, required this.ringColour});
+  final Color accent;
+  const _HoverMarkerDot({
+    required this.animation,
+    required this.ringColour,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1487,11 +1509,11 @@ class _HoverMarkerDot extends StatelessWidget {
       height: 12,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFFF59E0B),
+        color: accent,
         border: Border.all(color: ringColour, width: 2),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x66F59E0B),
+            color: accent.withValues(alpha: 0.4),
             blurRadius: 6,
             spreadRadius: 1,
           ),
@@ -1511,8 +1533,7 @@ class _HoverMarkerDot extends StatelessWidget {
                 height: 28 * (0.6 + animation.value * 0.4),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFF59E0B)
-                      .withValues(alpha: animation.value * 0.5),
+                  color: accent.withValues(alpha: animation.value * 0.5),
                 ),
               ),
               if (child != null) child,
