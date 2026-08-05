@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -392,7 +393,7 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          SizedBox(
+          TextLane(
             width: 84,
             child: Text(formatDateShort(w.scheduledDate, activeLocaleTag),
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -467,14 +468,14 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          SizedBox(
+          TextLane(
             width: 84,
             child: Text(formatDateShort(r.startedAt, activeLocaleTag),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 )),
           ),
-          SizedBox(
+          TextLane(
             width: 64,
             child: Text(_activityLabel(r.activityType),
                 style: theme.textTheme.bodyMedium
