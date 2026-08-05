@@ -119,6 +119,25 @@ Shared pieces:
   transactional/lifecycle mail ignores it (you can't opt out of a receipt).
   Toggle on web `/settings/preferences` + mobile Settings → Preferences.
   Registry: `docs/backend/settings.md`.
+- **Deep links** — `internal/mailer.go` `pathForKind` is the single kind → URL
+  map, shared by the email CTA, the web-push payload and the native-push
+  message, so a wrong target misroutes all three channels at once. Its inputs
+  are ONE `notifications` row's own FK columns — it does no joins, and it is
+  pure so the render functions stay testable. Two consequences: anything
+  needing a join (an event's club slug, a club's slug) is emitted as a
+  **stable-id URL** that web resolves — `/events/[id]` forwards to
+  `/clubs/{slug}/events/{id}`, and `/clubs/[slug]` falls back to an id lookup
+  and forwards to the canonical slug — and the notification inbox, which is a
+  tab rather than a route, is addressed as `/u/{user_id}?tab=notifications`.
+  Both id-resolution routes must keep resolving indefinitely: every link the
+  worker has ever sent is sitting in an inbox or a notification tray and cannot
+  be corrected after the fact. `run_completed` is the one kind whose recipient
+  is NOT the row's owner (it fires at a followee's followers), so it links to
+  `/share/run/{id}`; the owner-scoped `/runs/{id}` renders "run not found" for
+  them. `notification_link_guard_test.go` walks `apps/web/src/routes` and fails
+  if any kind — in any FK-presence permutation — emits a path that matches no
+  route, and requires an explicit `pathForKind` case per kind so a new kind
+  can't inherit the fallback silently.
 - **Idempotency** — `lifecycle_email_log (user_id, template)` is a send-once
   guard for **once-per-account** templates (welcome only). Recurring
   transactional templates (Pro receipt, dunning) deliberately skip it — the
