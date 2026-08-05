@@ -5,6 +5,15 @@
 // (app_semantic_colors_test.dart); a literal bypasses that guarantee and
 // silently drifts from the palette in one theme or the other.
 //
+// The ban list started as the status hues and now carries one that is not a
+// status role at all — Tailwind violet-500, the route heatmap's "kept on map"
+// colour. A fixed hex is a per-brightness measurement nobody took whichever
+// role it plays: that one read 3.828:1 light and 3.817:1 dark on the surface
+// its chrome sites actually painted on, over 3:1 in both but with no room for
+// a tint or an alpha, and 2.902:1 had a fourth site landed on dark
+// `surfaceContainerHighest`. So the real subject here is a colour literal that
+// bypasses a measured palette, and a hue earns an entry by being one.
+//
 // Two kinds of exemption, both deliberately narrow:
 //  * Whole-file: the share-card widgets rasterise to fixed-size PNGs for the
 //    OS share sheet and do not follow the device theme by design
@@ -45,6 +54,8 @@ const _bannedHexes = [
   'EF4444', 'DC2626', 'B91C1C', 'F87171', 'F44336', 'D32F2F',
   // crown gold
   'F5B30A',
+  // route-heatmap "kept on map" violet — cartographic, map-layer only
+  '8B5CF6',
 ];
 
 // Rasterised share-card PNGs — theme-independent by design.
@@ -65,8 +76,15 @@ const _dataPalettes = <String, Map<String, int>>{
     'F59E0B': 2,
     'EF4444': 2,
   },
-  // Heat-density dots + the featured map-pin ring.
-  'lib/screens/routes_heatmap_screen.dart': {'Colors.red': 1, 'FACC15': 1},
+  // Heat-density dots, the featured map-pin ring, and ONE "kept" route line.
+  // The violet is legible over arbitrary basemap tiles and is drawn on the map
+  // and nowhere else: the count is what stops a fourth chrome site importing it
+  // onto a theme surface, which is how three of them got there.
+  'lib/screens/routes_heatmap_screen.dart': {
+    'Colors.red': 1,
+    'FACC15': 1,
+    '8B5CF6': 1,
+  },
   // Map-overlay accent (selected-segment highlight, coarse-position ring,
   // hover pointer) — one constant now, read by all three and paired with a
   // darker rung the ban list doesn't carry, because `#F59E0B` computes to
