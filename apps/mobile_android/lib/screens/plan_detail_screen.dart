@@ -920,7 +920,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(
+                      TextLane(
                         width: 92,
                         child: Text(c.scheduledDate,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -1221,10 +1221,12 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         ),
         child: Row(
           children: [
-            SizedBox(width: 34, child: Text(dow,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.outline,
-                ))),
+            TextLane(
+                width: 34,
+                child: Text(dow,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ))),
             Expanded(
               child: Text(
                 workoutKindLabel(l10n, kind),
