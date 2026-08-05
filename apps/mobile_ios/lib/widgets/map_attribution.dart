@@ -50,29 +50,6 @@ class MapAttribution extends StatelessWidget {
     this.creditsOverride,
   });
 
-  Future<void> _open(BuildContext context, MapCredit credit) async {
-    try {
-      final ok = await launchUrl(
-        Uri.parse(credit.url),
-        mode: LaunchMode.externalApplication,
-      );
-      if (!ok && context.mounted) {
-        showTopBanner(
-          context,
-          AppLocalizations.of(context).legalCouldNotOpen(credit.url),
-        );
-      }
-    } catch (e) {
-      debugPrint('map_attribution: opening ${credit.url} failed: $e');
-      if (context.mounted) {
-        showTopBanner(
-          context,
-          AppLocalizations.of(context).legalCouldNotOpen(credit.url),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -104,12 +81,9 @@ class MapAttribution extends StatelessWidget {
                     Semantics(
                       link: true,
                       child: GestureDetector(
-                        onTap: () => _open(context, credits[i]),
+                        onTap: () => openMapCredit(context, credits[i]),
                         child: Text(
-                          credits[i].osmData
-                              ? l10n.mapAttributionOsmContributors(
-                                  credits[i].name)
-                              : l10n.mapAttributionProvider(credits[i].name),
+                          mapCreditLabel(l10n, credits[i]),
                           style: TextStyle(
                             fontSize: 10,
                             height: 1.3,
@@ -127,6 +101,39 @@ class MapAttribution extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// The localized credit line for [credit] — the proper noun untranslated
+/// inside a sentence that is.
+String mapCreditLabel(AppLocalizations l10n, MapCredit credit) =>
+    credit.osmData
+        ? l10n.mapAttributionOsmContributors(credit.name)
+        : l10n.mapAttributionProvider(credit.name);
+
+/// Opens a credit's copyright page. Attribution has to be *linked*, and a
+/// link that silently does nothing is not one — a launcher failure surfaces
+/// a banner rather than dying inside the map's build.
+Future<void> openMapCredit(BuildContext context, MapCredit credit) async {
+  try {
+    final ok = await launchUrl(
+      Uri.parse(credit.url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && context.mounted) {
+      showTopBanner(
+        context,
+        AppLocalizations.of(context).legalCouldNotOpen(credit.url),
+      );
+    }
+  } catch (e) {
+    debugPrint('map_attribution: opening ${credit.url} failed: $e');
+    if (context.mounted) {
+      showTopBanner(
+        context,
+        AppLocalizations.of(context).legalCouldNotOpen(credit.url),
+      );
+    }
   }
 }
 
