@@ -2,6 +2,7 @@
 	import type { PlanWorkout } from '$lib/types';
 	import { isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
+	import { workoutKindMarkVar } from '$lib/training/workout_kind_color';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { currentLocale, m } from '$lib/i18n/store.svelte';
 	import { monthName, weekdayAbbrevs, leadingBlanks, type WeekStart } from '$lib/format/calendar';
@@ -22,17 +23,6 @@
 		onSelect?: (workout: PlanWorkout) => void;
 	};
 	let { startDate, endDate, workouts, planId, weekStart = 'monday', onSelect }: Props = $props();
-
-	const KIND_COLOR: Record<string, string> = {
-		easy: 'var(--color-text-secondary)',
-		long: 'var(--color-primary)',
-		recovery: 'var(--color-text-tertiary)',
-		tempo: '#C98ECF',
-		interval: '#D97A54',
-		marathon_pace: '#E6A96B',
-		race: 'var(--color-primary)',
-		rest: 'var(--color-border)'
-	};
 
 	let workoutByDate = $derived.by(() => {
 		const m = new Map<string, PlanWorkout>();
@@ -169,7 +159,7 @@
 					class:out-month={!c.inMonth}
 					class:today={c.iso === today}
 					class:done={isWorkoutCompleted(wo)}
-					style="--kind: {KIND_COLOR[wo.kind] ?? 'var(--color-text-secondary)'}"
+					style="--kind: {workoutKindMarkVar(wo.kind)}"
 				>
 					<span class="day-num">{c.day}</span>
 					<span class="kind-pill">
@@ -268,7 +258,12 @@
 		text-decoration: none;
 		position: relative;
 	}
-	.cell.out-month {
+	/* The dim is a whole-cell opacity: at 0.35 it drops the kind label's
+	   --color-text from 14.283:1 to 2.051:1 and --color-text-secondary from
+	   5.722:1 to 1.627:1. A cell carrying a planned session — a leading or
+	   trailing grid row still inside the plan — is content, so it keeps full
+	   strength; only empty chrome cells are dimmed. */
+	.cell.out-month:not(.has-workout) {
 		opacity: 0.35;
 	}
 	.cell.out-plan {
@@ -300,7 +295,7 @@
 	.kind-pill {
 		font-size: 0.65rem;
 		font-weight: 700;
-		color: var(--kind);
+		color: var(--color-text);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		line-height: 1.1;

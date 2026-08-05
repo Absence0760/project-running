@@ -454,7 +454,7 @@ for (const { label, marker } of THEMES) {
 // have gone on passing against whatever list happened to come first.
 function dartChartScale(
 	brightness: 'light' | 'dark',
-	scale: 'series' | 'zones',
+	scale: 'series' | 'zones' | 'kinds',
 ): string[] {
 	const dart = readFileSync(
 		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/chart_palette.dart'),
@@ -642,6 +642,110 @@ test('HR zone tokens match mobile ChartPalette.zones', () => {
 				resolveToken(marker, `zone-${i + 1}`).toUpperCase(),
 				hex,
 				`--zone-${i + 1} in ${marker} has drifted from ChartPalette.${brightness}.zones[${i}].`,
+			);
+		});
+	}
+});
+
+// The six planned-workout kind marks. These were three raw hexes inlined in
+// PlanCalendar.svelte and CurrentWeekStrip.svelte, painting the kind LABEL as
+// well as the 3 px cell edge: as text they owed AA and delivered 2.30 (tempo),
+// 2.77 (interval) and 1.85 (marathon pace) on the page. Nothing in this file
+// caught it because none of those hues is a status token and none of them was in
+// app.css at all. The label reads --color-text now, so what the marks owe is
+// 1.4.11's 3:1 — on the page, on the plain surface, AND on the completed-day
+// fill, which is the deepest thing a cell edge is drawn against.
+const KIND_MARKS = ['kind-1', 'kind-2', 'kind-3', 'kind-4', 'kind-5', 'kind-6'];
+for (const { label, marker } of THEMES) {
+	test(`workout-kind marks clear 3:1 and separate by luminance — ${label}`, () => {
+		const hexes = KIND_MARKS.map((n) => ({ name: n, hex: resolveToken(marker, n) }));
+		const doneFill = mixOverHex(
+			resolveToken(marker, 'color-success'),
+			10,
+			resolveToken(marker, 'color-bg'),
+		);
+		for (const [surfaceName, surface] of [
+			['color-bg', resolveToken(marker, 'color-bg')],
+			['color-surface', resolveToken(marker, 'color-surface')],
+			['the completed-day fill', doneFill],
+		] as const) {
+			for (const { name, hex } of hexes) {
+				const ratio = contrastRatio(hex, surface);
+				assert.ok(
+					ratio >= AA_NON_TEXT,
+					`--${name} (${hex}) on ${surfaceName} (${surface}) is ${ratio.toFixed(3)}:1 in ${label}; a kind mark needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+				);
+			}
+		}
+		assert.equal(new Set(hexes.map((h) => h.hex)).size, 6, `kind marks collide in ${label}`);
+		// Six categorical marks cannot be pairwise 3:1 — five such steps need
+		// 243:1 and sRGB offers 21:1 — so the ordering is what is pinned, and
+		// the list order IS that ordering.
+		const ls = hexes.map((h) => relativeLuminance(h.hex));
+		const rising = ls[1] > ls[0];
+		for (let i = 0; i + 1 < ls.length; i++) {
+			assert.ok(
+				rising ? ls[i + 1] > ls[i] : ls[i + 1] < ls[i],
+				`the kind ladder folds at --kind-${i + 1} -> --kind-${i + 2} in ${label}.`,
+			);
+			const step = (Math.max(ls[i], ls[i + 1]) + 0.05) / (Math.min(ls[i], ls[i + 1]) + 0.05);
+			assert.ok(
+				step >= 1.18,
+				`--kind-${i + 1} -> --kind-${i + 2} steps only ${step.toFixed(3)} in ${label}; the ladder is what carries the marks in greyscale.`,
+			);
+		}
+	});
+}
+
+// The mark scale must not go back to painting type. Every surface that carries a
+// per-kind custom property is listed, and a `color:` reading any of them fails —
+// the marks are built to 1.4.11's 3:1, so as type they are exactly the 1.973 /
+// 2.373 / 1.589 regression this round closed. The scale reached FOUR web surfaces
+// (two components and two plan routes), each with its own copy of the three
+// hexes, which is why one measured fix had to close all four at once.
+const KIND_MARK_SURFACES = [
+	['lib/components/PlanCalendar.svelte', '--kind'],
+	['lib/components/CurrentWeekStrip.svelte', '--kind'],
+	['routes/plans/[id]/+page.svelte', '--kind-color'],
+	['routes/plans/[id]/workouts/[wid]/+page.svelte', '--kind-tint'],
+	['routes/plans/[id]/workouts/[wid]/+page.svelte', '--seg-color'],
+] as const;
+
+test('no plan surface paints type in the workout-kind mark scale', () => {
+	const root = resolve(__dirname, '..');
+	for (const [file, prop] of KIND_MARK_SURFACES) {
+		const src = readFileSync(join(root, file), 'utf-8');
+		const styles = src.slice(src.indexOf('<style>'));
+		assert.ok(styles.length > 0, `${file} has no style block`);
+		const asText = new RegExp(`(?<![a-z-])color:\\s*var\\(${prop}[,)]`);
+		assert.ok(
+			!asText.test(styles),
+			`${file} paints type in var(${prop}); the mark scale is a 3:1 fill, so the label owes AA in a text token.`,
+		);
+		assert.ok(
+			styles.includes(`var(${prop}`),
+			`${file} no longer reads var(${prop}) at all — if the mark moved, move this guard with it.`,
+		);
+	}
+});
+
+// Mobile cannot import a CSS custom property, so the lockstep is checked here.
+test('workout-kind tokens match mobile ChartPalette.kinds', () => {
+	for (const [marker, brightness] of [
+		[':root {', 'light'],
+		[':root[data-theme="dark"]', 'dark'],
+	] as const) {
+		const hexes = dartChartScale(brightness, 'kinds');
+		assert.equal(
+			hexes.length,
+			6,
+			`ChartPalette.${brightness}.kinds does not carry six marks`,
+		);
+		hexes.forEach((hex, i) => {
+			assert.equal(
+				resolveToken(marker, `kind-${i + 1}`).toUpperCase(),
+				hex,
+				`--kind-${i + 1} in ${marker} has drifted from ChartPalette.${brightness}.kinds[${i}].`,
 			);
 		});
 	}

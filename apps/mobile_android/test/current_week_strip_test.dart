@@ -1,8 +1,11 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/training.dart';
 import '../lib/widgets/current_week_strip.dart';
+import '../lib/workout_kind_color.dart';
 
 PlanWorkoutRow _wo(String id, DateTime date, String kind, double? dist,
         {bool done = false, DateTime? skippedAt}) =>
@@ -23,8 +26,10 @@ Future<void> _pump(
   required int weekIndex,
   required List<PlanWorkoutRow> workouts,
   void Function(PlanWorkoutRow)? onSelect,
+  ThemeData? theme,
 }) async {
   await tester.pumpWidget(MaterialApp(
+    theme: theme,
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
@@ -150,4 +155,41 @@ void main() {
     expect(find.text('TEMPO'), findsOneWidget);
     expect(find.text('LONG RUN'), findsNothing);
   });
+
+  // Issue #666 round 12: the same contract as `plan_calendar` — the strip is
+  // the second copy of the palette the two surfaces used to drift between.
+  for (final (name, theme) in [
+    ('light', AppTheme.light),
+    ('dark', AppTheme.dark),
+  ]) {
+    testWidgets('the kind hue paints the cell edge and never the label in $name',
+        (tester) async {
+      await _pump(
+        tester,
+        start: start,
+        weekIndex: 0,
+        theme: theme,
+        workouts: [_wo('a', DateTime(2024, 4, 2), 'interval', 6000)],
+      );
+      final label = find.text('INTERVALS');
+      expect(label, findsOneWidget);
+
+      final container = tester
+          .widgetList<Container>(
+              find.ancestor(of: label, matching: find.byType(Container)))
+          .firstWhere((c) =>
+              c.foregroundDecoration is BoxDecoration &&
+              (c.foregroundDecoration as BoxDecoration).border != null);
+      final edge =
+          ((container.foregroundDecoration as BoxDecoration).border as Border)
+              .left;
+      expect(edge.color, workoutKindMarkColor(theme, WorkoutKind.interval));
+
+      final style = tester.widget<Text>(label).style!;
+      expect(style.color, theme.colorScheme.onSurface);
+      for (final c in ChartPalette.ofTheme(theme).kinds) {
+        expect(style.color, isNot(c));
+      }
+    });
+  }
 }

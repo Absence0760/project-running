@@ -8,6 +8,7 @@
 		formatISO
 	} from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
+	import { workoutKindMarkVar } from '$lib/training/workout_kind_color';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { WeekStart } from '$lib/format/calendar';
@@ -32,17 +33,6 @@
 	};
 	let { startDate, currentWeek, weekWorkouts, today, weekStart = 'monday', onSelect }: Props =
 		$props();
-
-	const KIND_COLOR: Record<string, string> = {
-		easy: 'var(--color-text-secondary)',
-		long: 'var(--color-primary)',
-		recovery: 'var(--color-text-tertiary)',
-		tempo: '#C98ECF',
-		interval: '#D97A54',
-		marathon_pace: '#E6A96B',
-		race: 'var(--color-primary)',
-		rest: 'var(--color-border)'
-	};
 
 	const DOW_KEYS = [
 		'planDetail.dowSun',
@@ -110,7 +100,7 @@
 						class:today={c.iso === today}
 						class:done={isWorkoutCompleted(wo)}
 						class:rest={wo.kind === 'rest'}
-						style="--kind: {KIND_COLOR[wo.kind] ?? 'var(--color-text-secondary)'}"
+						style="--kind: {workoutKindMarkVar(wo.kind)}"
 						aria-label={`${c.dow}: ${workoutKindLabel(wo.kind)}${
 							isWorkoutCompleted(wo) ? m('planDetail.ariaCompletedSuffix') : ''
 						}`}
@@ -207,7 +197,7 @@
 	.kind {
 		font-size: 0.65rem;
 		font-weight: 700;
-		color: var(--kind);
+		color: var(--color-text);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		line-height: 1.1;

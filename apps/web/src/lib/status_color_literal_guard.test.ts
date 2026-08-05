@@ -95,12 +95,6 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	// "fixed medal rank pills" test in contrast_guard.test.ts.
 	'lib/components/ChallengeLeaderboard.svelte': { F6D671: 1, D4A017: 1 },
 	'lib/components/RunSegmentEfforts.svelte': { B45309: 1 },
-	// Workout-kind tint palette (easy / tempo / interval / marathon_pace /
-	// long). Only the marathon_pace rung collides with --color-warning.
-	'lib/components/CurrentWeekStrip.svelte': { E6A96B: 1 },
-	'lib/components/PlanCalendar.svelte': { E6A96B: 1 },
-	'routes/plans/[id]/+page.svelte': { E6A96B: 1 },
-	'routes/plans/[id]/workouts/[wid]/+page.svelte': { E6A96B: 1 },
 	// Per-stat-card accent gradients: four chart series, separated by hue.
 	'lib/components/PeriodSummary.svelte': { '10B981': 1, F97316: 1, F59E0B: 1, EF4444: 1 },
 	// Cartographic: privacy-zone marker, its fill and its outline. Drawn on
