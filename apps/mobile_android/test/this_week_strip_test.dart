@@ -20,23 +20,47 @@ Future<void> _pump(
   DistanceUnit unit = DistanceUnit.km,
   String weekStartDay = 'monday',
   required DateTime now,
+  double textScale = 1.0,
+  double width = 400,
 }) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: Scaffold(
-        body: SingleChildScrollView(
-          child: ThisWeekStrip(
-            runs: runs,
-            unit: unit,
-            weekStartDay: weekStartDay,
-            now: now,
+        body: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: width,
+            child: SingleChildScrollView(
+              child: ThisWeekStrip(
+                runs: runs,
+                unit: unit,
+                weekStartDay: weekStartDay,
+                now: now,
+              ),
+            ),
           ),
         ),
       ),
     ),
   );
+}
+
+/// Rendered height of the fill bar for the day cell at [index] (0-based
+/// within the week row) — the bar IS the chart, so a zero here means the
+/// strip rendered blank.
+double _barHeight(WidgetTester tester, int index) {
+  final bars = find.descendant(
+    of: find.byType(FractionallySizedBox),
+    matching: find.byType(Container),
+  );
+  return tester.getSize(bars.at(index)).height;
 }
 
 void main() {
@@ -134,6 +158,58 @@ void main() {
       // instead of throwing a RenderFlex overflow (the harness fails the
       // test on one).
       expect(find.text('This Week'), findsOneWidget);
+    });
+
+    group('OS text scaling', () {
+      final runs = [
+        _run(startedAt: DateTime(2026, 6, 8, 7), distanceM: 12340),
+        _run(startedAt: DateTime(2026, 6, 10, 7), distanceM: 5000),
+      ];
+
+      testWidgets('does not overflow at 2x text scale', (tester) async {
+        // Pre-fix: seven RenderFlex overflows (one per day cell) plus a
+        // header-row overflow — the cell was pinned at 76 px while two
+        // labelSmall lines alone need 64 px at 2x.
+        await _pump(tester, runs: runs, now: wed, textScale: 2.0);
+        expect(tester.takeException(), isNull);
+      });
+
+      testWidgets('the fill bar survives 2x text scale', (tester) async {
+        // The regression that matters: under the fixed 76 px cell the
+        // Expanded lane was squeezed to exactly 0 at 2x, so the chart
+        // rendered as seven empty boxes.
+        await _pump(tester, runs: runs, now: wed, textScale: 1.0);
+        final at1x = _barHeight(tester, 0);
+        expect(at1x, greaterThan(0));
+
+        await _pump(tester, runs: runs, now: wed, textScale: 2.0);
+        expect(_barHeight(tester, 0), at1x);
+      });
+
+      testWidgets('the cell grows instead of clipping, and cells stay uniform',
+          (tester) async {
+        await _pump(tester, runs: runs, now: wed, textScale: 1.0);
+        final small = tester.getSize(find.byType(IntrinsicHeight)).height;
+        // The cell was a fixed 76 before the fix; letting it size itself must
+        // not inflate the 1.0x rhythm. (77, not 76: today's cell carries a
+        // 1.5 px border that used to eat into the bar lane instead.)
+        expect(small, lessThanOrEqualTo(78));
+
+        await _pump(tester, runs: runs, now: wed, textScale: 2.0);
+        expect(tester.getSize(find.byType(IntrinsicHeight)).height,
+            greaterThan(small));
+
+        // Every day cell shares the row height — a rest day ("·") must not
+        // render shorter than a logged one.
+        final cells = find.descendant(
+          of: find.byType(IntrinsicHeight),
+          matching: find.byType(Opacity),
+        );
+        final cellHeights = <double>{
+          for (var i = 0; i < 7; i++) tester.getSize(cells.at(i)).height,
+        };
+        expect(cellHeights.length, 1);
+      });
     });
   });
 }
