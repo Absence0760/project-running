@@ -5176,4 +5176,205 @@ void main() {
               'IdentityAvatar for identities, Image.network elsewhere');
     });
   });
+
+  group('destructive confirms carry error emphasis', () {
+    // Rounds 4-7 fixed emphasis dialog by dialog, which left the decision
+    // living at 88 call sites: 21 marked the confirm with colorScheme.error
+    // and a comparable number of equally irreversible ones did not, because
+    // nothing forced the question to be asked. `confirmDestructive` now owns
+    // the shape; this guard owns the classification, so a new destructive
+    // dialog cannot ship unmarked by accident. A dialog is exempt only by
+    // being named here with a reason (issue #666 C11).
+    //
+    // The line: destructive means it destroys data, or a relationship the
+    // user cannot restore on their own — delete, remove, clear, erase,
+    // discard, revoke, unlink, deny, leave. Merely consequential is not
+    // destructive: reconnecting an integration, un-archiving a conversation,
+    // replacing an active plan, an upsert-only restore.
+
+    /// Index just past the bracket matching the one opening at [start],
+    /// skipping string literals and line comments.
+    int matchBlock(String src, int start) {
+      var depth = 0;
+      var i = start;
+      while (i < src.length) {
+        final c = src[i];
+        if (c == "'" || c == '"') {
+          final q = c;
+          i++;
+          while (i < src.length) {
+            if (src[i] == r'\') {
+              i += 2;
+              continue;
+            }
+            if (src[i] == q) break;
+            i++;
+          }
+          i++;
+          continue;
+        }
+        if (c == '/' && i + 1 < src.length && src[i + 1] == '/') {
+          while (i < src.length && src[i] != '\n') {
+            i++;
+          }
+          continue;
+        }
+        if (c == '(' || c == '[' || c == '{') {
+          depth++;
+        } else if (c == ')' || c == ']' || c == '}') {
+          depth--;
+          if (depth == 0) return i + 1;
+        }
+        i++;
+      }
+      return src.length;
+    }
+
+    /// A nested AlertDialog is its own entry; strip it so a nested confirm's
+    /// emphasis is never credited to the dialog that contains it.
+    String stripNested(String block) {
+      var out = block;
+      while (true) {
+        final m = RegExp('AlertDialog[(]').firstMatch(out.substring(1));
+        if (m == null) return out;
+        final open = m.start + 1 + 'AlertDialog'.length;
+        out = out.substring(0, m.start + 1) + out.substring(matchBlock(out, open));
+      }
+    }
+
+    /// "<lib-relative path>::<title expression>" for every AlertDialog in
+    /// `lib/` whose actions block carries no error emphasis.
+    Map<String, int> unemphasised() {
+      final counts = <String, int>{};
+      final files = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+      for (final f in files) {
+        final src = f.readAsStringSync();
+        for (final m in RegExp('AlertDialog[(]').allMatches(src)) {
+          final open = m.start + 'AlertDialog'.length;
+          final block = stripNested(src.substring(open, matchBlock(src, open)));
+          final am = RegExp(r'\bactions:\s*[<\w>\s]*\[').firstMatch(block);
+          var actions = '';
+          if (am != null) {
+            final lb = block.indexOf('[', am.start);
+            actions = block.substring(lb, matchBlock(block, lb));
+          }
+          if (RegExp(r'colorScheme\.error|AppSemanticColors|\.danger')
+              .hasMatch(actions)) {
+            continue;
+          }
+          final tm =
+              RegExp(r'title:\s*(?:const\s*)?Text\(([^\n]*)').firstMatch(block);
+          var title = (tm?.group(1) ?? '').trim();
+          if (title.endsWith('),')) {
+            title = title.substring(0, title.length - 2);
+          } else if (title.endsWith(',')) {
+            title = title.substring(0, title.length - 1);
+          }
+          final rel = f.path.startsWith('lib/') ? f.path.substring(4) : f.path;
+          final key = '$rel::${title.isEmpty ? '(no title)' : title}';
+          counts[key] = (counts[key] ?? 0) + 1;
+        }
+      }
+      return counts;
+    }
+
+    // Reviewed 2026-08-05 and found non-destructive: each is a form, a
+    // reversible toggle, a prompt, or an action the same user can undo from
+    // the same surface. Adding a row here is a claim that the dialog does not
+    // destroy anything — make it deliberately.
+    const exempt = <String, int>{
+      // Recoverable: the archive drawer un-archives it.
+      'screens/coach_screen.dart::l10n.coachArchiveTitle': 1,
+      // Rename / create / edit prompts and forms.
+      'screens/devices_screen.dart::l10n.devicesRenameTitle': 1,
+      'screens/gear_rotations_screen.dart::title': 1,
+      'screens/races_screen.dart::l.racesEditorTitle': 1,
+      'screens/races_screen.dart::widget.race.name': 1,
+      'screens/roadbook_screen.dart::l10n.roadbookPlanTitle': 1,
+      'screens/route_builder_screen.dart::l10n.routeBuilderGenerateLoop': 1,
+      'screens/route_builder_screen.dart::l10n.routeBuilderSaveDialogTitle': 1,
+      'screens/route_detail_screen.dart::l10n.routeDetailRateDialogTitle': 1,
+      'screens/run_detail_screen.dart::l10n.runDetailEditTitle': 1,
+      'screens/settings_account_screen.dart::l10n.settingsAccountDisplayName': 1,
+      'screens/settings_preferences_screen.dart::l10n.prefsTargetPace': 1,
+      'screens/settings_preferences_screen.dart::l10n.prefsHrZonesDialogTitle': 1,
+      'screens/settings_preferences_screen.dart::title': 3,
+      'screens/settings_safety_screen.dart::l10n.safetyTitle': 1,
+      'screens/workout_detail_screen.dart::l10n.workoutRelinkTitle': 1,
+      'widgets/fitness_card.dart::label': 1,
+      'widgets/nutrition_log_sheet.dart::widget.result.name': 1,
+      'screens/nutrition_screen.dart::l10n.nutritionSaveAsMealTitle': 1,
+      'screens/nutrition_screen.dart::l10n.nutritionSaveAsRecipeTitle': 1,
+      // Copies rather than replaces; the source plan is untouched.
+      'screens/plan_detail_screen.dart::dl10n.planDetailDuplicateConfirmTitle': 1,
+      // The displaced plan keeps every workout and stays readable.
+      'screens/plan_new_screen.dart::l10n.planNewReplaceActiveTitle': 1,
+      // Abandon: a status change, not a deletion.
+      'screens/plans_screen.dart::title': 1,
+      // Visibility toggles and a share that only widens visibility.
+      'screens/route_detail_screen.dart::l10n.routeDetailShareConfirmTitle': 1,
+      'screens/run_detail_screen.dart::l10n.runDetailMakePrivateTitle': 1,
+      'screens/run_detail_screen.dart::l10n.runDetailMakePublicTitle': 1,
+      'screens/run_detail_screen.dart::l10n.runDetailSaveAsRouteTitle': 1,
+      // Recording nudges and prompts; none of them discards a run.
+      'screens/run_screen.dart::_l10n.runBackgroundLocationNudgeTitle': 1,
+      'screens/run_screen.dart::_l10n.runBatteryOptHintTitle': 1,
+      'screens/run_screen.dart::_l10n.runLiveShareEndedTitle': 1,
+      'screens/run_screen.dart::_l10n.runResumeDialogTitle': 1,
+      // Credential changes the user is performing on purpose.
+      'screens/settings_account_screen.dart::l10n.settingsAccountChangeEmail': 1,
+      'screens/settings_account_screen.dart::l10n.settingsAccountChangePassword': 1,
+      // Restore is an upsert — it never deletes a run or route absent from
+      // the backup, and the copy says so.
+      'screens/settings_account_screen.dart::l10n.settingsAccountRestoreTitle': 1,
+      // Every integration here reconnects in one tap.
+      'screens/settings_integrations_screen.dart::(no title)': 1,
+      'screens/settings_integrations_screen.dart::l10n.integrationsHrTitle': 1,
+      'screens/settings_integrations_screen.dart::l10n.integrationsParkrunTitle': 1,
+      'screens/settings_integrations_screen.dart::l10n.integrationsStravaDisconnectTitle': 1,
+      'screens/settings_integrations_screen.dart::l10n.integrationsTreadmillTitle': 1,
+    };
+
+    test('no AlertDialog outside the reviewed set omits error emphasis', () {
+      final found = unemphasised();
+      final unreviewed = {
+        for (final e in found.entries)
+          if (!exempt.containsKey(e.key)) e.key: e.value,
+      };
+      expect(unreviewed, isEmpty,
+          reason: 'a new AlertDialog has an unemphasised confirm. If it is '
+              'destructive, route it through confirmDestructive; if it is '
+              'not, add it to `exempt` with the reason it cannot lose data');
+    });
+
+    test('the reviewed set has not silently grown or shrunk', () {
+      final found = unemphasised();
+      for (final e in exempt.entries) {
+        expect(found[e.key], e.value,
+            reason: '${e.key} changed shape — re-check whether it is still a '
+                'non-destructive dialog before adjusting the count');
+      }
+    });
+
+    test('confirmDestructive is the only destructive-dialog builder', () {
+      final src =
+          File('lib/widgets/confirm_destructive.dart').readAsStringSync();
+      // Cancel first, unstyled; the confirm second, carrying the error colour.
+      expect(
+        src.indexOf('cancelLabel ?? l10n.commonCancel'),
+        lessThan(src.indexOf('colorScheme.error')),
+        reason: 'cancel must stay the first action so a reflex tap is safe',
+      );
+      expect(
+        File('lib/widgets/confirm_discard.dart').readAsStringSync(),
+        contains('confirmDestructive('),
+        reason: 'confirmDiscard must not grow a second AlertDialog of its own',
+      );
+    });
+  });
 }
