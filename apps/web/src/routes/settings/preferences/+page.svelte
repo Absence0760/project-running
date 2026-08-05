@@ -1002,7 +1002,7 @@
 		<!-- Demographics — gender + DOB power tiered segment leaderboards.
 		     Combined they are special-category data under GDPR Art 9 so the
 		     explicit-consent checkbox is the precondition for saving either. -->
-		<section class="card">
+		<section class="card" id="body-metrics">
 			<h2>{m('prefs.demographicsHeading')}</h2>
 			<p class="section-desc">
 				{m('prefs.demographicsDesc')}

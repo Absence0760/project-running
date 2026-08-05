@@ -462,7 +462,16 @@
 <div class="page">
 	<header class="page-header">
 		<h1>{m('nutrition.heading')}</h1>
-		<button class="btn btn-primary" type="button" onclick={() => (showLog = true)} data-testid="log-food">{m('nutrition.logFood')}</button>
+		<div class="head-actions">
+			<!-- Ungated on purpose: Targets is this surface's entry point to the
+			     number every ring is measured against, so a user with none yet is
+			     exactly who needs to reach it (multi_modal.md, §63 amendment). -->
+			<a class="btn btn-secondary" href="/nutrition/targets" data-testid="nutrition-targets-link">
+				<span class="material-symbols" aria-hidden="true">flag</span>
+				{m('nutrition.targets.link')}
+			</a>
+			<button class="btn btn-primary" type="button" onclick={() => (showLog = true)} data-testid="log-food">{m('nutrition.logFood')}</button>
+		</div>
 	</header>
 
 	{#if loading}
@@ -550,10 +559,16 @@
 				</p>
 			{/if}
 			{#if !targets}
-				<p class="section-hint" data-testid="no-targets">
-					<span class="material-symbols hint-icon" aria-hidden="true">info</span>
-					{m('nutrition.noTargets')}
-				</p>
+				<div class="no-targets" data-testid="no-targets">
+					<p class="section-hint">
+						<span class="material-symbols hint-icon" aria-hidden="true">info</span>
+						{m('nutrition.noTargets')}
+					</p>
+					<a class="btn btn-secondary btn-sm" href="/settings/preferences#body-metrics" data-testid="add-body-metrics">
+						<span class="material-symbols" aria-hidden="true">straighten</span>
+						{m('nutrition.addBodyMetrics')}
+					</a>
+				</div>
 			{/if}
 		</section>
 
@@ -921,6 +936,19 @@
 		margin-bottom: var(--space-xl);
 	}
 	.page-header h1 { margin: 0; }
+	.head-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
+	.no-targets {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+	}
 
 
 	.card-head {
