@@ -156,7 +156,7 @@
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		padding-bottom: var(--space-sm);
 	}
 	.trend-table th[scope='row'] {
@@ -192,11 +192,11 @@
 		color: #b45309;
 	}
 	.delta-flat {
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.footnote {
 		margin: var(--space-md) 0 0;
 		font-size: 0.78rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 </style>

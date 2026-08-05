@@ -92,7 +92,7 @@
 	}
 	.back {
 		font-size: 0.85rem;
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 		text-decoration: none;
 	}
 	.library-head h1 {
@@ -101,7 +101,7 @@
 	}
 	.sub {
 		margin: 0;
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 	}
 	.search {
 		display: block;
@@ -110,13 +110,13 @@
 	.search input {
 		width: 100%;
 		padding: 0.6rem 0.75rem;
-		border: 1px solid var(--border, #ccd);
+		border: 1px solid var(--color-border);
 		border-radius: 0.5rem;
 		font-size: 1rem;
 	}
 	.state {
 		text-align: center;
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 		padding: 2rem 0;
 	}
 	.state.error {
@@ -138,15 +138,15 @@
 		flex-direction: column;
 		gap: 0.4rem;
 		padding: 1rem;
-		border: 1px solid var(--border, #ccd);
+		border: 1px solid var(--color-border);
 		border-radius: 0.75rem;
 		text-decoration: none;
 		color: inherit;
-		background: var(--surface, #fff);
+		background: var(--color-surface);
 		transition: border-color 0.15s ease;
 	}
 	.routine-card:hover {
-		border-color: var(--accent, #3b6ef5);
+		border-color: var(--color-primary);
 	}
 	.routine-name {
 		font-weight: 600;
@@ -154,7 +154,7 @@
 	}
 	.routine-author {
 		font-size: 0.85rem;
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 	}
 	.routine-meta {
 		display: flex;
@@ -166,14 +166,14 @@
 		font-size: 0.75rem;
 		padding: 0.15rem 0.5rem;
 		border-radius: 1rem;
-		background: var(--chip-bg, #eef);
-		color: var(--chip-fg, #335);
+		background: var(--chip-bg);
+		color: var(--chip-fg);
 	}
 	.routine-cta {
 		margin-top: 0.4rem;
 		font-size: 0.85rem;
 		font-weight: 600;
-		color: var(--accent, #3b6ef5);
+		color: var(--color-primary);
 	}
 	.visually-hidden {
 		position: absolute;

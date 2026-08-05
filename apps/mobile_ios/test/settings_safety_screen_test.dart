@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
@@ -78,6 +79,20 @@ class _AddFailApi extends ApiClient {
   }
 }
 
+/// Never resolves either load, so the loading frame is observable.
+class _HangingApi extends ApiClient {
+  @override
+  String? get userId => 'me';
+
+  @override
+  Future<List<SafetyContact>> fetchMySafetyContacts() =>
+      Completer<List<SafetyContact>>().future;
+
+  @override
+  Future<List<PendingSafetyRequest>> fetchPendingSafetyRequests() =>
+      Completer<List<PendingSafetyRequest>>().future;
+}
+
 /// Records bag writes and reports `synced` so the pref controls enable —
 /// same shape as settings_email_notifications_test's fake. `service`
 /// returns null, so the screen renders the defaults (Off / switch off).
@@ -115,6 +130,21 @@ Future<_FakeSettingsSync> _fakeSync() async {
 
 void main() {
   group('SettingsSafetyScreen', () {
+    testWidgets('the loading frame stands form rows, not a bare spinner',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsSafetyScreen(api: _HangingApi()),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(ListSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
     testWidgets('renders the add form, intro and empty state', (tester) async {
       await _pump(tester);
       expect(find.text('Safety contacts'), findsWidgets);

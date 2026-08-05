@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChartPalette;
 import 'package:uuid/uuid.dart';
 
 import '../adaptive_width.dart';
@@ -20,7 +20,6 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
-import '../hr_zone_palette.dart';
 import '../hr_zones.dart';
 import '../run_intensity.dart';
 import '../local_route_store.dart';
@@ -1762,7 +1761,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     final buckets = _cachedHrBuckets!;
     if (buckets.isEmpty) return const [];
 
-    final colors = hrZoneColours(theme);
+    final colors = ChartPalette.ofTheme(theme).zones;
 
     Widget bar() {
       final total =
@@ -1781,7 +1780,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 // can lift to 3:1; the page-coloured gap delineates them.
                 if (k > 0)
                   SizedBox(
-                    width: kHrZoneSeparatorWidth,
+                    width: ChartPalette.zoneSeparatorWidth,
                     child: ColoredBox(color: theme.scaffoldBackgroundColor),
                   ),
                 Expanded(

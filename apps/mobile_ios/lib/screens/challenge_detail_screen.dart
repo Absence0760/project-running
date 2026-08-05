@@ -174,7 +174,10 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
         ],
       ),
       body: !_loaded
-          ? const Center(child: CircularProgressIndicator())
+          ? FullBodyLoader(
+              kind: ActivityLoaderKind.run,
+              label: l10n.commonLoading,
+            )
           : _loadError
               ? ErrorState(message: l10n.challengesLoadFailed, onRetry: _load)
               : _notFound || c == null

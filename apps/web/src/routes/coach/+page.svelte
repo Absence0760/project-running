@@ -347,7 +347,7 @@
 	.coach-consent ul { margin: 0 0 var(--space-md) 1.25rem; padding: 0; }
 	.coach-consent li { margin-bottom: var(--space-xs); }
 	.coach-consent-error {
-		color: var(--color-error, #b71c1c);
+		color: var(--color-danger-text);
 		font-weight: 600;
 	}
 	.coach-consent-actions {

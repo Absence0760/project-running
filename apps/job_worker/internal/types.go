@@ -134,20 +134,23 @@ type NotificationEmailPayload struct {
 }
 
 // NotificationRow is the projection of `notifications` the email handler
-// reads. The source-link FKs (run_id / event_id / club_id / comment_id)
-// are nullable — only the one relevant to the kind is populated — and
-// drive the deep link in the rendered mail. EmailSentAt is the idempotency
-// guard: non-NULL means a prior attempt already sent or deliberately
-// skipped this row.
+// reads. The source-link FKs (run_id / event_id / club_id / comment_id /
+// plan_id / achievement_id / challenge_id) are nullable — only the one
+// relevant to the kind is populated — and drive the deep link in the rendered
+// mail. EmailSentAt is the idempotency guard: non-NULL means a prior attempt
+// already sent or deliberately skipped this row.
 type NotificationRow struct {
-	ID          string  `json:"id"`
-	UserID      string  `json:"user_id"`
-	Kind        string  `json:"kind"`
-	RunID       *string `json:"run_id"`
-	EventID     *string `json:"event_id"`
-	ClubID      *string `json:"club_id"`
-	CommentID   *string `json:"comment_id"`
-	EmailSentAt *string `json:"email_sent_at"`
+	ID            string  `json:"id"`
+	UserID        string  `json:"user_id"`
+	Kind          string  `json:"kind"`
+	RunID         *string `json:"run_id"`
+	EventID       *string `json:"event_id"`
+	ClubID        *string `json:"club_id"`
+	CommentID     *string `json:"comment_id"`
+	PlanID        *string `json:"plan_id"`
+	AchievementID *string `json:"achievement_id"`
+	ChallengeID   *string `json:"challenge_id"`
+	EmailSentAt   *string `json:"email_sent_at"`
 	// WebPushSentAt is the web-push channel's idempotency guard — the
 	// sibling of EmailSentAt for the kind='web_push' consumer (migration
 	// 20261219_001). Only the FetchNotificationForWebPush projection selects

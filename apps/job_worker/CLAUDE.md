@@ -117,6 +117,7 @@ Function moves per
   the kind with a cron enqueue + its own opt-in preference.
   `lifecycle_drip` (`handler_lifecycle_drip.go`) is the engagement sibling of
   `weekly_digest`: a NEW kind (`{user_id, template}` — `drip_onboarding` /
+  `weekly_digest`: a NEW kind (`{user_id, template}` — `drip_onboarding` /
   `drip_reengagement` / `drip_streak`), but the SAME opt-in/suppression/
   unsubscribe rails. Cohort selection lives in SQL (`enqueue_lifecycle_drip()`,
   migration `20270223_001`, a daily pg_cron) — the handler honours a SEPARATE
@@ -143,6 +144,30 @@ Function moves per
   `internal/stravahook/server.go` for the request-side validation.
   Data-export follows the request-side pattern; it doesn't fit the
   job-queue shape because the user is waiting on a signed URL.
+- A new **`NotificationKind`** (as opposed to a new `jobs.kind`) has its own
+  three-file rule, because the notifications AFTER-INSERT triggers enqueue an
+  email job **and** a push job for every kind with **no allowlist**. The
+  migration headers that claim "in-app only unless added to those channels'
+  allowlists" (`20270107_001`, `20270208_001`) are wrong — there is no such
+  allowlist, and `importantKinds` only suppresses a kind under the default
+  `important` mode, not under `all`. So a new kind reaches all three channels
+  immediately and needs, in the same commit:
+  1. copy in `email_i18n.go` for **every** locale in `emailLocales` — or
+     membership in `mailer.go`'s `inAppOnlyKinds` with the reason, which
+     `shouldEmail` + `shouldPush` both honour;
+  2. an explicit `pathForKind` arm in `mailer.go` whose target resolves against
+     `apps/web/src/routes` **for the recipient** (the `run_completed` trap: an
+     owner-scoped `/runs/{id}` renders "run not found" for a follower), plus the
+     row's FK column in all three `FetchNotificationFor*` projections when the
+     target is entity-scoped;
+  3. an arm in the mobile inbox's `_verbFor` (`profile_screen.dart`) with strings
+     in all seven ARBs, and the web `notificationsList.*` / `notificationBell.*`
+     keys in all six locales.
+  `notification_copy_guard_test.go` and `notification_link_guard_test.go` read
+  the `NotificationKind` union out of `apps/web/src/lib/types.ts` and fail on a
+  missing 1 or 2; `profile_screen_test.dart` reads the same union and fails on a
+  missing 3. Before those guards existed, three kinds silently emailed "You have
+  a new notification" and six rendered "{name} interacted with your activity".
 - Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
   with a Redis pub/sub-backed variant), per-run ring buffer for
   late-joiner replay of more than the most recent ping.
@@ -209,8 +234,10 @@ apps/job_worker/
 │   ├── handler_lifecycle_email.go # kind='lifecycle_email' (welcome) render + send-once
 │   ├── handler_lifecycle_email_test.go # 6 tests on send / dedup / no-address / nil-sender
 │   ├── handler_account_deletion_receipt_test.go # 9 tests on inline-address send / hash send-once / no-address / send-error / nil-sender / locale / no-prefs-link
-│   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic
-│   ├── mailer_test.go       # tests on emailMode / shouldEmail / render / MIME + header-injection sanitizer (buildMIME + safety-email owner name, issue #375)
+│   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic; importantKinds + inAppOnlyKinds + pathForKind
+│   ├── mailer_test.go       # tests on emailMode / shouldEmail / inAppOnlyKinds / render / MIME + header-injection sanitizer (buildMIME + safety-email owner name, issue #375)
+│   ├── notification_copy_guard_test.go # TS↔Go lockstep: every NotificationKind has catalogue copy or a recorded inAppOnlyKinds exemption, renders something other than "default", and deep-links the same entity web does
+│   ├── notification_link_guard_test.go # every pathForKind target resolves against the real apps/web route tree, in every FK-presence permutation
 │   ├── handler_safety_email.go # kind='safety_email' confirm + finish alerts (decisions §131)
 │   ├── handler_web_push.go  # kind='web_push' — send-or-skip over the notifications rows; prune dead subs
 │   ├── handler_web_push_test.go # 14 tests on gating / opt-out / no-sub / prune / transient / idempotency

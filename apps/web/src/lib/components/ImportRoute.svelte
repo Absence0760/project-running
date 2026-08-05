@@ -231,7 +231,7 @@
 	.error {
 		background: var(--color-danger-light, #fef2f2);
 		border: 1px solid rgba(229, 57, 53, 0.3);
-		color: var(--color-danger, #e53935);
+		color: var(--color-danger-text);
 		padding: var(--space-sm) var(--space-md);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;

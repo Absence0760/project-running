@@ -80,7 +80,7 @@
 	.anchor-line {
 		margin: 0 0 var(--space-md);
 		font-size: 0.88rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.ladder {
 		width: 100%;
@@ -93,12 +93,12 @@
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 		padding: 0.3rem 0.6rem 0.4rem 0;
 	}
 	.ladder td {
 		padding: 0.45rem 0.6rem 0.45rem 0;
-		border-top: 1px solid var(--border, #e5e7eb);
+		border-top: 1px solid var(--color-border);
 		font-size: 0.95rem;
 	}
 	.ladder .time { font-weight: 700; }
@@ -119,6 +119,6 @@
 	.footnote {
 		margin: var(--space-md) 0 0;
 		font-size: 0.78rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 </style>

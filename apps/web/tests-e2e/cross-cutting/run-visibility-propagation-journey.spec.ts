@@ -35,11 +35,11 @@ import {
  *        - the follower's /social feed (fetchFollowingFeed → public_runs)
  *        - the owner's public /u/[id] profile (fetchPublicRunsByUser)
  *        - /share/run/[id] (anon lookupSharedRun → public_runs → not found)
- *        - the follower's /runs/[id] (fetchRunById is owner-scoped
- *          `.eq('user_id', uid)` — a non-owner ALWAYS sees not-found
- *          there regardless of is_public, so this surface is NOT the
- *          public-visibility gate; the share/profile/feed surfaces are.
- *          Asserted as the not-found state, grounded in rule 5).
+ *        - the follower's /runs/[id]. Since issue #666 that surface has
+ *          a non-owner branch, but its entitlement is a `public_runs`
+ *          row, so a PRIVATE run still lands on not-found there.
+ *          Asserted both ways: not-found while private, and the run
+ *          itself once it flips public (step C).
  *
  *   C. Flip PUBLIC through the REAL owner UI (the /runs/[id] share
  *      button → makeRunPublic). The same run now APPEARS on the
@@ -217,10 +217,12 @@ test.describe('run visibility (public/private) propagation across surfaces', () 
 			}
 		});
 
-		await test.step('follower /runs/[id] is not-found (owner-scoped fetchRunById, rule 5)', async () => {
-			// fetchRunById filters `.eq('user_id', uid)` — a non-owner sees
-			// not-found here regardless of is_public, so this surface is NOT
-			// the public-visibility gate; the share/profile/feed surfaces are.
+		await test.step('follower /runs/[id] is not-found while the run is private', async () => {
+			// fetchRunById filters `.eq('user_id', uid)`, so the non-owner
+			// branch answers instead — and it resolves entitlement through
+			// the `public_runs` view (is_public = true), which excludes this
+			// run. The mirror-image step after the public flip asserts the
+			// same URL then renders the run.
 			const ctx = await browser.newContext({ storageState: follower.storageStatePath });
 			await ctx.addInitScript(setConsentAccepted);
 			const page = await ctx.newPage();
@@ -309,6 +311,35 @@ test.describe('run visibility (public/private) propagation across surfaces', () 
 			}
 		});
 
+		await test.step('follower /runs/[id] now renders the run (non-owner branch, issue #666)', async () => {
+			// The mirror of the private-run step in section B: same URL, same
+			// viewer, opposite verdict now that the run is in `public_runs`.
+			// Before #666 this stayed not-found forever, which is what made
+			// every "a runner you follow finished a run" link dead.
+			const ctx = await browser.newContext({ storageState: follower.storageStatePath });
+			await ctx.addInitScript(setConsentAccepted);
+			const page = await ctx.newPage();
+			try {
+				await page.route('**/functions/v1/clip-public-track', (route) =>
+					route.fulfill({
+						status: 200,
+						contentType: 'application/json',
+						body: JSON.stringify({ points: [] })
+					})
+				);
+				await page.goto(`/runs/${runId}`);
+				await expect(page.getByRole('heading', { name: RUN_TITLE })).toBeVisible({
+					timeout: 10_000
+				});
+				await expect(page.getByRole('heading', { name: 'Run not found' })).toHaveCount(0);
+				// Non-owner chrome: engagement yes, owner controls no.
+				await expect(page.locator('form.composer textarea')).toBeVisible({ timeout: 10_000 });
+				await expect(page.locator('.visibility-chip')).toHaveCount(0);
+			} finally {
+				await ctx.close();
+			}
+		});
+
 		// ── D. Flip back PRIVATE (admin — no make-private UI) ──
 		await test.step('owner flips the run back to private', async () => {
 			const { error } = await admin
@@ -362,6 +393,24 @@ test.describe('run visibility (public/private) propagation across surfaces', () 
 				await expect(page.getByRole('heading', { name: 'Run not found.' })).toBeVisible({
 					timeout: 10_000,
 				});
+			} finally {
+				await ctx.close();
+			}
+		});
+
+		await test.step('re-privatised run shows not-found on the follower /runs/[id] again', async () => {
+			// The revocation half for the surface #666 added — the non-owner
+			// branch has to close when the run leaves `public_runs`, or
+			// making a run private stops actually taking it back.
+			const ctx = await browser.newContext({ storageState: follower.storageStatePath });
+			await ctx.addInitScript(setConsentAccepted);
+			const page = await ctx.newPage();
+			try {
+				await page.goto(`/runs/${runId}`);
+				await expect(page.getByRole('heading', { name: 'Run not found' })).toBeVisible({
+					timeout: 10_000,
+				});
+				await expect(page.locator('form.composer textarea')).toHaveCount(0);
 			} finally {
 				await ctx.close();
 			}

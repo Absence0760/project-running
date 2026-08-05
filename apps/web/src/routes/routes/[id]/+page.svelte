@@ -1240,7 +1240,7 @@
 		padding: var(--space-2xs, 0.3rem) var(--space-sm);
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
-		background: var(--color-surface-2, var(--color-surface));
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm, 6px);
 		cursor: pointer;
@@ -1275,14 +1275,14 @@
 		color: var(--color-text-secondary);
 	}
 	.desc-upgrade a {
-		color: var(--color-primary, var(--color-accent, inherit));
+		color: var(--color-primary);
 		font-weight: 600;
 	}
 
 	.desc-error {
 		margin: var(--space-2xs, 0.25rem) 0 0;
 		font-size: 0.8rem;
-		color: var(--color-error, #dc2626);
+		color: var(--color-danger-text);
 	}
 
 	.actions {

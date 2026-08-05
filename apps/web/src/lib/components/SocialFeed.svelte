@@ -652,7 +652,7 @@
 		align-items: center;
 		gap: var(--space-2xs);
 		padding: var(--space-2xs) var(--space-sm);
-		border-radius: var(--radius-pill, 999px);
+		border-radius: var(--radius-pill);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-inline-start: 3px solid var(--tier-color, var(--color-border));

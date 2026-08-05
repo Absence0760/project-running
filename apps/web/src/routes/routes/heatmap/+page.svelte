@@ -54,6 +54,6 @@
 	}
 	/* Match the sidebar-collapsed offset so we don't lag behind. */
 	:global(.app-shell.sidebar-collapsed) .heatmap-root {
-		inset-inline-start: var(--sidebar-collapsed-width, 4.5rem);
+		inset-inline-start: var(--sidebar-collapsed-width);
 	}
 </style>

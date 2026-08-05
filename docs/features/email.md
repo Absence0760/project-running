@@ -114,6 +114,33 @@ Shared pieces:
   of the language picker (`decisions.md § 120`). Unknown/region tags normalize
   to a supported locale; English is the per-key fallback. `<html lang>` is set.
   A catalogue-parity test mirrors the web/mobile l10n-parity tests.
+- **Copy coverage** — the catalogue's `"default"` entry ("You have a new
+  notification on Threkir." + an "Open Threkir" CTA) exists for a kind a
+  *running binary predates* — an older worker draining a queue a newer deploy is
+  filling. It is **not** the resting place for a kind we know about. The
+  notifications AFTER-INSERT triggers enqueue an email job and a push job for
+  **every** kind, with no kind allowlist, so a kind with no catalogue entry ships
+  content-free mail to every recipient on `email_notifications='all'`. That went
+  unnoticed for `plan_assigned`, `achievement` and `challenge_complete`, because
+  the parity test above checks the catalogue against **itself** and cannot see a
+  key missing from `en` too. `notification_copy_guard_test.go` closes it: it
+  reads the `NotificationKind` union from `apps/web/src/lib/types.ts` (the same
+  source the deep-link guard reads) and fails unless each kind has either its own
+  copy in every locale or an explicit `inAppOnlyKinds` exemption. It also asserts
+  the rendered subject differs from the default, so copy that is present but
+  cloned from the fallback fails too.
+- **In-app-only kinds** — `mailer.go` `inAppOnlyKinds` never leaves the inbox,
+  on any channel, in any mode. `content_hidden` is the only entry: it is a
+  *provisional* automated moderation notice (`auto_hide_target`, migration
+  `20270218_001`) that a reviewer may reverse within hours, it has no
+  destination (web's `notificationLinkFor` returns `null` for it by design, so
+  an outbound message would carry a CTA with nowhere to go), and it fires off a
+  report count a coordinated reporting campaign can drive — so mailing or
+  pushing it hands the campaign a channel the recipient cannot mute per-kind.
+  The inbox row still carries the notice, so nothing is withheld. This is
+  enforced in `shouldEmail` + `shouldPush`, **not** by omission from
+  `importantKinds`: absence there only suppresses the default `important` mode,
+  and a recipient on `all` would still be reached.
 - **Preference** — `user_settings.prefs.email_notifications` (`all | important
   | off`, default `important`) gates the **notification** channel only;
   transactional/lifecycle mail ignores it (you can't opt out of a receipt).
@@ -133,11 +160,22 @@ Shared pieces:
   worker has ever sent is sitting in an inbox or a notification tray and cannot
   be corrected after the fact. `run_completed` is the one kind whose recipient
   is NOT the row's owner (it fires at a followee's followers), so it links to
-  `/share/run/{id}`; the owner-scoped `/runs/{id}` renders "run not found" for
-  them. `notification_link_guard_test.go` walks `apps/web/src/routes` and fails
-  if any kind — in any FK-presence permutation — emits a path that matches no
-  route, and requires an explicit `pathForKind` case per kind so a new kind
-  can't inherit the fallback silently.
+  `/share/run/{id}`, which is anon-reachable — an emailed link must open without
+  a session, and `/runs/{id}` is behind the layout auth-gate. (Round 10 gave
+  `/runs/{id}` a non-owner branch, so it no longer renders "run not found" for a
+  public run; that fixed the surface, not the reason this link points at
+  `/share`.) Each kind targets the same entity `apps/web`'s `notificationLinkFor`
+  does — `/plans/{plan_id}`, `/challenges/{challenge_id}`,
+  `/share/badge/{achievement_id}` — which needs `plan_id`, `achievement_id` and
+  `challenge_id` in all three `FetchNotificationFor*` projections; a partial
+  projection silently degrades one channel to the list-page fallback, since one
+  `pathForKind` serves all three renders. Every arm degrades to a list page or
+  the inbox when its FK is null. `notification_link_guard_test.go` walks
+  `apps/web/src/routes` and fails if any kind — in any FK-presence permutation —
+  emits a path that matches no route, and requires an explicit `pathForKind`
+  case per kind so a new kind can't inherit the fallback silently;
+  `notification_copy_guard_test.go` additionally pins the entity-scoped targets
+  against web's table so the two can't drift.
 - **Idempotency** — `lifecycle_email_log (user_id, template)` is a send-once
   guard for **once-per-account** templates (welcome only). Recurring
   transactional templates (Pro receipt, dunning) deliberately skip it — the

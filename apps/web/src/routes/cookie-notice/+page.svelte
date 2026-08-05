@@ -170,7 +170,7 @@
 		margin: var(--space-md, 1rem) 0;
 	}
 	.manage-consent-hint {
-		color: var(--color-muted, #6b7280);
+		color: var(--color-text-secondary);
 		font-size: 0.9em;
 	}
 	h1 {

@@ -418,7 +418,11 @@ A DATA palette (chart series, a segmented band) is still bound by WCAG 1.4.11: e
 
 Separate the marks by **luminance, not hue**: a WCAG ratio is computed from relative luminance alone, so a luminance ladder *is* a greyscale ladder, which is what survives red-green colour-vision deficiency. Ramp direction inverts with the background ([decisions.md § 489](decisions.md)).
 
-Pairwise 3:1 between marks is often unreachable — *n* marks need 3^(n−1) and sRGB offers 21:1, so four bands are the ceiling and five are impossible. When it is, say so and pick the mechanism that does work: for a segmented bar, hold every band to 3:1 against the surface and draw the gaps between segments **in that surface colour**, so each boundary is delineated by a separator guaranteed visible against both its neighbours. The current pairs are `--chart-fitness/-fatigue/-form` ↔ `TrainingLoadPalette` and `--zone-1..5` ↔ `hr_zone_palette.dart`.
+Pairwise 3:1 between marks is often unreachable — *n* marks need 3^(n−1) and sRGB offers 21:1, so four bands are the ceiling and five are impossible. When it is, say so and pick the mechanism that does work: for a segmented bar, hold every band to 3:1 against the surface and draw the gaps between segments **in that surface colour**, so each boundary is delineated by a separator guaranteed visible against both its neighbours. The current pairs are `--chart-fitness/-fatigue/-form` ↔ `ChartPalette.series` and `--zone-1..5` ↔ `ChartPalette.zones`.
+
+**On mobile, all three scales live in one place: `ChartPalette` in `packages/ui_kit`** — categorical `series`, ordinal `zones`, sequential `ramp` (plus `bar`, the single-series fill, which is `ramp.last`). Every ratio is computed by `packages/ui_kit/test/chart_palette_test.dart`. **`colorScheme.primary` is not a chart colour**: its hue is not stable across brightnesses (dusk in light, coral in dark), so a mark painted in it means "data" in one theme and echoes an interaction affordance in the other — which is how web's split bar ended up with its two halves 1.032:1 apart ([decisions.md § 503](decisions.md)). Every chart card also wears one header, `ChartCardHeader`, whose eyebrow takes `onSurfaceVariant` — **not `colorScheme.outline`, which is 4.058:1 on the light card and is a 3:1 *boundary* token, not a text colour**. `chart_surface_guard_test.dart` (both mobile twins) count-pins both tokens per chart surface and requires each to reference the header and the palette.
+
+**An alpha multiplier is not a contrast argument.** A token guarded at 3:1 stops being guarded the moment a caller thins it: the training-load gridlines drew `outline` at 0.5 and then multiplied by another 0.45 inside the painter, compositing to 1.297:1 on the light card — a labelled scale whose lines could not be seen. Read the token at full opacity, or compute the composited ratio and write it down.
 
 **Never assert a ratio you did not compute**, in code, comment, or commit message — every figure in this section was measured against the real tokens, and the audit that prompted them was wrong in both directions more than once.
 
@@ -438,7 +442,18 @@ On the Flutter apps, presentation that every instance of a widget should share l
 
 ## Mobile empty states — ui_kit `EmptyState`
 
-On the Flutter apps, a whole-surface "nothing here yet / not found" state renders ui_kit's `EmptyState` (icon 48, `all(32)` padding, titleMedium title, bodySmall body, optional CTA — reusing `ErrorState`'s icon size and padding; [decisions.md § 485](decisions.md)), never a hand-rolled centred `Text` or bespoke icon column; tiny inline empty hints inside a larger card/list section stay inline.
+On the Flutter apps, a whole-surface "nothing here yet / not found" state renders ui_kit's `EmptyState` (icon 48, `all(32)` padding, titleMedium title, bodySmall body, optional CTA — reusing `ErrorState`'s icon size and padding; [decisions.md § 485](decisions.md)), never a hand-rolled centred `Text` or bespoke icon column; tiny inline empty hints inside a larger card/list section stay inline. `architecture_guards_test.dart` fails any `class …EmptyState` declared in `lib/`.
+
+## Mobile loading surfaces — never a bare centred spinner
+
+On the Flutter apps a loading surface says what is coming, and holds the space it will occupy. **Never `Center(child: CircularProgressIndicator())`** — it reports only that something is happening, occupies none of the room the content needs, and lands the arriving frame as a re-layout instead of a fill. Choose by the shape of the surface that is loading ([decisions.md § 492](decisions.md) for the primitives, § 502 for the per-surface split):
+
+- **Rows in a bounded host** (a tab body, a `Scaffold` body, a settings form, a chat pane inside an `Expanded`) → `ListSkeleton(rows:, rowHeight:, hasLeading:)`. It owns a non-scrolling viewport, so it clips rather than overflowing when the host is short.
+- **One section of an already-laid-out scrollable** (a comment list under a run, a picker inside a dialog) → `ListSkeleton.section(...)`. Same rows at intrinsic height, no viewport, so it is safe where the incoming height is unbounded and the default constructor would throw.
+- **A genuinely mixed layout** (a map plus stats, a detail body of prose and controls) → `FullBodyLoader(kind:, label:)`.
+- **A composite** — compose the primitives into the shape the surface settles into rather than reaching for a fourth thing; `profile_screen`'s header-plus-tabs load is a `section` block, a `Divider`, and an `Expanded(ListSkeleton(...))`.
+
+ui_kit carries no localisations, so every one of these takes a `label` for the screen reader — pass `l10n.commonLoading` rather than a literal. `architecture_guards_test.dart` fails any bare centred spinner in `lib/`.
 
 ## Mobile tap targets — no `VisualDensity.compact` on IconButtons
 
@@ -543,6 +558,21 @@ The `--color-warning` / `--color-secondary` / `--color-accent-cyan` (and `--colo
 
 `contrast_guard.test.ts` enforces all three: `-strong` stays theme-independent + AA-with-white and is never used as text; every `-text` token clears AA as text (surface + chip) in all three theme blocks; and no source file uses a bare `--color-warning` / `-secondary` / `-accent-cyan` as a `color:`. Add a new accent that needs a foreground use → add its `-text` pair (light dark-value + dark base-value) and it's covered automatically.
 
+## Web CSS custom properties — a fallback is a default, never a substitute for the token
+
+**Never write `var(--some-token, #hex)` for a token that isn't declared in the token layer.** It reads as a defensive default and is actually the opposite: the declaration is pinned to that literal in *both* themes, permanently, and never tracks light/dark at all. It is strictly worse than the bare `var(--x)` form, which at least collapses to something inherited — and unlike the bare form it *looks* deliberate at the call site, so it survives review. The issue #666 round-10 sweep found **130** such references across **39** files (`#666` muted text at 2.815:1 on the dark card; white on a primary fill at 2.081:1 in dark, because `--color-primary` flips from dark teal to light coral).
+
+The rule the guards draw is **existence, not syntax**:
+
+- A fallback on a token that **is** declared is legal — it's the documented default for a component custom property a parent sets per instance (`style:--x={...}`).
+- A fallback on a token that is **not** declared is banned. Either use the right existing token, or declare the new one in `app.css` (all three theme blocks if it carries colour; a `var()`-alias in `:root` alone if it just follows another token, like `--chip-bg: var(--color-border)`).
+
+`css_token_guard.test.ts` fails the build on either form of undeclared reference, and its `MATCHER_FIXTURES` table pins the matcher in both directions (10 must-flag, 8 must-spare) because the whole distinction rests on one `[,)]` character class.
+
+**A dead fallback also blinds the other CSS guards, so strip it when you touch a line.** `color: var(--color-warning, #b45309)` resolves to the token — the fallback is never used — yet it slipped past `contrast_guard.test.ts`'s foreground ban for the same one-character reason, painting 2.048:1 warning text while reading as guarded. 28 live §503 violations were hiding this way (8 on `--color-warning`/`--color-success`, 20 on `--color-danger`). Both guards now match `[,)]`.
+
+Two traps worth naming, both measured: `--color-bg-tertiary` is **byte-identical to `--color-surface` in dark**, so it can't be the fill for anything sitting on a card (1.000:1); and a token whose *name* describes a layout slot that doesn't exist (`--app-header-h`) should be deleted, not declared.
+
 ## Web forms — `.editor-form` is the shared field layer
 
 Every create / edit editor (`ClubEditor`, `EventEditor`, `RunEditor`, `GymEditor`, `PlanMetaEditor`, `RoutineEditor`, `SessionPlanEditor`, `WorkoutEditor`) shares one field-styling layer in `apps/web/src/app.css`, opted into with `class="editor-form"` on the form / container root. It used to be duplicated per-editor and had drifted into three input backgrounds, two label cases, and two markup conventions; the 2026-06-12 consolidation collapsed ~440 lines of copy into one ~180-line layer.
@@ -608,11 +638,16 @@ Keep the `href` — it is the deep-link / hard-load fallback and the link's sema
 
 ## Linking another user's row — never to an owner-scoped route
 
-Several read paths are deliberately scoped to the viewer: `fetchRunById` filters `.eq('user_id', userId)`, so `/runs/[id]` only ever resolves the viewer's own run and renders its "Run not found" empty state for anyone else's — a real, public run presented as deleted. The same is true of every `/gym/[id]`-style owner surface.
+Several read paths are deliberately scoped to the viewer: `fetchRunById` filters `.eq('user_id', userId)`, because it is the only read path that downloads the **unclipped** GPS track. A page whose only row source is such a fetch renders its "Run not found" empty state for anyone else's row — a real, public row presented as deleted. That is still the shape of every `/gym/[id]`-style owner surface.
 
-So: **a surface that renders someone else's row links to the public twin, not the owner surface.** `/share/run/[id]`, `/share/workout/[id]`, `/share/event/[id]`, `/u/[id]`. The social feed, a club roster, a challenge leaderboard, a segment board, a notification about a followee's activity — all of these are other-people surfaces. Only `/history`, `/runs`, `/dashboard` and friends list the viewer's own rows and may use the owner route.
+So: **a surface that renders someone else's row links to the public twin, not the owner surface.** `/share/run/[id]`, `/share/workout/[id]`, `/share/event/[id]`, `/u/[id]`. The social feed, a club roster, a challenge leaderboard, a segment board, a notification about a followee's activity — all of these are other-people surfaces, and the public twin is additionally the right target because it is anon-reachable and indexable while the app routes sit behind the layout auth-gate. Only `/history`, `/runs`, `/dashboard` and friends list the viewer's own rows and may use the owner route.
 
 This is not a cosmetic difference: the failure is silent and looks exactly like a deleted row, so it survives review and reads as correct in a screenshot taken by the owner. `apps/web/src/lib/cross_user_link_guards.test.ts` pins the feed; extend it when a new cross-user surface ships.
+
+**The other half of the rule: an owner surface a stranger can plausibly reach needs a non-owner branch, not a 404.** People paste the URL out of their address bar. `/runs/[id]` used to 404 a public run for everyone but its owner — the only signed-in surface where a follower could comment on a run was `/share/run/[id]`, which is why several e2e specs navigated there (issue #666). It now resolves entitlement separately from the owner read (`fetchPublicRunAttribution` → a `public_runs` row, i.e. `is_public = true`) and mounts `RunShareView` for a non-owner. Two structural rules make that safe, and both are pinned in `cross_user_link_guards.test.ts`:
+
+- **The non-owner row never enters the owner state.** `run` is assigned only from `fetchRunById`; a non-owner takes a sibling `{#if}` branch. Every owner affordance (edit, delete, visibility, gear, save-as-route, rematch) lives inside the owner branch, so suppression is structural rather than a list of `{#if isOwner}` guards that a later edit can forget.
+- **The non-owner branch renders through the existing public component**, so the privacy-zone clip stays single-sourced: `RunShareView` is the one place that calls `fetchClippedTrackForRun` (decisions §33). A hand-rolled non-owner renderer would be one `fetchTrackByPath` away from serving the unclipped trace.
 
 The same rule reaches the Go worker's notification deep links — `run_completed` fires at a *followee's followers*, so it links to `/share/run/{id}`. See `docs/features/email.md § Architecture` for the deep-link contract and its route-tree guard.
 

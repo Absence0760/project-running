@@ -70,4 +70,78 @@ void main() {
     expect(list.physics, isA<NeverScrollableScrollPhysics>());
     await tester.pump(const Duration(milliseconds: 400));
   });
+
+  group('ListSkeleton.section', () {
+    testWidgets('renders inside an unbounded host, where the viewport variant '
+        'cannot', (tester) async {
+      await _pump(
+        tester,
+        ListView(
+          children: const [
+            SizedBox(height: 40),
+            ListSkeleton.section(label: 'Loading comments…', rows: 2),
+          ],
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.bySemanticsLabel('Loading comments…'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ListSkeleton),
+          matching: find.byType(ListView),
+        ),
+        findsNothing,
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('takes exactly the height its rows and gaps need',
+        (tester) async {
+      const rows = 3;
+      const rowHeight = 48.0;
+      const gap = 10.0;
+      const vertical = 8.0;
+      await _pump(
+        tester,
+        ListView(
+          children: const [
+            ListSkeleton.section(
+              label: 'Loading…',
+              rows: rows,
+              rowHeight: rowHeight,
+            ),
+          ],
+        ),
+      );
+      expect(
+        tester.getSize(find.byType(ListSkeleton)).height,
+        rows * rowHeight + (rows - 1) * gap + 2 * vertical,
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
+    testWidgets('keeps the pulse and the reduced-motion pose', (tester) async {
+      await _pump(
+        tester,
+        ListView(
+          children: const [
+            ListSkeleton.section(label: 'Loading…', rows: 2),
+          ],
+        ),
+        reduceMotion: true,
+      );
+      Color barColor() => (tester
+              .widget<Container>(find
+                  .descendant(
+                    of: find.byType(FractionallySizedBox),
+                    matching: find.byType(Container),
+                  )
+                  .first)
+              .decoration as BoxDecoration)
+          .color!;
+      final first = barColor();
+      await tester.pump(const Duration(milliseconds: 450));
+      expect(barColor(), first);
+    });
+  });
 }

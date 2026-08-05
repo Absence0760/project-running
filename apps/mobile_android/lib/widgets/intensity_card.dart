@@ -1,8 +1,8 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
-import '../hr_zone_palette.dart';
 import '../hr_zones.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../run_intensity.dart';
@@ -70,27 +70,9 @@ class IntensityCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.intensityTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.06,
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                ),
-                Text(
-                  l10n.intensityWindow(windowDays),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-              ],
+            ChartCardHeader(
+              title: l10n.intensityTitle,
+              note: l10n.intensityWindow(windowDays),
             ),
             const SizedBox(height: 10),
             _SegmentedBar(breakdown: breakdown),
@@ -100,7 +82,7 @@ class IntensityCard extends StatelessWidget {
             Text(
               l10n.intensityBasedOn(breakdown.hrTrackedRuns),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             if (_zonesAreAgeEstimated()) ...[
@@ -108,7 +90,7 @@ class IntensityCard extends StatelessWidget {
               Text(
                 l10n.runDetailHrDisclaimer,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -175,7 +157,7 @@ class _SegmentedBar extends StatelessWidget {
     final total = breakdown.totalSeconds;
     if (total <= 0) return const SizedBox.shrink();
     final theme = Theme.of(context);
-    final colours = hrZoneColours(theme);
+    final zones = ChartPalette.of(context).zones;
     final shown = [
       for (var i = 0; i < 5; i++)
         if (breakdown.zoneSeconds[i] > 0) i,
@@ -191,12 +173,12 @@ class _SegmentedBar extends StatelessWidget {
               // lift to 3:1; the surface-coloured gap is what delineates them.
               if (k > 0)
                 SizedBox(
-                  width: kHrZoneSeparatorWidth,
+                  width: ChartPalette.zoneSeparatorWidth,
                   child: ColoredBox(color: theme.colorScheme.surface),
                 ),
               Expanded(
                 flex: breakdown.zoneSeconds[shown[k]],
-                child: ColoredBox(color: colours[shown[k]]),
+                child: ColoredBox(color: zones[shown[k]]),
               ),
             ],
           ],
@@ -228,7 +210,7 @@ class _ZoneLegend extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: hrZoneColours(theme)[i],
+                  color: ChartPalette.of(context).zones[i],
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -243,7 +225,7 @@ class _ZoneLegend extends StatelessWidget {
               Text(
                 _pctLabel(breakdown.zoneSeconds[i], total),
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],

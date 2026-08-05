@@ -14,8 +14,8 @@ We've fixed three of these — the web feed thumbnail (eb02194), the bound thumb
    - Web: `<RunMap`, `<TrackPreview`, `<RunTrackPreview`, `track={`, `waypoints={`, `polyline={` across `apps/web/src/`
    - Mobile: `LiveRunMap(`, `TrackPreview(`, `RunTrackPreview(`, `plannedRoute:`, `track:` across `apps/mobile_android/lib/`
 2. **Classify each render site.**
-   - **Owner-only** (e.g. `/runs/[id]`, `runs_screen`, `run_detail_screen`) — never clip. Flag if it does.
-   - **Owner-or-other** (feed cards, profile recent runs, share pages, public run/route screens, club routes tab) — must clip when viewer ≠ owner.
+   - **Owner-only** (e.g. `runs_screen`, `run_detail_screen`, the owner branch of `/runs/[id]`) — never clip. Flag if it does.
+   - **Owner-or-other** (feed cards, profile recent runs, share pages, public run/route screens, club routes tab, **and the non-owner branch of `/runs/[id]`** — issue #666 gave the canonical run page a second branch that mounts `RunShareView` when the viewer doesn't own a publicly-readable run) — must clip when viewer ≠ owner. A page can be BOTH: `/runs/[id]` renders the unclipped owner track in one `{#if}` branch and the clipped non-owner track in its sibling, so classify per branch, not per route.
    - **Owner-only-by-RLS** — the row is only fetchable by the owner. Document this and confirm the RLS policy actually enforces it (cross-check with `audit/rls`).
 3. **Verify the gate.** For every owner-or-other site, the gate should be: viewer id from the auth store / `api.userId`, owner id from the row's `user_id`, **anon treated as non-owner** (`null` viewer id → clip). The exact predicate is:
    ```

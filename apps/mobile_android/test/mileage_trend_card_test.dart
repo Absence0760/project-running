@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
@@ -25,9 +26,11 @@ Future<void> _pump(
   required DateTime now,
   double textScale = 1.0,
   Locale? locale,
+  ThemeData? theme,
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -259,5 +262,67 @@ void main() {
         }
       }
     });
+
+    // Issue #666 round 10 S7: the bars drew in colorScheme.primary and the
+    // rotated axis labels in colorScheme.outline — a brand token used as data,
+    // and §487's 3:1 boundary token used as 11 sp text (4.058:1 on the light
+    // card, under WCAG 1.4.3's 4.5:1).
+    for (final (name, theme) in [
+      ('light', AppTheme.light),
+      ('dark', AppTheme.dark),
+    ]) {
+      testWidgets('bars draw the chart palette in $name', (tester) async {
+        await _pump(
+          tester,
+          runs: [_run(startedAt: DateTime(2026, 5, 18, 7), distanceM: 10000)],
+          now: now,
+          theme: theme,
+        );
+        final palette = ChartPalette.ofTheme(theme);
+        expect(_barColours(tester), everyElement(palette.bar));
+        expect(_barColours(tester), isNot(contains(theme.colorScheme.primary)));
+      });
+
+      testWidgets('the axis labels do not paint in the boundary token in $name',
+          (tester) async {
+        await _pump(
+          tester,
+          runs: [_run(startedAt: DateTime(2026, 5, 18, 7), distanceM: 10000)],
+          now: now,
+          theme: theme,
+        );
+        final labels = tester
+            .widgetList<Text>(find.byType(Text))
+            .where((t) => t.softWrap == false && t.overflow == TextOverflow.visible)
+            .map((t) => t.style?.color)
+            .toSet();
+        expect(labels, isNotEmpty);
+        expect(labels, isNot(contains(theme.colorScheme.outline)));
+        expect(labels, everyElement(theme.colorScheme.onSurfaceVariant));
+      });
+    }
+
+    testWidgets('the header is the shared chart eyebrow', (tester) async {
+      await _pump(tester, runs: const [], now: now);
+      expect(
+        find.ancestor(
+          of: find.text('MILEAGE'),
+          matching: find.byType(ChartCardHeader),
+        ),
+        findsOneWidget,
+      );
+    });
   });
 }
+
+/// Fill colours of the rendered bars, in column order.
+List<Color> _barColours(WidgetTester tester) => tester
+    .widgetList<Container>(find.descendant(
+      of: find.byType(MileageTrendCard),
+      matching: find.byType(Container),
+    ))
+    .map((c) => c.decoration)
+    .whereType<BoxDecoration>()
+    .where((d) => d.borderRadius is BorderRadius)
+    .map((d) => d.color!)
+    .toList();

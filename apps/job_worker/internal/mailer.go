@@ -282,6 +282,28 @@ var importantKinds = map[string]bool{
 	"message":        true,
 }
 
+// inAppOnlyKinds never leave the notifications inbox, whatever channel mode
+// the recipient is on. Membership is the recorded exemption from the
+// catalogue-coverage guard in notification_copy_guard_test.go — a kind is
+// either emailable copy or listed here, never a silent fall-through to the
+// generic "you have a new notification".
+//
+// content_hidden is the one entry. It is a PROVISIONAL automated moderation
+// notice (auto_hide_target, migration 20270218_001) that a human reviewer may
+// reverse within hours, and it has no destination: web's notificationLinkFor
+// returns null for it deliberately, so an outbound message would carry a CTA
+// with nowhere to go. It also fires off a report count, which a coordinated
+// reporting campaign can drive — pushing that into a mailbox or a system tray
+// hands the campaign a channel the recipient cannot mute per-kind. The inbox
+// row still carries the notice, so nothing is withheld from the user.
+//
+// This must be enforced here rather than by omission from importantKinds:
+// absence there only suppresses the default "important" mode, and a recipient
+// on "all" would still be emailed and pushed.
+var inAppOnlyKinds = map[string]bool{
+	"content_hidden": true,
+}
+
 // emailMode reads the channel preference out of the user_settings.prefs
 // bag, defaulting to "important". A non-string or unknown value also
 // falls back to "important" (fail-toward-smaller-set).
@@ -301,6 +323,9 @@ func emailMode(prefs map[string]interface{}) string {
 // shouldEmail decides whether a notification of the given kind is emailed
 // under the resolved mode.
 func shouldEmail(kind, mode string) bool {
+	if inAppOnlyKinds[kind] {
+		return false
+	}
 	switch mode {
 	case emailModeOff:
 		return false
@@ -355,9 +380,13 @@ func pathForKind(kind, base string, n NotificationRow) string {
 		return eventPath(base, n)
 	case "plan_update", "plan_assigned":
 		// Training plans live at /plans — there is no /training route, so the
-		// old target was a dead deep link. plan_assigned (a coach assigning a
-		// plan) lands on the same surface as plan_update.
-		return base + "/plans"
+		// old target was a dead deep link. Both kinds carry plan_id and both
+		// go to the plan's OWNER (notify_plan_update notifies the owner of an
+		// edit someone else made; notify_plan_assigned notifies the athlete,
+		// who owns the assigned plan), so the owner-scoped detail page is
+		// correct for each — the /runs/{id} trap that caught run_completed
+		// doesn't apply here.
+		return planPath(base, n)
 	case "message":
 		return base + "/messages"
 	case "club_post":
@@ -377,11 +406,17 @@ func pathForKind(kind, base string, n NotificationRow) string {
 		// shown — there is no /profile route, so the old target 404'd.
 		return profilePath(base, n)
 	case "challenge_complete":
-		return base + "/challenges"
-	case "achievement", "content_hidden":
-		// Neither has dedicated email copy yet (both fall through to the
-		// generic "you have a new notification" catalogue entry), so the
-		// inbox matches what the message actually says.
+		return challengePath(base, n)
+	case "achievement":
+		// The public badge share page, not a profile tab: the recipient earned
+		// it, the page is readable without a session, and it is the surface
+		// they'd share — matching notificationLinkFor on web.
+		return badgePath(base, n)
+	case "content_hidden":
+		// A provisional moderation notice with no destination — web's
+		// notificationLinkFor returns null for it, and inAppOnlyKinds keeps it
+		// off email and push entirely. The inbox is the honest target for the
+		// bell, which is the only channel that renders it.
 		return inboxPath(base, n)
 	default:
 		return inboxPath(base, n)
@@ -809,6 +844,27 @@ func runPath(base string, n NotificationRow) string {
 func sharedRunPath(base string, n NotificationRow) string {
 	if n.RunID != nil {
 		return base + "/share/run/" + *n.RunID
+	}
+	return inboxPath(base, n)
+}
+
+func planPath(base string, n NotificationRow) string {
+	if n.PlanID != nil {
+		return base + "/plans/" + *n.PlanID
+	}
+	return base + "/plans"
+}
+
+func challengePath(base string, n NotificationRow) string {
+	if n.ChallengeID != nil {
+		return base + "/challenges/" + *n.ChallengeID
+	}
+	return base + "/challenges"
+}
+
+func badgePath(base string, n NotificationRow) string {
+	if n.AchievementID != nil {
+		return base + "/share/badge/" + *n.AchievementID
 	}
 	return inboxPath(base, n)
 }

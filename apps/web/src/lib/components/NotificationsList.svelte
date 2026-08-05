@@ -536,7 +536,7 @@
 		align-items: center;
 	}
 	.dismiss:hover {
-		color: var(--color-danger, #ef4444);
+		color: var(--color-danger-text);
 		background: var(--color-bg-secondary);
 	}
 	.dismiss .material-symbols {

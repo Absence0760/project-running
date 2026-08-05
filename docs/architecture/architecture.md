@@ -343,8 +343,12 @@ Shared Flutter widgets used by both phone apps. Ensures visual consistency acros
 - `RunMap` — MapLibre widget with route overlay and live position
 - `StatCard` — metric display card (distance, pace, HR)
 - `RunListTile` — run history row
-- `ElevationChart` — post-run elevation + pace chart
+- `ChartCardHeader` — the one header every dashboard chart card wears
 - `ImportSheet` — bottom sheet for GPX/KML file selection
+
+Plus `AppTheme` (the Dusk light / dark themes and the `AppSemanticColors` status
+roles) and `ChartPalette` (the categorical / ordinal / sequential scales every
+chart draws its marks in).
 
 ---
 

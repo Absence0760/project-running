@@ -765,7 +765,7 @@
 	}
 	.success-text {
 		font-size: 0.92rem;
-		color: var(--color-success, #1a7f37);
+		color: var(--color-success-text);
 		margin: 0;
 	}
 

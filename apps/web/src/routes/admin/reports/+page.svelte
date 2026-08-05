@@ -348,7 +348,7 @@
 		cursor: pointer;
 	}
 	.row:hover {
-		background: var(--color-bg-subtle, rgba(0, 0, 0, 0.03));
+		background: color-mix(in srgb, var(--color-text) 6%, transparent);
 	}
 	.kind {
 		display: inline-block;
@@ -359,8 +359,8 @@
 		margin-inline-end: 0.4rem;
 	}
 	.target-link {
-		font-family: var(--font-mono, monospace);
-		color: var(--color-accent, var(--color-primary));
+		font-family: var(--font-mono);
+		color: var(--color-primary);
 	}
 	.reasons,
 	.report-top {
@@ -373,7 +373,8 @@
 		display: inline-block;
 		padding: 0.1rem 0.45rem;
 		border-radius: var(--radius-sm);
-		background: var(--color-bg-subtle, rgba(0, 0, 0, 0.05));
+		background: var(--chip-bg);
+		color: var(--chip-fg);
 		font-size: 0.78rem;
 	}
 	.detail-body {
@@ -390,7 +391,7 @@
 		display: inline-block;
 		padding: 0.1rem 0.45rem;
 		border-radius: var(--radius-sm);
-		background: var(--color-warning, #b45309);
+		background: var(--color-warning-strong);
 		color: #fff;
 		font-size: 0.72rem;
 		text-transform: uppercase;
@@ -403,9 +404,9 @@
 		justify-content: space-between;
 		gap: 0.75rem;
 		padding: var(--space-sm);
-		border: 1px solid var(--color-warning, #b45309);
+		border: 1px solid var(--color-warning);
 		border-radius: var(--radius-sm);
-		background: var(--color-bg-subtle, rgba(180, 83, 9, 0.08));
+		background: var(--color-warning-light);
 	}
 	.hidden-notice p {
 		margin: 0;
@@ -435,7 +436,7 @@
 		letter-spacing: 0.03em;
 	}
 	.status-pending {
-		color: var(--color-warning, #b45309);
+		color: var(--color-warning-text);
 	}
 	.report-by,
 	.when {

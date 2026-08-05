@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -70,31 +71,12 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // A Wrap, not a Row: one run of two lays out exactly as the Row
-            // did (spaceBetween anchors the title left and the toggle
-            // right), but the toggle can drop to its own line — and its own
-            // chips can wrap — once the three labels no longer fit beside
-            // the heading.
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              runSpacing: 8,
-              children: [
-                Text(
-                  l10n.mileageTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.06,
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-                _ViewToggle(
-                  view: _view,
-                  onChanged: (v) => setState(() => _view = v),
-                ),
-              ],
+            ChartCardHeader(
+              title: l10n.mileageTitle,
+              action: _ViewToggle(
+                view: _view,
+                onChanged: (v) => setState(() => _view = v),
+              ),
             ),
             // Spotlight headline — the most-recent bucket's value
             // surfaced once at the top so the bars can drop their
@@ -117,7 +99,7 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
                   child: Text(
                     latestLabel,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.fade,
@@ -204,8 +186,8 @@ class _BarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = theme.colorScheme.primary;
-    final dim = theme.colorScheme.outline;
+    final accent = ChartPalette.of(context).bar;
+    final dim = theme.colorScheme.onSurfaceVariant;
     // The label lane holds text, so it is a text-derived dimension and has to
     // track the OS text scale: at 2x a labelSmall line needs 32 px, and a
     // fixed 24 px lane let the rotated label paint over the bars instead.

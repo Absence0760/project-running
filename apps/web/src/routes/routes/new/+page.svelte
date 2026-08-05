@@ -1841,7 +1841,7 @@
 	}
 	.waypoint-delete:hover:not(:disabled) {
 		background: var(--color-surface);
-		color: var(--color-danger, #ef4444);
+		color: var(--color-danger-text);
 	}
 	.waypoint-delete:focus-visible {
 		outline: 2px solid var(--color-primary);

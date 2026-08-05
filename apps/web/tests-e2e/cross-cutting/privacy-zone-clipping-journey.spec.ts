@@ -19,13 +19,14 @@ import {
  * must reach the OWNER unclipped (their own /runs/[id] + their owner
  * branch of RunShareView), but reach every OTHER viewer with the
  * in-zone leading/trailing points removed — on /share/run/[id], on the
- * profile/feed run modal (the RunShareView modal on /u/[id]), and on
- * /live/[id]. The isolated guard specs each pin one surface
+ * profile/feed run modal (the RunShareView modal on /u/[id]), on
+ * /live/[id], and — since issue #666 gave it a non-owner branch — on
+ * /runs/[id] itself. The isolated guard specs each pin one surface
  * (`privacy-zones.spec.ts` pins the EF subset + the owner share dialog,
  * `clip-public-track-guards.spec.ts` pins the EF's pre-side-effect
  * gates, `public-runs-view.spec.ts` pins the metadata strip). None of
  * them walks the run from owner-full → non-owner-clipped across all
- * four render sites as one security story, asserting the clip is
+ * five render sites as one security story, asserting the clip is
  * *consistent* surface-to-surface — a single surface serving the
  * unclipped blob to a non-owner is a home-address leak.
  *
@@ -35,18 +36,20 @@ import {
  *   - viewer — a different, signed-in non-owner (a "follower viewing
  *     your run").
  *
- * The four render surfaces resolve the track through three distinct
+ * The five render surfaces resolve the track through three distinct
  * code paths, all exercised here:
  *   1. /runs/[id] (owner)      — fetchRunById's owner-only
- *      `.eq('user_id', userId)` row read + direct Storage download
- *      (data.ts:186). A non-owner gets `run = null` here, so the
- *      owner-full leg is grounded by the owner-JWT clip-public-track
- *      call returning ALL points (the EF's `isOwnerBypass`), which is
- *      the same blob the owner Storage path renders.
- *   2. /share/run/[id] + the /u/[id] run modal (non-owner) —
- *      RunShareView's non-owner branch → fetchClippedTrackForRun →
- *      the `clip-public-track` Edge Function (data.ts:280,
- *      RunShareView.svelte:66-79).
+ *      `.eq('user_id', userId)` row read + direct Storage download.
+ *      A non-owner gets `run = null` here, so the owner-full leg is
+ *      grounded by the owner-JWT clip-public-track call returning ALL
+ *      points (the EF's `isOwnerBypass`), which is the same blob the
+ *      owner Storage path renders.
+ *   2. /share/run/[id], the /u/[id] run modal, and the non-owner branch
+ *      of /runs/[id] — all three mount RunShareView, whose non-owner
+ *      branch calls fetchClippedTrackForRun → the `clip-public-track`
+ *      Edge Function. Same component, so the same clip; SURFACE 5
+ *      exists to pin that a future hand-rolled non-owner renderer on
+ *      /runs/[id] can't quietly take the direct-Storage path instead.
  *   3. /live/[id] (spectator)  — hydrates from `live_run_pings`, which
  *      the `live_run_pings_drop_in_zone` BEFORE-INSERT trigger clips at
  *      WRITE time. Since the SAR last-seen carve-out (migration
@@ -138,7 +141,7 @@ async function clipPointsViaEf(
 }
 
 test.describe('privacy-zone clipping — every viewer surface', () => {
-	test('owner sees the full track; a non-owner sees it clipped on /share, the profile run modal, and /live', async ({
+	test('owner sees the full track; a non-owner sees it clipped on /share, the profile run modal, /live, and /runs/[id]', async ({
 		browser
 	}) => {
 		let users: SagaUser[] = [];
@@ -201,10 +204,11 @@ test.describe('privacy-zone clipping — every viewer surface', () => {
 				expect(points.some((p) => isInAnyZone(p, [ZONE]))).toBe(true);
 			});
 
-			// The owner's own /runs/[id] is owner-only (fetchRunById
-			// `.eq('user_id', userId)`), so render it as the owner and
-			// confirm the run mounts with its map (the full-track surface
-			// a non-owner can never reach here at all).
+			// The owner branch of /runs/[id] (fetchRunById
+			// `.eq('user_id', userId)` + direct Storage download) is the
+			// only full-track render site. Drive it as the owner and confirm
+			// the run mounts with its map; SURFACE 5 drives the same URL as
+			// the non-owner and asserts the clipped track instead.
 			await test.step('SURFACE 1 (DOM) — owner /runs/[id] mounts the run + its map', async () => {
 				const ctx = await newAcceptedContext(browser, owner.storageStatePath);
 				const page = await ctx.newPage();
@@ -374,6 +378,51 @@ test.describe('privacy-zone clipping — every viewer surface', () => {
 					await expect(page.getByText('LIVE', { exact: true })).toBeVisible({
 						timeout: 20_000
 					});
+				} finally {
+					await ctx.close();
+				}
+			});
+
+			await test.step('SURFACE 5 — the non-owner /runs/[id] branch clips identically', async () => {
+				// Issue #666 gave /runs/[id] a non-owner branch: a viewer who
+				// is entitled to a public run now gets the run rather than
+				// "Run not found". That branch mounts the SAME RunShareView,
+				// so the clip must be byte-for-byte what /share and the
+				// profile modal serve. A future hand-rolled non-owner
+				// renderer here would be one fetchTrackByPath away from
+				// serving the unclipped trace — hence a fifth surface.
+				const ctx = await newAcceptedContext(browser, viewer.storageStatePath);
+				const page = await ctx.newPage();
+				try {
+					const efPromise = page.waitForResponse(
+						(r) =>
+							r.url().includes('/functions/v1/clip-public-track') &&
+							r.request().method() === 'POST',
+						{ timeout: 15_000 }
+					);
+					await page.goto(`/runs/${runId}`);
+					const ef = await efPromise;
+					expect(ef.status()).toBe(200);
+					const detailPoints = ((await ef.json()) as {
+						points: { lat: number; lng: number }[];
+					}).points;
+
+					expect(detailPoints.length).toBe(sharePoints.length);
+					expect(detailPoints.length).toBe(EXPECTED_CLIPPED.length);
+					for (const p of detailPoints) {
+						expect(
+							isInAnyZone(p, [ZONE]),
+							'a non-owner /runs/[id] point fell inside the privacy zone — home-coords leak'
+						).toBe(false);
+					}
+
+					// The run reached the viewer (not the not-found state) and
+					// carries none of the owner chrome.
+					await expect(page.getByText('e2e clip-journey run')).toBeVisible({
+						timeout: 15_000
+					});
+					await expect(page.getByRole('heading', { name: 'Run not found' })).toHaveCount(0);
+					await expect(page.locator('.visibility-chip')).toHaveCount(0);
 				} finally {
 					await ctx.close();
 				}

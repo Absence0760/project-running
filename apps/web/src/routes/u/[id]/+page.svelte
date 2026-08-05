@@ -1314,9 +1314,9 @@
 	   only signal that the toggle is in the active state — the icon
 	   stays the same (Material `block`). */
 	.btn-block.active {
-		background: color-mix(in srgb, var(--color-danger, #d33) 14%, transparent);
-		border-color: var(--color-danger, #d33);
-		color: var(--color-danger, #d33);
+		background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+		border-color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.btn-block.active:hover {

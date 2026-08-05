@@ -1,12 +1,34 @@
+import 'dart:async';
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ui_kit/ui_kit.dart' show TextLane;
+import 'package:ui_kit/ui_kit.dart' show FullBodyLoader, TextLane;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/challenge_detail_screen.dart';
 import '../lib/social_service.dart';
+
+/// Never resolves the challenge fetch, so the loading frame is observable.
+class _HangingSocial extends SocialService {
+  @override
+  String? get currentUserId => 'me';
+
+  @override
+  Future<ChallengeView?> fetchChallengeById(String id) =>
+      Completer<ChallengeView?>().future;
+
+  @override
+  Future<List<ChallengeLeaderboardEntry>> fetchChallengeLeaderboard(
+    String id, {
+    bool byTeam = false,
+  }) async =>
+      const [];
+
+  @override
+  Future<List<ClubView>> fetchMyClubs() async => const [];
+}
 
 class _FakeSocial extends SocialService {
   final ChallengeView? challenge;
@@ -99,6 +121,16 @@ Widget _app(SocialService social) => MaterialApp(
     );
 
 void main() {
+  testWidgets('the loading frame is the full-body loader, not a bare spinner',
+      (tester) async {
+    await tester.pumpWidget(_app(_HangingSocial()));
+    await tester.pump();
+
+    expect(find.byType(FullBodyLoader), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
   testWidgets('behind-pace joined challenge shows the verdict + required rate',
       (tester) async {
     // 20 km logged against an expected ~60 km at 60 % elapsed → behind.

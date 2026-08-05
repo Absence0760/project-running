@@ -392,7 +392,7 @@
 		gap: var(--space-md);
 	}
 	.subtitle {
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 		margin: 0.25rem 0 0;
 	}
 	.filters {
@@ -437,7 +437,7 @@
 		cursor: pointer;
 	}
 	.near-error {
-		color: var(--color-danger, #c0392b);
+		color: var(--color-danger-text);
 		font-size: 0.85rem;
 		margin: 0;
 	}
@@ -471,13 +471,13 @@
 		gap: var(--space-sm);
 	}
 	.state-msg {
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 	}
 	.races-error {
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
-		color: var(--color-danger, #c0392b);
+		color: var(--color-danger-text);
 	}
 	.import-body {
 		display: flex;
@@ -486,7 +486,7 @@
 	}
 	.paste-hint,
 	.unavailable {
-		color: var(--color-text-muted, #666);
+		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 		margin: 0;
 	}

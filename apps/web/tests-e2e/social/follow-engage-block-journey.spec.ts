@@ -50,8 +50,9 @@ import { clearNotifications, insertRun } from '../fixtures/simulate';
  * NB: the feed/people surfaces hold an open Supabase realtime socket —
  * never waitForLoadState('networkidle') on them; rely on auto-waiting
  * assertions. A non-owner comments on a run via /share/run/[id] (the
- * RunSocial composer); /runs/[id] is owner-scoped (fetchRunById), so a
- * follower viewing it 404s.
+ * RunSocial composer). The signed-in /runs/[id] also carries the composer
+ * since issue #666 — pinned in cross-user/run-detail-non-owner.spec.ts,
+ * not re-walked here.
  */
 
 const BLOCK_VERB_FOLLOW = /started following you/;

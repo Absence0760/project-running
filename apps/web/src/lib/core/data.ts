@@ -730,6 +730,54 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 	return { ...data, track: null } as Run;
 }
 
+export interface PublicRunAttribution {
+	ownerId: string;
+	displayName: string | null;
+	avatarUrl: string | null;
+}
+
+/// Resolve "may this signed-in viewer see a run they don't own, and whose
+/// is it" for the non-owner branch of `/runs/[id]`.
+///
+/// The entitlement IS the `public_runs` row existing: the view's where
+/// clause is `is_public = true` (20260626_001 and successors) and it runs
+/// as its owner, so a returned row means the run is publicly readable.
+/// Comment + kudos writes are gated independently by
+/// `private.is_run_visible_to` (20260812_001) and the block filter
+/// (20270204_001), so nothing here grants engagement rights.
+///
+/// Returns no run fields on purpose. The redacted row and the
+/// privacy-zone-clipped track are fetched by `RunShareView`, which the
+/// non-owner branch mounts — the clipped-track path (decisions §33) must
+/// stay the single way a non-owner track reaches a renderer.
+///
+/// A coach reading an athlete's *private* run is deliberately not routed
+/// here: `active coach reads athlete runs` (20261103_001) grants SELECT on
+/// the row but the raw GPS trace stays owner-only (decisions §98), so that
+/// surface is `/coaching/athletes/[id]`.
+export async function fetchPublicRunAttribution(
+	runId: string,
+): Promise<PublicRunAttribution | null> {
+	const { data: run } = await supabase
+		.from('public_runs')
+		.select('user_id')
+		.eq('id', runId)
+		.maybeSingle();
+	const ownerId = (run as { user_id?: string | null } | null)?.user_id;
+	if (!ownerId) return null;
+	const { data: profile } = await supabase
+		.from('user_profiles')
+		.select('display_name, avatar_url')
+		.eq('id', ownerId)
+		.maybeSingle();
+	const p = profile as { display_name?: string | null; avatar_url?: string | null } | null;
+	return {
+		ownerId,
+		displayName: p?.display_name ?? null,
+		avatarUrl: p?.avatar_url ?? null,
+	};
+}
+
 export async function deleteRun(id: string): Promise<void> {
 	// Best-effort sweep of attached Storage objects before the row delete:
 	//   - the gzipped track file in the `runs` bucket

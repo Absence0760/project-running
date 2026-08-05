@@ -166,12 +166,12 @@
 	}
 	.back {
 		font-size: 0.85rem;
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 		text-decoration: none;
 	}
 	.state {
 		text-align: center;
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 		padding: 2rem 0;
 	}
 	.state.error {
@@ -186,7 +186,7 @@
 	}
 	.author {
 		margin: 0 0 0.5rem;
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 	}
 	.chips {
 		display: flex;
@@ -197,8 +197,8 @@
 		font-size: 0.75rem;
 		padding: 0.15rem 0.5rem;
 		border-radius: 1rem;
-		background: var(--chip-bg, #eef);
-		color: var(--chip-fg, #335);
+		background: var(--chip-bg);
+		color: var(--chip-fg);
 	}
 	.clone-row {
 		display: flex;
@@ -215,7 +215,7 @@
 	}
 	.start input {
 		padding: 0.5rem;
-		border: 1px solid var(--border, #ccd);
+		border: 1px solid var(--color-border);
 		border-radius: 0.5rem;
 	}
 	.weeks ol {
@@ -230,11 +230,11 @@
 		display: flex;
 		justify-content: space-between;
 		padding: 0.6rem 0.75rem;
-		border: 1px solid var(--border, #ccd);
+		border: 1px solid var(--color-border);
 		border-radius: 0.5rem;
 	}
 	.week-count {
-		color: var(--text-muted, #667);
+		color: var(--color-text-secondary);
 		font-variant-numeric: tabular-nums;
 	}
 </style>

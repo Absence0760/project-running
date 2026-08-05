@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/training_load.dart';
-import 'dart:math' as math;
-
 import 'package:ui_kit/ui_kit.dart';
 
 import '../lib/widgets/training_load_chart.dart'
-    show TrainingLoadChart, TrainingLoadPalette, trainingLoadTickStep;
+    show TrainingLoadChart, trainingLoadTickStep;
 
 TrainingLoadPoint _point({
   required DateTime date,
@@ -40,26 +38,6 @@ Future<void> _pump(
       ),
     ),
   );
-}
-
-double _luminance(Color c) {
-  double chan(double v) {
-    v /= 255.0;
-    return v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
-  }
-
-  // ignore: deprecated_member_use
-  return 0.2126 * chan(c.red.toDouble()) +
-      // ignore: deprecated_member_use
-      0.7152 * chan(c.green.toDouble()) +
-      // ignore: deprecated_member_use
-      0.0722 * chan(c.blue.toDouble());
-}
-
-double _contrast(Color a, Color b) {
-  final la = _luminance(a);
-  final lb = _luminance(b);
-  return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
 }
 
 void main() {
@@ -126,13 +104,14 @@ void main() {
     // green key above a red line. Legend and plot now read one constant.
     for (final tsb in const [12.0, -12.0]) {
       for (final entry in {
-        'light': (AppTheme.light, TrainingLoadPalette.light),
-        'dark': (AppTheme.dark, TrainingLoadPalette.dark),
+        'light': (AppTheme.light, ChartPalette.light),
+        'dark': (AppTheme.dark, ChartPalette.dark),
       }.entries) {
         testWidgets(
             'Form legend swatch matches the plotted line at tsb=$tsb '
             'in ${entry.key}', (tester) async {
           final (theme, palette) = entry.value;
+          final series = palette.series;
           await _pump(
             tester,
             theme: theme,
@@ -142,66 +121,73 @@ void main() {
             ],
             hasHr: true,
           );
-          expect(_swatchColours(tester), <Color>[
-            palette.fitness,
-            palette.fatigue,
-            palette.form,
-          ]);
+          expect(_swatchColours(tester), series);
           expect(
             find.byKey(const Key('trainingLoadChartPainter')),
             paints
-              ..path(color: palette.fitness)
-              ..path(color: palette.fatigue)
-              ..path(color: palette.form),
+              ..path(color: series[0])
+              ..path(color: series[1])
+              ..path(color: series[2]),
           );
         });
       }
     }
 
-    // Issue #666 round 8: one fixed trio could not clear WCAG 1.4.11's 3:1
-    // non-text floor in both themes — the old indigo was 2.57:1 on the dark
-    // card and the old amber 1.94:1 on the light one. Each series is a
-    // graphical object carrying meaning alone, so each owes 3:1 to the card
-    // it is drawn on, and the three must separate from each other.
-    for (final entry in {
-      'light': (TrainingLoadPalette.light, AppTheme.parchment),
-      'dark': (TrainingLoadPalette.dark, AppTheme.duskDeep),
-    }.entries) {
-      test('series clear 3:1 on the ${entry.key} card and separate', () {
-        final (palette, card) = entry.value;
-        final series = <String, Color>{
-          'fitness': palette.fitness,
-          'fatigue': palette.fatigue,
-          'form': palette.form,
-        };
-        for (final s in series.entries) {
-          final ratio = _contrast(s.value, card);
-          expect(ratio, greaterThanOrEqualTo(3.0),
-              reason: '${s.key} is $ratio against the ${entry.key} card');
-        }
-        // Pairwise 3:1 is unreachable for three series that each also owe
-        // 3:1 to their card, so the floor here is the achievable one and the
-        // ORDER is what has to hold: a strictly monotone luminance ladder is
-        // what survives greyscale and red-green colour-vision deficiency.
-        final byLuminance = series.values.map(_luminance).toList()..sort();
-        for (var i = 0; i + 1 < byLuminance.length; i++) {
-          final ratio = (byLuminance[i + 1] + 0.05) / (byLuminance[i] + 0.05);
-          expect(ratio, greaterThanOrEqualTo(1.7),
-              reason: 'adjacent ${entry.key} series separate by only $ratio');
+    // Issue #666 round 10: §495 added labelled gridlines so a min/max-normalised
+    // plot carried a magnitude, but drew them at outline * 0.5 * 0.45 — 1.297:1
+    // on the light card and 1.410:1 on the dark one, so the ticks were labelled
+    // and the lines they labelled could not be seen. The grid takes §487's line
+    // token (3.531 / 3.330:1) and the zero datum onSurfaceVariant (8.459 /
+    // 9.474:1), which the dashed stroke still distinguishes.
+    for (final (name, theme) in [
+      ('light', AppTheme.light),
+      ('dark', AppTheme.dark),
+    ]) {
+      testWidgets('gridlines and the zero datum are visible in $name',
+          (tester) async {
+        await _pump(
+          tester,
+          theme: theme,
+          points: [
+            for (var i = 0; i < 6; i++)
+              _point(
+                date: DateTime(2026, 4, 1 + i),
+                atl: 30 + i * 8,
+                ctl: 40 + i * 4,
+                tsb: 10 - i * 5,
+              ),
+          ],
+          hasHr: true,
+        );
+        final painter = find.byKey(const Key('trainingLoadChartPainter'));
+        for (final token in [
+          theme.dividerColor,
+          theme.colorScheme.onSurfaceVariant,
+        ]) {
+          expect(
+            painter,
+            paints
+              ..something((symbol, args) =>
+                  symbol == #drawLine &&
+                  (args.last as Paint).color.toARGB32() == token.toARGB32()),
+            reason: 'no line drawn in $token',
+          );
         }
       });
     }
 
-    testWidgets('the three series hues are mutually distinct', (tester) async {
-      for (final palette in [
-        TrainingLoadPalette.light,
-        TrainingLoadPalette.dark,
-      ]) {
-        expect(
-          <Color>{palette.fitness, palette.fatigue, palette.form}.length,
-          3,
-        );
-      }
+    // The series values, their 3:1 floors on each card and the luminance
+    // ladder between them are pinned once in
+    // packages/ui_kit/test/chart_palette_test.dart, where the palette lives.
+    testWidgets('the header is the shared chart eyebrow', (tester) async {
+      await _pump(tester, points: const [], hasHr: false);
+      expect(
+        find.ancestor(
+          of: find.text('Fitness, Fatigue & Form'),
+          matching: find.byType(ChartCardHeader),
+        ),
+        findsOneWidget,
+      );
     });
   });
 

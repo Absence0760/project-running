@@ -5392,6 +5392,53 @@
       }
     }
   },
+  "profileNotifPlanAssigned": "{name} assigned you a training plan",
+  "@profileNotifPlanAssigned": {
+    "description": "Notification text for a coach assigning the athlete a training plan",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifEventCancelTitled": "An occurrence of \"{title}\" was cancelled",
+  "@profileNotifEventCancelTitled": {
+    "description": "Notification text for a cancelled event occurrence, when the event title is known",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifEventCancel": "An event occurrence you RSVP'd to was cancelled",
+  "@profileNotifEventCancel": {
+    "description": "Notification text for a cancelled event occurrence, when the title is unavailable"
+  },
+  "profileNotifEventReminderTitled": "\"{title}\" is coming up",
+  "@profileNotifEventReminderTitled": {
+    "description": "Notification text for an upcoming event reminder, when the event title is known",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifEventReminder": "An event you're going to is coming up",
+  "@profileNotifEventReminder": {
+    "description": "Notification text for an upcoming event reminder, when the title is unavailable"
+  },
+  "profileNotifAchievement": "You earned a new achievement",
+  "@profileNotifAchievement": {
+    "description": "Notification text for earning a new achievement"
+  },
+  "profileNotifChallengeComplete": "You completed a challenge",
+  "@profileNotifChallengeComplete": {
+    "description": "Notification text for completing a challenge"
+  },
+  "profileNotifContentHidden": "One of your posts was hidden after being reported",
+  "@profileNotifContentHidden": {
+    "description": "Notification text for one of the user's own posts being hidden after reports"
+  },
   "profileNotifGeneric": "{name} interacted with your activity",
   "@profileNotifGeneric": {
     "description": "Fallback notification text for unknown kinds",
@@ -9899,6 +9946,10 @@
   "dashboardStreakStart": "run today to start one",
   "@dashboardStreakStart": {
     "description": "Encouraging run-streak readout when the user has never had a streak"
+  },
+  "dashboardHeatmapTitle": "ACTIVITY",
+  "@dashboardHeatmapTitle": {
+    "description": "Card header over the calendar activity heatmap on the dashboard"
   },
   "dashboardHeatmapLess": "Less",
   "@dashboardHeatmapLess": {

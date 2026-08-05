@@ -230,7 +230,7 @@
 <style>
 	.page {
 		padding: var(--space-lg) var(--space-2xl);
-		height: calc(100vh - var(--app-header-h, 0px));
+		height: 100vh;
 		display: flex;
 		flex-direction: column;
 	}

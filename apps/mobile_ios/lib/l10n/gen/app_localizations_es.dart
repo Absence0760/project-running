@@ -3989,6 +3989,39 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String profileNotifPlanAssigned(String name) {
+    return '$name te asignó un plan de entrenamiento';
+  }
+
+  @override
+  String profileNotifEventCancelTitled(String title) {
+    return 'Se canceló una ocurrencia de \"$title\"';
+  }
+
+  @override
+  String get profileNotifEventCancel =>
+      'Se canceló una ocurrencia de un evento al que confirmaste asistencia';
+
+  @override
+  String profileNotifEventReminderTitled(String title) {
+    return '\"$title\" está por comenzar';
+  }
+
+  @override
+  String get profileNotifEventReminder =>
+      'Un evento al que vas a asistir está por comenzar';
+
+  @override
+  String get profileNotifAchievement => 'Has conseguido un nuevo logro';
+
+  @override
+  String get profileNotifChallengeComplete => 'Completaste un desafío';
+
+  @override
+  String get profileNotifContentHidden =>
+      'Una de tus publicaciones se ocultó tras ser denunciada';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interactuó con tu actividad';
   }
@@ -7435,6 +7468,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get dashboardStreakStart => 'corre hoy para empezar una';
+
+  @override
+  String get dashboardHeatmapTitle => 'ACTIVIDAD';
 
   @override
   String get dashboardHeatmapLess => 'Menos';

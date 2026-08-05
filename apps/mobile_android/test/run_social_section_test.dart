@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/profile_screen.dart';
@@ -78,13 +79,19 @@ Future<void> _ensureSupabase() async {
   _supabaseReady = true;
 }
 
+/// Mounts the section the way both real hosts do — as one child of a
+/// scrollable column, so its height is unbounded.
 Future<void> _pump(WidgetTester tester) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
-        body: RunSocialSection(api: ApiClient(), runId: 'fake-run-id'),
+        body: ListView(
+          children: [
+            RunSocialSection(api: ApiClient(), runId: 'fake-run-id'),
+          ],
+        ),
       ),
     ),
   );
@@ -238,11 +245,16 @@ void main() {
   setUpAll(_ensureSupabase);
 
   group('RunSocialSection — initial render', () {
-    testWidgets('first frame shows the loading spinner', (tester) async {
-      // Reason: while _loading is true the widget renders only a
-      // CircularProgressIndicator inside a centered Padding.
+    testWidgets('first frame stands comment rows where the comments will go', (
+      tester,
+    ) async {
       await _pump(tester);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(ListSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      // The section sits in an unbounded host, so a viewport-backed skeleton
+      // would throw here.
+      expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(milliseconds: 400));
     });
 
     testWidgets('empty thread renders the no-comments hint + composer', (

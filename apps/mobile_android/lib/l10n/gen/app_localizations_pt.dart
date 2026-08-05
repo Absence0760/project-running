@@ -3992,6 +3992,39 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String profileNotifPlanAssigned(String name) {
+    return '$name atribuiu um plano de treino a você';
+  }
+
+  @override
+  String profileNotifEventCancelTitled(String title) {
+    return 'Uma ocorrência de \"$title\" foi cancelada';
+  }
+
+  @override
+  String get profileNotifEventCancel =>
+      'Uma ocorrência de evento que você confirmou foi cancelada';
+
+  @override
+  String profileNotifEventReminderTitled(String title) {
+    return '\"$title\" está chegando';
+  }
+
+  @override
+  String get profileNotifEventReminder =>
+      'Um evento ao qual você vai comparecer está chegando';
+
+  @override
+  String get profileNotifAchievement => 'Você conquistou uma nova conquista';
+
+  @override
+  String get profileNotifChallengeComplete => 'Você completou um desafio';
+
+  @override
+  String get profileNotifContentHidden =>
+      'Uma das suas publicações foi ocultada após ser denunciada';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interagiu com sua atividade';
   }
@@ -7430,6 +7463,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get dashboardStreakStart => 'corra hoje para começar uma';
+
+  @override
+  String get dashboardHeatmapTitle => 'ATIVIDADE';
 
   @override
   String get dashboardHeatmapLess => 'Menos';
@@ -16504,6 +16540,39 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String profileNotifPlanAssigned(String name) {
+    return '$name atribuiu um plano de treino a você';
+  }
+
+  @override
+  String profileNotifEventCancelTitled(String title) {
+    return 'Uma ocorrência de \"$title\" foi cancelada';
+  }
+
+  @override
+  String get profileNotifEventCancel =>
+      'Uma ocorrência de evento que você confirmou foi cancelada';
+
+  @override
+  String profileNotifEventReminderTitled(String title) {
+    return '\"$title\" está chegando';
+  }
+
+  @override
+  String get profileNotifEventReminder =>
+      'Um evento ao qual você vai comparecer está chegando';
+
+  @override
+  String get profileNotifAchievement => 'Você conquistou uma nova conquista';
+
+  @override
+  String get profileNotifChallengeComplete => 'Você completou um desafio';
+
+  @override
+  String get profileNotifContentHidden =>
+      'Uma das suas publicações foi ocultada após ser denunciada';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interagiu com sua atividade';
   }
@@ -19941,6 +20010,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get dashboardStreakStart => 'corra hoje para começar uma';
+
+  @override
+  String get dashboardHeatmapTitle => 'ATIVIDADE';
 
   @override
   String get dashboardHeatmapLess => 'Menos';

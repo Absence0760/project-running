@@ -306,7 +306,7 @@
 	}
 
 	.error {
-		color: var(--color-danger, #ef4444);
+		color: var(--color-danger-text);
 		font-size: 0.85rem;
 		margin: 0;
 	}

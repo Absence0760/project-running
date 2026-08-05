@@ -5177,6 +5177,50 @@ void main() {
     });
   });
 
+  group('a loading surface names what is coming', () {
+    // A bare `Center(child: CircularProgressIndicator())` tells the user only
+    // that something is happening: it occupies none of the space the content
+    // will, so the arriving frame lands as a re-layout rather than a fill.
+    // Round 7 shipped the two named treatments (`ListSkeleton` for a row-
+    // shaped surface, `FullBodyLoader` for a mixed one) and converted 16 of
+    // the 30 sites; round 10 closed the remaining 14 (decisions.md § 492).
+    // The trap is not a bug in one file — it is the shape every screen
+    // reached for because there was nothing named to reach for.
+    late List<File> sources;
+    setUpAll(() {
+      sources = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .toList();
+    });
+
+    test('no surface loads behind a bare centred spinner', () {
+      final offenders = <String>[
+        for (final f in sources)
+          if (f.readAsStringSync().contains(
+              'Center(child: CircularProgressIndicator())'))
+            f.path,
+      ];
+      expect(offenders, isEmpty,
+          reason: 'use ListSkeleton where the surface is rows, '
+              'ListSkeleton.section where it is one section of a scrollable, '
+              'FullBodyLoader where the layout is mixed');
+    });
+
+    test('no screen hand-rolls its own empty state', () {
+      final offenders = <String>[
+        for (final f in sources)
+          if (RegExp(r'class \w*EmptyState\b')
+              .hasMatch(f.readAsStringSync()))
+            f.path,
+      ];
+      expect(offenders, isEmpty,
+          reason: 'ui_kit EmptyState owns the icon/title/body proportions and '
+              'the bounded-vs-unbounded host contract (decisions.md § 485)');
+    });
+  });
+
   group('destructive confirms carry error emphasis', () {
     // Rounds 4-7 fixed emphasis dialog by dialog, which left the decision
     // living at 88 call sites: 21 marked the confirm with colorScheme.error

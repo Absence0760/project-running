@@ -53,6 +53,32 @@ func TestShouldEmail_Matrix(t *testing.T) {
 	}
 }
 
+// TestInAppOnlyKinds_NeverLeaveTheInbox pins the deliberate skip. "all" is the
+// mode that matters: omission from importantKinds would already suppress these
+// under the default "important", so only an explicit gate stops a recipient who
+// opted into everything from being emailed and pushed a provisional moderation
+// notice with no destination.
+func TestInAppOnlyKinds_NeverLeaveTheInbox(t *testing.T) {
+	if !inAppOnlyKinds["content_hidden"] {
+		t.Fatal("content_hidden must be in-app only — see the inAppOnlyKinds rationale")
+	}
+	for kind := range inAppOnlyKinds {
+		for _, mode := range []string{emailModeAll, emailModeImportant, emailModeOff} {
+			if shouldEmail(kind, mode) {
+				t.Errorf("shouldEmail(%q, %q) = true; in-app-only kinds must never email", kind, mode)
+			}
+		}
+		for _, mode := range []string{pushModeAll, pushModeImportant, pushModeOff} {
+			if shouldPush(kind, mode) {
+				t.Errorf("shouldPush(%q, %q) = true; in-app-only kinds must never push", kind, mode)
+			}
+		}
+		if importantKinds[kind] {
+			t.Errorf("%q is both in-app-only and important — contradictory", kind)
+		}
+	}
+}
+
 func TestRenderNotificationEmail_EventReminderDeepLink(t *testing.T) {
 	ev := "evt-42"
 	n := NotificationRow{ID: "n1", UserID: "u1", Kind: "event_reminder", EventID: &ev}
