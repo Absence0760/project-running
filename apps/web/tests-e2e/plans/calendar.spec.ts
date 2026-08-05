@@ -100,6 +100,36 @@ test.describe('/plans/[id] — PlanCalendar (month view)', () => {
 		});
 	});
 
+	// The narrowest type in the app used to live here: `.kind-pill` shrank to
+	// 0.55rem (8.8 px) and `.dist` to 0.6rem (9.6 px) under the 40 rem media
+	// query, both below the 11 px micro-label floor § 482 pins on mobile. The
+	// source scan in font_size_floor_guard.test.ts cannot prove this one, because
+	// what failed was a higher-specificity media-query override winning over a
+	// compliant base rule — only the resolved cascade shows which declaration
+	// paints (§ 519's lesson, one surface over).
+	test('Calendar micro-labels stay at or above 11px on a phone-width viewport', async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: 360, height: 780 });
+		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
+		await expect(page.locator('.cal')).toBeVisible({ timeout: 10_000 });
+		await walkToMonth(page, SECOND_MONTH_LABEL);
+
+		const cell = page
+			.locator('.cal .cell.has-workout', {
+				has: page.locator('.kind-pill', { hasText: /^Tempo$/ })
+			})
+			.first();
+		for (const part of ['.kind-pill', '.dist'] as const) {
+			const target = cell.locator(part);
+			await expect(target).toBeVisible();
+			const px = await target.evaluate((el) =>
+				parseFloat(getComputedStyle(el as HTMLElement).fontSize)
+			);
+			expect(px, `${part} resolves to ${px}px at 360px wide`).toBeGreaterThanOrEqual(11);
+		}
+	});
+
 	test('Calendar section mounts under the plan-detail hero', async ({ page }) => {
 		// `<section class="calendar-section">` + `<h2 class="section-title">Calendar</h2>`
 		// + `.cal` from PlanCalendar. A regression that dropped the

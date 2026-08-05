@@ -2052,7 +2052,7 @@
 			color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)),
 			var(--color-surface)
 		);
-		border: 1px solid var(--color-border);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
 		border-radius: var(--radius-lg);
 		padding: var(--space-md);
 		margin-bottom: var(--space-md);

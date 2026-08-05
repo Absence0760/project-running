@@ -707,6 +707,29 @@ The `--color-warning` / `--color-secondary` / `--color-accent-cyan` (and `--colo
 
 `contrast_guard.test.ts` enforces all three: `-strong` stays theme-independent + AA-with-white and is never used as text; every `-text` token clears AA as text (surface + chip) in all three theme blocks; and no source file uses a bare `--color-warning` / `-secondary` / `-accent-cyan` as a `color:`. Add a new accent that needs a foreground use → add its `-text` pair (light dark-value + dark base-value) and it's covered automatically.
 
+## Web boundaries on a tinted surface — mix the surface's own accent into the line
+
+`--color-border` is the one LINE token and its whole guarantee is WCAG 1.4.11's 3:1 ([decisions.md § 518](decisions.md)). It clears that on the plain surfaces with very little to spare — **3.906:1** on the light card, **3.330:1** on the dark one — so a card that tints itself with an accent spends the remainder: on `color-mix(var(--color-primary) N%, var(--color-surface))` the dark line reads **3.000:1 at 6 %** and **2.539:1 at 14 %**.
+
+So: **a boundary drawn on an accent-tinted surface mixes that surface's own accent into the line**, at roughly twice the tint's share — `border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border))` on a 12 % primary tint. That widens the gap rather than closing it, because the border mix moves the line further toward the accent than the tint moved the surface, and it tracks the card's hue automatically. Thirteen call sites already did this before the rule was written, and mobile arrived at the same shape independently (`route_detail_screen.dart`'s marker chip: a 0.10 alpha fill under a 0.20 alpha border of the same colour).
+
+**Do not mint a second line token for it.** The tint's share and its hue are both per-card free variables, so a fixed second value is tuned for one tint and wrong at the next — and it restores the fail-open default § 518 removed, where a plain `border: 1px solid var(--color-border)` is right everywhere by construction. Nor does reducing the tints work: for the plain dark line to clear 3:1 the cap is 5 % on a primary tint, 3 % on the palest kind tint, and 2 % over `--color-bg-tertiary`, which is deleting the tint rather than tinting less.
+
+Two corollaries, both measured:
+
+- **`--color-border` may not edge `--color-fill-subtle`.** They are the same value one generation apart (§ 518 moved the fills onto the line token's old value), so they sit **2.678:1** light / **2.508:1** dark from each other, and in dark the gap cannot be opened from the fill's end at all: it would have to drop to luminance 0.02211 to reach 3:1, and `--color-surface` is at 0.01496, so a chip would fall from 1.328:1 to 1.110:1 against the card it sits on. A control whose fill flips to the subtle fill on hover moves its **edge** instead — `.btn-secondary:hover` takes `--color-primary`, following `.btn-outline:hover`.
+- **Measure where the border lands, not what the token is.** § 518 recorded eight tinted cards as failing at 2.551–2.998:1; seven of them never painted the bare token, and the real residue was five sites a token-level reading could not see plus one it hid. `contrast_guard.test.ts` now resolves each rule's tint stops and the border colour that actually applies to that rule's subject — including through a file-local custom property and through a `:hover` rule that moves the edge — and asserts 3:1 per theme.
+
+## Web type sizes — 11 px is the floor, and `--font-size-section-label` is the step to reach for
+
+Mobile pins **11 px** as the smallest type any surface may use (`labelSmall`, [decisions.md § 482](decisions.md)). Web owes the same conformance floor, and until round 13 had nothing enforcing it: **45** `font-size` declarations sat below it, the narrowest at 8 px, and `PlanCalendar`'s `.kind-pill` dropped to 8.8 px under a 40 rem media query on the one plan surface every phone user opens.
+
+`font_size_floor_guard.test.ts` reads the floor **out of `app_theme.dart`** so the two platforms cannot drift, then fails any `rem`/`px` `font-size` under it. Prefer `var(--font-size-section-label)` (0.7rem = 11.2 px — headroom over the floor, not an exact meet, so § 522's no-later-multiplier rule does not bite it); 80 declarations already use that size.
+
+It is a **floor** guard, not mobile's "name the step" literal guard, and the difference is structural rather than convenience: mobile's scale is closed at seven steps on one `textTheme`, so a literal is always a step spelled by hand or a value between two. Web's CSS carries 1886 numeric `font-size` declarations against three named size tokens, so a literal ban would need an allowlist longer than the code and would assert nothing.
+
+**When a narrow viewport no longer fits the text, tighten the box or let the text reflow — never shrink the type.** SC 1.4.4 and 1.4.10 both ask for reflow, and a `min-height` already permits the row to grow. The 42 declarations still below the floor are count-pinned per file, split into text-inside-a-graphic (the class mobile exempts too — a numeral inside a map pin, SVG labels inside a plot) and plain debt whose count can only shrink.
+
 ## Web CSS custom properties — a fallback is a default, never a substitute for the token
 
 **Never write `var(--some-token, #hex)` for a token that isn't declared in the token layer.** It reads as a defensive default and is actually the opposite: the declaration is pinned to that literal in *both* themes, permanently, and never tracks light/dark at all. It is strictly worse than the bare `var(--x)` form, which at least collapses to something inherited — and unlike the bare form it *looks* deliberate at the call site, so it survives review. The issue #666 round-10 sweep found **130** such references across **39** files (`#666` muted text at 2.815:1 on the dark card; white on a primary fill at 2.081:1 in dark, because `--color-primary` flips from dark teal to light coral).

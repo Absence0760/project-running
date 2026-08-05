@@ -667,7 +667,7 @@
 			var(--color-bg-tertiary) 60%,
 			color-mix(in srgb, var(--color-accent-cyan, var(--color-primary)) 5%, var(--color-bg-tertiary))
 		);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
 		display: flex;
 		align-items: center;
 		justify-content: center;

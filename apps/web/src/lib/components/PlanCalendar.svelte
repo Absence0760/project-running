@@ -293,7 +293,7 @@
 		align-self: flex-end;
 	}
 	.kind-pill {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text);
 		text-transform: uppercase;
@@ -316,16 +316,17 @@
 		font-size: 0.95rem;
 		color: var(--color-success-text);
 	}
+	/* The narrow-viewport cell tightens its box, not its type: the kind pill
+	   and the distance used to drop to 0.55rem / 0.6rem (8.8 / 9.6 px), under
+	   mobile's 11 px labelSmall floor (§ 482), on the one plan surface every
+	   phone user opens. A 7-column grid at that width leaves ~29 px of content
+	   per cell, so at the floor the distance reflows to two lines and the row
+	   grows — which is what SC 1.4.4 and 1.4.10 ask for, and `min-height`
+	   already permits. The pill keeps its ellipsis. */
 	@media (max-width: 40rem) {
 		.cell {
 			min-height: 3.5rem;
 			padding: 0.2rem;
-		}
-		.kind-pill {
-			font-size: 0.55rem;
-		}
-		.dist {
-			font-size: 0.6rem;
 		}
 	}
 </style>
