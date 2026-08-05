@@ -5,7 +5,17 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import {
+		basemapIsDarkFromEnv,
+		mapStyleUrlFromEnv as mapStyleUrl,
+	} from '$lib/routes/map-style.svelte';
+	import {
+		mapFeaturedHalo,
+		mapHoverLine,
+		mapLabelInk,
+		mapOverlayOutline,
+		mapPinnedLine,
+	} from '$lib/routes/basemap_contrast';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import {
 		fetchHeatmapPoints,
@@ -197,6 +207,9 @@
 		const prefersDark =
 			typeof window !== 'undefined' &&
 			window.matchMedia('(prefers-color-scheme: dark)').matches;
+		// The ground the overlays land on, not the OS theme — see
+		// `basemap_contrast.ts`.
+		const darkBasemap = basemapIsDarkFromEnv(PUBLIC_MAPTILER_KEY, prefersDark);
 
 		map = new maplibregl.Map({
 			container: mapEl,
@@ -319,14 +332,14 @@
 				id: ROUTE_PINNED_CASING,
 				type: 'line',
 				source: ROUTE_PINNED_SOURCE,
-				paint: { 'line-color': '#1e293b', 'line-width': 6, 'line-opacity': 0.45 },
+				paint: { 'line-color': mapOverlayOutline(darkBasemap), 'line-width': 6, 'line-opacity': 0.45 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.addLayer({
 				id: ROUTE_PINNED_LAYER,
 				type: 'line',
 				source: ROUTE_PINNED_SOURCE,
-				paint: { 'line-color': '#8b5cf6', 'line-width': 3.5 },
+				paint: { 'line-color': mapPinnedLine(darkBasemap), 'line-width': 3.5 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.on('click', ROUTE_PINNED_LAYER, (e) => {
@@ -355,14 +368,14 @@
 				id: ROUTES_LAYER_CASING,
 				type: 'line',
 				source: ROUTES_SOURCE,
-				paint: { 'line-color': '#1e293b', 'line-width': 7, 'line-opacity': 0.45 },
+				paint: { 'line-color': mapOverlayOutline(darkBasemap), 'line-width': 7, 'line-opacity': 0.45 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.addLayer({
 				id: ROUTES_LAYER,
 				type: 'line',
 				source: ROUTES_SOURCE,
-				paint: { 'line-color': '#22d3ee', 'line-width': 4 },
+				paint: { 'line-color': mapHoverLine(darkBasemap), 'line-width': 4 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.on('click', ROUTES_LAYER, (e) => {
@@ -395,8 +408,8 @@
 				source: ROUTE_HL_SOURCE,
 				paint: {
 					'circle-radius': 16,
-					'circle-color': 'rgba(34, 211, 238, 0.16)',
-					'circle-stroke-color': '#22d3ee',
+					'circle-color': `color-mix(in srgb, ${mapHoverLine(darkBasemap)} 16%, transparent)`,
+					'circle-stroke-color': mapHoverLine(darkBasemap),
 					'circle-stroke-width': 2,
 				},
 			});
@@ -416,7 +429,7 @@
 				paint: {
 					'circle-color': '#7FB3C2',
 					'circle-radius': 9,
-					'circle-stroke-color': '#0f172a',
+					'circle-stroke-color': mapOverlayOutline(darkBasemap),
 					'circle-stroke-width': 2,
 					'circle-opacity': 0.9,
 				},
@@ -468,7 +481,7 @@
 				paint: {
 					'circle-color': '#F2A07B',
 					'circle-opacity': 0.92,
-					'circle-stroke-color': '#0f172a',
+					'circle-stroke-color': mapOverlayOutline(darkBasemap),
 					'circle-stroke-width': 2,
 					'circle-radius': [
 						'step',
@@ -489,7 +502,7 @@
 					'text-font': ['Noto Sans Regular'],
 					'text-size': 12,
 				},
-				paint: { 'text-color': '#0f172a' },
+				paint: { 'text-color': mapLabelInk(darkBasemap) },
 			});
 			// Click a cluster → zoom to the point where it breaks apart.
 			map.on('click', ROUTE_CLUSTER_LAYER, async (e) => {
@@ -568,8 +581,8 @@
 					'circle-stroke-color': [
 						'case',
 						['get', 'featured'],
-						'#FACC15',
-						'#0f172a',
+						mapFeaturedHalo(darkBasemap),
+						mapOverlayOutline(darkBasemap),
 					],
 					'circle-stroke-width': [
 						'case',
@@ -1881,13 +1894,32 @@
 		background: var(--color-bg-tertiary);
 	}
 	/* A kept route gets a violet left rail + a filled pin glyph in the name
-	 * so the list mirrors the violet line drawn on the map. */
+	 * so the list mirrors the violet line drawn on the map. Unlike that line
+	 * this sits on a THEME surface, so it keys off the theme — and lands on
+	 * the same two rungs `mapPinnedLine` uses, because "clear the ground you
+	 * sit on" has the same answer at both ends of the violet. The single
+	 * `#8b5cf6` it replaces read 4.234:1 as label text on the light surface,
+	 * 3.374:1 on the row's own hover fill and 3.817:1 on the dark surface —
+	 * under AA in all three. Wants a --color-route-pinned token pair; local
+	 * until app.css mints one. */
+	.discover {
+		--kept-accent: #6D28D9;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root[data-theme="auto"] .discover,
+		:root:not([data-theme]) .discover {
+			--kept-accent: #A78BFA;
+		}
+	}
+	:root[data-theme="dark"] .discover {
+		--kept-accent: #A78BFA;
+	}
 	.result-row.kept {
-		box-shadow: inset 3px 0 0 #8b5cf6;
+		box-shadow: inset 3px 0 0 var(--kept-accent);
 	}
 	.result-kept {
 		font-size: 0.95rem;
-		color: #8b5cf6;
+		color: var(--kept-accent);
 		font-variation-settings: 'FILL' 1;
 		vertical-align: -0.15em;
 		margin-inline-end: 0.1rem;
@@ -1917,14 +1949,14 @@
 		padding: 0.1rem 0.5rem;
 		font-size: 0.72rem;
 		font-weight: 600;
-		color: #8b5cf6;
+		color: var(--kept-accent);
 		background: transparent;
-		border: 1px solid #8b5cf6;
+		border: 1px solid var(--kept-accent);
 		border-radius: 999px;
 		cursor: pointer;
 	}
 	.results-clear-pins:hover {
-		background: rgba(139, 92, 246, 0.12);
+		background: color-mix(in srgb, var(--kept-accent) 12%, transparent);
 	}
 	/* Hovering the dot on the map tints + accents its row (and vice
 	 * versa) — the synchronized hover that ties the two surfaces. Uses
@@ -2156,10 +2188,10 @@
 		min-width: 0;
 	}
 	:global(.heatmap-cluster-popup .cluster-route.kept) {
-		box-shadow: inset 3px 0 0 #8b5cf6;
+		box-shadow: inset 3px 0 0 var(--kept-accent);
 	}
 	:global(.heatmap-cluster-popup .cluster-route.kept .cluster-route-name) {
-		color: #8b5cf6;
+		color: var(--kept-accent);
 	}
 	:global(.heatmap-cluster-popup .cluster-route-view) {
 		flex-shrink: 0;

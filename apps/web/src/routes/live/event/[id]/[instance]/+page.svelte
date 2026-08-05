@@ -7,7 +7,17 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl, getMapStyle } from '$lib/routes/map-style.svelte';
+	import {
+		basemapIsDarkFromEnv,
+		getMapStyle,
+		mapStyleUrlFromEnv as mapStyleUrl,
+	} from '$lib/routes/map-style.svelte';
+	import {
+		mapAccentColour,
+		mapLabelHalo,
+		mapLabelInk,
+		mapOverlayOutline,
+	} from '$lib/routes/basemap_contrast';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { supabase } from '$lib/core/supabase';
 	import {
@@ -58,6 +68,10 @@
 	}> | null = null;
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+	// The ground the runner dots land on, not the OS theme — see
+	// `basemap_contrast.ts`.
+	const darkBasemap = $derived(basemapIsDarkFromEnv(PUBLIC_MAPTILER_KEY, prefersDark));
 
 	// Latest ping per user (the leaderboard view). Fetched via the
 	// `latest_race_pings` RPC (one row per runner) rather than folded from
@@ -480,7 +494,7 @@
 				// approximate ~1 km cell, deliberately distinct from the tight
 				// per-runner-coloured halo of a precise live position.
 				'circle-radius': ['case', ['get', 'coarse'], 20, 13],
-				'circle-color': ['case', ['get', 'coarse'], '#E6A96B', ['get', 'color']],
+				'circle-color': ['case', ['get', 'coarse'], mapAccentColour(darkBasemap), ['get', 'color']],
 				'circle-opacity': ['case', ['get', 'coarse'], 0.22, 0.25]
 			}
 		});
@@ -494,7 +508,12 @@
 				// precise: a solid runner-coloured dot.
 				'circle-radius': ['case', ['get', 'coarse'], 9, 7],
 				'circle-color': ['case', ['get', 'coarse'], 'rgba(0,0,0,0)', ['get', 'color']],
-				'circle-stroke-color': ['case', ['get', 'coarse'], '#E6A96B', prefersDark ? '#0f172a' : '#ffffff'],
+				'circle-stroke-color': [
+					'case',
+					['get', 'coarse'],
+					mapAccentColour(darkBasemap),
+					mapOverlayOutline(darkBasemap),
+				],
 				'circle-stroke-width': ['case', ['get', 'coarse'], 3, 2]
 			}
 		});
@@ -511,8 +530,8 @@
 				'text-offset': [0, -1.2]
 			},
 			paint: {
-				'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
-				'text-halo-color': prefersDark ? '#0f172a' : '#ffffff',
+				'text-color': mapLabelInk(darkBasemap),
+				'text-halo-color': mapLabelHalo(darkBasemap),
 				'text-halo-width': 1.5
 			}
 		});

@@ -7,7 +7,20 @@
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { getUnit } from '$lib/format/units.svelte';
-	import { getMapStyle, mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import {
+		basemapIsDarkFromEnv,
+		getMapStyle,
+		mapStyleUrlFromEnv as mapStyleUrl,
+	} from '$lib/routes/map-style.svelte';
+	import {
+		mapAccentColour,
+		mapFinishColour,
+		mapLabelHalo,
+		mapLabelInk,
+		mapOverlayOutline,
+		mapStartColour,
+		mapTrackLine,
+	} from '$lib/routes/basemap_contrast';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { minMax } from '$lib/util/min_max';
 	import type { TrackPoint } from '$lib/types';
@@ -154,6 +167,12 @@
 	let mapConsented = $state(untrack(() => (requireExplicitConsent ? false : hasAcceptedConsent())));
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+	// The ground the overlays land on, which is NOT `prefersDark`: the
+	// map-style preference decouples basemap luminance from the OS theme
+	// (`outdoors` is light under a dark OS, `satellite` dark under a light
+	// one). See `basemap_contrast.ts`.
+	const darkBasemap = $derived(basemapIsDarkFromEnv(PUBLIC_MAPTILER_KEY, prefersDark));
 
 	const METRES_PER_MILE = 1609.344;
 
@@ -510,7 +529,7 @@
 			id: 'trace-casing',
 			type: 'line',
 			source: 'trace',
-			paint: { 'line-color': '#1d4ed8', 'line-width': 7, 'line-opacity': 0.25 },
+			paint: { 'line-color': mapOverlayOutline(darkBasemap), 'line-width': 7, 'line-opacity': 0.25 },
 			layout: { 'line-join': 'round', 'line-cap': 'round' }
 		});
 
@@ -546,7 +565,7 @@
 				id: 'trace-line',
 				type: 'line',
 				source: 'trace',
-				paint: { 'line-color': prefersDark ? '#818CF8' : '#4F46E5', 'line-width': 3.5 },
+				paint: { 'line-color': mapTrackLine(darkBasemap), 'line-width': 3.5 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 		}
@@ -565,8 +584,8 @@
 				'text-allow-overlap': true,
 			},
 			paint: {
-				'text-color': prefersDark ? '#FFFFFF' : '#1d4ed8',
-				'text-halo-color': prefersDark ? '#1d4ed8' : '#FFFFFF',
+				'text-color': mapOverlayOutline(darkBasemap),
+				'text-halo-color': mapTrackLine(darkBasemap),
 				'text-halo-width': 1.5,
 			},
 		});
@@ -583,8 +602,8 @@
 				source: 'distance-markers',
 				paint: {
 					'circle-radius': 11,
-					'circle-color': prefersDark ? '#1E293B' : '#FFFFFF',
-					'circle-stroke-color': prefersDark ? '#818CF8' : '#4F46E5',
+					'circle-color': mapLabelHalo(darkBasemap),
+					'circle-stroke-color': mapTrackLine(darkBasemap),
 					'circle-stroke-width': 2,
 				},
 			});
@@ -599,7 +618,7 @@
 					'text-allow-overlap': true,
 				},
 				paint: {
-					'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
+					'text-color': mapLabelInk(darkBasemap),
 				},
 			});
 		}
@@ -618,7 +637,7 @@
 			paint: {
 				'circle-radius': 8,
 				'circle-color': ['get', 'color'],
-				'circle-stroke-color': '#FFFFFF',
+				'circle-stroke-color': mapOverlayOutline(darkBasemap),
 				'circle-stroke-width': 2,
 			},
 		});
@@ -635,8 +654,8 @@
 				'text-optional': true,
 			},
 			paint: {
-				'text-color': prefersDark ? '#F1F5F9' : '#1E293B',
-				'text-halo-color': prefersDark ? '#0F172A' : '#FFFFFF',
+				'text-color': mapLabelInk(darkBasemap),
+				'text-halo-color': mapLabelHalo(darkBasemap),
 				'text-halo-width': 1.5,
 			},
 		});
@@ -651,17 +670,21 @@
 				id: 'animated-trace-line',
 				type: 'line',
 				source: 'animated-trace',
-				paint: { 'line-color': '#f59e0b', 'line-width': 4 },
+				paint: { 'line-color': mapAccentColour(darkBasemap), 'line-width': 4 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' }
 			});
 		}
 
-		if (!startMarker) {
-			startMarker = new maplibregl.Marker({ color: '#22c55e' }).setLngLat(coords[0]).addTo(map);
-		}
-		if (!endMarker) {
-			endMarker = new maplibregl.Marker({ color: '#ef4444' }).setLngLat(coords[coords.length - 1]).addTo(map);
-		}
+		// Recreated rather than reused: MapLibre's Marker has no setColor, and
+		// a style swap can flip the ground these caps are measured against.
+		startMarker?.remove();
+		endMarker?.remove();
+		startMarker = new maplibregl.Marker({ color: mapStartColour(darkBasemap) })
+			.setLngLat(coords[0])
+			.addTo(map);
+		endMarker = new maplibregl.Marker({ color: mapFinishColour(darkBasemap) })
+			.setLngLat(coords[coords.length - 1])
+			.addTo(map);
 
 		// Empty selected-segment source + layers; populated when the user
 		// clicks. Rendered above the base trace so the highlight reads
@@ -675,14 +698,14 @@
 				id: 'selected-segment-casing',
 				type: 'line',
 				source: 'selected-segment',
-				paint: { 'line-color': '#f59e0b', 'line-width': 9, 'line-opacity': 0.35 },
+				paint: { 'line-color': mapAccentColour(darkBasemap), 'line-width': 9, 'line-opacity': 0.35 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.addLayer({
 				id: 'selected-segment-line',
 				type: 'line',
 				source: 'selected-segment',
-				paint: { 'line-color': '#f59e0b', 'line-width': 5 },
+				paint: { 'line-color': mapAccentColour(darkBasemap), 'line-width': 5 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 		}
@@ -967,7 +990,15 @@
 	the same page already, so a "view as table" toggle here would
 	be redundant.
 -->
-<div class="run-map-wrapper" role="region" aria-label={m('runMap.regionLabel')}>
+<div
+	class="run-map-wrapper"
+	role="region"
+	aria-label={m('runMap.regionLabel')}
+	style:--map-accent={mapAccentColour(darkBasemap)}
+	style:--map-outline={mapOverlayOutline(darkBasemap)}
+	style:--map-label-ink={mapLabelInk(darkBasemap)}
+	style:--map-label-halo={mapLabelHalo(darkBasemap)}
+>
 	{#if mapConsented}
 		<div bind:this={mapContainer} class="run-map" aria-hidden="true"></div>
 		{#if animatable}
@@ -1067,18 +1098,20 @@
 		width: 12px;
 		height: 12px;
 		border-radius: 50%;
-		background: #f59e0b;
-		border: 2px solid white;
-		box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3), 0 1px 4px rgba(0, 0, 0, 0.3);
+		background: var(--map-accent);
+		border: 2px solid var(--map-outline);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--map-accent) 30%, transparent),
+			0 1px 4px rgba(0, 0, 0, 0.3);
 	}
 
 	:global(.segment-pin) {
 		width: 14px;
 		height: 14px;
 		border-radius: 50%;
-		background: #f59e0b;
-		border: 3px solid white;
-		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4), 0 2px 6px rgba(0, 0, 0, 0.35);
+		background: var(--map-accent);
+		border: 3px solid var(--map-outline);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--map-accent) 40%, transparent),
+			0 2px 6px rgba(0, 0, 0, 0.35);
 	}
 
 	/* Linked-cursor marker (chart hover → map) + route-preview scrubber
@@ -1131,7 +1164,7 @@
 		width: 100%;
 		height: 100%;
 		border-radius: 50%;
-		border: 2px solid #ffffff;
+		border: 2px solid var(--map-outline);
 		box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 2px 6px rgba(0, 0, 0, 0.35);
 		transition: transform 0.12s ease;
 	}
@@ -1149,9 +1182,10 @@
 		white-space: nowrap;
 		font-size: 0.7rem;
 		font-weight: 700;
-		color: #1e293b;
+		color: var(--map-label-ink);
 		text-shadow:
-			0 0 2px #ffffff, 0 0 2px #ffffff, 0 0 3px #ffffff, 0 0 4px #ffffff;
+			0 0 2px var(--map-label-halo), 0 0 2px var(--map-label-halo),
+			0 0 3px var(--map-label-halo), 0 0 4px var(--map-label-halo);
 		pointer-events: none;
 	}
 	:global(.course-pin.draft .course-pin-dot) {
@@ -1163,13 +1197,6 @@
 		}
 		50% {
 			box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.12), 0 2px 6px rgba(0, 0, 0, 0.35);
-		}
-	}
-	@media (prefers-color-scheme: dark) {
-		:global(.course-pin-label) {
-			color: #f1f5f9;
-			text-shadow:
-				0 0 2px #0f172a, 0 0 2px #0f172a, 0 0 3px #0f172a, 0 0 4px #0f172a;
 		}
 	}
 </style>

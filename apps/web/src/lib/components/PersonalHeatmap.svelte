@@ -6,7 +6,11 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import {
+		basemapIsDarkFromEnv,
+		mapStyleUrlFromEnv as mapStyleUrl,
+	} from '$lib/routes/map-style.svelte';
+	import { mapTrackLine } from '$lib/routes/basemap_contrast';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { fetchRuns, fetchTrackByPath } from '$lib/core/data';
 	import { buildHeatCells, heatBounds, toHeatGeoJSON, toTrackLinesGeoJSON, MAX_CELL_WEIGHT } from '$lib/routes/run_heatmap';
@@ -146,6 +150,7 @@
 		const prefersDark =
 			typeof window !== 'undefined' &&
 			window.matchMedia('(prefers-color-scheme: dark)').matches;
+		const darkBasemap = basemapIsDarkFromEnv(PUBLIC_MAPTILER_KEY, prefersDark);
 
 		map = new maplibregl.Map({
 			container: mapEl,
@@ -242,7 +247,7 @@
 				source: LINE_SOURCE,
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 				paint: {
-					'line-color': prefersDark ? '#818CF8' : '#4F46E5',
+					'line-color': mapTrackLine(darkBasemap),
 					'line-width': [
 						'interpolate',
 						['linear'],

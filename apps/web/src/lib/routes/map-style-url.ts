@@ -64,18 +64,54 @@ export function buildMapStyleUrl(
 	// Same semantic as mobile's `resolveTileUrl` OSM fallback.
 	if (key.trim().length === 0) return OSM_FALLBACK_STYLE_URL;
 
-	const slug = (() => {
-		switch (chosen) {
-			case 'satellite':
-				return 'satellite';
-			case 'outdoors':
-				return 'outdoor-v2';
-			case 'dark':
-				return 'streets-v2-dark';
-			case 'streets':
-			default:
-				return prefersDark ? 'streets-v2-dark' : 'streets-v2';
-		}
-	})();
-	return `https://api.maptiler.com/maps/${slug}/style.json?key=${key}`;
+	return `https://api.maptiler.com/maps/${maptilerSlug(chosen, prefersDark)}/style.json?key=${key}`;
+}
+
+/// The MapTiler style slug a preference resolves to. Extracted so
+/// [basemapIsDark] classifies the SAME slug [buildMapStyleUrl] requests —
+/// two switches would let the URL and the overlay palette drift apart,
+/// which is the whole defect below.
+function maptilerSlug(chosen: MapStyle, prefersDark: boolean): string {
+	switch (chosen) {
+		case 'satellite':
+			return 'satellite';
+		case 'outdoors':
+			return 'outdoor-v2';
+		case 'dark':
+			return 'streets-v2-dark';
+		case 'streets':
+		default:
+			return prefersDark ? 'streets-v2-dark' : 'streets-v2';
+	}
+}
+
+/// Whether the basemap [buildMapStyleUrl] just resolved to is DARK, so map
+/// overlays can pick colours that show against the ground they land on.
+///
+/// This is not `prefers-color-scheme`, and conflating the two is the bug it
+/// exists to close: the map-style preference decouples basemap luminance
+/// from the OS theme in both directions. `outdoors` is a light basemap even
+/// under a dark OS, and `dark` / `satellite` are dark basemaps even under a
+/// light one — so an overlay keyed on `prefersDark` paints its light-ground
+/// colours on dark ground and vice versa. Twin of mobile's
+/// `resolveBasemapIsDark` (`live_run_map.dart`, decisions § 491), including
+/// its classification of MapTiler `satellite` as dark: imagery is not
+/// enumerable, and the darker rung is the safe side of an un-enumerable
+/// ground.
+///
+/// The keyless path is the OSM raster fallback, whose own
+/// `background-color` is `#dcdcdc` under light OSM tiles — light. An
+/// override is classified by its URL, the same substring test mobile uses,
+/// because a self-hosted style's luminance is not otherwise knowable here.
+export function basemapIsDark(
+	chosen: MapStyle,
+	key: string,
+	prefersDark: boolean,
+	overrideUrl: string | undefined = undefined,
+): boolean {
+	const trimmed = overrideUrl?.trim() ?? '';
+	if (trimmed.length > 0) return trimmed.toLowerCase().includes('dark');
+	if (key.trim().length === 0) return false;
+	const slug = maptilerSlug(chosen, prefersDark);
+	return slug === 'streets-v2-dark' || slug === 'satellite';
 }
