@@ -37,16 +37,18 @@
 		ACTIVITY_LEVELS.find((a) => a.key === activityLevel)?.factor ?? 1.55,
 	);
 	const goalDelta = $derived(GOAL_KCAL_DELTA[goal] ?? 0);
-	const bmr = $derived(
+	const bmrRaw = $derived(
 		weightKg != null && heightCm != null && ageYears != null
-			? Math.round(mifflinStJeorBmr(weightKg, heightCm, ageYears, sex))
+			? mifflinStJeorBmr(weightKg, heightCm, ageYears, sex)
 			: null,
 	);
+	const bmr = $derived(bmrRaw !== null ? Math.round(bmrRaw) : null);
 	// The engine rounds the base to the nearest 10 and floors it at
 	// MIN_CALORIE_TARGET, so a small/older user's shown terms would otherwise
-	// visibly fail to add up to the base we print.
+	// visibly fail to add up to the base we print. Compared against the
+	// unrounded BMR so this agrees with the engine at the boundary.
 	const baseFloored = $derived(
-		bmr !== null && targets !== null && bmr * activityFactor + goalDelta < MIN_CALORIE_TARGET,
+		bmrRaw !== null && targets !== null && bmrRaw * activityFactor + goalDelta < MIN_CALORIE_TARGET,
 	);
 
 	async function load() {
