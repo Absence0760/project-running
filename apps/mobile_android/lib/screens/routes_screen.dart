@@ -813,7 +813,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                         Text(
                           l10n.routesBuild,
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -824,7 +824,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                         Text(
                           l10n.routesImport,
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],

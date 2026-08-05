@@ -72,7 +72,7 @@ class WorkoutReviewSection extends StatelessWidget {
   }
 
   Widget _headerRow(ThemeData theme, AppLocalizations l10n) {
-    final outline = theme.colorScheme.outline;
+    final outline = theme.colorScheme.onSurfaceVariant;
     Widget cell(String label,
         {int flex = 1, TextAlign align = TextAlign.start}) {
       return Expanded(
@@ -110,7 +110,7 @@ class WorkoutReviewSection extends StatelessWidget {
   Widget _stepRow(ThemeData theme, AppLocalizations l10n, WorkoutStepReview s,
       {required bool last}) {
     final divider = BorderSide(color: theme.dividerColor);
-    final muted = theme.colorScheme.outline;
+    final muted = theme.colorScheme.onSurfaceVariant;
     final skipped = s.status == 'skipped';
 
     Widget cell(String text,
@@ -314,7 +314,7 @@ class PaceDelta {
       case PaceDeltaTone.off:
         return theme.colorScheme.error;
       case PaceDeltaTone.neutral:
-        return theme.colorScheme.outline;
+        return theme.colorScheme.onSurfaceVariant;
     }
   }
 }
@@ -351,7 +351,7 @@ class AdherencePill extends StatelessWidget {
         (theme.colorScheme.errorContainer, theme.colorScheme.onErrorContainer),
       _ => (
           theme.colorScheme.surfaceContainerHighest,
-          theme.colorScheme.outline,
+          theme.colorScheme.onSurfaceVariant,
         ),
     };
     // An unknown enum value falls back to the raw string — visible and

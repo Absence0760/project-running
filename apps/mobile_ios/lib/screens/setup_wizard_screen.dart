@@ -481,7 +481,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
         Text(
           hint,
           style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.outline, height: 1.5),
+              ?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
         ),
         const SizedBox(height: 20),
         child,
@@ -498,7 +501,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
             child: Text(
               l10n.setupOfflineHint,
               style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 8),
@@ -595,11 +598,9 @@ class _ProgressDots extends StatelessWidget {
             width: active ? 22 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: active
+              color: active || done
                   ? theme.colorScheme.primary
-                  : done
-                      ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                      : theme.colorScheme.outline.withValues(alpha: 0.3),
+                  : theme.dividerColor,
               borderRadius: BorderRadius.circular(4),
             ),
           );
@@ -631,7 +632,7 @@ class _OptionCard extends StatelessWidget {
         side: BorderSide(
           color: selected
               ? theme.colorScheme.primary
-              : theme.colorScheme.outline.withValues(alpha: 0.25),
+              : theme.dividerColor,
           width: selected ? 2 : 1,
         ),
       ),
@@ -653,7 +654,9 @@ class _OptionCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(subtitle!,
                           style: theme.textTheme.bodySmall
-                              ?.copyWith(color: theme.colorScheme.outline)),
+                              ?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              )),
                     ],
                   ],
                 ),

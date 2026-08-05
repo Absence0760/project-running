@@ -631,7 +631,7 @@ class _SessionExecutionBand extends StatelessWidget {
             l10n.sessionRunStepCount(state.index + 1, state.total),
             textAlign: TextAlign.center,
             style: theme.textTheme.labelMedium
-                ?.copyWith(color: theme.colorScheme.outline),
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           Text(
@@ -664,7 +664,7 @@ class _SessionExecutionBand extends StatelessWidget {
               step.cue!,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: theme.colorScheme.outline),
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
           const SizedBox(height: 32),

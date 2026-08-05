@@ -503,7 +503,9 @@ class _GymScreenState extends State<GymScreen> {
                           Text(
                             formatDateMed(started.toLocal(), tag),
                             style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.outline),
+                                ?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                           ),
                       ],
                     ),
@@ -519,7 +521,9 @@ class _GymScreenState extends State<GymScreen> {
                       Text(
                         l10n.gymExercisesShort(gymExerciseCount(w)),
                         style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.outline),
+                            ?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                       ),
                       if (volume > 0)
                         Text(
@@ -527,7 +531,9 @@ class _GymScreenState extends State<GymScreen> {
                           // user's weight unit (rounded — it's an aggregate).
                           '${WeightFormat.toDisplay(volume.toDouble(), activeWeightUnit).round()} ${WeightFormat.label(activeWeightUnit)}',
                           style: theme.textTheme.bodySmall
-                              ?.copyWith(color: theme.colorScheme.outline),
+                              ?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                         ),
                     ],
                   ),
@@ -568,7 +574,9 @@ class _GymScreenState extends State<GymScreen> {
                         Text(
                           '${title.isEmpty ? l10n.gymUntitled : title} · ${l10n.gymDraftSetCount(d.draft.sets.length)}',
                           style: theme.textTheme.bodySmall
-                              ?.copyWith(color: theme.colorScheme.outline),
+                              ?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ),

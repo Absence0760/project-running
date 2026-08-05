@@ -329,7 +329,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   l10n.signUpCheckEmailBody(_confirmationSentTo!),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -371,7 +371,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 l10n.signUpSubtitle,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 32),
@@ -492,7 +492,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     child: Text(
                       l10n.authOrDivider,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),

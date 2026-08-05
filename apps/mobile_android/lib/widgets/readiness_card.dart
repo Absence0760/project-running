@@ -69,7 +69,7 @@ class ReadinessCard extends StatelessWidget {
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.06,
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -102,7 +102,7 @@ class ReadinessCard extends StatelessWidget {
             Text(
               readiness.advice,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             if (readiness.contributors.isNotEmpty) ...[
@@ -149,7 +149,7 @@ class _ContributorChip extends StatelessWidget {
         ? semantic.success
         : contribution.delta < 0
             ? semantic.danger
-            : theme.colorScheme.outline;
+            : theme.colorScheme.onSurfaceVariant;
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -161,7 +161,7 @@ class _ContributorChip extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),

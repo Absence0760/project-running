@@ -1403,7 +1403,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       ? l10n.routeDetailReviewsOffline
                       : l10n.routeDetailNoReviews,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               )
@@ -1435,7 +1435,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                                     formatDateShort(review.createdAt!,
                                         localeToTag(Localizations.localeOf(context))),
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.outline,
+                                      color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 if (widget.apiClient?.userId != null)

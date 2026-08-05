@@ -83,7 +83,7 @@ class _GuidedRunCard extends StatelessWidget {
               Text(
                 run.subtitle,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 8),
@@ -92,7 +92,7 @@ class _GuidedRunCard extends StatelessWidget {
               Text(
                 l10n.guidedRunCueCount(run.cues.length),
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -147,7 +147,7 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
         children: [
           Text(widget.run.subtitle,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               )),
           const SizedBox(height: 12),
           Text(widget.run.description,
@@ -156,7 +156,7 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
           Text(
             l10n.guidedRunFullScript,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 0.06,
               fontWeight: FontWeight.w700,
             ),

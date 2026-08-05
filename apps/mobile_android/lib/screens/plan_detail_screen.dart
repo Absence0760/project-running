@@ -820,7 +820,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                             : FontWeight.w400,
                         color: phases[i] == currentPhase
                             ? theme.colorScheme.primary
-                            : theme.colorScheme.outline,
+                            : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -837,7 +837,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                     child: Text('${l10n.planDetailLongestLongRun}: ',
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.onSurfaceVariant,
                         )),
                   ),
                   Text(fmtKm(longest),
@@ -924,7 +924,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                         width: 92,
                         child: Text(c.scheduledDate,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             )),
                       ),
                       Expanded(
@@ -999,7 +999,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   '${toIsoDate(p.startDate)} → ${toIsoDate(p.endDate)} · '
                   '${l10n.planDetailDaysPerWeek(p.daysPerWeek)}',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -1054,7 +1054,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                         ?.copyWith(fontWeight: FontWeight.w700)),
                 Text('$done/$total',
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     )),
               ],
             ),
@@ -1105,8 +1105,12 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   const SizedBox(width: 8),
                 ],
                 if (wo.targetPaceSecPerKm != null)
-                  Text('@ ${fmtPace(wo.targetPaceSecPerKm)}',
-                      style: TextStyle(color: theme.colorScheme.outline)),
+                  Text(
+                    '@ ${fmtPace(wo.targetPaceSecPerKm)}',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 if (_isWorkoutCompleted(wo)) ...[
                   const SizedBox(width: 10),
                   Icon(Icons.check_circle,
@@ -1166,7 +1170,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               ),
               Text(fmtKm(w.targetVolumeM, 0),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   )),
               if (_isOwner(p) && !p.isTemplate)
                 IconButton(
@@ -1186,7 +1190,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               padding: const EdgeInsets.only(top: 2),
               child: Text(w.notes!,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   )),
             ),
           const SizedBox(height: 8),
@@ -1225,13 +1229,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                 width: 34,
                 child: Text(dow,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ))),
             Expanded(
               child: Text(
                 workoutKindLabel(l10n, kind),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: (isRest || isSkipped) ? theme.colorScheme.outline : null,
+                  color: (isRest || isSkipped)
+                      ? theme.colorScheme.onSurfaceVariant
+                      : null,
                   fontWeight: isRest ? FontWeight.w400 : FontWeight.w600,
                   decoration: isSkipped ? TextDecoration.lineThrough : null,
                 ),

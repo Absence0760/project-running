@@ -5470,7 +5470,7 @@ class _LastRunCard extends StatelessWidget {
                             ? l10n.runLastActivity
                             : l10n.runLastRun,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.onSurfaceVariant,
                           letterSpacing: 0.6,
                         ),
                       ),
@@ -5669,7 +5669,7 @@ class _RoutePreviewCard extends StatelessWidget {
                 Text(
                   l10n.runFollowing,
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                     letterSpacing: 0.6,
                   ),
                 ),

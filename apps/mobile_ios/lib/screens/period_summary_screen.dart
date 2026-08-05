@@ -433,7 +433,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                         PeriodType.all => l10n.periodSwitchToWeekly,
                       },
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),

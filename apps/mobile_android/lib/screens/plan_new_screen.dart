@@ -425,7 +425,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               child: Text(
                 l10n.planNewNameRequiredHint,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -535,7 +535,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             Text(
               l10n.planNewRecent5kHelp,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             if (_recent5kTotal != null)
@@ -753,13 +753,13 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               const SizedBox(height: 8),
               Text(l10n.planNewVdot(formatFixed(p.vdot!, 1, activeLocaleTag)),
                   style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             ],
           ],
           const SizedBox(height: 10),
           Text(l10n.planNewWeekOutline,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
                 letterSpacing: 0.6,
               )),
           const SizedBox(height: 4),
@@ -770,7 +770,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               child: Text(
                 l10n.planNewMoreWeeks(p.weeks.length - 6),
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -791,7 +791,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         children: [
           Text(label,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               )),
           const SizedBox(width: 4),
           Text(fmtPace(sec),
@@ -829,7 +829,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           const SizedBox(width: 8),
           Text(l10n.planNewSessions(active),
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               )),
         ],
       ),
@@ -987,7 +987,7 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text.toUpperCase(),
         style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.outline,
+          color: theme.colorScheme.onSurfaceVariant,
           letterSpacing: 0.7,
           fontWeight: FontWeight.w700,
         ),

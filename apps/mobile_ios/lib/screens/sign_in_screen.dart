@@ -332,7 +332,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 l10n.signInSubtitle,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 32),
@@ -412,7 +412,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     child: Text(
                       l10n.authOrDivider,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),

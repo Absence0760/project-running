@@ -473,7 +473,7 @@ class _ImportScreenState extends State<ImportScreen> {
                             Text(
                               l10n.importStravaCardSubtitle,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -537,7 +537,7 @@ class _ImportScreenState extends State<ImportScreen> {
                                   ? l10n.importHealthSubtitleIos
                                   : l10n.importHealthSubtitleAndroid,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -551,7 +551,7 @@ class _ImportScreenState extends State<ImportScreen> {
                         ? l10n.importHealthDescriptionIos
                         : l10n.importHealthDescriptionAndroid,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                       height: 1.5,
                     ),
                   ),
@@ -569,7 +569,7 @@ class _ImportScreenState extends State<ImportScreen> {
                     Text(
                       l10n.importHealthRoutesWithheld(_withheldRouteIds.length),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                         height: 1.5,
                       ),
                     ),
@@ -616,7 +616,7 @@ class _ImportScreenState extends State<ImportScreen> {
                             Text(
                               l10n.importCsvCardSubtitle,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -628,7 +628,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   Text(
                     l10n.importCsvCardDescription,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                       height: 1.5,
                     ),
                   ),
@@ -677,7 +677,7 @@ class _ImportScreenState extends State<ImportScreen> {
                             Text(
                               l10n.importBackupCardSubtitle,
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -689,7 +689,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   Text(
                     l10n.importBackupCardDescription,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                       height: 1.5,
                     ),
                   ),

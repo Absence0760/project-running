@@ -143,7 +143,7 @@ class _Band extends StatelessWidget {
                         state.total,
                       ),
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -156,7 +156,7 @@ class _Band extends StatelessWidget {
                   Text(
                     l10n.gymSessionTarget,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 2),

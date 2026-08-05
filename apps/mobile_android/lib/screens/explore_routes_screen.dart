@@ -602,7 +602,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
             Text(
               l10n.exploreRoutesEmptyBody,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -811,7 +811,7 @@ class _RouteCard extends StatelessWidget {
         Text(
           text,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
       ],

@@ -469,7 +469,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -479,7 +479,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                   AppLocalizations.of(context)
                       .clubsMemberCount(c.memberCount),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 if (c.row.description != null && c.row.description!.isNotEmpty)
@@ -597,7 +597,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                       ? AppLocalizations.of(context).clubDetailNoPostsMember
                       : AppLocalizations.of(context).clubDetailNoPosts,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -753,7 +753,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                       fmtRelative(p.row.createdAt ?? DateTime.now(),
                           localeToTag(Localizations.localeOf(context))),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -822,7 +822,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                                         localeToTag(Localizations.localeOf(context)))),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.outline,
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
                               Text(r.row.body, style: theme.textTheme.bodyMedium),
@@ -898,7 +898,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     : AppLocalizations.of(context).clubDetailNoEvents,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               if (showCreate) ...[
@@ -971,7 +971,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                           formatTime(e.nextInstanceStart,
                               localeToTag(Localizations.localeOf(context))),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -1001,7 +1001,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.outline,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               ),
@@ -1012,7 +1012,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                               AppLocalizations.of(context)
                                   .clubDetailGoingCount(e.attendeeCount),
                               style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -1164,7 +1164,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               child: Text(
                 l10n.clubDetailMemberCountLine(c.memberCount),
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -1428,7 +1428,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                           : AppLocalizations.of(context).clubDetailRoutesEmpty,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1518,7 +1518,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             c.isAdmin ? l10n.clubDetailNoTemplatesAdmin : l10n.clubDetailNoTemplates,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),

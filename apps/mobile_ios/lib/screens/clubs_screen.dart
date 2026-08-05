@@ -352,7 +352,7 @@ class _ClubTile extends StatelessWidget {
                             AppLocalizations.of(context).clubsBadgePrivate,
                             style: theme.textTheme.labelSmall?.copyWith(
                               letterSpacing: 0.8,
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -371,7 +371,7 @@ class _ClubTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -387,7 +387,7 @@ class _ClubTile extends StatelessWidget {
                         AppLocalizations.of(context)
                             .clubsMemberCount(view.memberCount),
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                       if (view.viewerRole != null) ...[
@@ -455,7 +455,7 @@ class _Empty extends StatelessWidget {
                   : l10n.clubsEmptyMineBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],

@@ -402,7 +402,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
               Text(
                 l10n.gearWearLogHint,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.outline),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -455,7 +455,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
               else if (_wearLogs.isEmpty)
                 Text(l10n.gearWearLogEmpty,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline))
+                        color: Theme.of(context).colorScheme.onSurfaceVariant))
               else
                 for (final log in _wearLogs)
                   ListTile(

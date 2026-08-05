@@ -615,7 +615,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                     child: Text(
                       l10n.gymNotFound,
                       style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.outline),
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   )
                 : _body(w, theme, l10n),
@@ -643,7 +643,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                   formatDateMed(started.toLocal(), tag),
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.outline),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ),
             if (started != null) const SizedBox(width: 8),
@@ -659,7 +659,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
           Text(
             l10n.gymNotes.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 1.1,
               fontWeight: FontWeight.w600,
             ),
@@ -680,7 +680,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
           Text(
             l10n.gymRoutineNextTarget.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 1.1,
               fontWeight: FontWeight.w600,
             ),
@@ -823,7 +823,9 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                       child: Text(
                         l10n.gymSetN(ref.index + 1),
                         style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.outline),
+                            ?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                       ),
                     ),
                     Expanded(
@@ -846,7 +848,9 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                         child: Text(
                           _setTypeChip(ref.set, l10n)!,
                           style: theme.textTheme.labelSmall
-                              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                              ?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -855,7 +859,9 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                       Text(
                         '${l10n.gymRpe} ${_numStr(ref.set['rpe'] as num)}',
                         style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.outline),
+                            ?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                       ),
                   ],
                 ),
@@ -896,7 +902,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
               child: Text(
                 '${l10n.gymDetailLastTime(dateText)}: $prevSet',
                 style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -915,7 +921,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                   fontWeight: FontWeight.w600,
                   color: delta > 0
                       ? AppSemanticColors.ofTheme(theme).success
-                      : theme.colorScheme.outline,
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -944,7 +950,9 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     AppLocalizations l10n,
   ) {
     final isPublic = w.workout.isPublic;
-    final fg = isPublic ? theme.colorScheme.primary : theme.colorScheme.outline;
+    final fg = isPublic
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
