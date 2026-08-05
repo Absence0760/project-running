@@ -332,9 +332,14 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                           height: (t.calories / maxCal * 70).clamp(2, 70),
                           margin: const EdgeInsets.symmetric(horizontal: 3),
                           decoration: BoxDecoration(
+                            // Both hues clear 3:1 against the card they sit on
+                            // (9.454/5.903 and 3.486/3.890); pairwise they do
+                            // not, which §495 established is unreachable for a
+                            // series — so the weekday label carries the
+                            // today/not-today distinction in weight as well.
                             color: _isSameDay(t.day, _dayStart)
                                 ? theme.colorScheme.primary
-                                : theme.colorScheme.primary.withOpacity(0.45),
+                                : theme.colorScheme.outline,
                             borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(3)),
                           ),
@@ -343,6 +348,9 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                         Text(formatDowNarrow(t.day, tag),
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: _isSameDay(t.day, _dayStart)
+                                  ? FontWeight.w700
+                                  : null,
                             )),
                       ],
                     ),

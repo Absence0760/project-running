@@ -414,11 +414,19 @@ On the Flutter apps, good/warning/bad/crown colouring comes from the `AppSemanti
 
 The guard scans **`lib` and `packages/ui_kit/lib`**. It used to walk `lib` alone, so moving a palette into the shared package took its hexes out of reach without touching the allowlist — a file that is no longer scanned needs no exemption. When a shared package starts carrying colour, add its root to `_roots`, not an exemption.
 
-## Mobile muted text — `onSurfaceVariant`, never `colorScheme.outline`
+## Mobile muted text — `onSurfaceVariant`, never a 3:1 colour source
 
 `colorScheme.outline` is a **3:1 boundary token** ([§ 487](decisions.md)): correct for a hairline, a border, a divider, or an icon tint, and wrong for type. Measured against the real tokens it reads **4.058:1 on the light card**, 3.486:1 on light `surfaceContainerHighest` and 2.952:1 on dark `tertiaryContainer` — short of WCAG 1.4.3's 4.5:1 for the 11–14 sp body and label type that reached for it. It *does* clear AA on the dark card (5.117:1), which is the point: `outline` cannot be **relied on** as text, while `onSurfaceVariant` can (8.459:1 light card, 9.474:1 dark card, 5.465:1 on its worst real background).
 
-So: **muted type takes `colorScheme.onSurfaceVariant`.** A blanket ban on `outline` would be wrong, so `outline_text_token_guard_test.dart` (both mobile twins, scanning `lib` + `packages/ui_kit/lib`) classifies each occurrence by its innermost enclosing constructor and fails only the text ones. A colour held in a local, returned from a helper, or produced by a `switch` arm cannot be classified from syntax — several of those did feed a `TextStyle` — so it is a third verdict that fails unless count-pinned per file, on the § 480 model. The ratios are computed in `packages/ui_kit/test/outline_token_contrast_test.dart`.
+So: **muted type takes `colorScheme.onSurfaceVariant`** (or `onSurface` where the type is its surface's headline). A blanket ban on `outline` would be wrong, so `outline_text_token_guard_test.dart` (both mobile twins, scanning `lib` + `packages/ui_kit/lib`) classifies each occurrence by its innermost enclosing constructor and fails only the text ones. A colour held in a local, returned from a helper, or produced by a `switch` arm cannot be classified from syntax — several of those did feed a `TextStyle` — so it is a third verdict that fails unless count-pinned per file, on the § 480 model. The ratios are computed in `packages/ui_kit/test/outline_token_contrast_test.dart`.
+
+**The rule is not about one token — it is about every colour source that carries no 4.5:1 guarantee.** Round 12 of #666 found the same defect one layer down: the plan-calendar workout-kind palette painted its kind LABEL, at 1.973 / 2.373 / 1.589:1 on the light completed-day fill, in hues no ban list carried. So the guard scans three families, each with a correct non-text use, and all three fail in text position:
+
+- the **boundary tokens** — `colorScheme.outline`, `colorScheme.outlineVariant`, `theme.dividerColor` (3.531:1 on the light card, 3.029:1 on the completed-day fill);
+- the **`ChartPalette` scales** — `series` / `zones` / `ramp` / `kinds`, every entry measured to 1.4.11's 3:1 and none of them to 4.5:1;
+- **raw `Color(0x…)` literals**, which carry no measurement at all — count-pinned per file, each entry naming the *fixed* surface (a rasterised share card, a map basemap chip) and the ratio that justifies it.
+
+Two rules cover what the constructor walk cannot see. A **`foregroundColor:` argument** is type wherever it appears, but its enclosing constructor is `TextButton.styleFrom(`, which also takes a `backgroundColor` — so the *parameter name* is matched directly (two button labels were painted in an unmeasured `#8B5CF6`, 3.828:1 on the light card). And a **`Color`-returning helper holding raw hexes** is exactly the round-12 shape — a private `static Color _kindColor(ThemeData, WorkoutKind)` duplicated across two widgets, whose `switch` arms have no enclosing constructor at all — so every such declaration must be named in an allowlist with where its value lands. That is what forces a new palette into a measured home instead of into a widget's private helper.
 
 **The boundary tokens are never thinned.** `colorScheme.outline`, `colorScheme.outlineVariant` and `theme.dividerColor` are guarded at 3:1 and nothing more, so an alpha forfeits the floor outright — 0.6, the strongest multiplier that had been used, composites `outline` to 2.134:1 on the light card. The same guard fails any `.withValues(alpha:)` / `.withOpacity()` on the three, with no allowlist, because there is no headroom to allow. If you want a fainter mark, pick a token that guards the level you want; if you want a *tint*, tint a token that has foreground headroom and write down the composited ratio.
 
@@ -429,10 +437,26 @@ Same rule on web, same shape of guard. Good/warning/bad/crown colouring comes fr
 `status_color_literal_guard.test.ts` fails any of 39 named status hues outside its allowlists. Three narrow exemption classes, each pinned to an **exact occurrence count** so the allowlist can only shrink and a new literal in an exempted file still fails:
 
 - **`app.css` custom-property declarations.** Only declaration lines, not the whole file — a *rule* in `app.css` is still scanned, which is what caught `.btn-primary` pairing a frozen `color: #FFFFFF` with a `--color-primary` fill that flips to a light coral in dark (2.081:1; `--color-on-primary` reads 9.120:1).
-- **DATA palettes** — badge tier metals, medal metals, workout-kind tints, chart series, cartographic markers. Per § 480's line: a colour that *communicates state on a theme surface* is a status role and takes a token; a colour that *is data* keeps its fixed hue.
+- **DATA palettes** — badge tier metals, medal metals, chart series, cartographic markers. (Workout-kind tints left this list in round 12: they became `--kind-1..6`, measured per theme, after the four surfaces that carried their own copy of the three hexes were found painting labels at 1.85–2.77:1.) Per § 480's line: a colour that *communicates state on a theme surface* is a status role and takes a token; a colour that *is data* keeps its fixed hue.
 - **Fixed canvases** that never follow the device theme — the `@media print` sheet (white paper, so a token would resolve to the *screen* theme and print dark-on-dark) and the race-day brand hero.
+- **DATA palettes** — badge tier metals, medal metals, workout-kind tints, chart series, cartographic markers. Per § 480's line: a colour that *communicates state on a theme surface* is a status role and takes a token; a colour that *is data* keeps its fixed hue.
+- **Fixed canvases** that never follow the device theme — the `@media print` sheet (white paper, so a token would resolve to the *screen* theme and print dark-on-dark), the race-day brand hero's verdict green, and `/runs/[id]`'s map overlay pill. A fixed canvas is exempt from *theming*, not from contrast, and it owes a guard of its own — see § Web boundaries. Two literals on such a canvas **invert** relative to the theme: the pill's hairline reads 6.084:1 as the old border value and 2.366:1 as the 3:1 line token, and its label read 1.402:1 as `--color-text-secondary`.
 
 Two things the sweep behind it taught, both worth carrying forward. **The frozen fill is the commoner defect, not the frozen ink**: a confidence chip's `#d1fae5` read 14.253:1 against the dark card it sat on — a pale mint panel blazing on dark purple — while its own ink was a respectable 4.835:1, so a fix justified only on foreground contrast misses the worse half. And **the naive token swap can be much worse than the literal**: a gold star over a *fixed* 0.65-black scrim reads 4.196:1 as `#fbbf24` and 1.123:1 as `--color-crown`, because crown is deliberately the dark gold for light surfaces. Measure it on the surface the site actually paints ([decisions.md § 503](decisions.md)).
+
+## Web boundaries — `--color-border` is a line, `--color-fill-subtle` is a fill
+
+**A border token is a line or a fill, never both** — § 503's rule for status tokens, one role over. `--color-border` is the *one* line token and its whole guarantee is WCAG 1.4.11's **3:1** against every surface a boundary is drawn on (3.906 / 3.531 / 3.313 / 3.112 light, 3.330 / 3.911 / 4.068 dark, in lockstep with mobile's `AppTheme.parchmentLine` / `duskLine` — [decisions.md § 487](decisions.md)). It shipped at 1.458:1 on the light card, which meant web had **no** token guaranteeing a visible boundary while mobile's whole card/divider grammar rested on one. In light the card fill is `#FFFFFF` on a `#F7F3EC` page — 1.116:1 apart — so the hairline is the only separation there is, which is exactly the "visual information required to identify a UI component" 1.4.11 sets at 3:1.
+
+So: **draw every border, outline and divider in `--color-border`, and every subtle neutral *fill* in `--color-fill-subtle`.** The second holds the value the first shipped with, so a progress-bar track, an inactive bar cell, the neutral metadata chip, a button hover and a skeleton shimmer stop did not move when the line token was raised. Three rules, all in `contrast_guard.test.ts` with both-direction fixtures, because the split is decided by the **CSS property** and nothing else:
+
+- **A fill token may not draw a `border` / `border-*` / `outline`.** `background` is out of scope in both directions — eight dividers here are legitimately a 1px background or a grid-`gap` show-through in `--color-border` — and `stroke` is too, because a chart gridline is reference ornament inside a graphic rather than a component edge, and is the one class deliberately left below the floor.
+- **The line token may not paint text.** 3:1 cannot reach AA's 4.5:1; muted type is `--color-text-tertiary`. A **quoted** `'var(--color-border)'` is banned outright rather than classified, because syntax cannot decide it — the plan surfaces' `rest` workout entry was handed to a `--kind` custom property that the consumer applied to a 3px stripe *and* to the label's `color:`, so one entry was a boundary and text at once.
+- **The line token may not be thinned** toward `transparent` or toward a surface token. Mixing it with an *accent* is not a thinning and is spared: the 19 `color-mix(<accent> N%, var(--color-border))` borders here all move contrast **up**, because the accent is darker than the line in light and lighter than it in dark.
+
+**A gradient needs its own foreground contract.** Neither a hex nor a token fixes a gradient whose stops straddle the mid-luminance band: white on `--gradient-primary` read 2.081 / 2.153:1 on its light-mode third stop and its two dark-mode stops. Identity avatars therefore take `--gradient-avatar`, two stops built from token pairs that flip *together* with `--color-on-primary`, and the guard resolves **every** stop rather than the pair it was written with. Where the fill is a per-entity hue rather than a token, pick the foreground by **computed** contrast and clamp the fill out of the dead band — `format/avatar.ts` is a faithful port of mobile's `identity_avatar.dart` ([decisions.md § 481](decisions.md)); at `hsl(h, 50%, 55%)` a fixed white fails AA on 297 of the 360 hues and the better of white-and-ink still bottoms out at 3.975:1.
+
+**A fixed canvas is exempt from *theming*, not from contrast, and it needs a guard that derives its own floor.** The race-day hero follows no theme, so nothing on it was ever checked against a surface token — and so nothing on it was checked at all. Build such a canvas from the theme-**independent** `-strong` fills (already held to white-on-AA and forbidden a dark override), then composite every veil the surface layers on top over the **worst** stop *including the midpoint*, which neither end measures. Inset sub-panels on a mid-tone canvas must be **deeper** than it, not lighter: a light veil spends the only foreground's headroom, so a 0.10–0.12 white veil left its own white text at 4.274–4.463:1 where 0.12 black gives 6.578:1.
 
 ## Chart and band palettes — per brightness, separated by luminance, computed
 
@@ -440,11 +464,19 @@ A DATA palette (chart series, a segmented band) is still bound by WCAG 1.4.11: e
 
 Separate the marks by **luminance, not hue**: a WCAG ratio is computed from relative luminance alone, so a luminance ladder *is* a greyscale ladder, which is what survives red-green colour-vision deficiency. Ramp direction inverts with the background ([decisions.md § 489](decisions.md)).
 
-Pairwise 3:1 between marks is often unreachable — *n* marks need 3^(n−1) and sRGB offers 21:1, so four bands are the ceiling and five are impossible. When it is, say so and pick the mechanism that does work: for a segmented bar, hold every band to 3:1 against the surface and draw the gaps between segments **in that surface colour**, so each boundary is delineated by a separator guaranteed visible against both its neighbours. The current pairs are `--chart-fitness/-fatigue/-form` ↔ `ChartPalette.series` and `--zone-1..5` ↔ `ChartPalette.zones`.
+Pairwise 3:1 between marks is often unreachable — *n* marks need 3^(n−1) and sRGB offers 21:1, so four bands are the ceiling and five are impossible. When it is, say so and pick the mechanism that does work: for a segmented bar, hold every band to 3:1 against the surface and draw the gaps between segments **in that surface colour**, so each boundary is delineated by a separator guaranteed visible against both its neighbours. The current pairs are `--chart-fitness/-fatigue/-form` ↔ `ChartPalette.series`, `--zone-1..5` ↔ `ChartPalette.zones`, and `--kind-1..6` ↔ `ChartPalette.kinds`.
 
-**On mobile, all three scales live in one place: `ChartPalette` in `packages/ui_kit`** — categorical `series`, ordinal `zones`, sequential `ramp` (plus `bar`, the single-series fill, which is `ramp.last`). Every ratio is computed by `packages/ui_kit/test/chart_palette_test.dart`. **`colorScheme.primary` is not a chart colour**: its hue is not stable across brightnesses (dusk in light, coral in dark), so a mark painted in it means "data" in one theme and echoes an interaction affordance in the other — which is how web's split bar ended up with its two halves 1.032:1 apart ([decisions.md § 503](decisions.md)). Every chart card also wears one header, `ChartCardHeader`, whose eyebrow takes `onSurfaceVariant` — **not `colorScheme.outline`, which is 4.058:1 on the light card and is a 3:1 *boundary* token, not a text colour**. `chart_surface_guard_test.dart` (both mobile twins) count-pins both tokens per chart surface and requires each to reference the header and the palette.
+**On mobile, all four scales live in one place: `ChartPalette` in `packages/ui_kit`** — categorical `series`, ordinal `zones`, sequential `ramp` (plus `bar`, the single-series fill, which is `ramp.last`), and categorical `kinds`, the six planned-workout marks. Every ratio is computed by `packages/ui_kit/test/chart_palette_test.dart`. **`colorScheme.primary` is not a chart colour**: its hue is not stable across brightnesses (dusk in light, coral in dark), so a mark painted in it means "data" in one theme and echoes an interaction affordance in the other — which is how web's split bar ended up with its two halves 1.032:1 apart ([decisions.md § 503](decisions.md)). Every chart card also wears one header, `ChartCardHeader`, whose eyebrow takes `onSurfaceVariant` — **not `colorScheme.outline`, which is 4.058:1 on the light card and is a 3:1 *boundary* token, not a text colour**. `chart_surface_guard_test.dart` (both mobile twins) count-pins both tokens per chart surface and requires each to reference the header and the palette.
 
-**An alpha multiplier is not a contrast argument.** A token guarded at 3:1 stops being guarded the moment a caller thins it: the training-load gridlines drew `outline` at 0.5 and then multiplied by another 0.45 inside the painter, compositing to 1.297:1 on the light card — a labelled scale whose lines could not be seen. Read the token at full opacity, or compute the composited ratio and write it down. **An `Opacity` widget is a second multiplier** and compounds with any alpha inside it: a plan-calendar out-of-month numeral drawn at `onSurfaceVariant` × 0.4 inside `Opacity(0.55)` composited to 1.432:1. For the three boundary tokens the rule is absolute and guarded — see § Mobile muted text.
+**A new categorical scale is a sibling, not an extension.** `kinds` could have been more entries on `series`, and is not: `series` *means* the three training-load curves and is pinned at three by the web lockstep, so overloading it would conflate two unrelated legends and break a guard in the other language's suite. A sibling keeps one home and one guard shape while each scale keeps its own cardinality and its own floor.
+
+**A scale that paints TEXT is the case to look for, and the answer is usually to stop.** The workout-kind palette was both a 3 px cell edge and the colour of the kind label, so it owed 1.4.3's 4.5:1 rather than 1.4.11's 3:1 — and six categorical entries cannot reach 4.5:1 apart on a pale surface without collapsing into six near-blacks. Minting a second, 4.5:1 twin scale was measured and rejected: on dark, `tertiaryContainer` caps the range at 9.324:1, so six rungs from 4.5:1 up can step only 1.157 apart — indistinguishable in greyscale, which is the failure the ladder exists to prevent. The mark keeps the hue at 3:1; the label takes a text token; **identity is carried by the localized kind WORD, which every site already renders**, so hue is redundant reinforcement rather than the sole channel ([decisions.md § 489](decisions.md)'s colour-only rule). Nine kinds share six marks, which is itself proof hue cannot name a kind.
+
+**An alpha multiplier is not a contrast argument.** A token guarded at 3:1 stops being guarded the moment a caller thins it: the training-load gridlines drew `outline` at 0.5 and then multiplied by another 0.45 inside the painter, compositing to 1.297:1 on the light card — a labelled scale whose lines could not be seen. Read the token at full opacity, or compute the composited ratio and write it down. For the three boundary tokens the rule is absolute and guarded — see § Mobile muted text.
+
+**For a non-boundary token, "measured" is the whole rule, and the measurement is registered.** `primary`, `onSurface`, `primaryContainer`, `surface` and the rest *do* have headroom, so a ban would be wrong — but a thinning is only legitimate once someone has computed it on the surface it actually paints. `thinned_token_register_test.dart` (both mobile twins) count-pins every surviving thinning per file, and each entry states the role and the number, so a new alpha fails until it is measured. Three obligations, by role: **text** owes 4.5:1 composited; an **icon, border, or any mark that carries meaning** owes 3:1 composited — and a border that is the only thing separating a panel from its page is a mark however decorative it looks; a purely decorative **wash** owes nothing but is still recorded, because a fill's alpha changes what its own children composite against. A **fill whose presence is a state signal is not a wash**: at the alphas these use (1.00–1.26:1 against the untinted neighbour) the tint cannot be the cue, so 1.4.1 needs a non-colour one beside it. And un-thinning is not always the fix — the calorie goal line's `secondary` reads 2.767:1 on the light card at *full* strength, so the defect was the token choice and it took the mark token instead. Every number is computed in `packages/ui_kit/test/thinned_token_contrast_test.dart`, which pins each repair in both directions: the replacement clears its floor **and** the value it replaced did not.
+
+**An `Opacity` widget is a second multiplier** and compounds with any alpha inside it: a plan-calendar out-of-month numeral drawn at `onSurfaceVariant` × 0.4 inside `Opacity(0.55)` composited to 1.432:1. More generally, **an `Opacity` around a subtree containing text is a contrast multiplier on that text, so its value is bounded above by WCAG 1.4.3 rather than chosen by taste** — and both the glyph and the fill behind it are inside the layer, so measure the pair *after* dimming, not the glyph against an undimmed fill. It is not a layout knob either way: `Opacity` sizes and positions its child exactly as if absent. The two surfaces that dim a subtree to mean "out of scope" (adjacent-month calendar cells, retired gear) share one bounded token, `AppTheme.dimmedSubtreeOpacity`; `dimmed_subtree_opacity_test.dart` derives the bound and pins the value inside it.
 
 **Never assert a ratio you did not compute**, in code, comment, or commit message — every figure in this section was measured against the real tokens, and the audit that prompted them was wrong in both directions more than once.
 
@@ -461,6 +493,17 @@ On the Flutter apps, presentation that every instance of a widget should share l
 - **Bottom sheets.** `bottomSheetTheme` owns background, top radius, drag handle and `clipBehavior`; a call site names only what it genuinely differs on. `useSafeArea` is **not** a theme field, so the rule is per call: **`isScrollControlled: true` implies `useSafeArea: true`**, or a tall sheet paints under the status bar. `bottom_sheet_safe_area_guard_test.dart` (both twins) fails the pair.
 - **Text fields.** `inputDecorationTheme` names the outlined language at radius 12. **Don't declare `border: OutlineInputBorder()` at a call site** — it re-pins the radius to Material's default 4. A field that is deliberately a different component (a filled borderless search box, a pill composer) still says so locally.
 - **Cards.** The card theme carries **no horizontal margin**. Horizontal insets are the layout's job, so every card in a list starts at its parent's padding edge; a card that insets itself lands at a different left edge from its siblings. The vertical 4 stays, because stacked-card sites rely on it for separation.
+
+## Mobile type sizes — a step on the scale, never a `fontSize:` literal
+
+`AppTheme`'s `textTheme` exists so no call site has to name a size ([decisions.md § 482](decisions.md)). It resolves the Material 3 steps plus one override — `labelSmall` at 11 px, the declared micro-label floor — giving **11 / 12 / 14 / 16 / 22 / 24** and up; `packages/ui_kit/test/type_scale_test.dart` pins them, in both brightnesses and inside a pumped tree (read straight off `AppTheme.light`, `textTheme` carries *no geometry at all* — Material applies the locale's geometry in `ThemeData.localize` at build time, so a scale test that reads the getter compares nulls and passes for the wrong reason).
+
+So: **name the step.** `theme.textTheme.<step>`, or `.copyWith(...)` on it when only weight, colour or letter-spacing differs. Where the ambient `DefaultTextStyle` is already that step, **drop the argument** rather than restating it — `Material` supplies `bodyMedium`, a `TextField` `bodyLarge`, a `CircleAvatar` `titleMedium`, all pinned by the same test. Two things to know before choosing:
+
+- **A value between two steps snaps upward.** 13 was the commonest literal in the tree (eight sites) and is not a step at all; every one went to 14. Never shrink type to reach a step.
+- **Naming a step replaces the ambient style, it does not merge into it.** The M3 geometry styles are `inherit: false`, which is only safe because every step already carries `onSurface`. Inside a host that supplies its own foreground — a button, a chip — dropping the `fontSize:` is right and naming a step would repaint the label.
+
+`font_size_literal_guard_test.dart` (both mobile twins, scanning `lib` + `packages/ui_kit/lib`) fails a numeric `fontSize:` and classifies by enclosing constructor, because one case is genuinely not on the scale: `IdentityAvatar.fontSize` sizes an initial inside a circle whose diameter the caller chose, so it is a **graphic** argument. A named constant or a read off the scale (`kMapAttributionFontSize`, `theme.textTheme.labelSmall?.fontSize`) is the durable form and needs no exemption. The recorded exemptions are count-pinned per file on the § 480 model — the fixed-canvas share rasterisers, map overlay chips and pins, two load-bearing graphics (`BoxFit.scaleDown` per § 497), and `ErrorWidget.builder`, which has no `Theme` ancestor at all.
 
 ## Mobile stat cells — ui_kit `StatTile` in a `StatGrid`
 
@@ -583,11 +626,32 @@ action can honestly be reversed:
   putting the snapshot back, so ordering survives; if the delete cascades
   children server-side, filter the children out too or the list renders orphans.
 - **Not undoable** → keep the `ConfirmDialog`. Use it when the delete cascades
-  something the actor could not reconstruct, when the row is an authored
+  something the actor could not reconstruct, or when the row is an authored
   reusable artefact rather than a line of data (a routine, a saved meal, a
-  plan), or when the affordance sits **inside a modal**: `Modal.svelte` traps
-  Tab, so an undo bar shown over it is unreachable by keyboard and would be an
-  affordance that only exists for mouse users.
+  plan).
+
+**One intent, one undo — including a bulk delete.** Dismissing a collapsed group
+of N notifications is a single intent, so it takes a single slot: one `commit`
+that deletes all N ids in one query and one `restore` that puts the whole list
+snapshot back. The queue's one-slot rule is about *separate* intents (a second
+destruction commits the first); it is not a per-row rule and needs no widening
+for bulk. Don't coalesce two separate intents into one bar — "Undo" would then
+have to mean "undo both", which the user never asked for.
+
+**A delete inside a modal may use undo, but the bar has to be in the trap.**
+`Modal.svelte` traps Tab (the page behind is still in the DOM, there is no
+`inert`), so a fixed bar over it is pointer-only unless the trap admits it. Any
+rendered `[data-modal-trap-include]` host outside the dialog joins the ring,
+appended **after** the dialog's own controls — the offer is a consequence of what
+the user just did in the dialog, so that is where it reads (WCAG 2.4.3), and the
+order must not depend on where the host sits in the layout. `UndoBar`'s
+always-mounted region carries the attribute, so nothing pending means no extra
+focusables and the ring is unchanged. Escape still exits, so widening the ring
+does not create a keyboard trap (2.1.2) — what it fixes is 2.1.1, an affordance
+that was not operable by keyboard at all. Pinned by
+`src/lib/undo_modal_trap_guard.test.ts` plus a keyboard-only leg in
+`tests-e2e/settings/gear.spec.ts`; **do not re-derive the "in-modal deletes must
+confirm" rule**, it was resolved, not deferred.
 
 Two things are forbidden. **Both guards on one action** — a modal followed by an
 undo bar is two dismissals for one intent, and the modal is what teaches users to
@@ -597,6 +661,12 @@ cannot re-upload a deleted Storage object's bytes, so it hands back a different
 row while claiming otherwise. If a class of action genuinely needs restore
 after the fact, that is a soft-delete/trash feature — a `deleted_at` column, a
 read-path filter and a retention story — scope it, don't fake it.
+
+**A counter or badge that reads from the server moves on `commit`, not on
+`defer`.** While the offer stands the row is still there and still unread, so the
+truthful count includes it; decrementing early puts the badge at odds with every
+`refresh()` for the whole window — indefinitely, for a user on the no-time-limit
+setting. The list is the optimistic surface; a server-sourced aggregate is not.
 
 **A timed undo is an accessibility surface.** WCAG 2.2.1 requires the limit be
 turnable-off, adjustable, or extendable; the `undo_window_s` preference
@@ -630,7 +700,7 @@ The `--color-warning` / `--color-secondary` / `--color-accent-cyan` (and `--colo
 The rule the guards draw is **existence, not syntax**:
 
 - A fallback on a token the **same file** declares is legal — it's the documented default for a component custom property a parent sets per instance (`style:--x={...}`).
-- A fallback on a token that is **not** declared anywhere is banned. Either use the right existing token, or declare the new one in `app.css` (all three theme blocks if it carries colour; a `var()`-alias in `:root` alone if it just follows another token, like `--chip-bg: var(--color-border)`).
+- A fallback on a token that is **not** declared anywhere is banned. Either use the right existing token, or declare the new one in `app.css` (all three theme blocks if it carries colour; a `var()`-alias in `:root` alone if it just follows another token, like `--chip-bg: var(--color-fill-subtle)`).
 - **A *colour* fallback on a token `app.css` declares globally is also banned** — the per-instance-default rationale doesn't survive the token being global. Nothing sets `--color-primary` per instance, so the fallback can never apply, and all 25 of them were frozen at a value the token had long since moved off (`#4f46e5`/`#3b82f6`/`#2563eb` for a primary that is now teal, `#e5e7eb` for a cream border, `#374151` for near-black text). Dead code that reads as the colour at the call site is worse than no comment: the next editor believes the blue. `status_color_literal_guard.test.ts` fails any hex fallback, of any digit length, on a global `app.css` token; the non-colour ones (spacing, radii, shadows, z-index) and the nested `var(--a, var(--b))` chains are out of that rule's declared scope.
 
 `css_token_guard.test.ts` fails the build on either form of undeclared reference, and its `MATCHER_FIXTURES` table pins the matcher in both directions (10 must-flag, 8 must-spare) because the whole distinction rests on one `[,)]` character class.

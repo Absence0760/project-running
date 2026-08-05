@@ -315,11 +315,15 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(page.locator('.markers-list .marker-row').first()).not.toContainText('Target');
 	});
 
-	test('delete-dialog cancel button is localized, not a hardcoded English label', async ({
+	// The marker delete lost its ConfirmDialog when it moved to undo, but the
+	// guard this test really carries is ConfirmDialog's OWN default cancel
+	// label — it used to be a hardcoded English 'Cancel' that leaked into
+	// every locale. Retargeted at the share confirm on the same page, which
+	// also omits cancelLabel, so the fallback stays pinned.
+	test('a ConfirmDialog cancel button is localized, not a hardcoded English label', async ({
 		browser
 	}) => {
 		routeId = await insertOwnedRoute();
-		await insertMarker(routeId, 'aid_station', 'Aid 1', 51.505, -0.125, {});
 
 		// A German browser negotiates the `de` catalogue on load.
 		const context = await browser.newContext({
@@ -338,13 +342,11 @@ test.describe('/routes/[id] — course markers', () => {
 		});
 		await page.goto(`/routes/${routeId}`);
 
-		// Open the delete dialog via a locale-independent selector (the
-		// material-symbols "delete" ligature, not the localized tooltip).
-		await page
-			.locator('.markers-list .marker-row')
-			.first()
-			.locator('.marker-actions button', { hasText: 'delete' })
-			.click();
+		// The share affordance on a private route opens the make-public
+		// confirm, which passes no cancelLabel.
+		await page.getByTestId('route-share-btn').click();
+		const dialog = page.getByTestId('share-confirm-dialog');
+		await expect(dialog).toBeVisible({ timeout: 10_000 });
 
 		// Before the fix ConfirmDialog defaulted cancelLabel to a hardcoded
 		// English "Cancel"; now it falls back to m('common.cancel') → German.
@@ -353,7 +355,8 @@ test.describe('/routes/[id] — course markers', () => {
 		await context.close();
 	});
 
-	test('owner deletes a marker', async ({ page }) => {
+	test('owner deletes a marker, and Undo puts it back untouched', async ({ page }) => {
+		const admin = getAdminClient();
 		routeId = await insertOwnedRoute();
 		await insertMarker(routeId, 'note', 'Locked gate', 51.505, -0.125, {
 			note: 'Climb over on the left'
@@ -364,14 +367,39 @@ test.describe('/routes/[id] — course markers', () => {
 		const rows = page.locator('.markers-list .marker-row');
 		await expect(rows).toHaveCount(1);
 
+		// One click, no confirm: the row leaves the list and the delete is
+		// held for the undo window (decisions § 514).
 		await rows.first().getByTitle('Delete').click();
-		// ConfirmDialog → confirm. Scope to the dialog: the row's icon button
-		// carries the same "Delete" accessible name (a11y label, 56d956f4).
-		const dialog = page.locator('.modal', { hasText: 'Delete marker?' });
-		await expect(dialog).toBeVisible({ timeout: 10_000 });
-		await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+		await expect(page.locator('.markers-empty')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('undo-bar')).toBeVisible();
 
+		await page.getByTestId('undo-action').click();
+		await expect(page.locator('.markers-list .marker-row')).toHaveCount(1, { timeout: 5_000 });
+		// Asserted after the undo so it cannot race the window: the marker
+		// never left the table, so its server-derived position_m is intact.
+		const { data: survived } = await admin
+			.from('route_markers')
+			.select('id')
+			.eq('route_id', routeId);
+		expect((survived ?? []).length).toBe(1);
+
+		// Dismiss commits the held delete.
+		await page.locator('.markers-list .marker-row').first().getByTitle('Delete').click();
+		await expect(page.getByTestId('undo-bar')).toBeVisible();
+		await page.getByTestId('undo-dismiss').click();
+		await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 		await expect(page.locator('.markers-list')).toHaveCount(0);
-		await expect(page.locator('.markers-empty')).toBeVisible();
+		await expect
+			.poll(
+				async () => {
+					const { data } = await admin
+						.from('route_markers')
+						.select('id')
+						.eq('route_id', routeId);
+					return (data ?? []).length;
+				},
+				{ timeout: 5_000 }
+			)
+			.toBe(0);
 	});
 });

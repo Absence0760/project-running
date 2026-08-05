@@ -96,6 +96,32 @@ test.describe('/plans/[id] race-day goal feasibility', () => {
 			await expect(feas).toHaveText(/behind goal/i);
 			// The delta magnitude (13:21 slower) is rendered.
 			await expect(feas).toHaveText(/13:21/);
+
+			// The verdict pill reads on the hero's fixed canvas. contrast_guard
+			// computes the ratio from the stylesheet; what only a browser can
+			// confirm is that the rules REACH this element — the pale pastel it
+			// used to paint (1.989-3.021:1 on the veil it sat on) was a
+			// higher-specificity `.feasibility.feas-behind` override, so a source
+			// scan alone cannot tell which declaration won. This checks the PAIR
+			// that reached the element (a light fill under a dark ink), not the
+			// composite over the gradient — the veil's alpha is dropped here and
+			// contrast_guard is what does that arithmetic properly.
+			const lum = (css: string): number => {
+				const [r, g, b] = css.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+				const ch = (v: number): number =>
+					v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4;
+				return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
+			};
+			const paint = await feas.evaluate((el) => {
+				const s = getComputedStyle(el);
+				return { fill: s.backgroundColor, ink: s.color };
+			});
+			const [fill, ink] = [lum(paint.fill), lum(paint.ink)];
+			expect(fill, `pill fill ${paint.fill} must be the light one`).toBeGreaterThan(0.5);
+			expect(
+				(fill + 0.05) / (ink + 0.05),
+				`${paint.ink} on ${paint.fill}`,
+			).toBeGreaterThanOrEqual(4.5);
 		} finally {
 			for (const rid of runIds) await deleteRun(rid);
 			await admin.from('training_plans').delete().eq('id', planId);

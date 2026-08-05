@@ -108,6 +108,25 @@
 	--zone-4: #AF5111;
 	--zone-5: #E9544F;
 
+	/* Six planned-workout kind marks, in lockstep with mobile's
+	   ChartPalette.kinds. These used to be three raw hexes inlined in
+	   PlanCalendar.svelte and CurrentWeekStrip.svelte, and they coloured the
+	   kind LABEL as well as the 3 px cell edge — so they owed 1.4.3's 4.5:1 and
+	   delivered 2.30 (tempo), 2.77 (interval) and 1.85 (marathon pace) on the
+	   page. The label reads --color-text now and these paint the edge only, so
+	   the floor is 1.4.11's 3:1. Six categorical marks cannot be pairwise 3:1
+	   (five such steps need 243:1 and sRGB offers 21:1), so what is pinned
+	   between them is a monotone luminance ladder — the same bargain as the
+	   zone bands. Index order is the ladder, coolest first:
+	   easy/recovery, long/race, tempo, marathon pace, interval/walk-run, rest.
+	   kind-1 -> kind-6 on the page: 15.28 / 11.38 / 8.62 / 6.55 / 4.93 / 3.74. */
+	--kind-1: #082024;
+	--kind-2: #0E3558;
+	--kind-3: #6D2A6D;
+	--kind-4: #72510E;
+	--kind-5: #CC2429;
+	--kind-6: #807A8C;
+
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
@@ -116,7 +135,20 @@
 	--color-bg-secondary: #F1ECE0;
 	--color-bg-tertiary: #EBE5D8;
 	--color-surface: #FFFFFF;
-	--color-border: #DDD5C5;
+	/* The one LINE token: every border, hairline outline and divider resolves
+	   to it, and it guarantees WCAG 1.4.11's 3:1 non-text floor against every
+	   surface above — 3.906 on the card, 3.531 / 3.313 / 3.112 on the three
+	   page steps. In light the card fill is near-white on a cream page (1.116:1
+	   apart), so the hairline is the ONLY thing separating a card from its
+	   background, which makes it exactly the "visual information required to
+	   identify a UI component" 1.4.11 sets at 3:1. It shipped at #DDD5C5 —
+	   1.458:1 on the card, 1.162:1 on the darkest page step — so web had no
+	   token that guaranteed a visible boundary at all. Value in lockstep with
+	   mobile's AppTheme.parchmentLine / duskLine (decisions § 487); the
+	   lockstep and the floor are both pinned in contrast_guard.test.ts.
+	   A boundary token has no headroom to be thinned or re-used as a fill:
+	   see --color-fill-subtle below. */
+	--color-border: #8A806A;
 	--color-text: #1F2328;
 	--color-text-secondary: #56616B;
 	/* >=4.5:1 (WCAG AA) against the worst-case (darkest) light surface tertiary
@@ -124,19 +156,41 @@
 	   and failed; stays lighter than --color-text-secondary to keep hierarchy. */
 	--color-text-tertiary: #62666B;
 
+	/* The subtle neutral FILL — a progress-bar track, an inactive bar cell, a
+	   neutral metadata chip, a button hover, a skeleton shimmer stop. These
+	   carried --color-border until it became a 3:1 line token, at which point
+	   they would have painted a mid-tan panel and a chip whose own label lost
+	   contrast. It holds the value --color-border shipped with, so nothing that
+	   was a fill moved visually. A border token is a LINE or a FILL, never
+	   both — the same rule § 503 drew for status tokens, one role over. */
+	--color-fill-subtle: #DDD5C5;
+
 	/* Neutral metadata chip (tag / count / label pills on a card). Aliased
 	   rather than duplicated per theme: a var() in a custom-property value is
 	   substituted at computed-value time, so these follow whichever theme block
-	   last set --color-border / --color-text. --color-bg-tertiary is NOT usable
-	   as the fill — in dark it is byte-identical to --color-surface, so a chip
-	   on a card would have 1.000:1 separation. --color-text-secondary is not
+	   last set --color-fill-subtle / --color-text. --color-bg-tertiary is NOT
+	   usable as the fill — in dark it is byte-identical to --color-surface, so a
+	   chip on a card would have 1.000:1 separation. --color-text-secondary is not
 	   usable as the foreground either: 4.34:1 on the light fill, under AA for
 	   the 0.75rem type these chips carry. Measured 10.83:1 light / 11.01:1 dark. */
-	--chip-bg: var(--color-border);
+	--chip-bg: var(--color-fill-subtle);
 	--chip-fg: var(--color-text);
 
 	/* Gradients */
 	--gradient-primary: linear-gradient(135deg, #2C5F6E 0%, #4F8090 50%, #F2A07B 100%);
+	/* Identity-avatar disc. Distinct from --gradient-primary because that one
+	   carries a LIGHT stop in both themes (its light third stop and its dark
+	   first two), so white on it read 2.081 / 2.153:1 and no foreground hex
+	   fixes a gradient spanning that range. Two stops instead of three, both
+	   drawn from token pairs that flip together with --color-on-primary, so one
+	   declaration resolves per theme: white on #2C5F6E / #A24A2C is 7.073 /
+	   5.912, and #120D22 on #F2A07B / #B9A7E8 is 9.120 / 8.818. Every stop is
+	   AA-checked against --color-on-primary in contrast_guard.test.ts. */
+	--gradient-avatar: linear-gradient(
+		135deg,
+		var(--color-primary) 0%,
+		var(--color-secondary-text) 100%
+	);
 	--gradient-surface: linear-gradient(135deg, rgba(44, 95, 110, 0.04) 0%, rgba(242, 160, 123, 0.04) 100%);
 	--gradient-sidebar: linear-gradient(180deg, #FFFFFF 0%, #F1ECE0 100%);
 
@@ -260,11 +314,25 @@
 		--zone-4: #E56917;
 		--zone-5: #E2231C;
 
+		/* See the :root note. kind-1 -> kind-6 on the page:
+		   17.01 / 14.09 / 11.52 / 9.44 / 7.79 / 6.41; on the tightest surface a
+		   mark is drawn against, mobile's completed-day fill, 8.35 down to
+		   3.15 — that midtone is what caps the dark ladder. */
+		--kind-1: #E3F6F9;
+		--kind-2: #C9E1F6;
+		--kind-3: #E5BDE5;
+		--kind-4: #E7AD3B;
+		--kind-5: #EB8B8F;
+		--kind-6: #9894A2;
+
 		--color-bg: #120D22;
 		--color-bg-secondary: #0C0818;
 		--color-bg-tertiary: #241B3D;
 		--color-surface: #241B3D;
-		--color-border: #3A2E5C;
+		/* mobile's AppTheme.duskLine; 3.330 on the card, 3.911 / 4.068 on the
+		   page steps. The #3A2E5C it replaces was 1.328:1 on the card. */
+		--color-border: #786A9A;
+		--color-fill-subtle: #3A2E5C;
 		--color-text: #F7F3EC;
 		--color-text-secondary: #B5ADC3;
 		/* >=4.5:1 against the lightest dark surface (#241B3D). #7E7692 was
@@ -280,7 +348,6 @@
 		--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
 		--sidebar-active-bg: rgba(58, 46, 92, 0.55);
 		--sidebar-active-text: #F7F3EC;
-		--sidebar-border: rgba(247, 243, 236, 0.08);
 		--sidebar-logo: #FFFFFF;
 
 		--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -335,11 +402,21 @@
 	--zone-4: #E56917;
 	--zone-5: #E2231C;
 
+	/* See the :root note; same values as the media-query block. */
+	--kind-1: #E3F6F9;
+	--kind-2: #C9E1F6;
+	--kind-3: #E5BDE5;
+	--kind-4: #E7AD3B;
+	--kind-5: #EB8B8F;
+	--kind-6: #9894A2;
+
 	--color-bg: #120D22;
 	--color-bg-secondary: #0C0818;
 	--color-bg-tertiary: #241B3D;
 	--color-surface: #241B3D;
-	--color-border: #3A2E5C;
+	/* mobile's AppTheme.duskLine; see the :root note for the floor. */
+	--color-border: #786A9A;
+	--color-fill-subtle: #3A2E5C;
 	--color-text: #F7F3EC;
 	--color-text-secondary: #B5ADC3;
 	/* >=4.5:1 against the lightest dark surface (#241B3D); see :root note. */
@@ -354,7 +431,6 @@
 	--sidebar-hover-bg: rgba(247, 243, 236, 0.06);
 	--sidebar-active-bg: rgba(58, 46, 92, 0.55);
 	--sidebar-active-text: #F7F3EC;
-	--sidebar-border: rgba(247, 243, 236, 0.08);
 	--sidebar-logo: #FFFFFF;
 
 	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -391,7 +467,7 @@ html {
  *   2. `::-webkit-scrollbar` pseudo-elements for older WebKit/Chromium
  *      (still the default in many production browsers).
  *
- * Both use the same design tokens — `--color-border` for the track,
+ * Both use the same design tokens — a transparent track and
  * `--color-text-tertiary` for the thumb — so light + dark themes each
  * pick up the right palette via the `:root` overrides further down.
  */
@@ -597,7 +673,7 @@ img {
 	border-color: var(--color-border);
 }
 .btn-secondary:hover:not(:disabled) {
-	background: var(--color-border);
+	background: var(--color-fill-subtle);
 }
 .btn-outline {
 	background: transparent;

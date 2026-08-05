@@ -32,8 +32,13 @@
 	import { reviewFromMetadata } from '$lib/gym/gym_workout_review';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import { env } from '$env/dynamic/public';
+	import { buildWorkoutShareCanonical } from '$lib/share/share_workout_meta';
 
 	const id = $derived($page.params.id ?? '');
+	const canonicalUrl = $derived(
+		buildWorkoutShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', id)
+	);
 
 	let data = $state<GymWorkoutWithSets | null>(null);
 	let history = $state<GymSetWithDate[]>([]);
@@ -327,7 +332,9 @@
 	async function copyShareLink() {
 		if (shareBusy) return;
 		shareBusy = true;
-		const url = `${location.origin}/share/workout/${id}`;
+		// Same builder as the canonical, but based on the CURRENT origin: a
+		// preview-host user must get a preview link, not a prod one.
+		const url = buildWorkoutShareCanonical(location.origin, id);
 		try {
 			// A non-public workout's share link 404s for everyone else, so make
 			// it public first — mirrors the run-detail share flow.
@@ -358,7 +365,10 @@
 	}
 </script>
 
-<svelte:head><title>{data?.workout.title || t('gym.title')} — Threkir</title></svelte:head>
+<svelte:head>
+	<title>{data?.workout.title || t('gym.title')} — Threkir</title>
+	<link rel="canonical" href={canonicalUrl} />
+</svelte:head>
 
 <div class="page">
 	<a class="back-link" href="/gym">

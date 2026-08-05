@@ -1,12 +1,14 @@
 // AWS Lambda Function URL handler for the shared entity-SSR surface.
 //
-// One HTML-only Lambda owning the four public /share/* entity paths, all
+// One HTML-only Lambda owning the six public /share/* entity paths, all
 // routed here by CloudFront (see the share-entity behaviours in
 // infra/modules/web-stack/main.tf):
-//   - /share/event/<id>        public club event  → SportsEvent/Event JSON-LD
+//   - /share/event/<id>        public club event   → SportsEvent/Event JSON-LD
 //   - /share/profile/<id>      public runner       → ProfilePage JSON-LD
 //   - /share/club/<slug>       public club         → SportsOrganization JSON-LD
 //   - /share/race/<id>         race-calendar entry → SportsEvent JSON-LD
+//   - /share/session/<id>      public session plan → WebPage + breadcrumb
+//   - /share/workout/<id>      public gym workout  → WebPage + breadcrumb
 //
 // Each renders at request time so an entity created/edited after the last
 // build still unfurls with the right per-entity <head> before a crawler or
@@ -24,6 +26,8 @@ import { lookupSharedEvent } from '../../../src/lib/share/share_event_lookup';
 import { lookupSharedProfile } from '../../../src/lib/share/share_profile_lookup';
 import { lookupSharedClub } from '../../../src/lib/share/share_club_lookup';
 import { lookupSharedRace } from '../../../src/lib/share/share_race_lookup';
+import { lookupSharedSession } from '../../../src/lib/share/share_session_lookup';
+import { lookupSharedWorkout } from '../../../src/lib/share/share_workout_lookup';
 import {
 	buildShareEventHead,
 	renderShareEventHeadTags,
@@ -40,6 +44,14 @@ import {
 	buildShareRaceHead,
 	renderShareRaceHeadTags,
 } from '../../../src/lib/share/share_race_meta';
+import {
+	buildShareSessionHead,
+	renderShareSessionHeadTags,
+} from '../../../src/lib/share/share_session_meta';
+import {
+	buildShareWorkoutHead,
+	renderShareWorkoutHeadTags,
+} from '../../../src/lib/share/share_workout_meta';
 import { injectEntityHead } from '../../../src/lib/share/entity_spa_shell';
 
 declare const __SPA_SHELL_HTML__: string;
@@ -88,6 +100,26 @@ const ROUTES: Array<{
 			const { race } = await lookupSharedRace(id, c);
 			if (!race) return null;
 			return renderShareRaceHeadTags(buildShareRaceHead({ id, race, siteUrl: c.siteUrl }));
+		},
+	},
+	{
+		re: /^\/share\/session\/([^/]+)\/?$/,
+		render: async (id, c) => {
+			const { session, displayName } = await lookupSharedSession(id, c);
+			if (!session) return null;
+			return renderShareSessionHeadTags(
+				buildShareSessionHead({ id, session, displayName, siteUrl: c.siteUrl }),
+			);
+		},
+	},
+	{
+		re: /^\/share\/workout\/([^/]+)\/?$/,
+		render: async (id, c) => {
+			const { workout, displayName } = await lookupSharedWorkout(id, c);
+			if (!workout) return null;
+			return renderShareWorkoutHeadTags(
+				buildShareWorkoutHead({ id, workout, displayName, siteUrl: c.siteUrl }),
+			);
 		},
 	},
 ];

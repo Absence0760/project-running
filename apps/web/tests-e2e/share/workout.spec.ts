@@ -76,4 +76,48 @@ test.describe('/share/workout/[id] — anon', () => {
 		// No exercise blocks for a hidden workout.
 		await expect(page.locator('.exercise-block')).toHaveCount(0);
 	});
+
+	test('the public workout head carries the canonical, OG tags, and JSON-LD', async ({
+		page
+	}) => {
+		await page.goto(`/share/workout/${publicWorkoutId}`);
+		await expect(page).toHaveTitle(`${title} — Threkir`);
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			new RegExp(`/share/workout/${publicWorkoutId}$`)
+		);
+		await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
+			'content',
+			`${title} — Threkir`
+		);
+		// Counts only, in canonical kg — never the owner's notes or per-set RPE,
+		// and never the viewer's preferred weight unit.
+		const desc = await page
+			.locator('meta[property="og:description"]')
+			.getAttribute('content');
+		expect(desc).toContain('1 exercise');
+		expect(desc).toContain('1 set');
+		// volume_kg is the trigger-maintained reps × load total: 5 × 100.
+		expect(desc).toContain('500 kg lifted');
+		expect(desc).not.toMatch(/\blb\b/);
+
+		const ld = await page.locator('script[type="application/ld+json"]').first().textContent();
+		const obj = JSON.parse(ld as string);
+		expect(obj['@type']).toBe('WebPage');
+		expect(obj.name).toBe(title);
+		expect(obj.breadcrumb['@type']).toBe('BreadcrumbList');
+	});
+
+	// Deterministic without a seeded workout: a crawler on a stale link must
+	// still get a valid head, never the app shell's generic one.
+	test('unknown id still renders a valid SEO head', async ({ page }) => {
+		await page.goto('/share/workout/00000000-0000-0000-0000-000000000000');
+		await expect(page).toHaveTitle('Workout — Threkir');
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			/\/share\/workout\/00000000-0000-0000-0000-000000000000$/
+		);
+		const ld = await page.locator('script[type="application/ld+json"]').first().textContent();
+		expect(JSON.parse(ld as string)['@type']).toBe('WebPage');
+	});
 });

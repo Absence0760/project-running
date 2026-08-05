@@ -42,9 +42,11 @@ import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/sag
  *      gated to isSelf on +page.svelte) lists all four rows, each rendered
  *      by verbFor() with the right verb copy (en.ts notificationsList.*).
  *   4. All vs Unread tabs both show 4 (every row arrived unread); a
- *      single-row dismiss (the .dismiss button → deleteNotification) drops
- *      that row and the DELETE persists (the inbox count falls to 3 AND a
- *      reload still shows 3 — proving it wasn't just a client filter).
+ *      single-row dismiss (the .dismiss button → the deferred-commit undo
+ *      queue → deleteNotifications) drops that row from the list while the
+ *      server still holds it, and committing via the undo bar's dismiss
+ *      persists the DELETE (the inbox count falls to 3 AND a reload still
+ *      shows 3 — proving it wasn't just a client filter).
  *   5. Mark-all-read clears the remaining unread: the Unread tab empties to
  *      "You're all caught up", every surviving row loses the .unread class,
  *      and the sidebar bell badge unmounts (unreadCount → 0).
@@ -286,6 +288,21 @@ test.describe('notifications multi-source journey — four triggers → one inbo
 				await expect(
 					page.locator('.item-wrap').filter({ hasText: /Kai Kudos gave kudos/i })
 				).toHaveCount(0);
+
+				// The dismiss is DEFERRED for the undo window (decisions § 514),
+				// so nothing has been destroyed yet — all four rows are still
+				// on the server while the offer stands, which is what makes
+				// Undo unable to fail.
+				const { count: whilePending } = await admin
+					.from('notifications')
+					.select('*', { count: 'exact', head: true })
+					.eq('user_id', recipient.id);
+				expect(whilePending).toBe(4);
+
+				// Dismissing the undo bar commits the held delete now rather
+				// than waiting out the window.
+				await page.getByTestId('undo-dismiss').click();
+				await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 
 				// Persistence check: the DELETE actually hit the DB, not just a
 				// client filter. A reload re-fetches and must still show 3 — and

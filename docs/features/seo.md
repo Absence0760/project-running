@@ -36,7 +36,8 @@ indexed anyway).
 | `/share/profile/[id]` | Lambda-SSR (`share-entity`) | `share_profile_meta` | `ProfilePage` + `Person` |
 | `/share/club/[slug]` | Lambda-SSR (`share-entity`) | `share_club_meta` | `SportsOrganization` |
 | `/share/race/[id]` | Lambda-SSR (`share-entity`) | `share_race_meta` | `SportsEvent` |
-| `/share/session/[id]`, `/share/workout/[id]` | CSR (no injector) | inline `<svelte:head>` | — |
+| `/share/session/[id]` | Lambda-SSR (`share-entity`) | `share_session_meta` | `WebPage` + breadcrumb |
+| `/share/workout/[id]` | Lambda-SSR (`share-entity`) | `share_workout_meta` | `WebPage` + breadcrumb |
 | `/runs/[id]`, `/routes/[id]`, `/u/[id]`, `/races` | CSR (app shell) | generic shell + canonical | — (auth-gated) |
 | `/clubs/[slug]`, `/clubs/[slug]/events/[id]`, `/events/[id]`, `/live/[id]`, `/recap/[year]` | CSR (app shell) | generic shell + canonical | — (anon-reachable, shell-only) |
 | dashboard / feed / settings / … | CSR (app shell) | generic shell | — (auth-gated) |
@@ -49,13 +50,16 @@ Two rows above are easy to misread, and both were wrong in this table before:
   the index because they serve the empty shell and canonical to their share
   twin, not because a gate turns the crawler away. Do not "simplify" these
   back into the auth-gated row.
-- **`/share/session/[id]` + `/share/workout/[id]` have no SSR injector.**
-  They are real public routes with real inline heads, but no Lambda dispatches
-  them and they are not in the `share-entity` set, so in prod an unfurler gets
-  the shell. They also emit no canonical and their in-app twins
-  (`/sessions/[id]`, `/gym/[id]`) hand-roll a `location.origin` share URL
-  instead of a `build<X>ShareCanonical`. Either finish them (step 2 of *Adding
-  a new indexable surface*) or stop calling them share surfaces.
+- **`/share/session/[id]` + `/share/workout/[id]` are NOT in the sitemap**,
+  unlike their four `share-entity` siblings. A public gym workout is the
+  athlete's own training record, and enumerating every one of them would build
+  a crawlable training-log directory — the same objection that keeps profiles
+  out (see *Crawl & redirect contract*). Session plans are held to the same
+  line for now: link-discoverable, not crawl-enumerated. They were also the
+  one pair of share routes that no Lambda served (round 11 found it, round 12
+  finished them per step 2 of *Adding a new indexable surface*);
+  `share_entity_dispatch_guard.test.ts` now fails if a `/share/<x>` route
+  loses its CloudFront behaviour or its dispatcher branch.
 
 ## Canonical consolidation (in-app → share twin)
 
@@ -71,11 +75,13 @@ the two URLs splitting ranking signal, each in-app page emits a
 | `/u/[id]` | `/share/profile/[id]` |
 | `/clubs/[slug]` | `/share/club/[slug]` |
 | `/clubs/[slug]/events/[id]` | `/share/event/[id]` |
+| `/sessions/[id]` | `/share/session/[id]` |
+| `/gym/[id]` | `/share/workout/[id]` |
 
 The canonical derives from the URL param (via `build<X>ShareCanonical`),
 so it's present even before/without the client data load.
 
-**An auth-gated in-app page still emits one.** Three of the five rows sit
+**An auth-gated in-app page still emits one.** Five of the seven rows sit
 behind the layout auth-gate, so the crawler-consolidation argument does not
 by itself carry them — but the tag is not only for crawlers. It is the
 machine-readable statement of "the public home of this content is *there*",
@@ -92,8 +98,9 @@ apart in either direction.
 ## The shared entity-SSR Lambda
 
 `apps/web/lambda/share-entity/` — **one HTML-only Lambda** dispatching the
-four `/share/{event,profile,club,race}` paths (vs cloning the ~10-resource
-share-badge stack 4×, decision §205). Each path resolves the same shape:
+six `/share/{event,profile,club,race,session,workout}` paths (vs cloning the
+~10-resource share-badge stack 6×, decision §205). Each path resolves the same
+shape:
 
 ```
 share_<x>_lookup (anon-readable rows only)
@@ -104,8 +111,8 @@ share_<x>_lookup (anon-readable rows only)
 ```
 
 No per-entity `og:image` PNG — the OG image is the branded `og-default.png`
-(events/races) or the entity's avatar URL (profiles/clubs) — so the Lambda
-needs no native rasteriser and runs at 256 MB. Fail-open: a private /
+(events/races/sessions/workouts) or the entity's avatar URL (profiles/clubs) —
+so the Lambda needs no native rasteriser and runs at 256 MB. Fail-open: a private /
 missing / deleted entity returns **404 HTML with `noindex`**, never a 5xx.
 
 The matching SvelteKit routes carry `prerender = false` and run the same
@@ -118,6 +125,16 @@ e2e-tested without standing up the Lambda.
   only — never the precise `meet_lat/meet_lng` (§147).
 - **Races**: only `location_label` is surfaced; the `location_point`
   geometry is never selected.
+- **Workouts**: read only through the redacted `public_gym_workouts` +
+  `public_gym_sets` views (migrations 20270313_001 / 20270327_001), which omit
+  `gym_workouts.notes` (1000 chars of free text) and per-set `rpe`. The meta
+  says how many exercises / sets / kilograms and when — never what the owner
+  wrote. Volume is canonical **kg** and the date is UTC: `formatWeight` reads
+  the viewer's `preferred_unit`, so an unfurl built from it would change with
+  whoever's scraper touched the link first.
+- **Sessions**: the plan's authored fields only. Per-item `cue` + `tempo` are
+  fetched (the visible sequence renders them) but stay out of the `<head>` —
+  an og:description is handed to every unfurler, out of context.
 - **Profiles**: only the anon-safe display name + avatar (via the
   `public_profile_by_id` SECURITY DEFINER RPC) — no email / private field.
 - **Profiles are NOT in the sitemap** — no people-directory crawl
@@ -176,6 +193,11 @@ redirect are **landed but deploy-gated** — they need a `terraform apply`
 share Lambdas shipped under. Until then the SvelteKit dev/build path serves
 the routes; prod serves the SPA shell for the new `/share/*` paths.
 
+The `/share/session/*` + `/share/workout/*` behaviours ride that same pending
+apply — no new Lambda, no new release step (the existing `share-entity` zip
+already carries their dispatcher branches), just two more
+`ordered_cache_behavior` blocks on the distribution.
+
 ### Fit with the minimal (Lean / Rock-bottom) deploy
 
 All of this rides **every** cost tier, including Rock-bottom (~$10–11/mo,
@@ -188,7 +210,7 @@ web-only, Supabase Free) — see [deployment_lean.md](../ops/deployment_lean.md)
   `web@*` release swaps in real code it runs the placeholder zip (same as
   every share/coach Lambda on first apply).
 - It needs **no deferred service** — only the anon key + the public
-  views/RLS, all present on Supabase Free. So the four `/share/*` surfaces
+  views/RLS, all present on Supabase Free. So the six `/share/*` surfaces
   work at Rock-bottom even with the worker, engines, and coach all off.
 - The **www→apex CloudFront Function** is prod-only (`redirect_www_to_apex`)
   and CloudFront Functions bill per-invocation at negligible cost.

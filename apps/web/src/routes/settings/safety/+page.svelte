@@ -536,7 +536,7 @@
 		background: linear-gradient(
 			90deg,
 			var(--color-bg-tertiary) 25%,
-			var(--color-border) 50%,
+			var(--color-fill-subtle) 50%,
 			var(--color-bg-tertiary) 75%
 		);
 		background-size: 200% 100%;

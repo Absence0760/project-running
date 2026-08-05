@@ -858,8 +858,8 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: #FFFFFF;
+		background: var(--gradient-avatar);
+		color: var(--color-on-primary);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -929,8 +929,8 @@
 		width: 2rem;
 		height: 2rem;
 		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: white;
+		background: var(--gradient-avatar);
+		color: var(--color-on-primary);
 		display: flex;
 		align-items: center;
 		justify-content: center;

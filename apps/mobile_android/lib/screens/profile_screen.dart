@@ -1020,10 +1020,31 @@ class _ProfileScreenState extends State<ProfileScreen>
                 style: theme.textTheme.bodySmall,
               )
             : null,
-        trailing: IconButton(
-          icon: const Icon(Icons.close, size: 18),
-          tooltip: AppLocalizations.of(context).profileDismiss,
-          onPressed: () => _dismissNotif(item.row.id),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // The row tint composites to 1.109:1 light / 1.087:1 dark against
+            // the page, so it cannot be the only unread signal. The grouped
+            // sibling row already carries a count badge; a single
+            // notification has no count, so it takes the dot.
+            if (unread)
+              Semantics(
+                label: AppLocalizations.of(context).profileNotifUnread,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: AppLocalizations.of(context).profileDismiss,
+              onPressed: () => _dismissNotif(item.row.id),
+            ),
+          ],
         ),
         onTap: () => _onNotifTap(item),
       ),

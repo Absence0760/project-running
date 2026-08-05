@@ -102,7 +102,7 @@
 		width: 100%;
 		height: 0.5rem;
 		border-radius: var(--radius-md);
-		background: var(--color-border);
+		background: var(--color-fill-subtle);
 		overflow: hidden;
 	}
 	.bar-fill {

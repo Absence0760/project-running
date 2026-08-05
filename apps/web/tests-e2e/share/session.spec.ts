@@ -100,4 +100,43 @@ test.describe('/share/session/[id] — anon', () => {
 		// No sequence list for a hidden plan.
 		await expect(page.getByTestId('session-steps')).toHaveCount(0);
 	});
+
+	test('the public plan head carries the canonical, OG tags, and JSON-LD', async ({ page }) => {
+		await page.goto(`/share/session/${publicPlanId}`);
+		await expect(page).toHaveTitle(`${title} — Threkir`);
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			new RegExp(`/share/session/${publicPlanId}$`)
+		);
+		await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
+			'content',
+			`${title} — Threkir`
+		);
+		// Discipline · movement count · duration — never a per-item cue or tempo.
+		const desc = await page
+			.locator('meta[property="og:description"]')
+			.getAttribute('content');
+		expect(desc).toContain('Vinyasa Yoga');
+		expect(desc).toContain('2 movements');
+		expect(desc).toContain('Mat');
+
+		const ld = await page.locator('script[type="application/ld+json"]').first().textContent();
+		const obj = JSON.parse(ld as string);
+		expect(obj['@type']).toBe('WebPage');
+		expect(obj.name).toBe(title);
+		expect(obj.breadcrumb['@type']).toBe('BreadcrumbList');
+	});
+
+	// Deterministic without a seeded plan: a crawler on a stale link must still
+	// get a valid head, never the app shell's generic one.
+	test('unknown id still renders a valid SEO head', async ({ page }) => {
+		await page.goto('/share/session/00000000-0000-0000-0000-000000000000');
+		await expect(page).toHaveTitle('Session — Threkir');
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			/\/share\/session\/00000000-0000-0000-0000-000000000000$/
+		);
+		const ld = await page.locator('script[type="application/ld+json"]').first().textContent();
+		expect(JSON.parse(ld as string)['@type']).toBe('WebPage');
+	});
 });

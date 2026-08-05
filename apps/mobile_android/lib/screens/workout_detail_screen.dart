@@ -538,11 +538,10 @@ class _RelinkPickerDialogState extends State<_RelinkPickerDialog> {
             trailing: isCurrent
                 ? Text(
                     l10n.workoutRelinkCurrent,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
                   )
                 : null,
             onTap: () => Navigator.of(context).pop(run.id),

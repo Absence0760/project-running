@@ -95,12 +95,6 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	// "fixed medal rank pills" test in contrast_guard.test.ts.
 	'lib/components/ChallengeLeaderboard.svelte': { F6D671: 1, D4A017: 1 },
 	'lib/components/RunSegmentEfforts.svelte': { B45309: 1 },
-	// Workout-kind tint palette (easy / tempo / interval / marathon_pace /
-	// long). Only the marathon_pace rung collides with --color-warning.
-	'lib/components/CurrentWeekStrip.svelte': { E6A96B: 1 },
-	'lib/components/PlanCalendar.svelte': { E6A96B: 1 },
-	'routes/plans/[id]/+page.svelte': { E6A96B: 1 },
-	'routes/plans/[id]/workouts/[wid]/+page.svelte': { E6A96B: 1 },
 	// Per-stat-card accent gradients: four chart series, separated by hue.
 	'lib/components/PeriodSummary.svelte': { '10B981': 1, F97316: 1, F59E0B: 1, EF4444: 1 },
 	// Cartographic: privacy-zone marker, its fill and its outline. Drawn on
@@ -126,37 +120,21 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	// Cartographic: the coarse (privacy-clipped) live position marker and its
 	// outline — the web twin of mobile's coarse-position ring.
 	'routes/live/event/[id]/[instance]/+page.svelte': { E6A96B: 2 },
-	// Fixed brand hero: the panel paints its own orange -> red gradient and
-	// every colour inside is calibrated to that canvas, not to the theme.
-	// Recorded rather than swept, with the numbers, because the gaps here are
-	// contrast-on-a-fixed-canvas and not theme drift: the panel's own
-	// `color: white` is 2.803:1 on the orange stop, the three .feasibility
-	// inks are 2.295-3.572:1 on the gradient, and .toggle-btn.active is
-	// 3.763:1 on its white pill. Fixing those is a redesign of the hero.
-	'lib/components/RaceDayPanel.svelte': {
-		F97316: 1,
-		EF4444: 2,
-		'047857': 1,
-		B45309: 1,
-		B91C1C: 1,
-		ECFDF5: 1,
-		FEF3C7: 1,
-		FEE2E2: 1,
-	},
+	// Fixed brand hero. The canvas follows no theme, so the ONE literal left is
+	// the verdict green shared by the confidence chip and the feasibility pill,
+	// which are the same "good" role on the same white pill (4.862:1 worst case
+	// across the ramp). The eight it replaces were the redesign: the gradient
+	// stops are the two theme-independent "-strong" fills now, the three pale
+	// .feasibility pastels are dark inks on an opaque pill, and the whole
+	// canvas is measured per-veil by contrast_guard.test.ts. The amber and red
+	// inks that came with it are not on the ban list, and the active toggle's
+	// #8F2F24 is deliberately NOT --color-danger-strong's value.
+	'lib/components/RaceDayPanel.svelte': { '047857': 2 },
 	// Fixed canvas: the @media print sheet targets white paper, so a theme
 	// token would resolve to the SCREEN theme and print dark-on-dark. The
 	// amber was deepened from #b26a00 (4.238:1 on paper, under AA) to
 	// #9E5C00 (5.270:1 on white, 5.031:1 on the mint price card).
 	'routes/compare/+page.svelte': { '1B5E20': 1 },
-	// Decorative feature-icon identity set on the public landing (indigo /
-	// pink / green / orange, one per feature card, each above its own <h3>).
-	// Only two of the four collide with the ban list. Measured on the tint
-	// each paints over a theme card: 5.425 / 3.126 / 2.308 / 2.531:1 in light
-	// and 2.392 / 4.069 / 5.530 / 5.044:1 in dark, so each fails in one theme
-	// as a graphical object. Left as a palette because the durable fix is to
-	// move the whole four-hue set onto the accent -text tokens, which is a
-	// design change to the marketing page rather than a token routing.
-	'routes/+page.svelte': { '10B981': 1, F97316: 1 },
 	// Gold star over a FIXED 0.65-black scrim on a route thumbnail, not on a
 	// theme surface. --color-crown is the deliberately dark light-mode gold
 	// and would read 1.123:1 here against 4.196:1 for this hue — the naive

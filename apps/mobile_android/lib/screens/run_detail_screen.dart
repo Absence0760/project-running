@@ -1060,7 +1060,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     ),
                     const SizedBox(width: 8),
                     Text(l10n.runDetailLoadingGps,
-                        style: const TextStyle(fontSize: 12)),
+                        style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -1080,7 +1080,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         color: Theme.of(context).colorScheme.outline),
                     const SizedBox(width: 8),
                     Text(l10n.runDetailGpsUnavailable,
-                        style: const TextStyle(fontSize: 12)),
+                        style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -2788,7 +2788,7 @@ class _ElevationPacePainter extends CustomPainter {
         Offset(tx, 0),
         Offset(tx, size.height),
         Paint()
-          ..color = theme.colorScheme.onSurface.withOpacity(0.4)
+          ..color = theme.colorScheme.outline
           ..strokeWidth = 1,
       );
       canvas.drawCircle(
@@ -3051,7 +3051,7 @@ class _SegmentStatsCard extends StatelessWidget {
         ),
         Text(
           value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ],
     );

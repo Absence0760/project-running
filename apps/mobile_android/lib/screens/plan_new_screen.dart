@@ -616,7 +616,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withOpacity(0.4),
-        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
+        border: Border.all(color: theme.colorScheme.primary),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -663,7 +663,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withOpacity(0.4),
-        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
+        border: Border.all(color: theme.colorScheme.primary),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(

@@ -1,20 +1,27 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppTheme;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../training.dart';
 import '../training_labels.dart';
+import '../workout_kind_color.dart';
 
 /// Month-by-month calendar projection of a training plan, mirroring the
 /// web's `PlanCalendar.svelte`. Each day cell shows the workout kind +
 /// target distance when one is scheduled; completed workouts get a
-/// green tick; out-of-month / out-of-plan days are dimmed.
+/// green tick; out-of-plan days are blank and out-of-month days without a
+/// workout are dimmed. A cell that DOES carry a workout is never dimmed: the
+/// dim is a 0.55 opacity over the whole subtree, which drops even
+/// `onSurfaceVariant` to 2.582:1 on the light card, and a planned session on
+/// the first or last row of the grid is content, not chrome.
 ///
 /// `onSelect` is invoked when the user taps a workout cell. Hosts pass
 /// the same handler they use for the weekly grid (push the workout
 /// detail screen).
+
 class PlanCalendar extends StatefulWidget {
   final DateTime startDate;
   final DateTime endDate;
@@ -180,7 +187,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
     final hasWorkout = wo != null && inPlan;
 
     final kind = wo == null ? null : workoutKindFromDb(wo.kind);
-    final kindColor = kind == null ? null : _kindColor(theme, kind);
+    final kindMark = kind == null ? null : workoutKindMarkColor(theme, kind);
     final isDone =
         hasWorkout && (wo.completedRunId != null || wo.manuallyCompleted);
 
@@ -204,7 +211,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
       foregroundDecoration: hasWorkout
           ? BoxDecoration(
               border: Border(
-                left: BorderSide(color: kindColor!, width: 3),
+                left: BorderSide(color: kindMark!, width: 3),
               ),
               borderRadius: BorderRadius.circular(6),
             )
@@ -227,7 +234,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
             Text(
               workoutKindLabel(l10n, kind!).toUpperCase(),
               style: theme.textTheme.labelSmall?.copyWith(
-                color: kindColor,
+                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.4,
               ),
@@ -252,38 +259,18 @@ class _PlanCalendarState extends State<PlanCalendar> {
       ),
     );
 
-    if (!hasWorkout) return Opacity(opacity: outOfMonth ? 0.55 : 1, child: base);
+    if (!hasWorkout) {
+      return Opacity(
+          opacity: outOfMonth ? AppTheme.dimmedSubtreeOpacity : 1,
+          child: base);
+    }
 
-    return Opacity(
-      opacity: outOfMonth ? 0.55 : 1,
-      child: InkWell(
-        onTap: widget.onSelect == null ? null : () => widget.onSelect!(wo),
-        borderRadius: BorderRadius.circular(6),
-        child: base,
-      ),
+    return InkWell(
+      onTap: widget.onSelect == null ? null : () => widget.onSelect!(wo),
+      borderRadius: BorderRadius.circular(6),
+      child: base,
     );
   }
-
-  static Color _kindColor(ThemeData theme, WorkoutKind k) {
-    switch (k) {
-      case WorkoutKind.easy:
-      case WorkoutKind.recovery:
-        return theme.colorScheme.onSurfaceVariant;
-      case WorkoutKind.long:
-      case WorkoutKind.race:
-        return theme.colorScheme.primary;
-      case WorkoutKind.tempo:
-        return const Color(0xFFC98ECF);
-      case WorkoutKind.interval:
-      case WorkoutKind.walkRun:
-        return const Color(0xFFD97A54);
-      case WorkoutKind.marathonPace:
-        return const Color(0xFFE6A96B);
-      case WorkoutKind.rest:
-        return theme.dividerColor;
-    }
-  }
-
 
   static String _toIso(DateTime d) {
     final y = d.year.toString().padLeft(4, '0');

@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show ListSkeleton, TextLane;
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton, TextLane;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -169,11 +169,8 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
         : '—';
     return Row(
       children: [
-        CircleAvatar(
-          radius: 24,
-          child: Text(_initial(widget.displayName),
-              style: const TextStyle(fontSize: 18)),
-        ),
+        IdentityAvatar(
+            seed: widget.athleteId, name: widget.displayName, size: 48),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -546,10 +543,5 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
   static String _isoOf(DateTime dt) {
     final d = dt.isUtc ? dt.toLocal() : dt;
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
-
-  static String _initial(String? name) {
-    final n = name?.trim() ?? '';
-    return n.isEmpty ? '?' : n.substring(0, 1).toUpperCase();
   }
 }

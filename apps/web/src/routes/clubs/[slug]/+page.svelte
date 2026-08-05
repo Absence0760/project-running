@@ -982,7 +982,7 @@
 				<div class="pending-list">
 					{#each pending as p (p.user_id)}
 						<div class="pending-row">
-							<Avatar name={p.display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(p.user_id)} />
+							<Avatar name={p.display_name} size="2.1rem" font="0.9rem" bg="seed" seedHue={hashHue(p.user_id)} />
 							<div class="pending-info">
 								<strong>{p.display_name ?? tr('clubHome.memberFallback')}</strong>
 								<span class="when">{tr('clubHome.requestedRelative', { time: fmtRelative(p.joined_at ?? new Date().toISOString()) })}</span>
@@ -1133,7 +1133,7 @@
 						<article class="post">
 							<div class="post-author">
 								<a href="/u/{post.author_id}" class="author-link">
-									<Avatar name={post.author_display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(post.author_id)} />
+									<Avatar name={post.author_display_name} size="2.1rem" font="0.9rem" bg="seed" seedHue={hashHue(post.author_id)} />
 									<div>
 										<strong>{post.author_display_name ?? tr('clubHome.memberFallback')}</strong>
 										<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
@@ -1176,7 +1176,7 @@
 										{#each expandedThreads[post.id] ?? [] as reply (reply.id)}
 											<div class="reply">
 												<a href="/u/{reply.author_id}" class="reply-author-link">
-													<Avatar name={reply.author_display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(reply.author_id)} />
+													<Avatar name={reply.author_display_name} size="2.1rem" font="0.9rem" bg="seed" seedHue={hashHue(reply.author_id)} />
 												</a>
 												<div class="reply-body">
 													<div class="reply-head">
@@ -1551,7 +1551,7 @@
 					{#each members as m (m.user_id)}
 						<div class="member">
 							<a href="/u/{m.user_id}" class="member-link">
-								<Avatar name={m.display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(m.user_id)} />
+								<Avatar name={m.display_name} size="2.1rem" font="0.9rem" bg="seed" seedHue={hashHue(m.user_id)} />
 								<div class="member-name">
 									<strong>{m.display_name ?? tr('clubHome.memberFallback')}</strong>
 									{#if m.role !== 'member' && (!isAdmin || m.role === 'owner' || m.user_id === club?.owner_id)}

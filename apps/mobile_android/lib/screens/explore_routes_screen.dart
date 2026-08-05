@@ -771,8 +771,7 @@ class _RouteCard extends StatelessWidget {
                               ),
                               child: Text(
                                 t,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 11,
+                                style: theme.textTheme.labelSmall?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),

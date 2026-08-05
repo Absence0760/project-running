@@ -7,12 +7,12 @@
 		fetchNotificationsWithError,
 		markNotificationRead,
 		markAllNotificationsRead,
-		deleteNotification,
 		deleteNotifications,
 		type NotificationView,
 	} from '$lib/core/data';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { deferDestructive } from '$lib/stores/undo.svelte';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { notificationLinkFor } from '$lib/social/notification_link';
@@ -90,20 +90,55 @@
 		if (href) goto(href);
 	}
 
-	async function removeGroup(group: NotificationGroup, event: Event) {
+	/// A notification is a system-minted line the user cannot re-create, so
+	/// an accidental dismiss is unrecoverable today — which is exactly the
+	/// case for undo. Nothing cascades off the row, so the deferred delete
+	/// restores it byte-identical.
+	///
+	/// The unread badge is decremented on COMMIT, not on defer: while the
+	/// offer stands the row is still on the server and still unread, so the
+	/// count the badge reports is the truthful one. Decrementing early would
+	/// disagree with the server for the whole window — indefinitely, for a
+	/// user whose `undo_window_s` is the no-time-limit choice — and any
+	/// focus-driven `refresh()` would silently walk it back up.
+	function dismiss(rows: { id: string; read_at: string | null }[], message: string) {
+		const idSet = new Set(rows.map((r) => r.id));
+		const unread = items.filter((x) => idSet.has(x.row.id) && x.row.read_at == null).length;
+		const before = items;
+		items = items.filter((x) => !idSet.has(x.row.id));
+		const ids = [...idSet];
+		deferDestructive({
+			message,
+			commit: async () => {
+				await deleteNotifications(ids);
+				notificationStore.decrement(unread);
+			},
+			restore: () => {
+				items = before;
+			},
+			onCommitError: (e) => {
+				showToast(
+					m('notificationsList.deleteFailed', {
+						error: e instanceof Error ? e.message : String(e),
+					}),
+					'error',
+				);
+			},
+		});
+	}
+
+	// One collapsed group is ONE intent, so it takes one undo slot and one
+	// restore of the whole snapshot — not N stacked offers. The queue's
+	// one-slot rule is about separate intents, and this is not one.
+	function removeGroup(group: NotificationGroup, event: Event) {
 		event.stopPropagation();
 		const rows = [group.lead, ...group.others];
-		const ids = rows.map((r) => r.id);
-		const idSet = new Set(ids);
-		const unread = items.filter((x) => idSet.has(x.row.id) && x.row.read_at == null).length;
-		items = items.filter((x) => !idSet.has(x.row.id));
-		for (let i = 0; i < unread; i++) notificationStore.decrement();
-		try {
-			await deleteNotifications(ids);
-		} catch (e) {
-			showToast(m('notificationsList.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
-			await load();
-		}
+		dismiss(
+			rows,
+			rows.length > 1
+				? m('notificationsList.dismissedMany', { count: rows.length })
+				: m('notificationsList.dismissed'),
+		);
 	}
 
 	function nameFor(item: NotificationView): string {
@@ -123,18 +158,11 @@
 		}
 	}
 
-	async function remove(id: string, event: Event) {
+	function remove(id: string, event: Event) {
 		event.stopPropagation();
 		const target = items.find((x) => x.row.id === id);
-		const wasUnread = target?.row.read_at == null;
-		items = items.filter((x) => x.row.id !== id);
-		if (wasUnread) notificationStore.decrement();
-		try {
-			await deleteNotification(id);
-		} catch (e) {
-			showToast(m('notificationsList.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
-			await load();
-		}
+		if (!target) return;
+		dismiss([target.row], m('notificationsList.dismissed'));
 	}
 
 	function verbFor(item: NotificationView, nameOverride?: string): string {

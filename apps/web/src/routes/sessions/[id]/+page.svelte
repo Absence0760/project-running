@@ -27,6 +27,8 @@
 	import { goto } from '$app/navigation';
 	import { smartBack } from '$lib/util/smart_back';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import { env } from '$env/dynamic/public';
+	import { buildSessionShareCanonical } from '$lib/share/share_session_meta';
 
 	let plan = $state<SessionPlanWithItems | null>(null);
 	let loading = $state(true);
@@ -45,6 +47,9 @@
 	const back = smartBack();
 	const planId = $derived($page.params.id ?? '');
 	const isOwner = $derived(!!plan && !!auth.user && plan.author_id === auth.user.id);
+	const canonicalUrl = $derived(
+		buildSessionShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', planId)
+	);
 
 	async function load() {
 		plan = await fetchSessionPlan(planId);
@@ -202,7 +207,9 @@
 	async function copyShareLink() {
 		if (!plan || shareBusy) return;
 		shareBusy = true;
-		const url = `${location.origin}/share/session/${plan.id}`;
+		// Same builder as the canonical, but based on the CURRENT origin: a
+		// preview-host user must get a preview link, not a prod one.
+		const url = buildSessionShareCanonical(location.origin, plan.id);
 		try {
 			// A non-public plan's share link 404s for everyone else, so make it
 			// public first — mirrors the gym-workout share flow.
@@ -221,7 +228,10 @@
 	}
 </script>
 
-<svelte:head><title>{plan?.title ?? t('session.title')}</title></svelte:head>
+<svelte:head>
+	<title>{plan?.title ?? t('session.title')}</title>
+	<link rel="canonical" href={canonicalUrl} />
+</svelte:head>
 
 <div class="page">
 	<a class="back" href="/sessions" onclick={back.handle}>&larr; {t('session.back')}</a>

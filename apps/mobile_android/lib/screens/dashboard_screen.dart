@@ -1237,8 +1237,7 @@ class _CoachEntryCard extends StatelessWidget {
                       Text(
                         l10n.homeAskCoachSubtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer
-                              .withValues(alpha: 0.8),
+                          color: theme.colorScheme.onPrimaryContainer,
                         ),
                       ),
                     ],

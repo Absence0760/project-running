@@ -3,6 +3,13 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import SharePageShell from '$lib/components/SharePageShell.svelte';
 	import { expandSessionSteps, type SessionStep } from '$lib/social/session_steps';
+	import {
+		buildSessionJsonLd,
+		buildSessionShareCanonical,
+		buildSessionShareDescription,
+		buildSessionShareTitle,
+		sessionEstimatedMinutes
+	} from '$lib/share/share_session_meta';
 
 	let { data } = $props();
 
@@ -10,12 +17,15 @@
 	let athlete = $derived(data.displayName ?? '');
 	let heroTitle = $derived((data.session?.title ?? '').trim());
 
-	let title = $derived(
-		heroTitle
-			? `${heroTitle} — Threkir`
-			: athlete
-				? `${m('shareSession.heroAthleteSession', { name: athlete })} — Threkir`
-				: `${m('shareSession.heroPublicSession')} — Threkir`
+	let title = $derived(buildSessionShareTitle(data.session, data.displayName));
+	let description = $derived(buildSessionShareDescription(data.session, data.displayName));
+	let canonicalUrl = $derived(buildSessionShareCanonical(data.siteUrl, data.id));
+	let jsonLd = $derived(
+		buildSessionJsonLd(data.session, {
+			id: data.id,
+			base: data.siteUrl,
+			displayName: data.displayName
+		})
 	);
 
 	// Expand blocks → items into ordered steps (per-side split into L/R) via the
@@ -39,17 +49,7 @@
 		});
 	});
 
-	let estMinutes = $derived(
-		data.session?.est_duration_min ?? Math.round(expanded.totalS / 60)
-	);
-
-	let description = $derived(
-		hasSession
-			? `${data.session!.items.length} movements${
-					estMinutes > 0 ? ` · ${m('session.estDuration', { minutes: estMinutes })}` : ''
-				}`
-			: m('shareSession.notFoundSub')
-	);
+	let estMinutes = $derived(sessionEstimatedMinutes(data.session));
 
 	function stepName(step: SessionStep): string {
 		if (step.side === 'left') return m('session.sideLeft', { name: step.movementName });
@@ -68,13 +68,20 @@
 <svelte:head>
 	<title>{title}</title>
 	<meta name="description" content={description} />
+	<link rel="canonical" href={canonicalUrl} />
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
 	<meta property="og:type" content="article" />
+	<meta property="og:url" content={canonicalUrl} />
 	<meta property="og:site_name" content="Threkir" />
-	<meta name="twitter:card" content="summary" />
+	<meta property="og:image" content="/og-default.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
+	<meta name="twitter:image" content="/og-default.png" />
+	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
 <SharePageShell>

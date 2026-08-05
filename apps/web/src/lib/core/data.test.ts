@@ -465,29 +465,40 @@ test('deleteNotifications batches into one .in() delete, guards empty, surfaces 
 	);
 });
 
-test('NotificationsList.removeGroup fires one batched delete, not one per member', () => {
+test('NotificationsList dismisses a whole group in one batched delete, not one per member', () => {
 	// Reason: removeGroup awaited remove(row.id) for every member of a
-	// collapsed group — N sequential DELETEs (issue #350). It must collect
-	// the ids and call the batched deleteNotifications ONCE, keeping the
-	// optimistic local removal + per-unread-row unread-count decrement.
+	// collapsed group — N sequential DELETEs (issue #350). Both the single
+	// and the group dismiss now route through one `dismiss` helper that
+	// defers the mutation (decisions § 514), so the batching invariant lives
+	// there: one deleteNotifications(ids) call for however many rows the
+	// intent covers, never a per-id loop. The unread badge is decremented
+	// by the whole count and only INSIDE commit — while the undo offer
+	// stands the rows are still on the server and still unread, so an early
+	// decrement would report a count the server disagrees with for the
+	// entire window.
 	const source = read('src/lib/components/NotificationsList.svelte');
-	const fnMatch = source.match(/async function removeGroup[\s\S]*?\n\t}/);
-	assert.ok(fnMatch, 'Could not locate removeGroup — rename?');
+	const fnMatch = source.match(/function dismiss\([\s\S]*?\n\t}/);
+	assert.ok(fnMatch, 'Could not locate the dismiss helper — rename?');
 	const body = fnMatch![0];
 	assert.match(
 		body,
 		/deleteNotifications\(ids\)/,
-		'removeGroup must dismiss the whole group with one deleteNotifications(ids) call.',
+		'dismiss must drop every id with one deleteNotifications(ids) call.',
 	);
 	assert.doesNotMatch(
 		body,
-		/remove\(row\.id/,
-		'removeGroup must not loop the single-delete remove(row.id) per member — that is the N+1 issue #350 fixed.',
+		/for \(|\.map\(\(r\) => deleteNotification/,
+		'dismiss must not loop a per-id delete — that is the N+1 issue #350 fixed.',
 	);
 	assert.match(
 		body,
-		/notificationStore\.decrement\(\)/,
-		'removeGroup must keep decrementing the unread badge per removed unread row.',
+		/commit: async \(\) => \{\s*await deleteNotifications\(ids\);\s*notificationStore\.decrement\(unread\);/,
+		'the unread badge must be decremented by the batch count, inside commit.',
+	);
+	assert.match(
+		source,
+		/function removeGroup[\s\S]*?dismiss\(/,
+		'removeGroup must hand the whole group to the shared dismiss helper.',
 	);
 });
 

@@ -2383,10 +2383,16 @@
 		padding: 0.35rem 0.7rem;
 		border-radius: 999px;
 		background: rgba(20, 22, 38, 0.78);
-		color: var(--color-text-secondary);
+		/* A FIXED near-black scrim over the basemap, not a theme surface, so
+		   both foregrounds are fixed with it — a theme token resolves to the
+		   wrong side here. --color-text-secondary read 1.402:1 in light, and
+		   the hairline INVERTS: --color-border is 6.084:1 in light but 2.366:1
+		   once it carries the 3:1 line value. Measured against the worst-case
+		   composite (the scrim over a white map tile): 8.022:1 and 4.111:1. */
+		color: #F7F3EC;
 		font-size: 0.75rem;
 		line-height: 1;
-		border: 1px solid var(--color-border);
+		border: 1px solid #B5ADC3;
 		backdrop-filter: blur(6px);
 		z-index: 5;
 		pointer-events: none;

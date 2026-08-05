@@ -134,9 +134,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 textAlign: TextAlign.center,
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text(':', style: TextStyle(fontSize: 20)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              // The separator between two number fields, so it takes the step
+              // an M3 `TextField` sizes its own input at rather than a step of
+              // its own — a colon larger than the digits it separates.
+              child: Text(':', style: Theme.of(context).textTheme.bodyLarge),
             ),
             SizedBox(
               width: 60,
@@ -1086,12 +1089,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                   children: [
                     const Icon(Icons.cloud_off_outlined, size: 18),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        offlineNotice,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
+                    Expanded(child: Text(offlineNotice)),
                   ],
                 ),
               ),
@@ -1334,7 +1332,6 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 child: Text(
                   l10n.prefsSignInToEdit,
                   style: TextStyle(
-                    fontSize: 13,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
