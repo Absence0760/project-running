@@ -51,9 +51,17 @@ abstract class PushMessaging {
   /// Fires the new token whenever the platform rotates it.
   Stream<String> get onTokenRefresh;
 
-  /// Fires when the user taps a notification that opened the app (background →
-  /// foreground, or cold start). Carries the deep-link target.
+  /// Fires when the user taps a notification while the app is already alive
+  /// (background → foreground). Carries the deep-link target.
+  ///
+  /// It does NOT replay the tap that LAUNCHED a terminated app — the platform
+  /// delivers that one exactly once, through [getInitialMessage].
   Stream<PushOpenedMessage> get onMessageOpenedApp;
+
+  /// The notification tap that cold-started the app, or null when the launch
+  /// came from anywhere else. Consumed once by the platform, so it must be
+  /// read at attach time or the deep link is gone.
+  Future<PushOpenedMessage?> getInitialMessage();
 
   /// Delete the platform token (sign-out) so the device stops receiving pushes
   /// for the previous account.
@@ -119,32 +127,53 @@ class PushMessagingBridge {
     });
 
     // Route a tap's deep link through the host.
-    _openedSub = _messaging.onMessageOpenedApp.listen((msg) {
-      try {
-        _onOpenNotification?.call(msg);
-      } catch (e) {
-        debugPrint('PushMessagingBridge: open-notification routing failed: $e');
-      }
+    _openedSub = _messaging.onMessageOpenedApp.listen(_route);
+
+    // The tap that cold-started the app never arrives on that stream — the
+    // platform holds it as the launch message and hands it over exactly once.
+    // Without this, every push tapped from a terminated app opens the
+    // dashboard and discards the target.
+    _messaging.getInitialMessage().then((msg) {
+      if (msg != null) _route(msg);
+    }).catchError((Object e) {
+      debugPrint('PushMessagingBridge: getInitialMessage failed: $e');
     });
 
-    final auth = Supabase.instance.client.auth;
+    // Token registration is auxiliary to the routing above and depends on
+    // Supabase being initialised; a throw here must not take the tap handler
+    // (or startup) with it.
+    try {
+      final auth = Supabase.instance.client.auth;
 
-    // Handle the already-signed-in case (app launched while a session exists).
-    if (auth.currentSession != null) {
-      _onSignedIn();
+      // Handle the already-signed-in case (app launched while a session
+      // exists).
+      if (auth.currentSession != null) {
+        _onSignedIn();
+      }
+
+      _authSub = auth.onAuthStateChange.listen((state) {
+        switch (state.event) {
+          case AuthChangeEvent.signedIn:
+          case AuthChangeEvent.tokenRefreshed:
+            _onSignedIn();
+          case AuthChangeEvent.signedOut:
+            _onSignedOut();
+          default:
+            break;
+        }
+      });
+    } catch (e) {
+      debugPrint('PushMessagingBridge: auth wiring failed; '
+          'token registration disabled: $e');
     }
+  }
 
-    _authSub = auth.onAuthStateChange.listen((state) {
-      switch (state.event) {
-        case AuthChangeEvent.signedIn:
-        case AuthChangeEvent.tokenRefreshed:
-          _onSignedIn();
-        case AuthChangeEvent.signedOut:
-          _onSignedOut();
-        default:
-          break;
-      }
-    });
+  void _route(PushOpenedMessage msg) {
+    try {
+      _onOpenNotification?.call(msg);
+    } catch (e) {
+      debugPrint('PushMessagingBridge: open-notification routing failed: $e');
+    }
   }
 
   void detach() {
