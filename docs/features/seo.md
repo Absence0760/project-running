@@ -193,6 +193,11 @@ redirect are **landed but deploy-gated** — they need a `terraform apply`
 share Lambdas shipped under. Until then the SvelteKit dev/build path serves
 the routes; prod serves the SPA shell for the new `/share/*` paths.
 
+The `/share/session/*` + `/share/workout/*` behaviours ride that same pending
+apply — no new Lambda, no new release step (the existing `share-entity` zip
+already carries their dispatcher branches), just two more
+`ordered_cache_behavior` blocks on the distribution.
+
 ### Fit with the minimal (Lean / Rock-bottom) deploy
 
 All of this rides **every** cost tier, including Rock-bottom (~$10–11/mo,
