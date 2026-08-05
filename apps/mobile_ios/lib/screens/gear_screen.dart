@@ -1,6 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, EmptyState;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme, EmptyState;
 
 import '../gear_backfill.dart';
 import '../gear_wear.dart';
@@ -353,7 +353,9 @@ class _GearScreenState extends State<GearScreen> {
                           ),
                           const SizedBox(height: 8),
                           for (final row in _retired)
-                            Opacity(opacity: 0.65, child: _gearTile(row, theme)),
+                            Opacity(
+                                opacity: AppTheme.dimmedSubtreeOpacity,
+                                child: _gearTile(row, theme)),
                         ],
                       ],
                     ),
