@@ -20,7 +20,15 @@ import '../watch_ingest_queue.dart';
 import '../watch_roadbook.dart';
 import '../watch_settings.dart';
 import '../watch_workout.dart';
+import '../widgets/app_bar_actions.dart';
 import 'watch_screens_editor_screen.dart';
+
+/// In-place busy indicator for a toolbar action already in flight.
+const Widget _actionSpinner = SizedBox(
+  width: 18,
+  height: 18,
+  child: CircularProgressIndicator(strokeWidth: 2),
+);
 
 class SimWatchScreen extends StatefulWidget {
   final SimWatchLink Function(String host, int port) linkFactory;
@@ -405,71 +413,50 @@ class _SimWatchScreenState extends State<SimWatchScreen> {
       appBar: AppBar(
         title: Text(l10n.simWatchTitle),
         actions: [
-          IconButton(
-            tooltip: l10n.simWatchPushSettingsAction,
-            icon: _pushingSettings
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.tune),
-            onPressed: _pushingSettings ? null : _pushSettings,
-          ),
-          IconButton(
-            tooltip: l10n.simWatchPushWorkoutAction,
-            icon: _pushingWorkout
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.checklist),
-            onPressed: _pushingWorkout ? null : _pushWorkout,
-          ),
-          IconButton(
-            tooltip: l10n.simWatchPushCourseAction,
-            icon: _pushingCourse
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.route),
-            onPressed: _pushingCourse ? null : _pushCourse,
-          ),
-          IconButton(
-            tooltip: l10n.simWatchPushRoadbookAction,
-            icon: _pushingRoadbook
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.table_chart_outlined),
-            onPressed: _pushingRoadbook ? null : _pushRoadbook,
-          ),
-          IconButton(
-            tooltip: l10n.watchScreensAction,
-            icon: const Icon(Icons.dashboard_customize),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => WatchScreensEditorScreen(
-                  transportFactory: widget.transportFactory,
+          AppBarActions(
+            actions: [
+              // Sync leads: it is the round trip the other five set up for.
+              AppBarAction(
+                icon: _syncing ? _actionSpinner : const Icon(Icons.sync),
+                label: l10n.simWatchSyncAction,
+                onPressed: _syncing ? null : _syncRuns,
+              ),
+              AppBarAction(
+                icon: _pushingSettings ? _actionSpinner : const Icon(Icons.tune),
+                label: l10n.simWatchPushSettingsAction,
+                onPressed: _pushingSettings ? null : _pushSettings,
+              ),
+              AppBarAction(
+                icon: _pushingWorkout
+                    ? _actionSpinner
+                    : const Icon(Icons.checklist),
+                label: l10n.simWatchPushWorkoutAction,
+                onPressed: _pushingWorkout ? null : _pushWorkout,
+              ),
+              AppBarAction(
+                icon: _pushingCourse ? _actionSpinner : const Icon(Icons.route),
+                label: l10n.simWatchPushCourseAction,
+                onPressed: _pushingCourse ? null : _pushCourse,
+              ),
+              AppBarAction(
+                icon: _pushingRoadbook
+                    ? _actionSpinner
+                    : const Icon(Icons.table_chart_outlined),
+                label: l10n.simWatchPushRoadbookAction,
+                onPressed: _pushingRoadbook ? null : _pushRoadbook,
+              ),
+              AppBarAction(
+                icon: const Icon(Icons.dashboard_customize),
+                label: l10n.watchScreensAction,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => WatchScreensEditorScreen(
+                      transportFactory: widget.transportFactory,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          IconButton(
-            tooltip: l10n.simWatchSyncAction,
-            icon: _syncing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.sync),
-            onPressed: _syncing ? null : _syncRuns,
+            ],
           ),
         ],
       ),

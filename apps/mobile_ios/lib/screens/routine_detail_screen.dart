@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../fab_clearance.dart';
 import '../gym_routine.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
@@ -340,7 +341,8 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   Widget _body(StoredRoutine r, ThemeData theme, AppLocalizations l10n) {
     final notes = r.notes?.trim();
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, fabScrollClearance(context, fabCount: 2)),
       children: [
         Text(
           l10n.gymRoutineExerciseCount(r.exerciseCount),

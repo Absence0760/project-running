@@ -983,10 +983,10 @@
 		color: var(--color-text-secondary);
 	}
 	.popover-danger {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.popover-danger .material-symbols {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.main-content {

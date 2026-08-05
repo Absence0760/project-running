@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../backend_timeout.dart';
 import '../auth_error.dart';
@@ -808,30 +809,28 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          SizedBox(
+          TextLane(
             width: 30,
             child: Text('#${w.weekIndex + 1}',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.primary)),
           ),
-          SizedBox(
-            width: 70,
+          Expanded(
             child: Text(planPhaseLabel(l10n, w.phase),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall),
           ),
-          Expanded(
-            child: Text(fmtKm(w.targetVolumeM, 0),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                )),
-          ),
-          Flexible(
-            child: Text(l10n.planNewSessions(active),
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.outline,
-                )),
-          ),
+          const SizedBox(width: 8),
+          Text(fmtKm(w.targetVolumeM, 0),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              )),
+          const SizedBox(width: 8),
+          Text(l10n.planNewSessions(active),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.outline,
+              )),
         ],
       ),
     );

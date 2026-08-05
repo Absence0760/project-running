@@ -1,6 +1,8 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/plan_detail_screen.dart';
 import '../lib/social_service.dart';
@@ -396,5 +398,55 @@ void main() {
       expect(at2x.height, greaterThanOrEqualTo(at1x.height));
       expect(tester.takeException(), isNull);
     });
+  });
+
+  group('PlanDetailScreen — the week-grid weekday lane', () {
+    // The weekday sat in a 34px box. Portuguese "dom." needs 27.1px in real
+    // Roboto at labelSmall, which clears the box from 1.5x (39.7) and reaches
+    // 52.2 at 2x — and the abbreviation carries no break opportunity, so it
+    // painted over the workout name beside it rather than reflowing.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane whose floor tracks
+    // the scale here tracks it on a device too.
+    Future<void> pumpGrid(WidgetTester tester, {double textScale = 1.0}) async {
+      final start = _mondayThisWeek();
+      final training = _FakeTraining(
+        _plan(start),
+        [_week('w0', 0, 'build', 40000)],
+        [_wo('wo0', 'w0', start, 'easy', 8000)],
+      );
+      await _pump(tester,
+          training: training,
+          social: _FakeSocial(const []),
+          textScale: textScale);
+      // The week cards sit below the calendar in a lazy ListView.
+      await tester.scrollUntilVisible(
+        find.byType(TextLane),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+    }
+
+    Finder dowLane() => find.byType(TextLane);
+
+    testWidgets('the lane widens to the weekday instead of overpainting',
+        (tester) async {
+      await pumpGrid(tester);
+      expect(dowLane(), findsWidgets);
+      final lane = dowLane().first;
+      final dow = find.descendant(of: lane, matching: find.byType(Text)).first;
+      final para = tester.renderObject<RenderParagraph>(dow);
+      expect(
+        tester.getSize(lane).width,
+        greaterThanOrEqualTo(para.getMaxIntrinsicWidth(double.infinity)),
+      );
+    });
+
+    testWidgets('the lane floor grows with the OS text scale', (tester) async {
+      await pumpGrid(tester, textScale: 2.0);
+      expect(tester.getSize(dowLane().first).width, greaterThanOrEqualTo(68));
+    });
+
   });
 }

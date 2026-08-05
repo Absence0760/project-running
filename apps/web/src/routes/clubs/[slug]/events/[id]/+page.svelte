@@ -2865,12 +2865,12 @@
 	.rsvp-going.active {
 		background: color-mix(in srgb, var(--color-success) 14%, transparent);
 		border-color: var(--color-success);
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	.rsvp-going.active .material-symbols,
 	.rsvp-going.active .rsvp-count {
-		color: var(--color-success);
-		background: color-mix(in srgb, var(--color-success) 18%, transparent);
+		color: var(--color-success-text);
+		background: color-mix(in srgb, var(--color-success) 18%, var(--color-surface));
 	}
 	.rsvp-maybe.active {
 		background: color-mix(in srgb, var(--color-warning) 16%, transparent);
@@ -2880,17 +2880,17 @@
 	.rsvp-maybe.active .material-symbols,
 	.rsvp-maybe.active .rsvp-count {
 		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
-		background: color-mix(in srgb, var(--color-warning) 22%, transparent);
+		background: color-mix(in srgb, var(--color-warning) 22%, var(--color-surface));
 	}
 	.rsvp-declined.active {
 		background: var(--color-danger-light);
 		border-color: var(--color-danger);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.rsvp-declined.active .material-symbols,
 	.rsvp-declined.active .rsvp-count {
-		color: var(--color-danger);
-		background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+		color: var(--color-danger-text);
+		background: color-mix(in srgb, var(--color-danger) 18%, var(--color-surface));
 	}
 
 	.admin-actions {
@@ -2917,12 +2917,12 @@
 	}
 	.btn-ghost .material-symbols { font-size: 1.05rem; }
 	.btn-ghost.danger {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
 	}
 	.btn-ghost.danger:hover {
 		background: var(--color-danger-light);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.card {
@@ -3088,13 +3088,13 @@
 	.att-btn.attended.active {
 		background: var(--color-success-light, var(--color-bg-secondary));
 		border-color: var(--color-success);
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 
 	.att-btn.no-show.active {
 		background: var(--color-danger-light);
 		border-color: var(--color-danger);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.attendance-badge {
@@ -3107,17 +3107,17 @@
 
 	.attendance-badge.attended {
 		background: var(--color-success-light, var(--color-bg-secondary));
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 
 	.attendance-badge.no_show {
 		background: var(--color-danger-light);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 
 	.error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		background: var(--color-danger-light);
 		padding: 0.5rem 0.8rem;
 		border-radius: var(--radius-md);
@@ -3370,7 +3370,7 @@
 	}
 	.dnf-tag {
 		background: var(--color-danger-light);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-size: 0.7rem;
 		font-weight: 700;
 		padding: 0.1rem 0.35rem;
@@ -3432,7 +3432,7 @@
 	.import-errors {
 		margin: var(--space-sm) 0 0;
 		padding-inline-start: 1.1rem;
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-size: 0.85rem;
 	}
 	.import-summary {
@@ -3531,7 +3531,7 @@
 		letter-spacing: 0.04em;
 	}
 	.btn-link.approve { color: #2e7d32; }
-	.btn-link.reject { color: var(--color-danger); }
+	.btn-link.reject { color: var(--color-danger-text); }
 
 	.photo-add {
 		cursor: pointer;

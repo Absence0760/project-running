@@ -1,6 +1,8 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -751,5 +753,80 @@ void main() {
         );
       },
     );
+  });
+
+  group('EventDetailScreen — the results rank lane', () {
+    // The finishing position sat in a 28px box. "999" needs 36.1px in real
+    // Roboto at titleMedium w700 once the OS text scale reaches 1.5x and 48.2
+    // at 2x, and a rank has no break opportunity, so it painted over the
+    // finisher's name beside it. A four-digit field clears the box at 1.0x.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane whose floor tracks
+    // the scale here tracks it on a device too.
+    Future<void> pumpResults(WidgetTester tester, {double scale = 1.0}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: ListView(children: [
+              EventResultsSection(
+                results: [
+                  EventResultView(
+                    userId: 'u-1',
+                    displayName: 'Backmarker',
+                    runId: null,
+                    durationS: 18000,
+                    distanceM: 42195,
+                    rank: 999,
+                    finisherStatus: 'finished',
+                    organiserApproved: true,
+                    ageGradePct: null,
+                    note: null,
+                    createdAt: DateTime.utc(2026, 3, 28),
+                  ),
+                ],
+                myUserId: null,
+                submitting: false,
+                onSubmit: () {},
+                onRemove: () {},
+                eventTitle: 'Spring Marathon',
+                clubName: null,
+                certificateDate: DateTime.utc(2026, 3, 28),
+              ),
+            ]),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('the lane widens to the rank instead of overpainting',
+        (tester) async {
+      await pumpResults(tester);
+      final lane = find.ancestor(
+        of: find.text('999'),
+        matching: find.byType(TextLane),
+      );
+      expect(lane, findsOneWidget);
+      final rank = tester.renderObject<RenderParagraph>(find.text('999'));
+      expect(
+        tester.getSize(lane).width,
+        greaterThanOrEqualTo(rank.getMaxIntrinsicWidth(double.infinity)),
+      );
+    });
+
+    testWidgets('the lane floor grows with the OS text scale', (tester) async {
+      await pumpResults(tester, scale: 2.0);
+      final lane = find.byType(TextLane).first;
+      expect(tester.getSize(lane).width,
+          greaterThanOrEqualTo(tester.widget<TextLane>(lane).width * 2));
+    });
   });
 }

@@ -1,6 +1,8 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/plan_new_screen.dart';
 import '../lib/social_service.dart';
@@ -503,6 +505,80 @@ void main() {
       await pumpTall(tester);
       await tester.pump();
       expect(find.text('Add a plan name to enable Create.'), findsOneWidget);
+    });
+  });
+
+  group('PlanNewScreen — the week-outline preview row survives the locale', () {
+    // The phase name is the row's only localized phrase and sat in a 70px box:
+    // French "Semaine de fin de programme" needs 186px in real Roboto at 1.0x,
+    // so it reflowed the row four lines deep before the OS text scale was even
+    // touched. It now absorbs the row's slack and ellipsizes (§486 — the label
+    // truncates, never the value), while the week number rides a TextLane and
+    // the two numerics take their intrinsic width.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so these assertions hold a
+    // fortiori on a device.
+    Future<void> pumpFrench(WidgetTester tester,
+        {Size surface = const Size(320, 2400), double scale = 1.0}) async {
+      tester.view.physicalSize = surface;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('fr'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: PlanNewScreen(training: TrainingService()),
+        ),
+      );
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.text('Aperçu des semaines'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+    }
+
+    Finder weekLane() => find.ancestor(
+          of: find.text('#1'),
+          matching: find.byType(TextLane),
+        );
+
+    testWidgets('the week-number lane gives its digits their full width',
+        (tester) async {
+      await pumpFrench(tester);
+      expect(weekLane(), findsOneWidget);
+      final digits = tester.renderObject<RenderParagraph>(find.text('#1'));
+      expect(
+        tester.getSize(weekLane()).width,
+        greaterThanOrEqualTo(digits.getMaxIntrinsicWidth(double.infinity)),
+      );
+    });
+
+    testWidgets('the week-number lane grows with the OS text scale',
+        (tester) async {
+      // A wide surface, because the goal dropdown above the preview carries a
+      // separate 2x overflow this round does not own.
+      await pumpFrench(tester,
+          surface: const Size(800, 2400), scale: 2.0);
+      expect(tester.getSize(weekLane()).width, greaterThanOrEqualTo(60));
+    });
+
+    testWidgets('the phase label ellipsizes instead of reflowing the row',
+        (tester) async {
+      await pumpFrench(tester);
+      final phase = find.text('Base').first;
+      expect(tester.widget<Text>(phase).maxLines, 1);
+      expect(tester.widget<Text>(phase).overflow, TextOverflow.ellipsis);
+      final para = tester.renderObject<RenderParagraph>(phase);
+      expect(para.size.height, lessThan(para.preferredLineHeight * 2),
+          reason: 'the phase lane must stay one line tall');
     });
   });
 }

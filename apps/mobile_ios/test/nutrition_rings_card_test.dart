@@ -7,9 +7,10 @@ import '../lib/nutrition_totals.dart';
 import '../lib/widgets/nutrition_rings_card.dart';
 
 Future<void> _pump(WidgetTester tester, Widget child,
-    {double textScale = 1.0}) {
+    {double textScale = 1.0, Locale? locale}) {
   return tester.pumpWidget(
     MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (context, c) => MediaQuery(
@@ -104,6 +105,46 @@ void main() {
       expect(at2x.width, lessThanOrEqualTo(48));
       expect(at2x.height, lessThanOrEqualTo(48));
       expect(at2x.width, greaterThanOrEqualTo(at1x.width));
+    });
+
+    testWidgets('the ring strip reflows rather than bursting the card',
+        (tester) async {
+      // Issue #666 round 9. The labels UNDER the rings are not bounded by
+      // the arc the round-8 fix bounded: four macro names overflowed a
+      // 320 dp card by 184 px in Portuguese and 174 in Spanish at 2x, and
+      // by 77 px in Portuguese at 1.5x. The Row is a Wrap now.
+      addTearDown(tester.view.reset);
+      for (final width in const [411.0, 320.0]) {
+        for (final locale in const [
+          Locale('en'),
+          Locale('pt'),
+          Locale('de'),
+        ]) {
+          for (final scale in const [1.0, 1.5, 2.0]) {
+            tester.view.physicalSize = Size(width, 2400);
+            tester.view.devicePixelRatio = 1.0;
+            await tester.pumpWidget(const SizedBox.shrink());
+            await _pump(
+              tester,
+              const NutritionRingsCard(
+                  consumed: consumed, targets: targets, onTap: _noop),
+              textScale: scale,
+              locale: locale,
+            );
+            final where = '$width dp / $locale / ${scale}x';
+            expect(tester.takeException(), isNull, reason: where);
+            expect(find.byType(CircularProgressIndicator), findsNWidgets(4),
+                reason: where);
+            // Every ring still inside the card, and so is its label.
+            final texts = find.byType(Text);
+            for (var i = 0; i < texts.evaluate().length; i++) {
+              expect(tester.getBottomRight(texts.at(i)).dx,
+                  lessThanOrEqualTo(width),
+                  reason: where);
+            }
+          }
+        }
+      }
     });
   });
 }

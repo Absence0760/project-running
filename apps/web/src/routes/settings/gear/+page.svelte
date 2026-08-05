@@ -1250,7 +1250,7 @@
 		border-radius: var(--radius-sm);
 		display: inline-flex;
 	}
-	.wear-del:hover { color: var(--color-danger); background: var(--color-surface); }
+	.wear-del:hover { color: var(--color-danger-text); background: var(--color-surface); }
 	.wear-del .material-symbols { font-size: 1rem; }
 
 	.rotation-filter select {

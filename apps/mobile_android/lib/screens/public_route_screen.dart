@@ -5,6 +5,7 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../fab_clearance.dart';
 import '../main.dart' show pendingStartRunWithRoute;
 import '../preferences.dart';
 import '../widgets/error_state.dart';
@@ -309,7 +310,7 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
             routeOwnerId: route.userId,
           ),
         ),
-        const SizedBox(height: 32),
+        SizedBox(height: fabScrollClearance(context)),
       ],
     );
   }

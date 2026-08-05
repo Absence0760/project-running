@@ -123,14 +123,15 @@ void main() {
     });
 
     test(
-        'bottom-of-list trailing padding (88 px) leaves room for the '
-        'FAB to float above the last review card',
+        'bottom-of-list trailing padding leaves room for the FAB to float '
+        'above the last review card',
         () {
-      // Without trailing padding, the FAB sits on top of the last
-      // review card. 88 px clears a standard FAB.extended height +
-      // 16 px breathing room.
+      // Without trailing padding, the FAB sits on top of the last review
+      // card. The fixed 88 this used to assert ignored the system nav bar,
+      // which adds ~48 on 3-button navigation (issue #666 C5 / decisions
+      // § C20) — `fabScrollClearance` folds that in.
       expect(
-        src.contains('const SizedBox(height: 88)'),
+        src.contains('SizedBox(height: fabScrollClearance(context))'),
         isTrue,
         reason: 'Bottom-of-scroll padding must clear the FAB.',
       );

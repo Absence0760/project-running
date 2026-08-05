@@ -7,6 +7,7 @@ import 'package:ui_kit/ui_kit.dart';
 
 import '../backend_timeout.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../fab_clearance.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
@@ -389,7 +390,8 @@ class _RoutinePublicPreviewScreenState
               label: l10n.commonLoading,
             )
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              padding: EdgeInsets.fromLTRB(
+                  16, 16, 16, fabScrollClearance(context)),
               children: [
                 Text(l10n.gymLibraryByAuthor(author),
                     style: theme.textTheme.bodyMedium),

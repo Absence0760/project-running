@@ -553,7 +553,7 @@
 	.comment-pill .material-symbols { font-size: 1rem; }
 	.kudos-pill.given {
 		background: color-mix(in srgb, var(--color-danger) 12%, transparent);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
 	}
 	.kudos-pill:disabled { opacity: 0.6; cursor: progress; }

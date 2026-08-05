@@ -2295,7 +2295,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.plan-hero-today-done {
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-weight: 600;
 	}
 	.plan-hero-today-arrow {
@@ -2339,7 +2339,7 @@
 		text-transform: uppercase;
 	}
 	.done-icon {
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-size: 1.75rem;
 	}
 	.plan-promo {
@@ -2604,8 +2604,8 @@
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
 	}
-	.fitness-value.tsb-neg { color: var(--color-danger); }
-	.fitness-value.tsb-pos { color: var(--color-success); }
+	.fitness-value.tsb-neg { color: var(--color-danger-text); }
+	.fitness-value.tsb-pos { color: var(--color-success-text); }
 
 	.recap-link {
 		display: inline-flex;
@@ -2654,7 +2654,7 @@
 	}
 	.readiness-card.readiness-high .readiness-band {
 		background: color-mix(in srgb, var(--color-success) 14%, transparent);
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	.readiness-card.readiness-moderate .readiness-band {
 		background: color-mix(in srgb, var(--color-warning) 22%, transparent);
@@ -2662,7 +2662,7 @@
 	}
 	.readiness-card.readiness-low .readiness-band {
 		background: color-mix(in srgb, var(--color-danger) 16%, transparent);
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 	.readiness-score {
 		font-size: 2.75rem;
@@ -2884,7 +2884,7 @@
 		font-variant-numeric: tabular-nums;
 		line-height: 1;
 	}
-	.goal-card-done .goal-overall { color: var(--color-success); }
+	.goal-card-done .goal-overall { color: var(--color-success-text); }
 	.goal-card-done {
 		border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
 		background: color-mix(in srgb, var(--color-success) 4%, var(--color-surface));
@@ -2895,7 +2895,7 @@
 		gap: var(--space-2xs);
 		padding: var(--space-2xs) var(--space-sm);
 		background: color-mix(in srgb, var(--color-success) 16%, transparent);
-		color: var(--color-success);
+		color: var(--color-success-text);
 		border-radius: 9999px;
 		font-size: 0.72rem;
 		font-weight: 700;
@@ -3099,9 +3099,11 @@
 		color: var(--color-text-secondary);
 		font-variant-numeric: tabular-nums;
 	}
+	/* --color-bg-secondary, not -tertiary: the bar's extent against its track is
+	   the datum, and --zone-5 computes to 2.86:1 against the darker track. */
 	.zone-bar-wrap {
 		height: 0.7rem;
-		background: var(--color-bg-tertiary);
+		background: var(--color-bg-secondary);
 		border-radius: 9999px;
 		overflow: hidden;
 	}
@@ -3110,15 +3112,17 @@
 		border-radius: inherit;
 		transition: width 0.4s ease;
 	}
-	.zone-row-1 .zone-bar { background: var(--color-accent-cyan); }
-	.zone-row-2 .zone-bar { background: color-mix(in srgb, var(--color-accent-cyan) 35%, var(--color-success)); }
-	.zone-row-3 .zone-bar { background: var(--color-warning); }
-	.zone-row-4 .zone-bar { background: var(--color-accent-orange); }
-	.zone-row-5 .zone-bar { background: var(--color-danger); }
-	.zone-row-1 .zone-name { color: var(--color-accent-cyan-text); }
-	.zone-row-3 .zone-name { color: var(--color-warning-text); }
-	.zone-row-4 .zone-name { color: var(--color-accent-orange); }
-	.zone-row-5 .zone-name { color: var(--color-danger); }
+	/* The shared per-brightness zone ladder. The five bespoke hues this replaces
+	   were the fourth HR-zone palette in the codebase and the worst: z3 and z4
+	   were 1.016:1 apart in light, and in dark four of the five sat inside
+	   1.08:1 of each other. The names deliberately carry no per-row colour —
+	   --zone-5 is 3.59:1 in light and cannot be text, and a name tinted a hue
+	   its own bar does not draw is the mislabelled-key defect of §489. */
+	.zone-row-1 .zone-bar { background: var(--zone-1); }
+	.zone-row-2 .zone-bar { background: var(--zone-2); }
+	.zone-row-3 .zone-bar { background: var(--zone-3); }
+	.zone-row-4 .zone-bar { background: var(--zone-4); }
+	.zone-row-5 .zone-bar { background: var(--zone-5); }
 	.zone-duration {
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);

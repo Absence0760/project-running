@@ -319,7 +319,7 @@
 		inset-inline-end: 0.3rem;
 		font-family: 'Material Symbols Outlined';
 		font-size: 0.95rem;
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	@media (max-width: 40rem) {
 		.cell {

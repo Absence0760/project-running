@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -859,6 +860,67 @@ void main() {
       },
     );
   });
+
+  group('ClubDetailScreen — the event date lane holds its localized date', () {
+    // The upcoming-event tile stacks a date over a time in a 56px box.
+    // Portuguese "28 de mar." needs 66.1px in real Roboto at titleSmall w700
+    // and English "10:35 AM" 57.9px at bodySmall, so both reflowed inside the
+    // box at 1.0x — before the OS text scale, which takes the date to 132.2.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane that clears its
+    // date's intrinsic width here clears it on a device too.
+    Future<void> pumpPortuguese(WidgetTester tester, {double scale = 1.0}) {
+      return tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('pt'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: ClubDetailScreen(
+            social: _EventSocial(),
+            training: _FakeTraining(),
+            slug: 'fake-slug',
+          ),
+        ),
+      );
+    }
+
+    Finder dateLane() => find.ancestor(
+          of: find.text('28 de mar.'),
+          matching: find.byType(TextLane),
+        );
+
+    realtimeWidgetTest('the lane widens to the date instead of reflowing it',
+        (tester) async {
+      await pumpPortuguese(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eventos'));
+      await tester.pumpAndSettle();
+      expect(dateLane(), findsOneWidget);
+      final date =
+          tester.renderObject<RenderParagraph>(find.text('28 de mar.'));
+      expect(
+        tester.getSize(dateLane()).width,
+        greaterThanOrEqualTo(date.getMaxIntrinsicWidth(double.infinity)),
+      );
+      expect(date.size.height, lessThan(date.preferredLineHeight * 2),
+          reason: 'the date must stay one line tall');
+    });
+
+    realtimeWidgetTest('the lane floor grows with the OS text scale',
+        (tester) async {
+      await pumpPortuguese(tester, scale: 2.0);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eventos'));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(dateLane()).width, greaterThanOrEqualTo(112));
+    });
+  });
 }
 
 ClubView _nonMemberClub() => ClubView(
@@ -972,4 +1034,27 @@ class _NonMemberSocial extends SocialService {
   @override
   RealtimeChannel subscribeToClub(String clubId, void Function() onChange) =>
       Supabase.instance.client.channel('test-$clubId');
+}
+
+/// A club whose one upcoming event lands on a date whose Portuguese short form
+/// ("28 de mar.") outruns the tile's historical 56px date box.
+class _EventSocial extends _FakeSocial {
+  @override
+  Future<List<EventView>> fetchUpcomingEvents(String clubId) async => [
+        EventView(
+          row: EventRow(
+            id: 'event-1',
+            clubId: 'club-1',
+            title: 'Long run',
+            startsAt: DateTime.utc(2026, 3, 28, 10, 35),
+            authorId: 'owner',
+            category: 'run',
+            isPublic: true,
+          ),
+          byday: null,
+          attendeeCount: 3,
+          viewerRsvp: null,
+          nextInstanceStart: DateTime.utc(2026, 3, 28, 10, 35),
+        ),
+      ];
 }

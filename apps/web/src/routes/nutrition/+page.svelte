@@ -1009,7 +1009,7 @@
 	/* Over a ceiling macro (calories / fat): the one ring state worth
 	   flagging — the arc already recoloured to danger via --ring-color. */
 	.ring-pct-over {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-weight: 700;
 	}
 	/* A goal macro (protein / carbs) cleared — a quiet win, never an alert. */
@@ -1257,7 +1257,7 @@
 		transition: background var(--transition-fast), color var(--transition-fast);
 	}
 	.icon-btn .material-symbols { font-size: 1.15rem; }
-	.icon-btn:hover { background: var(--color-danger-light); color: var(--color-danger); }
+	.icon-btn:hover { background: var(--color-danger-light); color: var(--color-danger-text); }
 
 	.load-error-banner {
 		display: flex;

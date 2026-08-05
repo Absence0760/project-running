@@ -68,12 +68,17 @@ RaceListingView _listing(String id, String name,
       distanceMAway: null,
     );
 
-Widget _app(RaceService service, {double textScale = 1.0}) => MaterialApp(
+Widget _app(RaceService service,
+        {double textScale = 1.0, double bottomInset = 0}) =>
+    MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: TextScaler.linear(textScale)),
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(textScale),
+          padding: EdgeInsets.only(bottom: bottomInset),
+          viewPadding: EdgeInsets.only(bottom: bottomInset),
+        ),
         child: child!,
       ),
       home: RacesScreen(service: service),
@@ -278,5 +283,34 @@ void main() {
     // Pre-fix the chip measured exactly 40.0 here while needing 58, so its
     // label was cropped inside the rail.
     expect(tester.getSize(chip).height, greaterThan(small));
+  });
+
+  // Issue #666 C5: the list reserved nothing at all for the Submit-race FAB,
+  // so the last card sat under it — worst on a 3-button nav bar, which lifts
+  // the button another ~48dp into the list.
+  testWidgets('the last race card clears the FAB, nav bar included',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 700);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final service = _FakeRaceService(results: [
+      for (var i = 0; i < 8; i++) _listing('r$i', 'Race $i', distanceM: 10000),
+    ]);
+    await tester.pumpWidget(_app(service, bottomInset: 48));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Race 7'), 300,
+        scrollable: find.descendant(
+            of: find.byType(ListView), matching: find.byType(Scrollable)));
+    await tester.pumpAndSettle();
+
+    final lastCard = find.ancestor(
+        of: find.text('Race 7'), matching: find.byType(Card));
+    expect(
+      tester.getRect(lastCard).bottom,
+      lessThan(tester.getRect(find.byType(FloatingActionButton)).top),
+      reason: 'the last card must end above the button that floats over it',
+    );
   });
 }

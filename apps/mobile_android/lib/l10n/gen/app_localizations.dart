@@ -20929,6 +20929,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Loading…'**
   String get commonLoading;
+
+  /// Tooltip on an app-bar overflow menu button
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get commonMore;
 }
 
 class _AppLocalizationsDelegate

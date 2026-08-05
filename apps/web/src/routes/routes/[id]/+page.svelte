@@ -1434,7 +1434,7 @@
 
 	.review-report-btn:hover,
 	.review-delete-btn:hover {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 	}
 
 	.review-report-btn .material-symbols {
@@ -1486,7 +1486,7 @@
 		line-height: 1;
 		padding: 0;
 	}
-	.tag-x:hover { color: var(--color-danger); }
+	.tag-x:hover { color: var(--color-danger-text); }
 	/* The owner-only "add tag" input. Dashed border to read as
 	 * "drop a tag here" affordance rather than a stray empty form
 	 * field — matches the dashed-chip pattern other apps use for

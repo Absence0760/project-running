@@ -12516,4 +12516,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get commonLoading => 'Cargando…';
+
+  @override
+  String get commonMore => 'Más';
 }

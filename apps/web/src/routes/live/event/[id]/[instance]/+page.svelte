@@ -1049,7 +1049,7 @@
 		color: var(--color-text);
 	}
 	.dnf {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		font-weight: 700;
 		font-size: 0.75rem;
 		letter-spacing: 0.05em;

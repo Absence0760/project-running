@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
@@ -239,5 +241,75 @@ void main() {
 
     expect(store.updateCalls, 1);
     expect(store.byId(id)!.workout.isPublic, isTrue);
+  });
+
+  group('GymDetailScreen — the set-number lane holds its localized label', () {
+    // "Set N" sat in a 56px box. French/Portuguese "Série 12" needs 75.7px in
+    // real Roboto at bodySmall once the OS text scale reaches 1.5x, and 100.9
+    // at 2x, so the label reflowed inside its box and pushed the set summary
+    // beside it out of line.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane whose floor tracks
+    // the scale here tracks it on a device too.
+    Widget frenchScreen(LocalGymStore store, String id, double scale) =>
+        MaterialApp(
+          locale: const Locale('fr'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: GymDetailScreen(api: null, store: store, workoutId: id),
+        );
+
+    Finder setLane() => find.ancestor(
+          of: find.text('Série 1'),
+          matching: find.byType(TextLane),
+        );
+
+    testWidgets('the lane widens to the label instead of reflowing it',
+        (tester) async {
+      late LocalGymStore store;
+      late String id;
+      late Directory dir;
+      await tester.runAsync(() async {
+        final s = await _seed();
+        store = s.store;
+        id = s.id;
+        dir = s.dir;
+      });
+      addTearDown(() => dir.deleteSync(recursive: true));
+
+      await tester.pumpWidget(frenchScreen(store, id, 1.0));
+      await tester.pump();
+      expect(setLane(), findsOneWidget);
+      final label = tester.renderObject<RenderParagraph>(find.text('Série 1'));
+      expect(
+        tester.getSize(setLane()).width,
+        greaterThanOrEqualTo(label.getMaxIntrinsicWidth(double.infinity)),
+      );
+      expect(label.size.height, lessThan(label.preferredLineHeight * 2),
+          reason: 'the set label must stay one line tall');
+    });
+
+    testWidgets('the lane floor grows with the OS text scale', (tester) async {
+      late LocalGymStore store;
+      late String id;
+      late Directory dir;
+      await tester.runAsync(() async {
+        final s = await _seed();
+        store = s.store;
+        id = s.id;
+        dir = s.dir;
+      });
+      addTearDown(() => dir.deleteSync(recursive: true));
+
+      await tester.pumpWidget(frenchScreen(store, id, 2.0));
+      await tester.pump();
+      expect(tester.getSize(setLane()).width, greaterThanOrEqualTo(112));
+    });
   });
 }

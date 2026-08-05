@@ -362,7 +362,7 @@
 	.check {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.1rem;
-		color: var(--color-success);
+		color: var(--color-success-text);
 		flex-shrink: 0;
 		line-height: 1.3;
 	}

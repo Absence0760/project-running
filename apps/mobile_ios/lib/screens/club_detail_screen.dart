@@ -955,7 +955,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               ),
               child: Row(
                 children: [
-                  SizedBox(
+                  TextLane(
                     width: 56,
                     child: Column(
                       children: [

@@ -142,7 +142,7 @@
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
 	}
-	.nutrition-ring-val.over { color: var(--color-danger); }
+	.nutrition-ring-val.over { color: var(--color-danger-text); }
 	.nutrition-ring-label {
 		font-size: 0.75rem;
 		font-weight: 600;

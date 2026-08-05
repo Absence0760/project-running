@@ -114,7 +114,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-weight: 600;
 	}
 	.complete .material-symbols {
@@ -149,7 +149,7 @@
 		color: var(--color-primary);
 	}
 	.pace.ahead .verdict {
-		color: var(--color-success);
+		color: var(--color-success-text);
 	}
 	.pace.behind .verdict {
 		color: var(--color-warning-text);

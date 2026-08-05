@@ -9,6 +9,7 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../adaptive_width.dart';
 import '../auth_error.dart';
+import '../fab_clearance.dart';
 import '../goals.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -1441,18 +1442,14 @@ class _RunsScreenState extends State<RunsScreen> {
         : buildHistoryItems(_visible,
             now: DateTime.now(),
             localeTag: localeToTag(Localizations.localeOf(context)));
-    // Bottom padding = FAB clearance (80) + system nav inset, mirroring
-    // plans_screen.dart — without it the docked Add Run FAB sits right on
-    // top of the last row, which is the Load-more button when one shows.
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     if (widthClassOf(context) == WidthClass.expanded) {
       return _buildRunGrid(theme, l10n, unit, items,
-          emptyAfterFilter: emptyAfterFilter,
-          showLoadMore: showLoadMore,
-          bottomInset: bottomInset);
+          emptyAfterFilter: emptyAfterFilter, showLoadMore: showLoadMore);
     }
+    // Without the clearance the Add Run FAB sits right on top of the last
+    // row, which is the Load-more button when one shows.
     return ListView.builder(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 80 + bottomInset),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, fabScrollClearance(context)),
       itemCount:
           items.length + 1 + (emptyAfterFilter ? 1 : 0) + loadMoreSlot,
       itemBuilder: (context, index) {
@@ -1490,7 +1487,6 @@ class _RunsScreenState extends State<RunsScreen> {
     List<HistoryItem> items, {
     required bool emptyAfterFilter,
     required bool showLoadMore,
-    required double bottomInset,
   }) {
     final slivers = <Widget>[
       SliverToBoxAdapter(child: _filterHeader(l10n, unit)),
@@ -1532,7 +1528,8 @@ class _RunsScreenState extends State<RunsScreen> {
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 80 + bottomInset),
+          padding:
+              EdgeInsets.fromLTRB(16, 16, 16, fabScrollClearance(context)),
           sliver: SliverMainAxisGroup(slivers: slivers),
         ),
       ],

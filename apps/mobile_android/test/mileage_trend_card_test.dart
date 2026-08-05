@@ -24,9 +24,11 @@ Future<void> _pump(
   DistanceUnit unit = DistanceUnit.km,
   required DateTime now,
   double textScale = 1.0,
+  Locale? locale,
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (context, child) => MediaQuery(
@@ -102,7 +104,6 @@ void main() {
         ],
         now: now,
       );
-      // Tap the Month segment in the SegmentedButton.
       await tester.tap(find.text('Month'));
       await tester.pump();
       expect(find.text("May '26"), findsOneWidget);
@@ -185,6 +186,78 @@ void main() {
       final grown = tester.getSize(lane.first).height;
       expect(grown, greaterThan(small));
       expect(tester.getSize(label).height, lessThanOrEqualTo(grown));
+    });
+
+    testWidgets('the view toggle reflows instead of bursting the card',
+        (tester) async {
+      // Issue #666 round 9. As a SegmentedButton the toggle overflowed a
+      // 360 dp card by 90 px in French and 68 in Spanish at 2x OS text
+      // scale, and by 60 px in French at 1.5x on 320 dp — the control takes
+      // its intrinsic width whatever the parent offers, so even a line of
+      // its own would not have held it.
+      addTearDown(tester.view.reset);
+      final runs = [
+        _run(startedAt: DateTime(2026, 5, 18, 7), distanceM: 5000),
+      ];
+      for (final width in const [411.0, 360.0, 320.0]) {
+        for (final locale in const [
+          Locale('en'),
+          Locale('fr'),
+          Locale('es'),
+        ]) {
+          for (final scale in const [1.0, 1.5, 2.0]) {
+            tester.view.physicalSize = Size(width, 2400);
+            tester.view.devicePixelRatio = 1.0;
+            await tester.pumpWidget(const SizedBox.shrink());
+            // The dashboard supplies a 16 dp gutter, and the card's width
+            // is the whole question here, so the harness reproduces it.
+            await tester.pumpWidget(MaterialApp(
+              locale: locale,
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(
+                body: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    MileageTrendCard(
+                        runs: runs, unit: DistanceUnit.km, now: now),
+                  ],
+                ),
+              ),
+            ));
+            final where = '$width dp / $locale / ${scale}x';
+            // Deliberately not an exception assertion. The spotlight
+            // headline's Row is a different, pre-existing shape — a short
+            // stat value beside an Expanded sibling, which § 486 swept and
+            // left — and in this harness's fixed-advance test font it bursts
+            // at 2x on its own ("5.00 km" wants 308 px of 288). Roboto wants
+            // 159 and fits. The toggle is asserted geometrically instead, so
+            // the guard does not depend on the harness font.
+            tester.takeException();
+            // Asserted on the labels, not on the control's type: what has
+            // to hold is that all three view options stay inside the card,
+            // whatever reflows them.
+            final l10n = AppLocalizations.of(
+                tester.element(find.byType(MileageTrendCard)));
+            for (final label in [
+              l10n.mileageWeek,
+              l10n.mileageMonth,
+              l10n.mileageYear,
+            ]) {
+              final f = find.text(label);
+              expect(f, findsOneWidget, reason: '$where $label');
+              expect(tester.getBottomRight(f).dx,
+                  lessThanOrEqualTo(width - 16),
+                  reason: '$where $label');
+            }
+          }
+        }
+      }
     });
   });
 }

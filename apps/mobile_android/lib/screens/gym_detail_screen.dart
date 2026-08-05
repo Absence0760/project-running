@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, TextLane;
 
 import '../auth_error.dart';
 import '../exercise_history.dart';
@@ -818,7 +818,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    SizedBox(
+                    TextLane(
                       width: 56,
                       child: Text(
                         l10n.gymSetN(ref.index + 1),

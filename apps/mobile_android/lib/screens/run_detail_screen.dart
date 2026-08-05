@@ -1145,47 +1145,36 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           child: Text(_notes, style: theme.textTheme.bodyMedium),
         ),
 
-      // Primary stats — each cell is Expanded so a long value like
-      // "1:15:30" can't push the row past the screen edge. For runs
-      // with no GPS track (manual entries, summary imports) the
-      // "Moving" column is dropped — it's identical to "Time" and
-      // four cells are too tight on a phone.
+      // Primary stats. For runs with no GPS track (manual entries, summary
+      // imports) the "Moving" column is dropped — it's identical to "Time".
       Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Expanded(
-              child: _StatBig(
-                label: l10n.runStatDistance,
-                value: UnitFormat.distanceValue(run.distanceMetres, unit),
-                unit: UnitFormat.distanceLabel(unit),
-              ),
+        child: _StatGrid(
+          cells: [
+            _StatBig(
+              label: l10n.runStatDistance,
+              value: UnitFormat.distanceValue(run.distanceMetres, unit),
+              unit: UnitFormat.distanceLabel(unit),
             ),
-            Expanded(
-              child: _StatBig(
-                label: l10n.runStatTime,
-                value: _formatDuration(run.duration),
-              ),
+            _StatBig(
+              label: l10n.runStatTime,
+              value: _formatDuration(run.duration),
             ),
             if (_showMovingTime)
-              Expanded(
-                child: _StatBig(
-                  label: l10n.runStatMoving,
-                  value: _formatDuration(_movingTime),
-                ),
+              _StatBig(
+                label: l10n.runStatMoving,
+                value: _formatDuration(_movingTime),
               ),
-            Expanded(
-              child: _StatBig(
-                label: _activityType.usesSpeed
-                    ? l10n.runStatAvgSpeed
-                    : l10n.runStatPace,
-                value: _activityType.usesSpeed
-                    ? UnitFormat.speed(_movingPaceSecPerKm, unit)
-                    : UnitFormat.pace(_movingPaceSecPerKm, unit),
-                unit: _activityType.usesSpeed
-                    ? UnitFormat.speedLabel(unit)
-                    : UnitFormat.paceLabel(unit),
-              ),
+            _StatBig(
+              label: _activityType.usesSpeed
+                  ? l10n.runStatAvgSpeed
+                  : l10n.runStatPace,
+              value: _activityType.usesSpeed
+                  ? UnitFormat.speed(_movingPaceSecPerKm, unit)
+                  : UnitFormat.pace(_movingPaceSecPerKm, unit),
+              unit: _activityType.usesSpeed
+                  ? UnitFormat.speedLabel(unit)
+                  : UnitFormat.paceLabel(unit),
             ),
           ],
         ),
@@ -1195,72 +1184,56 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       if (run.track.length >= 2 || _hasElevation) ...[
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Row(
-            children: [
+          child: _StatGrid(
+            cells: [
               if (_hasElevation) ...[
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.trending_up,
-                    label: l10n.runDetailStatElevGain,
-                    value: '${_elevationGain.round()}m',
-                  ),
+                _StatSmall(
+                  icon: Icons.trending_up,
+                  label: l10n.runDetailStatElevGain,
+                  value: '${_elevationGain.round()}m',
                 ),
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.trending_down,
-                    label: l10n.runDetailStatElevLoss,
-                    value: '${_elevationLoss.round()}m',
-                  ),
+                _StatSmall(
+                  icon: Icons.trending_down,
+                  label: l10n.runDetailStatElevLoss,
+                  value: '${_elevationLoss.round()}m',
                 ),
               ],
               if (_showGradeAdjustedPace)
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.terrain,
-                    label: l10n.runDetailStatGradeAdjPace,
-                    value:
-                        '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
-                  ),
+                _StatSmall(
+                  icon: Icons.terrain,
+                  label: l10n.runDetailStatGradeAdjPace,
+                  value:
+                      '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
                 ),
               if (_showCalories)
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.local_fire_department,
-                    label: l10n.runStatCalories,
-                    value: '$_estimatedCalories ${l10n.runUnitKcal}',
-                  ),
+                _StatSmall(
+                  icon: Icons.local_fire_department,
+                  label: l10n.runStatCalories,
+                  value: '$_estimatedCalories ${l10n.runUnitKcal}',
                 ),
               if (_steps > 0)
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.directions_walk,
-                    label: l10n.runStatSteps,
-                    value: '$_steps',
-                  ),
+                _StatSmall(
+                  icon: Icons.directions_walk,
+                  label: l10n.runStatSteps,
+                  value: '$_steps',
                 ),
               if (_cadence > 0)
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.speed,
-                    label: l10n.runStatCadence,
-                    value: '$_cadence ${l10n.runUnitSpm}',
-                  ),
+                _StatSmall(
+                  icon: Icons.speed,
+                  label: l10n.runStatCadence,
+                  value: '$_cadence ${l10n.runUnitSpm}',
                 ),
               if (_avgBpm > 0)
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.favorite,
-                    label: l10n.runDetailStatAvgHr,
-                    value: '$_avgBpm ${l10n.runUnitBpm}',
-                  ),
+                _StatSmall(
+                  icon: Icons.favorite,
+                  label: l10n.runDetailStatAvgHr,
+                  value: '$_avgBpm ${l10n.runUnitBpm}',
                 ),
               if (_ageGrade != null)
-                Expanded(
-                  child: _StatSmall(
-                    icon: Icons.emoji_events,
-                    label: l10n.runDetailStatAgeGrade,
-                    value: _ageGrade!,
-                  ),
+                _StatSmall(
+                  icon: Icons.emoji_events,
+                  label: l10n.runDetailStatAgeGrade,
+                  value: _ageGrade!,
                 ),
             ],
           ),
@@ -1830,20 +1803,18 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-        child: Row(
-          children: [
+        child: _StatGrid(
+          cells: [
             _StatSmall(
               icon: Icons.favorite,
               label: l10n.runDetailHrAvg,
               value: '${stats.avg} ${l10n.runUnitBpm}',
             ),
-            const SizedBox(width: 16),
             _StatSmall(
               icon: Icons.south,
               label: l10n.runDetailHrMin,
               value: '${stats.min}',
             ),
-            const SizedBox(width: 16),
             _StatSmall(
               icon: Icons.north,
               label: l10n.runDetailHrMax,
@@ -1892,7 +1863,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         ),
                       ),
                     SizedBox(
-                      width: 36,
+                      width: MediaQuery.textScalerOf(context).scale(36),
                       child: Text(
                         '${b.pct}%',
                         textAlign: TextAlign.right,
@@ -2047,6 +2018,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ];
     }
 
+    final scaler = MediaQuery.textScalerOf(context);
+    final tickLane = scaler.scale(36);
+    final durationLane = scaler.scale(54);
+
     // Find fastest and slowest for highlighting + bar scaling.
     final splitSeconds = splits.map((s) => s.duration.inSeconds).toList();
     final fastestSec = splitSeconds.reduce(math.min);
@@ -2078,7 +2053,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         child: Row(
           children: [
             SizedBox(
-              width: 36,
+              // Both side lanes hold text, so they are text-derived
+              // dimensions and track the OS text scale rather than sitting
+              // at a fixed 36/54: a scaled lane keeps every row's bar
+              // aligned (which a per-row intrinsic width would not) while
+              // still fitting the label. At 2x the split time needs 72 px
+              // and was being cropped inside the 54.
+              width: tickLane,
               child: Text(
                 '${s.tick}',
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -2107,13 +2088,21 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     ),
                     alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      _activityType.usesSpeed
-                          ? UnitFormat.speed(paceSecPerKm, unit)
-                          : UnitFormat.pace(paceSecPerKm, unit),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: barTextColor,
-                        fontWeight: FontWeight.w600,
+                    // The bar's WIDTH encodes the pace ranking, so it cannot
+                    // grow to hold the label the way its height can. On a
+                    // 320 dp screen at 2x the slowest bar is 6 px short of
+                    // the label and the ClipRRect cropped it silently.
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        _activityType.usesSpeed
+                            ? UnitFormat.speed(paceSecPerKm, unit)
+                            : UnitFormat.pace(paceSecPerKm, unit),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: barTextColor,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -2122,7 +2111,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             ),
             const SizedBox(width: 8),
             SizedBox(
-              width: 54,
+              width: durationLane,
               child: Text(
                 _formatDuration(s.duration),
                 style: theme.textTheme.bodyMedium?.copyWith(
@@ -2415,6 +2404,54 @@ class _Split {
   final int tick;
   final Duration duration;
   const _Split(this.tick, this.duration);
+}
+
+/// Narrowest a stat cell may be before its value stops being readable.
+/// The widest secondary value the screen produces is a paced one — "10:24
+/// /km", "1234 kcal" — which needs ~64dp at the 14sp body size the value is
+/// drawn in, so 72 leaves the value whole and lets only the label truncate.
+const double _kStatCellMinWidth = 72;
+
+/// Equal-width stat cells that reflow onto a second run rather than striping.
+///
+/// The secondary-stats row was one `Row` of up to eight `Expanded` cells, so
+/// on a 360dp phone a hilly race recorded with a chest strap gave each cell
+/// (360 - 40) / 8 = 40dp — narrower than every value it had to draw, and
+/// `_StatSmall` clips to one ellipsised line. Nothing overflowed, so no test
+/// and no debug banner could see it: the screen just went unreadable. Column
+/// count is derived from the width a cell needs *at the current text scale*,
+/// so a 2.0x reader gets two wide columns instead of eight illegible ones,
+/// and a row that fills all four columns lines up with the row above it.
+class _StatGrid extends StatelessWidget {
+  const _StatGrid({required this.cells});
+
+  static const int _maxColumns = 4;
+
+  final List<Widget> cells;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cells.isEmpty) return const SizedBox.shrink();
+    final minWidth =
+        MediaQuery.textScalerOf(context).scale(_kStatCellMinWidth);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final columns = (available / minWidth)
+            .floor()
+            .clamp(1, math.min(_maxColumns, cells.length));
+        // Floored so `columns` cells can never total more than `available`
+        // through floating-point drift and push the last one onto its own run.
+        final width = (available / columns).floorToDouble();
+        return Wrap(
+          runSpacing: 12,
+          children: [
+            for (final cell in cells) SizedBox(width: width, child: cell),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _StatSmall extends StatelessWidget {

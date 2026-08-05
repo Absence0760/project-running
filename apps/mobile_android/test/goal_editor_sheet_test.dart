@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/goals.dart';
 import '../lib/preferences.dart';
@@ -407,6 +409,81 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(prefs.goals, isNotEmpty);
+    });
+  });
+
+  group('GoalEditorSheet — the target-field label lane', () {
+    // Each target row leads with an 80px label box. Spanish "Ritmo medio"
+    // needs 79.3px in real Roboto at bodyMedium — inside the box by 0.7px at
+    // 1.0x, and 118.9 by 1.5x, 158.6 at 2x. The label has a break
+    // opportunity, so it reflowed inside the box and made the row taller than
+    // the field beside it rather than clipping.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane whose floor tracks
+    // the scale here tracks it on a device too.
+    // The 2x pass needs a wider surface than the sheet's usual 400: its
+    // Cancel/Save row is a §486 end-aligned action row that never became an
+    // OverflowBar and overflows at 2x on its own account, which this round
+    // does not own.
+    Future<void> pumpSpanish(WidgetTester tester,
+        {double scale = 1.0, double width = 400}) async {
+      final prefs = await _makePrefs();
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('es'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () =>
+                    showGoalEditorSheet(ctx, preferences: prefs),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('each lane widens to its label instead of reflowing it',
+        (tester) async {
+      await pumpSpanish(tester);
+      final lanes = find.byType(TextLane);
+      expect(lanes, findsWidgets);
+      for (var i = 0; i < lanes.evaluate().length; i++) {
+        final para = tester.renderObject<RenderParagraph>(
+            find.descendant(of: lanes.at(i), matching: find.byType(Text)).first);
+        expect(
+          tester.getSize(lanes.at(i)).width,
+          greaterThanOrEqualTo(para.getMaxIntrinsicWidth(double.infinity)),
+          reason: 'lane $i reflowed its label',
+        );
+        expect(para.size.height, lessThan(para.preferredLineHeight * 2),
+            reason: 'lane $i label must stay one line tall');
+      }
+    });
+
+    testWidgets('the lane floors grow with the OS text scale', (tester) async {
+      await pumpSpanish(tester, scale: 2.0, width: 700);
+      final lanes = find.byType(TextLane);
+      expect(lanes, findsWidgets);
+      for (var i = 0; i < lanes.evaluate().length; i++) {
+        expect(tester.getSize(lanes.at(i)).width,
+            greaterThanOrEqualTo(tester.widget<TextLane>(lanes.at(i)).width * 2),
+            reason: 'lane $i did not double with the scale');
+      }
     });
   });
 }

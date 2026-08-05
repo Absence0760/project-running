@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 
 import '../lib/audio_cues.dart';
 import '../lib/guided_runs.dart';
@@ -139,5 +141,62 @@ void main() {
       _app(GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues())),
     );
     expect(find.byIcon(Icons.volume_up), findsNWidgets(3));
+  });
+
+  group('GuidedRunDetailScreen — the cue timestamp lane', () {
+    // The cue timestamp sat in a 56px box. "120:00" needs 64.0px in real
+    // Roboto at titleSmall once the OS text scale reaches 1.5x and 85.4 at
+    // 2x, and a mm:ss stamp carries no break opportunity, so it painted over
+    // the cue text beside it.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane whose floor tracks
+    // the scale here tracks it on a device too.
+    const fixture = GuidedRun(
+      id: 'fixture',
+      title: 'Fixture',
+      subtitle: 'subtitle',
+      durationSec: 7200,
+      description: 'desc',
+      cues: [GuidedCue(atSec: 7200, text: 'Two hours in')],
+    );
+
+    Future<void> pumpCue(WidgetTester tester, {double scale = 1.0}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues()),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('the lane widens to the stamp instead of overpainting',
+        (tester) async {
+      await pumpCue(tester);
+      final lane = find.ancestor(
+        of: find.text('120:00'),
+        matching: find.byType(TextLane),
+      );
+      expect(lane, findsOneWidget);
+      final stamp = tester.renderObject<RenderParagraph>(find.text('120:00'));
+      expect(
+        tester.getSize(lane).width,
+        greaterThanOrEqualTo(stamp.getMaxIntrinsicWidth(double.infinity)),
+      );
+    });
+
+    testWidgets('the lane floor grows with the OS text scale', (tester) async {
+      await pumpCue(tester, scale: 2.0);
+      final lane = find.byType(TextLane).first;
+      expect(tester.getSize(lane).width,
+          greaterThanOrEqualTo(tester.widget<TextLane>(lane).width * 2));
+    });
   });
 }

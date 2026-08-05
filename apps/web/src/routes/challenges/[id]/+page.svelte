@@ -336,7 +336,7 @@
 		padding: 0.15rem 0.6rem;
 		border-radius: 999px;
 		background: var(--color-success-light);
-		color: var(--color-success);
+		color: var(--color-success-text);
 		font-weight: 600;
 	}
 	.badge-earned .material-symbols {

@@ -402,9 +402,12 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           border: Border.all(color: theme.dividerColor),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Row(
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.start,
           children: [
-            SizedBox(
+            TextLane(
               width: 90,
               child: Text(title,
                   style: theme.textTheme.labelMedium?.copyWith(
@@ -412,7 +415,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                     fontWeight: FontWeight.w700,
                   )),
             ),
-            Expanded(child: Text(body, style: theme.textTheme.bodyMedium)),
+            Text(body, style: theme.textTheme.bodyMedium),
           ],
         ),
       ));
