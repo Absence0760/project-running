@@ -5,7 +5,8 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart'
+    show ActivityLoaderKind, AppSemanticColors, FullBodyLoader;
 
 import '../l10n/gen/app_localizations.dart';
 import '../live_cutoff_eta.dart';
@@ -390,7 +391,10 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? FullBodyLoader(
+              kind: ActivityLoaderKind.run,
+              label: l10n.commonLoading,
+            )
           : _loadError != null
               ? ErrorState(
                   message: l10n.liveSpectatorConnectError, onRetry: _hydrate)

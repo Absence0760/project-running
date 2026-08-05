@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -98,10 +99,14 @@ void main() {
       expect(find.text('Profile'), findsOneWidget);
     });
 
-    testWidgets('first frame shows the loading spinner', (tester) async {
+    testWidgets('first frame stands the header + tab layout the profile will '
+        'settle into', (tester) async {
       await _pump(tester, userId: 'someone-else');
       // Single pump only — the post-fetch frame swaps in ErrorState.
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      // Two skeletons: the header block above the divider, the tab body below.
+      expect(find.byType(ListSkeleton), findsNWidgets(2));
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
     });
 
     testWidgets(
