@@ -158,7 +158,10 @@ jobs:
       # below: two `flutter test` processes racing on `bin/cache/engine.stamp`
       # produces a malformed `flutter//engine_stamp.json` 404.
       - run: flutter precache
-      - run: melos exec --scope="run_recorder" --scope="mobile_android" --scope="api_client" --scope="gpx_parser" -- flutter test
+      # ui_kit and core_models carry 16 test files between them and were
+      # absent from this list, so their suites — including every theme
+      # guard added by the issue #666 rounds — had never run in CI.
+      - run: melos exec --scope="run_recorder" --scope="mobile_android" --scope="api_client" --scope="gpx_parser" --scope="ui_kit" --scope="core_models" -- flutter test
       - run: melos exec -- dart analyze
 
   test-worker:
