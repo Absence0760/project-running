@@ -50,6 +50,7 @@
 	import NutritionRingsCard from '$lib/components/NutritionRingsCard.svelte';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import RacePredictorCard from '$lib/components/RacePredictorCard.svelte';
+	import CalendarHeatmap from '$lib/components/CalendarHeatmap.svelte';
 	import ConsistencyCard from '$lib/components/ConsistencyCard.svelte';
 	import IntensityBalanceCard from '$lib/components/IntensityBalanceCard.svelte';
 	import TrendDeltasCard from '$lib/components/TrendDeltasCard.svelte';
@@ -1468,6 +1469,20 @@
 		     (advanced analytics polish). -->
 		<ConsistencyCard activities={filteredRuns} weekStart={weekStartDay} {now} />
 
+		<!-- Daily-resolution companion to ConsistencyCard's weekly bars: 20
+		     weeks of per-day volume, so the pattern INSIDE a week (back-to-back
+		     days, a standing rest day, a fortnight off) is readable at all.
+		     Mobile's dashboard has shipped this grid for a while; the web
+		     component existed but was never mounted, which inverted §24 — the
+		     canonical surface was the one missing the feature. -->
+		<section class="card-elevated" data-testid="activity-heatmap">
+			<div class="chart-header">
+				<h2>{m('calendarHeatmap.title')}</h2>
+				<span class="chart-note">{m('calendarHeatmap.window')}</span>
+			</div>
+			<CalendarHeatmap runs={filteredRuns} {weekStartDay} />
+		</section>
+
 		<!-- Easy / hard intensity balance — the time-weighted easy vs hard
 		     split against the ~80/20 polarised-training guideline, with a
 		     verdict (on guideline / too hard / all easy). Classifies each run
@@ -2052,6 +2067,10 @@
 		margin-bottom: var(--space-md);
 	}
 	.chart-header h2 { margin-bottom: 0; }
+	.chart-note {
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+	}
 
 	.view-toggle {
 		display: inline-flex;

@@ -69,19 +69,21 @@
 		return result;
 	});
 
+	// Three levels, not four: --heat-1..3 is the whole accessible ladder (see
+	// the app.css note), and mobile's ChartPalette.ramp carries the same three,
+	// so a shade means the same thing on both platforms' grids.
 	function intensity(distance: number): string {
 		if (distance === 0) return 'var(--color-bg-tertiary)';
 		const ratio = Math.min(distance / maxDistance, 1);
-		if (ratio < 0.25) return '#C7D2FE';
-		if (ratio < 0.5) return '#818CF8';
-		if (ratio < 0.75) return '#6366F1';
-		return '#4F46E5';
+		if (ratio < 1 / 3) return 'var(--heat-1)';
+		if (ratio < 2 / 3) return 'var(--heat-2)';
+		return 'var(--heat-3)';
 	}
 
 	function formatTooltip(date: string, distance: number): string {
 		const d = new Date(date);
 		const label = d.toLocaleDateString(activeFormatLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
-		if (distance === 0) return `${label}: No run`;
+		if (distance === 0) return m('calendarHeatmap.noRun', { date: label });
 		return `${label}: ${fmtKm(distance)}`;
 	}
 
@@ -90,7 +92,7 @@
 	// index (offset for a Monday start) walks the week in display order.
 	// Only alternate rows are labelled to keep the column legible.
 	let dayLabels = $derived.by(() => {
-		const fmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+		const fmt = new Intl.DateTimeFormat(activeFormatLocale(), { weekday: 'short' });
 		const sundayBase = new Date(2024, 0, 7);
 		const startOffset = weekStartDay === 'monday' ? 1 : 0;
 		return Array.from({ length: 7 }, (_, row) => {
@@ -131,12 +133,27 @@
 			width={cellSize}
 			height={cellSize}
 			rx="2"
+			data-day={cell.date}
 			fill={intensity(cell.distance)}
+			stroke={cell.distance === 0 ? 'var(--heat-0)' : 'none'}
+			stroke-width={cell.distance === 0 ? 1 : 0}
 		>
 			<title>{formatTooltip(cell.date, cell.distance)}</title>
 		</rect>
 	{/each}
 </svg>
+
+<!-- The ramp has no axis, so the legend is the only thing that says which
+     direction is more. aria-hidden because the per-cell <title>s already
+     give AT the actual value; the swatches would just be noise. -->
+<div class="heat-legend" aria-hidden="true">
+	<span>{m('calendarHeatmap.less')}</span>
+	<i class="swatch zero"></i>
+	<i class="swatch" style="background: var(--heat-1);"></i>
+	<i class="swatch" style="background: var(--heat-2);"></i>
+	<i class="swatch" style="background: var(--heat-3);"></i>
+	<span>{m('calendarHeatmap.more')}</span>
+</div>
 
 <style>
 	.heatmap {
@@ -148,5 +165,26 @@
 	.day-label {
 		font-size: 7px;
 		fill: var(--color-text-tertiary);
+	}
+
+	.heat-legend {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.25rem;
+		margin-top: 0.5rem;
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.swatch {
+		width: 10px;
+		height: 10px;
+		border-radius: 2px;
+	}
+
+	.swatch.zero {
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--heat-0);
 	}
 </style>
