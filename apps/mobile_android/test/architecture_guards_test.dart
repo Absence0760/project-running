@@ -5494,4 +5494,116 @@ void main() {
               'second viewPadding read double-counts it');
     });
   });
+  group('deferred-commit undo outlives its surface', () {
+    // Reason: the undo queue is a top-level singleton whose timer belongs to
+    // it, not to any State, so a `commit` scheduled from a screen keeps running
+    // after that screen is popped (decisions § 514 + the mobile host note in
+    // lib/widgets/undo_bar.dart). Two consequences have to hold at every call
+    // site or a route pop turns into either a lost row or a crash:
+    //
+    //   * `commit` may not touch a BuildContext — it runs when the surface may
+    //     already be gone, so anything localized has to be resolved at defer
+    //     time and handed in as `message`.
+    //   * `restore` may not setState unguarded — it runs on undo AND on a
+    //     commit failure, either of which can land after a pop.
+    //
+    // The guard reads the arguments positionally, which is also why the
+    // convention is message / commit / restore / onCommitError in that order.
+
+    /// The body of `DeferredDestruction( ... )` for every call, by paren match.
+    List<String> _destructions(String src) {
+      final blocks = <String>[];
+      for (final m in RegExp(r'DeferredDestruction\(').allMatches(src)) {
+        var depth = 1;
+        var i = m.end;
+        while (i < src.length && depth > 0) {
+          if (src[i] == '(') depth++;
+          if (src[i] == ')') depth--;
+          i++;
+        }
+        blocks.add(src.substring(m.end, i - 1));
+      }
+      return blocks;
+    }
+
+    Iterable<File> _adopters() => [
+          ...Directory('lib/screens').listSync(recursive: true),
+          ...Directory('lib/widgets').listSync(recursive: true),
+        ].whereType<File>().where((f) =>
+            f.path.endsWith('.dart') &&
+            f.readAsStringSync().contains('deferDestructive('));
+
+    test('every adopting surface exists and is found by the guard', () {
+      expect(_adopters(), isNotEmpty,
+          reason: 'the guard silently passes if the call-site search breaks — '
+              'rename deferDestructive and this fails first');
+    });
+
+    test('no commit closure reads a BuildContext', () {
+      final offenders = <String>[];
+      for (final f in _adopters()) {
+        for (final block in _destructions(f.readAsStringSync())) {
+          final start = block.indexOf('commit:');
+          final end = block.indexOf('restore:');
+          if (start < 0 || end < start) {
+            offenders.add('${f.path} (commit:/restore: not in order)');
+            continue;
+          }
+          if (block.substring(start, end).contains('context')) {
+            offenders.add('${f.path} (commit reads context)');
+          }
+        }
+      }
+      expect(offenders, isEmpty,
+          reason: 'a deferred commit runs after the surface may have been '
+              'popped; resolve strings at defer time. Offenders: $offenders');
+    });
+
+    test('every restore closure is mount-guarded', () {
+      final offenders = <String>[];
+      for (final f in _adopters()) {
+        for (final block in _destructions(f.readAsStringSync())) {
+          final start = block.indexOf('restore:');
+          if (start < 0) {
+            offenders.add('${f.path} (no restore)');
+            continue;
+          }
+          final onError = block.indexOf('onCommitError:');
+          final body =
+              block.substring(start, onError > start ? onError : block.length);
+          if (!body.contains('mounted')) {
+            offenders.add('${f.path} (unguarded restore)');
+          }
+        }
+      }
+      expect(offenders, isEmpty,
+          reason: 'restore runs on undo and on a commit failure, either of '
+              'which can land after a pop. Offenders: $offenders');
+    });
+
+    test('the host is a root overlay entry, never a SnackBar', () {
+      final src = File('lib/widgets/undo_bar.dart').readAsStringSync();
+      expect(src.contains('rootOverlay: true'), isTrue);
+      expect(src.contains('ScaffoldMessenger'), isFalse,
+          reason: 'a snack bar lives inside the route Scaffold, which a modal '
+              'barrier drops from the semantics tree entirely — measured in '
+              'undo_bar_test.dart. An undo a screen reader cannot reach is '
+              'not an undo (WCAG 2.1.1)');
+    });
+
+    test('the recording surface and account deletion keep their confirms', () {
+      // The run screen's bottom controls and an account deletion are the two
+      // places where an undo offer would be either dangerous or a lie: the
+      // account delete cascades everything the user owns, and nothing on the
+      // recording screen may be obscured or made cancellable-by-timer.
+      for (final path in const [
+        'lib/screens/run_screen.dart',
+        'lib/screens/settings_account_screen.dart',
+      ]) {
+        expect(File(path).readAsStringSync().contains('deferDestructive('),
+            isFalse,
+            reason: '$path must keep confirm-then-gone');
+      }
+    });
+  });
 }
