@@ -1,7 +1,8 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ui_kit/ui_kit.dart' show FullBodyLoader;
+import 'package:flutter/rendering.dart';
+import 'package:ui_kit/ui_kit.dart' show FullBodyLoader, TextLane;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -202,6 +203,83 @@ void main() {
 
       expect(training.markCalled, isTrue);
       expect(training.lastMarkRunId, isNull);
+    });
+  });
+
+  group('WorkoutDetailScreen — the structure lane holds a localized term', () {
+    // Each structure row is `term | value` with the term in a 90px box.
+    // Portuguese "Desaquecimento" needs 105.7px in real Roboto at labelMedium
+    // w700 and carries no break opportunity, so it painted straight over the
+    // value beside it — at 1.0x, before the OS text scale entered it. German
+    // "Wiederholungen" and Spanish "Repeticiones" are the same shape. The pair
+    // now reflows (a Wrap) rather than sharing one line at any cost, because
+    // at 2x a term and its value genuinely do not fit side by side.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane that clears its
+    // term's intrinsic width here clears it on a device too.
+    PlanWorkoutRow _structured() => PlanWorkoutRow(
+          id: 'fake-workout-id',
+          weekId: 'week-1',
+          scheduledDate: DateTime(2026, 4, 5),
+          kind: 'interval',
+          targetDistanceM: 8000,
+          manuallyCompleted: false,
+          structure: const {
+            'warmup': {'distance_m': 1500},
+            'cooldown': {'distance_m': 1500},
+          },
+        );
+
+    Future<void> pumpPortuguese(WidgetTester tester, {double scale = 1.0}) async {
+      tester.view.physicalSize = const Size(320, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('pt'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: WorkoutDetailScreen(
+            training: _FakeTraining(_structured(), const []),
+            planId: 'fake-plan-id',
+            workoutId: 'fake-workout-id',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Finder termLane() => find.ancestor(
+          of: find.text('Desaquecimento'),
+          matching: find.byType(TextLane),
+        );
+
+    testWidgets('the term lane widens to the term instead of overpainting',
+        (tester) async {
+      await pumpPortuguese(tester);
+      expect(termLane(), findsOneWidget);
+      final term =
+          tester.renderObject<RenderParagraph>(find.text('Desaquecimento'));
+      expect(
+        tester.getSize(termLane()).width,
+        greaterThanOrEqualTo(term.getMaxIntrinsicWidth(double.infinity)),
+      );
+      expect(term.size.height, lessThan(term.preferredLineHeight * 2),
+          reason: 'the term must stay one line tall');
+    });
+
+    testWidgets('the term lane floor grows with the OS text scale',
+        (tester) async {
+      await pumpPortuguese(tester, scale: 2.0);
+      expect(tester.takeException(), isNull,
+          reason: 'the pair reflows rather than overrunning the card');
+      expect(tester.getSize(termLane()).width, greaterThanOrEqualTo(180));
     });
   });
 }
