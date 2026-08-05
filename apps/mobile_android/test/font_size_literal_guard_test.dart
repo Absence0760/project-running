@@ -64,9 +64,14 @@ const _allowlist = <String, int>{
   // the Start circle's label (inside `BoxFit.scaleDown`) and the 200 px
   // countdown numeral. No step exists at either size, and should not.
   'lib/screens/run_screen.dart': 2,
-  // The file that DEFINES the scale: `textTheme.labelSmall`'s 11 and the
-  // navigation-bar label style, in both brightnesses.
-  '../../packages/ui_kit/lib/src/theme/app_theme.dart': 4,
+  // The file that DEFINES the scale: `textTheme.labelSmall`'s 11, the
+  // navigation-bar label style's 12, and the chip label's 14 — in both
+  // brightnesses. The chip's is the only one that restates a step rather than
+  // declaring a new one, and it has to: `RawChip` reads
+  // `chipTheme.labelStyle ?? chipDefaults.labelStyle`, so the override that
+  // carries the selected/unselected colour displaces M3's `labelLarge` whole.
+  // The step is named in `packages/ui_kit/test/type_scale_test.dart`.
+  '../../packages/ui_kit/lib/src/theme/app_theme.dart': 6,
   // `fontSize ?? size * 0.42` — the 0.42 is a ratio of the circle's diameter,
   // not a size. This is the derivation the graphic exemption points at.
   '../../packages/ui_kit/lib/src/widgets/identity_avatar.dart': 1,

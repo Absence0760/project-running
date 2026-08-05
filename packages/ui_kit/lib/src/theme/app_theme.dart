@@ -179,8 +179,19 @@ class AppTheme {
         side: const BorderSide(color: haze),
         // RawChip resolves only labelStyle.color as a WidgetStateProperty
         // (never the whole TextStyle, never secondaryLabelStyle), so the
-        // selected/unselected fork must live on the color itself.
+        // selected/unselected fork must live on the color itself. It also
+        // takes `chipTheme.labelStyle ?? chipDefaults.labelStyle` — an OR, not
+        // a merge — so overriding this DISPLACES M3's labelLarge outright, and
+        // the size has to be restated here or the label falls through to
+        // whatever the ambient style happens to be. These four values ARE
+        // labelLarge, identical across all three of Material's locale
+        // geometries, and `inherit` stays true so the locale's own family and
+        // baseline still arrive by merge.
         labelStyle: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.1,
+          height: 1.43,
           color: WidgetStateColor.resolveWith(
             (states) =>
                 states.contains(WidgetState.selected) ? scheme.onPrimary : ink,
@@ -336,6 +347,10 @@ class AppTheme {
         selectedColor: coral,
         side: const BorderSide(color: haze),
         labelStyle: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.1,
+          height: 1.43,
           color: WidgetStateColor.resolveWith(
             (states) => states.contains(WidgetState.selected)
                 ? scheme.onPrimary
