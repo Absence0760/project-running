@@ -1990,11 +1990,26 @@ test('accessibility: chart svgs + map canvas carry role + aria-label', () => {
 		/"trainingLoad\.chartAriaLabel":\s*"Training load chart/,
 		'trainingLoad.chartAriaLabel copy must name the training-load chart.',
 	);
+	// Read the wrapper's opening TAG and assert the two properties inside it,
+	// rather than one canonical spelling of the whole line: the element gained
+	// four `style:--map-*` bindings when map overlay paint began resolving off
+	// the basemap, which split it across lines and broke a regex that had
+	// pinned the formatting. A guard on a spelling fails on a reformat; a guard
+	// on the property fails only when the property goes.
+	const wrapperTag = map.match(/<div[^>]*class="run-map-wrapper"[^>]*>/);
+	assert.ok(
+		wrapperTag,
+		'RunMap.svelte must wrap the map in a .run-map-wrapper element.',
+	);
 	assert.match(
-		map,
-		/<div\s+class="run-map-wrapper"\s+role="region"\s+aria-label=\{m\('runMap\.regionLabel'\)\}>/,
-		'RunMap.svelte wrapper must carry role="region" + an aria-label ' +
-			'(runMap.regionLabel) so AT users can skip past it or into it.',
+		wrapperTag![0],
+		/role="region"/,
+		'RunMap.svelte wrapper must carry role="region" so AT users can skip past it or into it.',
+	);
+	assert.match(
+		wrapperTag![0],
+		/aria-label=\{m\('runMap\.regionLabel'\)\}/,
+		'RunMap.svelte wrapper must carry aria-label={m(\'runMap.regionLabel\')}.',
 	);
 	assert.match(
 		en,
