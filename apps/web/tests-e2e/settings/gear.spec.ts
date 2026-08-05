@@ -529,7 +529,10 @@ test.describe('/settings/gear — wear log', () => {
 			.select('id')
 			.single();
 		const note = `keyboard undo ${Date.now()}`;
-		await admin.from('gear_wear_logs').insert({ gear_id: gear!.id, note, area: 'upper' });
+		const { error: seedErr } = await admin
+			.from('gear_wear_logs')
+			.insert({ gear_id: gear!.id, owner_id: USER_A.id, note, area: 'upper' });
+		expect(seedErr, `seeding the wear log failed: ${seedErr?.message}`).toBeNull();
 
 		try {
 			await page.goto('/settings/gear');
