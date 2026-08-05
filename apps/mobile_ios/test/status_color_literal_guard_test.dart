@@ -70,14 +70,6 @@ const _dataPalettes = <String, Map<String, int>>{
     'Colors.green': 2,
     'Colors.red': 1,
   },
-  // HR-zone band palette (Z2/Z3/Z5).
-  'lib/screens/run_detail_screen.dart': {
-    '4CAF50': 1,
-    'FFC107': 1,
-    'F44336': 1,
-  },
-  // Intensity-zone band palette (z3).
-  'lib/widgets/intensity_card.dart': {'F59E0B': 1},
 };
 
 final _hexPattern = RegExp(

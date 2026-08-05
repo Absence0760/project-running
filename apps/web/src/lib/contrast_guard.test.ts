@@ -407,3 +407,86 @@ test('training-load series match mobile TrainingLoadPalette', () => {
 		);
 	}
 });
+
+// The five heart-rate zone bands. Each band owes WCAG 1.4.11's 3:1 to the
+// surface behind the bar — that is exactly what makes the surface-coloured gap
+// between segments visible against every band, which is how the boundaries are
+// delineated at all: four steps of 3:1 need 81:1 and sRGB offers 21:1, so five
+// pairwise-3:1 bands do not exist. What is pinned between the bands instead is
+// a strictly monotone LUMINANCE ladder, because a green-to-red ramp collapses
+// under red-green colour-vision deficiency. The two palettes this replaced had
+// z1 and z5 at 1.03:1 (identical in greyscale) and 2.11:1 respectively.
+const ZONE_TOKENS = ['zone-1', 'zone-2', 'zone-3', 'zone-4', 'zone-5'];
+for (const { label, marker } of THEMES) {
+	test(`HR zone bands clear 3:1 and step monotonically — ${label}`, () => {
+		const hexes = ZONE_TOKENS.map((n) => resolveToken(marker, n));
+		for (const surfaceName of ['color-surface', 'color-bg']) {
+			const surface = resolveToken(marker, surfaceName);
+			hexes.forEach((hex, i) => {
+				const ratio = contrastRatio(hex, surface);
+				assert.ok(
+					ratio >= AA_NON_TEXT,
+					`--${ZONE_TOKENS[i]} (${hex}) on --${surfaceName} (${surface}) is ${ratio.toFixed(2)}:1 in ${label}; a band the separator has to show through needs >=${AA_NON_TEXT}:1.`,
+				);
+			});
+		}
+		const ls = hexes.map(relativeLuminance);
+		const rising = ls[1] > ls[0];
+		for (let i = 0; i + 1 < ls.length; i++) {
+			assert.ok(
+				rising ? ls[i + 1] > ls[i] : ls[i + 1] < ls[i],
+				`the zone ramp is not monotone in ${label} at z${i + 1}->z${i + 2}; the ordering is what survives greyscale.`,
+			);
+			const step = rising
+				? (ls[i + 1] + 0.05) / (ls[i] + 0.05)
+				: (ls[i] + 0.05) / (ls[i + 1] + 0.05);
+			assert.ok(
+				step >= 1.35,
+				`z${i + 1}->z${i + 2} steps only ${step.toFixed(2)}:1 in ${label}.`,
+			);
+		}
+	});
+}
+
+// The run-detail band must read the tokens, not a literal — the two mobile
+// surfaces and this one carried three different lists before.
+test('run-detail HR zone defs read the shared zone tokens', () => {
+	const page = readFileSync(
+		resolve(__dirname, '../routes/runs/[id]/+page.svelte'),
+		'utf-8',
+	);
+	for (let i = 1; i <= 5; i++) {
+		assert.ok(
+			page.includes(`color: 'var(--zone-${i})'`),
+			`runs/[id] zoneDefs entry ${i} does not read --zone-${i}.`,
+		);
+	}
+});
+
+// Mobile cannot import a CSS custom property, so the lockstep is checked here.
+test('HR zone tokens match the mobile hr_zone_palette', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../mobile_android/lib/hr_zone_palette.dart'),
+		'utf-8',
+	);
+	for (const [marker, symbol] of [
+		[':root {', 'hrZoneColoursLight'],
+		[':root[data-theme="dark"]', 'hrZoneColoursDark'],
+	] as const) {
+		const body = dart.match(
+			new RegExp(`const ${symbol} = <Color>\\[([\\s\\S]*?)\\];`),
+		);
+		assert.ok(body, `hr_zone_palette.dart has no ${symbol}`);
+		const hexes = [...body![1].matchAll(/Color\(0xFF([0-9A-Fa-f]{6})\)/g)].map(
+			(m) => `#${m[1].toUpperCase()}`,
+		);
+		assert.equal(hexes.length, 5, `${symbol} does not carry five bands`);
+		hexes.forEach((hex, i) => {
+			assert.equal(
+				resolveToken(marker, `zone-${i + 1}`).toUpperCase(),
+				hex,
+				`--zone-${i + 1} in ${marker} has drifted from ${symbol}[${i}].`,
+			);
+		});
+	}
+});
