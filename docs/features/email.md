@@ -160,8 +160,11 @@ Shared pieces:
   worker has ever sent is sitting in an inbox or a notification tray and cannot
   be corrected after the fact. `run_completed` is the one kind whose recipient
   is NOT the row's owner (it fires at a followee's followers), so it links to
-  `/share/run/{id}`; the owner-scoped `/runs/{id}` renders "run not found" for
-  them. Each kind targets the same entity `apps/web`'s `notificationLinkFor`
+  `/share/run/{id}`, which is anon-reachable — an emailed link must open without
+  a session, and `/runs/{id}` is behind the layout auth-gate. (Round 10 gave
+  `/runs/{id}` a non-owner branch, so it no longer renders "run not found" for a
+  public run; that fixed the surface, not the reason this link points at
+  `/share`.) Each kind targets the same entity `apps/web`'s `notificationLinkFor`
   does — `/plans/{plan_id}`, `/challenges/{challenge_id}`,
   `/share/badge/{achievement_id}` — which needs `plan_id`, `achievement_id` and
   `challenge_id` in all three `FetchNotificationFor*` projections; a partial
