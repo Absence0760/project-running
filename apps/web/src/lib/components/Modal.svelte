@@ -65,7 +65,8 @@
 			// still in the DOM (no inert), so without this a keyboard user
 			// tabs out of the last control straight into the obscured page.
 			if (e.key !== 'Tab' || !dialogEl) return;
-			const dialogRing = focusablesIn(dialogEl);
+			const dlg = dialogEl;
+			const dialogRing = focusablesIn(dlg);
 			// An element marked `data-modal-trap-include` joins the ring even
 			// though it sits outside the dialog. It exists for a transient
 			// global affordance a modal action PRODUCES — the undo bar — which
@@ -78,12 +79,12 @@
 			const outerRing = [
 				...document.querySelectorAll<HTMLElement>('[data-modal-trap-include]'),
 			]
-				.filter((host) => !dialogEl.contains(host))
+				.filter((host) => !dlg.contains(host))
 				.flatMap(focusablesIn);
 			const ring = [...dialogRing, ...outerRing];
 			if (ring.length === 0) {
 				e.preventDefault();
-				dialogEl.focus();
+				dlg.focus();
 				return;
 			}
 			const first = ring[0];

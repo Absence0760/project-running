@@ -29,7 +29,7 @@ test("Modal.svelte's Tab ring admits designated hosts outside the dialog", () =>
 	);
 	assert.match(
 		source,
-		/\.filter\(\(host\) => !dialogEl\.contains\(host\)\)/,
+		/\.filter\(\(host\) => !dlg\.contains\(host\)\)/,
 		'a host already inside the dialog must not be counted twice',
 	);
 });
@@ -79,5 +79,21 @@ test('the in-modal wear-log delete offers undo and no longer confirms', () => {
 		source,
 		/confirmingWearDelete/,
 		'the wear-log confirm was replaced by undo, not joined to it',
+	);
+});
+
+test('the notification dismiss defers instead of deleting on click', () => {
+	// Reason: a notification is system-minted — the user cannot type it
+	// back — so a stray Dismiss was the one unrecoverable action on the
+	// inbox. It must stay on the deferred path, and the unread badge must
+	// only move on COMMIT: while the offer stands the row is still on the
+	// server and still unread, and an early decrement disagrees with every
+	// `refresh()` for the whole window.
+	const source = read('src/lib/components/NotificationsList.svelte');
+	assert.match(source, /deferDestructive\(\{/, 'the dismiss must defer');
+	assert.doesNotMatch(
+		source,
+		/await deleteNotifications\(ids\);\n\t\t\} catch/,
+		'the dismiss must not delete straight from the click handler',
 	);
 });
