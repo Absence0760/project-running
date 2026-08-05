@@ -16,6 +16,10 @@ class ListSkeleton extends StatefulWidget {
   final EdgeInsetsGeometry padding;
   final String label;
 
+  /// Lay the rows out at their intrinsic height rather than inside a
+  /// viewport. See [ListSkeleton.section].
+  final bool _intrinsic;
+
   const ListSkeleton({
     super.key,
     required this.label,
@@ -23,7 +27,22 @@ class ListSkeleton extends StatefulWidget {
     this.rowHeight = 64,
     this.hasLeading = true,
     this.padding = const EdgeInsets.all(16),
-  });
+  }) : _intrinsic = false;
+
+  /// Placeholder rows for one *section* of an already-laid-out screen — a
+  /// comment list inside a card, a picker inside a scrollable sheet.
+  ///
+  /// The default constructor's viewport requires a bounded height, so it
+  /// cannot be used inside an outer scrollable; this variant occupies exactly
+  /// the height its rows need and leaves scrolling to the host.
+  const ListSkeleton.section({
+    super.key,
+    required this.label,
+    this.rows = 3,
+    this.rowHeight = 64,
+    this.hasLeading = true,
+    this.padding = const EdgeInsets.symmetric(vertical: 8),
+  }) : _intrinsic = true;
 
   @override
   State<ListSkeleton> createState() => _ListSkeletonState();
@@ -68,19 +87,34 @@ class _ListSkeletonState extends State<ListSkeleton>
           final block = onSurface.withValues(
             alpha: 0.05 + 0.06 * _controller.value,
           );
+          Widget row(int i) => _SkeletonRow(
+                color: block,
+                height: widget.rowHeight,
+                hasLeading: widget.hasLeading,
+                // Stagger the bar widths so the stack reads as content in
+                // waiting rather than as a rendered table.
+                titleFactor: 0.44 + (i % 3) * 0.12,
+              );
+          if (widget._intrinsic) {
+            return Padding(
+              padding: widget.padding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < widget.rows; i++) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    row(i),
+                  ],
+                ],
+              ),
+            );
+          }
           return ListView.separated(
             padding: widget.padding,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: widget.rows,
             separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (_, i) => _SkeletonRow(
-              color: block,
-              height: widget.rowHeight,
-              hasLeading: widget.hasLeading,
-              // Stagger the bar widths so the stack reads as content in
-              // waiting rather than as a rendered table.
-              titleFactor: 0.44 + (i % 3) * 0.12,
-            ),
+            itemBuilder: (_, i) => row(i),
           );
         },
       ),
