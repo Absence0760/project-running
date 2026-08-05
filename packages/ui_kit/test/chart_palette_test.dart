@@ -158,13 +158,92 @@ void main() {
         expect(palette.bar, palette.ramp.last);
       });
 
+      // Workout-kind marks. Before §516 these were three raw hexes duplicated
+      // across two widgets, drawn as a 3 px cell edge AND used as the colour of
+      // the kind LABEL — so they owed 1.4.3's 4.5:1 and reached 1.973 (tempo),
+      // 2.373 (interval) and 1.589 (marathon pace) on the light completed-day
+      // fill. They paint marks only now, so the floor is 1.4.11's 3:1, and it
+      // is owed on every surface the edge is drawn against: the two cell fills
+      // and the card behind the grid gap.
+      final kindSurfaces = <(String, Color)>[
+        ('surfaceContainerHigh', theme.colorScheme.surfaceContainerHigh),
+        ('tertiaryContainer', theme.colorScheme.tertiaryContainer),
+        ('card', card),
+        ('scaffold', scaffold),
+        (
+          'plain surface',
+          theme.brightness == Brightness.dark
+              ? AppTheme.midnight
+              : const Color(0xFFFFFFFF),
+        ),
+      ];
+
+      test('the kind scale carries one entry per workout-kind group', () {
+        expect(palette.kinds, hasLength(6));
+        expect(palette.kinds.toSet().length, palette.kinds.length);
+      });
+
+      test('every kind mark clears 3:1 on every surface it is drawn on', () {
+        for (var i = 0; i < palette.kinds.length; i++) {
+          for (final (where, surface) in kindSurfaces) {
+            final ratio = _contrast(palette.kinds[i], surface);
+            expect(ratio, greaterThanOrEqualTo(3.0),
+                reason: 'kinds[$i] is $ratio against the $name $where');
+          }
+        }
+      });
+
+      // Six categorical entries cannot be pairwise 3:1 — five such steps need
+      // 243:1 and sRGB offers 21:1 — so what is pinned between them is the
+      // ordering that survives greyscale and red-green CVD. The ceiling is set
+      // by the tightest surface: on dark, white is 9.324:1 against
+      // tertiaryContainer, so six rungs starting at 3:1 cannot step further
+      // apart than (9.324/3)^(1/5) = 1.255. Measured: 1.316 light, 1.207 dark.
+      test('kind marks separate by a monotone luminance ladder', () {
+        final ordered = palette.kinds.map(_luminance).toList()..sort();
+        for (var i = 0; i + 1 < ordered.length; i++) {
+          final step = (ordered[i + 1] + 0.05) / (ordered[i] + 0.05);
+          expect(step, greaterThanOrEqualTo(1.18),
+              reason: 'adjacent $name kind marks separate by only $step');
+        }
+      });
+
+      // The list order IS the ladder, so a consumer indexing by workout-kind
+      // group gets a stable greyscale ordering rather than whatever order the
+      // hexes happened to be typed in.
+      test('kind marks are listed in ladder order', () {
+        final ls = palette.kinds.map(_luminance).toList();
+        final rising = ls[1] > ls[0];
+        for (var i = 0; i + 1 < ls.length; i++) {
+          expect(rising ? ls[i + 1] > ls[i] : ls[i + 1] < ls[i], isTrue,
+              reason: 'the $name kind ladder folds at $i->${i + 1}');
+        }
+      });
+
       // A mark painted in the brand accent means "data" in one theme and
       // "interaction" in the other, because primary is dusk in light and coral
       // in dark. Nothing in the palette may alias it.
       test('no entry aliases the brand accent', () {
-        for (final c in [...palette.series, ...palette.zones, ...palette.ramp]) {
+        for (final c in [
+          ...palette.series,
+          ...palette.zones,
+          ...palette.ramp,
+          ...palette.kinds,
+        ]) {
           expect(c, isNot(theme.colorScheme.primary));
           expect(c, isNot(theme.colorScheme.secondary));
+        }
+      });
+
+      // The old palette reached for `dividerColor` for the rest day and
+      // `primary` for the long run, which is why nothing measured it: neither
+      // is a data token, and `dividerColor` was painting the REST label at
+      // 3.029:1 on the light completed-day fill. Both are excluded by name.
+      test('no kind mark aliases a boundary or brand token', () {
+        for (final c in palette.kinds) {
+          expect(c, isNot(theme.dividerColor));
+          expect(c, isNot(theme.colorScheme.outline));
+          expect(c, isNot(theme.colorScheme.outlineVariant));
         }
       });
     });
@@ -177,6 +256,7 @@ void main() {
     expect(ChartPalette.light.series, isNot(ChartPalette.dark.series));
     expect(ChartPalette.light.zones, isNot(ChartPalette.dark.zones));
     expect(ChartPalette.light.ramp, isNot(ChartPalette.dark.ramp));
+    expect(ChartPalette.light.kinds, isNot(ChartPalette.dark.kinds));
   });
 
   // A 1 px gap disappears into the antialiasing of the two bands either side.
