@@ -262,6 +262,13 @@
 		'Liberation Mono', monospace;
 	--font-size-page-title: 1.5rem;
 	--font-size-section-title: 1rem;
+	/* Also the micro-label step every small label should reach for: 11.2 px, which
+	   clears mobile's 11 px labelSmall floor (§ 482) by 0.2 px rather than meeting
+	   it exactly, so it survives a small later adjustment where a value ON a floor
+	   would not (§ 522). Never override it per theme or per breakpoint — a media
+	   query that shrank it would put 80 declarations under the floor at once.
+	   font_size_floor_guard.test.ts pins the floor and this token's single
+	   declaration. */
 	--font-size-section-label: 0.7rem;
 	--section-label-tracking: 0.05em;
 
