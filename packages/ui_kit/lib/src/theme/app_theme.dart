@@ -25,6 +25,18 @@ class AppTheme {
   static const Color secondary = coral;
   static const Color surface = parchment;
 
+  /// How far a subtree may be dimmed to read as out-of-scope — an adjacent
+  /// month's calendar cell, a retired piece of gear.
+  ///
+  /// `Opacity` composites the whole subtree, so when that subtree contains text
+  /// this is a contrast multiplier on every glyph in it, bounded above by WCAG
+  /// 1.4.3 rather than by taste. Both surfaces it dims wrap an `InkWell`, so
+  /// 1.4.3's incidental-text exemption does not apply to either. The previous
+  /// per-site values (0.55 and 0.65) put muted type at 2.511:1 and 3.427:1;
+  /// this is the one value both clear, derived in
+  /// `apps/mobile_android/test/dimmed_subtree_opacity_test.dart`.
+  static const double dimmedSubtreeOpacity = 0.85;
+
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(
       seedColor: dusk,

@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppTheme;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -20,6 +21,7 @@ import '../workout_kind_color.dart';
 /// `onSelect` is invoked when the user taps a workout cell. Hosts pass
 /// the same handler they use for the weekly grid (push the workout
 /// detail screen).
+
 class PlanCalendar extends StatefulWidget {
   final DateTime startDate;
   final DateTime endDate;
@@ -257,7 +259,11 @@ class _PlanCalendarState extends State<PlanCalendar> {
       ),
     );
 
-    if (!hasWorkout) return Opacity(opacity: outOfMonth ? 0.55 : 1, child: base);
+    if (!hasWorkout) {
+      return Opacity(
+          opacity: outOfMonth ? AppTheme.dimmedSubtreeOpacity : 1,
+          child: base);
+    }
 
     return InkWell(
       onTap: widget.onSelect == null ? null : () => widget.onSelect!(wo),

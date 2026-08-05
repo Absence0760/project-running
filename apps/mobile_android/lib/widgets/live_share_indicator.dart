@@ -54,7 +54,6 @@ class LiveShareIndicator extends StatelessWidget {
                   l10n.runLiveShareActive,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 13,
                     color: liveColor,
                     letterSpacing: 0.4,
                   ),

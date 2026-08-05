@@ -1448,7 +1448,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                         message: '${l10n.nutritionGoalLine}: $goal kcal',
                         child: Container(
                           height: 1.5,
-                          color: theme.colorScheme.secondary.withValues(alpha: 0.7),
+                          color: theme.colorScheme.outline,
                         ),
                       ),
                     ),

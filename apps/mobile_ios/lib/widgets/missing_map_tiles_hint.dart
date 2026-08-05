@@ -51,9 +51,7 @@ class MissingMapTilesHint extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.errorContainer.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.error.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: theme.colorScheme.error),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

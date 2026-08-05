@@ -4136,7 +4136,6 @@ class _RunScreenState extends State<RunScreen> {
                           l10n.runTapToCancel,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 14,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 0.5,
                           ),
@@ -4219,8 +4218,7 @@ class _RunScreenState extends State<RunScreen> {
                                 l10n.runRouteRemaining(
                                     UnitFormat.distance(rem, _unit)),
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13),
+                                    fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -4580,8 +4578,7 @@ class FinishedSummary extends StatelessWidget {
                   Icon(Icons.cloud_off, size: 36, color: semantic.warning),
                   const SizedBox(height: 4),
                   Text(syncError!,
-                      style: TextStyle(
-                          color: semantic.warning, fontSize: 13)),
+                      style: TextStyle(color: semantic.warning)),
                 ] else ...[
                   const SizedBox(
                     width: 24,
@@ -5456,7 +5453,7 @@ class _LastRunCard extends StatelessWidget {
                     ),
                     child: Icon(
                       Icons.directions_run,
-                      color: theme.colorScheme.primary.withOpacity(0.6),
+                      color: theme.colorScheme.primary,
                     ),
                   ),
                 const SizedBox(width: 14),
@@ -5730,9 +5727,7 @@ class _FirstRunPrompt extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.primary.withOpacity(0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.primary.withOpacity(0.18),
-        ),
+        border: Border.all(color: theme.colorScheme.primary),
       ),
       child: Row(
         children: [

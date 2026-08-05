@@ -322,8 +322,8 @@ class _CoachingScreenState extends State<CoachingScreen> {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(label,
-          style: TextStyle(
-              color: fg, fontWeight: FontWeight.w700, fontSize: 12)),
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: fg, fontWeight: FontWeight.w700)),
     );
   }
 
