@@ -85,8 +85,9 @@ locals {
     },
   )
 
-  # share-entity Lambda env. One HTML-only Lambda serving the four public
-  # /share/{event,profile,club,race} entity paths; same anon-key posture
+  # share-entity Lambda env. One HTML-only Lambda serving the six public
+  # /share/{event,profile,club,race,session,workout} entity paths; same
+  # anon-key posture
   # as the other share Lambdas (reads only anon-readable public rows;
   # PUBLIC_SITE_URL for env-specific absolute canonical / og:url URLs).
   share_entity_lambda_env = merge(
@@ -1141,9 +1142,9 @@ resource "aws_lambda_permission" "cloudfront_invoke_function_share_badge" {
   }
 }
 
-# ─── Shared entity-SSR Lambda (/share/{event,profile,club,race}) ───
+# ─── Shared entity-SSR Lambda (/share/{event,profile,club,race,session,workout}) ───
 #
-# One HTML-only Lambda serving the four public entity share paths (see
+# One HTML-only Lambda serving the six public entity share paths (see
 # apps/web/lambda/share-entity/README.md). Same execution role + log
 # group naming + CI-owns-code / Terraform-owns-shape lifecycle as the
 # other share Lambdas. No @resvg / PNG path, so it runs comfortably at
@@ -2349,7 +2350,7 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  # Shared entity-SSR Lambda: per-request SSR HTML for the four public
+  # Shared entity-SSR Lambda: per-request SSR HTML for the six public
   # entity share paths so a newly-created/edited entity unfurls with the
   # right per-entity head regardless of build cadence. HTML only (no
   # og:image PNG). See apps/web/lambda/share-entity/README.md.
@@ -2415,6 +2416,46 @@ resource "aws_cloudfront_distribution" "this" {
 
   ordered_cache_behavior {
     path_pattern               = "/share/race/*"
+    target_origin_id           = "lambda-share-entity"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_entity.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_entity.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/share/session/*"
+    target_origin_id           = "lambda-share-entity"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_entity.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_entity.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    dynamic "function_association" {
+      for_each = local.www_redirect_associations
+      content {
+        event_type   = "viewer-request"
+        function_arn = function_association.value
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern               = "/share/workout/*"
     target_origin_id           = "lambda-share-entity"
     viewer_protocol_policy     = "redirect-to-https"
     allowed_methods            = ["GET", "HEAD", "OPTIONS"]
