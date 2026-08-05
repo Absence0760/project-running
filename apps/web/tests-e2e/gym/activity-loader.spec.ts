@@ -37,7 +37,12 @@ test.describe('ActivityLoader in a live loading state', () => {
 
 		await page.goto('/gym/routines');
 
-		const loader = page.locator('[role="status"]');
+		// Scoped to the loader's own class: the root layout mounts a second,
+		// permanently-present `role="status"` live region for the undo bar
+		// (kept in the DOM even when empty, because a region that arrives
+		// already populated is not announced), so a bare role selector is
+		// ambiguous rather than wrong.
+		const loader = page.locator('.activity-loader[role="status"]');
 		await expect(loader).toBeVisible({ timeout: 10_000 });
 		await expect(loader).toContainText('Loading…');
 		await expect(loader.locator('svg')).toBeVisible();
