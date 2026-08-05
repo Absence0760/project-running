@@ -472,6 +472,83 @@ test('run-detail HR zone defs read the shared zone tokens', () => {
 	}
 });
 
+// The dashboard's per-zone time bars were a FIFTH list nobody had measured:
+// z3 and z4 were 1.016:1 apart in light, and in dark z1..z4 all sat inside
+// 1.08:1, so four of the five rows drew the same bar. They read the shared
+// ladder now, and each rung owes WCAG 1.4.11's 3:1 to the track it is measured
+// against — the bar's extent is the datum, so that boundary is the graphical
+// information.
+test('dashboard HR zone bars read the shared zone tokens', () => {
+	const page = readFileSync(resolve(__dirname, '../routes/dashboard/+page.svelte'), 'utf-8');
+	for (let i = 1; i <= 5; i++) {
+		assert.ok(
+			page.includes(`.zone-row-${i} .zone-bar { background: var(--zone-${i}); }`),
+			`dashboard .zone-row-${i} .zone-bar does not read --zone-${i}.`,
+		);
+	}
+	const track = page.match(/\.zone-bar-wrap \{[^}]*background:\s*var\(\s*--([\w-]+)\s*\)/)?.[1];
+	assert.ok(track, 'dashboard .zone-bar-wrap declares no track background token');
+	for (const { label, marker } of THEMES) {
+		const trackHex = resolveToken(marker, track!);
+		for (const name of ZONE_TOKENS) {
+			const ratio = contrastRatio(resolveToken(marker, name), trackHex);
+			assert.ok(
+				ratio >= AA_NON_TEXT,
+				`--${name} on the zone-bar track --${track} (${trackHex}) is ${ratio.toFixed(3)}:1 in ${label}; the bar/track boundary carries the value and needs >=${AA_NON_TEXT}:1.`,
+			);
+		}
+	}
+});
+
+// The intensity split bar. Two bands, so unlike the five-band ramp they CAN be
+// pairwise 3:1 as well as 3:1 against the card — and they take the two ends of
+// the same shared ladder rather than a third bespoke pair. The amber this
+// replaces was 2.148:1 against the light card, and in DARK it was 1.032:1
+// against its own partner (--color-primary flips to coral, which is the same
+// hue) — the split bar showed no split at all.
+test('the intensity split bar reads the ends of the shared zone ladder', () => {
+	const card = readFileSync(
+		resolve(__dirname, 'components/IntensityBalanceCard.svelte'),
+		'utf-8',
+	);
+	for (const [cls, token] of [
+		['seg-easy', 'zone-1'],
+		['seg-hard', 'zone-5'],
+		['dot-easy', 'zone-1'],
+		['dot-hard', 'zone-5'],
+	] as const) {
+		assert.ok(
+			new RegExp(`\\.${cls}\\s*\\{\\s*background:\\s*var\\(--${token}\\);`).test(card),
+			`IntensityBalanceCard .${cls} does not read --${token}.`,
+		);
+	}
+	assert.ok(
+		!/#[0-9a-fA-F]{3,8}\b/.test(card),
+		'IntensityBalanceCard carries a raw colour literal; every colour in it is a token.',
+	);
+	const track = card.match(/\.split-bar \{[^}]*background:\s*var\(\s*--([\w-]+)\s*\)/)?.[1];
+	assert.ok(track, 'IntensityBalanceCard .split-bar declares no track background token');
+	for (const { label, marker } of THEMES) {
+		const easy = resolveToken(marker, 'zone-1');
+		const hard = resolveToken(marker, 'zone-5');
+		const pair = contrastRatio(easy, hard);
+		assert.ok(
+			pair >= AA_NON_TEXT,
+			`the easy/hard split bands are ${pair.toFixed(3)}:1 apart in ${label}; two adjacent bands carrying the split need >=${AA_NON_TEXT}:1.`,
+		);
+		for (const surfaceName of ['color-surface', track!]) {
+			const surface = resolveToken(marker, surfaceName);
+			for (const [name, hex] of [['zone-1', easy], ['zone-5', hard]] as const) {
+				const ratio = contrastRatio(hex, surface);
+				assert.ok(
+					ratio >= AA_NON_TEXT,
+					`--${name} (${hex}) on --${surfaceName} (${surface}) is ${ratio.toFixed(3)}:1 in ${label}; the band needs >=${AA_NON_TEXT}:1.`,
+				);
+			}
+		}
+	}
+});
+
 // Mobile cannot import a CSS custom property, so the lockstep is checked here.
 test('HR zone tokens match the mobile hr_zone_palette', () => {
 	const dart = readFileSync(

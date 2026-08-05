@@ -79,33 +79,37 @@
 		letter-spacing: 0.03em;
 	}
 	.chip-onGuideline {
-		background: #d1fae5;
-		color: #047857;
+		background: var(--color-success-light);
+		color: var(--color-success-text);
 	}
 	.chip-tooHard {
-		background: #fee2e2;
-		color: #b91c1c;
+		background: var(--color-danger-light);
+		color: var(--color-danger-text);
 	}
 	.chip-allEasy {
-		background: #dbeafe;
-		color: #1d4ed8;
+		background: color-mix(in srgb, var(--color-accent-cyan) 16%, transparent);
+		color: var(--color-accent-cyan-text);
 	}
 	.split-bar {
 		display: flex;
 		height: 14px;
 		border-radius: 999px;
 		overflow: hidden;
-		background: var(--border, #e5e7eb);
+		background: var(--color-bg-secondary);
 		margin-bottom: var(--space-md);
 	}
 	.seg {
 		height: 100%;
 	}
+	/* The two ends of the shared intensity ladder (--zone-1 .. --zone-5), not a
+	   bespoke pair: easy and hard ARE the extremes of that ramp, and the rungs
+	   are already luminance-separated per brightness, which is what carries the
+	   split in greyscale. */
 	.seg-easy {
-		background: var(--color-primary, #2563eb);
+		background: var(--zone-1);
 	}
 	.seg-hard {
-		background: #f59e0b;
+		background: var(--zone-5);
 	}
 	.split-values {
 		display: flex;
@@ -124,10 +128,10 @@
 		align-self: center;
 	}
 	.dot-easy {
-		background: var(--color-primary, #2563eb);
+		background: var(--zone-1);
 	}
 	.dot-hard {
-		background: #f59e0b;
+		background: var(--zone-5);
 	}
 	.pct {
 		font-size: 1.4rem;
@@ -136,16 +140,16 @@
 	}
 	.metric-label {
 		font-size: 0.8rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.counts {
 		margin: 0 0 var(--space-sm);
 		font-size: 0.85rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.footnote {
 		margin: 0;
 		font-size: 0.78rem;
-		color: var(--text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 </style>
