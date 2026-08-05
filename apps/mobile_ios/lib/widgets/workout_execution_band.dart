@@ -224,7 +224,10 @@ class _Band extends StatelessWidget {
 
   Widget _shell(ThemeData theme, {required Widget child}) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      // The host column (RunTopOverlay) owns the top anchor and the outer
+      // inset; this only matches the sibling badge row's 4 px gutter and
+      // leaves a gap before the banners below.
+      margin: const EdgeInsets.fromLTRB(4, 0, 4, 4),
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface.withValues(alpha: 0.95),
