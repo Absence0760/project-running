@@ -319,7 +319,7 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
           ),
           child: Row(
             children: [
-              SizedBox(
+              TextLane(
                 width: 36,
                 child: Text(l10n.challengesLeaderboardRank(e.rank),
                     style: const TextStyle(fontWeight: FontWeight.w600)),

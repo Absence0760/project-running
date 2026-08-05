@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 
 import '../auth_error.dart';
 import '../audio_cues.dart';
@@ -165,7 +166,7 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
             Card(
               margin: const EdgeInsets.symmetric(vertical: 4),
               child: ListTile(
-                leading: SizedBox(
+                leading: TextLane(
                   width: 56,
                   child: Text(
                     _fmtMmSs(cue.atSec),

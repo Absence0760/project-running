@@ -1552,7 +1552,7 @@ class _ResultRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          SizedBox(
+          TextLane(
             width: 28,
             child: Text(
               rank,

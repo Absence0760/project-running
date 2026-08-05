@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, TextLane;
 
 import '../auth_error.dart';
 import '../goals.dart';
@@ -276,7 +276,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
       children: [
         Icon(icon, size: 18, color: theme.colorScheme.outline),
         const SizedBox(width: 8),
-        SizedBox(
+        TextLane(
           width: 80,
           child: Text(
             label,

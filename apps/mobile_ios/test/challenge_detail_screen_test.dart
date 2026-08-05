@@ -1,6 +1,8 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show TextLane;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/challenge_detail_screen.dart';
@@ -193,5 +195,67 @@ void main() {
 
     // Drain the showTopBanner auto-dismiss timer.
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  group('ChallengeDetailScreen — the leaderboard rank lane', () {
+    // The rank sat in a 36px box. "#999" needs 48.7px in real Roboto at
+    // bodyMedium w600 once the OS text scale reaches 1.5x and 64.9 at 2x, and
+    // a rank token has no break opportunity, so it painted over the
+    // participant's name beside it. A four-digit rank clears the box at 1.0x.
+    //
+    // Pinned as a derivation, never as an absolute fit: flutter_test renders a
+    // fixed-advance font 2-6x wider than Roboto, so a lane whose floor tracks
+    // the scale here tracks it on a device too.
+    Future<void> pumpBoard(WidgetTester tester, {double scale = 1.0}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: ChallengeDetailScreen(
+            social: _FakeSocial(
+              _ch(myValue: 20000),
+              board: const [
+                ChallengeLeaderboardEntry(
+                  userId: 'u-1',
+                  displayName: 'Backmarker',
+                  teamClubId: null,
+                  value: 500,
+                  rank: 999,
+                ),
+              ],
+            ),
+            challengeId: 'c1',
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('the lane widens to the rank instead of overpainting',
+        (tester) async {
+      await pumpBoard(tester);
+      final lane = find.ancestor(
+        of: find.text('#999'),
+        matching: find.byType(TextLane),
+      );
+      expect(lane, findsOneWidget);
+      final rank = tester.renderObject<RenderParagraph>(find.text('#999'));
+      expect(
+        tester.getSize(lane).width,
+        greaterThanOrEqualTo(rank.getMaxIntrinsicWidth(double.infinity)),
+      );
+    });
+
+    testWidgets('the lane floor grows with the OS text scale', (tester) async {
+      await pumpBoard(tester, scale: 2.0);
+      final lane = find.byType(TextLane).first;
+      expect(tester.getSize(lane).width,
+          greaterThanOrEqualTo(tester.widget<TextLane>(lane).width * 2));
+    });
   });
 }
