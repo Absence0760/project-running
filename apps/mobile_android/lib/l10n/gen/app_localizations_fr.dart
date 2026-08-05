@@ -12583,4 +12583,17 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get commonMore => 'Plus';
+
+  @override
+  String get undoAction => 'Annuler';
+
+  @override
+  String get undoDismiss => 'Fermer';
+
+  @override
+  String get undoHint =>
+      'L’annulation reste possible pendant un court instant.';
+
+  @override
+  String get undoRestored => 'Rétabli';
 }

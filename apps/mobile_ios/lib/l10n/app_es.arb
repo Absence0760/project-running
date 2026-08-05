@@ -3657,5 +3657,9 @@
   "photoLightboxError": "No se ha podido cargar esta foto.",
   "photoLightboxErrorHint": "Toca en cualquier parte para cerrar.",
   "commonLoading": "Cargando…",
-  "commonMore": "Más"
+  "commonMore": "Más",
+  "undoAction": "Deshacer",
+  "undoDismiss": "Cerrar",
+  "undoHint": "Puedes deshacer durante un breve periodo.",
+  "undoRestored": "Restaurado"
 }

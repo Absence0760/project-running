@@ -3657,5 +3657,9 @@
   "photoLightboxError": "Cette photo n'a pas pu être chargée.",
   "photoLightboxErrorHint": "Touchez n'importe où pour fermer.",
   "commonLoading": "Chargement…",
-  "commonMore": "Plus"
+  "commonMore": "Plus",
+  "undoAction": "Annuler",
+  "undoDismiss": "Fermer",
+  "undoHint": "L’annulation reste possible pendant un court instant.",
+  "undoRestored": "Rétabli"
 }

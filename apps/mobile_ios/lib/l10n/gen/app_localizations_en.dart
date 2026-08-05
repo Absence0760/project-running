@@ -12425,4 +12425,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonMore => 'More';
+
+  @override
+  String get undoAction => 'Undo';
+
+  @override
+  String get undoDismiss => 'Dismiss';
+
+  @override
+  String get undoHint => 'Undo is available for a short time.';
+
+  @override
+  String get undoRestored => 'Restored';
 }

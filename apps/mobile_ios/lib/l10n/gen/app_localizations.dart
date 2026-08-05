@@ -20989,6 +20989,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get commonMore;
+
+  /// Label of the undo bar action button that cancels the pending destructive action
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undoAction;
+
+  /// Tooltip on the undo bar close button, which commits the pending destructive action now
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get undoDismiss;
+
+  /// Screen-reader-only sentence appended to the undo bar announcement
+  ///
+  /// In en, this message translates to:
+  /// **'Undo is available for a short time.'**
+  String get undoHint;
+
+  /// Banner shown after the user taps Undo and the row is back
+  ///
+  /// In en, this message translates to:
+  /// **'Restored'**
+  String get undoRestored;
 }
 
 class _AppLocalizationsDelegate

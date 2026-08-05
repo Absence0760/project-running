@@ -12555,4 +12555,16 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get commonMore => 'Más';
+
+  @override
+  String get undoAction => 'Deshacer';
+
+  @override
+  String get undoDismiss => 'Cerrar';
+
+  @override
+  String get undoHint => 'Puedes deshacer durante un breve periodo.';
+
+  @override
+  String get undoRestored => 'Restaurado';
 }

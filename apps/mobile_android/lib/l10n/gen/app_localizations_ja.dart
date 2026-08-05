@@ -11970,4 +11970,16 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get commonMore => 'その他';
+
+  @override
+  String get undoAction => '元に戻す';
+
+  @override
+  String get undoDismiss => '閉じる';
+
+  @override
+  String get undoHint => 'しばらくの間、元に戻せます。';
+
+  @override
+  String get undoRestored => '元に戻しました';
 }

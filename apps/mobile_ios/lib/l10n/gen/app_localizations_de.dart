@@ -12563,4 +12563,16 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get commonMore => 'Mehr';
+
+  @override
+  String get undoAction => 'Widerrufen';
+
+  @override
+  String get undoDismiss => 'Schließen';
+
+  @override
+  String get undoHint => 'Widerrufen ist kurze Zeit möglich.';
+
+  @override
+  String get undoRestored => 'Wiederhergestellt';
 }

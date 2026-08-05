@@ -3657,5 +3657,9 @@
   "photoLightboxError": "Dieses Foto konnte nicht geladen werden.",
   "photoLightboxErrorHint": "Tippe irgendwo, um zu schließen.",
   "commonLoading": "Wird geladen…",
-  "commonMore": "Mehr"
+  "commonMore": "Mehr",
+  "undoAction": "Widerrufen",
+  "undoDismiss": "Schließen",
+  "undoHint": "Widerrufen ist kurze Zeit möglich.",
+  "undoRestored": "Wiederhergestellt"
 }

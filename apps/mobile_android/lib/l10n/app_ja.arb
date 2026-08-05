@@ -3657,5 +3657,9 @@
   "photoLightboxError": "この写真を読み込めませんでした。",
   "photoLightboxErrorHint": "画面のどこかをタップすると閉じます。",
   "commonLoading": "読み込み中…",
-  "commonMore": "その他"
+  "commonMore": "その他",
+  "undoAction": "元に戻す",
+  "undoDismiss": "閉じる",
+  "undoHint": "しばらくの間、元に戻せます。",
+  "undoRestored": "元に戻しました"
 }

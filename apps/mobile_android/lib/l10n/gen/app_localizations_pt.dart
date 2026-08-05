@@ -12551,6 +12551,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get commonMore => 'Mais';
+
+  @override
+  String get undoAction => 'Desfazer';
+
+  @override
+  String get undoDismiss => 'Fechar';
+
+  @override
+  String get undoHint => 'Desfazer fica disponível por um curto período.';
+
+  @override
+  String get undoRestored => 'Restaurado';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -25095,4 +25107,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get commonMore => 'Mais';
+
+  @override
+  String get undoAction => 'Desfazer';
+
+  @override
+  String get undoDismiss => 'Fechar';
+
+  @override
+  String get undoHint => 'Desfazer fica disponível por um curto período.';
+
+  @override
+  String get undoRestored => 'Restaurado';
 }
