@@ -870,6 +870,7 @@ tests-e2e/
   cross-user/                  — multi-context (two browsers, two users)
     kudos.spec.ts              — alex kudos runner, reload persists, rescind
     comments.spec.ts           — top-level + nested-reply round-trips
+    run-detail-non-owner.spec.ts — /runs/[id]'s NON-OWNER branch (issue #666): alex opens runner's PUBLIC run on the canonical signed-in surface, the run renders with owner attribution, kudos + the comment composer work (DB row asserted, author = alex), the branch POSTs to clip-public-track with the run id (the observable that proves the track is not taken from the owner's direct Storage path), and no visibility chip / Edit / Delete-run control renders. A PRIVATE run by the same owner still lands on not-found — entitlement is a `public_runs` row, not "not mine"
     follows.spec.ts            — morgan follows runner, counter increments, unfollow
     notifications.spec.ts      — kudos → bell badge update + popover entry
   cross-cutting/               — span >1 page or >1 session
@@ -896,6 +897,8 @@ tests-e2e/
     navigation.spec.ts         — sidebar collapse persistence
     privacy-zones.spec.ts      — owner Share guardrail when track crosses a zone (cancel + confirm paths) + cross-user clipping via the clip-public-track EF
     cross-feature.spec.ts      — runs↔goals (goal-card 100%) + runs↔plans (day-cell + progress ring) + cross-user kudos→owner /runs/[id]
+    privacy-zone-clipping-journey.spec.ts — the same zone-straddling run across all FIVE render surfaces: owner-full via the owner JWT + owner /runs/[id] DOM, clipped on /share/run/[id], clipped identically in the /u/[id] run modal, coarsened-not-precise in live_run_pings, and (SURFACE 5, issue #666) clipped identically on the NON-OWNER branch of /runs/[id]
+    run-visibility-propagation-journey.spec.ts — private → public → private across feed / profile / share / the follower's /runs/[id]; the /runs/[id] leg is asserted both ways (not-found while private, the run once public, not-found again after re-privatising) so revocation is pinned as well as grant
     dashboard-journey.spec.ts  — kitchen-sink reactivity: plant goal → add run → goal pct lifts → edit goal → delete run reverts every widget
     plans-journey.spec.ts      — mark 2 workouts done in sequence → revert 1 → progress ring + day-grid stay in lockstep
     clubs-journey.spec.ts      — create → post on Feed tab → /clubs lists it → delete → /clubs reverts
