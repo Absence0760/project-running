@@ -121,13 +121,16 @@ void main() {
         expect(_contrast(s.outline, card), greaterThanOrEqualTo(_aaMark));
         if (name == 'light') {
           // 2.006:1 thinned — and the finding that decided the token, rather
-          // than merely the alpha: `secondary` is coralDeep on parchment,
-          // 2.767:1 at FULL strength, so un-thinning would have left the mark
+          // than merely the alpha: light `secondary` was coralDeep, 2.767:1 on
+          // parchment at FULL strength, so un-thinning would have left the mark
           // failing. A thinning is not always a thinning problem. Dark read
-          // 4.402:1 thinned, so only light ever failed.
-          expect(_contrast(_thin(s.secondary, 0.7, card), card),
+          // 4.402:1 thinned, so only light ever failed. The colour is named
+          // directly because light `secondary` has since moved to coralMark:
+          // that repaired the token, it did not make the old figure untrue, and
+          // the line keeps `outline` because a boundary is what it draws.
+          expect(_contrast(_thin(AppTheme.coralDeep, 0.7, card), card),
               lessThan(_aaMark));
-          expect(_contrast(s.secondary, card), lessThan(_aaMark));
+          expect(_contrast(AppTheme.coralDeep, card), lessThan(_aaMark));
         }
       });
 
@@ -152,6 +155,38 @@ void main() {
           expect(_contrast(_thin(s.onSurface, 0.4, faintest), faintest),
               lessThan(_aaMark));
         }
+      });
+    });
+
+    // Two `primaryContainer@0.5` row fills whose PRESENCE is the state — the
+    // plan-detail "today" row and the segment leaderboard's viewer row. Both
+    // are indistinguishable from the row above them, so WCAG 1.4.1 needs a cue
+    // that is not colour: the numbers below are what forced a dot, a label and
+    // a weight rather than a deeper tint. The cue's own foreground still owes
+    // its floor ON the tint, which is the pairing §503 says to measure.
+    group('$name state-carrying row tints cannot be the cue', () {
+      test('the plan-detail today row is invisible against its neighbour', () {
+        final tint = _thin(s.primaryContainer, 0.5, sCHighest);
+        expect(_contrast(tint, sCHighest), lessThan(1.2),
+            reason: 'if a tint this faint were the only signal, nobody — not '
+                'just a colour-blind reader — would see the state');
+        expect(_contrast(s.primary, tint), greaterThanOrEqualTo(_aaMark),
+            reason: 'the dot');
+        expect(_contrast(s.onSurfaceVariant, tint),
+            greaterThanOrEqualTo(_aaText),
+            reason: 'the weekday abbreviation the weight thickens');
+      });
+
+      test('the leaderboard viewer row is invisible against its neighbour', () {
+        // The tint composites over the CARD here, not over the neighbouring
+        // row's own opaque fill, which is why the two rows differ by so little.
+        final tint = _thin(s.primaryContainer, 0.5, card);
+        expect(_contrast(tint, sCHighest), lessThan(1.2));
+        expect(_contrast(s.onSurfaceVariant, tint),
+            greaterThanOrEqualTo(_aaText),
+            reason: 'the "You" label');
+        expect(_contrast(s.onSurface, tint), greaterThanOrEqualTo(_aaText),
+            reason: 'the athlete name the weight thickens');
       });
     });
 

@@ -778,11 +778,26 @@ class _LeaderboardRow extends StatelessWidget {
             child: Text(
               entry.athlete.displayName ??
                   AppLocalizations.of(context).segmentsPanelRunnerFallback,
-              style: theme.textTheme.bodyMedium,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: isViewer ? FontWeight.w700 : null,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          // The viewer tint is 1.078:1 light / 1.013:1 dark against a
+          // neighbouring row, so the label and the weight are the cue.
+          if (isViewer) ...[
+            const SizedBox(width: 6),
+            Text(
+              AppLocalizations.of(context).navYou,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
           Text(
             _fmtTime(entry.effort.timeSeconds),
             style: theme.textTheme.titleSmall?.copyWith(

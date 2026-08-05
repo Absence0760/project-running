@@ -50,8 +50,9 @@ const _register = <String, int>{
   // ICON, `onSurfaceVariant@0.7` on the page — 3.861/5.899, clears 3:1. The
   // 48 px empty-state glyph, with its title and body text beside it.
   'lib/screens/people_screen.dart': 1,
-  // The plan-detail "today" row fill (1.003/1.140). State-carrying and its
-  // only cue: see the open item in the round-12 ADR entry.
+  // The plan-detail "today" row fill (1.003/1.140). Not the cue: the row's
+  // leading slot carries a dot labelled `planDetailToday` and its weekday
+  // abbreviation goes w700.
   'lib/screens/plan_detail_screen.dart': 1,
   // The two create-plan card fills (1.065/1.256). Washes now that each card's
   // border is full `primary` and carries the boundary at 10.337/7.260.
@@ -94,8 +95,8 @@ const _register = <String, int>{
   // TEXT, `onInverseSurface@0.75` on the opaque inverse-surface card —
   // 7.295/5.135. 0.75 rather than 0.70 was already a computed choice.
   'lib/widgets/safety_nudge_banner.dart': 1,
-  // The viewer's own leaderboard row (1.076/1.017). State-carrying and its
-  // only cue: see the open item in the round-12 ADR entry.
+  // The viewer's own leaderboard row (1.078/1.013 re-derived). Not the cue: the
+  // row carries a `navYou` label beside the name and the name goes w700.
   'lib/widgets/segments_panel.dart': 1,
   // The overlay banner. Its callers include four map screens, so the tile
   // extremes are the honest background: type >= 14.272/12.715.

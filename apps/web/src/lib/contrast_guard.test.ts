@@ -1199,3 +1199,35 @@ test('success/danger -text tokens match mobile AppSemanticColors', () => {
 		}
 	}
 });
+
+// The accent foreground is the same idea on both platforms and, since round 13,
+// the same value: mobile's light `colorScheme.secondary` is `AppTheme.coralMark`
+// because every mobile site that reads `secondary` paints an icon, and the base
+// coral it used to hold reads 2.767:1 on parchment. Rather than mint a second
+// guess at "coral, but legible", it took the value web had already measured for
+// exactly this. Mobile's FILL coral — the FAB background and the navigation
+// bar's indicator tint — stays `AppTheme.coralDeep`, which is web's
+// `--color-secondary`; that half of the pair is asserted here too, so a change
+// to either colour has to face both platforms. Dark is excluded on purpose:
+// web's dark `-text` token aliases to its base and mobile's dark `secondary` is
+// lilac, so there is no shared value to pin.
+test('the light accent foreground and fill match mobile AppTheme', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/app_theme.dart'),
+		'utf-8',
+	);
+	for (const [symbol, token] of [
+		['coralMark', 'color-secondary-text'],
+		['coralDeep', 'color-secondary'],
+	] as const) {
+		const hex: string | undefined = dart.match(
+			new RegExp(`static const Color ${symbol} = Color\\(0xFF([0-9A-Fa-f]{6})\\)`),
+		)?.[1];
+		assert.ok(hex, `app_theme.dart has no ${symbol}`);
+		assert.equal(
+			resolveToken(':root {', token).toUpperCase(),
+			`#${hex!.toUpperCase()}`,
+			`--${token} has drifted from AppTheme.${symbol}.`,
+		);
+	}
+});

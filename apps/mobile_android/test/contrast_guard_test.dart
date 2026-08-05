@@ -181,4 +181,40 @@ void main() {
       });
     }
   });
+
+  // The route heatmap's "kept on map" state names itself twice: once as a line
+  // on the basemap and once in the chrome around it. Only the first is
+  // cartographic, and only a cartographic colour gets to be a fixed hex.
+  group('the kept-route state', () {
+    // Tailwind violet-500, the hex the map line still draws. Chrome sites had
+    // lifted it onto theme surfaces, where a single value cannot be right in
+    // both brightnesses.
+    const violet = Color(0xFF8B5CF6);
+
+    for (final (name, theme) in [
+      ('light', AppTheme.light),
+      ('dark', AppTheme.dark),
+    ]) {
+      test('$name chrome takes a token with headroom, not the map hex', () {
+        final s = theme.colorScheme;
+        // The sheet, the results pill and the selection card are all
+        // `colorScheme.surface`.
+        expect(_contrast(s.primary, s.surface), greaterThanOrEqualTo(3.0));
+        // And it survives being carried onto a deeper container, which is what
+        // the violet could not promise.
+        expect(_contrast(s.primary, s.surfaceContainerHighest),
+            greaterThanOrEqualTo(3.0));
+      });
+    }
+
+    test('the map hex could not have been promoted to a chrome token', () {
+      // It cleared 3:1 on `surface` in both themes — 3.828 light, 3.817 dark —
+      // which is why three chrome sites shipped. One step deeper it does not,
+      // so the passing figure was luck about which container each site used.
+      expect(
+        _contrast(violet, AppTheme.dark.colorScheme.surfaceContainerHighest),
+        lessThan(3.0),
+      );
+    });
+  });
 }
