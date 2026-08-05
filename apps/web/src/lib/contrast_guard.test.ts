@@ -838,6 +838,36 @@ test('the line/fill scans split on the CSS property, not on the token alone', ()
 	}
 });
 
+// The public landing's four feature-icon accents. Each is a base token's tint
+// under a theme-aware ink, and the rules are READ OUT OF THE SOURCE so the pair
+// cannot drift apart or be re-frozen as a hex: the four literals they replace
+// (#4F46E5 / #EC4899 / #10B981 / #F97316) each failed in exactly one theme
+// because a fixed hue cannot suit both a near-white and a dark-violet card.
+// Marketing copy is still content, so the 4.5:1 floor applies rather than 3:1.
+for (const { label, marker } of THEMES) {
+	test(`landing feature-icon accents meet AA on their own tint — ${label}`, () => {
+		const page = readFileSync(resolve(__dirname, '../routes/+page.svelte'), 'utf-8');
+		const rules = [
+			...page.matchAll(
+				/\.feature:nth-child\((\d)\) \.feature-icon \{\s*background:\s*color-mix\(in srgb, var\(--([\w-]+)\) (\d+)%, var\(--([\w-]+)\)\);\s*color:\s*var\(--([\w-]+)\);/g,
+			),
+		];
+		assert.equal(rules.length, 4, 'the landing must declare four token-based feature accents');
+		for (const [, nth, base, pct, surfaceName, ink] of rules) {
+			const tint = mixOverHex(
+				resolveToken(marker, base),
+				Number(pct),
+				resolveToken(marker, surfaceName),
+			);
+			const ratio = contrastRatio(resolveToken(marker, ink), tint);
+			assert.ok(
+				ratio >= AA_NORMAL,
+				`feature card ${nth}: --${ink} on --${base}@${pct}% over --${surfaceName} (${tint}) is ${ratio.toFixed(3)}:1 in ${label}; WCAG AA requires >=${AA_NORMAL}:1.`,
+			);
+		}
+	});
+}
+
 // The identity-avatar disc. A gradient is the one fill a foreground hex cannot
 // be reasoned about by eye, and --gradient-primary proved it: white on its light
 // light-mode third stop and its two dark-mode stops read 2.081 / 2.153:1, which

@@ -298,21 +298,31 @@
 		margin-inline-end: auto;
 	}
 
+	/* Four decorative accents, one per card. The frozen indigo / pink / emerald
+	   / orange they replace each failed WCAG 1.4.11 in ONE theme on the tint it
+	   painted over the card — 5.414 / 3.120 / 2.309 / 2.533:1 light and 2.386 /
+	   4.069 / 5.543 / 5.045:1 dark — because a fixed hue cannot suit both a
+	   near-white and a dark-violet card. Each is now a base token's 12% tint
+	   under its own theme-aware -text ink, the pairing the status chips already
+	   use, so both halves flip with the theme: 5.914 / 5.244 / 5.649 / 4.838
+	   light and 6.205 / 5.971 / 6.565 / 6.054 dark. Colour carries nothing here
+	   — the icon, heading and body each say what the card is — so the four are
+	   picked for spread, not for meaning. */
 	.feature:nth-child(1) .feature-icon {
-		background: rgba(79, 70, 229, 0.1);
-		color: #4F46E5;
+		background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+		color: var(--color-primary);
 	}
 	.feature:nth-child(2) .feature-icon {
-		background: rgba(236, 72, 153, 0.1);
-		color: #EC4899;
+		background: color-mix(in srgb, var(--color-secondary) 12%, var(--color-surface));
+		color: var(--color-secondary-text);
 	}
 	.feature:nth-child(3) .feature-icon {
-		background: rgba(16, 185, 129, 0.1);
-		color: #10B981;
+		background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
+		color: var(--color-success-text);
 	}
 	.feature:nth-child(4) .feature-icon {
-		background: rgba(249, 115, 22, 0.1);
-		color: #F97316;
+		background: color-mix(in srgb, var(--color-accent-cyan) 12%, var(--color-surface));
+		color: var(--color-accent-cyan-text);
 	}
 
 	.feature h3 {

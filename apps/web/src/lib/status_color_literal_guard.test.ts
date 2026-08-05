@@ -148,15 +148,6 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	// amber was deepened from #b26a00 (4.238:1 on paper, under AA) to
 	// #9E5C00 (5.270:1 on white, 5.031:1 on the mint price card).
 	'routes/compare/+page.svelte': { '1B5E20': 1 },
-	// Decorative feature-icon identity set on the public landing (indigo /
-	// pink / green / orange, one per feature card, each above its own <h3>).
-	// Only two of the four collide with the ban list. Measured on the tint
-	// each paints over a theme card: 5.425 / 3.126 / 2.308 / 2.531:1 in light
-	// and 2.392 / 4.069 / 5.530 / 5.044:1 in dark, so each fails in one theme
-	// as a graphical object. Left as a palette because the durable fix is to
-	// move the whole four-hue set onto the accent -text tokens, which is a
-	// design change to the marketing page rather than a token routing.
-	'routes/+page.svelte': { '10B981': 1, F97316: 1 },
 	// Gold star over a FIXED 0.65-black scrim on a route thumbnail, not on a
 	// theme surface. --color-crown is the deliberately dark light-mode gold
 	// and would read 1.123:1 here against 4.196:1 for this hue — the naive
