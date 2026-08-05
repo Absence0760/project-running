@@ -70,18 +70,24 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            // A Wrap, not a Row: one run of two lays out exactly as the Row
+            // did (spaceBetween anchors the title left and the toggle
+            // right), but the toggle can drop to its own line — and its own
+            // chips can wrap — once the three labels no longer fit beside
+            // the heading.
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: Text(
-                    l10n.mileageTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.06,
-                      color: theme.colorScheme.outline,
-                    ),
+                Text(
+                  l10n.mileageTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.06,
+                    color: theme.colorScheme.outline,
                   ),
                 ),
                 _ViewToggle(
@@ -150,23 +156,31 @@ class _ViewToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return SegmentedButton<MileageView>(
-      segments: [
-        ButtonSegment(
-            value: MileageView.weekly, label: Text(l10n.mileageWeek)),
-        ButtonSegment(
-            value: MileageView.monthly, label: Text(l10n.mileageMonth)),
-        ButtonSegment(value: MileageView.yearly, label: Text(l10n.mileageYear)),
+    // Chips rather than a SegmentedButton. § 486 exempted SegmentedButton
+    // from the narrow-width sweep because it has no knob to bind — which is
+    // also why it cannot survive text scaling: the control takes its
+    // intrinsic width whatever the parent offers, and at 2x the three
+    // French labels want 90 px more than a 360 dp card, more than a line of
+    // its own would give it. Chips in a Wrap reflow instead, and the M3
+    // checkmark the segmented control suppressed for width is kept, so
+    // selection is not signalled by fill colour alone (§ 488).
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final (value, label) in [
+          (MileageView.weekly, l10n.mileageWeek),
+          (MileageView.monthly, l10n.mileageMonth),
+          (MileageView.yearly, l10n.mileageYear),
+        ])
+          ChoiceChip(
+            label: Text(label),
+            selected: view == value,
+            onSelected: (_) => onChanged(value),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
       ],
-      selected: {view},
-      onSelectionChanged: (s) => onChanged(s.first),
-      // Compact density so the toggle fits next to the section header
-      // without forcing the card into two rows on narrow phones.
-      style: const ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      showSelectedIcon: false,
     );
   }
 }
