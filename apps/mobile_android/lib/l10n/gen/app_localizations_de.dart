@@ -12575,4 +12575,16 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get undoRestored => 'Wiederhergestellt';
+
+  @override
+  String get prefsUndoWindow => 'Widerruf-Zeitfenster';
+
+  @override
+  String get prefsUndoWindow8s => '8 Sekunden';
+
+  @override
+  String get prefsUndoWindow30s => '30 Sekunden';
+
+  @override
+  String get prefsUndoWindowManual => 'Bis ich es schließe';
 }

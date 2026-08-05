@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'goals.dart';
 import 'preferences.dart';
+import 'undo_queue.dart';
 
 /// Bridge between local [Preferences] (SharedPreferences) and the
 /// cross-device [SettingsService] (Supabase jsonb bags).
@@ -228,6 +229,13 @@ class SettingsSyncService extends ChangeNotifier {
     final pd = prefs[SettingsKeys.privacyDefault];
     if (pd is String) {
       preferences.setPrivacyDefault(pd);
+    }
+    // How long a destructive action stays reversible. Normalised through
+    // undoWindowSFromPref inside setUndoWindowS, so a corrupt bag reads
+    // back as the 8 s default rather than as no-limit.
+    if (prefs.containsKey(SettingsKeys.undoWindowS)) {
+      final uw = undoWindowSFromPref(prefs[SettingsKeys.undoWindowS]);
+      if (uw != preferences.undoWindowS) preferences.setUndoWindowS(uw);
     }
     // Basemap for every map surface. Unknown values normalise to
     // `streets` inside setMapStyle.

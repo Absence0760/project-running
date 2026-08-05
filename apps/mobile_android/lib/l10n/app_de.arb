@@ -3661,5 +3661,9 @@
   "undoAction": "Widerrufen",
   "undoDismiss": "Schließen",
   "undoHint": "Widerrufen ist kurze Zeit möglich.",
-  "undoRestored": "Wiederhergestellt"
+  "undoRestored": "Wiederhergestellt",
+  "prefsUndoWindow": "Widerruf-Zeitfenster",
+  "prefsUndoWindow8s": "8 Sekunden",
+  "prefsUndoWindow30s": "30 Sekunden",
+  "prefsUndoWindowManual": "Bis ich es schließe"
 }

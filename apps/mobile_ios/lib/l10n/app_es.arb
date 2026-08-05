@@ -3661,5 +3661,9 @@
   "undoAction": "Deshacer",
   "undoDismiss": "Cerrar",
   "undoHint": "Puedes deshacer durante un breve periodo.",
-  "undoRestored": "Restaurado"
+  "undoRestored": "Restaurado",
+  "prefsUndoWindow": "Ventana para deshacer",
+  "prefsUndoWindow8s": "8 segundos",
+  "prefsUndoWindow30s": "30 segundos",
+  "prefsUndoWindowManual": "Hasta que lo cierre"
 }

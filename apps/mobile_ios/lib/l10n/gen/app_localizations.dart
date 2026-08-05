@@ -21013,6 +21013,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restored'**
   String get undoRestored;
+
+  /// Preferences row label for how long a destructive action stays reversible
+  ///
+  /// In en, this message translates to:
+  /// **'Undo window'**
+  String get prefsUndoWindow;
+
+  /// Undo window choice: eight seconds (the default)
+  ///
+  /// In en, this message translates to:
+  /// **'8 seconds'**
+  String get prefsUndoWindow8s;
+
+  /// Undo window choice: thirty seconds
+  ///
+  /// In en, this message translates to:
+  /// **'30 seconds'**
+  String get prefsUndoWindow30s;
+
+  /// Undo window choice: no time limit, the offer waits for an explicit dismiss
+  ///
+  /// In en, this message translates to:
+  /// **'Until I dismiss it'**
+  String get prefsUndoWindowManual;
 }
 
 class _AppLocalizationsDelegate

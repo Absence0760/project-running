@@ -12437,4 +12437,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get undoRestored => 'Restored';
+
+  @override
+  String get prefsUndoWindow => 'Undo window';
+
+  @override
+  String get prefsUndoWindow8s => '8 seconds';
+
+  @override
+  String get prefsUndoWindow30s => '30 seconds';
+
+  @override
+  String get prefsUndoWindowManual => 'Until I dismiss it';
 }

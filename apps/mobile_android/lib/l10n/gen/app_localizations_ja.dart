@@ -11982,4 +11982,16 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get undoRestored => '元に戻しました';
+
+  @override
+  String get prefsUndoWindow => '元に戻せる時間';
+
+  @override
+  String get prefsUndoWindow8s => '8秒';
+
+  @override
+  String get prefsUndoWindow30s => '30秒';
+
+  @override
+  String get prefsUndoWindowManual => '自分で閉じるまで';
 }

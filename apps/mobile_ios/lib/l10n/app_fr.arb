@@ -3661,5 +3661,9 @@
   "undoAction": "Annuler",
   "undoDismiss": "Fermer",
   "undoHint": "L’annulation reste possible pendant un court instant.",
-  "undoRestored": "Rétabli"
+  "undoRestored": "Rétabli",
+  "prefsUndoWindow": "Délai d’annulation",
+  "prefsUndoWindow8s": "8 secondes",
+  "prefsUndoWindow30s": "30 secondes",
+  "prefsUndoWindowManual": "Jusqu’à ce que je le ferme"
 }

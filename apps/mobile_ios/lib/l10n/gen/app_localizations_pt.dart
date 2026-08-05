@@ -12563,6 +12563,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get undoRestored => 'Restaurado';
+
+  @override
+  String get prefsUndoWindow => 'Janela para desfazer';
+
+  @override
+  String get prefsUndoWindow8s => '8 segundos';
+
+  @override
+  String get prefsUndoWindow30s => '30 segundos';
+
+  @override
+  String get prefsUndoWindowManual => 'Até eu fechar';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -25119,4 +25131,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get undoRestored => 'Restaurado';
+
+  @override
+  String get prefsUndoWindow => 'Janela para desfazer';
+
+  @override
+  String get prefsUndoWindow8s => '8 segundos';
+
+  @override
+  String get prefsUndoWindow30s => '30 segundos';
+
+  @override
+  String get prefsUndoWindowManual => 'Até eu fechar';
 }

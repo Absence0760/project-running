@@ -3661,5 +3661,9 @@
   "undoAction": "元に戻す",
   "undoDismiss": "閉じる",
   "undoHint": "しばらくの間、元に戻せます。",
-  "undoRestored": "元に戻しました"
+  "undoRestored": "元に戻しました",
+  "prefsUndoWindow": "元に戻せる時間",
+  "prefsUndoWindow8s": "8秒",
+  "prefsUndoWindow30s": "30秒",
+  "prefsUndoWindowManual": "自分で閉じるまで"
 }

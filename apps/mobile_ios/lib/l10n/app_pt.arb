@@ -3661,5 +3661,9 @@
   "undoAction": "Desfazer",
   "undoDismiss": "Fechar",
   "undoHint": "Desfazer fica disponível por um curto período.",
-  "undoRestored": "Restaurado"
+  "undoRestored": "Restaurado",
+  "prefsUndoWindow": "Janela para desfazer",
+  "prefsUndoWindow8s": "8 segundos",
+  "prefsUndoWindow30s": "30 segundos",
+  "prefsUndoWindowManual": "Até eu fechar"
 }

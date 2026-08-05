@@ -15984,5 +15984,21 @@
   "undoRestored": "Restored",
   "@undoRestored": {
     "description": "Banner shown after the user taps Undo and the row is back"
+  },
+  "prefsUndoWindow": "Undo window",
+  "@prefsUndoWindow": {
+    "description": "Preferences row label for how long a destructive action stays reversible"
+  },
+  "prefsUndoWindow8s": "8 seconds",
+  "@prefsUndoWindow8s": {
+    "description": "Undo window choice: eight seconds (the default)"
+  },
+  "prefsUndoWindow30s": "30 seconds",
+  "@prefsUndoWindow30s": {
+    "description": "Undo window choice: thirty seconds"
+  },
+  "prefsUndoWindowManual": "Until I dismiss it",
+  "@prefsUndoWindowManual": {
+    "description": "Undo window choice: no time limit, the offer waits for an explicit dismiss"
   }
 }

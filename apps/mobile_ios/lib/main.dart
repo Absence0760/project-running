@@ -45,6 +45,7 @@ import 'training_service.dart';
 import 'watch_ingest_queue.dart';
 import 'wear_auth_bridge.dart';
 import 'wear_routes_bridge.dart';
+import 'widgets/undo_bar.dart';
 
 /// Holds the auth-state subscription registered in [main]. Top-level so
 /// a re-entrant main (rare — full hot-restart resets isolate state, but
@@ -738,6 +739,25 @@ class RunApp extends StatefulWidget {
 }
 
 class _RunAppState extends State<RunApp> {
+  @override
+  void initState() {
+    super.initState();
+    // The undo host reads its window at defer time from a module-level value
+    // rather than from a context, because a `commit` outlives the surface that
+    // scheduled it. Mirror the pref in from here so the direction of the
+    // dependency stays app → widget.
+    _syncUndoWindow();
+    widget.preferences.addListener(_syncUndoWindow);
+  }
+
+  void _syncUndoWindow() => setUndoWindowS(widget.preferences.undoWindowS);
+
+  @override
+  void dispose() {
+    widget.preferences.removeListener(_syncUndoWindow);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(

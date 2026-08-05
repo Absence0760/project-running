@@ -12596,4 +12596,16 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get undoRestored => 'Rétabli';
+
+  @override
+  String get prefsUndoWindow => 'Délai d’annulation';
+
+  @override
+  String get prefsUndoWindow8s => '8 secondes';
+
+  @override
+  String get prefsUndoWindow30s => '30 secondes';
+
+  @override
+  String get prefsUndoWindowManual => 'Jusqu’à ce que je le ferme';
 }

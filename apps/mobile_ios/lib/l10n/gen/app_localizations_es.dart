@@ -12567,4 +12567,16 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get undoRestored => 'Restaurado';
+
+  @override
+  String get prefsUndoWindow => 'Ventana para deshacer';
+
+  @override
+  String get prefsUndoWindow8s => '8 segundos';
+
+  @override
+  String get prefsUndoWindow30s => '30 segundos';
+
+  @override
+  String get prefsUndoWindowManual => 'Hasta que lo cierre';
 }
