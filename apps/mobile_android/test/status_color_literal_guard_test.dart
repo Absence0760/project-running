@@ -25,11 +25,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _bannedHexes = [
   // greens
-  '22C55E', '16A34A', '10B981', '34D399', '047857', '4CAF50',
+  '22C55E', '16A34A', '10B981', '34D399', '047857', '4CAF50', '2E7D32',
   // ambers
   'F59E0B', 'FBBF24', 'EAB308', 'FACC15', 'D97706', 'FFC107',
   // reds
-  'EF4444', 'DC2626', 'B91C1C', 'F87171', 'F44336',
+  'EF4444', 'DC2626', 'B91C1C', 'F87171', 'F44336', 'D32F2F',
   // crown gold
   'F5B30A',
 ];
@@ -70,17 +70,6 @@ const _dataPalettes = <String, Map<String, int>>{
     'Colors.green': 2,
     'Colors.red': 1,
   },
-  // HR-zone band palette (Z2/Z3/Z5).
-  'lib/screens/run_detail_screen.dart': {
-    '4CAF50': 1,
-    'FFC107': 1,
-    'F44336': 1,
-  },
-  // Intensity-zone band palette (z3).
-  'lib/widgets/intensity_card.dart': {'F59E0B': 1},
-  // CTL/ATL/TSB chart series hues — one constant each, read by both the
-  // legend swatch and the painter.
-  'lib/widgets/training_load_chart.dart': {'F59E0B': 1, 'EF4444': 1},
 };
 
 final _hexPattern = RegExp(

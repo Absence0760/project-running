@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../l10n/date_format.dart';
@@ -5,18 +7,52 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../training_load.dart';
 
-/// Series hues for the three curves. The legend swatch and the painted line
-/// read the SAME constant, so a key can never name one colour while the plot
-/// draws another. Form carries no sign colouring: one stroke cannot honestly
-/// change hue at every zero crossing of the window it spans, and the sign is
-/// already told three other ways on this card (the dashed zero line, the
-/// signed value in the legend entry, the reading chip below the plot).
+/// Series hues for the three curves, per brightness. The legend swatch and the
+/// painted line read the SAME palette, so a key can never name one colour while
+/// the plot draws another. Form carries no sign colouring: one stroke cannot
+/// honestly change hue at every zero crossing of the window it spans, and the
+/// sign is already told three other ways on this card (the dashed zero line,
+/// the signed value in the legend entry, the reading chip below the plot).
+///
+/// One fixed trio could not clear WCAG 1.4.11's 3:1 non-text floor in both
+/// themes: the old indigo was 2.57:1 on the dark card and the old amber 1.94:1
+/// on the light one. Each triple below separates by LUMINANCE rather than hue,
+/// which is what makes the plot survive greyscale and red-green colour-vision
+/// deficiency — the same reasoning §489 applied to the elevation pace ramp.
+/// Pairwise 3:1 across three series is unreachable: it forces the extreme pair
+/// past 9:1, and with every series also owing 3:1 to its own card the whole
+/// usable luminance range is only 5.98:1 in light.
 @visibleForTesting
-const trainingLoadFitnessColour = Color(0xFF4F46E5);
-@visibleForTesting
-const trainingLoadFatigueColour = Color(0xFFF59E0B);
-@visibleForTesting
-const trainingLoadFormColour = Color(0xFFEF4444);
+class TrainingLoadPalette {
+  const TrainingLoadPalette({
+    required this.fitness,
+    required this.fatigue,
+    required this.form,
+  });
+
+  final Color fitness;
+  final Color fatigue;
+  final Color form;
+
+  /// On parchment: fitness 13.39:1, form 6.66:1, fatigue 3.14:1; adjacent
+  /// pairs 2.01:1 and 2.12:1.
+  static const light = TrainingLoadPalette(
+    fitness: Color(0xFF1F1A6B),
+    fatigue: Color(0xFFB4801F),
+    form: Color(0xFFA62020),
+  );
+
+  /// On duskDeep: fitness 13.15:1, fatigue 6.45:1, form 3.32:1; adjacent
+  /// pairs 1.94:1 and 2.04:1.
+  static const dark = TrainingLoadPalette(
+    fitness: Color(0xFFE8E5FF),
+    fatigue: Color(0xFFE59105),
+    form: Color(0xFFDE1F17),
+  );
+
+  static TrainingLoadPalette of(ThemeData theme) =>
+      theme.brightness == Brightness.dark ? dark : light;
+}
 
 /// Dashboard "Fitness / Fatigue / Form" chart. Mirrors
 /// `apps/web/src/lib/components/TrainingLoadChart.svelte` (decisions §34).
@@ -89,7 +125,11 @@ class TrainingLoadChart extends StatelessWidget {
                   key: const Key('trainingLoadChartPainter'),
                   painter: _ChartPainter(
                     points: points,
+                    palette: TrainingLoadPalette.of(theme),
                     axisColor: theme.colorScheme.outline.withValues(alpha: 0.5),
+                    labelStyle: theme.textTheme.labelSmall!.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),
@@ -154,22 +194,23 @@ class _Legend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final palette = TrainingLoadPalette.of(Theme.of(context));
     return Wrap(
       spacing: 16,
       runSpacing: 6,
       children: [
         _LegendKey(
-          color: trainingLoadFitnessColour,
+          color: palette.fitness,
           label: l10n.trainingLoadLegendFitness,
           value: last.ctl,
         ),
         _LegendKey(
-          color: trainingLoadFatigueColour,
+          color: palette.fatigue,
           label: l10n.trainingLoadLegendFatigue,
           value: last.atl,
         ),
         _LegendKey(
-          color: trainingLoadFormColour,
+          color: palette.form,
           label: l10n.trainingLoadLegendForm,
           value: last.tsb,
         ),
@@ -215,17 +256,45 @@ class _LegendKey extends StatelessWidget {
   }
 }
 
+/// Round tick step that keeps at most [maxTicks] gridlines across [span] —
+/// the 1 / 2 / 5 x 10^n ladder, so the labels read as whole training-load
+/// numbers rather than the padded axis extremes.
+@visibleForTesting
+double trainingLoadTickStep(double span, {int maxTicks = 4}) {
+  if (!span.isFinite || span <= 0) return 1;
+  final raw = span / maxTicks;
+  final mag = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+  final norm = raw / mag;
+  final mult = norm <= 1
+      ? 1.0
+      : norm <= 2
+          ? 2.0
+          : norm <= 5
+              ? 5.0
+              : 10.0;
+  return mult * mag;
+}
+
 class _ChartPainter extends CustomPainter {
   final List<TrainingLoadPoint> points;
+  final TrainingLoadPalette palette;
   final Color axisColor;
+  final TextStyle labelStyle;
 
-  _ChartPainter({required this.points, required this.axisColor});
+  _ChartPainter({
+    required this.points,
+    required this.palette,
+    required this.axisColor,
+    required this.labelStyle,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
-    const padL = 8.0;
-    const padR = 4.0;
+    // A min/max-normalised plot with no gutter draws CTL 45 and CTL 450 as
+    // the same picture, so the left inset is a real axis gutter now.
+    const padL = 34.0;
+    const padR = 6.0;
     const padT = 6.0;
     const padB = 6.0;
     final plotW = size.width - padL - padR;
@@ -259,7 +328,33 @@ class _ChartPainter extends CustomPainter {
       return padT + plotH * (1 - (v - minV) / (maxV - minV));
     }
 
-    // Zero line — dashed.
+    // Labelled gridlines — the magnitude the shape alone never carried.
+    final gridPaint = Paint()
+      ..color = axisColor.withValues(alpha: axisColor.a * 0.45)
+      ..strokeWidth = 1;
+    final step = trainingLoadTickStep(maxV - minV);
+    for (var tick = (minV / step).ceil() * step;
+        tick <= maxV + step * 0.001;
+        tick += step) {
+      final y = yAt(tick);
+      if (tick != 0) {
+        canvas.drawLine(
+          Offset(padL, y),
+          Offset(size.width - padR, y),
+          gridPaint,
+        );
+      }
+      final label = TextPainter(
+        text: TextSpan(text: tick.round().toString(), style: labelStyle),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: padL - 4);
+      label.paint(
+        canvas,
+        Offset(padL - 4 - label.width, y - label.height / 2),
+      );
+    }
+
+    // Zero line — dashed, so the TSB sign stays distinct from the grid.
     final zeroPaint = Paint()
       ..color = axisColor
       ..strokeWidth = 1;
@@ -290,9 +385,9 @@ class _ChartPainter extends CustomPainter {
       canvas.drawPath(path, paint);
     }
 
-    drawSeries((p) => p.ctl, trainingLoadFitnessColour);
-    drawSeries((p) => p.atl, trainingLoadFatigueColour);
-    drawSeries((p) => p.tsb, trainingLoadFormColour);
+    drawSeries((p) => p.ctl, palette.fitness);
+    drawSeries((p) => p.atl, palette.fatigue);
+    drawSeries((p) => p.tsb, palette.form);
   }
 
   void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
@@ -312,5 +407,8 @@ class _ChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ChartPainter old) =>
-      !identical(old.points, points) || old.axisColor != axisColor;
+      !identical(old.points, points) ||
+      old.axisColor != axisColor ||
+      old.labelStyle != labelStyle ||
+      old.palette.fitness != palette.fitness;
 }

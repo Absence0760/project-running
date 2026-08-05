@@ -655,7 +655,7 @@
 		align-items: center;
 	}
 	.crown-icon {
-		color: #f5b30a;
+		color: var(--color-crown);
 		font-size: 1.1rem;
 		line-height: 1;
 	}

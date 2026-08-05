@@ -25,6 +25,14 @@ import 'top_banner.dart';
 /// the track casing does — the OSM fallback is light whatever the app
 /// theme is.
 ///
+/// Deliberately theme-FREE, unlike the rest of the app's micro-labels: the
+/// widget is mounted inside the rasterised share cards as well as on live
+/// maps, and its ink has to follow the resolved basemap (§ 491), not the app
+/// theme. So it carries a bespoke [TextStyle] rather than `labelSmall` — but
+/// pinned to [kMapAttributionFontSize], the same 11 px micro-label floor
+/// § 482 declared. It shipped at 10 px, under that floor, on a target that is
+/// also a link.
+///
 /// Anchored to the bottom START, not the bottom-right MapLibre defaults to
 /// on web: every locate / re-centre control in the app is a `FloatingAction
 /// Button`, which Material also anchors to the end, and a credit a floating
@@ -72,7 +80,7 @@ class MapAttribution extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 5),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -81,14 +89,21 @@ class MapAttribution extends StatelessWidget {
                     Semantics(
                       link: true,
                       child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () => openMapCredit(context, credits[i]),
-                        child: Text(
-                          mapCreditLabel(l10n, credits[i]),
-                          style: TextStyle(
-                            fontSize: 10,
-                            height: 1.3,
-                            fontWeight: FontWeight.w500,
-                            color: ink,
+                        child: SizedBox(
+                          height: kMapAttributionTapTarget,
+                          child: Center(
+                            widthFactor: 1,
+                            child: Text(
+                              mapCreditLabel(l10n, credits[i]),
+                              style: TextStyle(
+                                fontSize: kMapAttributionFontSize,
+                                height: 1.3,
+                                fontWeight: FontWeight.w500,
+                                color: ink,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -136,6 +151,17 @@ Future<void> openMapCredit(BuildContext context, MapCredit credit) async {
     }
   }
 }
+
+/// The 11 px micro-label floor § 482 declared. Held here rather than read off
+/// `textTheme.labelSmall` so the strip stays theme-free for the share cards.
+@visibleForTesting
+const double kMapAttributionFontSize = 11;
+
+/// WCAG 2.2 SC 2.5.8 minimum target size. Each credit is a link, and two of
+/// them sit 6 dp apart, so the undersized-target spacing exception does not
+/// apply — the target itself has to reach 24 dp.
+@visibleForTesting
+const double kMapAttributionTapTarget = 24;
 
 /// Credit text colour. Same pair as the track casing: white over a dark
 /// basemap, the deep indigo ink over a light one.

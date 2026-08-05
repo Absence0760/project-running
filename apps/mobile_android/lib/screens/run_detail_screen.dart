@@ -20,6 +20,7 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../hr_zone_palette.dart';
 import '../hr_zones.dart';
 import '../run_intensity.dart';
 import '../local_route_store.dart';
@@ -1788,29 +1789,33 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     final buckets = _cachedHrBuckets!;
     if (buckets.isEmpty) return const [];
 
-    const colors = [
-      Color(0xFF90CAF9), // Z1 Recovery
-      Color(0xFF4CAF50), // Z2 Easy
-      Color(0xFFFFC107), // Z3 Aerobic
-      Color(0xFFFF9800), // Z4 Threshold
-      Color(0xFFF44336), // Z5 Max
-    ];
+    final colors = hrZoneColours(theme);
 
     Widget bar() {
       final total =
           buckets.fold<int>(0, (sum, b) => sum + (b.pct < 0 ? 0 : b.pct));
       if (total <= 0) return const SizedBox.shrink();
+      final shown =
+          buckets.where((b) => (b.pct < 0 ? 0 : b.pct) > 0).toList();
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: SizedBox(
           height: 14,
           child: Row(
             children: [
-              for (final b in buckets)
+              for (var k = 0; k < shown.length; k++) ...[
+                // Adjacent bands sit ~1.45:1 apart, which no five-band ramp
+                // can lift to 3:1; the page-coloured gap delineates them.
+                if (k > 0)
+                  SizedBox(
+                    width: kHrZoneSeparatorWidth,
+                    child: ColoredBox(color: theme.scaffoldBackgroundColor),
+                  ),
                 Expanded(
-                  flex: (b.pct < 0 ? 0 : b.pct).clamp(0, 100),
-                  child: Container(color: colors[b.index]),
+                  flex: shown[k].pct.clamp(0, 100),
+                  child: ColoredBox(color: colors[shown[k].index]),
                 ),
+              ],
             ],
           ),
         ),

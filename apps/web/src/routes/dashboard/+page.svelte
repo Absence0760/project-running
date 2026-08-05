@@ -2692,8 +2692,8 @@
 		align-items: baseline;
 	}
 	.contrib-delta { font-variant-numeric: tabular-nums; font-weight: 700; }
-	.contrib-delta.positive { color: var(--color-success); }
-	.contrib-delta.negative { color: var(--color-danger); }
+	.contrib-delta.positive { color: var(--color-success-text); }
+	.contrib-delta.negative { color: var(--color-danger-text); }
 	.fitness-unit {
 		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);

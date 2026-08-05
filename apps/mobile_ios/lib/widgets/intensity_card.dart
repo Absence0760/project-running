@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../hr_zone_palette.dart';
 import '../hr_zones.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../run_intensity.dart';
@@ -169,32 +170,35 @@ class _SegmentedBar extends StatelessWidget {
   final IntensityBreakdown breakdown;
   const _SegmentedBar({required this.breakdown});
 
-  // Zone palette — green easy, yellow / orange moderate, red hard.
-  // Matches the web `--zone-*` CSS vars + the run-detail HR-zone band.
-  static const _zoneColors = <Color>[
-    Color(0xFF2E7D32), // z1 easy
-    Color(0xFF66BB6A), // z2 endurance
-    Color(0xFFF59E0B), // z3 tempo
-    Color(0xFFFB8C00), // z4 threshold
-    Color(0xFFD32F2F), // z5 vo2 / sprint
-  ];
-
   @override
   Widget build(BuildContext context) {
     final total = breakdown.totalSeconds;
     if (total <= 0) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final colours = hrZoneColours(theme);
+    final shown = [
+      for (var i = 0; i < 5; i++)
+        if (breakdown.zoneSeconds[i] > 0) i,
+    ];
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: SizedBox(
         height: 12,
         child: Row(
           children: [
-            for (var i = 0; i < 5; i++)
-              if (breakdown.zoneSeconds[i] > 0)
-                Expanded(
-                  flex: breakdown.zoneSeconds[i],
-                  child: Container(color: _zoneColors[i]),
+            for (var k = 0; k < shown.length; k++) ...[
+              // Adjacent bands sit ~1.45:1 apart, which no five-band ramp can
+              // lift to 3:1; the surface-coloured gap is what delineates them.
+              if (k > 0)
+                SizedBox(
+                  width: kHrZoneSeparatorWidth,
+                  child: ColoredBox(color: theme.colorScheme.surface),
                 ),
+              Expanded(
+                flex: breakdown.zoneSeconds[shown[k]],
+                child: ColoredBox(color: colours[shown[k]]),
+              ),
+            ],
           ],
         ),
       ),
@@ -224,7 +228,7 @@ class _ZoneLegend extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: _SegmentedBar._zoneColors[i],
+                  color: hrZoneColours(theme)[i],
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

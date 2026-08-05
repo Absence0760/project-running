@@ -827,11 +827,11 @@
 	/// HR). When it doesn't, the panel reports "No HR samples on this
 	/// run" instead of rendering fake percentages.
 	const zoneDefs = $derived([
-		{ zone: m('runDetail.zone1'), label: m('runDetail.zoneRecovery'), color: '#90CAF9' },
-		{ zone: m('runDetail.zone2'), label: m('runDetail.zoneEasy'), color: '#4CAF50' },
-		{ zone: m('runDetail.zone3'), label: m('runDetail.zoneAerobic'), color: '#FFC107' },
-		{ zone: m('runDetail.zone4'), label: m('runDetail.zoneThreshold'), color: '#FF9800' },
-		{ zone: m('runDetail.zone5'), label: m('runDetail.zoneMax'), color: '#F44336' },
+		{ zone: m('runDetail.zone1'), label: m('runDetail.zoneRecovery'), color: 'var(--zone-1)' },
+		{ zone: m('runDetail.zone2'), label: m('runDetail.zoneEasy'), color: 'var(--zone-2)' },
+		{ zone: m('runDetail.zone3'), label: m('runDetail.zoneAerobic'), color: 'var(--zone-3)' },
+		{ zone: m('runDetail.zone4'), label: m('runDetail.zoneThreshold'), color: 'var(--zone-4)' },
+		{ zone: m('runDetail.zone5'), label: m('runDetail.zoneMax'), color: 'var(--zone-5)' },
 	]);
 
 	/// Per-point BPM samples paired with their timestamps so the zone
@@ -1793,6 +1793,7 @@
 					{#each hrZones as zone}
 						<div
 							class="hr-segment"
+							class:hr-segment-empty={zone.pct <= 0}
 							style="width: {zone.pct}%; background: {zone.color}"
 							title="{zone.zone}: {zone.pct}%{zone.seconds != null ? ` (${formatZoneTime(zone.seconds)})` : ''}"
 						></div>
@@ -2759,6 +2760,10 @@
 
 	.hr-bar {
 		display: flex;
+		/* Adjacent bands sit ~1.45:1 apart, which no five-band ramp can lift
+		   to 3:1; the gap shows the surface through and is what delineates
+		   them (every band clears 3:1 against it). */
+		gap: 2px;
 		height: 1.5rem;
 		border-radius: var(--radius-sm);
 		overflow: hidden;
@@ -2767,6 +2772,13 @@
 
 	.hr-segment {
 		transition: width var(--transition-base);
+	}
+
+	/* A zero-width band still generates a flex gap, so a run spent entirely in
+	   one zone would show separators around nothing. Kept in the DOM: the
+	   five-segment count is what pins "no zone was silently dropped". */
+	.hr-segment-empty {
+		display: none;
 	}
 
 	.hr-legend {
