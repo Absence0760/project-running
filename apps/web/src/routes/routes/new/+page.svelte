@@ -9,6 +9,7 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import { toGpx, toKml, downloadFile } from '$lib/routes/gpx';
 	import { saveRoute } from '$lib/core/data';
@@ -190,6 +191,10 @@
 	// tabindex list of focusable rows. Key → action mapping and the
 	// nudge geodesy live in the pure waypoint_keyboard.ts helper.
 	let waypointList = $state<TrackPoint[]>([]);
+	let saved = $state(false);
+	// A drawn line is the work at risk here, not a text field: the name and
+	// description are typed in the save modal, after the route exists.
+	const routeDirty = () => !saved && waypointList.length > 0;
 	let activeWaypointIdx = $state(0);
 	let waypointEls = $state<(HTMLButtonElement | undefined)[]>([]);
 	let wpAnnounce = $state('');
@@ -620,7 +625,7 @@
 			// rationale + the regression test that pins it.
 			const polyline = pickSavePolyline(routeData.waypoints, routeData.coordinates);
 
-			const saved = await saveRoute({
+			const route = await saveRoute({
 				name: routeName.trim(),
 				waypoints: polyline,
 				distance_m: Math.round(distance * 100) / 100,
@@ -632,8 +637,9 @@
 			});
 
 			showSaveModal = false;
+			saved = true;
 			showToast(m('routeNew.savedToast'), 'success');
-			goto(`/routes/${saved.id}`);
+			goto(`/routes/${route.id}`);
 		} catch (err) {
 			// Surface the failure IN the save modal (persistent, in-context)
 			// and keep it open with the user's work intact — a transient toast
@@ -648,6 +654,8 @@
 <svelte:head>
 	<title>{m('routeNew.routeBuilder')} — Threkir</title>
 </svelte:head>
+
+<UnsavedChangesGuard isDirty={routeDirty} message={m('routeNew.unsavedBody')} />
 
 <div class="builder-layout">
 	<SplitPane storageKey="route-builder-split" min={280} initialFraction={0.28}>

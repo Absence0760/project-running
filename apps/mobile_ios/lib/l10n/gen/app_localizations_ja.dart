@@ -6069,6 +6069,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get legalHealthDataNotice => '健康データのプライバシー';
 
   @override
+  String get mapAttributionSemantics => '地図データの帰属表示';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© $name コントリビューター';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return '$url を開けませんでした';
   }
@@ -11885,4 +11898,16 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => '再試行';
+
+  @override
+  String get photoLightboxLoading => '写真を読み込んでいます…';
+
+  @override
+  String get photoLightboxError => 'この写真を読み込めませんでした。';
+
+  @override
+  String get photoLightboxErrorHint => '画面のどこかをタップすると閉じます。';
+
+  @override
+  String get commonLoading => '読み込み中…';
 }

@@ -10569,6 +10569,24 @@ abstract class AppLocalizations {
   /// **'Health data privacy'**
   String get legalHealthDataNotice;
 
+  /// Accessibility label for the credit strip shown over every map
+  ///
+  /// In en, this message translates to:
+  /// **'Map data attribution'**
+  String get mapAttributionSemantics;
+
+  /// Credit for the company that renders the basemap tiles. {name} is a company name and is never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'© {name}'**
+  String mapAttributionProvider(String name);
+
+  /// ODbL credit for the map data. {name} is the OpenStreetMap project name and is never translated; the word for the people who contribute to it is.
+  ///
+  /// In en, this message translates to:
+  /// **'© {name} contributors'**
+  String mapAttributionOsmContributors(String name);
+
   /// Banner shown when a legal-document link fails to open
   ///
   /// In en, this message translates to:
@@ -20839,6 +20857,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get pendingSyncRetry;
+
+  /// Accessible label for the spinner shown while a full-size photo loads in the lightbox
+  ///
+  /// In en, this message translates to:
+  /// **'Loading photo…'**
+  String get photoLightboxLoading;
+
+  /// Shown in the photo lightbox when the full-size image fails to load (expired signed URL, offline)
+  ///
+  /// In en, this message translates to:
+  /// **'This photo couldn\'t be loaded.'**
+  String get photoLightboxError;
+
+  /// Hint under the photo lightbox error telling the user how to dismiss the viewer
+  ///
+  /// In en, this message translates to:
+  /// **'Tap anywhere to close.'**
+  String get photoLightboxErrorHint;
+
+  /// Generic screen-reader announcement for a surface that is still loading
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get commonLoading;
 }
 
 class _AppLocalizationsDelegate

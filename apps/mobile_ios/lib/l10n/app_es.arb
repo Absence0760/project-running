@@ -1786,6 +1786,9 @@
   "legalTerms": "Condiciones del servicio",
   "legalCookieNotice": "Aviso de cookies",
   "legalHealthDataNotice": "Privacidad de datos de salud",
+  "mapAttributionSemantics": "Atribución de los datos del mapa",
+  "mapAttributionProvider": "© {name}",
+  "mapAttributionOsmContributors": "© colaboradores de {name}",
   "legalCouldNotOpen": "No se pudo abrir {url}",
   "aboutLegalSection": "Legal",
   "devicesTitle": "Dispositivos",
@@ -3632,5 +3635,9 @@
   "watchLiveSyncSubtitle": "Descarga las carreras grabadas del reloj. La retransmisión se pausa mientras tanto.",
   "pendingSyncOffline": "{count, plural, one{{count} cambio guardado en este dispositivo — se sincronizará al volver a estar en línea} other{{count} cambios guardados en este dispositivo — se sincronizarán al volver a estar en línea}}",
   "pendingSyncFailed": "{count, plural, one{{count} cambio no se ha sincronizado} other{{count} cambios no se han sincronizado}}",
-  "pendingSyncRetry": "Reintentar"
+  "pendingSyncRetry": "Reintentar",
+  "photoLightboxLoading": "Cargando la foto…",
+  "photoLightboxError": "No se ha podido cargar esta foto.",
+  "photoLightboxErrorHint": "Toca en cualquier parte para cerrar.",
+  "commonLoading": "Cargando…"
 }

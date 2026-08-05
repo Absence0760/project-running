@@ -5,6 +5,8 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { untrack } from 'svelte';
+	import { trackDirty } from '$lib/core/form_dirty';
+	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	interface Props {
 		/// When set, the editor edits this club instead of creating a new one.
@@ -28,6 +30,19 @@
 	let stravaUrl = $state(untrack(() => existing?.strava_url ?? ''));
 	let facebookUrl = $state(untrack(() => existing?.facebook_url ?? ''));
 	let busy = $state(false);
+
+	const dirty = trackDirty(() => ({
+		name,
+		description,
+		location,
+		visibility,
+		joinPolicy,
+		requireWaiver,
+		websiteUrl,
+		instagramUrl,
+		stravaUrl,
+		facebookUrl,
+	}));
 
 	$effect(() => {
 		// Private clubs don't appear in Browse; 'request' makes no sense
@@ -56,6 +71,7 @@
 					strava_url: stravaUrl,
 					facebook_url: facebookUrl
 				});
+				dirty.rebaseline();
 				onsaved?.();
 				return;
 			}
@@ -83,6 +99,7 @@
 				strava_url: stravaUrl,
 				facebook_url: facebookUrl
 			});
+			dirty.rebaseline();
 			oncreated?.(club);
 		} catch (e: unknown) {
 			showToast(e instanceof Error ? e.message : m('clubEditor.createFailed'), 'error');
@@ -91,6 +108,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <form onsubmit={submit} class="editor-form">
 	<label>

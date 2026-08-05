@@ -1,13 +1,14 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../basemap_credits.dart' show tileEnv;
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart' show ActivityType, activeMapStyle;
 import '../tile_cache.dart';
+import 'map_attribution.dart';
 import 'pace_segments.dart';
 import 'track_decorations.dart';
 import 'track_segment.dart';
@@ -183,26 +184,11 @@ bool resolveBasemapIsDark(
   return slug == 'streets-v2-dark' || slug == 'satellite';
 }
 
-/// Read dotenv defensively — bare `dotenv.env` throws
-/// `NotInitializedError` when the harness hasn\'t called `dotenv.load()`,
-/// which then propagates up and prevents the screen from rendering at all
-/// (real bug found by the May 2026 audit when the privacy-zones + heatmap
-/// screens started reading dotenv in their TileLayer URL). Tiles are an L2
-/// layer: failing to resolve one must never take a screen down with it.
-Map<String, String> _tileEnv() {
-  try {
-    return dotenv.env;
-  } catch (e) {
-    debugPrint('dotenv unavailable for tile resolution: $e');
-    return const {};
-  }
-}
-
 /// Tile URL for an explicit basemap choice. The share cards call this with
 /// a pinned dark basemap; every on-screen map goes through
 /// [currentTileUrl].
 String tileUrlFor(String mapStyle, Brightness brightness) =>
-    resolveTileUrl(_tileEnv(), mapStyle: mapStyle, brightness: brightness);
+    resolveTileUrl(tileEnv(), mapStyle: mapStyle, brightness: brightness);
 
 /// Production-callsite convenience: the user's basemap preference under
 /// the ambient theme. Use this from screen build() methods.
@@ -212,9 +198,64 @@ String currentTileUrl(BuildContext context) =>
 /// Companion to [currentTileUrl] — whether the basemap it just resolved is
 /// dark, so overlays can pick a separator that shows against it.
 bool currentBasemapIsDark(BuildContext context) => resolveBasemapIsDark(
-      _tileEnv(),
+      tileEnv(),
       mapStyle: activeMapStyle,
       brightness: Theme.of(context).brightness,
+    );
+
+/// Colour behind the tile grid. `flutter_map` paints its own `#E0E0E0`
+/// default under every layer, which on the dark basemap the app was locked
+/// to before § 489 made a failed or still-loading tile a 13:1 bright
+/// rectangle. Keying the void to the resolved basemap makes a gap read as
+/// map-not-here rather than as a hole punched through the map.
+Color basemapVoidColour({required bool darkBasemap}) =>
+    darkBasemap ? const Color(0xFF23252B) : const Color(0xFFE6E1D8);
+
+int _tileFailures = 0;
+
+/// The basemap raster layer, with the failure treatment every map shares.
+///
+/// A tile that 404s or times out leaves nothing drawn, and `flutter_map`
+/// caches the failure: without an eviction strategy the gap survives every
+/// later pan back over the same ground for the life of the layer. Evicting
+/// error tiles once they leave the pruning margin means the next approach
+/// re-requests them, which is what a dropped connection at the start of a
+/// run needs.
+///
+/// No `errorImage`: a per-tile broken-image glyph tiled across the viewport
+/// is a worse failure surface than the basemap-coloured void
+/// [basemapVoidColour] already paints, and it would ship an asset whose
+/// only job is to be seen when something is wrong.
+///
+/// Logging is an L2 auxiliary effect — first failure then every hundredth,
+/// so a flaky network can't drown the log the recording stack writes to.
+TileLayer basemapTileLayer({
+  required String urlTemplate,
+  TileProvider? tileProvider,
+  int maxNativeZoom = 19,
+  double maxZoom = 19,
+}) =>
+    TileLayer(
+      urlTemplate: urlTemplate,
+      userAgentPackageName: 'com.threkir.app',
+      maxNativeZoom: maxNativeZoom,
+      maxZoom: maxZoom,
+      evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
+      errorTileCallback: (tile, error, _) {
+        _tileFailures++;
+        if (_tileFailures == 1 || _tileFailures % 100 == 0) {
+          debugPrint(
+            'basemap tile failed (${tile.coordinates}, '
+            '$_tileFailures so far): $error',
+          );
+        }
+      },
+      tileProvider: tileProvider ??
+          CachedTileProvider(
+            store: TileCache.store,
+            maxStale: const Duration(days: 30),
+            dio: TileCache.dio,
+          ),
     );
 
 /// Separator between an overlay and the basemap: the casing under the
@@ -227,6 +268,20 @@ bool currentBasemapIsDark(BuildContext context) => resolveBasemapIsDark(
 @visibleForTesting
 Color mapOverlayOutline({required bool darkBasemap}) =>
     darkBasemap ? Colors.white : const Color(0xFF1E1B4B);
+
+/// Amber accent for the map's transient overlays — the selected-segment
+/// highlight, the coarse last-seen ring, and the elevation-chart hover dot.
+///
+/// One amber served every map while all seven were locked to the dark
+/// basemap. § 489 unlocked the light ones and left `#F59E0B` at 1.87:1
+/// against a representative light land fill (1.96:1 against a paler one) —
+/// under WCAG 1.4.11's 3:1 floor for a non-text element carrying meaning.
+/// The light-basemap rung is the first darker amber that clears it, at
+/// 4.38:1, and still holds 3.13:1 over a light basemap's water fill.
+/// `#F59E0B` stays on the dark basemap, where it reads 8.00:1.
+@visibleForTesting
+Color mapAccentColour({required bool darkBasemap}) =>
+    darkBasemap ? const Color(0xFFF59E0B) : const Color(0xFFB45309);
 
 /// Gradient stops for the recorded track, oldest → newest. Both ramps
 /// start at the same mid indigo and move away from the basemap, so the
@@ -902,12 +957,14 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
 
     final darkBasemap = currentBasemapIsDark(context);
     final outline = mapOverlayOutline(darkBasemap: darkBasemap);
+    final accent = mapAccentColour(darkBasemap: darkBasemap);
 
     return Stack(
       children: [
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
+            backgroundColor: basemapVoidColour(darkBasemap: darkBasemap),
             initialCenter: fitBounds ? allPoints.first : center,
             initialZoom: fitBounds ? 14 : 19,
             // Cap gesture zoom to what the tile layer can actually cover
@@ -949,23 +1006,17 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                   },
           ),
           children: [
-            // Dark map tiles with HTTP cache. `maxNativeZoom` caps tile
+            // Map tiles with HTTP cache. `maxNativeZoom` caps tile
             // fetches at 19 (MapTiler's ceiling for this style) while
             // `maxZoom` lets flutter_map keep displaying the layer at
             // gesture-zoom 20–22 by up-sampling the z=19 tiles. Without
             // the split the layer goes blank past 19 and the user sees
             // the polyline floating on a white background.
-            TileLayer(
+            basemapTileLayer(
               urlTemplate: _tileUrl,
-              userAgentPackageName: 'com.threkir.app',
+              tileProvider: widget.offlineTileProvider,
               maxNativeZoom: 19,
               maxZoom: 22,
-              tileProvider: widget.offlineTileProvider ??
-                  CachedTileProvider(
-                    store: TileCache.store,
-                    maxStale: const Duration(days: 30),
-                    dio: TileCache.dio,
-                  ),
             ),
 
             // Planned route (underneath) — dashed-looking with lighter color
@@ -1024,7 +1075,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                       _selectedSegment!.endIdx + 1,
                     ),
                     strokeWidth: 9,
-                    color: const Color(0xFFF59E0B), // amber, matches web
+                    color: accent,
                   ),
                 ],
               ),
@@ -1115,6 +1166,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     child: _HoverMarkerDot(
                       animation: _pulseAnimation,
                       ringColour: outline,
+                      accent: accent,
                     ),
                   ),
                 ],
@@ -1197,7 +1249,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     width: 48,
                     height: 48,
                     child: widget.coarsePosition
-                        ? const _CoarseDot()
+                        ? _CoarseDot(accent: accent)
                         : _PulsingDot(
                             animation: _pulseAnimation,
                             ringColour: outline,
@@ -1205,6 +1257,11 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                   ),
                 ],
               ),
+
+            MapAttribution(
+              darkBasemap: darkBasemap,
+              bottomInset: widget.bottomPadding,
+            ),
           ],
         ),
 
@@ -1350,7 +1407,8 @@ class _GhostDot extends StatelessWidget {
 /// Mirrors the web `.runner-dot.coarse` style. No pulse — it is a
 /// stale-but-retained last position, not a live fix.
 class _CoarseDot extends StatelessWidget {
-  const _CoarseDot();
+  final Color accent;
+  const _CoarseDot({required this.accent});
 
   @override
   Widget build(BuildContext context) {
@@ -1361,10 +1419,10 @@ class _CoarseDot extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.transparent,
-          border: Border.all(color: const Color(0xFFF59E0B), width: 3),
-          boxShadow: const [
+          border: Border.all(color: accent, width: 3),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x38F59E0B),
+              color: accent.withValues(alpha: 0.22),
               blurRadius: 4,
               spreadRadius: 8,
             ),
@@ -1437,7 +1495,12 @@ class _PulsingDot extends StatelessWidget {
 class _HoverMarkerDot extends StatelessWidget {
   final Animation<double> animation;
   final Color ringColour;
-  const _HoverMarkerDot({required this.animation, required this.ringColour});
+  final Color accent;
+  const _HoverMarkerDot({
+    required this.animation,
+    required this.ringColour,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1446,11 +1509,11 @@ class _HoverMarkerDot extends StatelessWidget {
       height: 12,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFFF59E0B),
+        color: accent,
         border: Border.all(color: ringColour, width: 2),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x66F59E0B),
+            color: accent.withValues(alpha: 0.4),
             blurRadius: 6,
             spreadRadius: 1,
           ),
@@ -1470,8 +1533,7 @@ class _HoverMarkerDot extends StatelessWidget {
                 height: 28 * (0.6 + animation.value * 0.4),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFF59E0B)
-                      .withValues(alpha: animation.value * 0.5),
+                  color: accent.withValues(alpha: animation.value * 0.5),
                 ),
               ),
               if (child != null) child,

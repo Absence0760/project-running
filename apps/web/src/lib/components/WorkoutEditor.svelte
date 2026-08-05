@@ -13,6 +13,8 @@
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import Modal from './Modal.svelte';
+	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
+	import { trackDirty } from '$lib/core/form_dirty';
 
 	interface Props {
 		workout: PlanWorkout;
@@ -161,6 +163,30 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
+	const dirty = trackDirty(() => ({
+		kind,
+		distance,
+		paceMin,
+		paceSec,
+		paceEndMin,
+		paceEndSec,
+		toleranceSec,
+		zone,
+		notes,
+		mode,
+		warmupDistance,
+		cooldownDistance,
+		repeatsCount,
+		repeatsDistance,
+		repeatsPaceMin,
+		repeatsPaceSec,
+		recoveryDistance,
+		recoveryPace,
+		steadyDistance,
+		steadyPaceMin,
+		steadyPaceSec,
+	}));
+
 	// Workouts can be completed two ways: (1) auto-matched from a tracked
 	// run via /runs (sets completed_run_id), or (2) the user taps
 	// "Mark as done" here when they ran without recording — sets the
@@ -194,6 +220,7 @@
 			} else {
 				await markWorkoutCompleted(workout.id, null, { manual: true });
 			}
+			dirty.rebaseline();
 			onSaved();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : t('workoutEditor.updateFailed');
@@ -209,6 +236,7 @@
 			// Skipping clears any manual completion server-side; un-skipping
 			// just drops the flag and leaves the workout as a plain to-do.
 			await markWorkoutSkipped(workout.id, !wasSkipped);
+			dirty.rebaseline();
 			onSaved();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : t('workoutEditor.updateFailed');
@@ -291,6 +319,7 @@
 					? null
 					: (nextStructure as unknown as Record<string, unknown> | null),
 			});
+			dirty.rebaseline();
 			onSaved();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : t('workoutEditor.saveFailed');
@@ -299,6 +328,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <Modal
 	open={true}

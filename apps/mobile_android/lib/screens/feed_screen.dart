@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton;
 
 import '../adaptive_width.dart';
 import '../auth_error.dart';
@@ -245,7 +246,11 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _buildBody(ThemeData theme) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return ListSkeleton(
+        label: AppLocalizations.of(context).commonLoading,
+        rows: 3,
+        rowHeight: 168,
+      );
     }
     if (_loadError != null) {
       return ErrorState(
@@ -550,9 +555,11 @@ class _EntryCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Row(
                 children: [
-                  _MiniAvatar(
-                    displayName: entry.author.displayName,
-                    avatarUrl: entry.author.avatarUrl,
+                  IdentityAvatar(
+                    seed: entry.author.id,
+                    name: entry.author.displayName,
+                    size: 32,
+                    imageUrl: entry.author.avatarUrl,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -824,9 +831,11 @@ class _LiftEntryCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Row(
                 children: [
-                  _MiniAvatar(
-                    displayName: entry.author.displayName,
-                    avatarUrl: entry.author.avatarUrl,
+                  IdentityAvatar(
+                    seed: entry.author.id,
+                    name: entry.author.displayName,
+                    size: 32,
+                    imageUrl: entry.author.avatarUrl,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -932,47 +941,3 @@ class _Stat extends StatelessWidget {
   }
 }
 
-class _MiniAvatar extends StatelessWidget {
-  final String? displayName;
-  final String? avatarUrl;
-  const _MiniAvatar({this.displayName, this.avatarUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final letter = (displayName?.isNotEmpty ?? false)
-        ? displayName![0].toUpperCase()
-        : '?';
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: theme.colorScheme.primary,
-        image: avatarUrl != null && avatarUrl!.isNotEmpty
-            ? DecorationImage(
-                // ResizeImage decodes the avatar at ~3× the rendered
-                // 32 dp circle instead of full source resolution — big
-                // memory win when scrolling a feed full of cards.
-                image: ResizeImage(
-                  NetworkImage(avatarUrl!),
-                  width: 96,
-                  height: 96,
-                ),
-                fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      alignment: Alignment.center,
-      child: avatarUrl == null || avatarUrl!.isEmpty
-          ? Text(
-              letter,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            )
-          : null,
-    );
-  }
-}

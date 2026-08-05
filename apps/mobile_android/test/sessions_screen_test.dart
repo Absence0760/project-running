@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
@@ -141,6 +142,7 @@ void main() {
           _wrap(SessionsScreen(api: _FailingApi(), gymStore: gym)));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(ListSkeleton), findsNothing);
       expect(find.text("Couldn't load sessions."), findsOneWidget);
     } finally {
       dir.deleteSync(recursive: true);

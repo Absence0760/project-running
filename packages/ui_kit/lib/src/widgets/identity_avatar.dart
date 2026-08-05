@@ -64,14 +64,21 @@ Color identityForeground(Color background) =>
         ? Colors.white
         : AppTheme.ink;
 
-/// Deterministic initial-letter avatar for users, clubs, and events without
-/// an uploaded image. Hashes [seed] to a hue and guarantees the initial
-/// meets WCAG AA (4.5:1) over the resolved background in both themes.
+/// Deterministic initial-letter avatar for users, clubs, and events. Hashes
+/// [seed] to a hue and guarantees the initial meets WCAG AA (4.5:1) over the
+/// resolved background in both themes.
+///
+/// When [imageUrl] is set the uploaded picture is layered over that circle
+/// rather than replacing it, so the initial is what shows while the bytes
+/// are in flight and what remains if they never arrive. `DecorationImage`
+/// carries no error hook at all, which is why every hand-rolled avatar that
+/// used one rendered a failed load as an empty coloured disc.
 class IdentityAvatar extends StatelessWidget {
   final String seed;
   final String? name;
   final double size;
   final double? fontSize;
+  final String? imageUrl;
 
   const IdentityAvatar({
     super.key,
@@ -79,11 +86,24 @@ class IdentityAvatar extends StatelessWidget {
     this.name,
     this.size = 36,
     this.fontSize,
+    this.imageUrl,
   });
 
   @override
   Widget build(BuildContext context) {
     final background = identityBackground(identityHue(seed));
+    final url = imageUrl;
+    final letter = Text(
+      identityInitial(name),
+      style: TextStyle(
+        color: identityForeground(background),
+        fontWeight: FontWeight.w700,
+        fontSize: fontSize ?? size * 0.42,
+      ),
+    );
+    // Decode at ~3x the rendered circle instead of full source resolution —
+    // a feed or leaderboard holds dozens of these at once.
+    final decodeSide = (size * 3).round();
     return Container(
       width: size,
       height: size,
@@ -92,14 +112,31 @@ class IdentityAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         color: background,
       ),
-      child: Text(
-        identityInitial(name),
-        style: TextStyle(
-          color: identityForeground(background),
-          fontWeight: FontWeight.w700,
-          fontSize: fontSize ?? size * 0.42,
-        ),
-      ),
+      child: url == null || url.isEmpty
+          ? letter
+          : Stack(
+              alignment: Alignment.center,
+              children: [
+                letter,
+                ClipOval(
+                  child: Image(
+                    image: ResizeImage(
+                      NetworkImage(url),
+                      width: decodeSide,
+                      height: decodeSide,
+                    ),
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    frameBuilder: (_, child, frame, wasSynchronouslyLoaded) =>
+                        wasSynchronouslyLoaded || frame != null
+                            ? child
+                            : const SizedBox.shrink(),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

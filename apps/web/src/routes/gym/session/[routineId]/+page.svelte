@@ -5,8 +5,10 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fetchGymRoutineDetail,
+		fetchGymSessionDraft,
 		fetchExerciseSetHistoryBatch,
 		type GymRoutineDetail,
+		type GymWorkout,
 	} from '$lib/core/data';
 	import { expandRoutineSteps, type RoutineStep, type PlannedRoutine } from '$lib/gym/gym_routine';
 	import { nextPrescription } from '$lib/gym/gym_progression';
@@ -19,6 +21,7 @@
 
 	let detail = $state<GymRoutineDetail | null>(null);
 	let steps = $state<RoutineStep[]>([]);
+	let draft = $state<GymWorkout | null>(null);
 	let loading = $state(true);
 
 	async function load() {
@@ -46,6 +49,10 @@
 			};
 			const expanded = expandRoutineSteps(planned).steps;
 			steps = await prefillFromProgression(expanded, detail).catch(() => expanded);
+			// A refresh lands back on this URL, so an in-flight draft for this
+			// routine is resumed rather than started over — which also stops a
+			// second draft row forking off the first (decisions.md § 483).
+			draft = await fetchGymSessionDraft(routineId);
 		}
 		loading = false;
 	}
@@ -141,7 +148,7 @@
 			<p class="head-eyebrow section-label">{t('gym.session.title')}</p>
 			<h1>{detail.routine.title}</h1>
 		</header>
-		<GymSessionRunner routine={detail.routine} {steps} {onfinish} {oncancel} />
+		<GymSessionRunner routine={detail.routine} {steps} {draft} {onfinish} {oncancel} />
 	{/if}
 </div>
 

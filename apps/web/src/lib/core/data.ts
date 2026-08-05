@@ -75,6 +75,7 @@ import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
 import type { RecapPeriodKind } from '../types';
 import { normaliseExerciseName } from '../gym/gym_prs';
+import { GYM_SESSION_DRAFT_KEY } from '../gym/gym_session_draft';
 import type { YearInRunningRecap } from '../runs/recap';
 import type {
 	CoachAthleteStatus,
@@ -8543,6 +8544,10 @@ export interface GymWorkout {
 	external_id: string | null;
 	last_modified_at: string;
 	created_at: string;
+	/// Schemaless bag (migration 20270101_001) holding the guided-runner
+	/// execution trio and, while a session is in flight, the
+	/// `gym_session_draft` snapshot. Registered in docs/backend/metadata.md.
+	metadata: Record<string, unknown> | null;
 }
 
 export interface GymSet {
@@ -8644,6 +8649,28 @@ export async function fetchGymWorkoutWithSets(
 		return { workout: workout as GymWorkout, sets: [] };
 	}
 	return { workout: workout as GymWorkout, sets: (sets ?? []) as GymSet[] };
+}
+
+/// The newest in-flight guided-session draft for a routine — the row a refresh
+/// mid-session resumes from (decisions.md § 483). Owner-scoped by RLS; the
+/// `metadata ? key` existence filter is what distinguishes a draft from a
+/// finished workout, whose bag carries the execution trio instead.
+export async function fetchGymSessionDraft(routineId: string): Promise<GymWorkout | null> {
+	const userId = auth.user?.id;
+	if (!userId || !routineId) return null;
+	const { data, error } = await supabase
+		.from(TABLES.gym_workouts)
+		.select('*')
+		.eq('user_id', userId)
+		.eq('metadata->>routine_id', routineId)
+		.not(`metadata->${GYM_SESSION_DRAFT_KEY}`, 'is', null)
+		.order('started_at', { ascending: false })
+		.limit(1);
+	if (error) {
+		console.error('fetchGymSessionDraft failed', error);
+		return null;
+	}
+	return (data?.[0] as GymWorkout | undefined) ?? null;
 }
 
 /// Sets the user has logged, joined to their workout start time. Owner-scoped.
@@ -8967,7 +8994,9 @@ export async function createGymWorkout(input: {
 
 export async function updateGymWorkout(
 	id: string,
-	patch: Partial<Pick<GymWorkout, 'title' | 'started_at' | 'duration_s' | 'notes' | 'is_public'>>,
+	patch: Partial<
+		Pick<GymWorkout, 'title' | 'started_at' | 'duration_s' | 'notes' | 'is_public' | 'metadata'>
+	>,
 	sets?: GymSetInput[],
 ): Promise<void> {
 	const { error } = await supabase

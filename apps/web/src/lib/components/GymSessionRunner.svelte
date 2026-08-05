@@ -1,8 +1,14 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import type { RoutineStep } from '$lib/gym/gym_routine';
-	import type { GymRoutineSummary } from '$lib/core/data';
-	import { createGymWorkout, type GymSetInput } from '$lib/core/data';
+	import type { GymRoutineSummary, GymWorkout } from '$lib/core/data';
+	import {
+		createGymWorkout,
+		deleteGymWorkout,
+		updateGymWorkout,
+		type GymSetInput,
+	} from '$lib/core/data';
 	import {
 		computeRoutineAdherence,
 		refKey,
@@ -10,35 +16,50 @@
 		type ActualSetRef,
 	} from '$lib/gym/gym_adherence';
 	import GymExecutionBand from './GymExecutionBand.svelte';
-	import type { EnteredSet } from '$lib/gym/gym_session_types';
+	import type { EnteredSet, StepOutcome } from '$lib/gym/gym_session_types';
+	import { draftMetadata, restoreSessionDraft, resumedStartedAt } from '$lib/gym/gym_session_draft';
 	import RestTimer from './RestTimer.svelte';
-	import ConfirmDialog from './ConfirmDialog.svelte';
+	import Modal from './Modal.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		routine: GymRoutineSummary;
 		steps: RoutineStep[];
+		/// An in-flight draft row for this routine, if one exists — the runner
+		/// replays its snapshot instead of starting fresh, and every later
+		/// durable save lands on that same row rather than forking a second one.
+		draft?: GymWorkout | null;
 		onfinish: (workoutId: string) => void;
 		oncancel: () => void;
 	}
 
-	let { routine, steps, onfinish, oncancel }: Props = $props();
+	let { routine, steps, draft = null, onfinish, oncancel }: Props = $props();
 
-	type StepOutcome =
-		| { kind: 'logged'; entered: EnteredSet }
-		| { kind: 'skipped' };
+	const restored = untrack(() =>
+		draft ? restoreSessionDraft(draft.metadata, steps.length) : null,
+	);
 
-	let currentIndex = $state(0);
+	let currentIndex = $state(restored?.currentIndex ?? 0);
 	// Sparse per-step record of what the runner entered (or skipped). Indexed by
 	// step position so a rewind can re-surface a prior edit.
-	let outcomes = $state<(StepOutcome | undefined)[]>(untrack(() => steps.map(() => undefined)));
+	let outcomes = $state<(StepOutcome | undefined)[]>(
+		untrack(() => restored?.outcomes ?? steps.map(() => undefined)),
+	);
 	let resting = $state(false);
 	let restSeconds = $state(0);
-	let confirmingDiscard = $state(false);
+	let leavePrompt = $state(false);
 	let saving = $state(false);
 	let saveFailed = $state(false);
+	let draftId: string | null = untrack(() => draft?.id ?? null);
+	let leaveTarget: string | null = null;
+	let abandoned = false;
+	let departing = false;
 
-	const startedAt = new Date().toISOString();
+	// Resuming continues from the last durable save rather than billing the time
+	// the tab was gone, matching resumeSession's elapsed semantics on the run side.
+	let startedAt = untrack(() =>
+		draft ? resumedStartedAt(draft.duration_s, Date.now()) : new Date().toISOString(),
+	);
 
 	const currentStep = $derived(steps[currentIndex] as RoutineStep | undefined);
 	const finished = $derived(currentIndex >= steps.length);
@@ -177,19 +198,121 @@
 		};
 	}
 
+	function durationS(): number {
+		return Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000));
+	}
+
+	// Persist the session so far onto one draft row. Best-effort (L4): a failed
+	// write leaves the in-memory state intact for the next tick, never
+	// interrupts the runner. The snapshot rides the row's metadata rather than
+	// a second store, so a force-kill is as resumable as a graceful leave.
+	async function durableSave(): Promise<void> {
+		if (abandoned || saving) return;
+		const sets = buildSets();
+		if (sets.length === 0 && draftId === null) return;
+		const metadata = draftMetadata(routine.id, outcomes, currentIndex, new Date().toISOString());
+		try {
+			if (draftId === null) {
+				const created = await createGymWorkout({
+					title: routine.title,
+					started_at: startedAt,
+					duration_s: durationS(),
+					sets,
+					metadata,
+				});
+				draftId = created.id;
+			} else {
+				await updateGymWorkout(draftId, { duration_s: durationS(), metadata }, sets);
+			}
+		} catch (e) {
+			console.error('gym session durable save failed', e);
+		}
+	}
+
+	onMount(() => {
+		const timer = setInterval(() => void durableSave(), 10_000);
+		return () => clearInterval(timer);
+	});
+
+	// The session's leave outcome is ternary and non-destructive, so it takes
+	// its own three-way prompt rather than the binary UnsavedChangesGuard —
+	// the same split decisions.md § 483 made on mobile against DiscardGuard.
+	beforeNavigate((nav) => {
+		if (abandoned || departing || saving || leaveTarget !== null) return;
+		if (buildSets().length === 0 && draftId === null) return;
+		nav.cancel();
+		// A 'leave' navigation is the browser's own beforeunload; the tab may go
+		// anyway, so persist first and let the native prompt carry the choice.
+		if (nav.type === 'leave') {
+			void durableSave();
+			return;
+		}
+		leaveTarget = nav.to?.url.href ?? null;
+		leavePrompt = true;
+	});
+
+	function dismissLeave() {
+		leavePrompt = false;
+		leaveTarget = null;
+	}
+
+	async function departTo(href: string | null): Promise<void> {
+		leavePrompt = false;
+		const target = href;
+		leaveTarget = null;
+		// The departure is itself a navigation, so the guard has to stand down
+		// or it would re-prompt against the choice just made.
+		departing = true;
+		if (target) await goto(target);
+		else oncancel();
+	}
+
+	async function leaveKeepingDraft() {
+		const target = leaveTarget;
+		await durableSave();
+		await departTo(target);
+	}
+
+	async function discardSession() {
+		const target = leaveTarget;
+		abandoned = true;
+		const id = draftId;
+		draftId = null;
+		if (id) {
+			try {
+				await deleteGymWorkout(id);
+			} catch (e) {
+				console.error('gym session draft discard failed', e);
+			}
+		}
+		await departTo(target);
+	}
+
 	async function finish() {
 		saving = true;
 		saveFailed = false;
 		try {
-			const durationS = Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000));
-			const workout = await createGymWorkout({
-				title: routine.title,
-				started_at: startedAt,
-				duration_s: durationS,
-				sets: buildSets(),
-				metadata: buildMetadata(),
-			});
-			onfinish(workout.id);
+			// Finish replaces the whole bag with the execution trio, which is what
+			// clears the draft marker — the row stops being resumable because it
+			// is no longer in flight.
+			const metadata = buildMetadata();
+			const sets = buildSets();
+			let id = draftId;
+			if (id === null) {
+				const workout = await createGymWorkout({
+					title: routine.title,
+					started_at: startedAt,
+					duration_s: durationS(),
+					sets,
+					metadata,
+				});
+				id = workout.id;
+				draftId = id;
+			} else {
+				await updateGymWorkout(id, { duration_s: durationS(), metadata }, sets);
+			}
+			abandoned = true;
+			onfinish(id);
 		} catch (e) {
 			console.error('save guided session failed', e);
 			saveFailed = true;
@@ -211,7 +334,7 @@
 			{onComplete}
 			{onSkip}
 			{onRewind}
-			onAbandon={() => (confirmingDiscard = true)}
+			onAbandon={() => (leavePrompt = true)}
 		/>
 	{:else}
 		<div class="finish" data-testid="gym-session-finish">
@@ -226,7 +349,7 @@
 				<button
 					type="button"
 					class="btn btn-secondary"
-					onclick={() => (confirmingDiscard = true)}
+					onclick={() => (leavePrompt = true)}
 					disabled={saving}
 				>
 					{t('gym.session.abandon')}
@@ -245,19 +368,37 @@
 	{/if}
 </div>
 
-<ConfirmDialog
-	open={confirmingDiscard}
-	data-testid="gym-discard-dialog"
-	title={t('gym.session.discardTitle')}
-	message={t('gym.session.discardBody')}
-	confirmLabel={t('gym.session.discardConfirm')}
-	danger
-	onconfirm={() => {
-		confirmingDiscard = false;
-		oncancel();
-	}}
-	oncancel={() => (confirmingDiscard = false)}
-/>
+<Modal
+	open={leavePrompt}
+	narrow
+	data-testid="gym-leave-dialog"
+	title={t('gym.session.leaveTitle')}
+	onclose={dismissLeave}
+	bodyClass="leave-body"
+>
+	<p class="leave-message">{t('gym.session.leaveBody')}</p>
+	<div class="leave-actions">
+		<button type="button" class="btn btn-primary" onclick={dismissLeave}>
+			{t('gym.session.leaveKeepGoing')}
+		</button>
+		<button
+			type="button"
+			class="btn btn-secondary"
+			onclick={leaveKeepingDraft}
+			data-testid="gym-leave-keep-draft"
+		>
+			{t('gym.session.leaveKeepDraft')}
+		</button>
+		<button
+			type="button"
+			class="btn btn-danger"
+			onclick={discardSession}
+			data-testid="gym-leave-discard"
+		>
+			{t('gym.session.discardConfirm')}
+		</button>
+	</div>
+</Modal>
 
 <style>
 	.runner {
@@ -290,6 +431,18 @@
 	}
 	.finish-actions {
 		display: flex;
+		gap: var(--space-sm);
+	}
+	.leave-message {
+		margin: 0 0 var(--space-md);
+		font-size: 0.88rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.leave-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 		gap: var(--space-sm);
 	}
 </style>

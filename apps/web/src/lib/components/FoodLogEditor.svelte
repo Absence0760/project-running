@@ -5,6 +5,8 @@
 	import { m, currentLocale } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { env } from '$env/dynamic/public';
+	import { trackDirty } from '$lib/core/form_dirty';
+	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	// Fail-closed USDA gate: with PUBLIC_USDA_FDC_API_KEY unset the USDA source
 	// is simply not queried — Open Food Facts still works, no error, no broken
@@ -44,6 +46,24 @@
 	let manualSodium = $state<number | null>(null);
 	let manualSatFat = $state<number | null>(null);
 	let manualCholesterol = $state<number | null>(null);
+
+	// The search query and the meal-slot pick are deliberately outside the
+	// snapshot: both are one tap to recreate, and arming a leave prompt on a
+	// half-typed search would fire on every visit (decisions.md § 478).
+	const dirty = trackDirty(() => ({
+		picked: picked?.code ?? null,
+		portionG,
+		manualName,
+		manualKcal,
+		manualProtein,
+		manualCarbs,
+		manualFat,
+		manualFiber,
+		manualSugar,
+		manualSodium,
+		manualSatFat,
+		manualCholesterol,
+	}));
 
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 	function onQueryInput() {
@@ -102,6 +122,7 @@
 				external_id: `${picked.source}:${picked.code}`,
 			});
 			showToast(m('nutrition.added'), 'success');
+			dirty.rebaseline();
 			oncreated();
 		} catch (e) {
 			showToast(m('nutrition.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
@@ -128,6 +149,7 @@
 				cholesterol_mg: manualCholesterol,
 			});
 			showToast(m('nutrition.added'), 'success');
+			dirty.rebaseline();
 			oncreated();
 		} catch (e) {
 			showToast(m('nutrition.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
@@ -135,6 +157,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <div class="food-log-editor">
 	{#if picked}

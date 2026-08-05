@@ -60,6 +60,8 @@
 	import ChallengesPanel from '$lib/components/ChallengesPanel.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
+	import { trackDirty } from '$lib/core/form_dirty';
 	import type { PlanWorkout } from '$lib/types';
 	import { loadSettings, peekCachedSettings, effective, updateUniversal } from '$lib/settings/settings';
 	import { relativeAge } from '$lib/runs/pr_recency';
@@ -387,6 +389,9 @@
 		return sourceFilter === 'all' ? all : all.filter((r) => r.source === sourceFilter);
 	}
 
+	const goalDirty = trackDirty(() => (editingGoal ? { ...editingGoal } : null));
+	const goalEditorDirty = () => showGoalEditor && goalDirty.isDirty();
+
 	function openNewGoal() {
 		editingGoal = {
 			id: newGoalId(),
@@ -396,11 +401,13 @@
 			paceSecPerKm: undefined,
 			runCount: undefined,
 		};
+		goalDirty.rebaseline();
 		showGoalEditor = true;
 	}
 
 	function openEditGoal(g: RunGoal) {
 		editingGoal = { ...g };
+		goalDirty.rebaseline();
 		showGoalEditor = true;
 	}
 
@@ -1773,6 +1780,8 @@
 		/>
 	{/if}
 </Modal>
+
+<UnsavedChangesGuard isDirty={goalEditorDirty} />
 
 <Modal
 	open={showGoalEditor && editingGoal != null}

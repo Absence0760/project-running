@@ -1786,6 +1786,9 @@
   "legalTerms": "Nutzungsbedingungen",
   "legalCookieNotice": "Cookie-Hinweis",
   "legalHealthDataNotice": "Gesundheitsdaten-Datenschutz",
+  "mapAttributionSemantics": "Kartendaten-Quellenangabe",
+  "mapAttributionProvider": "© {name}",
+  "mapAttributionOsmContributors": "© {name}-Mitwirkende",
   "legalCouldNotOpen": "{url} konnte nicht geöffnet werden",
   "aboutLegalSection": "Rechtliches",
   "devicesTitle": "Geräte",
@@ -3632,5 +3635,9 @@
   "watchLiveSyncSubtitle": "Holt aufgezeichnete Läufe von der Uhr. Die Übertragung pausiert währenddessen.",
   "pendingSyncOffline": "{count, plural, one{{count} Änderung auf diesem Gerät gespeichert – wird synchronisiert, sobald du online bist} other{{count} Änderungen auf diesem Gerät gespeichert – werden synchronisiert, sobald du online bist}}",
   "pendingSyncFailed": "{count, plural, one{{count} Änderung wurde nicht synchronisiert} other{{count} Änderungen wurden nicht synchronisiert}}",
-  "pendingSyncRetry": "Erneut versuchen"
+  "pendingSyncRetry": "Erneut versuchen",
+  "photoLightboxLoading": "Foto wird geladen…",
+  "photoLightboxError": "Dieses Foto konnte nicht geladen werden.",
+  "photoLightboxErrorHint": "Tippe irgendwo, um zu schließen.",
+  "commonLoading": "Wird geladen…"
 }

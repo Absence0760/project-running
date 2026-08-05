@@ -5,15 +5,15 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
-import '../tile_cache.dart';
-import 'live_run_map.dart' show tileUrlFor;
+import 'live_run_map.dart'
+    show basemapTileLayer, basemapVoidColour, tileUrlFor;
+import 'map_attribution.dart';
 import '../widgets/top_banner.dart';
 
 /// Open a portrait "share card" modal for [route] — a branded preview
@@ -205,6 +205,7 @@ class _ShareCardContent extends StatelessWidget {
 
     return FlutterMap(
       options: MapOptions(
+        backgroundColor: basemapVoidColour(darkBasemap: true),
         initialCameraFit: CameraFit.bounds(
           bounds: LatLngBounds.fromPoints(waypoints),
           padding: const EdgeInsets.all(40),
@@ -214,16 +215,7 @@ class _ShareCardContent extends StatelessWidget {
         ),
       ),
       children: [
-        TileLayer(
-          urlTemplate: _tileUrl,
-          userAgentPackageName: 'com.threkir.app',
-          maxZoom: 19,
-          tileProvider: CachedTileProvider(
-            store: TileCache.store,
-            maxStale: const Duration(days: 30),
-            dio: TileCache.dio,
-          ),
-        ),
+        basemapTileLayer(urlTemplate: _tileUrl),
         PolylineLayer(
           polylines: [
             Polyline(
@@ -260,6 +252,7 @@ class _ShareCardContent extends StatelessWidget {
             ),
           ],
         ),
+        const MapAttribution(darkBasemap: true),
       ],
     );
   }

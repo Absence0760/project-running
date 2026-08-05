@@ -9,6 +9,10 @@ export interface EnteredSet {
 	distanceM: number | null;
 }
 
+/// What the runner recorded for one expanded step. Lives here rather than in
+/// GymSessionRunner.svelte because the draft snapshot shapes it too.
+export type StepOutcome = { kind: 'logged'; entered: EnteredSet } | { kind: 'skipped' };
+
 // P4 "next target" hint shown on the workout review (gym_programming.md). Weights
 // canonical kg. Built by the page from nextPrescription + the routine's
 // per-exercise progression scheme; the review only renders it.

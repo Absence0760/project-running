@@ -4,14 +4,18 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_run_store.dart';
 import '../run_heatmap.dart';
-import '../tile_cache.dart';
-import '../widgets/live_run_map.dart' show currentTileUrl;
+import '../widgets/live_run_map.dart'
+    show
+        basemapTileLayer,
+        basemapVoidColour,
+        currentBasemapIsDark,
+        currentTileUrl;
+import '../widgets/map_attribution.dart';
 
 /// Personal run-track heatmap — the mobile mirror of web `/runs/heatmap`
 /// (decisions/parity row "Personal run-track heatmap"). A Strava-style
@@ -266,6 +270,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final darkBasemap = currentBasemapIsDark(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.runHeatmapTitle)),
       body: Stack(
@@ -273,6 +278,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
+              backgroundColor: basemapVoidColour(darkBasemap: darkBasemap),
               initialCenter: const LatLng(30, 0),
               initialZoom: 2,
               onMapReady: () {
@@ -287,15 +293,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
               },
             ),
             children: [
-              TileLayer(
-                urlTemplate: currentTileUrl(context),
-                userAgentPackageName: 'com.threkir.app',
-                tileProvider: CachedTileProvider(
-                  store: TileCache.store,
-                  maxStale: const Duration(days: 30),
-                  dio: TileCache.dio,
-                ),
-              ),
+              basemapTileLayer(urlTemplate: currentTileUrl(context)),
               if (_heatOpacity > 0 && _cells.isNotEmpty)
                 CircleLayer(
                   circles: [
@@ -321,6 +319,7 @@ class _RunHeatmapScreenState extends State<RunHeatmapScreen> {
                       ),
                   ],
                 ),
+              MapAttribution(darkBasemap: darkBasemap),
             ],
           ),
           if (_loading)

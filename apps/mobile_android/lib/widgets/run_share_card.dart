@@ -5,11 +5,12 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'live_run_map.dart' show tileUrlFor;
+import 'live_run_map.dart'
+    show basemapTileLayer, basemapVoidColour, tileUrlFor;
+import 'map_attribution.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/date_format.dart';
@@ -17,7 +18,6 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
-import '../tile_cache.dart';
 import '../widgets/top_banner.dart';
 
 /// Opens a modal sheet showing a portrait "share card" for [run] — a branded
@@ -291,6 +291,7 @@ class RunShareCard extends StatelessWidget {
 
     final options = hasSpan
         ? MapOptions(
+            backgroundColor: basemapVoidColour(darkBasemap: true),
             initialCameraFit: CameraFit.bounds(
               bounds: LatLngBounds.fromPoints(track),
               padding: const EdgeInsets.all(40),
@@ -300,6 +301,7 @@ class RunShareCard extends StatelessWidget {
             ),
           )
         : MapOptions(
+            backgroundColor: basemapVoidColour(darkBasemap: true),
             initialCenter: track.first,
             initialZoom: 16,
             interactionOptions: const InteractionOptions(
@@ -310,16 +312,7 @@ class RunShareCard extends StatelessWidget {
     return FlutterMap(
       options: options,
       children: [
-        TileLayer(
-          urlTemplate: _tileUrl,
-          userAgentPackageName: 'com.threkir.app',
-          maxZoom: 19,
-          tileProvider: CachedTileProvider(
-            store: TileCache.store,
-            maxStale: const Duration(days: 30),
-            dio: TileCache.dio,
-          ),
-        ),
+        basemapTileLayer(urlTemplate: _tileUrl),
         PolylineLayer(
           polylines: [
             Polyline(
@@ -360,6 +353,7 @@ class RunShareCard extends StatelessWidget {
             ),
           ],
         ),
+        const MapAttribution(darkBasemap: true),
       ],
     );
   }

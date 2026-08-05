@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -12,9 +11,14 @@ import '../geocoding.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../privacy.dart';
 import '../settings_sync.dart';
-import '../tile_cache.dart';
 import '../widgets/confirm_discard.dart';
-import '../widgets/live_run_map.dart' show currentTileUrl;
+import '../widgets/live_run_map.dart'
+    show
+        basemapTileLayer,
+        basemapVoidColour,
+        currentBasemapIsDark,
+        currentTileUrl;
+import '../widgets/map_attribution.dart';
 import '../widgets/top_banner.dart';
 
 /// Settings → Privacy zones: tap-to-add geofences clipped from the
@@ -317,6 +321,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final darkBasemap = currentBasemapIsDark(context);
     final initial = _zones.isNotEmpty
         ? LatLng(_zones.first.lat, _zones.first.lng)
         : (_userLatLng ??
@@ -401,6 +406,8 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                   FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
+                      backgroundColor:
+                          basemapVoidColour(darkBasemap: darkBasemap),
                       initialCenter: initial,
                       initialZoom: 14,
                       onMapReady: () {
@@ -418,26 +425,13 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                       onTap: (_, latlng) => _addZoneAt(latlng),
                     ),
                     children: [
-                      TileLayer(
-                        // Honours TILE_URL_TEMPLATE → MAPTILER_KEY → OSM in
-                        // that order, matching every other map surface in
-                        // the app. Hardcoded OSM pre-May-2026 made the
-                        // privacy-zones picker the only map that worked on
-                        // a Protomaps-only dev setup, which masked the
-                        // resolveTileUrl regression.
-                        urlTemplate: currentTileUrl(context),
-                        userAgentPackageName: 'com.threkir.app',
-                        // Shared disk-backed tile cache (see TileCache in
-                        // tile_cache.dart). Without it, panning the zone
-                        // picker re-downloads tiles every session AND
-                        // flutter_map logs a "Using fallback freshness age"
-                        // warning per tile.
-                        tileProvider: CachedTileProvider(
-                          store: TileCache.store,
-                          maxStale: const Duration(days: 30),
-                          dio: TileCache.dio,
-                        ),
-                      ),
+                      // Honours TILE_URL_TEMPLATE → MAPTILER_KEY → OSM in
+                      // that order, matching every other map surface in
+                      // the app. Hardcoded OSM pre-May-2026 made the
+                      // privacy-zones picker the only map that worked on
+                      // a Protomaps-only dev setup, which masked the
+                      // resolveTileUrl regression.
+                      basemapTileLayer(urlTemplate: currentTileUrl(context)),
                       CircleLayer(
                         circles: [
                           for (final z in _zones)
@@ -478,6 +472,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                             ),
                         ],
                       ),
+                      MapAttribution(darkBasemap: darkBasemap),
                     ],
                   ),
                   if (_searchOpen && _searchResults.isNotEmpty)

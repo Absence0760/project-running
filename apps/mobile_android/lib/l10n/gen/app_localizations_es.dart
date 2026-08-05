@@ -6433,6 +6433,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get legalHealthDataNotice => 'Privacidad de datos de salud';
 
   @override
+  String get mapAttributionSemantics => 'Atribución de los datos del mapa';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© colaboradores de $name';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return 'No se pudo abrir $url';
   }
@@ -12465,4 +12478,16 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => 'Reintentar';
+
+  @override
+  String get photoLightboxLoading => 'Cargando la foto…';
+
+  @override
+  String get photoLightboxError => 'No se ha podido cargar esta foto.';
+
+  @override
+  String get photoLightboxErrorHint => 'Toca en cualquier parte para cerrar.';
+
+  @override
+  String get commonLoading => 'Cargando…';
 }

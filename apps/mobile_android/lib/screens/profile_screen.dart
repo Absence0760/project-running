@@ -641,7 +641,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
-          _Avatar(displayName: s.displayName, avatarUrl: s.avatarUrl, size: 56),
+          IdentityAvatar(
+            seed: s.id,
+            name: s.displayName,
+            size: 56,
+            imageUrl: s.avatarUrl,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -739,7 +744,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     required Widget Function() child,
   }) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return ListSkeleton(label: AppLocalizations.of(context).commonLoading);
     }
     if (error != null) {
       return ErrorState(
@@ -868,10 +873,11 @@ class _ProfileScreenState extends State<ProfileScreen>
           }
           final p = people[i];
           return ListTile(
-            leading: _Avatar(
-              displayName: p.displayName,
-              avatarUrl: p.avatarUrl,
+            leading: IdentityAvatar(
+              seed: p.id,
+              name: p.displayName,
               size: 40,
+              imageUrl: p.avatarUrl,
             ),
             title: Text(p.displayName ??
                 AppLocalizations.of(context).profileRunnerFallback),
@@ -985,10 +991,11 @@ class _ProfileScreenState extends State<ProfileScreen>
         contentPadding: isSub
             ? const EdgeInsets.only(left: 40, right: 8)
             : null,
-        leading: _Avatar(
-          displayName: item.actor?.displayName,
-          avatarUrl: item.actor?.avatarUrl,
+        leading: IdentityAvatar(
+          seed: item.actor?.id ?? item.row.id,
+          name: item.actor?.displayName,
           size: isSub ? 32 : 40,
+          imageUrl: item.actor?.avatarUrl,
         ),
         title: Text(_verbFor(AppLocalizations.of(context), item)),
         subtitle: item.commentExcerpt != null
@@ -1026,10 +1033,11 @@ class _ProfileScreenState extends State<ProfileScreen>
           ? theme.colorScheme.primary.withValues(alpha: 0.06)
           : null,
       child: ListTile(
-        leading: _Avatar(
-          displayName: lead.actor?.displayName,
-          avatarUrl: lead.actor?.avatarUrl,
+        leading: IdentityAvatar(
+          seed: lead.actor?.id ?? lead.row.id,
+          name: lead.actor?.displayName,
           size: 40,
+          imageUrl: lead.actor?.avatarUrl,
         ),
         title: Text(title),
         subtitle: lead.commentExcerpt != null
@@ -1194,52 +1202,3 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 }
 
-/// Circular avatar with image fallback to the first letter of the
-/// display name. Used in the header, follower / following lists, and
-/// notification rows. Inlined here rather than promoted to `ui_kit`
-/// until a third caller materialises.
-class _Avatar extends StatelessWidget {
-  final String? displayName;
-  final String? avatarUrl;
-  final double size;
-
-  const _Avatar({this.displayName, this.avatarUrl, this.size = 40});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final letter = (displayName?.isNotEmpty ?? false)
-        ? displayName![0].toUpperCase()
-        : '?';
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: theme.colorScheme.primary,
-        image: avatarUrl != null && avatarUrl!.isNotEmpty
-            ? DecorationImage(
-                // Decode at ~3× the rendered size rather than full
-                // source resolution — saves memory in long lists.
-                image: ResizeImage(
-                  NetworkImage(avatarUrl!),
-                  width: (size * 3).round(),
-                  height: (size * 3).round(),
-                ),
-                fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      alignment: Alignment.center,
-      child: avatarUrl == null || avatarUrl!.isEmpty
-          ? Text(
-              letter,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            )
-          : null,
-    );
-  }
-}

@@ -6431,6 +6431,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get legalHealthDataNotice => 'Privacidade dos dados de saúde';
 
   @override
+  String get mapAttributionSemantics => 'Atribuição dos dados do mapa';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© colaboradores do $name';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return 'Não foi possível abrir $url';
   }
@@ -12461,6 +12474,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => 'Tentar novamente';
+
+  @override
+  String get photoLightboxLoading => 'A carregar a fotografia…';
+
+  @override
+  String get photoLightboxError => 'Não foi possível carregar esta fotografia.';
+
+  @override
+  String get photoLightboxErrorHint => 'Toque em qualquer sítio para fechar.';
+
+  @override
+  String get commonLoading => 'A carregar…';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -18888,6 +18913,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get legalHealthDataNotice => 'Privacidade dos dados de saúde';
 
   @override
+  String get mapAttributionSemantics => 'Atribuição dos dados do mapa';
+
+  @override
+  String mapAttributionProvider(String name) {
+    return '© $name';
+  }
+
+  @override
+  String mapAttributionOsmContributors(String name) {
+    return '© colaboradores do $name';
+  }
+
+  @override
   String legalCouldNotOpen(String url) {
     return 'Não foi possível abrir $url';
   }
@@ -24915,4 +24953,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get pendingSyncRetry => 'Tentar novamente';
+
+  @override
+  String get photoLightboxLoading => 'Carregando a foto…';
+
+  @override
+  String get photoLightboxError => 'Não foi possível carregar esta foto.';
+
+  @override
+  String get photoLightboxErrorHint => 'Toque em qualquer lugar para fechar.';
+
+  @override
+  String get commonLoading => 'Carregando…';
 }

@@ -14,6 +14,8 @@
 		type SessionPlan
 	} from '$lib/core/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
+	import { trackDirty } from '$lib/core/form_dirty';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
 	import { EVENT_CATEGORIES, isAthleticCategory } from '$lib/social/event_category';
@@ -121,6 +123,34 @@
 	let until = $state<string>('');
 	let count = $state<number | null>(null);
 
+	const dirty = trackDirty(() => ({
+		category,
+		discipline,
+		gymTemplateDurationMin,
+		sessionPlanId,
+		title,
+		description,
+		date,
+		time,
+		durationMin,
+		meetLabel,
+		routeId,
+		distanceInUnit,
+		paceMin,
+		paceSec,
+		capacity,
+		charge,
+		priceMajor,
+		currency,
+		refundPolicy,
+		salesCloseOffset,
+		isPublic,
+		recurrence,
+		byday: [...byday],
+		until,
+		count,
+	}));
+
 	function toggleByday(code: Weekday) {
 		byday = byday.includes(code) ? byday.filter((c) => c !== code) : [...byday, code];
 	}
@@ -200,7 +230,14 @@
 		if (!existing) {
 			const acct = await fetchPayoutAccount();
 			chargesEnabled = acct?.charges_enabled ?? false;
-			if (acct?.default_currency) currency = acct.default_currency;
+			if (acct?.default_currency) {
+				// The account's currency lands after the form is built, so it would
+				// otherwise read as a user edit. Only re-take the baseline when
+				// nothing has been typed yet, so a fast typist keeps the guard.
+				const clean = !dirty.isDirty();
+				currency = acct.default_currency;
+				if (clean) dirty.rebaseline();
+			}
 			try {
 				sessionPlans = await fetchSessionPlans();
 			} catch (e) {
@@ -271,6 +308,7 @@
 					capacity: capacity ?? null,
 					is_public: showVisibilityToggle ? isPublic : true
 				});
+				dirty.rebaseline();
 				onsaved?.();
 				return;
 			}
@@ -336,6 +374,7 @@
 					showToast(m('session.event.planFailed'), 'error');
 				}
 			}
+			dirty.rebaseline();
 			oncreated?.(event);
 		} catch (e: unknown) {
 			error = e instanceof Error
@@ -346,6 +385,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <form onsubmit={submit} class="editor-form event-editor">
 	<p class="sub">{existing ? m('eventEditor.editSub', { clubName }) : m('eventEditor.sub', { clubName })}</p>

@@ -10,7 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ActivityLoaderKind, FullBodyLoader;
 
 import '../backend_timeout.dart';
 import '../auth_error.dart';
@@ -891,7 +891,10 @@ class _CoachScreenState extends State<CoachScreen> {
     if (!_consentChecked) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.coachTitle)),
-        body: const Center(child: CircularProgressIndicator()),
+        body: FullBodyLoader(
+          kind: ActivityLoaderKind.run,
+          label: l10n.commonLoading,
+        ),
       );
     }
     if (_consentAt == null) {

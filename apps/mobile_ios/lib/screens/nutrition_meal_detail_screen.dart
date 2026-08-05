@@ -143,8 +143,9 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
         ),
       ),
       body: _loading
-          ? const Center(
-              child: ActivityLoader(kind: ActivityLoaderKind.fuel, size: 76),
+          ? FullBodyLoader(
+              kind: ActivityLoaderKind.fuel,
+              label: l10n.commonLoading,
             )
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),

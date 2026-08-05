@@ -54,9 +54,12 @@ const _dataPalettes = <String, Map<String, int>>{
   },
   // Heat-density dots + the featured map-pin ring.
   'lib/screens/routes_heatmap_screen.dart': {'Colors.red': 1, 'FACC15': 1},
-  // Map-overlay markers: selected-segment highlight, coarse-position ring,
-  // hover pointer (mirrors web RunMap.svelte).
-  'lib/widgets/live_run_map.dart': {'F59E0B': 6},
+  // Map-overlay accent (selected-segment highlight, coarse-position ring,
+  // hover pointer) — one constant now, read by all three and paired with a
+  // darker rung the ban list doesn't carry, because `#F59E0B` computes to
+  // 1.87:1 against a light basemap. Contrast is pinned by property in
+  // live_run_map_tile_url_test.dart, not by this literal count.
+  'lib/widgets/live_run_map.dart': {'F59E0B': 1},
   // Painted start/finish caps on the mini track preview.
   'lib/widgets/track_preview.dart': {'22C55E': 1, 'EF4444': 1},
   // Course start/finish checkpoint hues beside the kindSpec marker catalogue.
