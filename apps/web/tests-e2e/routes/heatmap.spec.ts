@@ -244,6 +244,11 @@ test.describe('/routes/heatmap — geolocation failure fallback', () => {
 	test('failed locate shows a toast and frames the map on the route data', async ({
 		page,
 	}) => {
+		// Three sequential map milestones at 15s each cannot all be honoured
+		// inside the 30s default, so a slow run used to abort mid-assertion
+		// and report an ambiguous test timeout. The budget now covers them.
+		test.setTimeout(60_000);
+
 		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({
 			timeout: 15_000,
@@ -255,18 +260,37 @@ test.describe('/routes/heatmap — geolocation failure fallback', () => {
 		});
 
 		// 2) Instead of stranding the user at the [0, 30] world view, the map
-		//    fits to the loaded route pins — the seed routes are all in
-		//    Virginia, so the centre lands inside the state's bounding box.
+		//    frames the whole discoverable set. The seed spans two clusters —
+		//    Denver and Virginia — so a correct fit contains BOTH, and its
+		//    centre lands between them. That rules out all three wrong
+		//    outcomes at once: the world view (centre 0), a Denver-only fit
+		//    (~-105) and a Virginia-only fit (~-77).
 		await page.waitForFunction(
 			() => {
 				const m = (
 					window as unknown as {
-						__heatmapMap?: { getCenter: () => { lng: number; lat: number } };
+						__heatmapMap?: {
+							getCenter: () => { lng: number; lat: number };
+							getBounds: () => {
+								getWest: () => number;
+								getEast: () => number;
+								getSouth: () => number;
+								getNorth: () => number;
+							};
+						};
 					}
 				).__heatmapMap;
 				if (!m) return false;
+				const b = m.getBounds();
+				const contains = (lng: number, lat: number) =>
+					lng >= b.getWest() &&
+					lng <= b.getEast() &&
+					lat >= b.getSouth() &&
+					lat <= b.getNorth();
+				// Wash Park (Denver) and Belle Isle (Richmond) start points.
+				if (!contains(-105.0, 39.74) || !contains(-77.452, 37.5311)) return false;
 				const c = m.getCenter();
-				return c.lng > -84 && c.lng < -75 && c.lat > 36 && c.lat < 40;
+				return c.lng > -100 && c.lng < -80 && c.lat > 36 && c.lat < 41;
 			},
 			{ timeout: 15_000 },
 		);
