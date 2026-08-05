@@ -182,10 +182,12 @@ class _RacesScreenState extends State<RacesScreen> {
                   },
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: 40,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
+                // A scrolling Row, not a horizontal ListView in a fixed-height
+                // box: a chip needs 58 px at 2x OS text scale and a 40 px lane
+                // cropped its label (and stole its 48 dp tap target at 1.0x).
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
                     children: [
                       for (final band in _distanceBands)
                         Padding(

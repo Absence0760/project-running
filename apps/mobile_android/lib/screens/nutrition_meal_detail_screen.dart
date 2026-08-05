@@ -306,8 +306,11 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 120,
+          // minHeight, not a fixed 120: the 70 px bar lane is the data, but
+          // the calorie and weekday captions around it double at 2x OS text
+          // scale and used to overflow the box by 20 px per column.
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 120),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [

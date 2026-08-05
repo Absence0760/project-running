@@ -2096,7 +2096,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   alignment: Alignment.centerLeft,
                   widthFactor: barFraction.clamp(0.1, 1.0),
                   child: Container(
-                    height: 26,
+                    // minHeight, not a fixed 26: the enclosing ClipRRect
+                    // makes an overrun silent, and at 2x OS text scale the
+                    // pace label needs 32 px — it was being clipped with no
+                    // overflow stripe to give it away.
+                    constraints: const BoxConstraints(minHeight: 26),
                     decoration: BoxDecoration(
                       color: barColor,
                       borderRadius: BorderRadius.circular(4),

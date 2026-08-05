@@ -93,12 +93,19 @@ class IdentityAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final background = identityBackground(identityHue(seed));
     final url = imageUrl;
-    final letter = Text(
-      identityInitial(name),
-      style: TextStyle(
-        color: identityForeground(background),
-        fontWeight: FontWeight.w700,
-        fontSize: fontSize ?? size * 0.42,
+    // The circle's diameter is chosen by the caller for layout, so the
+    // initial is bounded by the graphic rather than the other way round: at
+    // 2x OS text scale an 18 px avatar's 10 px initial needs 29 px and spilled
+    // outside the circle. Scaling down keeps it centred and whole.
+    final letter = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        identityInitial(name),
+        style: TextStyle(
+          color: identityForeground(background),
+          fontWeight: FontWeight.w700,
+          fontSize: fontSize ?? size * 0.42,
+        ),
       ),
     );
     // Decode at ~3x the rendered circle instead of full source resolution —

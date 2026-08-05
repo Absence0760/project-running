@@ -23,11 +23,17 @@ Future<void> _pump(
   required List<Run> runs,
   DistanceUnit unit = DistanceUnit.km,
   required DateTime now,
+  double textScale = 1.0,
 }) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: Scaffold(
         body: SingleChildScrollView(
           child: MileageTrendCard(runs: runs, unit: unit, now: now),
@@ -153,6 +159,32 @@ void main() {
       expect(find.text('0.00 km'), findsOneWidget);
       expect(find.text('this week'), findsOneWidget);
       expect(find.text('10.00 km'), findsNothing);
+    });
+
+    testWidgets(
+        'the axis-label lane scales with the OS text size (issue #666 V12)',
+        (tester) async {
+      final runs = [_run(startedAt: DateTime(2026, 5, 18, 7), distanceM: 10000)];
+
+      // The label lane is the only fixed-height box under each bar. It holds
+      // a rotated labelSmall line, so at 2x it needs 32 px, not 20 — a fixed
+      // lane let the label paint back over the bars.
+      final lane = find.byWidgetPredicate((w) =>
+          w is SizedBox &&
+          w.child is Transform &&
+          w.height != null);
+
+      final label = find.descendant(of: lane.first, matching: find.byType(Text));
+
+      await _pump(tester, runs: runs, now: now);
+      final small = tester.getSize(lane.first).height;
+      expect(small, 20);
+      expect(tester.getSize(label).height, lessThanOrEqualTo(small));
+
+      await _pump(tester, runs: runs, now: now, textScale: 2.0);
+      final grown = tester.getSize(lane.first).height;
+      expect(grown, greaterThan(small));
+      expect(tester.getSize(label).height, lessThanOrEqualTo(grown));
     });
   });
 }

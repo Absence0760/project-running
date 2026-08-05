@@ -192,8 +192,12 @@ class _BarChart extends StatelessWidget {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
     final dim = theme.colorScheme.outline;
+    // The label lane holds text, so it is a text-derived dimension and has to
+    // track the OS text scale: at 2x a labelSmall line needs 32 px, and a
+    // fixed 24 px lane let the rotated label paint over the bars instead.
+    final labelLane = MediaQuery.textScalerOf(context).scale(_labelsExtra);
     return SizedBox(
-      height: _barAreaHeight + _labelsExtra,
+      height: _barAreaHeight + labelLane,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -208,6 +212,7 @@ class _BarChart extends StatelessWidget {
                 dim: dim,
                 unit: unit,
                 barAreaHeight: _barAreaHeight,
+                labelLane: labelLane,
               ),
             ),
         ],
@@ -223,6 +228,7 @@ class _BarColumn extends StatelessWidget {
   final Color dim;
   final DistanceUnit unit;
   final double barAreaHeight;
+  final double labelLane;
   const _BarColumn({
     required this.period,
     required this.fraction,
@@ -230,6 +236,7 @@ class _BarColumn extends StatelessWidget {
     required this.dim,
     required this.unit,
     required this.barAreaHeight,
+    required this.labelLane,
   });
 
   @override
@@ -261,7 +268,7 @@ class _BarColumn extends StatelessWidget {
           // columns truncated mid-character. Field report: "Mileage
           // -> Week numbers below the vertical lines are cut off."
           SizedBox(
-            height: 20,
+            height: labelLane - 4,
             child: Transform.rotate(
               angle: -0.6,
               alignment: Alignment.center,

@@ -67,43 +67,57 @@ class ThisWeekStrip extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
+            // Wrap, not Row: at 2x OS text scale the title and the
+            // "10.00 km · 2 activities" summary together need more than a
+            // phone's width, and truncating either loses real information.
+            // Reflowing onto a second line keeps both whole.
+            child: SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  Text(
                     l10n.dashboardWeekStripTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.w600),
                   ),
-                ),
-                Text(
-                  '$totalLabel · $countLabel',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Row(
-            children: [
-              for (final day in week.days)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: _DayCell(
-                      day: day,
-                      maxDistance: maxDistance,
-                      unit: unit,
-                      tag: tag,
-                      l10n: l10n,
+                  Text(
+                    '$totalLabel · $countLabel',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-            ],
+                ],
+              ),
+            ),
+          ),
+          // IntrinsicHeight, not a fixed cell height: the cells must stay
+          // uniform, but the tallest one has to be able to grow past 76 when
+          // the OS text scale makes two label lines plus the fill lane
+          // exceed it. Sizing each cell independently would desynchronise
+          // the row (a "·" rest day is shorter than a "12.34 km" day).
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final day in week.days)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: _DayCell(
+                        day: day,
+                        maxDistance: maxDistance,
+                        unit: unit,
+                        tag: tag,
+                        l10n: l10n,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -112,6 +126,11 @@ class ThisWeekStrip extends StatelessWidget {
 }
 
 class _DayCell extends StatelessWidget {
+  /// The bar lane's height — exactly the slack the old fixed 76 px cell left
+  /// after its border, padding and two label lines at 1.0x text scale, now
+  /// named so the cell grows around it instead of the lane shrinking away.
+  static const double _fillLaneHeight = 30;
+
   final WeekDay day;
   final double maxDistance;
   final DistanceUnit unit;
@@ -159,7 +178,6 @@ class _DayCell extends StatelessWidget {
       child: Opacity(
         opacity: day.isFuture ? 0.55 : 1,
         child: Container(
-          height: 76,
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
           decoration: BoxDecoration(
             color: bg,
@@ -178,7 +196,12 @@ class _DayCell extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.clip,
               ),
-              Expanded(
+              // A fixed lane, not Expanded: the bar IS the data, and under
+              // the old fixed 76 px cell the two label lines ate the whole
+              // cell at 2x OS text scale, leaving the lane zero-high — the
+              // chart rendered blank exactly for the users who most need it.
+              SizedBox(
+                height: _fillLaneHeight,
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: FractionallySizedBox(

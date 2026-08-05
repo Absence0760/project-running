@@ -95,11 +95,17 @@ Future<void> _pump(
   required _FakeTraining training,
   required _FakeSocial social,
   String? viewerId = _uid,
+  double textScale = 1.0,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: PlanDetailScreen(
         training: training,
         planId: 'plan-1',
@@ -355,6 +361,40 @@ void main() {
       addTearDown(tester.view.reset);
       await _pump(tester, training: training(), social: _FakeSocial(const []));
       expect(tester.getSize(find.byType(ListView).first).width, 400);
+    });
+  });
+
+  group('PlanDetailScreen — OS text scaling (issue #666 V12)', () {
+    _FakeTraining allDone() {
+      final start = _mondayThisWeek();
+      return _FakeTraining(
+        _plan(start),
+        [_week('w0', 0, 'build', 8000)],
+        [
+          _wo('wo0', 'w0', start.add(const Duration(days: 1)), 'easy', 8000,
+              manuallyCompleted: true),
+        ],
+      );
+    }
+
+    testWidgets('the progress ring caption stays inside the 64 px ring',
+        (tester) async {
+      final caption = find.byWidgetPredicate((w) =>
+          w is FittedBox && w.child is Column && w.fit == BoxFit.scaleDown);
+
+      await _pump(tester, training: allDone(), social: _FakeSocial(const []));
+      final at1x = tester.getSize(caption.first);
+
+      await _pump(
+          tester, training: allDone(), social: _FakeSocial(const []),
+          textScale: 2.0);
+      // Pre-fix this Column measured 144 px inside a 64 px ring and painted a
+      // 112 px RenderFlex overflow stripe over the plan header.
+      final at2x = tester.getSize(caption.first);
+      expect(at2x.height, lessThanOrEqualTo(64));
+      expect(at2x.width, lessThanOrEqualTo(64));
+      expect(at2x.height, greaterThanOrEqualTo(at1x.height));
+      expect(tester.takeException(), isNull);
     });
   });
 }

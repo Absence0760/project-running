@@ -65,9 +65,14 @@ Future<void> _pumpUntil(
   }
 }
 
-Widget _app(LocalFoodStore store) => MaterialApp(
+Widget _app(LocalFoodStore store, {double textScale = 1.0}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: NutritionScreen(api: _OfflineFakeApi(), store: store),
     );
 
@@ -463,6 +468,39 @@ void _exerciseInputsTests() {
 
     expect(day.gym.single.durationS, isNull);
     expect(day.seconds, 0);
+  });
+
+  testWidgets(
+      'the macro-ring value stays inside the 56 px arc at 2x text scale '
+      '(issue #666 V12)', (tester) async {
+    final f = await _store('ringscale_');
+    await tester.runAsync(() async {
+      await f.store.createLocal(
+        startedAt: DateTime.now(),
+        itemName: 'Big day',
+        mealSlot: 'dinner',
+        calories: 2450,
+      );
+    });
+    try {
+      final value = find.ancestor(
+          of: find.text('2450'), matching: find.byType(FittedBox));
+
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      final at1x = tester.getSize(value.first);
+
+      await tester.pumpWidget(_app(f.store, textScale: 2.0));
+      await tester.pump();
+      // Pre-fix a four-digit calorie count needed 98 px inside the 56 px ring
+      // and was wrapped and cropped there.
+      final at2x = tester.getSize(value.first);
+      expect(at2x.width, lessThanOrEqualTo(56));
+      expect(at2x.height, lessThanOrEqualTo(56));
+      expect(at2x.width, greaterThanOrEqualTo(at1x.width));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
   });
 
   test('the kind constants are the literals the activities view emits', () {
