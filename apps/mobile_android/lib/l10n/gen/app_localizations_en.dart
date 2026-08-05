@@ -3163,16 +3163,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routeDetailDeleteReview => 'Delete your review';
 
   @override
-  String get routeDetailDeleteReviewTitle => 'Delete your review?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Your rating and comment will be removed from this route. You can leave a new review afterwards.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Delete review';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'Couldn\'t delete the review: $error';
   }
@@ -10750,13 +10740,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Delete marker?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'This removes the marker from the route permanently.';
-
-  @override
   String get routeMarkerKindAidStation => 'Aid station';
 
   @override
@@ -12442,4 +12425,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runSocialCommentRemoved => 'Comment removed';
+
+  @override
+  String get routeDetailReviewRemoved => 'Review removed';
+
+  @override
+  String get routeMarkerRemoved => 'Marker removed';
 }

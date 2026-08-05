@@ -3197,16 +3197,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeDetailDeleteReview => 'Supprimer votre avis';
 
   @override
-  String get routeDetailDeleteReviewTitle => 'Supprimer votre avis ?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Votre note et votre commentaire seront retirés de cet itinéraire. Vous pourrez laisser un nouvel avis ensuite.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Supprimer l\'avis';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'Impossible de supprimer l\'avis : $error';
   }
@@ -10885,13 +10875,6 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Supprimer le repère ?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Cela supprime définitivement le repère du parcours.';
-
-  @override
   String get routeMarkerKindAidStation => 'Ravitaillement';
 
   @override
@@ -12601,4 +12584,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get runSocialCommentRemoved => 'Commentaire supprimé';
+
+  @override
+  String get routeDetailReviewRemoved => 'Avis supprimé';
+
+  @override
+  String get routeMarkerRemoved => 'Repère supprimé';
 }

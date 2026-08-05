@@ -3186,16 +3186,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get routeDetailDeleteReview => 'Excluir sua avaliação';
 
   @override
-  String get routeDetailDeleteReviewTitle => 'Excluir sua avaliação?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Sua nota e seu comentário serão removidos desta rota. Você poderá deixar uma nova avaliação depois.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Excluir avaliação';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'Não foi possível excluir a avaliação: $error';
   }
@@ -10855,13 +10845,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Excluir marcador?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Isso remove o marcador do percurso permanentemente.';
-
-  @override
   String get routeMarkerKindAidStation => 'Posto de apoio';
 
   @override
@@ -12568,6 +12551,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runSocialCommentRemoved => 'Comentário removido';
+
+  @override
+  String get routeDetailReviewRemoved => 'Avaliação removida';
+
+  @override
+  String get routeMarkerRemoved => 'Marcador removido';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -15749,16 +15738,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeDetailDeleteReview => 'Excluir sua avaliação';
-
-  @override
-  String get routeDetailDeleteReviewTitle => 'Excluir sua avaliação?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Sua nota e seu comentário serão removidos desta rota. Você poderá deixar uma nova avaliação depois.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Excluir avaliação';
 
   @override
   String routeDetailReviewDeleteFailed(String error) {
@@ -23419,13 +23398,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Excluir marcador?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Isso remove o marcador do percurso permanentemente.';
-
-  @override
   String get routeMarkerKindAidStation => 'Posto de apoio';
 
   @override
@@ -25129,4 +25101,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runSocialCommentRemoved => 'Comentário removido';
+
+  @override
+  String get routeDetailReviewRemoved => 'Avaliação removida';
+
+  @override
+  String get routeMarkerRemoved => 'Marcador removido';
 }

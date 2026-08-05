@@ -916,9 +916,6 @@
   "routeDetailSubmit": "Envoyer",
   "routeDetailSignInToReview": "Connectez-vous pour laisser un avis",
   "routeDetailDeleteReview": "Supprimer votre avis",
-  "routeDetailDeleteReviewTitle": "Supprimer votre avis ?",
-  "routeDetailDeleteReviewBody": "Votre note et votre commentaire seront retirés de cet itinéraire. Vous pourrez laisser un nouvel avis ensuite.",
-  "routeDetailDeleteReviewCta": "Supprimer l'avis",
   "routeDetailReviewDeleteFailed": "Impossible de supprimer l'avis : {error}",
   "routeDetailReviewFailed": "Échec de l'envoi de l'avis : {error}",
   "routeDetailBookmarkFailed": "Échec du signet : {error}",
@@ -3129,8 +3126,6 @@
   "routeMarkerEnterCoords": "Saisir l'emplacement à la place",
   "routeMarkerSaveFailed": "Impossible d'enregistrer le repère : {error}",
   "routeMarkerDeleteFailed": "Impossible de supprimer le repère : {error}",
-  "routeMarkerDeleteConfirmTitle": "Supprimer le repère ?",
-  "routeMarkerDeleteConfirmMessage": "Cela supprime définitivement le repère du parcours.",
   "routeMarkerKindAidStation": "Ravitaillement",
   "routeMarkerKindCutoff": "Barrière horaire",
   "routeMarkerKindCrewAccess": "Assistance / parking",
@@ -3661,5 +3656,7 @@
   "routeConditionsRemoved": "Signalement supprimé",
   "gearWearLogRemoved": "Observation supprimée",
   "nutritionEntryRemoved": "{item} supprimé",
-  "runSocialCommentRemoved": "Commentaire supprimé"
+  "runSocialCommentRemoved": "Commentaire supprimé",
+  "routeDetailReviewRemoved": "Avis supprimé",
+  "routeMarkerRemoved": "Repère supprimé"
 }

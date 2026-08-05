@@ -3186,16 +3186,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeDetailDeleteReview => 'Eliminar tu reseña';
 
   @override
-  String get routeDetailDeleteReviewTitle => '¿Eliminar tu reseña?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Tu valoración y tu comentario se quitarán de esta ruta. Después podrás dejar una reseña nueva.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Eliminar reseña';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'No se pudo eliminar la reseña: $error';
   }
@@ -10861,13 +10851,6 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => '¿Eliminar marcador?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Esto elimina el marcador de la ruta de forma permanente.';
-
-  @override
   String get routeMarkerKindAidStation => 'Avituallamiento';
 
   @override
@@ -12572,4 +12555,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get runSocialCommentRemoved => 'Comentario eliminado';
+
+  @override
+  String get routeDetailReviewRemoved => 'Reseña eliminada';
+
+  @override
+  String get routeMarkerRemoved => 'Marcador eliminado';
 }

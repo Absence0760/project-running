@@ -916,9 +916,6 @@
   "routeDetailSubmit": "Senden",
   "routeDetailSignInToReview": "Melde dich an, um eine Bewertung abzugeben",
   "routeDetailDeleteReview": "Eigene Bewertung löschen",
-  "routeDetailDeleteReviewTitle": "Eigene Bewertung löschen?",
-  "routeDetailDeleteReviewBody": "Deine Bewertung und dein Kommentar werden von dieser Route entfernt. Du kannst danach eine neue Bewertung abgeben.",
-  "routeDetailDeleteReviewCta": "Bewertung löschen",
   "routeDetailReviewDeleteFailed": "Bewertung konnte nicht gelöscht werden: {error}",
   "routeDetailReviewFailed": "Bewertung konnte nicht gesendet werden: {error}",
   "routeDetailBookmarkFailed": "Lesezeichen fehlgeschlagen: {error}",
@@ -3129,8 +3126,6 @@
   "routeMarkerEnterCoords": "Standort stattdessen eingeben",
   "routeMarkerSaveFailed": "Marker konnte nicht gespeichert werden: {error}",
   "routeMarkerDeleteFailed": "Marker konnte nicht gelöscht werden: {error}",
-  "routeMarkerDeleteConfirmTitle": "Marker löschen?",
-  "routeMarkerDeleteConfirmMessage": "Dadurch wird der Marker dauerhaft von der Strecke entfernt.",
   "routeMarkerKindAidStation": "Verpflegungsstation",
   "routeMarkerKindCutoff": "Cut-off",
   "routeMarkerKindCrewAccess": "Crew / Parken",
@@ -3661,5 +3656,7 @@
   "routeConditionsRemoved": "Zustandsmeldung entfernt",
   "gearWearLogRemoved": "Beobachtung entfernt",
   "nutritionEntryRemoved": "{item} entfernt",
-  "runSocialCommentRemoved": "Kommentar entfernt"
+  "runSocialCommentRemoved": "Kommentar entfernt",
+  "routeDetailReviewRemoved": "Bewertung entfernt",
+  "routeMarkerRemoved": "Markierung entfernt"
 }

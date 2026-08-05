@@ -4250,18 +4250,6 @@
   "@routeDetailDeleteReview": {
     "description": "Tooltip on the delete button for the viewer's own route review"
   },
-  "routeDetailDeleteReviewTitle": "Delete your review?",
-  "@routeDetailDeleteReviewTitle": {
-    "description": "Title of the confirm dialog for deleting your own route review"
-  },
-  "routeDetailDeleteReviewBody": "Your rating and comment will be removed from this route. You can leave a new review afterwards.",
-  "@routeDetailDeleteReviewBody": {
-    "description": "Body of the confirm dialog for deleting your own route review"
-  },
-  "routeDetailDeleteReviewCta": "Delete review",
-  "@routeDetailDeleteReviewCta": {
-    "description": "Confirm action in the delete-your-review dialog"
-  },
   "routeDetailReviewDeleteFailed": "Couldn't delete the review: {error}",
   "@routeDetailReviewDeleteFailed": {
     "description": "Banner shown when deleting your own route review fails",
@@ -14135,14 +14123,6 @@
       }
     }
   },
-  "routeMarkerDeleteConfirmTitle": "Delete marker?",
-  "@routeMarkerDeleteConfirmTitle": {
-    "description": "Delete-marker confirm title"
-  },
-  "routeMarkerDeleteConfirmMessage": "This removes the marker from the route permanently.",
-  "@routeMarkerDeleteConfirmMessage": {
-    "description": "Delete-marker confirm message"
-  },
   "routeMarkerKindAidStation": "Aid station",
   "@routeMarkerKindAidStation": {
     "description": "Marker kind: aid station"
@@ -15992,5 +15972,13 @@
   "runSocialCommentRemoved": "Comment removed",
   "@runSocialCommentRemoved": {
     "description": "Undo bar sentence after removing a run comment or reply"
+  },
+  "routeDetailReviewRemoved": "Review removed",
+  "@routeDetailReviewRemoved": {
+    "description": "Undo bar sentence after removing the viewer's own route review"
+  },
+  "routeMarkerRemoved": "Marker removed",
+  "@routeMarkerRemoved": {
+    "description": "Undo bar sentence after removing a course marker"
   }
 }

@@ -3196,16 +3196,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get routeDetailDeleteReview => 'Eigene Bewertung löschen';
 
   @override
-  String get routeDetailDeleteReviewTitle => 'Eigene Bewertung löschen?';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      'Deine Bewertung und dein Kommentar werden von dieser Route entfernt. Du kannst danach eine neue Bewertung abgeben.';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'Bewertung löschen';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'Bewertung konnte nicht gelöscht werden: $error';
   }
@@ -10870,13 +10860,6 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'Marker löschen?';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage =>
-      'Dadurch wird der Marker dauerhaft von der Strecke entfernt.';
-
-  @override
   String get routeMarkerKindAidStation => 'Verpflegungsstation';
 
   @override
@@ -12580,4 +12563,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runSocialCommentRemoved => 'Kommentar entfernt';
+
+  @override
+  String get routeDetailReviewRemoved => 'Bewertung entfernt';
+
+  @override
+  String get routeMarkerRemoved => 'Markierung entfernt';
 }

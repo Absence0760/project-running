@@ -3005,16 +3005,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailDeleteReview => '自分のレビューを削除';
 
   @override
-  String get routeDetailDeleteReviewTitle => '自分のレビューを削除しますか？';
-
-  @override
-  String get routeDetailDeleteReviewBody =>
-      '評価とコメントがこのルートから削除されます。あとで新しいレビューを投稿できます。';
-
-  @override
-  String get routeDetailDeleteReviewCta => 'レビューを削除';
-
-  @override
   String routeDetailReviewDeleteFailed(String error) {
     return 'レビューを削除できませんでした: $error';
   }
@@ -10336,12 +10326,6 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get routeMarkerDeleteConfirmTitle => 'マーカーを削除しますか？';
-
-  @override
-  String get routeMarkerDeleteConfirmMessage => 'マーカーはルートから完全に削除されます。';
-
-  @override
   String get routeMarkerKindAidStation => 'エイドステーション';
 
   @override
@@ -11989,4 +11973,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runSocialCommentRemoved => 'コメントを削除しました';
+
+  @override
+  String get routeDetailReviewRemoved => 'レビューを削除しました';
+
+  @override
+  String get routeMarkerRemoved => 'マーカーを削除しました';
 }

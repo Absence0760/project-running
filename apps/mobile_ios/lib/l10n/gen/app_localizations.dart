@@ -5326,24 +5326,6 @@ abstract class AppLocalizations {
   /// **'Delete your review'**
   String get routeDetailDeleteReview;
 
-  /// Title of the confirm dialog for deleting your own route review
-  ///
-  /// In en, this message translates to:
-  /// **'Delete your review?'**
-  String get routeDetailDeleteReviewTitle;
-
-  /// Body of the confirm dialog for deleting your own route review
-  ///
-  /// In en, this message translates to:
-  /// **'Your rating and comment will be removed from this route. You can leave a new review afterwards.'**
-  String get routeDetailDeleteReviewBody;
-
-  /// Confirm action in the delete-your-review dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete review'**
-  String get routeDetailDeleteReviewCta;
-
   /// Banner shown when deleting your own route review fails
   ///
   /// In en, this message translates to:
@@ -18038,18 +18020,6 @@ abstract class AppLocalizations {
   /// **'Could not delete marker: {error}'**
   String routeMarkerDeleteFailed(String error);
 
-  /// Delete-marker confirm title
-  ///
-  /// In en, this message translates to:
-  /// **'Delete marker?'**
-  String get routeMarkerDeleteConfirmTitle;
-
-  /// Delete-marker confirm message
-  ///
-  /// In en, this message translates to:
-  /// **'This removes the marker from the route permanently.'**
-  String get routeMarkerDeleteConfirmMessage;
-
   /// Marker kind: aid station
   ///
   /// In en, this message translates to:
@@ -21013,6 +20983,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Comment removed'**
   String get runSocialCommentRemoved;
+
+  /// Undo bar sentence after removing the viewer's own route review
+  ///
+  /// In en, this message translates to:
+  /// **'Review removed'**
+  String get routeDetailReviewRemoved;
+
+  /// Undo bar sentence after removing a course marker
+  ///
+  /// In en, this message translates to:
+  /// **'Marker removed'**
+  String get routeMarkerRemoved;
 }
 
 class _AppLocalizationsDelegate

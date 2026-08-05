@@ -916,9 +916,6 @@
   "routeDetailSubmit": "Enviar",
   "routeDetailSignInToReview": "Inicia sesión para dejar una reseña",
   "routeDetailDeleteReview": "Eliminar tu reseña",
-  "routeDetailDeleteReviewTitle": "¿Eliminar tu reseña?",
-  "routeDetailDeleteReviewBody": "Tu valoración y tu comentario se quitarán de esta ruta. Después podrás dejar una reseña nueva.",
-  "routeDetailDeleteReviewCta": "Eliminar reseña",
   "routeDetailReviewDeleteFailed": "No se pudo eliminar la reseña: {error}",
   "routeDetailReviewFailed": "Error al enviar la reseña: {error}",
   "routeDetailBookmarkFailed": "Error al marcar: {error}",
@@ -3129,8 +3126,6 @@
   "routeMarkerEnterCoords": "Introducir ubicación en su lugar",
   "routeMarkerSaveFailed": "No se pudo guardar el marcador: {error}",
   "routeMarkerDeleteFailed": "No se pudo eliminar el marcador: {error}",
-  "routeMarkerDeleteConfirmTitle": "¿Eliminar marcador?",
-  "routeMarkerDeleteConfirmMessage": "Esto elimina el marcador de la ruta de forma permanente.",
   "routeMarkerKindAidStation": "Avituallamiento",
   "routeMarkerKindCutoff": "Corte de tiempo",
   "routeMarkerKindCrewAccess": "Equipo / aparcamiento",
@@ -3661,5 +3656,7 @@
   "routeConditionsRemoved": "Informe de estado eliminado",
   "gearWearLogRemoved": "Observación eliminada",
   "nutritionEntryRemoved": "{item} eliminado",
-  "runSocialCommentRemoved": "Comentario eliminado"
+  "runSocialCommentRemoved": "Comentario eliminado",
+  "routeDetailReviewRemoved": "Reseña eliminada",
+  "routeMarkerRemoved": "Marcador eliminado"
 }

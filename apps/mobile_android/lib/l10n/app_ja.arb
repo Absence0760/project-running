@@ -916,9 +916,6 @@
   "routeDetailSubmit": "送信",
   "routeDetailSignInToReview": "レビューを残すにはサインインしてください",
   "routeDetailDeleteReview": "自分のレビューを削除",
-  "routeDetailDeleteReviewTitle": "自分のレビューを削除しますか？",
-  "routeDetailDeleteReviewBody": "評価とコメントがこのルートから削除されます。あとで新しいレビューを投稿できます。",
-  "routeDetailDeleteReviewCta": "レビューを削除",
   "routeDetailReviewDeleteFailed": "レビューを削除できませんでした: {error}",
   "routeDetailReviewFailed": "レビューの送信に失敗しました: {error}",
   "routeDetailBookmarkFailed": "ブックマークに失敗しました: {error}",
@@ -3129,8 +3126,6 @@
   "routeMarkerEnterCoords": "代わりに位置を入力",
   "routeMarkerSaveFailed": "マーカーを保存できませんでした: {error}",
   "routeMarkerDeleteFailed": "マーカーを削除できませんでした: {error}",
-  "routeMarkerDeleteConfirmTitle": "マーカーを削除しますか？",
-  "routeMarkerDeleteConfirmMessage": "マーカーはルートから完全に削除されます。",
   "routeMarkerKindAidStation": "エイドステーション",
   "routeMarkerKindCutoff": "関門",
   "routeMarkerKindCrewAccess": "クルー / 駐車",
@@ -3661,5 +3656,7 @@
   "routeConditionsRemoved": "コンディション報告を削除しました",
   "gearWearLogRemoved": "記録を削除しました",
   "nutritionEntryRemoved": "{item}を削除しました",
-  "runSocialCommentRemoved": "コメントを削除しました"
+  "runSocialCommentRemoved": "コメントを削除しました",
+  "routeDetailReviewRemoved": "レビューを削除しました",
+  "routeMarkerRemoved": "マーカーを削除しました"
 }
