@@ -560,6 +560,41 @@ Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.mod
 
 `ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
 
+## Web destructive actions — confirm OR undo, never both, and never a fake undo
+
+A destructive action gets **exactly one** guard. Pick it by asking whether the
+action can honestly be reversed:
+
+- **Undoable** → call `deferDestructive` (`$lib/stores/undo.svelte`) and drop the
+  `ConfirmDialog`. The row leaves the caller's local list immediately and the
+  server mutation is **held** for the undo window, so `Undo` cancels a timer
+  rather than compensating for a completed delete — it cannot fail. Restore by
+  snapshotting the list (`const before = rows; rows = rows.filter(...)`) and
+  putting the snapshot back, so ordering survives; if the delete cascades
+  children server-side, filter the children out too or the list renders orphans.
+- **Not undoable** → keep the `ConfirmDialog`. Use it when the delete cascades
+  something the actor could not reconstruct, when the row is an authored
+  reusable artefact rather than a line of data (a routine, a saved meal, a
+  plan), or when the affordance sits **inside a modal**: `Modal.svelte` traps
+  Tab, so an undo bar shown over it is unreachable by keyboard and would be an
+  affordance that only exists for mouse users.
+
+Two things are forbidden. **Both guards on one action** — a modal followed by an
+undo bar is two dismissals for one intent, and the modal is what teaches users to
+click through without reading. And **an "Undo" that cannot actually reverse the
+action**: a re-insert mints a new id, cannot restore cascaded children, and
+cannot re-upload a deleted Storage object's bytes, so it hands back a different
+row while claiming otherwise. If a class of action genuinely needs restore
+after the fact, that is a soft-delete/trash feature — a `deleted_at` column, a
+read-path filter and a retention story — scope it, don't fake it.
+
+**A timed undo is an accessibility surface.** WCAG 2.2.1 requires the limit be
+turnable-off, adjustable, or extendable; the `undo_window_s` preference
+(`/settings/preferences`, registered in [settings.md](../backend/settings.md))
+carries a `0` = *no time limit* choice, and hover/focus pauses a running window.
+Keep the countdown out of the `aria-live` region — a ticking number re-announces
+on every tick — and never let the bar steal focus.
+
 ## Web cards — `.card-elevated` is the shared elevated panel
 
 The app has **two** card flavours, and the distinction is load-bearing — don't collapse them:

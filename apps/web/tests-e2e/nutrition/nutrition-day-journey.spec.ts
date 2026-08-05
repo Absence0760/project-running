@@ -31,7 +31,7 @@ import { USER_A } from '../fixtures/users';
  *      the bodyweight-derived target, reload, and the final add flips the chip to
  *      "Goal reached".
  *   5. The 7-day calorie-trend week-summary chip renders wired to the goal.
- *   6. Delete the logged food via its row Delete → confirm dialog → the consumed
+ *   6. Delete the logged food via its row Delete → dismiss the undo bar → the consumed
  *      total reverts to its pre-log value and the row is gone from the DB.
  *
  * A unique food name per run keeps the assertions + cleanup isolated in the
@@ -185,22 +185,31 @@ test.describe('/nutrition — day-in-the-life journey', () => {
 			const row = page.locator('.meal-list li', { hasText: item });
 			await expect(row).toBeVisible({ timeout: 10_000 });
 
+			// The entry delete is undo-backed, not confirm-gated: the row leaves
+			// the list at once and the mutation is held behind the undo bar.
+			// Dismissing commits it immediately.
 			await row.getByRole('button', { name: `Delete ${item}` }).click();
-			const dialog = page.locator('.modal', { hasText: 'Delete this entry?' });
-			await expect(dialog).toBeVisible({ timeout: 5_000 });
-			await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
 			await expect(row).toHaveCount(0, { timeout: 10_000 });
+			await page.getByTestId('undo-dismiss').click();
+			await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 
 			// The consumed total dropped back to the pre-log baseline.
 			await expect.poll(consumedKcal).toBe(baseKcal);
 
 			// And the row is gone from the DB.
-			const { data: after } = await admin
-				.from('food_log')
-				.select('id')
-				.eq('user_id', USER_A.id)
-				.eq('item_name', item);
-			expect(after?.length ?? 0).toBe(0);
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('food_log')
+							.select('id')
+							.eq('user_id', USER_A.id)
+							.eq('item_name', item);
+						return data?.length ?? 0;
+					},
+					{ timeout: 10_000 },
+				)
+				.toBe(0);
 		});
 	});
 });

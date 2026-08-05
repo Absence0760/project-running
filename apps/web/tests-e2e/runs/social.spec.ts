@@ -78,23 +78,31 @@ test.describe('/runs/[id] — owner-side engagement panel', () => {
 
 		// Owner can delete the comment via the per-row × button (the
 		// `auth.user?.id === comment.author_id || isOwn` guard exposes
-		// the icon-btn). It now confirms first: Cancel keeps the comment,
-		// confirm removes it.
+		// the icon-btn). It is undo-backed, not confirm-gated: the row goes
+		// at once, Undo puts it back, and dismissing commits the delete.
 		await social.getByRole('button', { name: 'Delete comment' }).click();
-		const confirm = page.locator('.modal', { hasText: 'Delete this comment?' });
-		await expect(confirm).toBeVisible({ timeout: 5_000 });
-		await confirm.getByRole('button', { name: 'Cancel' }).click();
-		await expect(confirm).toBeHidden({ timeout: 5_000 });
+		await expect(
+			social.locator('article.comment', { hasText: 'e2e-owner-social' })
+		).toHaveCount(0, { timeout: 5_000 });
+		await expect(page.getByTestId('undo-bar')).toBeVisible();
+
+		await page.getByTestId('undo-action').click();
 		await expect(
 			social.locator('article.comment', { hasText: 'e2e-owner-social' })
 		).toBeVisible();
 
 		await social.getByRole('button', { name: 'Delete comment' }).click();
-		await expect(confirm).toBeVisible({ timeout: 5_000 });
-		await confirm.getByRole('button', { name: 'Delete comment' }).click();
+		await page.getByTestId('undo-dismiss').click();
+		await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
 		await expect(
 			social.locator('article.comment', { hasText: 'e2e-owner-social' })
 		).toHaveCount(0, { timeout: 5_000 });
+		// The commit really landed — a reload shows the comment gone.
+		await page.reload();
+		await expect(social.locator('article.comment', { hasText: 'e2e-owner-social' })).toHaveCount(
+			0,
+			{ timeout: 10_000 },
+		);
 	});
 
 	test('owner posts a comment on own run via composer → DB row created with author = owner', async ({

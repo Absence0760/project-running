@@ -113,19 +113,35 @@ test.describe('/routes/[id] — condition reports (owner)', () => {
 		await expect(row.locator('.condition-note')).toHaveText('Boggy in the dip');
 	});
 
-	test('owner deletes their own report', async ({ page }) => {
+	test('owner deletes their own report, and Undo brings it back', async ({ page }) => {
 		routeId = await insertRoute(false);
 		await insertCondition(routeId, USER_A.id, 'closed', 'impassable', 'Logging closure');
 		await page.goto(`/routes/${routeId}`);
 
 		const rows = page.locator('.conditions-list .condition');
 		await expect(rows).toHaveCount(1);
-		await rows.first().getByRole('button', { name: 'Delete' }).click();
-		// ConfirmDialog → confirm. Scope to the dialog so the row's own Delete
-		// button (still in the DOM) doesn't make the locator strict-violate.
-		await page.locator('.modal').getByRole('button', { name: 'Delete', exact: true }).click();
 
+		// The delete is undo-backed, not confirm-gated: one click empties the
+		// list and offers the undo.
+		await rows.first().getByRole('button', { name: 'Delete' }).click();
 		await expect(page.getByText('No condition reports yet.', { exact: false })).toBeVisible();
+		await expect(page.getByTestId('undo-bar')).toBeVisible();
+
+		// Undo restores the report — and a reload proves it was never deleted
+		// server-side, only held.
+		await page.getByTestId('undo-action').click();
+		await expect(rows).toHaveCount(1);
+		await page.reload();
+		await expect(page.locator('.conditions-list .condition')).toHaveCount(1, { timeout: 10_000 });
+
+		// Dismissing the bar commits the delete for real.
+		await page.locator('.conditions-list .condition').first().getByRole('button', { name: 'Delete' }).click();
+		await page.getByTestId('undo-dismiss').click();
+		await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
+		await page.reload();
+		await expect(page.getByText('No condition reports yet.', { exact: false })).toBeVisible({
+			timeout: 10_000,
+		});
 	});
 });
 

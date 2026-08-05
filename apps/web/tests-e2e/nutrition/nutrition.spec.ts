@@ -285,11 +285,11 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await page.evaluate((key) => localStorage.removeItem(key), waterStorageKey(USER_A.id));
 	});
 
-	test('deleting a food entry confirms first: cancel keeps it, confirm removes it', async ({
+	test('deleting a food entry defers the delete: Undo brings the row back', async ({
 		page
 	}) => {
 		const admin = getAdminClient();
-		const item = `E2E Delete ${Date.now()}`;
+		const item = `E2E Undo ${Date.now()}`;
 		const { data: created } = await admin
 			.from('food_log')
 			.insert({
@@ -307,25 +307,106 @@ test.describe('/nutrition — manual log, render, water', () => {
 			const row = page.locator('.meal-list li', { hasText: item });
 			await expect(row).toBeVisible({ timeout: 10_000 });
 
-			// Cancel keeps the entry.
+			// One click removes the row — no modal — and offers the undo.
 			await row.getByRole('button', { name: `Delete ${item}` }).click();
-			const dialog = page.locator('.modal', { hasText: 'Delete this entry?' });
-			await expect(dialog).toBeVisible({ timeout: 5_000 });
-			await dialog.getByRole('button', { name: 'Cancel' }).click();
-			await expect(dialog).toBeHidden({ timeout: 5_000 });
+			await expect(row).toHaveCount(0, { timeout: 5_000 });
+			const bar = page.getByTestId('undo-bar');
+			await expect(bar).toBeVisible();
+			await expect(bar).toContainText(item);
+
+			// Undo cancels the pending mutation, and the row really comes back.
+			await page.getByTestId('undo-action').click();
+			await expect(bar).toBeHidden({ timeout: 5_000 });
 			await expect(row).toBeVisible();
 
-			// Confirm removes it from the list + the DB.
-			await row.getByRole('button', { name: `Delete ${item}` }).click();
-			await expect(dialog).toBeVisible({ timeout: 5_000 });
-			await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
-			await expect(row).toHaveCount(0, { timeout: 10_000 });
+			// The delete was DEFERRED, never performed: the backend row was
+			// untouched the whole time. Checked after the undo so the assertion
+			// can't race the window — once undone, nothing can delete it.
+			const { data: after } = await admin.from('food_log').select('id').eq('id', created!.id);
+			expect(after?.length ?? 0).toBe(1);
+		} finally {
+			await admin.from('food_log').delete().eq('id', created!.id);
+		}
+	});
 
-			const { data: after } = await admin
-				.from('food_log')
-				.select('id')
-				.eq('id', created!.id);
-			expect(after?.length ?? 0).toBe(0);
+	test('dismissing the undo bar commits the delete immediately', async ({ page }) => {
+		const admin = getAdminClient();
+		const item = `E2E Undo Dismiss ${Date.now()}`;
+		const { data: created } = await admin
+			.from('food_log')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date().toISOString(),
+				item_name: item,
+				calories: 200,
+				meal_slot: 'snack',
+			})
+			.select('id')
+			.single();
+
+		try {
+			await page.goto('/nutrition');
+			const row = page.locator('.meal-list li', { hasText: item });
+			await expect(row).toBeVisible({ timeout: 10_000 });
+
+			await row.getByRole('button', { name: `Delete ${item}` }).click();
+			await page.getByTestId('undo-dismiss').click();
+			await expect(page.getByTestId('undo-bar')).toBeHidden({ timeout: 5_000 });
+
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin.from('food_log').select('id').eq('id', created!.id);
+						return data?.length ?? 0;
+					},
+					{ timeout: 10_000 },
+				)
+				.toBe(0);
+			await expect(row).toHaveCount(0);
+		} finally {
+			await admin.from('food_log').delete().eq('id', created!.id);
+		}
+	});
+
+	test('an untouched undo window expires and the delete lands on its own', async ({ page }) => {
+		// The default 8 s window plus the page load plus the confirmation poll
+		// does not fit the suite-wide 30 s budget.
+		test.setTimeout(60_000);
+		const admin = getAdminClient();
+		const item = `E2E Undo Expiry ${Date.now()}`;
+		const { data: created } = await admin
+			.from('food_log')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date().toISOString(),
+				item_name: item,
+				calories: 200,
+				meal_slot: 'snack',
+			})
+			.select('id')
+			.single();
+
+		try {
+			await page.goto('/nutrition');
+			const row = page.locator('.meal-list li', { hasText: item });
+			await expect(row).toBeVisible({ timeout: 10_000 });
+
+			await row.getByRole('button', { name: `Delete ${item}` }).click();
+			const bar = page.getByTestId('undo-bar');
+			await expect(bar).toBeVisible();
+
+			// Nothing is clicked: the default 8 s window closes by itself and the
+			// held mutation fires. Deferring must not mean never deleting.
+			await expect(bar).toBeHidden({ timeout: 15_000 });
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin.from('food_log').select('id').eq('id', created!.id);
+						return data?.length ?? 0;
+					},
+					{ timeout: 10_000 },
+				)
+				.toBe(0);
 		} finally {
 			await admin.from('food_log').delete().eq('id', created!.id);
 		}

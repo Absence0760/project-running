@@ -15,8 +15,8 @@
 	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { deferDestructive } from '$lib/stores/undo.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
-	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	interface Props {
 		runId: string;
@@ -25,8 +25,6 @@
 	let { runId, runOwnerId }: Props = $props();
 
 	let reportCommentId = $state<string | null>(null);
-	let confirmDeleteCommentId = $state<string | null>(null);
-	let deletingComment = $state(false);
 
 	let kudos = $state<RunKudosSummary>({ count: 0, viewer_has_kudos: false });
 	let comments = $state<RunCommentWithAuthor[]>([]);
@@ -118,19 +116,30 @@
 		}
 	}
 
-	async function removeComment() {
-		const commentId = confirmDeleteCommentId;
-		if (!commentId || deletingComment) return;
-		deletingComment = true;
-		try {
-			await deleteRunComment(commentId);
-			confirmDeleteCommentId = null;
-			await load();
-		} catch (e) {
-			showToast(t('runSocial.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
-		} finally {
-			deletingComment = false;
-		}
+	// Undo rather than a confirm, on both the author's own delete and the
+	// run owner's moderation delete: with the mutation deferred the actor
+	// can put the comment back untouched, which is more than the modal
+	// offered once it was dismissed. The single behaviour is deliberate —
+	// a button that asks on some rows and not others reads as a bug.
+	function removeComment(comment: RunCommentWithAuthor) {
+		const before = comments;
+		// Drop the replies too: `parent_comment_id` cascades, so leaving them
+		// on screen would render children of a comment that is on its way out.
+		comments = comments.filter(
+			(c) => c.id !== comment.id && c.parent_comment_id !== comment.id,
+		);
+		deferDestructive({
+			message: t('runSocial.commentRemoved'),
+			commit: () => deleteRunComment(comment.id),
+			restore: () => {
+				comments = before;
+			},
+			onCommitError: (e) =>
+				showToast(
+					t('runSocial.deleteFailed', { error: e instanceof Error ? e.message : String(e) }),
+					'error',
+				),
+		});
 	}
 
 
@@ -221,7 +230,7 @@
 									class="icon-btn"
 									type="button"
 									aria-label={t('runSocial.deleteComment')}
-									onclick={() => (confirmDeleteCommentId = comment.id)}
+									onclick={() => removeComment(comment)}
 								>
 									<span class="material-symbols">close</span>
 								</button>
@@ -268,7 +277,7 @@
 														class="icon-btn"
 														type="button"
 														aria-label={t('runSocial.deleteReply')}
-														onclick={() => (confirmDeleteCommentId = reply.id)}
+														onclick={() => removeComment(reply)}
 													>
 														<span class="material-symbols">close</span>
 													</button>
@@ -326,16 +335,6 @@
 	targetKind="comment"
 	targetId={reportCommentId ?? ''}
 	onclose={() => (reportCommentId = null)}
-/>
-
-<ConfirmDialog
-	open={confirmDeleteCommentId !== null}
-	title={t('runSocial.deleteCommentTitle')}
-	message={t('runSocial.deleteCommentMessage')}
-	confirmLabel={t('runSocial.deleteComment')}
-	onconfirm={removeComment}
-	oncancel={() => (confirmDeleteCommentId = null)}
-	danger
 />
 
 <style>
