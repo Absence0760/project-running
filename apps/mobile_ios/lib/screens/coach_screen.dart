@@ -10,7 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ActivityLoaderKind, FullBodyLoader;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ActivityLoaderKind, FullBodyLoader, ListSkeleton;
 
 import '../backend_timeout.dart';
 import '../auth_error.dart';
@@ -983,7 +983,12 @@ class _CoachScreenState extends State<CoachScreen> {
           Expanded(
             child: _threadLoaded
                 ? _buildScroll(theme, l10n, hasPlan)
-                : const Center(child: CircularProgressIndicator()),
+                : ListSkeleton(
+                    label: l10n.commonLoading,
+                    rows: 4,
+                    rowHeight: 72,
+                    hasLeading: false,
+                  ),
           ),
           if (_viewingArchiveAt == null) _buildComposer(theme, l10n, cs),
         ],

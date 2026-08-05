@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/watch_screens_editor_screen.dart';
@@ -171,6 +172,27 @@ void main() {
   });
 
   group('editor', () {
+    testWidgets('the loading phase stands screen-card blocks, not a bare '
+        'spinner', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: WatchScreensEditorScreen(
+            transportFactory: _FakeTransport.new,
+          ),
+        ),
+      );
+      // No runAsync yet: the store read is still in flight.
+      expect(find.byType(ListSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+      expect(find.byType(ListSkeleton), findsNothing);
+    });
+
     testWidgets('an empty store lands on the empty state, not a blank list',
         (tester) async {
       await _pumpEditor(tester);

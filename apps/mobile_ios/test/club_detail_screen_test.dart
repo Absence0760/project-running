@@ -81,7 +81,10 @@ class _FakeSocial extends SocialService {
 
 class _FakeApi extends ApiClient {
   final List<GymRoutineRow> routines;
-  _FakeApi(this.routines);
+
+  /// Held open so a test can observe the Templates tab's loading frame.
+  final Completer<void>? templatesGate;
+  _FakeApi(this.routines, {this.templatesGate});
 
   /// The screen gates on the viewer id, so a fake must declare who is
   /// looking rather than falling through to a real Supabase read.
@@ -92,8 +95,10 @@ class _FakeApi extends ApiClient {
     String clubId,
   ) async => routines;
   @override
-  Future<List<SessionPlanRow>> fetchClubSessionTemplates(String clubId) async =>
-      const [];
+  Future<List<SessionPlanRow>> fetchClubSessionTemplates(String clubId) async {
+    await templatesGate?.future;
+    return const [];
+  }
 }
 
 class _FakeTraining extends TrainingService {
@@ -352,6 +357,40 @@ void main() {
   });
 
   group('ClubDetailScreen — Templates tab gym routines', () {
+    realtimeWidgetTest('the tab holds its card layout with a skeleton before '
+        'the templates land', (tester) async {
+      final gate = Completer<void>();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ClubDetailScreen(
+            social: _FakeSocial(),
+            training: _FakeTraining(),
+            apiClient: _FakeApi(
+              [_routine('r-1', 'Club push day', 3)],
+              templatesGate: gate,
+            ),
+            slug: 'track-club',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.text('Templates'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(ListSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      gate.complete();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byType(ListSkeleton), findsNothing);
+      expect(find.text('Club push day'), findsOneWidget);
+    });
+
     realtimeWidgetTest('renders a gym-routine template row with Adopt', (
       tester,
     ) async {

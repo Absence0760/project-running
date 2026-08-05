@@ -225,7 +225,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(
+              label: l10n.commonLoading,
+              rows: 5,
+              rowHeight: 48,
+              hasLeading: false,
+            )
           : _error
               ? ErrorState(message: l10n.sessionDetailLoadError, onRetry: _load)
               : _steps.isEmpty

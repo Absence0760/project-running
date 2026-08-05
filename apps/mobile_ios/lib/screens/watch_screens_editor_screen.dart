@@ -16,6 +16,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../l10n/gen/app_localizations.dart';
 import '../reactive_ble_watch_transport.dart';
@@ -406,7 +407,12 @@ class _WatchScreensEditorScreenState extends State<WatchScreensEditorScreen> {
         ],
       ),
       body: switch (_phase) {
-        _Phase.loading => const Center(child: CircularProgressIndicator()),
+        _Phase.loading => ListSkeleton(
+            label: l10n.commonLoading,
+            rows: 3,
+            rowHeight: 96,
+            hasLeading: false,
+          ),
         _Phase.unreadable => _UnreadableState(onStartOver: _startOver),
         _Phase.ready => _buildEditor(context, l10n),
       },
