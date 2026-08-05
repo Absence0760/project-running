@@ -3665,5 +3665,6 @@
   "prefsUndoWindow": "Janela para desfazer",
   "prefsUndoWindow8s": "8 segundos",
   "prefsUndoWindow30s": "30 segundos",
-  "prefsUndoWindowManual": "Até eu fechar"
+  "prefsUndoWindowManual": "Até eu fechar",
+  "undoDismissed": "{count, plural, =1{Notificação descartada} other{{count} notificações descartadas}}"
 }

@@ -12579,4 +12579,15 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get prefsUndoWindowManual => 'Hasta que lo cierre';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notificaciones descartadas',
+      one: 'Notificación descartada',
+    );
+    return '$_temp0';
+  }
 }

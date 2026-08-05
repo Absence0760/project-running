@@ -3665,5 +3665,6 @@
   "prefsUndoWindow": "元に戻せる時間",
   "prefsUndoWindow8s": "8秒",
   "prefsUndoWindow30s": "30秒",
-  "prefsUndoWindowManual": "自分で閉じるまで"
+  "prefsUndoWindowManual": "自分で閉じるまで",
+  "undoDismissed": "{count, plural, other{通知{count}件を消しました}}"
 }

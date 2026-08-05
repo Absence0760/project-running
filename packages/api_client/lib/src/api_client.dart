@@ -3011,14 +3011,17 @@ class ApiClient {
         .isFilter(NotificationRow.colReadAt, null);
   }
 
-  /// Per-row dismiss.
-  Future<void> deleteNotification(String id) async {
+  /// Dismiss one or more notifications in a single statement. Dismissing a
+  /// collapsed group is one user intent, so it must not fan out into N
+  /// round-trips (mirrors web `deleteNotifications`).
+  Future<void> deleteNotifications(List<String> ids) async {
+    if (ids.isEmpty) return;
     final viewerId = _client.auth.currentUser?.id;
     if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(NotificationRow.table)
         .delete()
-        .eq(NotificationRow.colId, id)
+        .inFilter(NotificationRow.colId, ids)
         .eq(NotificationRow.colUserId, viewerId);
   }
 

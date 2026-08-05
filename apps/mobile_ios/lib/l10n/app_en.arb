@@ -16000,5 +16000,14 @@
   "prefsUndoWindowManual": "Until I dismiss it",
   "@prefsUndoWindowManual": {
     "description": "Undo window choice: no time limit, the offer waits for an explicit dismiss"
+  },
+  "undoDismissed": "{count, plural, =1{Notification dismissed} other{{count} notifications dismissed}}",
+  "@undoDismissed": {
+    "description": "Undo bar sentence after dismissing one or more notifications",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

@@ -12,12 +12,14 @@ import '../notification_groups.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
+import '../undo_queue.dart';
 import '../widgets/badge_grid.dart';
 import '../widgets/error_state.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/run_track_preview.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
+import '../widgets/undo_bar.dart';
 import 'club_detail_screen.dart';
 import 'event_detail_screen.dart';
 import 'public_run_screen.dart';
@@ -552,22 +554,43 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  Future<void> _dismissNotif(String id) async {
+  /// A dismissed notification is the strongest undo case in the app: the row
+  /// is SYSTEM-minted, so a stray tap was the one destruction the user could
+  /// not put back by re-typing, and nothing hangs off it. The delete is
+  /// deferred rather than performed, so Undo cancels a timer and the row
+  /// returns with its own id (decisions § 514).
+  ///
+  /// Dismissing a collapsed group is ONE intent, so it takes one slot: one
+  /// bar, one batched delete, one restore of the whole id set. The unread
+  /// badge is deliberately NOT adjusted here — while the offer stands the
+  /// rows are still on the server and still unread, so the truthful count
+  /// includes them (§ 521).
+  void _dismissNotifs(List<String> ids, String message) {
+    if (ids.isEmpty) return;
+    final api = widget.api;
+    final l10n = AppLocalizations.of(context);
     setState(() {
-      _dismissedNotifIds = {..._dismissedNotifIds, id};
+      _dismissedNotifIds = {..._dismissedNotifIds, ...ids};
     });
-    try {
-      await widget.api.deleteNotification(id);
-    } catch (e) {
-      debugPrint('profile dismiss failed: $e');
-      if (!mounted) return;
-      // Roll back the optimistic dismiss.
-      setState(() {
-        _dismissedNotifIds = _dismissedNotifIds.difference({id});
-      });
-      showTopBanner(
-          context, AppLocalizations.of(context).profileDismissFailed(friendlyError(AppLocalizations.of(context), e)));
-    }
+    deferDestructive(
+      context,
+      DeferredDestruction(
+        message: message,
+        commit: () => api.deleteNotifications(ids),
+        restore: () {
+          if (!mounted) return;
+          setState(() {
+            _dismissedNotifIds = _dismissedNotifIds.difference(ids.toSet());
+          });
+        },
+        onCommitError: (e) {
+          debugPrint('profile dismiss failed: $e');
+          if (!mounted) return;
+          showTopBanner(
+              context, l10n.profileDismissFailed(friendlyError(l10n, e)));
+        },
+      ),
+    );
   }
 
   @override
@@ -1042,7 +1065,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             IconButton(
               icon: const Icon(Icons.close, size: 18),
               tooltip: AppLocalizations.of(context).profileDismiss,
-              onPressed: () => _dismissNotif(item.row.id),
+              onPressed: () => _dismissNotifs(
+                  [item.row.id], AppLocalizations.of(context).undoDismissed(1)),
             ),
           ],
         ),
@@ -1140,10 +1164,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     await _onNotifTap(lead);
   }
 
-  Future<void> _dismissGroup(NotificationGroup group) async {
-    for (final row in [group.lead, ...group.others]) {
-      await _dismissNotif(row.id);
-    }
+  void _dismissGroup(NotificationGroup group) {
+    final ids = [group.lead.id, ...group.others.map((r) => r.id)];
+    _dismissNotifs(ids, AppLocalizations.of(context).undoDismissed(ids.length));
   }
 
   Future<void> _onNotifTap(NotificationView item) async {

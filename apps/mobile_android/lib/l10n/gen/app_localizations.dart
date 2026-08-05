@@ -21037,6 +21037,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Until I dismiss it'**
   String get prefsUndoWindowManual;
+
+  /// Undo bar sentence after dismissing one or more notifications
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Notification dismissed} other{{count} notifications dismissed}}'**
+  String undoDismissed(int count);
 }
 
 class _AppLocalizationsDelegate

@@ -3665,5 +3665,6 @@
   "prefsUndoWindow": "Widerruf-Zeitfenster",
   "prefsUndoWindow8s": "8 Sekunden",
   "prefsUndoWindow30s": "30 Sekunden",
-  "prefsUndoWindowManual": "Bis ich es schließe"
+  "prefsUndoWindowManual": "Bis ich es schließe",
+  "undoDismissed": "{count, plural, =1{Benachrichtigung entfernt} other{{count} Benachrichtigungen entfernt}}"
 }

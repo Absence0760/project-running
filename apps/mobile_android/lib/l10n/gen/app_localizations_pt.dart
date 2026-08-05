@@ -12575,6 +12575,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get prefsUndoWindowManual => 'Até eu fechar';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notificações descartadas',
+      one: 'Notificação descartada',
+    );
+    return '$_temp0';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -25143,4 +25154,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get prefsUndoWindowManual => 'Até eu fechar';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notificações descartadas',
+      one: 'Notificação descartada',
+    );
+    return '$_temp0';
+  }
 }

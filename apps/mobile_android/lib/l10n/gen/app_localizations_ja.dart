@@ -11994,4 +11994,14 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get prefsUndoWindowManual => '自分で閉じるまで';
+
+  @override
+  String undoDismissed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '通知$count件を消しました',
+    );
+    return '$_temp0';
+  }
 }
