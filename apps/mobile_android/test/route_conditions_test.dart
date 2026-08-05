@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/route_conditions.dart';
+import '../lib/widgets/undo_bar.dart';
 
 RouteConditionRow _row({
   String id = 'c1',
@@ -70,7 +71,68 @@ Widget _host(Widget child) => MaterialApp(
       home: Scaffold(body: SingleChildScrollView(child: child)),
     );
 
+/// The armed undo window owns a real Timer; a test that ends with it pending
+/// fails on `!timersPending`.
+Future<void> _drain(WidgetTester tester) =>
+    tester.pump(const Duration(seconds: 9));
+
 void main() {
+  tearDown(debugResetUndo);
+
+  // Issue #666 U8, mobile half: a condition report is one tap to re-file and
+  // has no children, so the delete drops its confirm and becomes a deferred,
+  // undoable mutation instead (decisions § 514).
+  group('delete offers undo instead of a confirm', () {
+    testWidgets('the delete is deferred and the row leaves the list at once',
+        (tester) async {
+      final api = _ConditionsApi(seed: [_row(note: 'Creek is high')]);
+      await tester.pumpWidget(_host(RouteConditions(
+        api: api,
+        routeId: 'route-1',
+        routeOwnerId: 'owner-9',
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsNothing,
+          reason: 'confirm and undo are alternatives, not partners');
+      expect(find.text('Creek is high'), findsNothing);
+      expect(find.text('Condition report removed'), findsOneWidget);
+      expect(api.deleteCalls, 0);
+
+      await _drain(tester);
+      expect(api.deleteCalls, 1);
+    });
+
+    testWidgets('Undo restores the list snapshot and never calls the server',
+        (tester) async {
+      final api = _ConditionsApi(seed: [
+        _row(id: 'c1', note: 'Creek is high'),
+        _row(id: 'c2', condition: 'flooded', note: 'Ford impassable'),
+      ]);
+      await tester.pumpWidget(_host(RouteConditions(
+        api: api,
+        routeId: 'route-1',
+        routeOwnerId: 'owner-9',
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Delete').first);
+      await tester.pump();
+      expect(find.text('Creek is high'), findsNothing);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pump();
+      expect(find.text('Creek is high'), findsOneWidget);
+      expect(find.text('Ford impassable'), findsOneWidget,
+          reason: 'the snapshot restores ordering, not an append');
+
+      await _drain(tester);
+      expect(api.deleteCalls, 0);
+    });
+  });
+
   testWidgets('empty state renders with a Report affordance for a signed-in viewer',
       (tester) async {
     final api = _ConditionsApi();

@@ -12692,18 +12692,6 @@ abstract class AppLocalizations {
   /// **'Report reply'**
   String get runSocialReportReply;
 
-  /// Confirm dialog title before deleting a run comment
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this comment?'**
-  String get runSocialDeleteCommentTitle;
-
-  /// Confirm dialog body before deleting a run comment
-  ///
-  /// In en, this message translates to:
-  /// **'This comment will be permanently removed. This can\'t be undone.'**
-  String get runSocialDeleteCommentMessage;
-
   /// Button to post a comment
   ///
   /// In en, this message translates to:
@@ -16682,18 +16670,6 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get nutritionDelete;
 
-  /// No description provided for @nutritionDeleteEntryTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this entry?'**
-  String get nutritionDeleteEntryTitle;
-
-  /// Confirm dialog body before deleting a logged food entry
-  ///
-  /// In en, this message translates to:
-  /// **'{item} will be removed from today\'s log.'**
-  String nutritionDeleteEntryMessage(String item);
-
   /// Banner when deleting a logged food entry fails
   ///
   /// In en, this message translates to:
@@ -19136,18 +19112,6 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get routeConditionsDelete;
 
-  /// Title of the delete-condition confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete report?'**
-  String get routeConditionsDeleteTitle;
-
-  /// Body of the delete-condition confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'This removes the condition report permanently.'**
-  String get routeConditionsDeleteConfirm;
-
   /// Error banner when deleting a condition report fails
   ///
   /// In en, this message translates to:
@@ -19951,24 +19915,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove'**
   String get gymEditorRemoveExerciseConfirm;
-
-  /// Title of the wear-log delete confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this note?'**
-  String get gearWearLogDeleteTitle;
-
-  /// Body of the wear-log delete confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'This wear-log note will be permanently deleted.'**
-  String get gearWearLogDeleteBody;
-
-  /// Confirm button of the wear-log delete dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete'**
-  String get gearWearLogDeleteConfirm;
 
   /// Error when the submit-time sheet fails to load recent runs
   ///
@@ -21043,6 +20989,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{Notification dismissed} other{{count} notifications dismissed}}'**
   String undoDismissed(int count);
+
+  /// Undo bar sentence after removing a route condition report
+  ///
+  /// In en, this message translates to:
+  /// **'Condition report removed'**
+  String get routeConditionsRemoved;
+
+  /// Undo bar sentence after removing a gear wear-log observation
+  ///
+  /// In en, this message translates to:
+  /// **'Observation removed'**
+  String get gearWearLogRemoved;
+
+  /// Undo bar sentence after removing a logged food entry
+  ///
+  /// In en, this message translates to:
+  /// **'{item} removed'**
+  String nutritionEntryRemoved(String item);
+
+  /// Undo bar sentence after removing a run comment or reply
+  ///
+  /// In en, this message translates to:
+  /// **'Comment removed'**
+  String get runSocialCommentRemoved;
 }
 
 class _AppLocalizationsDelegate

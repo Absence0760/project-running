@@ -13,6 +13,7 @@ import '../lib/local_food_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/nutrition_screen.dart';
 import '../lib/screens/settings_body_metrics_screen.dart';
+import '../lib/widgets/undo_bar.dart';
 
 class _OfflineFakeApi extends ApiClient {
   @override
@@ -65,6 +66,13 @@ Future<void> _pumpUntil(
   }
 }
 
+/// Close the armed undo window so the deferred commit runs. The delete tap
+/// itself must NOT be wrapped in `runAsync` any more — deferring means no store
+/// I/O happens at tap time, and a timer armed in the real zone could not be
+/// advanced by `pump` at all.
+Future<void> _closeUndoWindow(WidgetTester tester) =>
+    tester.pump(const Duration(seconds: 9));
+
 Widget _app(LocalFoodStore store, {double textScale = 1.0}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -81,6 +89,7 @@ void main() {
 
   setUpAll(() => initializeDateFormatting());
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  tearDown(debugResetUndo);
 
   testWidgets('renders the empty state when nothing is logged today',
       (tester) async {
@@ -145,9 +154,13 @@ void main() {
     }
   });
 
-  testWidgets('deleting an entry asks to confirm; Cancel keeps it',
+  // Issue #666 U8, mobile half: the food entry is the app's most frequently
+  // deleted row and is re-typed in seconds, so it dropped its confirm for a
+  // deferred, undoable delete (decisions § 514). These three tests replace the
+  // confirm / cancel / confirm-then-remove trio that pinned the old shape.
+  testWidgets('deleting an entry offers Undo and does NOT touch the store',
       (tester) async {
-    final f = await _store('del_cancel_');
+    final f = await _store('del_defer_');
     await tester.runAsync(() => f.store.createLocal(
           startedAt: DateTime.now(),
           itemName: 'Oats',
@@ -160,20 +173,52 @@ void main() {
       expect(find.text('Oats'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Delete'));
-      await tester.pumpAndSettle();
-      expect(find.text('Delete this entry?'), findsOneWidget);
+      await tester.pump();
 
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing,
+          reason: 'confirm and undo are alternatives, not partners');
+      expect(find.text('Oats'), findsNothing, reason: 'it leaves the list now');
+      expect(find.text('Oats removed'), findsOneWidget);
+      expect(f.store.rows.length, 1,
+          reason: 'nothing is destroyed while undo is on offer');
+      await _closeUndoWindow(tester);
+      await _pumpUntil(tester, () => f.store.rows.isEmpty);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('Undo puts the entry back with its stored row untouched',
+      (tester) async {
+    final f = await _store('del_undo_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    final before = Map<String, dynamic>.from(f.store.rows.single);
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pump();
+      await tester.tap(find.text('Undo'));
+      await tester.pump();
+
       expect(find.text('Oats'), findsOneWidget);
+      expect(f.store.rows.single, before,
+          reason: 'the row comes back byte-identical — it never left');
+      // The window is cancelled, so no timer is left to drain.
+      await tester.pump(const Duration(seconds: 9));
       expect(f.store.rows.length, 1);
     } finally {
       f.dir.deleteSync(recursive: true);
     }
   });
 
-  testWidgets('deleting an entry → confirm removes it', (tester) async {
-    final f = await _store('del_confirm_');
+  testWidgets('the window closing commits the delete for real', (tester) async {
+    final f = await _store('del_commit_');
     await tester.runAsync(() => f.store.createLocal(
           startedAt: DateTime.now(),
           itemName: 'Oats',
@@ -183,26 +228,10 @@ void main() {
     try {
       await tester.pumpWidget(_app(f.store));
       await tester.pump();
-
-      // _delete (and the deleteLocal file I/O it awaits after the confirm)
-      // is anchored to the zone the row tap fires in, so both taps run
-      // under runAsync; real I/O only resolves there.
-      await tester.runAsync(() async {
-        await tester.tap(find.byTooltip('Delete'));
-      });
-      await tester.pumpAndSettle();
-      expect(find.text('Delete this entry?'), findsOneWidget);
-
-      final confirm = find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.widgetWithText(TextButton, 'Delete'),
-      );
-      await tester.runAsync(() async {
-        await tester.tap(confirm);
-      });
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pump();
+      await _closeUndoWindow(tester);
       await _pumpUntil(tester, () => f.store.rows.isEmpty);
-      await tester.pumpAndSettle();
-
       expect(find.text('Oats'), findsNothing);
       expect(f.store.rows.length, 0);
     } finally {
@@ -210,7 +239,8 @@ void main() {
     }
   });
 
-  testWidgets('a failed entry delete surfaces an error banner', (tester) async {
+  testWidgets('a failed commit restores the entry and surfaces a banner',
+      (tester) async {
     final dir =
         Directory.systemTemp.createTempSync('nutrition_screen_del_fail_');
     final store = _ThrowingDeleteFoodStore();
@@ -225,24 +255,15 @@ void main() {
       await tester.pumpWidget(_app(store));
       await tester.pump();
 
-      await tester.runAsync(() async {
-        await tester.tap(find.byTooltip('Delete'));
-      });
-      await tester.pumpAndSettle();
-      expect(find.text('Delete this entry?'), findsOneWidget);
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pump();
+      expect(find.text('Oats'), findsNothing);
 
-      final confirm = find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.widgetWithText(TextButton, 'Delete'),
-      );
-      await tester.runAsync(() async {
-        await tester.tap(confirm);
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      });
+      // Let the window close so the commit runs and throws.
+      await _closeUndoWindow(tester);
       await tester.pump();
 
-      // The delete threw; the entry is still listed and an error banner shows
-      // (rather than the failure being swallowed silently).
+      // A list must never claim a row is gone while the store still holds it.
       expect(find.text('Oats'), findsOneWidget);
       expect(
         find.textContaining("Couldn’t delete the entry"),
@@ -276,7 +297,7 @@ void main() {
     );
   });
 
-  testWidgets('name dialog dismiss releases focus before the delete dialog',
+  testWidgets('name dialog dismiss releases focus before the delete affordance',
       (tester) async {
     final f = await _store('focus_leak_');
     final pp = Directory.systemTemp.createTempSync('nutrition_focus_pp_');
@@ -305,15 +326,20 @@ void main() {
       expect(FocusManager.instance.primaryFocus?.context?.widget,
           isNot(isA<EditableText>()));
 
-      // Now the plain delete confirmation must not bring the keyboard back.
+      // Now the delete interaction must not bring the keyboard back. It is an
+      // undo pill rather than a confirm dialog since round 13, but the
+      // property this test exists for is unchanged: the field-less surface
+      // that follows a dismissed name dialog must not resurface the IME.
       await tester.tap(find.byTooltip('Delete'));
-      await tester.pumpAndSettle();
-      expect(find.text('Delete this entry?'), findsOneWidget);
+      await tester.pump();
+      expect(find.text('Oats removed'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
       expect(tester.testTextInput.isVisible, isFalse);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('Undo'));
+      await tester.pump();
+      // Drain the Restored banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 5));
     } finally {
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);

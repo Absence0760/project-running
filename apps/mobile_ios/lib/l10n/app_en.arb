@@ -10258,14 +10258,6 @@
   "@runSocialReportReply": {
     "description": "Accessibility label / tooltip on the flag button of another user's reply"
   },
-  "runSocialDeleteCommentTitle": "Delete this comment?",
-  "@runSocialDeleteCommentTitle": {
-    "description": "Confirm dialog title before deleting a run comment"
-  },
-  "runSocialDeleteCommentMessage": "This comment will be permanently removed. This can't be undone.",
-  "@runSocialDeleteCommentMessage": {
-    "description": "Confirm dialog body before deleting a run comment"
-  },
   "runSocialPost": "Post",
   "@runSocialPost": {
     "description": "Button to post a comment"
@@ -13069,16 +13061,6 @@
     "description": "Per-meal nutrition detail screen"
   },
   "nutritionDelete": "Delete",
-  "nutritionDeleteEntryTitle": "Delete this entry?",
-  "nutritionDeleteEntryMessage": "{item} will be removed from today's log.",
-  "@nutritionDeleteEntryMessage": {
-    "description": "Confirm dialog body before deleting a logged food entry",
-    "placeholders": {
-      "item": {
-        "type": "String"
-      }
-    }
-  },
   "nutritionDeleteFailed": "Couldn’t delete the entry: {error}",
   "@nutritionDeleteFailed": {
     "description": "Banner when deleting a logged food entry fails",
@@ -14987,14 +14969,6 @@
   "@routeConditionsDelete": {
     "description": "Delete a condition report"
   },
-  "routeConditionsDeleteTitle": "Delete report?",
-  "@routeConditionsDeleteTitle": {
-    "description": "Title of the delete-condition confirmation dialog"
-  },
-  "routeConditionsDeleteConfirm": "This removes the condition report permanently.",
-  "@routeConditionsDeleteConfirm": {
-    "description": "Body of the delete-condition confirmation dialog"
-  },
   "routeConditionsDeleteFailed": "Could not delete report",
   "@routeConditionsDeleteFailed": {
     "description": "Error banner when deleting a condition report fails"
@@ -15579,18 +15553,6 @@
   "@gymEditorRemoveExerciseConfirm": {
     "description": "Confirm button of the remove-exercise dialog"
   },
-  "gearWearLogDeleteTitle": "Delete this note?",
-  "@gearWearLogDeleteTitle": {
-    "description": "Title of the wear-log delete confirmation dialog"
-  },
-  "gearWearLogDeleteBody": "This wear-log note will be permanently deleted.",
-  "@gearWearLogDeleteBody": {
-    "description": "Body of the wear-log delete confirmation dialog"
-  },
-  "gearWearLogDeleteConfirm": "Delete",
-  "@gearWearLogDeleteConfirm": {
-    "description": "Confirm button of the wear-log delete dialog"
-  },
   "eventSubmitRunsLoadError": "Couldn't load your recent runs.",
   "@eventSubmitRunsLoadError": {
     "description": "Error when the submit-time sheet fails to load recent runs"
@@ -16009,5 +15971,26 @@
         "type": "int"
       }
     }
+  },
+  "routeConditionsRemoved": "Condition report removed",
+  "@routeConditionsRemoved": {
+    "description": "Undo bar sentence after removing a route condition report"
+  },
+  "gearWearLogRemoved": "Observation removed",
+  "@gearWearLogRemoved": {
+    "description": "Undo bar sentence after removing a gear wear-log observation"
+  },
+  "nutritionEntryRemoved": "{item} removed",
+  "@nutritionEntryRemoved": {
+    "description": "Undo bar sentence after removing a logged food entry",
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "runSocialCommentRemoved": "Comment removed",
+  "@runSocialCommentRemoved": {
+    "description": "Undo bar sentence after removing a run comment or reply"
   }
 }

@@ -7296,12 +7296,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runSocialReportReply => '返信を報告';
 
   @override
-  String get runSocialDeleteCommentTitle => 'このコメントを削除しますか？';
-
-  @override
-  String get runSocialDeleteCommentMessage => 'このコメントは完全に削除されます。元に戻せません。';
-
-  @override
   String get runSocialPost => '投稿';
 
   @override
@@ -9551,14 +9545,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionDelete => '削除';
 
   @override
-  String get nutritionDeleteEntryTitle => 'この項目を削除しますか？';
-
-  @override
-  String nutritionDeleteEntryMessage(String item) {
-    return '$item を今日の記録から削除します。';
-  }
-
-  @override
   String nutritionDeleteFailed(String error) {
     return 'エントリーを削除できませんでした: $error';
   }
@@ -10934,12 +10920,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeConditionsDelete => '削除';
 
   @override
-  String get routeConditionsDeleteTitle => '報告を削除しますか？';
-
-  @override
-  String get routeConditionsDeleteConfirm => 'コンディション報告を完全に削除します。';
-
-  @override
   String get routeConditionsDeleteFailed => '報告を削除できませんでした';
 
   @override
@@ -11383,15 +11363,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gymEditorRemoveExerciseConfirm => '削除';
-
-  @override
-  String get gearWearLogDeleteTitle => 'このメモを削除しますか？';
-
-  @override
-  String get gearWearLogDeleteBody => 'この摩耗メモは完全に削除されます。';
-
-  @override
-  String get gearWearLogDeleteConfirm => '削除';
 
   @override
   String get eventSubmitRunsLoadError => '最近のランを読み込めませんでした。';
@@ -12004,4 +11975,18 @@ class AppLocalizationsJa extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get routeConditionsRemoved => 'コンディション報告を削除しました';
+
+  @override
+  String get gearWearLogRemoved => '記録を削除しました';
+
+  @override
+  String nutritionEntryRemoved(String item) {
+    return '$itemを削除しました';
+  }
+
+  @override
+  String get runSocialCommentRemoved => 'コメントを削除しました';
 }

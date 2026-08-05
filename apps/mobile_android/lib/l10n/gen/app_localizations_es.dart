@@ -7713,13 +7713,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runSocialReportReply => 'Denunciar respuesta';
 
   @override
-  String get runSocialDeleteCommentTitle => '¿Eliminar este comentario?';
-
-  @override
-  String get runSocialDeleteCommentMessage =>
-      'Este comentario se eliminará de forma permanente. No se puede deshacer.';
-
-  @override
   String get runSocialPost => 'Publicar';
 
   @override
@@ -10053,14 +10046,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get nutritionDelete => 'Eliminar';
 
   @override
-  String get nutritionDeleteEntryTitle => '¿Eliminar esta entrada?';
-
-  @override
-  String nutritionDeleteEntryMessage(String item) {
-    return '$item se eliminará del registro de hoy.';
-  }
-
-  @override
   String nutritionDeleteFailed(String error) {
     return 'No se pudo eliminar la entrada: $error';
   }
@@ -11475,13 +11460,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get routeConditionsDelete => 'Eliminar';
 
   @override
-  String get routeConditionsDeleteTitle => '¿Eliminar reporte?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'Esto elimina el reporte de forma permanente.';
-
-  @override
   String get routeConditionsDeleteFailed => 'No se pudo eliminar el reporte';
 
   @override
@@ -11936,16 +11914,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get gymEditorRemoveExerciseConfirm => 'Quitar';
-
-  @override
-  String get gearWearLogDeleteTitle => '¿Eliminar esta nota?';
-
-  @override
-  String get gearWearLogDeleteBody =>
-      'Esta nota de desgaste se eliminará permanentemente.';
-
-  @override
-  String get gearWearLogDeleteConfirm => 'Eliminar';
 
   @override
   String get eventSubmitRunsLoadError =>
@@ -12590,4 +12558,18 @@ class AppLocalizationsEs extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get routeConditionsRemoved => 'Informe de estado eliminado';
+
+  @override
+  String get gearWearLogRemoved => 'Observación eliminada';
+
+  @override
+  String nutritionEntryRemoved(String item) {
+    return '$item eliminado';
+  }
+
+  @override
+  String get runSocialCommentRemoved => 'Comentario eliminado';
 }

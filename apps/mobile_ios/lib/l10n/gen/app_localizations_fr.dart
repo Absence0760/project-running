@@ -7733,13 +7733,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runSocialReportReply => 'Signaler la réponse';
 
   @override
-  String get runSocialDeleteCommentTitle => 'Supprimer ce commentaire ?';
-
-  @override
-  String get runSocialDeleteCommentMessage =>
-      'Ce commentaire sera définitivement supprimé. Cette action est irréversible.';
-
-  @override
   String get runSocialPost => 'Publier';
 
   @override
@@ -10077,14 +10070,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nutritionDelete => 'Supprimer';
 
   @override
-  String get nutritionDeleteEntryTitle => 'Supprimer cette entrée ?';
-
-  @override
-  String nutritionDeleteEntryMessage(String item) {
-    return '$item sera retiré du journal d\'aujourd\'hui.';
-  }
-
-  @override
   String nutritionDeleteFailed(String error) {
     return 'Impossible de supprimer l’entrée : $error';
   }
@@ -11498,13 +11483,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get routeConditionsDelete => 'Supprimer';
 
   @override
-  String get routeConditionsDeleteTitle => 'Supprimer le signalement ?';
-
-  @override
-  String get routeConditionsDeleteConfirm =>
-      'Cela supprime définitivement le signalement.';
-
-  @override
   String get routeConditionsDeleteFailed =>
       'Impossible de supprimer le signalement';
 
@@ -11962,16 +11940,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gymEditorRemoveExerciseConfirm => 'Supprimer';
-
-  @override
-  String get gearWearLogDeleteTitle => 'Supprimer cette note ?';
-
-  @override
-  String get gearWearLogDeleteBody =>
-      'Cette note d\'usure sera définitivement supprimée.';
-
-  @override
-  String get gearWearLogDeleteConfirm => 'Supprimer';
 
   @override
   String get eventSubmitRunsLoadError =>
@@ -12619,4 +12587,18 @@ class AppLocalizationsFr extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get routeConditionsRemoved => 'Signalement supprimé';
+
+  @override
+  String get gearWearLogRemoved => 'Observation supprimée';
+
+  @override
+  String nutritionEntryRemoved(String item) {
+    return '$item supprimé';
+  }
+
+  @override
+  String get runSocialCommentRemoved => 'Commentaire supprimé';
 }

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/profile_screen.dart';
 import '../lib/widgets/run_social_section.dart';
+import '../lib/widgets/undo_bar.dart';
 
 /// Renders the viewer's own comment (so the delete affordance shows)
 /// and records delete calls, with [throwOnDelete] to drive the error
@@ -242,6 +243,8 @@ RunCommentWithAuthor _comment(
 );
 
 void main() {
+  tearDown(debugResetUndo);
+
   setUpAll(_ensureSupabase);
 
   group('RunSocialSection — initial render', () {
@@ -510,7 +513,10 @@ void main() {
     });
   });
 
-  group('RunSocialSection — delete comment confirm', () {
+  // Issue #666 U8, mobile half: the comment delete dropped its confirm for a
+  // deferred, undoable mutation (decisions § 514). One behaviour serves both the
+  // author's own delete and the run owner's moderation delete.
+  group('RunSocialSection — delete comment offers undo', () {
     Future<void> pumpLoaded(WidgetTester tester, _CommentApi api) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -524,12 +530,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    Finder confirmDelete() => find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.widgetWithText(TextButton, 'Delete'),
-    );
-
-    testWidgets('Cancel keeps the comment and never calls delete', (
+    testWidgets('the comment leaves the list and the delete is held', (
       tester,
     ) async {
       final api = _CommentApi();
@@ -537,38 +538,50 @@ void main() {
       expect(find.text('e2e-comment-body'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(TextButton, 'Delete'));
-      await tester.pumpAndSettle();
-      expect(find.text('Delete this comment?'), findsOneWidget);
+      await tester.pump();
 
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-      await tester.pumpAndSettle();
-      expect(api.deleteCalls, 0);
-      expect(find.text('e2e-comment-body'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing,
+          reason: 'confirm and undo are alternatives, not partners');
+      expect(find.text('e2e-comment-body'), findsNothing);
+      expect(find.text('Comment removed'), findsOneWidget);
+      expect(api.deleteCalls, 0,
+          reason: 'the CASCADE has not run, which is what makes undo honest');
+
+      await tester.pump(const Duration(seconds: 9));
+      expect(api.deleteCalls, 1);
     });
 
-    testWidgets('Confirm deletes the comment', (tester) async {
+    testWidgets('Undo restores the comment and never calls delete', (
+      tester,
+    ) async {
       final api = _CommentApi();
       await pumpLoaded(tester, api);
 
       await tester.tap(find.widgetWithText(TextButton, 'Delete'));
-      await tester.pumpAndSettle();
-      await tester.tap(confirmDelete());
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.tap(find.text('Undo'));
+      await tester.pump();
 
-      expect(api.deleteCalls, 1);
-      expect(find.text('e2e-comment-body'), findsNothing);
+      expect(api.deleteCalls, 0);
+      expect(find.text('e2e-comment-body'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 9));
+      expect(api.deleteCalls, 0);
+      // Drain the Restored banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
     });
 
-    testWidgets('a failed delete surfaces a banner and keeps the comment', (
+    testWidgets('a failed commit restores the comment and surfaces a banner', (
       tester,
     ) async {
       final api = _CommentApi(throwOnDelete: true);
       await pumpLoaded(tester, api);
 
       await tester.tap(find.widgetWithText(TextButton, 'Delete'));
-      await tester.pumpAndSettle();
-      await tester.tap(confirmDelete());
-      await tester.pumpAndSettle();
+      await tester.pump();
+      expect(find.text('e2e-comment-body'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pump();
 
       expect(api.deleteCalls, 1);
       expect(find.text('e2e-comment-body'), findsOneWidget);
