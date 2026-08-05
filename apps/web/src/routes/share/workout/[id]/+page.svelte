@@ -4,6 +4,13 @@
 	import SharePageShell from '$lib/components/SharePageShell.svelte';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import { formatDateStable } from '$lib/share/share_meta';
+	import {
+		buildWorkoutJsonLd,
+		buildWorkoutShareCanonical,
+		buildWorkoutShareDescription,
+		buildWorkoutShareTitle,
+		distinctExerciseCount
+	} from '$lib/share/share_workout_meta';
 	import type { SharedWorkoutSet } from '$lib/share/share_workout_lookup';
 
 	let { data } = $props();
@@ -13,17 +20,15 @@
 	let heroTitle = $derived((data.workout?.title ?? '').trim());
 	let heroDate = $derived(formatDateStable(data.workout?.started_at));
 
-	let title = $derived(
-		heroTitle
-			? `${heroTitle} — Threkir`
-			: athlete
-				? `${m('shareWorkout.heroAthleteWorkout', { name: athlete })} — Threkir`
-				: `${m('shareWorkout.heroPublicWorkout')} — Threkir`
-	);
-	let description = $derived(
-		hasWorkout
-			? `${data.workout!.set_count ?? 0} sets · ${formatWeight(data.workout!.volume_kg ?? 0)}`
-			: m('shareWorkout.notFoundSub')
+	let title = $derived(buildWorkoutShareTitle(data.workout, data.displayName));
+	let description = $derived(buildWorkoutShareDescription(data.workout, data.displayName));
+	let canonicalUrl = $derived(buildWorkoutShareCanonical(data.siteUrl, data.id));
+	let jsonLd = $derived(
+		buildWorkoutJsonLd(data.workout, {
+			id: data.id,
+			base: data.siteUrl,
+			displayName: data.displayName
+		})
 	);
 
 	// Group the public sets into exercise blocks in set_index order — same
@@ -39,9 +44,7 @@
 		return out;
 	});
 
-	let exerciseCount = $derived(
-		new Set((data.workout?.sets ?? []).map((s) => s.exercise_name.trim().toLowerCase())).size
-	);
+	let exerciseCount = $derived(distinctExerciseCount(data.workout?.sets ?? []));
 
 	function setSummary(s: SharedWorkoutSet): string {
 		const parts: string[] = [];
@@ -59,13 +62,20 @@
 <svelte:head>
 	<title>{title}</title>
 	<meta name="description" content={description} />
+	<link rel="canonical" href={canonicalUrl} />
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
 	<meta property="og:type" content="article" />
+	<meta property="og:url" content={canonicalUrl} />
 	<meta property="og:site_name" content="Threkir" />
-	<meta name="twitter:card" content="summary" />
+	<meta property="og:image" content="/og-default.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
+	<meta name="twitter:image" content="/og-default.png" />
+	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
 <SharePageShell>
