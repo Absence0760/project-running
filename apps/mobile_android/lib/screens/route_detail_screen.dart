@@ -37,6 +37,7 @@ import '../tile_pack.dart' show TileBbox;
 import '../watch_course.dart';
 import '../watch_roadbook.dart';
 import 'roadbook_screen.dart';
+import '../widgets/app_bar_actions.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
 import '../widgets/report_sheet.dart';
@@ -913,133 +914,150 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           : null,
       appBar: AppBar(
         title: Text(route.name),
+        // Six concurrent owner actions left a measured 0dp of a 360dp toolbar
+        // for the route's name. Share stays pinned (it is itself a menu, and
+        // menus don't nest), one action earns the remaining slot, the rest
+        // fold into the overflow — the policy `run_detail_screen` follows.
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.ios_share),
-            tooltip: l10n.routeDetailShare,
-            onSelected: (fmt) => switch (fmt) {
-              'link' => _shareLink(context),
-              'watch' => _sendCourseToWatch(),
-              'apple_watch' => _sendRouteToAppleWatch(),
-              _ => _shareAs(context, fmt),
-            },
-            itemBuilder: (_) => [
-              // "Share link" is the intuitive send-to-someone path: it hands
-              // the public /share/route/[id] URL to the OS share sheet. Shown
-              // only when the route is already public or the viewer owns it
-              // (an owner's tap flips it public first) — otherwise the link
-              // would resolve to nothing for the recipient.
-              if (_isPublic || _isOwner)
-                PopupMenuItem(
-                    value: 'link', child: Text(l10n.routeDetailShareLink)),
-              PopupMenuItem(
-                  value: 'image', child: Text(l10n.routeDetailShareAsImage)),
-              PopupMenuItem(value: 'gpx', child: Text(l10n.routeDetailShareAsGpx)),
-              PopupMenuItem(
-                  value: 'gpx_markers',
-                  child: Text(l10n.routeDetailShareAsGpxMarkers)),
-              PopupMenuItem(value: 'kml', child: Text(l10n.routeDetailShareAsKml)),
-              // The custom watch is research-tier with no unit in a runner's
-              // hands, so this stays behind the loopback-backend rail the Sim
-              // Watch link uses rather than promising every user a device that
-              // does not exist (decisions §71, §209).
-              if (_watchPushAvailable && !_watchPushBusy)
-                PopupMenuItem(
-                    value: 'watch', child: Text(l10n.routeDetailSendToWatch)),
-              if (_appleWatchAvailable && !_appleWatchPushBusy)
-                PopupMenuItem(
-                    value: 'apple_watch',
-                    child: Text(l10n.routeDetailSendToAppleWatch)),
+          AppBarActions(
+            pinned: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.ios_share),
+                tooltip: l10n.routeDetailShare,
+                onSelected: (fmt) => switch (fmt) {
+                  'link' => _shareLink(context),
+                  'watch' => _sendCourseToWatch(),
+                  'apple_watch' => _sendRouteToAppleWatch(),
+                  _ => _shareAs(context, fmt),
+                },
+                itemBuilder: (_) => [
+                  // "Share link" is the intuitive send-to-someone path: it
+                  // hands the public /share/route/[id] URL to the OS share
+                  // sheet. Shown only when the route is already public or the
+                  // viewer owns it (an owner's tap flips it public first) —
+                  // otherwise the link would resolve to nothing for the
+                  // recipient.
+                  if (_isPublic || _isOwner)
+                    PopupMenuItem(
+                        value: 'link', child: Text(l10n.routeDetailShareLink)),
+                  PopupMenuItem(
+                      value: 'image',
+                      child: Text(l10n.routeDetailShareAsImage)),
+                  PopupMenuItem(
+                      value: 'gpx', child: Text(l10n.routeDetailShareAsGpx)),
+                  PopupMenuItem(
+                      value: 'gpx_markers',
+                      child: Text(l10n.routeDetailShareAsGpxMarkers)),
+                  PopupMenuItem(
+                      value: 'kml', child: Text(l10n.routeDetailShareAsKml)),
+                  // The custom watch is research-tier with no unit in a
+                  // runner's hands, so this stays behind the loopback-backend
+                  // rail the Sim Watch link uses rather than promising every
+                  // user a device that does not exist (decisions §71, §209).
+                  if (_watchPushAvailable && !_watchPushBusy)
+                    PopupMenuItem(
+                        value: 'watch',
+                        child: Text(l10n.routeDetailSendToWatch)),
+                  if (_appleWatchAvailable && !_appleWatchPushBusy)
+                    PopupMenuItem(
+                        value: 'apple_watch',
+                        child: Text(l10n.routeDetailSendToAppleWatch)),
+                ],
+              ),
+            ],
+            actions: [
+              // A viewer who does not own the route came to keep it, so the
+              // bookmark leads for them; an owner already has it and reaches
+              // for the offline pin before a run instead.
+              if (!widget.isOwner &&
+                  widget.apiClient != null &&
+                  widget.apiClient!.userId != null)
+                AppBarAction(
+                  icon: Icon(
+                    (_bookmarked ?? false)
+                        ? Icons.bookmark
+                        : Icons.bookmark_border,
+                  ),
+                  label: (_bookmarked ?? false)
+                      ? l10n.routeDetailRemoveBookmark
+                      : l10n.routeDetailBookmarkRoute,
+                  onPressed: _bookmarkBusy ? null : _toggleBookmark,
+                ),
+              // Offline-pin affordance — local-only flag (never synced).
+              // Also surfaces an inline tile below for discoverability.
+              AppBarAction(
+                icon: Icon(_isOfflinePinned
+                    ? Icons.download_done
+                    : Icons.download_outlined),
+                iconColor: _isOfflinePinned
+                    ? semantic.success
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                label: _isOfflinePinned
+                    ? l10n.routeDetailRemoveOfflineSave
+                    : l10n.routeDetailSaveForOffline,
+                onPressed: _offlinePinBusy ? null : _toggleOfflinePin,
+              ),
+              if (_isOwner)
+                AppBarAction(
+                  icon: Icon(_isStarred ? Icons.star : Icons.star_border),
+                  iconColor: _isStarred
+                      ? semantic.crown
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                  label: _isStarred
+                      ? l10n.routeDetailUnstarRoute
+                      : l10n.routeDetailStarForWatch,
+                  onPressed: _starBusy ? null : _toggleStar,
+                ),
+              // Show the visibility toggle whenever the local store
+              // considers the viewer to own this route — regardless of
+              // signed-in state. _togglePublic itself handles the
+              // signed-out path (writes local + queues for sync) so the
+              // user surfaces the affordance they expect to see and
+              // ALSO doesn't lose the toggle on a network hiccup.
+              if (widget.isOwner)
+                AppBarAction(
+                  icon: Icon(_isPublic ? Icons.public : Icons.public_off),
+                  label: _isPublic
+                      ? l10n.routeDetailMakePrivate
+                      : l10n.routeDetailMakePublic,
+                  onPressed: _publicBusy ? null : _togglePublic,
+                ),
+              if (_isOwner)
+                AppBarAction(
+                  icon: _transferBusy
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(_clubId == null
+                          ? Icons.group_add_outlined
+                          : Icons.group),
+                  label: _clubId == null
+                      ? l10n.routeDetailTransferToClub
+                      : l10n.routeDetailManageClub,
+                  onPressed: _transferBusy ? null : _transferToClub,
+                ),
+              if (!widget.isOwner && widget.apiClient != null)
+                AppBarAction(
+                  icon: const Icon(Icons.flag_outlined),
+                  label: l10n.routeDetailReportRoute,
+                  onPressed: () => showReportSheet(
+                    context,
+                    api: widget.apiClient!,
+                    targetKind: 'route',
+                    targetId: route.id,
+                  ),
+                ),
+              if (_isOwner)
+                AppBarAction(
+                  icon: const Icon(Icons.delete_outline),
+                  label: l10n.routeDetailDeleteRoute,
+                  destructive: true,
+                  onPressed: () => _confirmDelete(context),
+                ),
             ],
           ),
-          // Offline-pin affordance — local-only flag (never synced).
-          // Surfaces an inline tile below for discoverability and the
-          // AppBar icon here so it sits next to the star (which gates
-          // watch sync) — the two together read as "what stays where".
-          IconButton(
-            icon: Icon(
-              _isOfflinePinned ? Icons.download_done : Icons.download_outlined,
-              color: _isOfflinePinned
-                  ? semantic.success
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            tooltip: _isOfflinePinned
-                ? l10n.routeDetailRemoveOfflineSave
-                : l10n.routeDetailSaveForOffline,
-            onPressed: _offlinePinBusy ? null : _toggleOfflinePin,
-          ),
-          if (_isOwner)
-            IconButton(
-              icon: Icon(
-                _isStarred ? Icons.star : Icons.star_border,
-                color: _isStarred
-                    ? semantic.crown
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              tooltip: _isStarred
-                  ? l10n.routeDetailUnstarRoute
-                  : l10n.routeDetailStarForWatch,
-              onPressed: _starBusy ? null : _toggleStar,
-            ),
-          // Show the visibility toggle whenever the local store
-          // considers the viewer to own this route — regardless of
-          // signed-in state. _togglePublic itself handles the
-          // signed-out path (writes local + queues for sync) so the
-          // user surfaces the affordance they expect to see and
-          // ALSO doesn't lose the toggle on a network hiccup.
-          if (widget.isOwner)
-            IconButton(
-              icon: Icon(_isPublic ? Icons.public : Icons.public_off),
-              tooltip: _isPublic
-                  ? l10n.routeDetailMakePrivate
-                  : l10n.routeDetailMakePublic,
-              onPressed: _publicBusy ? null : _togglePublic,
-            ),
-          if (!widget.isOwner &&
-              widget.apiClient != null &&
-              widget.apiClient!.userId != null)
-            IconButton(
-              icon: Icon(
-                (_bookmarked ?? false) ? Icons.bookmark : Icons.bookmark_border,
-              ),
-              tooltip: (_bookmarked ?? false)
-                  ? l10n.routeDetailRemoveBookmark
-                  : l10n.routeDetailBookmarkRoute,
-              onPressed: _bookmarkBusy ? null : _toggleBookmark,
-            ),
-          if (!widget.isOwner && widget.apiClient != null)
-            IconButton(
-              tooltip: l10n.routeDetailReportRoute,
-              icon: const Icon(Icons.flag_outlined),
-              onPressed: () => showReportSheet(
-                context,
-                api: widget.apiClient!,
-                targetKind: 'route',
-                targetId: route.id,
-              ),
-            ),
-          if (_isOwner)
-            IconButton(
-              icon: _transferBusy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(_clubId == null
-                      ? Icons.group_add_outlined
-                      : Icons.group),
-              tooltip: _clubId == null
-                  ? l10n.routeDetailTransferToClub
-                  : l10n.routeDetailManageClub,
-              onPressed: _transferBusy ? null : _transferToClub,
-            ),
-          if (_isOwner)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: l10n.routeDetailDeleteRoute,
-              onPressed: () => _confirmDelete(context),
-            ),
         ],
       ),
       body: SafeArea(

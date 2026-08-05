@@ -11934,4 +11934,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get commonLoading => '読み込み中…';
+
+  @override
+  String get commonMore => 'その他';
 }

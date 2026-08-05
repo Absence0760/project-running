@@ -114,6 +114,19 @@ Future<void> _pumpScreen(WidgetTester tester, SimWatchLink link) {
   );
 }
 
+/// Taps the toolbar action carrying [icon]. The Sim Watch toolbar keeps two
+/// actions visible and folds the rest into an overflow menu (issue #666 C4),
+/// so an action that is not on the toolbar is reached through it.
+Future<void> _tapAction(WidgetTester tester, IconData icon) async {
+  if (tester.any(find.byIcon(icon))) {
+    await tester.tap(find.byIcon(icon));
+    return;
+  }
+  await tester.tap(find.byTooltip('More'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byIcon(icon));
+}
+
 const _fix = SimWatchFix(
   lat: 40.015,
   lon: -105.2705,
@@ -276,7 +289,7 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byIcon(Icons.sync));
+      await _tapAction(tester, Icons.sync);
       await tester.pump();
       // The pull is real-async (broadcast stream + completers); let the event
       // loop drain it (pumpAndSettle would hang on the sync spinner).
@@ -307,7 +320,7 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byIcon(Icons.tune));
+      await _tapAction(tester, Icons.tune);
       await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -358,7 +371,7 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byIcon(Icons.checklist));
+      await _tapAction(tester, Icons.checklist);
       await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -402,7 +415,7 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byIcon(Icons.dashboard_customize));
+      await _tapAction(tester, Icons.dashboard_customize);
       await tester.pumpAndSettle();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -428,7 +441,7 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byIcon(Icons.route));
+      await _tapAction(tester, Icons.route);
       await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -473,7 +486,7 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byIcon(Icons.table_chart_outlined));
+      await _tapAction(tester, Icons.table_chart_outlined);
       await tester.pump();
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),

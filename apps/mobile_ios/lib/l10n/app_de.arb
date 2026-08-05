@@ -3647,5 +3647,6 @@
   "photoLightboxLoading": "Foto wird geladen…",
   "photoLightboxError": "Dieses Foto konnte nicht geladen werden.",
   "photoLightboxErrorHint": "Tippe irgendwo, um zu schließen.",
-  "commonLoading": "Wird geladen…"
+  "commonLoading": "Wird geladen…",
+  "commonMore": "Mehr"
 }

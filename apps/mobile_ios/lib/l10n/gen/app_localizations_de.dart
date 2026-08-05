@@ -12523,4 +12523,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get commonLoading => 'Wird geladen…';
+
+  @override
+  String get commonMore => 'Mehr';
 }

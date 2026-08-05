@@ -12512,6 +12512,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get commonLoading => 'A carregar…';
+
+  @override
+  String get commonMore => 'Mais';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -25017,4 +25020,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get commonLoading => 'Carregando…';
+
+  @override
+  String get commonMore => 'Mais';
 }

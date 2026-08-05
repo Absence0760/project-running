@@ -12544,4 +12544,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get commonLoading => 'Chargement…';
+
+  @override
+  String get commonMore => 'Plus';
 }
