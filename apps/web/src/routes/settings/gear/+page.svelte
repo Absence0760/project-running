@@ -27,6 +27,8 @@
 	import { gearWear } from '$lib/gear/gear_wear';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
+	import { trackDirty } from '$lib/core/form_dirty';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -234,6 +236,18 @@
 		return (m / div).toFixed(0);
 	}
 
+	const dirty = trackDirty(() => ({
+		formName,
+		formBrand,
+		formModel,
+		formPurchased,
+		formTargetDisplay,
+		formNotes,
+		wearNote,
+		wearArea,
+	}));
+	const gearFormDirty = () => (showCreate || editingId !== null) && dirty.isDirty();
+
 	function resetForm() {
 		formName = '';
 		formBrand = '';
@@ -245,6 +259,7 @@
 		wearLogs = [];
 		wearNote = '';
 		wearArea = '';
+		dirty.rebaseline();
 	}
 
 	function openEdit(g: GearWithDistance) {
@@ -258,6 +273,7 @@
 		wearLogs = [];
 		wearNote = '';
 		wearArea = '';
+		dirty.rebaseline();
 		loadWearLogs(g.id);
 	}
 
@@ -672,6 +688,8 @@
 	onconfirm={handleDeleteRotation}
 	oncancel={() => (confirmingRotationDelete = null)}
 />
+
+<UnsavedChangesGuard isDirty={gearFormDirty} />
 
 <Modal
 	open={showCreate || editingId !== null}

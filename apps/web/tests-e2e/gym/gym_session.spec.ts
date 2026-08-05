@@ -264,7 +264,7 @@ test.describe('/gym/session — guided runner', () => {
 		}
 	});
 
-	test('discard via the ConfirmDialog leaves without saving', async ({ page }) => {
+	test('discard from the leave dialog leaves without saving', async ({ page }) => {
 		const admin = getAdminClient();
 		const r = await seedRoutine(Date.now());
 		try {
@@ -274,9 +274,11 @@ test.describe('/gym/session — guided runner', () => {
 			await page.getByTestId('gym-set-reps').fill('5');
 			await page.getByTestId('gym-session-discard').click();
 
-			const dialog = page.getByTestId('gym-discard-dialog');
+			// Abandon shares the three-way leave prompt (keep going / keep draft /
+			// discard) with the navigation guard — decisions.md § 483 / § 493.
+			const dialog = page.getByTestId('gym-leave-dialog');
 			await expect(dialog).toBeVisible({ timeout: 10_000 });
-			await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
+			await page.getByTestId('gym-leave-discard').click();
 
 			// Returns to the routine detail, no workout persisted.
 			await page.waitForURL(new RegExp(`/gym/routines/${r.id}$`), { timeout: 10_000 });

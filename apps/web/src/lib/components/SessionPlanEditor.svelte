@@ -15,6 +15,8 @@
 		type SessionItemKind,
 		type SessionPlanInput as ExpandInput
 	} from '$lib/social/session_steps';
+	import { trackDirty } from '$lib/core/form_dirty';
+	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	interface Props {
 		existing?: SessionPlanWithItems | null;
@@ -88,6 +90,15 @@
 	let items = $state<EditItem[]>(untrack(() => initItems(existing)));
 	let saving = $state(false);
 	let movementSuggestions = $state<string[]>([]);
+
+	const dirty = trackDirty(() => ({
+		title,
+		discipline,
+		equipment,
+		isPublic,
+		blocks: blocks.map((b) => ({ ...b })),
+		items: items.map((i) => ({ ...i })),
+	}));
 
 	onMount(async () => {
 		movementSuggestions = await fetchSessionMovementNames();
@@ -180,10 +191,12 @@
 			if (existing) {
 				await updateSessionPlan(existing.id, input);
 				showToast(t('session.saved'), 'success');
+				dirty.rebaseline();
 				onupdated?.();
 			} else {
 				const id = await createSessionPlan(input);
 				showToast(t('session.saved'), 'success');
+				dirty.rebaseline();
 				oncreated?.(id);
 			}
 		} catch (e) {
@@ -194,6 +207,8 @@
 		}
 	}
 </script>
+
+<UnsavedChangesGuard isDirty={dirty.isDirty} />
 
 <div class="editor-form session-editor">
 	<datalist id="session-movement-suggestions">

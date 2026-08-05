@@ -6,16 +6,27 @@
 		fetchGymSetHistoryWithError,
 		fetchSessionPlans,
 		fetchExerciseCatalogue,
+		fetchGymRoutines,
+		updateGymWorkout,
+		deleteGymWorkout,
 		type GymWorkout,
 		type GymSetWithDate,
 	} from '$lib/core/data';
+	import {
+		draftLoggedCount,
+		draftRoutineId,
+		hasSessionDraft,
+		stripSessionDraft,
+	} from '$lib/gym/gym_session_draft';
 	import type { Exercise } from '$lib/types';
 	import { RunningPrTracker, type GymSetLike } from '$lib/gym/gym_prs';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 
 	let workouts = $state<GymWorkout[]>([]);
 	let history = $state<GymSetWithDate[]>([]);
@@ -27,6 +38,12 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let showCreate = $state(false);
+	// The in-flight guided-session draft whose routine still exists, if any —
+	// what the resume card offers. A draft whose routine was deleted has nothing
+	// to replay against and degrades to a plain workout row in the list below.
+	let resumable = $state<{ draft: GymWorkout; routineId: string; title: string } | null>(null);
+	let confirmingDraftDiscard = $state(false);
+	let draftBusy = $state(false);
 
 	async function load() {
 		loading = true;
@@ -45,7 +62,55 @@
 		history = h.sets;
 		sessionPlanCount = plans.length;
 		catalogue = cat;
+		resumable = await findResumable(w.workouts).catch(() => null);
 		loading = false;
+	}
+
+	// L4 auxiliary read: routines are fetched only once a draft is actually
+	// present, and any failure degrades to "no card" rather than breaking the
+	// gym list.
+	async function findResumable(
+		rows: GymWorkout[],
+	): Promise<{ draft: GymWorkout; routineId: string; title: string } | null> {
+		const draft = rows.find((r) => hasSessionDraft(r.metadata));
+		const routineId = draft ? draftRoutineId(draft.metadata) : null;
+		if (!draft || !routineId) return null;
+		const routine = (await fetchGymRoutines()).find((r) => r.id === routineId);
+		if (!routine) return null;
+		return { draft, routineId, title: routine.title };
+	}
+
+	async function saveDraftAsIs() {
+		const current = resumable;
+		if (!current || draftBusy) return;
+		draftBusy = true;
+		try {
+			await updateGymWorkout(current.draft.id, {
+				metadata: stripSessionDraft(current.draft.metadata),
+			});
+			await load();
+		} catch (e) {
+			console.error('gym draft save-as-is failed', e);
+			showToast(t('gym.session.saveFailed'), 'error');
+		} finally {
+			draftBusy = false;
+		}
+	}
+
+	async function discardDraft() {
+		const current = resumable;
+		confirmingDraftDiscard = false;
+		if (!current || draftBusy) return;
+		draftBusy = true;
+		try {
+			await deleteGymWorkout(current.draft.id);
+			await load();
+		} catch (e) {
+			console.error('gym draft discard failed', e);
+			showToast(t('gym.session.saveFailed'), 'error');
+		} finally {
+			draftBusy = false;
+		}
 	}
 
 	onMount(async () => {
@@ -166,6 +231,47 @@
 		</div>
 	</header>
 
+	{#if resumable}
+		<div class="card-elevated draft-card" data-testid="gym-session-draft-card">
+			<div class="draft-text">
+				<p class="draft-title">{t('gym.draft.title')}</p>
+				<p class="draft-body">
+					{t('gym.draft.body', {
+						title: resumable.title,
+						sets: draftLoggedCount(resumable.draft.metadata),
+					})}
+				</p>
+			</div>
+			<div class="draft-actions">
+				<a
+					class="btn btn-primary"
+					href={`/gym/session/${resumable.routineId}`}
+					data-testid="gym-draft-resume"
+				>
+					{t('gym.draft.resume')}
+				</a>
+				<button
+					type="button"
+					class="btn btn-secondary"
+					onclick={saveDraftAsIs}
+					disabled={draftBusy}
+					data-testid="gym-draft-save-as-is"
+				>
+					{t('gym.draft.saveAsIs')}
+				</button>
+				<button
+					type="button"
+					class="btn btn-outline"
+					onclick={() => (confirmingDraftDiscard = true)}
+					disabled={draftBusy}
+					data-testid="gym-draft-discard"
+				>
+					{t('gym.session.discardConfirm')}
+				</button>
+			</div>
+		</div>
+	{/if}
+
 	{#if loading}
 		<ul class="workout-list" aria-hidden="true">
 			{#each Array(5) as _, i (i)}
@@ -234,6 +340,17 @@
 	{/if}
 </div>
 
+<ConfirmDialog
+	open={confirmingDraftDiscard}
+	data-testid="gym-draft-discard-dialog"
+	title={t('gym.session.discardTitle')}
+	message={t('gym.session.discardBody')}
+	confirmLabel={t('gym.session.discardConfirm')}
+	danger
+	onconfirm={discardDraft}
+	oncancel={() => (confirmingDraftDiscard = false)}
+/>
+
 <Modal open={showCreate} title={t('gym.editor.newTitle')} onclose={() => (showCreate = false)}>
 	<GymEditor {suggestions} {catalogue} oncreated={onCreated} oncancel={() => (showCreate = false)} />
 </Modal>
@@ -276,6 +393,39 @@
 	}
 	.page-header .material-symbols {
 		font-size: 1.1rem;
+	}
+
+	.draft-card {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		margin-bottom: var(--space-lg);
+		border-inline-start: 3px solid var(--color-primary);
+	}
+	.draft-text {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.draft-title {
+		margin: 0;
+		font-weight: 600;
+	}
+	.draft-body {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.draft-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-sm);
+	}
+	.draft-actions .btn {
+		text-decoration: none;
 	}
 
 	/* Empty-state card — same shape as /routes, /history, /dashboard. */
