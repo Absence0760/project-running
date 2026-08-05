@@ -434,7 +434,7 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		padding: 0.15rem 0.5rem;
-		border-radius: var(--radius-full, 999px);
+		border-radius: var(--radius-pill);
 		line-height: 1.4;
 	}
 	.badge .material-symbols { font-size: 0.95rem; }
@@ -443,8 +443,8 @@
 		background: var(--color-primary-light);
 	}
 	.badge.pending {
-		color: var(--color-warning, #92600a);
-		background: color-mix(in srgb, var(--color-warning, #d99a2b) 15%, transparent);
+		color: var(--color-warning-text);
+		background: color-mix(in srgb, var(--color-warning) 15%, transparent);
 	}
 	.badge.sms {
 		color: var(--color-primary);

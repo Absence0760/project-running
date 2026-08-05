@@ -62,13 +62,13 @@
 	}
 	.message {
 		margin: var(--space-2xs) 0 0;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	time {
 		font-size: 0.8rem;
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 	.empty {
-		color: var(--color-text-muted, #6b7280);
+		color: var(--color-text-secondary);
 	}
 </style>

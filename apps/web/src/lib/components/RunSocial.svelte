@@ -477,7 +477,7 @@
 	}
 
 	.icon-btn:hover {
-		color: var(--color-danger, #ef4444);
+		color: var(--color-danger-text);
 	}
 
 	.comment-body p,

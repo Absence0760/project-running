@@ -401,7 +401,7 @@
 		cursor: pointer;
 	}
 	.near-error {
-		color: var(--color-danger, #c0392b);
+		color: var(--color-danger-text);
 		font-size: 0.85rem;
 		margin: 0;
 	}
@@ -431,7 +431,7 @@
 	.chip.active {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
-		color: var(--color-on-primary, #fff);
+		color: var(--color-on-primary);
 	}
 	.select-row {
 		display: flex;
@@ -466,7 +466,7 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-md) 0;
-		color: var(--color-danger, #c0392b);
+		color: var(--color-danger-text);
 	}
 	.discover-error span:not(.material-symbols) {
 		flex: 1 1 auto;

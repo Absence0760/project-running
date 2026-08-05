@@ -1332,7 +1332,7 @@
 		border-color: var(--color-primary);
 		flex: 1;
 	}
-	.header-btn.primary-btn:hover { background: var(--color-primary-dark, var(--color-primary)); filter: brightness(0.95); }
+	.header-btn.primary-btn:hover { background: var(--color-primary-hover); filter: brightness(0.95); }
 	.header-btn .material-symbols { font-size: 0.95rem; line-height: 1; }
 
 	.context-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }

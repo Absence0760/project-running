@@ -857,7 +857,7 @@
 	.zip-error {
 		margin: var(--space-sm) 0 0;
 		font-size: 0.85rem;
-		color: var(--color-danger, #e53935);
+		color: var(--color-danger-text);
 	}
 	.zip-progress {
 		margin-top: var(--space-md);

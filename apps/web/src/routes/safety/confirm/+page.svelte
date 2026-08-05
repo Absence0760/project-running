@@ -108,7 +108,7 @@
 		color: var(--color-primary, #2c5f6e);
 	}
 	p.bad {
-		color: var(--color-danger, #b91c1c);
+		color: var(--color-danger-text);
 	}
 	.btn-primary {
 		display: inline-block;

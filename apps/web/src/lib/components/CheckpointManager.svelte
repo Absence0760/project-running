@@ -330,8 +330,8 @@
 		font-size: 0.75rem;
 	}
 	.cp-badge.cutoff {
-		background: color-mix(in srgb, var(--warning, #b45309) 18%, transparent);
-		color: var(--warning, #b45309);
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+		color: var(--color-warning-text);
 	}
 	.cp-badge.weigh {
 		background: var(--color-bg-secondary);
@@ -363,7 +363,7 @@
 		cursor: default;
 	}
 	.btn-link.danger {
-		color: var(--danger, #dc2626);
+		color: var(--color-danger-text);
 	}
 	.toggle-hint {
 		display: block;

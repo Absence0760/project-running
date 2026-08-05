@@ -257,7 +257,7 @@
 	}
 	.verdict-partial {
 		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
-		background: var(--color-warning-light, rgba(230, 169, 107, 0.16));
+		background: var(--color-warning-light);
 	}
 	.verdict-abandoned {
 		color: var(--color-text-secondary);
@@ -307,7 +307,7 @@
 	}
 	.status-partial {
 		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
-		background: var(--color-warning-light, rgba(230, 169, 107, 0.16));
+		background: var(--color-warning-light);
 	}
 	.status-missed {
 		color: var(--color-danger-text);

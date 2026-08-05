@@ -213,8 +213,14 @@ for (const { label, marker } of THEMES) {
 // below pins both directions so a future tightening cannot over-reach.
 // Quoted JS props (`color: 'var(--color-accent-cyan)'`, the macro-ring stroke
 // colours) are data, not text, and don't match (the `'` breaks `:\s*var`).
+// The trailing `[,)]` matters as much as the leading boundary: a fallback does
+// not make the reference safe, it only hid it here. `color: var(--color-warning,
+// #b45309)` resolves to the token (the fallback is dead — the token exists), so
+// it painted 2.048:1 warning text on white while reading as guarded. Eight such
+// sites survived §503 for exactly this reason; css_token_guard.test.ts had the
+// same one-character gap. A fallback on the -text pair stays legal.
 const FOREGROUND_TOKEN_OFFENDER =
-	/(?<![a-z-])(?:color|fill|stroke|-webkit-text-fill-color)\s*:\s*var\(\s*--color-(?:warning|secondary|accent-cyan|accent-orange|accent-pink|success|danger)\s*\)(?!-)/;
+	/(?<![a-z-])(?:color|fill|stroke|-webkit-text-fill-color)\s*:\s*var\(\s*--color-(?:warning|secondary|accent-cyan|accent-orange|accent-pink|success|danger)\s*[,)](?!-)/;
 
 test('no source file uses a bare accent/status token as a foreground colour', () => {
 	const hits = scanSource((line) => FOREGROUND_TOKEN_OFFENDER.test(line));
@@ -239,7 +245,15 @@ const MATCHER_FIXTURES: Array<[flagged: boolean, line: string]> = [
 	[true, '\tfill: var(--color-danger);'],
 	[true, '\tstroke: var(--color-success);'],
 	[true, '\t-webkit-text-fill-color: var(--color-accent-orange);'],
+	[true, '\tcolor: var(--color-warning, #b45309);'],
+	[true, '\tcolor: var(--color-success, #16a34a);'],
+	[true, '\tfill: var(--color-danger, #dc2626);'],
+	[true, '\tcolor: var(--color-danger, var(--color-primary));'],
 	[false, '\tbackground: var(--color-success);'],
+	[false, '\tbackground: var(--color-success, #16a34a);'],
+	[false, '\tborder-color: var(--color-danger, #dc2626);'],
+	[false, '\tcolor: var(--color-success-text, #2E6B3C);'],
+	[false, '\tcolor: var(--color-danger-light, #fff);'],
 	[false, '\tbackground-color: var(--color-danger);'],
 	[false, '\tborder-color: var(--color-danger);'],
 	[false, '\toutline-color: var(--color-warning);'],

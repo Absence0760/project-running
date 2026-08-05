@@ -700,6 +700,6 @@
 		color: var(--color-text-tertiary);
 	}
 	.link-btn.danger:hover {
-		color: var(--color-danger, #ef4444);
+		color: var(--color-danger-text);
 	}
 </style>
