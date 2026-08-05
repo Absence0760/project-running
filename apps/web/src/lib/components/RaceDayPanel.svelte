@@ -185,7 +185,17 @@
 
 <style>
 	.race-day-panel {
-		background: linear-gradient(135deg, #F97316 0%, #EF4444 100%);
+		/* A FIXED brand canvas: it does not follow the device theme, so every
+		   colour inside is calibrated to the gradient rather than to a surface
+		   token. The stops are the two theme-INDEPENDENT "-strong" fills, which
+		   are defined as "dark enough for white text at AA" and are already
+		   pinned there — white now reads 5.420 / 5.841 / 6.056:1 across the
+		   ramp against 2.803 / 3.763:1 on the #F97316 -> #EF4444 it replaces. */
+		background: linear-gradient(
+			135deg,
+			var(--color-warning-strong) 0%,
+			var(--color-danger-strong) 100%
+		);
 		color: white;
 		border-radius: var(--radius-lg);
 		padding: var(--space-xl);
@@ -215,13 +225,17 @@
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		background: rgba(255, 255, 255, 0.18);
-		border: 1px solid rgba(255, 255, 255, 0.35);
+		/* One near-opaque white pill for all three verdicts rather than a
+		   per-verdict veil: at 0.82 and 0.7 the amber and red inks read 3.853
+		   and 4.108:1, and the unclassed 0.18 fill left white text at 3.802:1.
+		   The fill is 5.4:1 from the panel on its own, so the hairline that
+		   separated the translucent version is gone with it. */
+		background: rgba(255, 255, 255, 0.92);
 		cursor: help;
 	}
-	.confidence-chip.conf-high { background: rgba(255, 255, 255, 0.92); color: #047857; }
-	.confidence-chip.conf-moderate { background: rgba(255, 255, 255, 0.82); color: #B45309; }
-	.confidence-chip.conf-low { background: rgba(255, 255, 255, 0.7); color: #B91C1C; }
+	.confidence-chip.conf-high { color: #047857; }
+	.confidence-chip.conf-moderate { color: #8A4A00; }
+	.confidence-chip.conf-low { color: #991B1B; }
 
 	.feasibility {
 		margin: 0.5rem 0 0;
@@ -232,7 +246,12 @@
 		gap: 0.4rem;
 		padding: 0.3rem 0.7rem;
 		border-radius: 999px;
-		background: rgba(255, 255, 255, 0.15);
+		/* Same white pill as the confidence chip. The near-white pastels this
+		   replaces were measured on the BARE gradient when they were written
+		   (2.295-3.572:1); on the 0.15 veil the rule actually paints they were
+		   1.989-3.021:1, and the ::before dot inherits the same ink, so it was
+		   under the 3:1 non-text floor too. */
+		background: rgba(255, 255, 255, 0.92);
 	}
 	.feasibility::before {
 		content: '';
@@ -242,12 +261,15 @@
 		background: currentColor;
 	}
 	.feasibility.feas-ahead,
-	.feasibility.feas-on_track { color: #ECFDF5; }
-	.feasibility.feas-behind { color: #FEF3C7; }
-	.feasibility.feas-far_behind { color: #FEE2E2; }
+	.feasibility.feas-on_track { color: #047857; }
+	.feasibility.feas-behind { color: #8A4A00; }
+	.feasibility.feas-far_behind { color: #991B1B; }
 
 	.pacing-section {
-		background: rgba(255, 255, 255, 0.12);
+		/* Inset sub-panels are DEEPER than the canvas, not lighter. A 0.10-0.12
+		   WHITE veil left its white text at 4.274-4.463:1 — the lighter the
+		   inset, the less headroom the only foreground on this canvas has. */
+		background: rgba(0, 0, 0, 0.12);
 		border-radius: var(--radius-md);
 		padding: var(--space-md);
 		margin-bottom: var(--space-lg);
@@ -259,7 +281,8 @@
 	}
 	.toggle-btn {
 		padding: 0.3rem 0.8rem;
-		border: 1px solid rgba(255, 255, 255, 0.4);
+		/* 0.4 read 1.494:1 against the panel; a control's edge owes 3:1. */
+		border: 1px solid rgba(255, 255, 255, 0.7);
 		background: transparent;
 		color: white;
 		border-radius: 999px;
@@ -267,7 +290,12 @@
 		font-weight: 600;
 		cursor: pointer;
 	}
-	.toggle-btn.active { background: white; color: #EF4444; }
+	/* Not --color-danger-strong's #B0392C, even though it measures fine: a
+	   literal that re-spells a token's value is what the hex guard's own
+	   token-value group exists to catch, and a "-strong" token may not be a
+	   `color:` because it goes invisible on a dark theme surface. This is a
+	   fixed canvas, so it takes a fixed hue of its own. 8.077:1 on the pill. */
+	.toggle-btn.active { background: white; color: #8F2F24; }
 	.splits {
 		list-style: none;
 		margin: 0;
@@ -280,7 +308,7 @@
 		display: flex;
 		justify-content: space-between;
 		padding: 0.3rem 0.6rem;
-		background: rgba(255, 255, 255, 0.1);
+		background: rgba(0, 0, 0, 0.12);
 		border-radius: 6px;
 		font-size: 0.9rem;
 	}
@@ -292,7 +320,7 @@
 		gap: var(--space-md);
 	}
 	.checklist-section {
-		background: rgba(255, 255, 255, 0.1);
+		background: rgba(0, 0, 0, 0.12);
 		border-radius: var(--radius-md);
 		padding: var(--space-md);
 	}
@@ -319,5 +347,7 @@
 		font-size: 0.88rem;
 	}
 	.check-name { font-weight: 600; }
-	.check-detail { opacity: 0.85; font-size: 0.8rem; }
+	/* No opacity: 0.85 composited to 3.693:1 over the 0.10 veil beneath it, and
+	   a boundary-free size step already carries the hierarchy. */
+	.check-detail { font-size: 0.8rem; }
 </style>

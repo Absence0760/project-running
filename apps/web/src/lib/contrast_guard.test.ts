@@ -838,6 +838,89 @@ test('the line/fill scans split on the CSS property, not on the token alone', ()
 	}
 });
 
+// The race-day hero is a FIXED canvas — it paints its own gradient and follows
+// no theme — so its colours cannot be checked against a surface token and were
+// therefore never checked at all: `color: white` sat at 2.803:1 on the orange
+// stop, the .feasibility inks at 1.989-3.021:1 on the veil they actually paint
+// over (the 2.295-3.572:1 in the source comment was measured on the BARE
+// gradient, § 503's trap one more time), and the toggle's edge at 1.494:1.
+//
+// The floor is derived from the panel's own declarations rather than from a
+// pinned number: the gradient stops must be the two theme-INDEPENDENT "-strong"
+// fills (already held to white-on-AA above and forbidden a dark override), and
+// then every white veil the panel layers on top is composited over the WORST
+// stop — including the midpoint, which neither end measures.
+test('every ink on the race-day fixed canvas clears AA over its own veil', () => {
+	const source = readFileSync(resolve(__dirname, 'components/RaceDayPanel.svelte'), 'utf-8');
+	const panel = source.match(/\.race-day-panel \{([\s\S]*?)\n\t\}/)?.[1];
+	assert.ok(panel, 'RaceDayPanel has no .race-day-panel rule');
+	const gradient = panel!.match(/background:\s*(linear-gradient\([\s\S]*?\));/)?.[1];
+	assert.ok(gradient, '.race-day-panel declares no gradient background');
+	const stopTokens = [...gradient!.matchAll(/var\(\s*--([\w-]+)\s*\)/g)].map((m) => m[1]);
+	assert.deepEqual(
+		stopTokens,
+		['color-warning-strong', 'color-danger-strong'],
+		'the hero gradient must be built from the theme-independent "-strong" fills, whose ' +
+			'white-on-AA is pinned by the test above; a theme surface token would resolve to ' +
+			'the wrong side on a canvas that does not follow the theme.',
+	);
+	const ends = stopTokens.map((n) => resolveToken(':root {', n));
+	const stops = [ends[0], mixOverHex(ends[0], 50, ends[1]), ends[1]];
+
+	// Rule -> the veil it fills with (white OR black — an inset sub-panel is the
+	// deeper one) and the ink it sets. A rule that declares no ink of its own
+	// takes whatever its class siblings declare, because the verdict and
+	// confidence inks live in sibling rules that set only a `color:`; only when
+	// no sibling declares one either does it inherit the panel's white.
+	const WHITE = '#FFFFFF';
+	const offenders: string[] = [];
+	for (const rule of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+		const [, selector, body] = rule;
+		const veil = body.match(/background:\s*rgba\((255,\s*255,\s*255|0,\s*0,\s*0),\s*([0-9.]+)\)/);
+		if (veil == null) continue;
+		const [, channel, alpha] = veil;
+		const over = channel.startsWith('0') ? '#000000' : WHITE;
+		const backings = stops.map((s) => mixOverHex(over, Number(alpha) * 100, s));
+		const inks = [...body.matchAll(/(?<![a-z-])color:\s*(#[0-9A-Fa-f]{6}|white)/g)].map((m) =>
+			m[1] === 'white' ? WHITE : m[1],
+		);
+		const base = selector.trim().split(/[\s.:]+/).filter(Boolean)[0];
+		const siblingInks = [
+			...source.matchAll(
+				new RegExp(`\\.${base}[^{}]*\\{[^{}]*?(?<![a-z-])color:\\s*(#[0-9A-Fa-f]{6}|white)`, 'g'),
+			),
+		].map((m) => (m[1] === 'white' ? WHITE : m[1]));
+		const resolved = [...new Set([...inks, ...siblingInks])];
+		for (const ink of resolved.length ? resolved : [WHITE]) {
+			for (const backing of backings) {
+				const ratio = contrastRatio(ink, backing);
+				if (ratio < AA_NORMAL) {
+					offenders.push(
+						`${selector.trim()}: ${ink} on rgba(${channel},${alpha}) over ${backing} is ${ratio.toFixed(3)}:1`,
+					);
+				}
+			}
+		}
+	}
+	assert.equal(
+		offenders.length,
+		0,
+		`An ink on the race-day fixed canvas fails WCAG AA over the veil it paints on. ` +
+			`Deepen the veil or darken the ink — the panel follows no theme, so there is no ` +
+			`token to route to:\n${offenders.join('\n')}`,
+	);
+
+	// A thinned foreground on this canvas is the same class of defect one step
+	// removed: 0.85 composited to 3.693:1 over the 0.10 veil beneath it.
+	// Comments stripped first: the rule that explains why a thinning was removed
+	// quotes the value it removed, and flagging that would push the next editor
+	// toward deleting the reasoning.
+	const thin = [...source.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/opacity:\s*(0\.\d+)/g)]
+		.map((m) => Number(m[1]))
+		.filter((o) => o < 0.9);
+	assert.deepEqual(thin, [], 'a foreground on the hero may not be thinned below 0.9.');
+});
+
 // The public landing's four feature-icon accents. Each is a base token's tint
 // under a theme-aware ink, and the rules are READ OUT OF THE SOURCE so the pair
 // cannot drift apart or be re-frozen as a hex: the four literals they replace

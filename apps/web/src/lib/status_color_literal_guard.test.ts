@@ -126,23 +126,16 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	// Cartographic: the coarse (privacy-clipped) live position marker and its
 	// outline — the web twin of mobile's coarse-position ring.
 	'routes/live/event/[id]/[instance]/+page.svelte': { E6A96B: 2 },
-	// Fixed brand hero: the panel paints its own orange -> red gradient and
-	// every colour inside is calibrated to that canvas, not to the theme.
-	// Recorded rather than swept, with the numbers, because the gaps here are
-	// contrast-on-a-fixed-canvas and not theme drift: the panel's own
-	// `color: white` is 2.803:1 on the orange stop, the three .feasibility
-	// inks are 2.295-3.572:1 on the gradient, and .toggle-btn.active is
-	// 3.763:1 on its white pill. Fixing those is a redesign of the hero.
-	'lib/components/RaceDayPanel.svelte': {
-		F97316: 1,
-		EF4444: 2,
-		'047857': 1,
-		B45309: 1,
-		B91C1C: 1,
-		ECFDF5: 1,
-		FEF3C7: 1,
-		FEE2E2: 1,
-	},
+	// Fixed brand hero. The canvas follows no theme, so the ONE literal left is
+	// the verdict green shared by the confidence chip and the feasibility pill,
+	// which are the same "good" role on the same white pill (4.862:1 worst case
+	// across the ramp). The eight it replaces were the redesign: the gradient
+	// stops are the two theme-independent "-strong" fills now, the three pale
+	// .feasibility pastels are dark inks on an opaque pill, and the whole
+	// canvas is measured per-veil by contrast_guard.test.ts. The amber and red
+	// inks that came with it are not on the ban list, and the active toggle's
+	// #8F2F24 is deliberately NOT --color-danger-strong's value.
+	'lib/components/RaceDayPanel.svelte': { '047857': 2 },
 	// Fixed canvas: the @media print sheet targets white paper, so a theme
 	// token would resolve to the SCREEN theme and print dark-on-dark. The
 	// amber was deepened from #b26a00 (4.238:1 on paper, under AA) to
