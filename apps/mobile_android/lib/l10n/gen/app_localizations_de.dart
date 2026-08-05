@@ -12473,4 +12473,13 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get pendingSyncRetry => 'Erneut versuchen';
+
+  @override
+  String get photoLightboxLoading => 'Foto wird geladen…';
+
+  @override
+  String get photoLightboxError => 'Dieses Foto konnte nicht geladen werden.';
+
+  @override
+  String get photoLightboxErrorHint => 'Tippe irgendwo, um zu schließen.';
 }

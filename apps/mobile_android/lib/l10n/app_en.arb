@@ -15843,5 +15843,17 @@
   "pendingSyncRetry": "Retry",
   "@pendingSyncRetry": {
     "description": "Retry button on the pending-sync banner"
+  },
+  "photoLightboxLoading": "Loading photo…",
+  "@photoLightboxLoading": {
+    "description": "Accessible label for the spinner shown while a full-size photo loads in the lightbox"
+  },
+  "photoLightboxError": "This photo couldn't be loaded.",
+  "@photoLightboxError": {
+    "description": "Shown in the photo lightbox when the full-size image fails to load (expired signed URL, offline)"
+  },
+  "photoLightboxErrorHint": "Tap anywhere to close.",
+  "@photoLightboxErrorHint": {
+    "description": "Hint under the photo lightbox error telling the user how to dismiss the viewer"
   }
 }

@@ -3632,5 +3632,8 @@
   "watchLiveSyncSubtitle": "Transfere as corridas gravadas no relógio. A retransmissão fica em pausa durante esse período.",
   "pendingSyncOffline": "{count, plural, one{{count} alteração guardada neste dispositivo — será sincronizada quando estiver on-line} other{{count} alterações guardadas neste dispositivo — serão sincronizadas quando estiver on-line}}",
   "pendingSyncFailed": "{count, plural, one{{count} alteração não foi sincronizada} other{{count} alterações não foram sincronizadas}}",
-  "pendingSyncRetry": "Tentar novamente"
+  "pendingSyncRetry": "Tentar novamente",
+  "photoLightboxLoading": "A carregar a fotografia…",
+  "photoLightboxError": "Não foi possível carregar esta fotografia.",
+  "photoLightboxErrorHint": "Toque em qualquer sítio para fechar."
 }

@@ -20839,6 +20839,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get pendingSyncRetry;
+
+  /// Accessible label for the spinner shown while a full-size photo loads in the lightbox
+  ///
+  /// In en, this message translates to:
+  /// **'Loading photo…'**
+  String get photoLightboxLoading;
+
+  /// Shown in the photo lightbox when the full-size image fails to load (expired signed URL, offline)
+  ///
+  /// In en, this message translates to:
+  /// **'This photo couldn\'t be loaded.'**
+  String get photoLightboxError;
+
+  /// Hint under the photo lightbox error telling the user how to dismiss the viewer
+  ///
+  /// In en, this message translates to:
+  /// **'Tap anywhere to close.'**
+  String get photoLightboxErrorHint;
 }
 
 class _AppLocalizationsDelegate
