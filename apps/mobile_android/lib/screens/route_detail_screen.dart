@@ -18,6 +18,7 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../fab_clearance.dart';
 import '../local_route_store.dart';
 import '../main.dart' show pendingStartRunWithRoute;
 import '../offline_tile_pack.dart';
@@ -1507,7 +1508,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
 
             // Trailing bottom-of-scroll padding so the FAB doesn't
             // sit on top of the last review card.
-            const SizedBox(height: 88),
+            SizedBox(height: fabScrollClearance(context)),
           ],
         ),
       ),

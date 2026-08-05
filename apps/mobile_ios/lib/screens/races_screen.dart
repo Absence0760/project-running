@@ -5,6 +5,7 @@ import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../fab_clearance.dart';
 import '../race_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
@@ -224,6 +225,7 @@ class _RacesScreenState extends State<RacesScreen> {
       return EmptyState(icon: Icons.flag_outlined, title: l.racesEmpty);
     }
     return ListView.builder(
+      padding: EdgeInsets.only(bottom: fabScrollClearance(context)),
       itemCount: _results.length,
       itemBuilder: (context, i) => _RaceCard(
         race: _results[i],

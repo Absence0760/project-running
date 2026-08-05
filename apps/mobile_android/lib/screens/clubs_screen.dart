@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../fab_clearance.dart';
 import '../local_route_store.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -232,7 +233,8 @@ class ClubsScreenState extends State<ClubsScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.fromLTRB(
+                        16, 16, 16, fabScrollClearance(context)),
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (ctx, i) => _ClubTile(

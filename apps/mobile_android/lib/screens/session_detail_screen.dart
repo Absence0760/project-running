@@ -10,6 +10,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../audio_cues.dart';
 import '../event_gym_template.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../fab_clearance.dart';
 import '../local_gym_store.dart';
 import '../session_steps.dart';
 import '../widgets/error_state.dart';
@@ -233,7 +234,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                   title: l10n.sessionNotFound,
                 )
               : ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(
+                      16, 16, 16, fabScrollClearance(context)),
                   children: [
                     Text(l10n.sessionSteps,
                         style: Theme.of(context).textTheme.titleMedium),
