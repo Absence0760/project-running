@@ -176,7 +176,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
             Text(
               l10n.goalEditorTargetsHelp,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 16),

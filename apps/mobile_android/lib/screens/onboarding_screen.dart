@@ -175,7 +175,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   p.description,
                                   textAlign: TextAlign.center,
                                   style: theme.textTheme.bodyLarge?.copyWith(
-                                    color: theme.colorScheme.outline,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                     height: 1.5,
                                   ),
                                 ),
@@ -269,7 +269,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             l10n.onboardingPrivacyBody,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.outline, height: 1.4),
+                ?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
           ),
           const SizedBox(height: 20),
           for (final o in options)

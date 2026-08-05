@@ -433,7 +433,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                         PeriodType.all => l10n.periodSwitchToWeekly,
                       },
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -547,7 +547,7 @@ class _SummaryStat extends StatelessWidget {
               const SizedBox(width: 4),
               Text(unit!,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   )),
             ],
           ],
@@ -555,7 +555,7 @@ class _SummaryStat extends StatelessWidget {
         const SizedBox(height: 4),
         Text(label,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             )),
       ],
     );

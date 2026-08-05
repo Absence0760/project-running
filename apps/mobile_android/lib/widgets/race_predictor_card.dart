@@ -56,7 +56,7 @@ class RacePredictorCard extends StatelessWidget {
                     _clock(prediction.anchor.durationS.toDouble()),
                   ),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -89,7 +89,7 @@ class RacePredictorCard extends StatelessWidget {
                 Text(
                   l10n.racePredictorFootnote,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -128,7 +128,7 @@ class _HeadCell extends StatelessWidget {
       softWrap: false,
       overflow: TextOverflow.visible,
       style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.outline,
+        color: theme.colorScheme.onSurfaceVariant,
         fontWeight: FontWeight.w700,
         letterSpacing: upper ? 0.5 : 0,
       ),

@@ -202,7 +202,7 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
                 child: Text(
                   l10n.checkpointPending,
                   style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.outline),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ),
             ),
@@ -249,7 +249,7 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
             l10n.checkpointNone,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.outline),
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ),
       );
@@ -269,7 +269,7 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
           Text(
             l10n.checkpointPickLabel,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 0.8,
             ),
           ),
@@ -326,7 +326,7 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
           Text(
             l10n.checkpointLoggedHere(stamped.length),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 0.8,
             ),
           ),
@@ -335,7 +335,7 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
             Text(
               l10n.checkpointNoneLoggedHere,
               style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             )
           else
             for (final r in stamped)
@@ -414,7 +414,7 @@ class _WeighInSheetState extends State<_WeighInSheet> {
           Text(
             l10n.checkpointWeighInConsentBlurb,
             style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.outline),
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
           SwitchListTile(

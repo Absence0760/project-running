@@ -43,7 +43,7 @@ class CutoffCard extends StatelessWidget {
           semantic.success,
           l10n.liveCutoffAhead(_marginLabel(eta.marginS!)),
         ),
-      LiveCutoffStatus.unknown => (theme.colorScheme.outline, ''),
+      LiveCutoffStatus.unknown => (theme.colorScheme.onSurfaceVariant, ''),
     };
 
     return Container(

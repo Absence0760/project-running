@@ -77,7 +77,7 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
                 child: Text(
                   l10n.gymExerciseEmpty,
                   style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.colorScheme.outline),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -120,7 +120,10 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
               Text(
                 l10n.gymPrE1rm.toUpperCase(),
                 style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.colorScheme.outline, letterSpacing: 0.8),
+                    ?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      letterSpacing: 0.8,
+                    ),
               ),
             ],
             if (p.est1RmDeltaKg != null) _deltaChip(p.est1RmDeltaKg!, theme, l10n),
@@ -130,7 +133,7 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
         Text(
           l10n.gymRecordsSessions(p.sessions.length),
           style: theme.textTheme.bodySmall
-              ?.copyWith(color: theme.colorScheme.outline),
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -144,7 +147,7 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
     if (delta == 0) {
       text = l10n.gymSinceFirstFlat;
       icon = Icons.trending_flat;
-      color = theme.colorScheme.outline;
+      color = theme.colorScheme.onSurfaceVariant;
     } else if (delta > 0) {
       text = l10n.gymSinceFirstUp(mag);
       icon = Icons.trending_up;
@@ -152,7 +155,7 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
     } else {
       text = l10n.gymSinceFirstDown(mag);
       icon = Icons.trending_down;
-      color = theme.colorScheme.outline;
+      color = theme.colorScheme.onSurfaceVariant;
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -198,7 +201,7 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
                         Text(
                           dateText,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
                           ),
                         ),

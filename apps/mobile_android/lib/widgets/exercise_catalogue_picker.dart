@@ -218,7 +218,9 @@ class _ExerciseCataloguePickerScreenState
                       child: Text(
                         l10n.gymCatalogueEmpty,
                         style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: theme.colorScheme.outline),
+                            ?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                       ),
                     ),
                   )

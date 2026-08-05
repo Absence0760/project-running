@@ -481,7 +481,10 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
         Text(
           hint,
           style: theme.textTheme.bodyMedium
-              ?.copyWith(color: theme.colorScheme.outline, height: 1.5),
+              ?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.5,
+              ),
         ),
         const SizedBox(height: 20),
         child,
@@ -498,7 +501,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
             child: Text(
               l10n.setupOfflineHint,
               style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 8),
@@ -653,7 +656,9 @@ class _OptionCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(subtitle!,
                           style: theme.textTheme.bodySmall
-                              ?.copyWith(color: theme.colorScheme.outline)),
+                              ?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              )),
                     ],
                   ],
                 ),

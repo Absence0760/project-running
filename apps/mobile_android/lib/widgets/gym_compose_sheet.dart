@@ -556,7 +556,9 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                       child: Text(
                         l10n.gymSetN(si + 1),
                         style: theme.textTheme.bodySmall
-                            ?.copyWith(color: theme.colorScheme.outline),
+                            ?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                       ),
                     ),
                     Expanded(

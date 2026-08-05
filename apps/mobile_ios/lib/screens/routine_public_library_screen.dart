@@ -192,8 +192,9 @@ class _RoutinePublicLibraryScreenState
                                                 e.routine.exerciseCount),
                                             style: theme.textTheme.bodySmall
                                                 ?.copyWith(
-                                                    color: theme
-                                                        .colorScheme.outline),
+                                              color: theme
+                                                  .colorScheme.onSurfaceVariant,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -399,7 +400,7 @@ class _RoutinePublicPreviewScreenState
                 Text(
                   l10n.gymRoutineExerciseCount(r.exerciseCount),
                   style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
                 if ((r.notes ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 8),

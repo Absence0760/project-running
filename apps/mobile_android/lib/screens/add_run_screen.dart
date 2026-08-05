@@ -307,7 +307,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
                             '${UnitFormat.distance(_selectedRoute!.distanceMetres, unit)}',
                     style: _selectedRoute == null
                         ? theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                           )
                         : theme.textTheme.bodyLarge,
                     overflow: TextOverflow.ellipsis,
@@ -326,7 +326,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
                 child: Text(
                   l10n.addRunNoRoutes,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -541,7 +541,7 @@ class _RoutePickerPageState extends State<_RoutePickerPage> {
                 child: Text(
                   l10n.addRunPickerNoMatch(_query),
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               )

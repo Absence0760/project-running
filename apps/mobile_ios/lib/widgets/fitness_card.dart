@@ -206,7 +206,9 @@ class FitnessStat extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final labelStyle =
-        theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline);
+        theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        );
     final hasTip = tooltip != null;
     final column = Column(
       children: [

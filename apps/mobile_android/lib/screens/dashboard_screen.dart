@@ -558,7 +558,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ? l10n.dashGymReadinessExcluded
                   : l10n.dashGymReadinessIncluded,
               style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -1311,7 +1311,7 @@ class _WelcomeEmpty extends StatelessWidget {
               l10n.dashboardWelcomeBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 24),
@@ -1402,7 +1402,7 @@ class _EmptyGoalsCta extends StatelessWidget {
                     Text(
                       l10n.dashboardSetFirstGoalBody,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -1485,7 +1485,7 @@ class _GoalCard extends StatelessWidget {
                               ?.copyWith(
                             color: customTitle != null
                                 ? null
-                                : theme.colorScheme.outline,
+                                : theme.colorScheme.onSurfaceVariant,
                             letterSpacing: customTitle != null ? 0 : 1.1,
                             fontWeight: customTitle != null
                                 ? FontWeight.w700
@@ -1498,7 +1498,7 @@ class _GoalCard extends StatelessWidget {
                           Text(
                             periodLabel,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                               letterSpacing: 1.1,
                             ),
                           ),
@@ -1560,14 +1560,14 @@ class _TargetRow extends StatelessWidget {
               child: Text(
                 goalKindLabel(kind),
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
             Text(
               '—',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.outline.withValues(alpha: 0.6),
+                color: theme.colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1590,7 +1590,7 @@ class _TargetRow extends StatelessWidget {
               child: Text(
                 goalKindLabel(kind),
                 style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -1624,7 +1624,7 @@ class _TargetRow extends StatelessWidget {
               child: Text(
                 t.feedback,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -1702,7 +1702,7 @@ class _PbRow extends StatelessWidget {
               Text(
                 subValue!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
           ],
@@ -1750,7 +1750,7 @@ class _PeriodStatCard extends StatelessWidget {
             style: theme.textTheme.labelSmall?.copyWith(
               fontWeight: FontWeight.w700,
               letterSpacing: 0.06,
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 6),
@@ -1773,7 +1773,7 @@ class _PeriodStatCard extends StatelessWidget {
               Text(
                 unitLabel,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -1782,7 +1782,7 @@ class _PeriodStatCard extends StatelessWidget {
           Text(
             l10n.dashboardRunCount(runCount),
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           if (vertMetres > 0) ...[
@@ -1800,7 +1800,7 @@ class _PeriodStatCard extends StatelessWidget {
                   child: Text(
                     l10n.dashboardVert(UnitFormat.elevation(vertMetres, unit)),
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.fade,
@@ -1909,8 +1909,9 @@ class _StreakRow extends StatelessWidget {
       windowed,
     );
     final crown = state.current > 0;
-    final color =
-        crown ? AppSemanticColors.of(context).crown : theme.colorScheme.outline;
+    final color = crown
+        ? AppSemanticColors.of(context).crown
+        : theme.colorScheme.onSurfaceVariant;
     final bestText = switch (state.sub) {
       StreakSubKind.best => l10n.dashboardStreakBest(state.bestN!),
       StreakSubKind.allTimeBest => l10n.dashboardStreakAllTimeBest,
@@ -1948,7 +1949,7 @@ class _StreakRow extends StatelessWidget {
                           : l10n.dashboardStreakDaysUnit,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -1959,7 +1960,7 @@ class _StreakRow extends StatelessWidget {
                 l10n.dashboardStreakCurrent,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -1979,7 +1980,7 @@ class _StreakRow extends StatelessWidget {
                   l10n.dashboardStreakHistory,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],

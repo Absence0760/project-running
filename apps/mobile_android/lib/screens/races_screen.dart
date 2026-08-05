@@ -267,7 +267,7 @@ class _RaceCard extends StatelessWidget {
                 child: Text(
                   l.racesUnverified,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
               ),

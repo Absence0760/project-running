@@ -1117,7 +1117,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 _activityType.label,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -1130,7 +1130,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   _disciplineLabel!,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -1722,7 +1722,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   l10n.runDetailAttemptOf(
                       rank, attempts.length, _formatDuration(best.duration)),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -1857,7 +1857,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         child: Text(
                           _formatZoneSeconds(b.seconds!),
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -1886,7 +1886,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
               Text(
                 l10n.runDetailHrDisclaimer,
                 style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -2063,7 +2063,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 '${s.tick}',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -2485,7 +2485,7 @@ class _StatSmall extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.outline,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -2522,7 +2522,7 @@ class _StatBig extends StatelessWidget {
                 Text(
                   unit!,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -2533,7 +2533,7 @@ class _StatBig extends StatelessWidget {
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
+            color: theme.colorScheme.onSurfaceVariant,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -3008,7 +3008,7 @@ class _RouteSuggestBanner extends StatelessWidget {
                 Text(
                   l10n.runDetailSuggestLinkPrompt,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],

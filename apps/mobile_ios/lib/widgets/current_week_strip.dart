@@ -42,7 +42,7 @@ class CurrentWeekStrip extends StatelessWidget {
     switch (k) {
       case WorkoutKind.easy:
       case WorkoutKind.recovery:
-        return theme.colorScheme.outline;
+        return theme.colorScheme.onSurfaceVariant;
       case WorkoutKind.long:
       case WorkoutKind.race:
         return theme.colorScheme.primary;
@@ -95,7 +95,7 @@ class CurrentWeekStrip extends StatelessWidget {
               ),
               Text('$done / $active',
                   style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             ],
           ),
         ),
@@ -159,7 +159,7 @@ class CurrentWeekStrip extends StatelessWidget {
           Text(
             formatDow(day, tag),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.4,
             ),

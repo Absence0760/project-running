@@ -764,7 +764,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     l10n.eventDurationMin(e.row.durationMin!),
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -804,7 +804,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             Text(
               l10n.clubEventLogAsWorkoutHint,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -818,7 +818,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               l10n.eventPickOccurrence,
               style: theme.textTheme.labelSmall?.copyWith(
                 letterSpacing: 0.8,
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 6),
@@ -913,7 +913,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             l10n.eventAttendees(_attendees.length),
             style: theme.textTheme.labelSmall?.copyWith(
               letterSpacing: 0.8,
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 6),
@@ -921,7 +921,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             Text(
               l10n.eventNoRsvps,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             )
           else
@@ -954,7 +954,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           Text(
                             l10n.eventAttendeeStatus(a.status),
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.outline,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -1121,7 +1121,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         Text(
           label.toUpperCase(),
           style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.outline,
+            color: theme.colorScheme.onSurfaceVariant,
             letterSpacing: 0.6,
           ),
         ),
@@ -1149,9 +1149,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final bannerColour = switch (status) {
       'armed' => theme.colorScheme.tertiary,
       'running' => theme.colorScheme.primary,
-      'finished' => theme.colorScheme.outline,
+      'finished' => theme.colorScheme.onSurfaceVariant,
       'cancelled' => theme.colorScheme.error,
-      _ => theme.colorScheme.outline,
+      _ => theme.colorScheme.onSurfaceVariant,
     };
 
     return Card(
@@ -1170,7 +1170,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     l10n.eventRaceControlLabel,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.outline,
+                      color: theme.colorScheme.onSurfaceVariant,
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -1204,7 +1204,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               Text(
                 l10n.eventRaceArmedHint,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1233,7 +1233,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       race!.startedAt!.toLocal(),
                       localeToTag(Localizations.localeOf(context)))),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               const SizedBox(height: 8),
@@ -1324,7 +1324,7 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
           Text(
             AppLocalizations.of(context).eventPostUpdateLabel,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 0.8,
             ),
           ),
@@ -1511,7 +1511,7 @@ class EventResultsSection extends StatelessWidget {
           Text(
             l10n.eventNoResults,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           )
         else
@@ -1561,7 +1561,7 @@ class _ResultRow extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: row.finisherStatus == 'finished'
                     ? theme.colorScheme.primary
-                    : theme.colorScheme.outline,
+                    : theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -1582,7 +1582,7 @@ class _ResultRow extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(AppLocalizations.of(context).eventResultYou,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.outline,
+                        color: theme.colorScheme.onSurfaceVariant,
                       )),
                 ],
                 if (row.finisherStatus != 'finished') ...[
@@ -1606,7 +1606,7 @@ class _ResultRow extends StatelessWidget {
             const SizedBox(width: 10),
             Text('$distKm km',
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.outline,
+                  color: theme.colorScheme.onSurfaceVariant,
                 )),
           ],
           if (isCertificateEligible(
@@ -1694,7 +1694,7 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
             Text(
               l10n.eventSubmitTimeSubtitle,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 12),
