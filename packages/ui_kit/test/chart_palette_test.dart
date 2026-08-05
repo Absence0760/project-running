@@ -82,6 +82,48 @@ void main() {
         }
       });
 
+      // Two five-colour zone lists used to ship — the run-detail band and the
+      // dashboard intensity card. Measured before §495: the card's z2|z3 and
+      // z3|z4 were 1.10:1 and its z1|z5 1.03:1 (identical in greyscale); the
+      // band's z3|z4 was 1.32:1, its whole ramp spanned 2.11:1, and its z1 was
+      // 1.75:1 against the light card. Both surfaces read this list now, and
+      // the bands appear over the card AND the page, so both are checked — a
+      // separator drawn in either surface colour has to stay visible.
+      test('every zone band clears 3:1 on every surface it sits on', () {
+        expect(palette.zones, hasLength(5));
+        for (var i = 0; i < palette.zones.length; i++) {
+          for (final (where, surface) in [
+            ('card', card),
+            ('scaffold', scaffold),
+            // Web's --color-surface is plain white in light and midnight in
+            // dark, and the twin band renders there too.
+            (
+              'plain surface',
+              theme.brightness == Brightness.dark
+                  ? AppTheme.midnight
+                  : const Color(0xFFFFFFFF),
+            ),
+          ]) {
+            final ratio = _contrast(palette.zones[i], surface);
+            expect(ratio, greaterThanOrEqualTo(3.0),
+                reason: 'z${i + 1} is $ratio against the $name $where — a '
+                    'separator drawn in that colour would vanish');
+          }
+        }
+      });
+
+      test('zone bands step monotonically in luminance', () {
+        final ls = palette.zones.map(_luminance).toList();
+        final rising = ls[1] > ls[0];
+        for (var i = 0; i + 1 < ls.length; i++) {
+          expect(rising ? ls[i + 1] > ls[i] : ls[i + 1] < ls[i], isTrue,
+              reason: 'the $name zone ramp folds at z${i + 1}->z${i + 2}');
+          final step = _step(palette.zones[i], palette.zones[i + 1]);
+          expect(step, greaterThanOrEqualTo(1.35),
+              reason: 'z${i + 1}->z${i + 2} steps only $step in $name');
+        }
+      });
+
       test('every ramp step clears 3:1 on the card', () {
         for (var i = 0; i < palette.ramp.length; i++) {
           expect(_contrast(palette.ramp[i], card), greaterThanOrEqualTo(3.0),
@@ -120,7 +162,7 @@ void main() {
       // "interaction" in the other, because primary is dusk in light and coral
       // in dark. Nothing in the palette may alias it.
       test('no entry aliases the brand accent', () {
-        for (final c in [...palette.series, ...palette.ramp]) {
+        for (final c in [...palette.series, ...palette.zones, ...palette.ramp]) {
           expect(c, isNot(theme.colorScheme.primary));
           expect(c, isNot(theme.colorScheme.secondary));
         }
@@ -133,6 +175,12 @@ void main() {
   // "simplification" from collapsing them.
   test('the two brightnesses carry different palettes', () {
     expect(ChartPalette.light.series, isNot(ChartPalette.dark.series));
+    expect(ChartPalette.light.zones, isNot(ChartPalette.dark.zones));
     expect(ChartPalette.light.ramp, isNot(ChartPalette.dark.ramp));
+  });
+
+  // A 1 px gap disappears into the antialiasing of the two bands either side.
+  test('the zone separator is wide enough to read at bar height', () {
+    expect(ChartPalette.zoneSeparatorWidth, greaterThanOrEqualTo(2));
   });
 }
