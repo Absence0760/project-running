@@ -66,3 +66,18 @@ test('UndoBar puts the attribute on the always-mounted live region', () => {
 	);
 	assert.match(region, /role="status"/, 'the live region must stay outside the {#if}');
 });
+
+test('the in-modal wear-log delete offers undo and no longer confirms', () => {
+	// Reason: confirm and undo are alternatives, never partners (§ 514).
+	// The gear + rotation deletes on this page keep their confirms because
+	// they cascade; a wear observation is one line the owner typed, with
+	// nothing hanging off it. A future round putting a modal back in front
+	// of this delete gives the user two dismissals for one intent.
+	const source = read('src/routes/settings/gear/+page.svelte');
+	assert.match(source, /deferDestructive\(\{/, 'the wear-log delete must defer');
+	assert.doesNotMatch(
+		source,
+		/confirmingWearDelete/,
+		'the wear-log confirm was replaced by undo, not joined to it',
+	);
+});

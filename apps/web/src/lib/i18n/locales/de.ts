@@ -2960,7 +2960,7 @@ export const messages = {
 	"settingsGear.wearLogAdd": "Beobachtung hinzufügen",
 	"settingsGear.wearLogAdding": "Wird hinzugefügt…",
 	"settingsGear.wearLogDelete": "Beobachtung löschen",
-	"settingsGear.wearLogDeleteMessage": "Diese Beobachtung wird dauerhaft entfernt. Das kann nicht rückgängig gemacht werden.",
+	"settingsGear.wearLogRemoved": "Beobachtung entfernt",
 	"settingsGear.wearLogSaveOnly": "Speichere die Ausrüstung zuerst, um ein Verschleißprotokoll zu beginnen.",
 	"settingsGear.wearLogAddFailed": "Beobachtung konnte nicht hinzugefügt werden: {error}",
 	"settingsGear.wearLogDeleteFailed": "Beobachtung konnte nicht gelöscht werden: {error}",

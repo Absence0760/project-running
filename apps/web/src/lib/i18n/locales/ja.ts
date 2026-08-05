@@ -2955,7 +2955,7 @@ export const messages = {
 	"settingsGear.wearLogAdd": "観察メモを追加",
 	"settingsGear.wearLogAdding": "追加中…",
 	"settingsGear.wearLogDelete": "観察メモを削除",
-	"settingsGear.wearLogDeleteMessage": "この観察メモは完全に削除されます。元に戻せません。",
+	"settingsGear.wearLogRemoved": "観察メモを削除しました",
 	"settingsGear.wearLogSaveOnly": "摩耗ログを始めるには、まずギアを保存してください。",
 	"settingsGear.wearLogAddFailed": "観察メモを追加できませんでした: {error}",
 	"settingsGear.wearLogDeleteFailed": "観察メモを削除できませんでした: {error}",

@@ -2960,7 +2960,7 @@ export const messages = {
 	"settingsGear.wearLogAdd": "Añadir observación",
 	"settingsGear.wearLogAdding": "Añadiendo…",
 	"settingsGear.wearLogDelete": "Eliminar observación",
-	"settingsGear.wearLogDeleteMessage": "Esta observación se eliminará de forma permanente. No se puede deshacer.",
+	"settingsGear.wearLogRemoved": "Observación eliminada",
 	"settingsGear.wearLogSaveOnly": "Guarda primero el equipo para empezar un registro de desgaste.",
 	"settingsGear.wearLogAddFailed": "No se pudo añadir la observación: {error}",
 	"settingsGear.wearLogDeleteFailed": "No se pudo eliminar la observación: {error}",

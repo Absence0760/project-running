@@ -2968,7 +2968,7 @@ export const en = {
 	"settingsGear.wearLogAdd": "Add observation",
 	"settingsGear.wearLogAdding": "Adding…",
 	"settingsGear.wearLogDelete": "Delete observation",
-	"settingsGear.wearLogDeleteMessage": "This observation will be permanently removed. This can't be undone.",
+	"settingsGear.wearLogRemoved": "Observation removed",
 	"settingsGear.wearLogSaveOnly": "Save the gear first to start a wear log.",
 	"settingsGear.wearLogAddFailed": "Couldn't add observation: {error}",
 	"settingsGear.wearLogDeleteFailed": "Couldn't delete observation: {error}",
