@@ -437,7 +437,7 @@
 		cursor: pointer;
 	}
 	.near-error {
-		color: var(--color-danger, #c0392b);
+		color: var(--color-danger-text);
 		font-size: 0.85rem;
 		margin: 0;
 	}
@@ -477,7 +477,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
-		color: var(--color-danger, #c0392b);
+		color: var(--color-danger-text);
 	}
 	.import-body {
 		display: flex;

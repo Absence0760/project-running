@@ -457,7 +457,7 @@
 		margin: 0;
 	}
 	.missed-count {
-		color: var(--color-danger, #dc2626);
+		color: var(--color-danger-text);
 	}
 	.workout-list,
 	.run-list {
@@ -524,7 +524,7 @@
 	}
 	.status-pill.status-missed {
 		background: color-mix(in srgb, var(--color-danger, #dc2626) 16%, transparent);
-		color: var(--color-danger, #dc2626);
+		color: var(--color-danger-text);
 	}
 	.status-pill.status-upcoming {
 		background: var(--color-surface);

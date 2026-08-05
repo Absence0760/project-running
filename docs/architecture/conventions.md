@@ -543,6 +543,21 @@ The `--color-warning` / `--color-secondary` / `--color-accent-cyan` (and `--colo
 
 `contrast_guard.test.ts` enforces all three: `-strong` stays theme-independent + AA-with-white and is never used as text; every `-text` token clears AA as text (surface + chip) in all three theme blocks; and no source file uses a bare `--color-warning` / `-secondary` / `-accent-cyan` as a `color:`. Add a new accent that needs a foreground use → add its `-text` pair (light dark-value + dark base-value) and it's covered automatically.
 
+## Web CSS custom properties — a fallback is a default, never a substitute for the token
+
+**Never write `var(--some-token, #hex)` for a token that isn't declared in the token layer.** It reads as a defensive default and is actually the opposite: the declaration is pinned to that literal in *both* themes, permanently, and never tracks light/dark at all. It is strictly worse than the bare `var(--x)` form, which at least collapses to something inherited — and unlike the bare form it *looks* deliberate at the call site, so it survives review. The issue #666 round-10 sweep found **130** such references across **39** files (`#666` muted text at 2.815:1 on the dark card; white on a primary fill at 2.081:1 in dark, because `--color-primary` flips from dark teal to light coral).
+
+The rule the guards draw is **existence, not syntax**:
+
+- A fallback on a token that **is** declared is legal — it's the documented default for a component custom property a parent sets per instance (`style:--x={...}`).
+- A fallback on a token that is **not** declared is banned. Either use the right existing token, or declare the new one in `app.css` (all three theme blocks if it carries colour; a `var()`-alias in `:root` alone if it just follows another token, like `--chip-bg: var(--color-border)`).
+
+`css_token_guard.test.ts` fails the build on either form of undeclared reference, and its `MATCHER_FIXTURES` table pins the matcher in both directions (10 must-flag, 8 must-spare) because the whole distinction rests on one `[,)]` character class.
+
+**A dead fallback also blinds the other CSS guards, so strip it when you touch a line.** `color: var(--color-warning, #b45309)` resolves to the token — the fallback is never used — yet it slipped past `contrast_guard.test.ts`'s foreground ban for the same one-character reason, painting 2.048:1 warning text while reading as guarded. 28 live §503 violations were hiding this way (8 on `--color-warning`/`--color-success`, 20 on `--color-danger`). Both guards now match `[,)]`.
+
+Two traps worth naming, both measured: `--color-bg-tertiary` is **byte-identical to `--color-surface` in dark**, so it can't be the fill for anything sitting on a card (1.000:1); and a token whose *name* describes a layout slot that doesn't exist (`--app-header-h`) should be deleted, not declared.
+
 ## Web forms — `.editor-form` is the shared field layer
 
 Every create / edit editor (`ClubEditor`, `EventEditor`, `RunEditor`, `GymEditor`, `PlanMetaEditor`, `RoutineEditor`, `SessionPlanEditor`, `WorkoutEditor`) shares one field-styling layer in `apps/web/src/app.css`, opted into with `class="editor-form"` on the form / container root. It used to be duplicated per-editor and had drifted into three input backgrounds, two label cases, and two markup conventions; the 2026-06-12 consolidation collapsed ~440 lines of copy into one ~180-line layer.

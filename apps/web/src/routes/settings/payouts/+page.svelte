@@ -149,7 +149,7 @@
 		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
 	.status-warn {
-		color: var(--color-warning, var(--color-danger));
+		color: var(--color-warning-text);
 	}
 	.merchant-note {
 		margin: 0;

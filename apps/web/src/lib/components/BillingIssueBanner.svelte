@@ -43,7 +43,7 @@
 		padding: var(--space-md) var(--space-xl);
 		background: rgba(229, 57, 53, 0.08);
 		border-bottom: 1px solid rgba(229, 57, 53, 0.25);
-		color: var(--color-danger, #c1413f);
+		color: var(--color-danger-text);
 	}
 	.material-symbols {
 		font-size: 1.5rem;

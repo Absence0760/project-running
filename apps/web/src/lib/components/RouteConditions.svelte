@@ -330,7 +330,7 @@
 		color: var(--color-warning-text);
 	}
 	.severity-impassable {
-		color: var(--color-danger, #b91c1c);
+		color: var(--color-danger-text);
 		font-weight: 700;
 	}
 	.chip.severity-caution {
@@ -357,7 +357,7 @@
 		padding: 0 0.25rem;
 	}
 	.delete-btn:hover {
-		color: var(--color-danger, #b91c1c);
+		color: var(--color-danger-text);
 	}
 	.condition-note {
 		margin: 0.25rem 0 0;
