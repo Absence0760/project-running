@@ -89,6 +89,25 @@ class _ActivityLoaderState extends State<ActivityLoader>
   }
 }
 
+/// The app's standard whole-surface loading treatment — the athlete figure,
+/// centred, at the one size every full-body loader uses. Screens reached for
+/// a bare `Center(child: CircularProgressIndicator())` because there was no
+/// named thing to reach for; this is that thing.
+///
+/// Use [ListSkeleton] instead wherever the surface is a list — placeholder
+/// rows hold the layout, a centred figure does not.
+class FullBodyLoader extends StatelessWidget {
+  final ActivityLoaderKind kind;
+  final String label;
+
+  const FullBodyLoader({super.key, required this.kind, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: ActivityLoader(kind: kind, size: 76, label: label),
+      );
+}
+
 enum _HandStyle { hand, apple, dumbbell }
 
 class _ActivityLoaderPainter extends CustomPainter {
