@@ -3513,6 +3513,8 @@ export const messages = {
 	"notificationsList.emptyAll": "Aún no hay notificaciones: los kudos, comentarios y nuevos seguidores aparecen aquí.",
 	"notificationsList.findPeople": "Buscar personas",
 	"notificationsList.dismiss": "Descartar",
+	"notificationsList.dismissed": "Notificación descartada",
+	"notificationsList.dismissedMany": "{count} notificaciones descartadas",
 	"notificationsList.someone": "Alguien",
 	"notificationsList.yourRun": "tu carrera",
 	"notificationsList.verbKudos": "{name} dio kudos a tu {dist}",

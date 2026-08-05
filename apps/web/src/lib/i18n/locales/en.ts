@@ -3526,6 +3526,8 @@ export const en = {
 	"notificationsList.emptyAll": "No notifications yet — kudos, comments, and new followers show up here.",
 	"notificationsList.findPeople": "Find people",
 	"notificationsList.dismiss": "Dismiss",
+	"notificationsList.dismissed": "Notification dismissed",
+	"notificationsList.dismissedMany": "{count} notifications dismissed",
 	"notificationsList.someone": "Someone",
 	"notificationsList.yourRun": "your run",
 	"notificationsList.verbKudos": "{name} gave kudos to your {dist}",

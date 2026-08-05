@@ -3508,6 +3508,8 @@ export const messages = {
 	"notificationsList.emptyAll": "まだ通知はありません。Kudos、コメント、新しいフォロワーがここに表示されます。",
 	"notificationsList.findPeople": "ユーザーを探す",
 	"notificationsList.dismiss": "閉じる",
+	"notificationsList.dismissed": "通知を閉じました",
+	"notificationsList.dismissedMany": "{count} 件の通知を閉じました",
 	"notificationsList.someone": "誰か",
 	"notificationsList.yourRun": "あなたのラン",
 	"notificationsList.verbKudos": "{name} があなたの {dist} に Kudos をくれました",
