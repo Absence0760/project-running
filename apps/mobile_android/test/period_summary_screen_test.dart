@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show EmptyState;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
@@ -118,6 +119,19 @@ void main() {
       );
       await tester.pump();
       expect(find.text('No runs this week'), findsOneWidget);
+      expect(find.byType(EmptyState), findsOneWidget);
+      expect(find.byIcon(Icons.event_busy), findsOneWidget);
+      // Unbounded host: the shared EmptyState must NOT nest its own
+      // scrollable inside the screen's ListView.
+      expect(
+        find.descendant(
+          of: find.byType(EmptyState),
+          matching: find.byType(SingleChildScrollView),
+        ),
+        findsNothing,
+      );
+      // ...and the host itself still scrolls.
+      expect(find.byType(ListView), findsOneWidget);
     });
 
     testWidgets('period-type switcher exposes merged button semantics',

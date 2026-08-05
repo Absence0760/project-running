@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -248,7 +249,12 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.bodyMetricsTitle)),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(
+              label: l10n.commonLoading,
+              rows: 5,
+              rowHeight: 56,
+              hasLeading: false,
+            )
           : ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [

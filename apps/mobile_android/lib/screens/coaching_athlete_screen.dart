@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show TextLane;
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton, TextLane;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -140,7 +140,12 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
         title: Text(widget.displayName ?? l10n.coachingAthleteAthleteFallback),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListSkeleton(
+              label: l10n.commonLoading,
+              rows: 3,
+              rowHeight: 120,
+              hasLeading: false,
+            )
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(

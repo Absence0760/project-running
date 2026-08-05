@@ -438,7 +438,18 @@ On the Flutter apps, presentation that every instance of a widget should share l
 
 ## Mobile empty states — ui_kit `EmptyState`
 
-On the Flutter apps, a whole-surface "nothing here yet / not found" state renders ui_kit's `EmptyState` (icon 48, `all(32)` padding, titleMedium title, bodySmall body, optional CTA — reusing `ErrorState`'s icon size and padding; [decisions.md § 485](decisions.md)), never a hand-rolled centred `Text` or bespoke icon column; tiny inline empty hints inside a larger card/list section stay inline.
+On the Flutter apps, a whole-surface "nothing here yet / not found" state renders ui_kit's `EmptyState` (icon 48, `all(32)` padding, titleMedium title, bodySmall body, optional CTA — reusing `ErrorState`'s icon size and padding; [decisions.md § 485](decisions.md)), never a hand-rolled centred `Text` or bespoke icon column; tiny inline empty hints inside a larger card/list section stay inline. `architecture_guards_test.dart` fails any `class …EmptyState` declared in `lib/`.
+
+## Mobile loading surfaces — never a bare centred spinner
+
+On the Flutter apps a loading surface says what is coming, and holds the space it will occupy. **Never `Center(child: CircularProgressIndicator())`** — it reports only that something is happening, occupies none of the room the content needs, and lands the arriving frame as a re-layout instead of a fill. Choose by the shape of the surface that is loading ([decisions.md § 492](decisions.md) for the primitives, § 502 for the per-surface split):
+
+- **Rows in a bounded host** (a tab body, a `Scaffold` body, a settings form, a chat pane inside an `Expanded`) → `ListSkeleton(rows:, rowHeight:, hasLeading:)`. It owns a non-scrolling viewport, so it clips rather than overflowing when the host is short.
+- **One section of an already-laid-out scrollable** (a comment list under a run, a picker inside a dialog) → `ListSkeleton.section(...)`. Same rows at intrinsic height, no viewport, so it is safe where the incoming height is unbounded and the default constructor would throw.
+- **A genuinely mixed layout** (a map plus stats, a detail body of prose and controls) → `FullBodyLoader(kind:, label:)`.
+- **A composite** — compose the primitives into the shape the surface settles into rather than reaching for a fourth thing; `profile_screen`'s header-plus-tabs load is a `section` block, a `Divider`, and an `Expanded(ListSkeleton(...))`.
+
+ui_kit carries no localisations, so every one of these takes a `label` for the screen reader — pass `l10n.commonLoading` rather than a literal. `architecture_guards_test.dart` fails any bare centred spinner in `lib/`.
 
 ## Mobile tap targets — no `VisualDensity.compact` on IconButtons
 

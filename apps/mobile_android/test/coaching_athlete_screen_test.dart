@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show SocketException;
 
 import 'package:api_client/api_client.dart';
@@ -5,7 +6,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ui_kit/ui_kit.dart' show TextLane;
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton, TextLane;
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -101,6 +102,26 @@ AthleteRunSummary _strollerRun() => AthleteRunSummary(
       metadata: null,
     );
 
+/// Never resolves the runs fetch, so the loading frame is observable.
+class _HangingApi extends ApiClient {
+  @override
+  String? get userId => 'coach-1';
+
+  @override
+  Future<List<AthleteRunSummary>> fetchAthleteRuns(String athleteId,
+          {int limit = 20}) =>
+      Completer<List<AthleteRunSummary>>().future;
+
+  @override
+  Future<AthletePlanOverview?> fetchAthletePlanOverview(
+    String athleteId,
+  ) async =>
+      null;
+
+  @override
+  Future<List<TrainingPlanRow>> fetchMyPlans({int limit = 100}) async => const [];
+}
+
 Future<Preferences> _prefs() async {
   SharedPreferences.setMockInitialValues({});
   final p = Preferences();
@@ -128,6 +149,15 @@ Future<void> _pump(WidgetTester tester, ApiClient api, Preferences prefs) async 
 
 void main() {
   setUpAll(() => initializeDateFormatting());
+
+  testWidgets('the loading frame stands card blocks, not a bare spinner',
+      (tester) async {
+    final prefs = await _prefs();
+    await _pump(tester, _HangingApi(), prefs);
+    expect(find.byType(ListSkeleton), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
 
   testWidgets('shows recent runs and the no-plan empty state', (tester) async {
     final prefs = await _prefs();

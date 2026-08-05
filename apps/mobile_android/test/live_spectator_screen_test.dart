@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show FullBodyLoader;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -115,9 +116,11 @@ void main() {
       // pump (no settle) catches the pre-resolution loading frame.
       // Without this guard, a refactor that flips _loading=false at
       // construction (e.g. lazy hydration) would silently strip the
-      // spinner and surface ErrorState immediately.
+      // loader and surface ErrorState immediately.
       await _pump(tester);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(FullBodyLoader), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
     });
 
     realtimeWidgetTest('status badge reads "Connecting" while hydrating', (

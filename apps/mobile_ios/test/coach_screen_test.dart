@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/coach_screen.dart';
 import '../lib/widgets/sign_in_required_state.dart';
@@ -20,6 +23,23 @@ class _ConsentedApi extends ApiClient {
   String? get userId => 'u-viewer';
   @override
   Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+}
+
+/// Consented, but the message fetch never resolves — so the thread's own
+/// loading frame stays observable while the rest of the screen is up.
+class _HangingThreadApi extends _ConsentedApi {
+  @override
+  Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) =>
+      Completer<List<CoachMessageRow>>().future;
+
+  @override
+  Future<List<DateTime>> listCoachArchives({String? planId}) async => const [];
+
+  @override
+  Future<int> getCoachUsage() async => 0;
+
+  @override
+  Future<bool> isPro() async => false;
 }
 
 bool _supabaseReady = false;
@@ -149,6 +169,17 @@ void main() {
   setUpAll(_ensureSupabase);
 
   group('CoachScreen — initial render', () {
+    testWidgets('the thread pane stands message blocks while it loads',
+        (tester) async {
+      await _pump(tester, api: _HangingThreadApi());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(ListSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+      await _drain(tester);
+    });
+
     testWidgets('renders the Coach app-bar title', (tester) async {
       await _pump(tester);
       expect(find.text('Coach'), findsOneWidget);

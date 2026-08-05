@@ -609,7 +609,21 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          // Header-plus-tabs, so neither a list nor a plain body: the two
+          // primitives are composed into the shape the profile settles into,
+          // and each tab's own `_tabScope` skeleton takes over from here.
+          ? Column(
+              children: [
+                ListSkeleton.section(
+                  label: l10n.commonLoading,
+                  rows: 1,
+                  rowHeight: 56,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                ),
+                const Divider(height: 1),
+                Expanded(child: ListSkeleton(label: l10n.commonLoading)),
+              ],
+            )
           : _loadError != null
               ? ErrorState(
                   message: l10n.profileLoadError,

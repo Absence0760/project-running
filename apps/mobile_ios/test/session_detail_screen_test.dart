@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
@@ -38,6 +40,24 @@ class _NotFoundFakeApi extends ApiClient {
   })?> fetchSessionPlan(String id) async => null;
 }
 
+/// Never resolves, so the loading frame is observable.
+class _HangingFakeApi extends ApiClient {
+  @override
+  String? get userId => 'me';
+
+  @override
+  Future<({
+    SessionPlanRow plan,
+    List<SessionPlanBlockRow> blocks,
+    List<SessionPlanItemRow> items,
+  })?> fetchSessionPlan(String id) => Completer<
+      ({
+        SessionPlanRow plan,
+        List<SessionPlanBlockRow> blocks,
+        List<SessionPlanItemRow> items,
+      })?>().future;
+}
+
 Widget _wrap(Widget child) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -51,6 +71,26 @@ Future<LocalGymStore> _gymStore(Directory dir) async {
 }
 
 void main() {
+  testWidgets('the loading frame stands step rows, not a bare spinner',
+      (tester) async {
+    final dir = Directory.systemTemp.createTempSync('session_detail_loading');
+    try {
+      final gym = await _gymStore(dir);
+      await tester.pumpWidget(_wrap(SessionDetailScreen(
+          api: _HangingFakeApi(),
+          gymStore: gym,
+          planId: 'p1',
+          titleHint: 'Morning Flow')));
+      await tester.pump();
+
+      expect(find.byType(ListSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets(
       'a fetch failure shows the error state with retry instead of a stuck spinner',
       (tester) async {

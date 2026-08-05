@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
@@ -39,6 +42,17 @@ class _ConsentedApi extends ApiClient {
   Future<void> withdrawHealthDataConsent() async => withdrawCalled = true;
 }
 
+/// Never resolves the profile fetch, so the loading frame is observable.
+class _HangingApi extends ApiClient {
+  @override
+  String? get userId => 'u1';
+  @override
+  Future<UserProfileRow?> fetchMyProfile() =>
+      Completer<UserProfileRow?>().future;
+  @override
+  Future<double?> fetchLatestBodyWeightKg() async => null;
+}
+
 Future<Preferences> _prefs() async {
   SharedPreferences.setMockInitialValues({});
   final p = Preferences();
@@ -65,6 +79,26 @@ Future<void> _pump(WidgetTester tester, Preferences prefs) async {
 
 void main() {
   group('SettingsBodyMetricsScreen', () {
+    testWidgets('the loading frame stands form rows, not a bare spinner',
+        (tester) async {
+      final prefs = await _prefs();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsBodyMetricsScreen(
+            api: _HangingApi(),
+            settingsSync: null,
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(ListSkeleton), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+    });
+
     testWidgets('consent off by default — height & weight fields are hidden',
         (tester) async {
       await _pump(tester, await _prefs());

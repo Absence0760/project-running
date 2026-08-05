@@ -1381,7 +1381,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   Widget _buildRoutesTab(ThemeData theme, ClubView c) {
     if (!_routesLoaded) {
-      return const Center(child: CircularProgressIndicator());
+      return ListSkeleton(
+        label: AppLocalizations.of(context).commonLoading,
+        rows: 4,
+      );
     }
     // Admin-only CTA — mirrors web's `Routes` tab "New route" + "Transfer
     // from My routes" actions strip on `/clubs/[slug]`. We only render
@@ -1498,7 +1501,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   Widget _buildTemplatesTab(ThemeData theme, ClubView c) {
     if (!_templatesLoaded) {
-      return const Center(child: CircularProgressIndicator());
+      return ListSkeleton(
+        label: AppLocalizations.of(context).commonLoading,
+        rows: 4,
+        hasLeading: false,
+      );
     }
     final l10n = AppLocalizations.of(context);
     if (_templates.isEmpty &&
