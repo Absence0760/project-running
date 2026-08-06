@@ -569,11 +569,13 @@ The social layer. See `docs/features/clubs.md` for surfaces and `docs/product/ro
 create table clubs (
   id            uuid primary key default gen_random_uuid(),
   owner_id      uuid references auth.users not null,
-  name          text not null,
+  name          text not null check (char_length(name) <= 80),
   slug          text unique not null,                 -- URL-safe, generated from name
-  description   text,
+  description   text check (description is null                  -- 20270502_001; the sibling standard
+                            or char_length(description) <= 2000),-- (events / challenges descriptions)
   avatar_url    text,
-  location_label text,                                -- freeform "Austin, TX"
+  location_label text check (location_label is null              -- freeform "Austin, TX"
+                             or char_length(location_label) <= 80),
   location_point geography(Point, 4326),              -- ClubEditor geocodes location_label via MapTiler;
                                                       -- powers the `search_clubs` ST_DWithin branch so a
                                                       -- query like "Virginia" pulls clubs in VA even when
@@ -821,7 +823,7 @@ Supplementary user data not stored in `auth.users`. As of `20260521_001_user_fol
 ```sql
 create table user_profiles (
   id                       uuid primary key references auth.users,
-  display_name             text,                                -- rejects control chars (CHECK user_profiles_display_name_no_control_chars, 20270423_001)
+  display_name             text,                                -- <= 60 chars (20270502_001) + rejects control chars (20270423_001)
   avatar_url               text,
   handle                   text,                                -- public @username (issue #465, 20270424000002); lowercase [a-z0-9_]{3,30}, case-insensitively unique, world-readable
   parkrun_number           text,                                -- e.g. 'A123456' (world-readable)
@@ -848,6 +850,33 @@ create table user_profiles (
 -- construction; this CHECK is the defence-in-depth write boundary. NULL stays
 -- allowed. Added NOT VALID + VALIDATE (existing rows scrubbed first) so the
 -- DDL doesn't take a long blocking lock on the populated table.
+--
+-- `user_profiles_display_name_len_chk` (20270502_001, decisions §545) caps it at
+-- **60** — the number both setup wizards already stated while the two settings
+-- screens capped at nothing and the column at nothing. The four caps that
+-- migration adds (this one plus `clubs.name` 80 / `clubs.description` 2000 /
+-- `clubs.location_label` 80) are restated once per client in
+-- `apps/web/src/lib/core/text_limits.ts` + `apps/mobile_android/lib/text_limits.dart`,
+-- and `text_limits_test` on each side PARSES the migration to prove they match —
+-- a composer capped above the constraint hands the user a 23514 it cannot
+-- explain. Unlike `20261124_001` (which added three NOT VALID caps and never
+-- validated any of them, so those rows are permanently unchecked) it emits the
+-- VALIDATE, pinned by `club_profile_text_caps_test.sql`.
+--
+-- **Still uncapped:** re-derived across the whole schema, **51** user-writable
+-- text columns carry no length CHECK and no `varchar(n)` (there is not one
+-- `varchar`, `character varying` or `citext` anywhere in it) — 7 of those are
+-- URLs / slugs / a `text[]`, leaving **44** free-text prose-or-name fields, of
+-- which this migration caps 4 and **40** remain. Among the 40: `routes.name`/`description`,
+-- `route_reviews.comment`, `events.title`/`meet_label`/`discipline`/`timezone`,
+-- `event_results.note`/`bib`/`finisher_name`, the four `training_plans`/
+-- `plan_weeks`/`plan_workouts` notes fields, six `session_plans*` fields,
+-- `reports.notes`, `user_blocks.reason`, `coach_athletes.note`,
+-- `fundraisers.charity_name`/`title`/`story`, `donations.display_name`/`message`
+-- (clamped in the Edge Function at 80/280, not in the DB), `race_listings.name`/
+-- `location_label` and `checkpoint_crossings.*` (the four `clubs.*_url` link
+-- columns are among the 7, scheme regex only). The ladder the capped columns use is
+-- 60/80/120 for a name, 280–500 for a note, 2000–4096 for prose.
 --
 -- `coach_consent_at` and `health_data_consent_at` were added in
 -- 20260921_001_user_profiles_gdpr_consent_timestamps.sql per
