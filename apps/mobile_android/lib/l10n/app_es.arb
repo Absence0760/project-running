@@ -3659,5 +3659,6 @@
   "runSocialCommentRemoved": "Comentario eliminado",
   "routeDetailReviewRemoved": "Reseña eliminada",
   "routeMarkerRemoved": "Marcador eliminado",
-  "roadbookNeedsRouteLine": "Añade al menos dos puntos a esta ruta para crear un roadbook."
+  "roadbookNeedsRouteLine": "Añade al menos dos puntos a esta ruta para crear un roadbook.",
+  "settingsGearUnavailable": "El equipamiento no está disponible en esta versión"
 }

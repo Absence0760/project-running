@@ -13,6 +13,7 @@ import '../preferences.dart';
 import '../widgets/gear_backfill_sheet.dart';
 import '../widgets/gear_form_sheet.dart';
 import '../widgets/pending_sync_banner.dart';
+import '../widgets/surface_peer_strip.dart';
 import '../widgets/top_banner.dart';
 import 'gear_rotations_screen.dart';
 
@@ -266,12 +267,6 @@ class _GearScreenState extends State<GearScreen> {
       appBar: AppBar(
         title: Text(l10n.gearTitle),
         actions: [
-          if (widget.api != null && widget.api!.userId != null)
-            IconButton(
-              tooltip: l10n.gearRotationsTitle,
-              icon: const Icon(Icons.sync_alt),
-              onPressed: _refreshing ? null : _openRotations,
-            ),
           IconButton(
             tooltip: l10n.gearAddGear,
             icon: const Icon(Icons.add),
@@ -281,6 +276,21 @@ class _GearScreenState extends State<GearScreen> {
       ),
       body: Column(
         children: [
+          // Rotations hung off an `Icons.sync_alt` AppBar glyph whose name
+          // existed only as a tooltip — undiscoverable on a touch device, and
+          // the glyph read as "sync" besides (#666 I8 + I15). Web renders it
+          // as a labelled link; the peer strip is the mobile shape.
+          if (widget.api != null && widget.api!.userId != null)
+            SurfacePeerStrip(
+              label: l10n.gearTitle,
+              peers: [
+                SurfacePeer(label: l10n.gearTitle),
+                SurfacePeer(
+                  label: l10n.gearRotationsTitle,
+                  onTap: _openRotations,
+                ),
+              ],
+            ),
           if (!_isOnline && !widget.store.hasPending)
             Container(
               width: double.infinity,

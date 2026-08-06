@@ -83,13 +83,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// A landing tile. Pass a null [onTap] for a tile whose destination cannot
+  /// be built on this mount — it renders disabled with [subtitle] carrying the
+  /// reason, never as a tappable row that silently does nothing (#666 I16).
   Widget _tab({
     required IconData icon,
     required String label,
     required String subtitle,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return ListTile(
+      enabled: onTap != null,
       leading: Icon(icon),
       title: Text(label),
       subtitle: Text(subtitle),
@@ -195,21 +199,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     currentDeviceId: widget.preferences.deviceId,
                   )),
             ),
-            _tab(
-              icon: Icons.directions_run,
-              label: l10n.gearTitle,
-              subtitle: l10n.settingsTabGearSubtitle,
-              onTap: () {
-                final gearStore = widget.gearStore;
-                if (gearStore == null) return;
-                _open((_) => GearScreen(
-                      api: widget.apiClient,
-                      preferences: widget.preferences,
-                      store: gearStore,
-                      runStore: widget.runStore,
-                    ));
-              },
-            ),
+            () {
+              final gearStore = widget.gearStore;
+              return _tab(
+                icon: Icons.directions_run,
+                label: l10n.gearTitle,
+                subtitle: gearStore == null
+                    ? l10n.settingsGearUnavailable
+                    : l10n.settingsTabGearSubtitle,
+                onTap: gearStore == null
+                    ? null
+                    : () => _open((_) => GearScreen(
+                          api: widget.apiClient,
+                          preferences: widget.preferences,
+                          store: gearStore,
+                          runStore: widget.runStore,
+                        )),
+              );
+            }(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
               child: SectionHeader(label: l10n.settingsSectionAccountLegal),

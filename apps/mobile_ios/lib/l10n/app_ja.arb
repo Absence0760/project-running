@@ -3659,5 +3659,6 @@
   "runSocialCommentRemoved": "コメントを削除しました",
   "routeDetailReviewRemoved": "レビューを削除しました",
   "routeMarkerRemoved": "マーカーを削除しました",
-  "roadbookNeedsRouteLine": "ロードブックを作成するには、このルートに 2 点以上を追加してください。"
+  "roadbookNeedsRouteLine": "ロードブックを作成するには、このルートに 2 点以上を追加してください。",
+  "settingsGearUnavailable": "このビルドではギアを利用できません"
 }

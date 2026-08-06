@@ -705,20 +705,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             MaterialPageRoute(builder: (_) => FeedScreen(api: api)),
           ),
         ),
-        IconButton(
-          tooltip: l10n.dashboardRecapTooltip,
-          icon: const Icon(Icons.calendar_today_outlined),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => RecapScreen(
-                runStore: widget.runStore,
-                preferences: widget.preferences,
-                api: api,
-              ),
-            ),
-          ),
-        ),
         if (viewerId != null) NotificationBell(api: api),
         if (viewerId != null)
           IconButton(
@@ -820,6 +806,30 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ],
       );
+      // The recap used to be an unlabelled calendar glyph on the toolbar —
+      // which reads as a date picker — and was the surface's only entry point
+      // in the app (#666 I8). Web renders it as a labelled link beside the
+      // dashboard stat grid; this is that link, under the period cards it
+      // summarises.
+      final recapLink = api == null
+          ? null
+          : Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => RecapScreen(
+                      runStore: widget.runStore,
+                      preferences: widget.preferences,
+                      api: api,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: Text(l10n.dashboardRecapTooltip),
+              ),
+            );
       final thisWeekCard = Card(
         child: Padding(
           padding: _kCardPadding,
@@ -982,6 +992,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   goalsSection,
                 _kSectionGap,
                 periodRow,
+                if (recapLink != null) recapLink,
                 _kSectionGap,
                 thisWeekCard,
                 _kSectionGap,
@@ -1023,6 +1034,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             goalsSection,
             _kSectionGap,
             periodRow,
+            if (recapLink != null) recapLink,
             _kSectionGap,
             // Every card below names itself with a ChartCardHeader, so the
             // stack separates by the card grammar (§482's 4dp vertical margin

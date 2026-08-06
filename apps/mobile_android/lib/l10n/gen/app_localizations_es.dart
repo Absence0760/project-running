@@ -12563,4 +12563,8 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get roadbookNeedsRouteLine =>
       'Añade al menos dos puntos a esta ruta para crear un roadbook.';
+
+  @override
+  String get settingsGearUnavailable =>
+      'El equipamiento no está disponible en esta versión';
 }

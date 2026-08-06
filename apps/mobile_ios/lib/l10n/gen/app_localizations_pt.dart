@@ -12560,6 +12560,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get roadbookNeedsRouteLine =>
       'Adicione pelo menos dois pontos a esta rota para montar um roadbook.';
+
+  @override
+  String get settingsGearUnavailable =>
+      'Equipamento não está disponível nesta versão';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -25113,4 +25117,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get roadbookNeedsRouteLine =>
       'Adicione pelo menos dois pontos a esta rota para montar um roadbook.';
+
+  @override
+  String get settingsGearUnavailable =>
+      'Equipamento não está disponível nesta versão';
 }

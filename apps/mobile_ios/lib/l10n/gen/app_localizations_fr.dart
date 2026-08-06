@@ -12592,4 +12592,8 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get roadbookNeedsRouteLine =>
       'Ajoutez au moins deux points à cet itinéraire pour créer un roadbook.';
+
+  @override
+  String get settingsGearUnavailable =>
+      'L\'équipement n\'est pas disponible dans cette version';
 }

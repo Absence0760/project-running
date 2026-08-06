@@ -11980,4 +11980,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get roadbookNeedsRouteLine => 'ロードブックを作成するには、このルートに 2 点以上を追加してください。';
+
+  @override
+  String get settingsGearUnavailable => 'このビルドではギアを利用できません';
 }

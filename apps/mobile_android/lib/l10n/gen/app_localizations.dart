@@ -20995,6 +20995,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add at least two points to this route to build a roadbook.'**
   String get roadbookNeedsRouteLine;
+
+  /// Reason on the disabled Gear tile when no gear store is wired on this mount
+  ///
+  /// In en, this message translates to:
+  /// **'Gear isn\'t available on this build'**
+  String get settingsGearUnavailable;
 }
 
 class _AppLocalizationsDelegate

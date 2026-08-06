@@ -16,6 +16,7 @@ import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
+import '../widgets/surface_peer_strip.dart';
 import '../widgets/top_banner.dart';
 import 'plan_detail_screen.dart';
 import 'plan_library_screen.dart';
@@ -114,18 +115,6 @@ class _PlansScreenState extends State<PlansScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.plansTitle),
-        actions: [
-          if (signedIn)
-            IconButton(
-              icon: const Icon(Icons.public),
-              tooltip: l10n.plansBrowseLibrary,
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => PlanLibraryScreen(training: widget.training),
-                ),
-              ),
-            ),
-        ],
       ),
       floatingActionButton: signedIn
           ? FloatingActionButton.extended(
@@ -140,7 +129,29 @@ class _PlansScreenState extends State<PlansScreen> {
               label: Text(l10n.plansNewPlan),
             )
           : null,
-      body: !signedIn
+      body: Column(
+        children: [
+          // The plan library used to hang off an icon-only `Icons.public`
+          // AppBar glyph named only in a tooltip; web renders it as a
+          // labelled link beside New plan (#666 I8).
+          if (signedIn)
+            SurfacePeerStrip(
+              label: l10n.plansTitle,
+              peers: [
+                SurfacePeer(label: l10n.plansTitle),
+                SurfacePeer(
+                  label: l10n.plansBrowseLibrary,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          PlanLibraryScreen(training: widget.training),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          Expanded(
+            child: !signedIn
           ? const _SignInPrompt()
           : _loading
           ? ListSkeleton(label: l10n.commonLoading, hasLeading: false)
@@ -207,6 +218,9 @@ class _PlansScreenState extends State<PlansScreen> {
                     },
                   ),
                 ),
+          ),
+        ],
+      ),
     );
   }
 }
