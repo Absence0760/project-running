@@ -111,5 +111,25 @@ void main() {
         ]),
       );
     });
+
+    // `club_detail` and `profile` are clamped through the shared tab host, not
+    // at the screen, so the screens-directory sweep above cannot see them —
+    // and they were the two § 538 had to leave unclamped until § 545 moved
+    // their tab strip into the scroll view.
+    test('the shared tab host clamps, and both hosted screens use it', () {
+      expect(
+        File('lib/widgets/collapsing_tab_host.dart').readAsStringSync(),
+        contains('contentColumn('),
+        reason: 'CollapsingTabHost stopped clamping — club_detail and profile '
+            'lose their content column with it',
+      );
+      for (final screen in ['club_detail_screen.dart', 'profile_screen.dart']) {
+        expect(
+          File('lib/screens/$screen').readAsStringSync(),
+          contains('CollapsingTabHost('),
+          reason: '$screen no longer goes through the clamped tab host',
+        );
+      }
+    });
   });
 }
