@@ -837,7 +837,11 @@ What breaks it is almost never a page. Five mechanisms account for every failure
 
 **Content whose axis is its information may scroll itself.** A data table takes the `.table-scroll` wrapper (`max-width: 100%; overflow-x: auto`, plus `tabindex="0"` so the region is reachable without a mouse). A segmented control, a tab strip and a multi-column set grid scroll as one block, because splitting a continuous track across two rows destroys the control rather than reflowing it — and rows inside such a scroller need a shared explicit `min-width`, or each sizes to its own content and the columns stop lining up.
 
-`tests-e2e/cross-cutting/reflow-narrow-viewport.spec.ts` drives 15 routes at 320 and 360 px. Add a route to it when you add a surface with a grid, a toolbar or a table.
+**A long unbroken token is the same bug in text form.** An env-var name, an id or a URL offers the line breaker no opportunity, so its min-content width is the whole string. `app.css` gives `:not(pre) > code` `overflow-wrap: anywhere` — `anywhere`, not `break-word`, because only `anywhere` counts toward the intrinsic minimum, which is the size that widens the page.
+
+**Measure the narrowest fit, not the pass at 320.** Bisect the viewport width at which a route stops fitting; that number is renderer-independent, and "passes at 320" is not. CI's Linux font stack measures 12-20 px wider than macOS, which is how a route with a 318 px narrowest fit passed a developer's 320 px check and failed CI at 330 (§ 535 amendment). Keep new surfaces at or under ~280 px.
+
+`tests-e2e/cross-cutting/reflow-narrow-viewport.spec.ts` drives 16 routes at 300, 320 and 360 px — the 300 px row is renderer headroom, not a stricter reading of the criterion. Add a route to it when you add a surface with a grid, a toolbar or a table.
 ## A sentence is a catalogue key, not a template plus a fragment
 
 A message that interpolates a fragment carrying its own grammar will double it. The notification templates said `"{name} gave kudos to your {dist}"` and filled `{dist}` with `"your run"` when a run had no recorded distance, so every locale shipped a doubled possessive: "your your run", "deinem deinen Lauf", "a tu tu carrera", "à ton ta course", "à sua sua corrida", "あなたのあなたのラン" ([decisions.md § 536](decisions.md); mobile's twin was `profileNotifYourRun`).
