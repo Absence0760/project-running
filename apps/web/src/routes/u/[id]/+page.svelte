@@ -1183,7 +1183,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 
 	.back-link {
@@ -1253,7 +1253,8 @@
 
 	.counts {
 		display: flex;
-		gap: var(--space-lg);
+		flex-wrap: wrap;
+		gap: var(--space-sm) var(--space-lg);
 	}
 
 	.count {
@@ -1384,7 +1385,7 @@
 	   so the page reads as one product rather than two. */
 	.run-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 
@@ -1471,7 +1472,7 @@
 
 	.people-list {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
 		gap: var(--space-sm);
 	}
 
@@ -1657,7 +1658,7 @@
 
 	.feed {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 
@@ -1734,7 +1735,7 @@
 
 	.stats {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: var(--space-md);
 	}
 
@@ -1888,7 +1889,7 @@
 
 	.skel-card-stats {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: var(--space-md);
 		margin-top: 0.3rem;
 	}

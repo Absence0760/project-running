@@ -752,7 +752,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 88rem;
 		margin: 0 auto;
 	}

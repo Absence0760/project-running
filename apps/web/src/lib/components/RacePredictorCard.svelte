@@ -44,31 +44,33 @@
 				time: fmtSplitTime(prediction.anchor.durationS),
 			})}
 		</p>
-		<table class="ladder">
-			<thead>
-				<tr>
-					<th scope="col">{m('racePredictor.colDistance')}</th>
-					<th scope="col">{m('racePredictor.colTime')}</th>
-					<th scope="col">{m('racePredictor.colPace')}</th>
-					<th scope="col">{m('racePredictor.colConfidence')}</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each prediction.rungs as rung (rung.distanceM)}
+		<div class="table-scroll" tabindex="0">
+			<table class="ladder">
+				<thead>
 					<tr>
-						<td class="dist">{fmtKm(rung.distanceM, 1)}</td>
-						<td class="time">{fmtSplitTime(rung.predictedSec)}</td>
-						<td class="pace">{fmtPace(rung.paceSecPerKm)}</td>
-						<td class="conf">
-							<span
-								class="confidence-chip conf-{rung.quality.confidence}"
-								title={reasonFor(rung.quality.reason)}
-							>{labelFor(rung.quality.confidence)}</span>
-						</td>
+						<th scope="col">{m('racePredictor.colDistance')}</th>
+						<th scope="col">{m('racePredictor.colTime')}</th>
+						<th scope="col">{m('racePredictor.colPace')}</th>
+						<th scope="col">{m('racePredictor.colConfidence')}</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each prediction.rungs as rung (rung.distanceM)}
+						<tr>
+							<td class="dist">{fmtKm(rung.distanceM, 1)}</td>
+							<td class="time">{fmtSplitTime(rung.predictedSec)}</td>
+							<td class="pace">{fmtPace(rung.paceSecPerKm)}</td>
+							<td class="conf">
+								<span
+									class="confidence-chip conf-{rung.quality.confidence}"
+									title={reasonFor(rung.quality.reason)}
+								>{labelFor(rung.quality.confidence)}</span>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 		<p class="footnote">{m('racePredictor.footnote')}</p>
 	</section>
 {/if}

@@ -160,7 +160,7 @@
 		padding: 0;
 		margin: 0;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
 		gap: 0.75rem;
 	}
 	.plan-card {

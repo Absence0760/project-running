@@ -499,7 +499,7 @@
 	.login-page {
 		min-height: 100vh;
 		display: grid;
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 		background: var(--color-bg);
 	}
 

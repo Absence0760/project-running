@@ -446,6 +446,11 @@
 		background: var(--color-surface);
 		padding: var(--space-2xs);
 		gap: var(--space-2xs);
+		/* A segmented control is one continuous track — wrapping it
+		   splits the pill. It scrolls itself rather than widening the
+		   document (WCAG 1.4.10). */
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
 	.activity-btn {
@@ -559,7 +564,7 @@
 
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 

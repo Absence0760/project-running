@@ -429,7 +429,7 @@
 	}
 	.feed {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.entry {
@@ -499,11 +499,11 @@
 	}
 	.stats {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 0.5rem;
 	}
 	.stats-2 {
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 	.lift-title {
 		display: flex;

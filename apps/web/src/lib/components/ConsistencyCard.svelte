@@ -75,9 +75,10 @@
 	}
 	.card-head {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-sm);
+		gap: var(--space-2xs) var(--space-sm);
 		margin-bottom: var(--space-md);
 	}
 	.card-head h2 {

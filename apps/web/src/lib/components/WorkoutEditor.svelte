@@ -605,7 +605,7 @@
 	fieldset.repeats,
 	fieldset.steady {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.55rem 0.85rem;
 	}
 	fieldset.repeats > fieldset,

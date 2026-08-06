@@ -262,7 +262,7 @@
 	}
 	.key-stats {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
 		gap: 1px;
 		background: var(--color-border);
 		border: 1px solid var(--color-border);

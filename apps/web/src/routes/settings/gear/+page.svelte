@@ -839,7 +839,7 @@
 <style>
 	.page {
 		max-width: 64rem;
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 	.page-head { margin-bottom: var(--space-xl); }
 	.kicker {
@@ -860,6 +860,7 @@
 	}
 	.tabs {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.25rem;
 		border-bottom: 1px solid var(--color-border);
@@ -1134,7 +1135,7 @@
 	}
 	.gear-form .row {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-md);
 	}
 	.gear-form footer {
@@ -1275,6 +1276,7 @@
 	}
 	.rotation-create {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-sm);
 		margin-bottom: var(--space-md);
 		max-width: 30rem;

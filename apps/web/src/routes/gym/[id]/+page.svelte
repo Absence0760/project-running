@@ -603,6 +603,7 @@
 
 	.page-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: var(--space-md);
@@ -645,8 +646,8 @@
 	}
 	.head-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-sm);
-		flex-shrink: 0;
 	}
 	.head-actions .btn {
 		display: inline-flex;
@@ -661,7 +662,7 @@
 	   stacked layout lives here. */
 	.summary-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr));
 		gap: var(--space-sm);
 		margin-bottom: var(--space-lg);
 	}
@@ -768,9 +769,9 @@
 	}
 	.sets li {
 		display: grid;
-		grid-template-columns: 4rem 1fr 4rem;
+		grid-template-columns: minmax(0, 4rem) minmax(0, 1fr) minmax(0, 4rem);
 		align-items: center;
-		gap: var(--space-md);
+		gap: var(--space-sm);
 		padding: var(--space-xs) 0;
 	}
 	.sets li + li:not(.sets-head) {

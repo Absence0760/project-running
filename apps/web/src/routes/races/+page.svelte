@@ -383,10 +383,11 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-lg);
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 	.races-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: var(--space-md);

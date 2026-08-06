@@ -2073,7 +2073,7 @@
 	}
 	.loading-key-stats {
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: var(--space-md);
 		margin-top: var(--space-sm);
 	}
@@ -2098,9 +2098,9 @@
 		100% { background-position: -200% 0; }
 	}
 	@media (max-width: 900px) {
-		.loading-grid { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; }
+		.loading-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: 40vh 1fr; }
 		.loading-map { border-inline-end: none; border-bottom: 1px solid var(--color-border); }
-		.loading-key-stats { grid-template-columns: repeat(2, 1fr); }
+		.loading-key-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 	.not-found {
 		text-align: center;
@@ -2481,7 +2481,7 @@
 
 	.segment-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(5rem, 100%), 1fr));
 		gap: 0.4rem 0.9rem;
 	}
 
@@ -2679,7 +2679,7 @@
 	 */
 	.key-stats {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
 		gap: 1px;
 		margin-bottom: var(--space-xl);
 		background: var(--color-border);
@@ -3178,7 +3178,7 @@
 	}
 	.share-card-stats {
 		display: grid;
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 64px;
 	}
 	.share-stat {

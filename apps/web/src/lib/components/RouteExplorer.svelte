@@ -656,7 +656,7 @@
 
 	.route-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 

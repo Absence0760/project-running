@@ -930,6 +930,7 @@
 	}
 	.page-header {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: var(--space-md);
@@ -1469,7 +1470,7 @@
 	}
 
 	@media (max-width: 36rem) {
-		.rings { grid-template-columns: repeat(2, 1fr); align-items: start; }
+		.rings { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 		.ring-hero { grid-column: 1 / -1; }
 	}
 </style>

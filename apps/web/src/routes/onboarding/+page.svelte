@@ -728,11 +728,11 @@
 
 	.goal-grid {
 		display: grid;
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-sm);
 	}
 	@media (min-width: 32rem) {
-		.goal-grid { grid-template-columns: 1fr 1fr; }
+		.goal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 	.goal-option { padding: 0.85rem var(--space-md); font-weight: 500; }
 

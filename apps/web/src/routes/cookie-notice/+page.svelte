@@ -37,17 +37,19 @@
 		These load unconditionally because the site cannot function (or function securely) without
 		them. They do not require consent under EU ePrivacy.
 	</p>
-	<table>
-		<thead>
-			<tr><th>Name</th><th>Kind</th><th>Purpose</th><th>Lifetime</th></tr>
-		</thead>
-		<tbody>
-			<tr><td>sb-access-token / sb-refresh-token</td><td>Cookie (Supabase Auth)</td><td>Authentication session</td><td>1 hour / 30 days</td></tr>
-			<tr><td>cookie_consent</td><td>localStorage + a same-named cookie</td><td>Remembers your consent choice. The cookie mirrors the stored choice so our server can respect it per-request (for example, gating error monitoring) — the server cannot read localStorage.</td><td>12 months</td></tr>
-			<tr><td>strava_oauth_state</td><td>Browser storage</td><td>Anti-forgery (CSRF) state while you connect Strava</td><td>During the connect flow</td></tr>
-			<tr><td>run_app.device_id</td><td>localStorage</td><td>A random identifier for this browser so per-device settings can differ from your other devices. First-party only; never used for advertising.</td><td>Persistent</td></tr>
-		</tbody>
-	</table>
+	<div class="table-scroll" tabindex="0">
+		<table>
+			<thead>
+				<tr><th>Name</th><th>Kind</th><th>Purpose</th><th>Lifetime</th></tr>
+			</thead>
+			<tbody>
+				<tr><td>sb-access-token / sb-refresh-token</td><td>Cookie (Supabase Auth)</td><td>Authentication session</td><td>1 hour / 30 days</td></tr>
+				<tr><td>cookie_consent</td><td>localStorage + a same-named cookie</td><td>Remembers your consent choice. The cookie mirrors the stored choice so our server can respect it per-request (for example, gating error monitoring) — the server cannot read localStorage.</td><td>12 months</td></tr>
+				<tr><td>strava_oauth_state</td><td>Browser storage</td><td>Anti-forgery (CSRF) state while you connect Strava</td><td>During the connect flow</td></tr>
+				<tr><td>run_app.device_id</td><td>localStorage</td><td>A random identifier for this browser so per-device settings can differ from your other devices. First-party only; never used for advertising.</td><td>Persistent</td></tr>
+			</tbody>
+		</table>
+	</div>
 
 	<h2>2. Preferences + on-device caches</h2>
 	<p>
@@ -55,31 +57,35 @@
 		table is sent to a third party; entries keyed by user id or date are cleared on sign-out or
 		roll off naturally.
 	</p>
-	<table>
-		<thead>
-			<tr><th>Name</th><th>Purpose</th><th>Lifetime</th></tr>
-		</thead>
-		<tbody>
-			<tr><td>run_app.theme</td><td>Light/dark mode preference</td><td>Persistent</td></tr>
-			<tr><td>sidebar_collapsed</td><td>Sidebar collapse state</td><td>Persistent</td></tr>
-			<tr><td>locale</td><td>Language preference</td><td>Persistent</td></tr>
-			<tr><td>settings_cache_* (per user/device)</td><td>Offline-first cache of your account settings, plus a pending-changes queue drained when you're back online</td><td>Until sign-out</td></tr>
-			<tr><td>runs_filters_v1 / routes_filters_v1</td><td>Your list filters, so they survive navigation</td><td>Persistent</td></tr>
-			<tr><td>water_ml_&lt;user&gt;_&lt;date&gt;</td><td>Today's water-tracker total (stays on this device)</td><td>Per day</td></tr>
-			<tr><td>Layout keys (panel widths, goal migration)</td><td>Remember resizable-panel positions; migrate legacy locally-stored goals into your account</td><td>Persistent</td></tr>
-		</tbody>
-	</table>
+	<div class="table-scroll" tabindex="0">
+		<table>
+			<thead>
+				<tr><th>Name</th><th>Purpose</th><th>Lifetime</th></tr>
+			</thead>
+			<tbody>
+				<tr><td>run_app.theme</td><td>Light/dark mode preference</td><td>Persistent</td></tr>
+				<tr><td>sidebar_collapsed</td><td>Sidebar collapse state</td><td>Persistent</td></tr>
+				<tr><td>locale</td><td>Language preference</td><td>Persistent</td></tr>
+				<tr><td>settings_cache_* (per user/device)</td><td>Offline-first cache of your account settings, plus a pending-changes queue drained when you're back online</td><td>Until sign-out</td></tr>
+				<tr><td>runs_filters_v1 / routes_filters_v1</td><td>Your list filters, so they survive navigation</td><td>Persistent</td></tr>
+				<tr><td>water_ml_&lt;user&gt;_&lt;date&gt;</td><td>Today's water-tracker total (stays on this device)</td><td>Per day</td></tr>
+				<tr><td>Layout keys (panel widths, goal migration)</td><td>Remember resizable-panel positions; migrate legacy locally-stored goals into your account</td><td>Persistent</td></tr>
+			</tbody>
+		</table>
+	</div>
 
 	<h2>3. Consent-gated</h2>
 	<p>These load only after you accept them via the consent banner.</p>
-	<table>
-		<thead>
-			<tr><th>Name</th><th>Provider</th><th>Purpose</th><th>Lifetime</th></tr>
-		</thead>
-		<tbody>
-			<tr><td>sentry-trace, baggage</td><td>Sentry</td><td>Error monitoring + performance traces</td><td>Per-request</td></tr>
-		</tbody>
-	</table>
+	<div class="table-scroll" tabindex="0">
+		<table>
+			<thead>
+				<tr><th>Name</th><th>Provider</th><th>Purpose</th><th>Lifetime</th></tr>
+			</thead>
+			<tbody>
+				<tr><td>sentry-trace, baggage</td><td>Sentry</td><td>Error monitoring + performance traces</td><td>Per-request</td></tr>
+			</tbody>
+		</table>
+	</div>
 
 	<h2>4. Third-party services that load on-page</h2>
 	<p>
@@ -160,7 +166,7 @@
 	.legal-page {
 		max-width: 48rem;
 		margin: 0 auto;
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		line-height: 1.6;
 	}
 	.manage-consent {

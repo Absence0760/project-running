@@ -123,7 +123,7 @@
 </div>
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 72rem; margin: 0 auto; }
+	.page { padding: var(--page-padding-y) var(--page-padding-x); max-width: 72rem; margin: 0 auto; }
 	.hero { text-align: center; padding: var(--space-2xl) 0 var(--space-xl); }
 	.kicker {
 		text-transform: uppercase;
@@ -146,7 +146,7 @@
 	}
 	.price-cards {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
 		gap: var(--space-md);
 		margin-bottom: var(--space-xl);
 	}
@@ -288,7 +288,7 @@
 	   page. Used for marketing handouts + the occasional partner deck. */
 	@media print {
 		.page { padding: 0; max-width: none; }
-		.price-cards { grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+		.price-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
 		.price-card { padding: 0.5rem; box-shadow: none; background: white !important; border: 1px solid #ccc; }
 		.price-card.us { background: #f6fbf6 !important; }
 		.cmp-section { page-break-inside: avoid; margin-bottom: 1rem; }

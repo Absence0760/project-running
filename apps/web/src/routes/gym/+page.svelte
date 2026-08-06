@@ -361,6 +361,7 @@
 	}
 	.page-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
 		margin-bottom: var(--space-xl);
@@ -381,8 +382,8 @@
 	}
 	.head-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-sm);
-		flex-shrink: 0;
 	}
 	.page-header .btn {
 		display: inline-flex;
@@ -513,9 +514,9 @@
 	}
 	.row-stats {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-lg);
-		flex-shrink: 0;
+		gap: var(--space-sm) var(--space-lg);
 	}
 	.stat {
 		display: flex;

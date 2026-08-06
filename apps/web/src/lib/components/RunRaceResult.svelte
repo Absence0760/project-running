@@ -251,7 +251,7 @@
 <style>
 	.race-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr));
 		gap: var(--space-sm) var(--space-lg);
 		margin: 0 0 var(--space-md);
 	}

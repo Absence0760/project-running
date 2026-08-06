@@ -480,7 +480,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 64rem;
 	}
 	.page-head {
@@ -565,6 +565,7 @@
 	}
 	.link-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-sm) var(--space-md);
@@ -608,8 +609,8 @@
 	}
 	.link-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-xs);
-		flex-shrink: 0;
 	}
 
 	.roster-scroll {

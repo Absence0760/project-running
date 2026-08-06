@@ -2444,7 +2444,7 @@
 		gap: var(--space-sm);
 	}
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 
 	.back {
@@ -2812,7 +2812,7 @@
 	}
 	.rsvp-tri {
 		display: grid;
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 0.4rem;
 		padding: 0.5rem;
 		background: var(--color-surface);
@@ -3003,7 +3003,7 @@
 
 	.attendees {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(13rem, 100%), 1fr));
 		gap: 0.5rem;
 	}
 
@@ -3291,22 +3291,23 @@
 
 	@media (max-width: 60rem) {
 		.hero {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 		.hero-side {
 			align-self: stretch;
 		}
 		.rsvp-tri { min-width: 0; }
 		.skel-hero {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 
 	.results-head {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-md);
+		gap: var(--space-sm) var(--space-md);
 		margin-bottom: var(--space-sm);
 	}
 	.btn-primary-sm {
@@ -3419,8 +3420,9 @@
 	}
 	.results-actions {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-md);
+		gap: var(--space-sm) var(--space-md);
 	}
 	.import-help {
 		font-size: 0.85rem;
@@ -3538,7 +3540,7 @@
 	}
 	.photo-gallery {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(8rem, 100%), 1fr));
 		gap: var(--space-sm);
 		margin-top: var(--space-sm);
 	}

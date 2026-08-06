@@ -443,7 +443,7 @@
 	/* Type / Seconds / Block share one row and line up across movement cards. */
 	.item-grid {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: var(--space-md);
 	}
 	.item-row {
@@ -487,7 +487,7 @@
 
 	@media (max-width: 560px) {
 		.item-grid {
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 		.row {
 			flex-direction: column;

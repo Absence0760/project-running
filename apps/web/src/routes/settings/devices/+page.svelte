@@ -611,7 +611,7 @@
 </Modal>
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
+	.page { padding: var(--page-padding-y) var(--page-padding-x); max-width: 64rem; }
 	.page-head { margin-bottom: var(--space-xl); }
 	.kicker {
 		text-transform: uppercase;

@@ -562,7 +562,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 64rem;
 	}
 
@@ -682,8 +682,9 @@
 
 	.integration-card {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-lg);
+		gap: var(--space-md) var(--space-lg);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
@@ -809,9 +810,9 @@
 	}
 	.btn-group {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-xs);
-		flex-shrink: 0;
 	}
 	.btn-sync {
 		background: var(--color-secondary, var(--color-primary));

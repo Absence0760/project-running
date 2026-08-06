@@ -393,7 +393,7 @@
 
 	@media (max-width: 48rem) {
 		.layout {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 		/* On narrow screens show one pane at a time. */
 		.threads.has-active {

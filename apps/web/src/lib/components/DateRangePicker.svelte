@@ -345,7 +345,7 @@
 
 	.chip-row {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 8px;
 		padding: 0 0 8px;
 	}
@@ -446,7 +446,7 @@
 
 	.dow-row {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(0, 1fr));
 		padding: 4px 0;
 		border-top: 1px solid var(--color-border);
 		border-bottom: 1px solid var(--color-border);
@@ -472,7 +472,7 @@
 
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(0, 1fr));
 	}
 
 	.cell {

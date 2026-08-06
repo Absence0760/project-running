@@ -74,7 +74,7 @@
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.badge-tile {

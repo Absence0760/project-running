@@ -1587,7 +1587,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 	.back {
 		display: inline-flex;
@@ -1603,6 +1603,7 @@
 
 	.hero {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: var(--space-lg);
@@ -2218,7 +2219,7 @@
 	}
 	.day-grid {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(0, 1fr));
 		gap: 0.4rem;
 	}
 	/* On narrow viewports stay one column wide per day so the
@@ -2227,7 +2228,7 @@
 	   Tue+Wed which reads like a random grid. */
 	@media (max-width: 40rem) {
 		.day-grid {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 	.day {
@@ -2458,10 +2459,15 @@
 		}
 		.hero-position {
 			flex-direction: row;
+			flex-wrap: wrap;
 			align-items: center;
 			align-self: stretch;
 			justify-content: space-between;
 			min-width: 0;
+			/* The base rule pins flex-shrink to 0 for the desktop column;
+			   stacked under the title it has to be able to take the line and
+			   wrap its own pills instead. */
+			flex: 1 1 100%;
 		}
 		h1 {
 			font-size: 1.35rem;

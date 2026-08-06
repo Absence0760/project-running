@@ -393,7 +393,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 	/* The session + gym branches are focused single-form editors — cap their
 	   content so fields don't stretch the full viewport on a wide screen
@@ -446,6 +446,10 @@
 
 	.kind-chooser {
 		display: inline-flex;
+		/* A segmented control is one continuous track — it scrolls itself
+		   rather than widening the document (WCAG 1.4.10). */
+		max-width: 100%;
+		overflow-x: auto;
 		gap: 0.25rem;
 		padding: 0.25rem;
 		background: var(--color-surface);
@@ -510,7 +514,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
-		min-width: 12rem;
+		min-width: min(12rem, 100%);
 	}
 	.picker-field span {
 		font-size: 0.85rem;

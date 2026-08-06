@@ -123,7 +123,7 @@
 
 	.guide-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 

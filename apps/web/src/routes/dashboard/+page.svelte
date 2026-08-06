@@ -1585,45 +1585,47 @@
 							{m('dash.prStaleNote')}
 						</p>
 					{/if}
-					<table class="pr-table">
-						<thead>
-							<tr>
-								<th>{m('dash.prColDistance')}</th>
-								<th>{m('dash.prColTime')}</th>
-								<th>{m('dash.prColDate')}</th>
-								{#if showAgeGradeCol}
-									<th class="pr-age-grade-th">{m('dash.prColAgeGrade')}</th>
-								{/if}
-								<th></th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each visiblePrs as pr}
+					<div class="table-scroll" tabindex="0">
+						<table class="pr-table">
+							<thead>
 								<tr>
-									<td class="pr-distance">{pr.distance}</td>
-									<td class="pr-time">{formatDuration(pr.time_s)}</td>
-									<td class="pr-date">
-										{formatDate(pr.date)}
-										<span class="pr-age">{relativeAge(pr.date)}</span>
-									</td>
+									<th>{m('dash.prColDistance')}</th>
+									<th>{m('dash.prColTime')}</th>
+									<th>{m('dash.prColDate')}</th>
 									{#if showAgeGradeCol}
-										<td class="pr-age-grade" title={m('dash.prAgeGradeTitle')}>
-											{prAgeGrades[pr.key] ?? '—'}
-										</td>
+										<th class="pr-age-grade-th">{m('dash.prColAgeGrade')}</th>
 									{/if}
-									<td>
-										<button
-											type="button"
-											class="pr-hide"
-											title={m('dash.hideRecordTitle')}
-											aria-label={m('dash.hideRecordAria', { distance: pr.distance })}
-											onclick={() => hidePr(pr.key)}>×</button
-										>
-									</td>
+									<th></th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{#each visiblePrs as pr}
+									<tr>
+										<td class="pr-distance">{pr.distance}</td>
+										<td class="pr-time">{formatDuration(pr.time_s)}</td>
+										<td class="pr-date">
+											{formatDate(pr.date)}
+											<span class="pr-age">{relativeAge(pr.date)}</span>
+										</td>
+										{#if showAgeGradeCol}
+											<td class="pr-age-grade" title={m('dash.prAgeGradeTitle')}>
+												{prAgeGrades[pr.key] ?? '—'}
+											</td>
+										{/if}
+										<td>
+											<button
+												type="button"
+												class="pr-hide"
+												title={m('dash.hideRecordTitle')}
+												aria-label={m('dash.hideRecordAria', { distance: pr.distance })}
+												onclick={() => hidePr(pr.key)}>×</button
+											>
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 				{:else if personalRecords.length === 0}
 					<p class="empty-text">{m('dash.prEmptyNoRuns')}</p>
 				{:else}
@@ -2055,6 +2057,7 @@
 
 	.view-toggle {
 		display: inline-flex;
+		flex-wrap: wrap;
 		gap: 0.15rem;
 		background: var(--color-bg-tertiary);
 		padding: 0.2rem;
@@ -2589,7 +2592,7 @@
 	}
 	.fitness-row {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr));
 		gap: var(--space-md);
 		margin-bottom: var(--space-sm);
 	}
@@ -2839,7 +2842,7 @@
 	.goals-empty-card .btn :global(.material-symbols) { font-size: 1.05rem; }
 	.goal-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(24rem, 100%), 1fr));
 		gap: var(--space-lg);
 	}
 	.goal-card {
@@ -3236,7 +3239,10 @@
 
 	.two-col {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		/* A bare `1fr` track floors at the column's min-content, so a
+		   table or a long row inside widens the page instead of being
+		   held to the track. */
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-lg);
 	}
 
@@ -3356,8 +3362,9 @@
 	}
 	.run-meta {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-sm);
+		gap: var(--space-2xs) var(--space-sm);
 	}
 	.run-pace {
 		font-size: 0.8rem;
@@ -3400,16 +3407,19 @@
 		   3-up first would leave an awkward 3+2 split (which is exactly
 		   what we just escaped at the wider size). */
 		.stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-		.fitness-row { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+		.fitness-row { grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr)); }
 	}
 	@media (max-width: 768px) {
 		.stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-		.two-col { grid-template-columns: 1fr; }
+		.two-col { grid-template-columns: minmax(0, 1fr); }
 		.plan-hero,
 		.plan-promo {
 			padding: var(--space-md) var(--space-lg);
 		}
-		.plan-hero-name { font-size: 1.25rem; }
+		/* nowrap makes the whole plan name this element's min-content
+		   width, so on a phone the ellipsis never engages — the box grows
+		   and takes the page with it. Below this width the name wraps. */
+		.plan-hero-name { font-size: 1.25rem; white-space: normal; }
 		.goals-empty-card {
 			flex-direction: column;
 			align-items: flex-start;

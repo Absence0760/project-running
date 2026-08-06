@@ -45,13 +45,14 @@
 	.page {
 		display: flex;
 		flex-direction: column;
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		gap: var(--space-lg);
 		height: 100vh;
 		min-height: 32rem;
 	}
 	.page-head {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: var(--space-md);

@@ -2336,7 +2336,9 @@
 		top: 12px;
 		inset-inline-start: 12px;
 		z-index: 10;
-		width: 320px;
+		/* Absolutely positioned over the map, so a fixed 320px runs past a
+		   320px viewport's right edge and takes the document with it. */
+		width: min(320px, calc(100% - 24px));
 	}
 
 	.search-row {
@@ -2346,6 +2348,7 @@
 
 	.search-box input {
 		flex: 1;
+		min-width: 0;
 		padding: 10px 14px;
 		border: none;
 		border-radius: 8px;

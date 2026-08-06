@@ -153,7 +153,7 @@
 		padding: var(--space-2xl) 0;
 	}
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 48rem;
 	}
 	.back-link {
@@ -200,7 +200,8 @@
 	}
 	.macro-breakdown {
 		display: flex;
-		gap: var(--space-xl);
+		flex-wrap: wrap;
+		gap: var(--space-sm) var(--space-xl);
 	}
 	.macro-stat {
 		display: flex;

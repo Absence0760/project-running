@@ -344,7 +344,7 @@
 />
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 48rem; }
+	.page { padding: var(--page-padding-y) var(--page-padding-x); max-width: 48rem; }
 	.page-head { margin-bottom: var(--space-xl); }
 	.kicker {
 		font-size: 0.72rem;

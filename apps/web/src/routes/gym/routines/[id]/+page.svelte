@@ -238,26 +238,28 @@
 							</span>
 						{/if}
 					</div>
-					<table class="set-table">
-						<thead>
-							<tr>
-								<th class="section-label">{t('gym.routine.setType')}</th>
-								<th class="section-label">{t('gym.routine.targetReps')}</th>
-								<th class="section-label">{t('gym.rpe')}</th>
-								<th class="section-label">{t('gym.routine.restLabel')}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each ex.sets as s (s.set_index)}
+					<div class="table-scroll" tabindex="0">
+						<table class="set-table">
+							<thead>
 								<tr>
-									<td>{t(`gym.routine.setType.${s.set_type}`)}</td>
-									<td>{targetLabel(ex.modality, s)}</td>
-									<td data-testid="routine-set-rpe-value">{s.target_rpe == null ? '—' : s.target_rpe}</td>
-									<td>{s.rest_s == null ? '—' : t('gym.durationValue', { seconds: s.rest_s })}</td>
+									<th class="section-label">{t('gym.routine.setType')}</th>
+									<th class="section-label">{t('gym.routine.targetReps')}</th>
+									<th class="section-label">{t('gym.rpe')}</th>
+									<th class="section-label">{t('gym.routine.restLabel')}</th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{#each ex.sets as s (s.set_index)}
+									<tr>
+										<td>{t(`gym.routine.setType.${s.set_type}`)}</td>
+										<td>{targetLabel(ex.modality, s)}</td>
+										<td data-testid="routine-set-rpe-value">{s.target_rpe == null ? '—' : s.target_rpe}</td>
+										<td>{s.rest_s == null ? '—' : t('gym.durationValue', { seconds: s.rest_s })}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 				</li>
 			{/each}
 		</ul>
@@ -288,6 +290,7 @@
 	}
 	.detail-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: var(--space-md);
@@ -302,6 +305,7 @@
 	}
 	.head-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-sm);
 	}
 	.publish-row {

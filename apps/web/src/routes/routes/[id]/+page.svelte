@@ -1010,7 +1010,7 @@
 	 * pushed the description / tags / scrubber way down). */
 	.key-stats {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(112px, 100%), 1fr));
 		gap: 1px;
 		margin-bottom: var(--space-xl);
 		background: var(--color-border);
@@ -1529,13 +1529,13 @@
 		 * auto-fit form orphaned the 4th tile at panel widths between
 		 * 3 and 4 columns. 2-col here gives a perfect 2×2 at most
 		 * widths and stacks 1-col only on truly tiny panels. */
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-sm);
 		margin-bottom: var(--space-md);
 	}
 	@container stats (min-width: 600px) {
 		.elev-grid {
-			grid-template-columns: repeat(4, 1fr);
+			grid-template-columns: repeat(4, minmax(0, 1fr));
 		}
 	}
 	.elev-tile {

@@ -281,128 +281,130 @@
 				</select>
 			</label>
 
-			<div class="set-head" class:wr={ex.modality === 'weight_reps'}>
-				<span class="section-label set-cap">{t('gym.routine.setType')}</span>
-				{#if ex.modality === 'weight_reps' || ex.modality === 'bodyweight_reps'}
-					<span class="section-label set-cap">{t('gym.routine.targetReps')}</span>
-				{:else if ex.modality === 'time'}
-					<span class="section-label set-cap">{t('gym.routine.targetDuration')}</span>
-				{:else}
-					<span class="section-label set-cap">{t('gym.routine.targetDistance')}</span>
-				{/if}
-				{#if ex.modality === 'weight_reps'}
-					<span class="section-label set-cap"
-						>{t('gym.routine.targetWeight', { unit: weightUnitLabel() })}</span
-					>
-				{/if}
-				<span class="section-label set-cap">{t('gym.routine.restLabel')}</span>
-				<span class="section-label set-cap">{t('gym.rpe')}</span>
-				<span></span>
-			</div>
-
-			{#each ex.sets as _set, si (si)}
-				<div class="set-row" class:wr={ex.modality === 'weight_reps'}>
-					<select
-						class="text-input"
-						bind:value={exercises[ei].sets[si].setType}
-						aria-label={t('gym.routine.setType')}
-						data-testid="routine-set-type"
-					>
-						{#each SET_TYPES as st (st)}
-							<option value={st}>{setTypeLabel(st)}</option>
-						{/each}
-					</select>
-
+			<div class="set-scroll">
+				<div class="set-head" class:wr={ex.modality === 'weight_reps'}>
+					<span class="section-label set-cap">{t('gym.routine.setType')}</span>
 					{#if ex.modality === 'weight_reps' || ex.modality === 'bodyweight_reps'}
-						<span class="rep-range">
-							<input
-								class="text-input"
-								type="number"
-								inputmode="numeric"
-								min="0"
-								bind:value={exercises[ei].sets[si].reps}
-								aria-label={t('gym.routine.targetReps')}
-								data-testid="routine-set-reps"
-							/>
-							<span class="range-sep">{t('gym.routine.targetRepsMax')}</span>
-							<input
-								class="text-input"
-								type="number"
-								inputmode="numeric"
-								min="0"
-								bind:value={exercises[ei].sets[si].repsMax}
-								aria-label={t('gym.routine.targetRepsMax')}
-								data-testid="routine-set-reps-max"
-							/>
-						</span>
+						<span class="section-label set-cap">{t('gym.routine.targetReps')}</span>
 					{:else if ex.modality === 'time'}
+						<span class="section-label set-cap">{t('gym.routine.targetDuration')}</span>
+					{:else}
+						<span class="section-label set-cap">{t('gym.routine.targetDistance')}</span>
+					{/if}
+					{#if ex.modality === 'weight_reps'}
+						<span class="section-label set-cap"
+							>{t('gym.routine.targetWeight', { unit: weightUnitLabel() })}</span
+						>
+					{/if}
+					<span class="section-label set-cap">{t('gym.routine.restLabel')}</span>
+					<span class="section-label set-cap">{t('gym.rpe')}</span>
+					<span></span>
+				</div>
+
+				{#each ex.sets as _set, si (si)}
+					<div class="set-row" class:wr={ex.modality === 'weight_reps'}>
+						<select
+							class="text-input"
+							bind:value={exercises[ei].sets[si].setType}
+							aria-label={t('gym.routine.setType')}
+							data-testid="routine-set-type"
+						>
+							{#each SET_TYPES as st (st)}
+								<option value={st}>{setTypeLabel(st)}</option>
+							{/each}
+						</select>
+
+						{#if ex.modality === 'weight_reps' || ex.modality === 'bodyweight_reps'}
+							<span class="rep-range">
+								<input
+									class="text-input"
+									type="number"
+									inputmode="numeric"
+									min="0"
+									bind:value={exercises[ei].sets[si].reps}
+									aria-label={t('gym.routine.targetReps')}
+									data-testid="routine-set-reps"
+								/>
+								<span class="range-sep">{t('gym.routine.targetRepsMax')}</span>
+								<input
+									class="text-input"
+									type="number"
+									inputmode="numeric"
+									min="0"
+									bind:value={exercises[ei].sets[si].repsMax}
+									aria-label={t('gym.routine.targetRepsMax')}
+									data-testid="routine-set-reps-max"
+								/>
+							</span>
+						{:else if ex.modality === 'time'}
+							<input
+								class="text-input"
+								type="number"
+								inputmode="numeric"
+								min="0"
+								bind:value={exercises[ei].sets[si].duration}
+								aria-label={t('gym.routine.targetDuration')}
+								data-testid="routine-set-duration"
+							/>
+						{:else}
+							<input
+								class="text-input"
+								type="number"
+								inputmode="decimal"
+								min="0"
+								bind:value={exercises[ei].sets[si].distance}
+								aria-label={t('gym.routine.targetDistance')}
+								data-testid="routine-set-distance"
+							/>
+						{/if}
+
+						{#if ex.modality === 'weight_reps'}
+							<input
+								class="text-input"
+								type="number"
+								inputmode="decimal"
+								min="0"
+								step="0.5"
+								bind:value={exercises[ei].sets[si].weight}
+								aria-label={t('gym.routine.targetWeight', { unit: weightUnitLabel() })}
+								data-testid="routine-set-weight"
+							/>
+						{/if}
+
 						<input
 							class="text-input"
 							type="number"
 							inputmode="numeric"
 							min="0"
-							bind:value={exercises[ei].sets[si].duration}
-							aria-label={t('gym.routine.targetDuration')}
-							data-testid="routine-set-duration"
+							max="3600"
+							bind:value={exercises[ei].sets[si].rest}
+							aria-label={t('gym.routine.restLabel')}
+							data-testid="routine-set-rest"
 						/>
-					{:else}
-						<input
-							class="text-input"
-							type="number"
-							inputmode="decimal"
-							min="0"
-							bind:value={exercises[ei].sets[si].distance}
-							aria-label={t('gym.routine.targetDistance')}
-							data-testid="routine-set-distance"
-						/>
-					{/if}
 
-					{#if ex.modality === 'weight_reps'}
 						<input
 							class="text-input"
 							type="number"
 							inputmode="decimal"
 							min="0"
+							max="10"
 							step="0.5"
-							bind:value={exercises[ei].sets[si].weight}
-							aria-label={t('gym.routine.targetWeight', { unit: weightUnitLabel() })}
-							data-testid="routine-set-weight"
+							bind:value={exercises[ei].sets[si].rpe}
+							aria-label={t('gym.rpe')}
+							data-testid="routine-set-rpe"
 						/>
-					{/if}
 
-					<input
-						class="text-input"
-						type="number"
-						inputmode="numeric"
-						min="0"
-						max="3600"
-						bind:value={exercises[ei].sets[si].rest}
-						aria-label={t('gym.routine.restLabel')}
-						data-testid="routine-set-rest"
-					/>
-
-					<input
-						class="text-input"
-						type="number"
-						inputmode="decimal"
-						min="0"
-						max="10"
-						step="0.5"
-						bind:value={exercises[ei].sets[si].rpe}
-						aria-label={t('gym.rpe')}
-						data-testid="routine-set-rpe"
-					/>
-
-					<button
-						class="icon-btn"
-						type="button"
-						onclick={() => removeSet(ei, si)}
-						aria-label={t('gym.editor.removeSet')}
-					>
-						<span class="material-symbols" aria-hidden="true">remove</span>
-					</button>
-				</div>
-			{/each}
+						<button
+							class="icon-btn"
+							type="button"
+							onclick={() => removeSet(ei, si)}
+							aria-label={t('gym.editor.removeSet')}
+						>
+							<span class="material-symbols" aria-hidden="true">remove</span>
+						</button>
+					</div>
+				{/each}
+			</div>
 
 			<button class="btn btn-sm btn-outline" type="button" onclick={() => addSet(ei)}>
 				<span class="material-symbols" aria-hidden="true">add</span>
@@ -580,17 +582,31 @@
 	}
 
 	/* Set type / reps / weight / rest share one grid so the columns line up
-	   across every set in an exercise; the header row uses the same template. */
+	   across every set in an exercise; the header row uses the same template.
+	   Six labelled numeric columns can't reflow into a 320px screen without
+	   losing a field, so the group scrolls as one block (WCAG 1.4.10) and
+	   every row is pinned to the same min-width — otherwise each row would
+	   size to its own content inside the scroller and the columns would
+	   stop lining up. Keep the min-width sums in step with the templates. */
+	.set-scroll {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+		max-width: 100%;
+		overflow-x: auto;
+	}
 	.set-head,
 	.set-row {
 		display: grid;
-		grid-template-columns: 8rem 1fr 6rem 5rem 2.25rem;
+		grid-template-columns: 8rem minmax(7rem, 1fr) 6rem 5rem 2.25rem;
 		gap: var(--space-sm);
 		align-items: center;
+		min-width: calc(28.25rem + 4 * var(--space-sm));
 	}
 	.set-head.wr,
 	.set-row.wr {
-		grid-template-columns: 8rem 1fr 6rem 6rem 5rem 2.25rem;
+		grid-template-columns: 8rem minmax(7rem, 1fr) 6rem 6rem 5rem 2.25rem;
+		min-width: calc(34.25rem + 5 * var(--space-sm));
 	}
 	.set-head {
 		gap: var(--space-sm);
