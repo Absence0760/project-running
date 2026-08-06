@@ -6,6 +6,7 @@ export 'src/widgets/app_tab_bar.dart';
 export 'src/widgets/stat_tile.dart';
 export 'src/widgets/stat_grid.dart';
 export 'src/widgets/chart_card_header.dart';
+export 'src/widgets/choice_chip_row.dart';
 export 'src/widgets/empty_state.dart';
 export 'src/widgets/identity_avatar.dart';
 export 'src/widgets/list_skeleton.dart';
