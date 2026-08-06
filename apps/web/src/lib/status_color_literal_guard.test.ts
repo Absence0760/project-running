@@ -118,9 +118,6 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	'lib/components/RunSegmentEfforts.svelte': { B45309: 1 },
 	// Per-stat-card accent gradients: four chart series, separated by hue.
 	'lib/components/PeriodSummary.svelte': { '10B981': 1, F97316: 1, F59E0B: 1, EF4444: 1 },
-	// Cartographic: privacy-zone marker, its fill and its outline. Drawn on
-	// the basemap, not on a theme surface.
-	'lib/components/PrivacyZonePicker.svelte': { DC2626: 3 },
 	// Painted start / finish caps on the mini track preview — the exact twin
 	// of mobile's track_preview.dart allowlist entry.
 	'lib/components/TrackPreview.svelte': { '22C55E': 1, EF4444: 1 },
@@ -520,11 +517,6 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 		F97316: [1, 'gradient-stop'], F59E0B: [1, 'gradient-stop'],
 		EC4899: [1, 'gradient-stop'], EF4444: [1, 'gradient-stop'],
 	},
-	// Privacy-zone centre marker, fill and outline. 4.208:1 on the light
-	// land sample, 3.560 on the dark, 3.011 over light-basemap water — the
-	// thinnest margin in the register, and the reason the water sample is
-	// asserted at all.
-	'lib/components/PrivacyZonePicker.svelte': { DC2626: [3, 'cartographic'] },
 	// Start / finish caps on the mini track preview and the roadbook course
 	// schedule. Painted on a track thumbnail, not on a live basemap, so
 	// these are the twin of mobile's own two allowlist entries.

@@ -74,6 +74,35 @@ export function mapFinishColour(darkBasemap: boolean): string {
 	return darkBasemap ? '#EF4444' : '#B91C1C';
 }
 
+/// The privacy-zone circle in the zone picker: its 2 px boundary, the marker
+/// at its centre, and the 0.18 wash inside it.
+///
+/// This is the one overlay on the map whose job is to tell the runner what is
+/// being REDACTED, so a circle they cannot see is a privacy setting they
+/// cannot check. It was a single fixed `#dc2626`, and that value does clear
+/// 1.4.11's 3:1 on every ground the picker resolves — 4.208:1 on the light
+/// land sample, 3.560 on the dark, 3.522 on the keyless OSM backdrop, and
+/// **3.011 over light-basemap water**. A 0.4 % margin is not a pass (§ 535's
+/// "a margin of 2 px is not a pass", one unit over), and the reason no single
+/// red does better is structural: a red dark enough for the pale grounds is
+/// too dark for the dark one and vice versa, which is § 541's finding that a
+/// mark owing 3:1 twice cannot be paid by one colour.
+///
+/// So it splits. The light rung is held against the WORST of the three light
+/// grounds — water, not land, because a zone over a riverside home is the
+/// ordinary case — and the dark rung against the dark land sample. Both are
+/// measured in `basemap_contrast.test.ts`; the numbers here are the worst
+/// ground each rung faces, not its best.
+///
+/// The 0.18 wash is decoration on the same footing as the track casing: it
+/// reads 1.14–1.31:1 against every ground, so it cannot be counted as the
+/// zone's contrast and the boundary clears the floor unaided. The centre
+/// marker takes the same rung because MapLibre's default marker sets
+/// `stroke: none` — its fill IS the silhouette.
+export function mapZoneBoundary(darkBasemap: boolean): string {
+	return darkBasemap ? '#EF4444' : '#991B1B';
+}
+
 /// The hovered-route preview line on the routes heatmap.
 export function mapHoverLine(darkBasemap: boolean): string {
 	return darkBasemap ? '#22D3EE' : '#0E7490';

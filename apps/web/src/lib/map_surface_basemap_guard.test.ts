@@ -49,13 +49,13 @@ const MAP_SURFACES: Record<string, ['shared' | 'unkeyed', string]> = {
 	'lib/components/PersonalHeatmap.svelte': ['shared', 'the personal run heatmap'],
 	'routes/live/[id]/+page.svelte': ['shared', 'the spectator live map'],
 	'routes/live/event/[id]/[instance]/+page.svelte': ['shared', 'the event live hub map'],
-	// The privacy-zone circle is one fixed danger hue on both grounds, not a
-	// keyed pair: `#dc2626` clears 1.4.11 on every basemap this app resolves
-	// to (4.208:1 light land, 3.560 dark, 3.011 over light-basemap water,
-	// 3.522 on the OSM backdrop), which no darker or lighter red does. It
-	// therefore has no basemap question to get wrong — but the margin over
-	// water is the thinnest in the literal register, and is asserted there.
-	'lib/components/PrivacyZonePicker.svelte': ['unkeyed', 'one hue that clears every ground'],
+	// The privacy-zone circle WAS one fixed `#dc2626` on both grounds, on the
+	// grounds that it cleared 1.4.11 everywhere the app resolves to. It did —
+	// 4.208:1 on the light land sample, 3.560 on the dark, 3.522 on the OSM
+	// backdrop, and 3.011 over light-basemap water. That last figure is a
+	// 0.4 % margin, i.e. a value sitting ON the floor rather than above it, so
+	// it splits into `mapZoneBoundary`'s keyed pair like every other rung.
+	'lib/components/PrivacyZonePicker.svelte': ['shared', 'the privacy-zone circle'],
 };
 
 /// Infrastructure, not a surface: the MapLibre re-export and the resize
@@ -103,7 +103,7 @@ test('every registered surface resolves the ground the way its entry claims', ()
 	for (const [key, [how]] of Object.entries(MAP_SURFACES)) {
 		const source = read(key);
 		const resolves = /basemapIsDark(FromEnv|ForSlug)\(/.test(source);
-		const paints = /\bmap(TrackLine|AccentColour|OverlayOutline|StartColour|FinishColour|HoverLine|PinnedLine|DraftLine|OverlapLine|LiveLine|HintLine|FeaturedHalo|LabelInk|LabelHalo)\(/.test(
+		const paints = /\bmap(TrackLine|AccentColour|OverlayOutline|StartColour|FinishColour|HoverLine|PinnedLine|DraftLine|OverlapLine|LiveLine|HintLine|FeaturedHalo|LabelInk|LabelHalo|ZoneBoundary)\(/.test(
 			source,
 		);
 		if (how === 'shared') {
