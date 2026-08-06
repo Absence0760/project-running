@@ -78,6 +78,36 @@ TrainingPlanRow _plan(String id, String name, {String? assignedBy}) =>
       assignedByCoachId: assignedBy,
     );
 
+/// Every value of the `workout_kind` postgres enum except 'rest', which
+/// `_focusWorkouts` filters out before any row is built.
+const _kindsInEnum = [
+  'easy',
+  'long',
+  'recovery',
+  'tempo',
+  'interval',
+  'marathon_pace',
+  'race',
+  'walk_run',
+];
+
+/// Half the kinds dated before today and half after, so the ±4/+6 focus
+/// window around the pivot admits every one of them.
+List<PlanWorkoutRow> _oneWorkoutPerKind() {
+  final today = DateTime.now();
+  final half = _kindsInEnum.length ~/ 2;
+  return [
+    for (var i = 0; i < _kindsInEnum.length; i++)
+      PlanWorkoutRow(
+        id: 'w$i',
+        weekId: 'wk1',
+        scheduledDate: today.add(Duration(days: i < half ? i - half : i - half + 1)),
+        kind: _kindsInEnum[i],
+        manuallyCompleted: false,
+      ),
+  ];
+}
+
 AthleteRunSummary _run(String id) => AthleteRunSummary(
       id: id,
       startedAt: DateTime.utc(2026, 1, 10, 7),
@@ -129,9 +159,15 @@ Future<Preferences> _prefs() async {
   return p;
 }
 
-Future<void> _pump(WidgetTester tester, ApiClient api, Preferences prefs) async {
+Future<void> _pump(
+  WidgetTester tester,
+  ApiClient api,
+  Preferences prefs, {
+  Locale? locale,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: CoachingAthleteScreen(
@@ -194,6 +230,37 @@ void main() {
     await _pump(tester, _FakeApi(overview: overview), prefs);
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.coachingAthleteAssignedByYou), findsOneWidget);
+  });
+
+  testWidgets('every workout kind renders the catalogue label, not the raw '
+      'db value', (tester) async {
+    final prefs = await _prefs();
+    final overview = AthletePlanOverview(
+      plan: _plan('p1', 'My Plan', assignedBy: 'coach-1'),
+      weeks: const [],
+      workouts: _oneWorkoutPerKind(),
+      completionPct: 0,
+    );
+    await _pump(tester, _FakeApi(overview: overview), prefs,
+        locale: const Locale('fr'));
+    final l10n = await AppLocalizations.delegate.load(const Locale('fr'));
+    for (final label in [
+      l10n.workoutKindEasy,
+      l10n.workoutKindLong,
+      l10n.workoutKindRecovery,
+      l10n.workoutKindTempo,
+      l10n.workoutKindInterval,
+      l10n.workoutKindMarathonPace,
+      l10n.workoutKindRace,
+      l10n.workoutKindWalkRun,
+    ]) {
+      expect(find.text(label), findsWidgets, reason: 'missing "$label"');
+    }
+    // The two db values whose hand-capitalised form collides with no
+    // catalogue label in any locale, so their absence proves the raw
+    // capitaliser is gone rather than merely shadowed.
+    expect(find.text('Marathon pace'), findsNothing);
+    expect(find.text('Walk run'), findsNothing);
   });
 
   testWidgets('surfaces the assign RPC raise as a banner (no swallow)',

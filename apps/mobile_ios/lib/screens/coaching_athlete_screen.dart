@@ -8,6 +8,8 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
+import '../training.dart';
+import '../training_labels.dart';
 import '../widgets/top_banner.dart';
 
 /// Coach run-review surface — mobile mirror of web
@@ -406,7 +408,7 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_workoutLabel(w),
+                Text(workoutKindLabel(l10n, workoutKindFromDb(w.kind)),
                     style: theme.textTheme.bodyMedium
                         ?.copyWith(fontWeight: FontWeight.w600)),
                 if (target.isNotEmpty)
@@ -515,11 +517,6 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
     return _isoOf(w.scheduledDate).compareTo(_todayISO()) < 0
         ? 'missed'
         : 'upcoming';
-  }
-
-  static String _workoutLabel(PlanWorkoutRow w) {
-    final k = w.kind.replaceAll('_', ' ');
-    return k.isEmpty ? 'Run' : '${k[0].toUpperCase()}${k.substring(1)}';
   }
 
   static String _activityLabel(String a) {
