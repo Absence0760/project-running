@@ -80,10 +80,16 @@ test.describe('/recap/share/[id] — publish round-trip (seed user)', () => {
 		// Load the public share page as the same session and assert OG tags +
 		// the rendered card.
 		await page.goto(`/recap/share/${id}`);
-		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
-			'content',
-			`/og/recap/${id}.png`
-		);
+		// The unfurl image is ABSOLUTE (§ 546): a remote crawler fetches it
+		// off-site, so a root-relative value has no origin to resolve against.
+		// Asserted as a derivation rather than a literal — `PUBLIC_SITE_URL` is
+		// unset locally and set on preview / prod, so the host is env-dependent
+		// while "absolute, and ends at this entity's path" is not (§ 500).
+		const ogImage = await page
+			.locator('meta[property="og:image"]')
+			.getAttribute('content');
+		expect(ogImage).toMatch(/^https?:\/\//);
+		expect(ogImage!.endsWith(`/og/recap/${id}.png`)).toBe(true);
 		await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
 			'content',
 			'summary_large_image'
