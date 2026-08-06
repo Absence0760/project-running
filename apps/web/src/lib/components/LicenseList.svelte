@@ -253,7 +253,7 @@
 		list-style: none;
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--space-3) var(--space-5);
+		gap: var(--space-sm) var(--space-lg);
 	}
 
 	.page {
