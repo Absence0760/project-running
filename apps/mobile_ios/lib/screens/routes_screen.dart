@@ -74,11 +74,12 @@ class RoutesScreen extends StatefulWidget {
   /// the user's clubs. When null, the picker is hidden and saved
   /// routes go to the user's personal library (existing behaviour).
   final SocialService? social;
-  /// When true, the screen renders only its body — the parent (e.g.
-  /// `SocialScreen`) owns the Scaffold/AppBar/FAB chrome. The dual
-  /// "Build" / "Import" FAB column is exposed via [RoutesScreenState.buildRouteFabs]
-  /// so the parent can hoist it on demand. Same pattern as
-  /// `ClubsScreen.embedded`.
+  /// When true, the screen renders only its body and a hosting parent owns
+  /// the Scaffold/AppBar/FAB chrome. No host uses it today — Routes is pushed
+  /// standalone from the Fitness hub's Runs peer strip since the hub redesign
+  /// relocated it out of `SocialScreen` — but the dual "Build" / "Import" FAB
+  /// column stays exposed via [RoutesScreenState.buildRouteFabs] for one.
+  /// Same pattern as `ClubsScreen.embedded`.
   final bool embedded;
 
   const RoutesScreen({
@@ -431,11 +432,11 @@ class RoutesScreenState extends State<RoutesScreen> {
   // ── Selection mode ────────────────────────────────────────────────
   //
   // Mirrors the runs_screen pattern: long-press a route to enter
-  // selection, tap to add/remove, then bulk-delete. Because RoutesScreen
-  // is normally embedded under SocialScreen (which owns the AppBar +
-  // TabBar), we render the selection state as an inline banner at the
-  // top of the body — replacing a host AppBar would require plumbing
-  // selection state up through SocialScreen.
+  // selection, tap to add/remove, then bulk-delete. The selection state is
+  // an inline banner at the top of the body rather than a replacement
+  // AppBar, so the `embedded: true` path stays viable for a host that owns
+  // the chrome — replacing a host's AppBar would mean plumbing selection
+  // state up into it.
 
   void _enterSelection(String firstId) {
     setState(() {
@@ -1263,9 +1264,8 @@ class RoutesScreenState extends State<RoutesScreen> {
     ];
   }
 
-  /// Dual-FAB column ("Build" + "Import"). Public so the embedded host
-  /// (`SocialScreen`) can hoist it into its own Scaffold's
-  /// `floatingActionButton` slot when the Routes sub-tab is active.
+  /// Dual-FAB column ("Build" + "Import"). Public so an `embedded: true`
+  /// host can hoist it into its own Scaffold's `floatingActionButton` slot.
   Widget buildRouteFabs(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Column(

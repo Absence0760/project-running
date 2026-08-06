@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/ble_heart_rate.dart';
 import '../lib/ble_treadmill.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/local_gear_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/settings_account_screen.dart';
@@ -34,6 +35,7 @@ Future<void> _pump(
   required Preferences prefs,
   required BleHeartRate heartRate,
   LocalRunStore? runStore,
+  LocalGearStore? gearStore,
 }) {
   return tester.pumpWidget(
     MaterialApp(
@@ -44,6 +46,7 @@ Future<void> _pump(
         heartRate: heartRate,
         treadmill: BleTreadmill(),
         runStore: runStore,
+        gearStore: gearStore,
       ),
     ),
   );
@@ -103,8 +106,17 @@ void main() {
       // needed. Gear, by contrast, now works fully offline via
       // LocalGearStore, so its subtitle stays neutral regardless of
       // sign-in state.
+      // A gear store must be wired for this test to say anything about
+      // sign-out: without one the tile is disabled for a different reason
+      // entirely (#666 I16), and the pre-I16 code hid that by leaving `onTap`
+      // non-null while doing nothing when tapped.
       final s = await _makeStores();
-      await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
+      await _pump(
+        tester,
+        prefs: s.prefs,
+        heartRate: s.heartRate,
+        gearStore: LocalGearStore(),
+      );
       await tester.scrollUntilVisible(find.text('Signed-in devices'), 200,
           scrollable: find.byType(Scrollable).first);
       final devices = tester.widget<ListTile>(find.ancestor(
