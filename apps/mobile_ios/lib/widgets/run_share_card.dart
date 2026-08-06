@@ -26,9 +26,6 @@ import '../widgets/top_banner.dart';
 /// activity glyph instead.
 bool runShareCardHasMap(Run run) => run.track.length >= 2;
 
-/// [runShareCardHasMap] over the already-projected points.
-bool runShareCardHasMapPoints(List<LatLng> track) => track.length >= 2;
-
 /// Opens a modal sheet showing a portrait "share card" for [run] — a branded
 /// preview of the route map plus headline stats — and lets the user share
 /// either the rendered PNG or the raw GPX via the system share sheet.
@@ -286,7 +283,7 @@ class RunShareCard extends StatelessWidget {
   }
 
   Widget _buildMap(List<LatLng> track) {
-    if (!runShareCardHasMapPoints(track)) {
+    if (track.length < 2) {
       return const Center(
         child: Icon(Icons.directions_run,
             size: 96, color: Color(0xFF4F46E5)),
