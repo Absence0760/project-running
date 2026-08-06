@@ -1014,7 +1014,7 @@
 	}
 	.ring-hero .ring-val { font-size: 1.45rem; }
 	.ring-target {
-		font-size: 0.68rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;
 	}
@@ -1423,7 +1423,7 @@
 		gap: var(--space-2xs);
 	}
 	.trend-val {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;
 		min-height: 0.9rem;

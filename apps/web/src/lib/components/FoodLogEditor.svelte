@@ -375,7 +375,7 @@
 	.brand { color: var(--color-text-secondary); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.source-tag {
 		flex-shrink: 0;
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;

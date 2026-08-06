@@ -1476,7 +1476,7 @@
 	}
 	.usage-count { font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem; }
 	.tier-badge {
-		font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+		font-size: var(--font-size-section-label); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
 		padding: 0.1rem 0.4rem; border-radius: 9999px;
 	}
 	.tier-pro { background: rgba(79, 70, 229, 0.12); color: var(--color-primary); }

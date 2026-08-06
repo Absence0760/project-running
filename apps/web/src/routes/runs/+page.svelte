@@ -1189,7 +1189,7 @@
 	   and /runs/[id]. The local rule just controls size, weight, and
 	   the slight desaturation that makes it sit quieter on the row. */
 	.source-badge {
-		font-size: 0.625rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-surface);
 		padding: var(--space-2xs) var(--space-sm);

@@ -7,11 +7,12 @@
 // equivalent, and the drift showed: 45 `font-size` declarations sat under it, the
 // narrowest at 8 px, and `PlanCalendar`'s `.kind-pill` — on the one plan surface
 // every phone user opens — dropped from 0.65rem to 0.55rem (8.8 px) under 40 rem.
+// § 525 closed that one and pinned the other 42; the sweep since leaves 9.
 //
 // This is a FLOOR guard, not mobile's literal guard, and the difference is not
 // laziness. Mobile's rule is "name the step", which is enforceable because the
 // scale is closed: seven steps on one `textTheme`, so a literal is either a step
-// spelled by hand or a value between two steps. Web's CSS carries 1886 numeric
+// spelled by hand or a value between two steps. Web's CSS carries ~1860 numeric
 // `font-size` declarations against three named size tokens, so banning literals
 // would need an allowlist longer than the codebase and would assert nothing. What
 // transfers is the conformance content of § 482 — the 11 px minimum — and a floor
@@ -21,10 +22,22 @@
 // platforms cannot drift the way the line token did before § 518 pinned it.
 //
 // When this test fails: raise the declaration to at least the floor. Prefer
-// `var(--font-size-section-label)` (0.7rem = 11.2 px), which is the micro-label
-// token 80 declarations already use. If a narrow viewport no longer fits the
-// text, tighten the box or let the text reflow — SC 1.4.4 and 1.4.10 both ask
-// for reflow rather than a smaller size.
+// `var(--font-size-section-label)` (0.7rem = 11.2 px), the micro-label token —
+// and prefer the token over its value, which is a distinction § 525 ran
+// together when it called this "the micro-label token 80 declarations already
+// use". Recomputed: 81 declarations spelled the literal `0.7rem`, and 21 used
+// the token. Both land on 11.2 px today, but only the token moves if the floor
+// does, and per § 522 a hand-spelled value sitting exactly ON a floor is the
+// fragile kind. The 81 literals are out of this guard's reach by construction —
+// they are at the floor, not under it — and are recorded as remaining work.
+//
+// If a narrow viewport no longer fits the text, tighten the box or let the text
+// reflow — SC 1.4.4 and 1.4.10 both ask for reflow rather than a smaller size.
+// Never re-shrink it in a media query: that is the defect § 525 found on
+// `PlanCalendar` and this round closed on both week ribbons, and a source scan
+// cannot see which of a base rule and its override actually paints. The
+// resolved-cascade half lives in Playwright — `tests-e2e/plans/calendar.spec.ts`
+// and `tests-e2e/cross-cutting/week-strip-type-floor.spec.ts`.
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
@@ -109,46 +122,40 @@ function scanFontSizes(): { sized: Declaration[]; relative: string[] } {
 // Two groups, and the split is what the entry means rather than how it is
 // checked. The equality pin is the same either way: a NEW sub-floor declaration
 // in a listed file still fails, and a file that gets fixed forces its entry out.
+//
+// Every entry below is a named, justified exemption rather than an unexamined
+// literal — which is the state § 525 asked for and did not yet have. What it
+// took was reading each site's markup rather than its file: two of § 525's three
+// "text inside a graphic" entries were files that also held a plain-debt
+// declaration, and `PersonalHeatmap`'s was not a graphic at all (see below). The
+// list can only shrink from here.
 const BELOW_FLOOR = <Record<string, number>>{
 	// --- Text inside a graphic, which is the class mobile's guard exempts too:
 	// drawn over basemap tiles or inside an SVG plot, not on a theme surface, so
 	// the size is a dimension of the drawing rather than a step on a type scale.
-	// RouteBuilder's second is the 8 px numeral inside a 20 px map pin (mobile
-	// exempts `route_builder_screen.dart` for exactly this); its first is a
-	// keyboard-shortcut hint and is debt.
+	//
+	// `.extreme-text` is SVG text — it paints `fill:` — inside the elevation
+	// plot, which scales with its own fixed viewBox.
+	'lib/components/ElevationProfile.svelte': 1,
+	// Two, and only one is a graphic: `.km-marker` is the 8 px numeral inside a
+	// 20 px km pin drawn over basemap tiles (mobile exempts
+	// `route_builder_screen.dart` for exactly this). `.shortcuts-hint kbd` is a
+	// keyboard-shortcut hint in flowing layout and is plain debt.
 	'lib/components/RouteBuilder.svelte': 2,
-	// `.extreme-text` is SVG text (it paints `fill:`) inside the elevation plot;
-	// `.tt-label` is its tooltip's label and is debt.
-	'lib/components/ElevationProfile.svelte': 2,
-	// The heatmap's legend scale, inside the legend graphic.
-	'lib/components/PersonalHeatmap.svelte': 1,
 
 	// --- Micro-labels that are simply under the floor. Every one of these is
 	// owed a fix; they are pinned so the count can only shrink, not so they are
 	// blessed.
+	//
+	// `.bar-label` (base + a 0.6rem narrow-viewport shrink, the same pattern the
+	// two week ribbons and `PlanCalendar` have now lost) and `.source-badge` —
+	// the last member of its family still under the floor, the other three being
+	// `PeriodSummary` at 0.7rem, `RunShareView` and `/runs`.
 	'routes/dashboard/+page.svelte': 3,
-	'lib/components/BadgeGrid.svelte': 1,
-	'lib/components/CoachChat.svelte': 1,
-	'lib/components/DateRangePicker.svelte': 1,
-	'lib/components/FoodLogEditor.svelte': 1,
-	'lib/components/ImportRoute.svelte': 1,
-	'lib/components/NotificationBell.svelte': 1,
-	'lib/components/ProGate.svelte': 1,
-	'lib/components/RunShareView.svelte': 1,
+	// `.collapse-toggle-label`, the sidebar section-label toggle.
 	'routes/+layout.svelte': 1,
-	'routes/+page.svelte': 1,
-	'routes/coach/+page.svelte': 1,
-	'routes/gym/exercise/+page.svelte': 1,
-	'routes/live/[id]/+page.svelte': 2,
-	'routes/live/event/[id]/[instance]/+page.svelte': 1,
-	'routes/login/+page.svelte': 1,
-	'routes/messages/[[id]]/+page.svelte': 1,
-	'routes/nutrition/+page.svelte': 2,
-	'routes/nutrition/[date]/[slot]/+page.svelte': 1,
-	'routes/routes/new/+page.svelte': 2,
-	'routes/runs/+page.svelte': 1,
+	// `.segment-eyebrow` and `.segment-stat-label`.
 	'routes/runs/[id]/+page.svelte': 2,
-	'routes/settings/gear/+page.svelte': 2,
 };
 
 test(`no font-size declaration falls below the ${FLOOR_PX} px micro-label floor`, () => {
@@ -181,8 +188,28 @@ test(`no font-size declaration falls below the ${FLOOR_PX} px micro-label floor`
 
 // An `em` font-size compounds with whatever the ancestor resolved to, so no
 // static scan can price it and the floor above cannot see it. Count-pinned so a
-// new micro-label cannot slip under the floor by switching unit — none of the six
-// is a micro-label today (0.85em is the smallest, inside prose).
+// new micro-label cannot slip under the floor by switching unit.
+//
+// § 525 left the six at that and called them unmeasurable. They are not — only
+// un-measured-statically, and each is now classified rather than merely counted:
+//
+//   - Three are Material Symbols glyph sizing (`ChallengeProgressBar` 1.05em,
+//     `RunGearChips` 0.95em, `settings/gear` 1.1em). An icon's `font-size` is the
+//     glyph's box, so this is the `em` analogue of the text-inside-a-graphic
+//     exemption above. Deliberately NOT held to the floor: a legibility minimum
+//     on an icon asserts the wrong thing.
+//   - Three are real text, and `tests-e2e/cross-cutting/type-floor-em-units.spec.ts`
+//     reads each with `getComputedStyle` — the same resolved-cascade move § 525
+//     made for the media-query override a source scan cannot see. Measured:
+//     `cookie-notice` `.manage-consent-hint` 0.9em -> 14.4 px, and CoachChat's
+//     inline `code` and `pre code` 0.85em -> 13.6 px off a `.md` that resolves
+//     to 16 px.
+//
+// The two code rules do NOT compound, and that is the one number here worth
+// keeping: both set 0.85em on the same element and `.md pre` sets no size, so
+// `pre code` is 13.6 px, not 0.85 x 0.85 = 11.56 px. If `pre` ever gains a
+// font-size the product lands within 0.6 px of the floor, which is why the
+// resolved check exists rather than a comment asserting it is fine.
 test('exactly six font-size declarations use the unresolvable em unit', () => {
 	const { relative: ems } = scanFontSizes();
 	assert.equal(

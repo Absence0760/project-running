@@ -266,7 +266,7 @@
 	}
 
 	.source-badge {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: white;
 		padding: 0.15rem 0.5rem;
