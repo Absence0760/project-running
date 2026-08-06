@@ -1899,33 +1899,12 @@
 	.result-row.hovered {
 		background: var(--color-bg-tertiary);
 	}
-	/* A kept route gets a violet left rail + a filled pin glyph in the name
-	 * so the list mirrors the violet line drawn on the map. Unlike that line
-	 * this sits on a THEME surface, so it keys off the theme — and lands on
-	 * the same two rungs `mapPinnedLine` uses, because "clear the ground you
-	 * sit on" has the same answer at both ends of the violet. The single
-	 * `#8b5cf6` it replaces read 4.234:1 as label text on the light surface,
-	 * 3.374:1 on the row's own hover fill and 3.817:1 on the dark surface —
-	 * under AA in all three. Wants a --color-route-pinned token pair; local
-	 * until app.css mints one. */
-	.discover {
-		--kept-accent: #6D28D9;
-	}
-	@media (prefers-color-scheme: dark) {
-		:root[data-theme="auto"] .discover,
-		:root:not([data-theme]) .discover {
-			--kept-accent: #A78BFA;
-		}
-	}
-	:root[data-theme="dark"] .discover {
-		--kept-accent: #A78BFA;
-	}
 	.result-row.kept {
-		box-shadow: inset 3px 0 0 var(--kept-accent);
+		box-shadow: inset 3px 0 0 var(--color-route-pinned);
 	}
 	.result-kept {
 		font-size: 0.95rem;
-		color: var(--kept-accent);
+		color: var(--color-route-pinned);
 		font-variation-settings: 'FILL' 1;
 		vertical-align: -0.15em;
 		margin-inline-end: 0.1rem;
@@ -1955,14 +1934,14 @@
 		padding: 0.1rem 0.5rem;
 		font-size: 0.72rem;
 		font-weight: 600;
-		color: var(--kept-accent);
+		color: var(--color-route-pinned);
 		background: transparent;
-		border: 1px solid var(--kept-accent);
+		border: 1px solid var(--color-route-pinned);
 		border-radius: 999px;
 		cursor: pointer;
 	}
 	.results-clear-pins:hover {
-		background: color-mix(in srgb, var(--kept-accent) 12%, transparent);
+		background: color-mix(in srgb, var(--color-route-pinned) 12%, transparent);
 	}
 	/* Hovering the dot on the map tints + accents its row (and vice
 	 * versa) — the synchronized hover that ties the two surfaces. Uses
@@ -2194,10 +2173,10 @@
 		min-width: 0;
 	}
 	:global(.heatmap-cluster-popup .cluster-route.kept) {
-		box-shadow: inset 3px 0 0 var(--kept-accent);
+		box-shadow: inset 3px 0 0 var(--color-route-pinned);
 	}
 	:global(.heatmap-cluster-popup .cluster-route.kept .cluster-route-name) {
-		color: var(--kept-accent);
+		color: var(--color-route-pinned);
 	}
 	:global(.heatmap-cluster-popup .cluster-route-view) {
 		flex-shrink: 0;
