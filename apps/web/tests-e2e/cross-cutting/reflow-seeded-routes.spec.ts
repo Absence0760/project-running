@@ -41,6 +41,14 @@ import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
  * report a false pass.
  */
 
+// Each test navigates three viewports and waits for `networkidle` at each, on
+// top of building its own fixtures — 15 navigations across the file. On a cold
+// CI stack the first one pays the dev server's route compile: the segment case
+// blew the default 30 s budget on its first attempt and then passed on retry in
+// 8.5 s. Nothing here asserts a duration, so the budget is a cost of the
+// measurement, not part of what is being measured.
+test.describe.configure({ timeout: 90_000 });
+
 const MELBOURNE_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
 
 // Clear of the seeded 200 m privacy zone at (-37.8136, 144.9631) — the
@@ -223,7 +231,11 @@ test.describe('no horizontal document scroll on the seeded dynamic routes', () =
 					30
 				);
 
-				await expectReflows(page, '/messages', { locator: 'button.thread', min: 2 });
+				// A thread row is an `<a class="thread" href="/messages/{id}">`, not a
+				// button — the first spelling of this locator matched nothing, and the
+				// § 534 population assertion is what refused to measure rather than
+				// reporting a trivially-fitting empty pane as a pass.
+				await expectReflows(page, '/messages', { locator: 'a.thread', min: 2 });
 			} finally {
 				if (ids.length > 0) {
 					await admin.from('direct_messages').delete().in('id', ids);
@@ -297,10 +309,21 @@ test.describe('no horizontal document scroll on the seeded dynamic routes', () =
 			);
 			if (acctErr) throw new Error(`payout account upsert failed: ${acctErr.message}`);
 
+			// `fundraisers_anchor_check` is `(run_id IS NOT NULL) <> (event_id IS
+			// NOT NULL)` — exactly one anchor, never neither. The first draft set
+			// neither and the insert was rejected deterministically.
+			const anchorRunId = await insertRun({
+				user_id: USER_A.id,
+				started_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
+				duration_s: 3600,
+				distance_m: 10_000,
+				is_public: true
+			});
 			const { data: fr, error: frErr } = await admin
 				.from('fundraisers')
 				.insert({
 					owner_user_id: USER_A.id,
+					run_id: anchorRunId,
 					charity_name: 'Girls on the Run',
 					charity_url: 'https://www.girlsontherun.org',
 					title: 'Running my next marathon for Girls on the Run',
@@ -368,6 +391,8 @@ test.describe('no horizontal document scroll on the seeded dynamic routes', () =
 			} finally {
 				await admin.from('donations').delete().eq('fundraiser_id', fundraiserId);
 				await admin.from('fundraisers').delete().eq('id', fundraiserId);
+				// After the fundraiser: the anchor is an FK, so the run cannot go first.
+				await deleteRun(anchorRunId);
 			}
 		});
 	});

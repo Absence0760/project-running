@@ -85,6 +85,36 @@ export async function expectReflows(
 			`${route} at ${viewport.width}px rendered ${measured.mainNodes} nodes — too few to be measuring the real page`
 		).toBeGreaterThanOrEqual(MIN_MAIN_NODES);
 
+		// A bare "scrollWidth 302 vs 300" says a page overflowed but not by what,
+		// and the two causes need opposite fixes: a BOX wider than the viewport is
+		// a rule (a fixed width, a flex item at its min-content floor), whereas a
+		// container whose SCROLL extent exceeds its client width is content (an
+		// unbreakable token in user-supplied text). Both were live on these routes
+		// and neither was findable from the assertion message alone.
+		if (measured.scrollWidth > measured.clientWidth) {
+			const offenders = await page.evaluate((limit) => {
+				const out: string[] = [];
+				const name = (el: Element) =>
+					`${el.tagName.toLowerCase()}.${(el.className || '').toString().split(' ').filter(Boolean).join('.')}`;
+				for (const el of Array.from(document.querySelectorAll('*'))) {
+					const r = el.getBoundingClientRect();
+					if (r.right > limit + 0.5 || r.left < -0.5) {
+						out.push(
+							`BOX ${name(el)} left=${r.left.toFixed(1)} right=${r.right.toFixed(1)} w=${r.width.toFixed(1)}`
+						);
+					}
+					if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
+						const cs = getComputedStyle(el);
+						out.push(
+							`SCROLL ${name(el)} scrollW=${el.scrollWidth} clientW=${el.clientWidth} overflowX=${cs.overflowX} minW=${cs.minWidth}`
+						);
+					}
+				}
+				return out.slice(0, 30);
+			}, measured.clientWidth);
+			console.log(`OFFENDERS ${route} @${viewport.width}:\n` + offenders.join('\n'));
+		}
+
 		expect(
 			measured.scrollWidth,
 			`${route} scrolls horizontally at ${viewport.width}px: scrollWidth ${measured.scrollWidth} vs clientWidth ${measured.clientWidth}`
