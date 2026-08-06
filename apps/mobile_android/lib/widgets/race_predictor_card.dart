@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChartCardHeader;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChartCardHeader, StatusPill, StatusPillSize;
 
 import '../fitness.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -186,7 +186,6 @@ class _ConfidenceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final semantic = AppSemanticColors.of(context);
     late final Color bg;
     late final Color fg;
@@ -211,22 +210,11 @@ class _ConfidenceChip extends StatelessWidget {
     return Tooltip(
       message: _reason(l10n, quality.reason),
       triggerMode: TooltipTriggerMode.longPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.visible,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: fg,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+      child: StatusPill(
+        label: label,
+        foreground: fg,
+        fill: bg,
+        size: StatusPillSize.compact,
       ),
     );
   }

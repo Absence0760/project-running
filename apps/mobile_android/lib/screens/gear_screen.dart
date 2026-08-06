@@ -6,7 +6,9 @@ import 'package:ui_kit/ui_kit.dart' show
         ChoiceChipOption,
         ChoiceChipRow,
         EmptyState,
-        ProgressBar;
+        ProgressBar,
+        StatusPill,
+        StatusPillSize;
 
 import '../gear_backfill.dart';
 import '../gear_wear.dart';
@@ -391,26 +393,12 @@ class _GearScreenState extends State<GearScreen> {
       _ => (Colors.transparent, Colors.transparent, Icons.circle, ''),
     };
     if (label.isEmpty) return null;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: fg),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
+    return StatusPill(
+      label: label,
+      foreground: fg,
+      fill: bg,
+      icon: icon,
+      size: StatusPillSize.compact,
     );
   }
 

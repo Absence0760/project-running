@@ -8,7 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatusPill, StatusPillSize;
 
 import '../auth_error.dart';
 import '../distance_bands.dart';
@@ -1209,19 +1209,13 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
 
   Widget _bandBadge(String label) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(right: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: scheme.onPrimaryContainer,
-            ),
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: StatusPill(
+        label: label,
+        foreground: scheme.onPrimaryContainer,
+        fill: scheme.primaryContainer,
+        size: StatusPillSize.compact,
       ),
     );
   }

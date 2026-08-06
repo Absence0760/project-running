@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatusPill;
 
 import '../l10n/gen/app_localizations.dart';
 import '../live_cutoff_eta.dart';
@@ -95,22 +95,10 @@ class CutoffCard extends StatelessWidget {
             Row(
               children: [
                 Flexible(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: chipColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      chipLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: chipColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  child: StatusPill(
+                    label: chipLabel,
+                    foreground: chipColor,
+                    fill: chipColor.withValues(alpha: 0.15),
                   ),
                 ),
                 if (eta.projectedArrivalElapsedS != null) ...[

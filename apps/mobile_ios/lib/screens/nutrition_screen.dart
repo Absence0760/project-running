@@ -1114,18 +1114,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
       bg = theme.colorScheme.surfaceContainerHighest;
       fg = theme.colorScheme.onSurfaceVariant;
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: theme.textTheme.labelMedium
-            ?.copyWith(color: fg, fontWeight: FontWeight.w600),
-      ),
-    );
+    return StatusPill(label: text, foreground: fg, fill: bg);
   }
 
   Widget _ringWidget(ThemeData theme, _Ring r) {
@@ -1281,18 +1270,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
     final fg = reached
         ? theme.colorScheme.onSecondaryContainer
         : theme.colorScheme.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: theme.textTheme.labelSmall
-            ?.copyWith(color: fg, fontWeight: FontWeight.w600),
-      ),
-    );
+    return StatusPill(
+        label: text, foreground: fg, fill: bg, size: StatusPillSize.compact);
   }
 
   /// Litres for a millilitre amount, trimmed of trailing zeros (mirrors web
@@ -1514,18 +1493,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
       bg = theme.colorScheme.surfaceContainerHighest;
       fg = theme.colorScheme.onSurfaceVariant;
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: theme.textTheme.labelSmall
-            ?.copyWith(color: fg, fontWeight: FontWeight.w600),
-      ),
-    );
+    return StatusPill(
+        label: text, foreground: fg, fill: bg, size: StatusPillSize.compact);
   }
 
   Widget _weekProteinChip(
@@ -1537,18 +1506,11 @@ class _NutritionScreenState extends State<NutritionScreen> {
     final fg = allMet
         ? theme.colorScheme.onSecondaryContainer
         : theme.colorScheme.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        l10n.nutritionWeekProtein(p.daysMetGoal!, p.loggedDays),
-        style: theme.textTheme.labelSmall
-            ?.copyWith(color: fg, fontWeight: FontWeight.w600),
-      ),
-    );
+    return StatusPill(
+        label: l10n.nutritionWeekProtein(p.daysMetGoal!, p.loggedDays),
+        foreground: fg,
+        fill: bg,
+        size: StatusPillSize.compact);
   }
 
   void _openMealDetail(String slot) {

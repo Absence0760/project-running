@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:ui_kit/ui_kit.dart' show StatusPill;
 
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
@@ -466,23 +467,14 @@ class _ResultCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: free
-                      ? theme.colorScheme.surfaceContainerHighest
-                      : theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  price,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: free
-                        ? theme.colorScheme.onSurfaceVariant
-                        : theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
+              StatusPill(
+                label: price,
+                foreground: free
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.onPrimaryContainer,
+                fill: free
+                    ? theme.colorScheme.surfaceContainerHighest
+                    : theme.colorScheme.primaryContainer,
               ),
             ],
           ),

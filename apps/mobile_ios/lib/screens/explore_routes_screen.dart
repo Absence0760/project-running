@@ -4,7 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
+import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow, StatusPill, StatusPillSize;
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
@@ -761,21 +761,12 @@ class _RouteCard extends StatelessWidget {
                         runSpacing: 4,
                         children: [
                           for (final t in route.tags.take(4))
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                t,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
+                            StatusPill(
+                              label: t,
+                              foreground: theme.colorScheme.onSurfaceVariant,
+                              fill:
+                                  theme.colorScheme.surfaceContainerHighest,
+                              size: StatusPillSize.compact,
                             ),
                         ],
                       ),

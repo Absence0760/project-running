@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme, StatusPill;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -220,19 +220,6 @@ class _RankPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (bg, fg) = rankPillColors(theme, rank);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '#$rank',
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
+    return StatusPill(label: '#$rank', foreground: fg, fill: bg);
   }
 }
