@@ -985,6 +985,60 @@ Once the user has asked for work, commit **after each discrete piece** as you go
 
 Pairs with the "Test hygiene" section below — tests for a piece go in the **same commit** as the piece itself, not a follow-up commit.
 
+## A value domain gets ONE vocabulary, and a destination gets a name of its own
+
+Two rules from the same failure — a user-facing name that more than one place
+was allowed to decide (decisions § 547).
+
+**A closed value domain has exactly one catalogue namespace and one resolver.**
+When a column's value set is fixed by a CHECK constraint (`activity_type`,
+`workout_kind`, …), every surface that names a value resolves through the one
+helper — web `runs/activity_type.svelte.ts#activityTypeLabel`, mobile
+`activity_type_labels.dart#activityTypeLabel`. Do NOT mint
+`<surface>.activity<Value>` keys for a picker, a filter chip and a detail
+header: seven such namespaces existed for five values and they disagreed
+*inside* a locale (German `hike` was both "Wandern" and "Wanderung"), and four
+of them silently omitted a value, which is what made `/runs/[id]` print the raw
+token "stroller" in every language. Corollaries:
+
+- **Never hand-capitalise an identifier in place of a label.**
+  `x.charAt(0).toUpperCase() + x.slice(1)` (and its Dart template form
+  `'${x[0].toUpperCase()}${x.substring(1)}'`) prints English on a localized
+  page and loses whatever words the catalogue adds. Both platforms carry a
+  tree-wide source sweep with a *named* allowlist — web in
+  `training/workout_labels.test.ts`, mobile in `activity_type_vocabulary_test.dart`
+  — so a new one fails wherever it lands, and an entry must say why the value
+  cannot be resolved (an open vendor string like a FIT `sub_sport` can; a closed
+  domain cannot).
+- **Derive the value set, don't restate it.** The guards parse the CHECK out of
+  the migration, so widening the domain fails the build until every catalogue
+  carries the new key.
+- **An unrecognised value renders VERBATIM, never title-cased.** A title-cased
+  token is indistinguishable from a real translation and hides the drift on
+  exactly the surface where it would be noticed.
+
+**Two destinations may not have names a reader cannot tell apart.** A
+destination's name is the thing a user searches for, so "Coach" (the AI chat)
+beside "Coaching" (the human coach↔athlete roster) is a contradiction on one
+surface. `i18n/destination_names.test.ts` compares every top-level destination
+name pairwise **in every locale**, because the collision is a property of the
+words: separating the two in English can leave them colliding in German, and
+nothing else would notice (its first run found "Über"/"Übersicht" and
+"Einstellungen" naming both Settings and its Preferences tab). Add a new
+sidebar item, popover entry or Settings tab to `DESTINATION_KEYS`.
+
+## A tab index is an ordered enum, never a raw int
+
+`initialTab` on a tab host takes a named enum whose declaration order IS the
+strip order, and the labels, the views, the FAB switch and any deep link all
+read that one order (`ProfileTab`, `FitnessTab`, `SocialTab`). Do not take an
+int and clamp it: the clamp is what *hid* § 490's live bug rather than catching
+it — a stale `initialTab: 3` literal stayed in range after the tab set changed,
+so the notification bell opened the wrong tab in silence. With an enum, out of
+range is unrepresentable, so the test to write is not a clamp test but the
+property a clamp cannot give: every value opens its own tab, and the strip is
+exactly as long as the enum.
+
 ## Docs hygiene
 
 Every change that affects documented behaviour updates the docs **in the same turn as the code change**. See the root [`CLAUDE.md`](../../CLAUDE.md) § "Docs hygiene" for the full rule and checklist. Shortest version: if a doc describes the old behaviour, it is wrong the moment you change the code — fix it now, not later.

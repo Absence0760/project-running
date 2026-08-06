@@ -7220,3 +7220,101 @@ Round 15 of the issue #666 audit closed three mobile cross-cutting systems, and 
 **Date:** 2026-08-05
 
 § 529 recorded that `activity_timeline_list.dart` carried the two inks web had just retired as theme-independent `const Color`s, each doing both jobs at once — `0xFF4E7C5E` and `0xFF9A6B2F` were the `CircleAvatar`'s 16 % tint *and* the glyph on that tint, which is the tightest ground a mark can be measured against. Re-derived here to the digit: **2.875:1 (lift) and 2.962:1 (meal) on duskDeep**, 3.585 / 3.473 on parchment, against 1.4.11's 3:1 for a graphical object — so the defect is dark-only and § 529's figures were exact. The fix takes web's `--section-gym` / `-ink` and `--section-nutrition` / `-ink` verbatim into a new `SectionAccents` in `ui_kit`, shaped like `ChartPalette` (a per-brightness const pair, not a `ThemeExtension`) rather than minting new values: the disc keeps the fill, the glyph takes the ink, and dark's ink *is* its fill because a pastel on near-black already clears. Measured after: **5.297 / 5.183 light, 5.712 / 6.633 dark** on the same 16 % disc. Only the two modalities mobile paints are ported — web's other five section hues belong to its sidebar, which mobile has no twin of, so porting them would be a preemptive abstraction rather than a parity debt. The run kind was left on `colorScheme.primary` because it needs no split: **8.271:1 light / 5.698:1 dark** on its own disc. The pinning test reads the rendered `CircleAvatar` background and `Icon` colour and composites the alpha itself (`withValues` carries an alpha, it does not blend), so it measures the ground the glyph actually lands on; reverting the two constants reproduces 2.875:1 exactly.
+
+## 547. One `activity_type` vocabulary instead of seven; European Portuguese was translated and unreachable; a destination gets a name a reader can tell from the others
+
+**Date:** 2026-08-06
+
+Four items from the issue #666 audit, all of them the same failure at different
+depths: a user-facing *name* that more than one place was allowed to decide.
+
+**The `activity_type` vocabulary.** Five values (`run`, `walk`, `hike`,
+`cycle`, `stroller` — the `runs_activity_type_check` CHECK from migration
+`20261207_001`) were named by **seven** independent web catalogue namespaces and
+**three** mobile ones. The hand audit had counted six on web; the guard's first
+run found the seventh (`prefs.activity*`, driving the Preferences
+default-activity select). They disagreed *inside* a locale, not merely across
+platforms: German `hike` was both "Wandern" and "Wanderung", German `run` "Lauf"
+and "Laufen", Spanish `run` "Carrera" and "Correr", Spanish `stroller`
+"Cochecito" and "Carrito", Japanese `walk` "ウォーク" and "ウォーキング", Brazilian
+`cycle` "Ciclismo" and "Pedalada" — 13 measured within-locale disagreements.
+Four of the seven web namespaces omitted `stroller` entirely, so `/runs/[id]`
+rendered the raw token "stroller" in all six languages and **neither** settings
+surface (`/settings/devices`, `/settings/preferences`) could offer it as a
+default activity. `/coaching/athletes/[id]` hand-capitalised the column and
+`ChallengeEditor` rendered the bare value. On mobile the third vocabulary was
+worse than a disagreement: `ActivityType.label` was a hardcoded English getter
+reached from **eight** render sites — run detail, the runs filter chips, the
+add-run picker, the run-screen activity chips, two lock-screen notification
+titles, the run-list tile's subtitle *and* its semantics label, and the share
+card — so a German runner's notification read "Run" and their list rows "run".
+
+The fix is one namespace and one resolver per platform (`activityType.<value>` +
+`activityTypeLabel`; `activityTypeRun` + `activity_type_labels.dart`), 5 keys ×
+6 web locales and 5 × 7 ARBs, with all 30 duplicate keys deleted. Where the two
+platforms disagreed, the side with recorded user evidence won: `hike` reads
+**"Trail run"** everywhere, because a runner picking it means an off-road run
+and a user had surfaced "Hike" as the reason trail runners did not see
+themselves in the picker. The enum name and the database value stay `hike`.
+
+The value domain is **derived** in both guards — parsed out of the migration —
+so widening the CHECK fails the build until the catalogues catch up. The
+tree-wide hand-capitalisation sweep is deliberately **not** duplicated: web's
+lives in `workout_labels.test.ts` and the allowlist entry it carried for the
+coaching label is retired, which is the proof the fix landed. The Dart sweep is
+separate because it must catch a shape web's cannot — the mobile defect was a
+string *template* with no `+`, written through a one-letter alias, so a matcher
+keyed on an `activity`-ish identifier would have spared the very line it
+existed for. Both matchers carry must-flag / must-spare fixtures, and the Dart
+sweep's allowlist is asserted non-stale, which immediately dropped one entry
+written from the CLAUDE.md description rather than from a measurement.
+
+**European Portuguese.** `app_pt.arb` carried 3478 keys, and **247 of them
+genuinely differed** from `app_pt_BR.arb` in real European Portuguese prose —
+"partilhar" not "compartilhar", "em direto" not "ao vivo", "Inicie sessão" not
+"Faça login", "Modo passadeira" not "Modo esteira" — with **zero** of them left
+as English. Every one was unreachable: `supportedLocales` omitted `Locale('pt')`
+and `_baseToLocale` mapped the base onto `pt-BR`, measured as
+`negotiate('pt-PT') = pt-BR`. Round 14 recorded the measurement and left the
+call open; guarding the two files identical would have *destroyed* finished
+translation work, so the decision is to **ship it**. `pt` joins
+`supportedLocales` and the picker (endonym "Português (Portugal)"), and the base
+mapping now points at the European variant, so `pt-PT` and `pt-AO` (Angola uses
+that orthography) reach it while `pt-BR` still matches exactly. Re-measured:
+`negotiate('pt-PT') = pt`. Web ships only `pt-BR`, so a pt-PT reader still gets
+Brazilian there — that is a **missing web catalogue, not a reason to keep a
+finished mobile one dark**, and it is the one open item this leaves.
+
+**Destination names.** The sidebar's `/coach` read "Coach" and the account
+popover's `/coaching` read "Coaching" — one letter apart, for two unrelated
+features (the AI chat and the human coach↔athlete roster). Round 15 filed it as
+mobile-only; web carried the identical pair, so the rename landed web-first
+(§ 24): "AI Coach" and "Athletes & coaches", both platforms, every catalogue.
+Settings' "Licenses" tab becomes "About", and the four legal documents move onto
+it — they had been reachable *only* from the public footer, which the signed-in
+shell does not render, so a signed-in reader had no path to the terms they had
+agreed to (mobile closed this in round 1 as I4). Web keeps "About" rather than
+mobile's "About & updates" because a web app has no update path to offer; the
+suffix mobile earns is the only thing that differs.
+
+The guard checks every locale, because the collision is a property of the
+*words*. On its first run it found two pre-existing German pairs nobody was
+looking for: "Über" (About) one ending away from "Übersicht" (Dashboard), and
+"Einstellungen" naming **both** Settings and its Preferences tab — the latter on
+web *and* mobile. Now "Über die App" and "Voreinstellungen". The predicate flags
+a short morphological ending, not any shared prefix: Portuguese "Conta"
+(Account) must not read as colliding with "Contatos de segurança" (Safety
+contacts), which is a real pair in that catalogue.
+
+**The `initialTab` seam.** `FitnessHubScreen.initialTab` and
+`SocialScreen.initialTab` were raw ints documented in a comment, clamped into
+range. No production caller passed a non-default value, so § 490's bug was not
+live here — but the clamp is what *hid* that bug rather than catching it: a
+stale `initialTab: 3` literal stayed in range after the tab set changed and the
+notification bell opened the wrong tab in silence. Both take a named, ordered
+enum (`FitnessTab`, `SocialTab`) that the label row, the view row, the FAB
+switch and any future deep link all read, which also retires the bare `case 2:`
+that decided whether to hoist the Clubs FAB. Out of range is now
+unrepresentable, so the clamp test is replaced by the property no clamp could
+give: every value opens its own tab, and the strip is exactly as long as the
+enum. Both halves were proven to fail on a reverted source.
