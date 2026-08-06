@@ -46,7 +46,16 @@ async function expectAtFloor(
 		.evaluateAll((els) =>
 			els.map((el) => parseFloat(getComputedStyle(el as HTMLElement).fontSize))
 		);
-	expect(sizes.length, `${root} ${selector} matched no element to measure`).toBe(expected);
+	// A MINIMUM, not an equality. The point of counting at all is that a
+	// selector matching nothing would let every size assertion below pass over
+	// an empty set — but how many days of the current plan week carry a workout
+	// is a property of the seed, not of the type floor, and it differs between
+	// a developer's database and CI's. Pinning equality made this spec assert
+	// the seed instead of the rule it exists to protect.
+	expect(
+		sizes.length,
+		`${root} ${selector} matched fewer than ${expected} elements to measure`,
+	).toBeGreaterThanOrEqual(expected);
 	for (const px of sizes) {
 		expect(
 			px,
@@ -143,7 +152,9 @@ test.describe('week ribbons — 11px micro-label floor at phone width', () => {
 		test('day, kind and distance labels clear the floor', async ({ page }) => {
 			await page.goto(`/plans/${RICHMOND_HALF_PLAN_ID}`);
 			await expect(page.locator('.strip')).toBeVisible({ timeout: 10_000 });
-			await expect(page.locator('.strip .day.has-workout')).toHaveCount(1);
+			await expect
+				.poll(() => page.locator('.strip .day.has-workout').count(), { timeout: 10_000 })
+				.toBeGreaterThan(0);
 
 			await expectAtFloor(page, '.strip', '.dow', 7);
 			await expectAtFloor(page, '.strip', '.kind', 1);
