@@ -10,6 +10,26 @@
 
 export type MapStyle = 'streets' | 'satellite' | 'outdoors' | 'dark';
 
+/// Every MapTiler style slug any surface in the app requests. Wider than
+/// [MapStyle] on purpose: the route builder runs its own three-way switcher
+/// whose satellite rung is `hybrid` (imagery with labels, which is what you
+/// want while placing waypoints) rather than the bare `satellite` the
+/// preference resolves to. That is a genuine difference in tiles, so it is
+/// modelled here as an extra slug rather than flattened onto the preference
+/// union — a fifth `MapStyle` member would be a value no preference surface
+/// ever writes, and pointing the builder at `satellite` would silently change
+/// the imagery it requests (§ 526 declined the swap for exactly that reason).
+///
+/// What the two DO share is the classification: which slugs are dark ground.
+/// That question has one answer in [slugIsDark], so a surface with its own
+/// slug table still cannot disagree with the palette about what it drew over.
+export type MaptilerSlug =
+	| 'streets-v2'
+	| 'streets-v2-dark'
+	| 'satellite'
+	| 'hybrid'
+	| 'outdoor-v2';
+
 /// Pure env-override resolver. Returns the trimmed value of
 /// [getter] when non-blank; the empty string otherwise (treated by
 /// [buildMapStyleUrl] as "no override → fall back to MapTiler").
@@ -64,14 +84,21 @@ export function buildMapStyleUrl(
 	// Same semantic as mobile's `resolveTileUrl` OSM fallback.
 	if (key.trim().length === 0) return OSM_FALLBACK_STYLE_URL;
 
-	return `https://api.maptiler.com/maps/${maptilerSlug(chosen, prefersDark)}/style.json?key=${key}`;
+	return maptilerStyleUrl(maptilerSlug(chosen, prefersDark), key);
+}
+
+/// The MapTiler style-document URL for a slug. The one place the endpoint is
+/// spelled, so a surface with its own slug table (the route builder) still
+/// requests it the same way.
+export function maptilerStyleUrl(slug: MaptilerSlug, key: string): string {
+	return `https://api.maptiler.com/maps/${slug}/style.json?key=${key}`;
 }
 
 /// The MapTiler style slug a preference resolves to. Extracted so
 /// [basemapIsDark] classifies the SAME slug [buildMapStyleUrl] requests —
 /// two switches would let the URL and the overlay palette drift apart,
 /// which is the whole defect below.
-function maptilerSlug(chosen: MapStyle, prefersDark: boolean): string {
+function maptilerSlug(chosen: MapStyle, prefersDark: boolean): MaptilerSlug {
 	switch (chosen) {
 		case 'satellite':
 			return 'satellite';
@@ -109,9 +136,38 @@ export function basemapIsDark(
 	prefersDark: boolean,
 	overrideUrl: string | undefined = undefined,
 ): boolean {
+	return basemapIsDarkForSlug(maptilerSlug(chosen, prefersDark), key, overrideUrl);
+}
+
+/// [basemapIsDark] for a surface that resolves its own slug rather than a
+/// [MapStyle] preference — the route builder, whose three-way switcher offers
+/// `hybrid` imagery and no dark rung. It keeps the override and keyless
+/// precedence identical, so the only thing such a surface still owns is WHICH
+/// slug it asked for; whether that slug is dark ground is not its call.
+export function basemapIsDarkForSlug(
+	slug: MaptilerSlug,
+	key: string,
+	overrideUrl: string | undefined = undefined,
+): boolean {
 	const trimmed = overrideUrl?.trim() ?? '';
 	if (trimmed.length > 0) return trimmed.toLowerCase().includes('dark');
 	if (key.trim().length === 0) return false;
-	const slug = maptilerSlug(chosen, prefersDark);
-	return slug === 'streets-v2-dark' || slug === 'satellite';
+	return slugIsDark(slug);
+}
+
+/// Whether a MapTiler slug renders dark ground. Exhaustive over
+/// [MaptilerSlug], so adding a slug is a compile error here until it is
+/// classified — which is the point: an unclassified ground is an overlay
+/// palette picked by coin toss. Both imagery slugs count as dark for § 526's
+/// reason (imagery is not enumerable, and the darker rung is the safe side).
+export function slugIsDark(slug: MaptilerSlug): boolean {
+	switch (slug) {
+		case 'streets-v2-dark':
+		case 'satellite':
+		case 'hybrid':
+			return true;
+		case 'streets-v2':
+		case 'outdoor-v2':
+			return false;
+	}
 }
