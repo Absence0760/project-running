@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShareBadgeMeta } from './share_badge_meta';
+import { buildBadgeShareCanonical, buildShareBadgeMeta } from './share_badge_meta';
 import type { SharedBadge } from './share_badge_lookup';
 
 function badge(over: Partial<SharedBadge> = {}): SharedBadge {
@@ -123,4 +123,37 @@ test('jsonLd — left unset (the badge page carries no structured-data node yet)
 		siteUrl: 'https://threkir.com',
 	});
 	assert.equal(meta.jsonLd, undefined);
+});
+
+// ---------------- buildBadgeShareCanonical ----------------
+
+// The path exists once, and each caller supplies the base its use wants: a
+// <head> canonical resolves against PUBLIC_SITE_URL, the profile page's
+// copy-to-clipboard against location.origin so a preview host yields a
+// preview link (§ 520).
+
+test('buildBadgeShareCanonical — resolves against whatever base the caller passes', () => {
+	assert.equal(
+		buildBadgeShareCanonical('https://threkir.com', 'b-9'),
+		'https://threkir.com/share/badge/b-9',
+	);
+	assert.equal(
+		buildBadgeShareCanonical('https://preview.threkir.com', 'b-9'),
+		'https://preview.threkir.com/share/badge/b-9',
+	);
+});
+
+test('buildBadgeShareCanonical — trailing slashes collapse, an absent base stays root-relative', () => {
+	assert.equal(buildBadgeShareCanonical('https://threkir.com//', 'b-9'), 'https://threkir.com/share/badge/b-9');
+	assert.equal(buildBadgeShareCanonical(null, 'b-9'), '/share/badge/b-9');
+});
+
+test('buildBadgeShareCanonical is the single definition the <head> canonical uses', () => {
+	const meta = buildShareBadgeMeta({
+		id: 'b-9',
+		badge: badge(),
+		displayName: null,
+		siteUrl: 'https://threkir.com',
+	});
+	assert.equal(meta.canonical, buildBadgeShareCanonical('https://threkir.com', 'b-9'));
 });

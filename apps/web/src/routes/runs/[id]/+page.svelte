@@ -586,7 +586,7 @@
 			// the share button both read `run.is_public` and would otherwise
 			// keep showing "Private" / "Make public" until a reload.
 			run = { ...run, is_public: true } as Run;
-			const url = `${window.location.origin}/share/run/${run.id}`;
+			const url = buildRunShareCanonical(window.location.origin, run.id);
 			await navigator.clipboard.writeText(url);
 			showToast(m('runDetail.shareLinkCopied'), 'success');
 		} catch (e) {

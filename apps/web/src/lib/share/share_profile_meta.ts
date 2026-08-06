@@ -54,7 +54,7 @@ export function buildProfileJsonLd(
 	opts: { id: string; base: string | null | undefined },
 ): string {
 	const base = normaliseSiteUrl(opts.base);
-	const canonical = `${base}/share/profile/${opts.id}`;
+	const canonical = buildProfileShareCanonical(base, opts.id);
 	const name = profileDisplayName(profile);
 	const person: Record<string, unknown> = { '@type': 'Person', name };
 	if (profile?.avatar_url) person.image = profile.avatar_url;

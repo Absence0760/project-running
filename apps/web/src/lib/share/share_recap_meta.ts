@@ -7,7 +7,21 @@
 
 import type { SharedRecap } from './share_recap_lookup';
 import { recapPeriodLabel } from './recap_period_label';
+import { normaliseSiteUrl } from './share_meta';
 import { escapeHtml } from '../util/html_escape';
+
+/// Absolute URL of a frozen recap's public share page. Note the path shape:
+/// the recap share page predates the `/share/<entity>/[id]` family and lives
+/// at `/recap/share/[id]`, so it is the one entity whose public URL is not
+/// under `/share/`. The one definition of it — resolve against
+/// `PUBLIC_SITE_URL` for a `<head>`, against `location.origin` for a
+/// copy-link (§ 520).
+export function buildRecapShareCanonical(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/recap/share/${id}`;
+}
 
 export interface ShareRecapMetaInput {
 	id: string;
@@ -38,7 +52,7 @@ export function buildShareRecapMeta(input: ShareRecapMetaInput): ShareRecapMeta 
 	return {
 		title,
 		description,
-		ogUrl: `${base}/recap/share/${id}`,
+		ogUrl: buildRecapShareCanonical(base, id),
 		ogImageUrl: `${base}/og/recap/${id}.png`,
 	};
 }

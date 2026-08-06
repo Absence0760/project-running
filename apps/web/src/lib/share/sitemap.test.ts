@@ -11,6 +11,10 @@ import {
 	priorityForRunCount,
 	xmlEscape,
 } from './sitemap';
+import { buildClubShareCanonical } from './share_club_meta';
+import { buildEventShareCanonical } from './share_event_meta';
+import { buildRaceShareCanonical } from './share_race_meta';
+import { buildRouteShareCanonical, buildRunShareCanonical } from './share_meta';
 
 // ---------------- xmlEscape ----------------
 
@@ -316,4 +320,33 @@ test('entityEntries — never emits a profile URL (no people enumeration)', () =
 
 test('entityEntries — empty inputs yield no entries', () => {
 	assert.deepEqual(entityEntries('https://threkir.com', [], [], []), []);
+});
+
+// ---------------- the sitemap advertises exactly the canonical ----------------
+
+// A <loc> and the target page's <link rel="canonical"> have to be the same
+// string. If the sitemap spells the path itself and the two ever drift, the
+// crawler is handed a manifest of URLs that each point somewhere else — worse
+// than either mistake alone, and invisible until indexing stalls.
+
+test('every share <loc> equals the entity builder canonical for the same base', () => {
+	const base = 'https://threkir.com';
+	const entries = composeEntries(base, [{ id: 'rt-1' }], [{ id: 'r-1' }]);
+	const locs = entries.map((e) => e.loc);
+	assert.ok(locs.includes(buildRouteShareCanonical(base, 'rt-1')));
+	assert.ok(locs.includes(buildRunShareCanonical(base, 'r-1')));
+
+	const ent = entityEntries(base, [{ id: 'e-1' }], [{ slug: 'club-a' }], [{ id: 'ra-1' }]).map(
+		(e) => e.loc,
+	);
+	assert.deepEqual(ent, [
+		buildEventShareCanonical(base, 'e-1'),
+		buildClubShareCanonical(base, 'club-a'),
+		buildRaceShareCanonical(base, 'ra-1'),
+	]);
+});
+
+test('a trailing slash on the base is normalised the same way the builders do', () => {
+	const entries = entityEntries('https://threkir.com/', [], [{ slug: 'club-a' }], []);
+	assert.equal(entries[0].loc, buildClubShareCanonical('https://threkir.com', 'club-a'));
 });

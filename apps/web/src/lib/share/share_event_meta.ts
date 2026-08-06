@@ -78,7 +78,7 @@ export function buildEventJsonLd(
 	opts: { id: string; base: string | null | undefined },
 ): string {
 	const base = normaliseSiteUrl(opts.base);
-	const canonical = `${base}/share/event/${opts.id}`;
+	const canonical = buildEventShareCanonical(base, opts.id);
 	const isAthletic = event?.category === 'run' || event?.category === 'cycle' || event?.category == null;
 	const graph: Record<string, unknown> = {
 		'@context': 'https://schema.org',

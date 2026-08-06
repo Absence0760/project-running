@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildShareRecapMeta } from './share_recap_meta';
+import { buildRecapShareCanonical, buildShareRecapMeta } from './share_recap_meta';
 import { injectShareRecapMeta } from './share_recap_spa_shell';
 import type { SharedRecap } from './share_recap_lookup';
 
@@ -71,4 +71,28 @@ test('injectShareRecapMeta: escapes a hostile display name', () => {
 	});
 	const out = injectShareRecapMeta(shell, meta);
 	assert.ok(!out.includes('<script>alert(1)</script>'));
+});
+
+// ---------------- buildRecapShareCanonical ----------------
+
+// The recap share page predates the /share/<entity>/[id] family, so its public
+// URL is /recap/share/[id] — the one entity whose path does not sit under
+// /share/. Worth pinning literally: the shape is easy to "correct" into the
+// family form, which would 404 every link ever pasted.
+
+test('buildRecapShareCanonical — the path is /recap/share/, not /share/recap/', () => {
+	assert.equal(
+		buildRecapShareCanonical('https://threkir.com', 'rec-1'),
+		'https://threkir.com/recap/share/rec-1',
+	);
+});
+
+test('buildRecapShareCanonical — trailing slashes collapse, an absent base stays root-relative', () => {
+	assert.equal(buildRecapShareCanonical('https://threkir.com//', 'rec-1'), 'https://threkir.com/recap/share/rec-1');
+	assert.equal(buildRecapShareCanonical(null, 'rec-1'), '/recap/share/rec-1');
+});
+
+test('buildRecapShareCanonical is the single definition the og:url uses', () => {
+	const meta = buildShareRecapMeta({ id: 'rec-1', recap: recap(), siteUrl: 'https://threkir.com' });
+	assert.equal(meta.ogUrl, buildRecapShareCanonical('https://threkir.com', 'rec-1'));
 });

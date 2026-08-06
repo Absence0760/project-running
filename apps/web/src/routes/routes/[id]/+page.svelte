@@ -363,7 +363,7 @@
 				return;
 			}
 		}
-		shareLink = `${window.location.origin}/share/route/${route.id}`;
+		shareLink = buildRouteShareCanonical(window.location.origin, route.id);
 		shareCopied = false;
 	}
 
