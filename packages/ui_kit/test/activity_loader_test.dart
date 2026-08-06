@@ -3,9 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 void main() {
-  Widget host(ActivityLoaderKind kind, {double size = 76}) => MaterialApp(
+  Widget host(ActivityLoaderKind kind,
+          {double size = 76, String label = 'Chargement…'}) =>
+      MaterialApp(
         home: Scaffold(
-          body: Center(child: ActivityLoader(kind: kind, size: size)),
+          body: Center(
+              child: ActivityLoader(kind: kind, size: size, label: label)),
         ),
       );
 
@@ -36,9 +39,12 @@ void main() {
     expect(size.height, closeTo(170, 0.01));
   });
 
-  testWidgets('exposes a Loading semantics label', (tester) async {
-    await tester.pumpWidget(host(ActivityLoaderKind.fuel));
-    expect(find.bySemanticsLabel('Loading'), findsOneWidget);
+  testWidgets('announces the caller-supplied label verbatim', (tester) async {
+    await tester.pumpWidget(
+        host(ActivityLoaderKind.fuel, label: 'Cargando actividades'));
+    expect(find.bySemanticsLabel('Cargando actividades'), findsOneWidget);
+    // The one thing a locale-free package must never announce.
+    expect(find.bySemanticsLabel('Loading'), findsNothing);
   });
 
   testWidgets('paints the rest pose when animations are disabled',
@@ -48,7 +54,9 @@ void main() {
         data: MediaQueryData(disableAnimations: true),
         child: MaterialApp(
           home: Scaffold(
-            body: Center(child: ActivityLoader(kind: ActivityLoaderKind.train)),
+            body: Center(
+                child: ActivityLoader(
+                    kind: ActivityLoaderKind.train, label: 'Wird geladen…')),
           ),
         ),
       ),
