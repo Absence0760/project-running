@@ -32,7 +32,10 @@ test.describe('/settings — side-nav structure', () => {
 			{ href: '/settings/account', label: 'Account' },
 			{ href: '/settings/preferences', label: 'Preferences' },
 			{ href: '/settings/integrations', label: 'Integrations' },
-			{ href: '/settings/devices', label: 'Devices' },
+			// "Devices" alone read as hardware; the page is signed-in sessions
+			// plus their per-device overrides, and the heart-rate strap /
+			// treadmill pairing lives under Integrations (#666 I10).
+			{ href: '/settings/devices', label: 'Signed-in devices' },
 			{ href: '/settings/gear', label: 'Gear' },
 			{ href: '/settings/upgrade', label: 'Pro & support' },
 			{ href: '/settings/licenses', label: 'Licenses' },
