@@ -27,9 +27,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { SUPPORTED_LOCALES } from '$lib/i18n/locale';
-import { CATALOGUE_LOADERS } from '$lib/i18n/catalogues';
-import { ACTIVITY_TYPES, ACTIVITY_TYPE_ICONS, activityTypeKey } from './activity_type';
+// Relative, not `$lib`: this suite runs under `tsx --test`, which resolves the
+// alias only from the `.svelte-kit/tsconfig.json` a `svelte-kit sync` generates.
+// CI's drift job runs the tests without syncing first, so a `$lib` import passes
+// locally after any dev command and fails there with ERR_MODULE_NOT_FOUND.
+import { SUPPORTED_LOCALES } from '../i18n/locale.js';
+import { CATALOGUE_LOADERS } from '../i18n/catalogues.js';
+import { ACTIVITY_TYPES, ACTIVITY_TYPE_ICONS, activityTypeKey } from './activity_type.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, '..', '..', '..', '..', '..');
