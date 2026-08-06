@@ -781,6 +781,12 @@
 		font-weight: 800;
 		margin: 0 0 var(--space-sm);
 		line-height: 1.2;
+		/* The title is user-supplied, so one unbreakable token — a URL, a German
+		 * compound, a long id — is wider at 2rem than a narrow viewport's text
+		 * column, and an unbreakable word pushes the whole document open (the
+		 * § 535 failure, from content rather than from a rule). A length CHECK
+		 * cannot prevent this: it bounds the string, not the longest word. */
+		overflow-wrap: break-word;
 	}
 	.status-row {
 		display: inline-flex;
