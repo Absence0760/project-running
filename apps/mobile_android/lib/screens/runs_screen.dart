@@ -26,9 +26,8 @@ import '../widgets/activity_timeline_list.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/log_sheet.dart';
 import '../widgets/nutrition_log_sheet.dart';
-import '../widgets/run_track_preview.dart';
+import '../widgets/run_list_tile.dart';
 import '../widgets/surface_peer_strip.dart';
-import '../widgets/track_preview.dart';
 import 'add_run_screen.dart';
 import 'gym_detail_screen.dart';
 import 'gym_screen.dart';
@@ -135,12 +134,6 @@ const int _kRunsPageSize = 20;
 /// than ~380dp. The fixed extent matches a two-line `_RunTile` card.
 const double _kRunGridMaxTileWidth = 560;
 const double _kRunGridTileExtent = 96;
-
-/// Single leading-slot width for every `_RunTile` variant (track
-/// preview, selecting checkbox, or activity icon fallback). Locking
-/// this to one value keeps the title column anchored at the same
-/// x-position regardless of which leading the row happens to render.
-const double _kLeadingWidth = 72;
 
 /// True when the Load-more button should render at the bottom of the
 /// runs list — either the local filtered superset has more rows beyond
@@ -1618,12 +1611,11 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   Widget _runTile(Run run, ThemeData theme, DistanceUnit unit) {
-    return _RunTile(
+    return RunListTile.owned(
       key: ValueKey(run.id),
       api: widget.apiClient,
       run: run,
       unit: unit,
-      theme: theme,
       isUnsynced: _unsyncedIds.contains(run.id),
       selecting: _selecting,
       selected: _selected.contains(run.id),
@@ -1728,194 +1720,6 @@ class _KindChipRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _RunTile extends StatelessWidget {
-  final Run run;
-  final DistanceUnit unit;
-  final ThemeData theme;
-  final bool isUnsynced;
-  final bool selecting;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-  final ApiClient? api;
-
-  const _RunTile({
-    super.key,
-    required this.run,
-    required this.unit,
-    required this.theme,
-    required this.isUnsynced,
-    required this.selecting,
-    required this.selected,
-    required this.onTap,
-    required this.onLongPress,
-    required this.api,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final dist = UnitFormat.distance(run.distanceMetres, unit);
-    final dur = _formatDuration(run.duration);
-    final paceSecPerKm = run.distanceMetres < 10
-        ? null
-        : run.duration.inSeconds / (run.distanceMetres / 1000);
-    final activity =
-        ActivityType.fromName(run.metadata?['activity_type'] as String?);
-    final trailingMetric = activity.usesSpeed
-        ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
-        : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
-    final date = formatDateShort(
-        run.startedAt, localeToTag(Localizations.localeOf(context)));
-    // Per-row vert chip — persona-hunt Round 3 finding Ultra #4
-    // (mobile twin of web `/runs/+page.svelte`). Mirrors the web
-    // condition: render only when `metadata.elevation_m` is positive
-    // so layouts don't widen on runs with no elevation signal.
-    final vertRaw = run.metadata?['elevation_m'];
-    final vertMetres = (vertRaw is num && vertRaw > 0) ? vertRaw.toDouble() : 0.0;
-    final vertLabel = vertMetres > 0
-        ? '  ·  ${UnitFormat.elevation(vertMetres, unit)} ↑'
-        : '';
-
-    final trackUrl = run.metadata?['track_url'] as String?;
-    final hasInlineTrack = run.track.length >= 2;
-    final Widget leading = SizedBox(
-      width: _kLeadingWidth,
-      height: 40,
-      child: Center(
-        child: selecting
-            ? Icon(
-                selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: selected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outline,
-              )
-            : hasInlineTrack
-                ? TrackPreview(points: run.track)
-                : (trackUrl != null && api != null)
-                    ? RunTrackPreview(trackUrl: trackUrl, api: api!)
-                    : CircleAvatar(
-                        backgroundColor: theme.colorScheme.primaryContainer,
-                        child: Icon(activity.icon,
-                            color: theme.colorScheme.primary),
-                      ),
-      ),
-    );
-
-    final semanticsLabel = [
-      '$dist ${activity.label.toLowerCase()}',
-      date,
-      dur,
-      trailingMetric,
-      if (vertMetres > 0) '${UnitFormat.elevation(vertMetres, unit)} elevation gain',
-      if (isUnsynced) 'not yet synced',
-    ].join(', ');
-
-    // Split the trailing metric into value + unit pieces so the
-    // numeric reads as the hero and the unit/label as supporting
-    // metadata. `trailingMetric` is "{value} {unit}" — find the
-    // last space and pivot.
-    final lastSpace = trailingMetric.lastIndexOf(' ');
-    final trailingValue =
-        lastSpace > 0 ? trailingMetric.substring(0, lastSpace) : trailingMetric;
-    final trailingUnit =
-        lastSpace > 0 ? trailingMetric.substring(lastSpace + 1) : '';
-    return Semantics(
-      label: semanticsLabel,
-      button: true,
-      selected: selected,
-      child: Card(
-        color: selected
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
-            : null,
-        child: ListTile(
-          leading: leading,
-          // Title row: activity icon (signature colour, not outline-
-          // grey) + bold distance text. Pre-polish the distance was
-          // bodyMedium-default-weight which read as "metadata"; the
-          // distance is the run's primary identifier and deserves
-          // hero treatment.
-          title: Row(
-            children: [
-              Icon(activity.icon, size: 18, color: theme.colorScheme.primary),
-              const SizedBox(width: 6),
-              Text(
-                dist,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          // Subtitle: date · duration · activity-label. Adding the
-          // activity word ("run", "walk", "cycle", "trail run")
-          // makes a glanceable list of mixed activities readable
-          // without expanding the row. Same `·` separator used by
-          // the routes-list polish.
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              '$date  ·  $dur  ·  ${activity.label.toLowerCase()}$vertLabel',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          // Trailing: pace value (bold) + unit (small, muted)
-          // stacked. Pre-polish was a single small bodySmall text
-          // — the pace got visually lost. Stack treatment matches
-          // the run-detail screen's `_Stat` widget shape.
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    trailingValue,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (isUnsynced) ...[
-                    const SizedBox(width: 6),
-                    Tooltip(
-                      message: AppLocalizations.of(context).historyQueuedToSync,
-                      child: Icon(
-                        Icons.cloud_upload_outlined,
-                        size: 16,
-                        color: theme.colorScheme.tertiary,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              if (trailingUnit.isNotEmpty)
-                Text(
-                  trailingUnit,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-            ],
-          ),
-          onTap: onTap,
-          onLongPress: onLongPress,
-        ),
-      ),
-    );
-  }
-
-  static String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    if (h > 0) return '${h}h ${m}m';
-    return '${m}m ${s}s';
-  }
-
 }
 
 class _EmptyRuns extends StatelessWidget {

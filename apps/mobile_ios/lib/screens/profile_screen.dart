@@ -5,9 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart';
 
 import '../auth_error.dart';
-import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
-import '../l10n/locale_support.dart';
 import '../notification_groups.dart';
 import '../preferences.dart';
 import '../social_service.dart';
@@ -16,7 +14,7 @@ import '../undo_queue.dart';
 import '../widgets/badge_grid.dart';
 import '../widgets/error_state.dart';
 import '../widgets/report_sheet.dart';
-import '../widgets/run_track_preview.dart';
+import '../widgets/run_list_tile.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 import '../widgets/undo_bar.dart';
@@ -844,54 +842,22 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.separated(
+      child: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _runs.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (_, i) {
           final r = _runs[i];
-          // Mirrors the History tab's `_RunTile`: leading is a track
-          // preview when the run carries a `trackUrl`, falling back to
-          // the activity-type icon otherwise. Tap-into-detail routes
-          // through `PublicRunScreen` (which takes a `runId`) so this
-          // works for non-owner viewers too.
-          final activity = ActivityType.fromName(r.activityType);
-          final dist = formatDistanceForPref(r.distanceM);
-          final paceLine =
-              '${_formatDuration(Duration(seconds: r.durationS))} · ${_formatPace(r.distanceM, r.durationS)}';
-          final trackUrl = r.trackUrl;
-          final leading = SizedBox(
-            width: 56,
-            height: 40,
-            child: Center(
-              child: trackUrl != null
-                  ? RunTrackPreview(
-                      runId: r.id,
-                      trackUrl: trackUrl,
-                      api: widget.api,
-                      ownerUserId: widget.userId,
-                    )
-                  : CircleAvatar(
-                      backgroundColor: theme.colorScheme.primaryContainer,
-                      child: Icon(
-                        activity.icon,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-            ),
-          );
-          return ListTile(
-            leading: leading,
-            title: Row(
-              children: [
-                Icon(activity.icon, size: 16, color: theme.colorScheme.outline),
-                const SizedBox(width: 6),
-                Text(dist),
-              ],
-            ),
-            subtitle: Text(
-              '${formatDateMed(r.startedAt, localeToTag(Localizations.localeOf(context)))}  ·  $paceLine',
-            ),
+          // The run row, shared with Fitness -> Runs. Tap-into-detail routes
+          // through `PublicRunScreen` (which takes a `runId`) so this works
+          // for non-owner viewers too, and `ownerUserId` sends the thumbnail
+          // through the clipping function when the profile is not the
+          // viewer's own.
+          return RunListTile.public(
+            key: ValueKey(r.id),
+            row: r,
+            ownerUserId: widget.userId,
+            unit: activeDistanceUnit,
+            api: widget.api,
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -1264,19 +1230,6 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
       );
     }
-  }
-
-  static String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    if (h > 0) return '${h}h ${m}m';
-    return '${m}m ${s}s';
-  }
-
-  static String _formatPace(double metres, int durationS) {
-    if (metres <= 0 || durationS <= 0) return '—';
-    return formatPaceForPref(durationS / (metres / 1000));
   }
 
   String _notifName(AppLocalizations l10n, NotificationView item) =>
