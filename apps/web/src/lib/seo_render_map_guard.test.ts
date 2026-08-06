@@ -172,14 +172,35 @@ function inAppPages(dir: string, out: string[] = []): string[] {
 	return out;
 }
 
+/// A page FOLDS onto a share twin when it emits a `<link rel="canonical">`
+/// built from a share-canonical builder. Both halves are required, and the
+/// second half was added in § 546: calling the builder alone is not a fold,
+/// because § 520 established that the SAME builder legitimately serves a
+/// copy-to-clipboard link resolved against `location.origin`. `/recap/[year]`
+/// is the first page to do only that — it publishes a snapshot and copies the
+/// resulting link, and it cannot canonical onto `/recap/share/[id]` because
+/// that id does not exist until the user publishes. Greening this by writing a
+/// table row would have documented a fold the page does not perform, which is
+/// the failure this guard exists to catch, pointed the wrong way.
+function foldsOntoShareTwin(source: string): boolean {
+	return /<link\s+rel="canonical"/.test(source) && /build\w*ShareCanonical\(/.test(source);
+}
+
 test('no in-app page folds onto a share twin without a table row', () => {
 	const documented = new Set(canonicalRows.map((r) => r.inApp));
 	const undocumented: string[] = [];
+	let folds = 0;
 	for (const route of inAppPages(routesRoot)) {
-		const source = readFileSync(pageFor(route), 'utf-8');
-		if (!/build\w*ShareCanonical\(/.test(source)) continue;
+		if (!foldsOntoShareTwin(readFileSync(pageFor(route), 'utf-8'))) continue;
+		folds++;
 		if (!documented.has(route)) undocumented.push(route);
 	}
+	// § 534: prove the scan saw a non-empty set. A predicate that matched
+	// nothing would satisfy the assertion below for the wrong reason.
+	assert.ok(
+		folds >= canonicalRows.length,
+		`the scan found ${folds} folding pages against ${canonicalRows.length} documented rows`,
+	);
 	assert.deepEqual(
 		undocumented,
 		[],
@@ -187,4 +208,23 @@ test('no in-app page folds onto a share twin without a table row', () => {
 			`consolidation table: ${undocumented.join(', ')}. Add the row — the table is ` +
 			'the contract, and a fold missing from it is a fold nobody will maintain.',
 	);
+});
+
+test('the fold detector needs both halves, not either one', () => {
+	const CANONICAL = '<link rel="canonical" href={canonicalUrl} />';
+	const BUILDER = 'buildRunShareCanonical(window.location.origin, id)';
+	assert.equal(foldsOntoShareTwin(`${CANONICAL}\n${BUILDER}`), true, 'a real fold');
+	// A copy-link and nothing else — the two recap pages.
+	assert.equal(
+		foldsOntoShareTwin(`const url = ${BUILDER};`),
+		false,
+		'a copy-to-clipboard link is not a canonical fold (§ 520)',
+	);
+	// A canonical that is not a share twin — every prerendered marketing page.
+	assert.equal(
+		foldsOntoShareTwin(CANONICAL),
+		false,
+		'a self-canonical is not a fold onto a share twin',
+	);
+	assert.equal(foldsOntoShareTwin('nothing here'), false);
 });

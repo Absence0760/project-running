@@ -7,15 +7,16 @@
 /// page can rasterise it to PNG via an offscreen canvas.
 
 import type { YearInRunningRecap } from '../runs/recap';
+import { OG_CARD_DARK } from './og_card_palette';
 
 const SIZE = 1080; // square — friendliest aspect for social shares
 const PAD = 72;
 
-const BG = '#0f172a'; // slate-900 — confident dark card
-const BRAND = '#60a5fa'; // brand blue, lightened for dark bg
-const HERO_FILL = '#ffffff';
-const LABEL_FILL = '#94a3b8'; // slate-400
-const STAT_FILL = '#e2e8f0'; // slate-200
+const BG = OG_CARD_DARK.bg;
+const BRAND = OG_CARD_DARK.brand;
+const HERO_FILL = OG_CARD_DARK.hero;
+const LABEL_FILL = OG_CARD_DARK.label;
+const STAT_FILL = OG_CARD_DARK.stat;
 
 function fmtDistance(meters: number, unit: 'km' | 'mi'): string {
 	if (unit === 'mi') return `${(meters / 1609.344).toFixed(0)} mi`;

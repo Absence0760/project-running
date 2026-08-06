@@ -49,13 +49,13 @@ const MAP_SURFACES: Record<string, ['shared' | 'unkeyed', string]> = {
 	'lib/components/PersonalHeatmap.svelte': ['shared', 'the personal run heatmap'],
 	'routes/live/[id]/+page.svelte': ['shared', 'the spectator live map'],
 	'routes/live/event/[id]/[instance]/+page.svelte': ['shared', 'the event live hub map'],
-	// The privacy-zone circle is one fixed danger hue on both grounds, not a
-	// keyed pair: `#dc2626` clears 1.4.11 on every basemap this app resolves
-	// to (4.208:1 light land, 3.560 dark, 3.011 over light-basemap water,
-	// 3.522 on the OSM backdrop), which no darker or lighter red does. It
-	// therefore has no basemap question to get wrong — but the margin over
-	// water is the thinnest in the literal register, and is asserted there.
-	'lib/components/PrivacyZonePicker.svelte': ['unkeyed', 'one hue that clears every ground'],
+	// The privacy-zone circle WAS one fixed `#dc2626` on both grounds, on the
+	// grounds that it cleared 1.4.11 everywhere the app resolves to. It did —
+	// 4.208:1 on the light land sample, 3.560 on the dark, 3.522 on the OSM
+	// backdrop, and 3.011 over light-basemap water. That last figure is a
+	// 0.4 % margin, i.e. a value sitting ON the floor rather than above it, so
+	// it splits into `mapZoneBoundary`'s keyed pair like every other rung.
+	'lib/components/PrivacyZonePicker.svelte': ['shared', 'the privacy-zone circle'],
 };
 
 /// Infrastructure, not a surface: the MapLibre re-export and the resize
@@ -103,7 +103,7 @@ test('every registered surface resolves the ground the way its entry claims', ()
 	for (const [key, [how]] of Object.entries(MAP_SURFACES)) {
 		const source = read(key);
 		const resolves = /basemapIsDark(FromEnv|ForSlug)\(/.test(source);
-		const paints = /\bmap(TrackLine|AccentColour|OverlayOutline|StartColour|FinishColour|HoverLine|PinnedLine|DraftLine|OverlapLine|LiveLine|HintLine|FeaturedHalo|LabelInk|LabelHalo)\(/.test(
+		const paints = /\bmap(TrackLine|AccentColour|OverlayOutline|StartColour|FinishColour|HoverLine|PinnedLine|DraftLine|OverlapLine|LiveLine|HintLine|FeaturedHalo|LabelInk|LabelHalo|ZoneBoundary)\(/.test(
 			source,
 		);
 		if (how === 'shared') {
@@ -221,6 +221,73 @@ test('the route builder still requests exactly the tiles it did before', () => {
 	assert.equal(
 		maptilerStyleUrl('outdoor-v2', 'K'),
 		'https://api.maptiler.com/maps/outdoor-v2/style.json?key=K',
+	);
+});
+
+/// A surface may choose its slug; it may not re-implement the precedence that
+/// turns a slug into a style URL. `styleUrlForSlug` (and the `MapStyle`-keyed
+/// `buildMapStyleUrl` / `mapStyleUrl*` in front of it) spell it once: override,
+/// then the keyless OSM raster fallback, then the keyed MapTiler slug. Calling
+/// `maptilerStyleUrl` from a surface skips the middle rung, which is exactly
+/// how the route builder became the only map in the app that rendered a blank
+/// canvas — and, because MapLibre reads the credit out of the style document
+/// that loaded (§ 491), the only one that displayed tiles crediting nobody.
+const STYLE_RESOLVER = /\b(styleUrlForSlug|buildMapStyleUrl|mapStyleUrlFromEnv|mapStyleUrl)\(/;
+const RAW_ENDPOINT = /\bmaptilerStyleUrl\(/;
+
+test('a map surface resolves its style URL through the shared precedence', () => {
+	const missing: string[] = [];
+	const raw: string[] = [];
+	for (const key of Object.keys(MAP_SURFACES)) {
+		const source = read(key);
+		if (!STYLE_RESOLVER.test(source)) missing.push(key);
+		if (RAW_ENDPOINT.test(source)) raw.push(key);
+	}
+	assert.equal(
+		Object.keys(MAP_SURFACES).length,
+		7,
+		'the population this scan ran over — a shrinking register would let it pass over nothing',
+	);
+	assert.deepEqual(
+		missing,
+		[],
+		`these map surfaces build no style URL through the shared resolver: ${missing.join(', ')}`,
+	);
+	assert.deepEqual(
+		raw,
+		[],
+		`these map surfaces call maptilerStyleUrl directly: ${raw.join(', ')}. That skips the ` +
+			'keyless OSM-raster branch, so a deploy with no PUBLIC_MAPTILER_KEY renders a blank ' +
+			'canvas with no basemap credit. Pass the slug to styleUrlForSlug instead.',
+	);
+});
+
+test('the style-resolver scan flags a raw endpoint call and spares the resolver', () => {
+	// Both directions, because the check is a regex over source and § 536's
+	// lesson is that the matcher defines the population.
+	for (const line of [
+		"\tstreets: maptilerStyleUrl(BUILDER_SLUGS.streets, KEY),",
+		"\tconst u = maptilerStyleUrl('hybrid', key);",
+	]) {
+		assert.ok(RAW_ENDPOINT.test(line), `must flag: ${line}`);
+	}
+	for (const line of [
+		"\tstreets: styleUrlForSlug(BUILDER_SLUGS.streets, KEY, OVERRIDE),",
+		'\tstyle: mapStyleUrlFromEnv(PUBLIC_MAPTILER_KEY, prefersDark),',
+		"\timport { maptilerStyleUrl } from '$lib/routes/map-style-url';",
+	]) {
+		assert.ok(!RAW_ENDPOINT.test(line), `must spare: ${line}`);
+	}
+	for (const line of [
+		'\tstyle: mapStyleUrl(key, prefersDark),',
+		'\tconst u = buildMapStyleUrl(chosen, key, prefersDark);',
+		'\tstreets: styleUrlForSlug(slug, key, override),',
+	]) {
+		assert.ok(STYLE_RESOLVER.test(line), `must count as a resolver: ${line}`);
+	}
+	assert.ok(
+		!STYLE_RESOLVER.test("\tconst u = maptilerStyleUrl('hybrid', key);"),
+		'the raw endpoint must not satisfy the resolver requirement',
 	);
 });
 

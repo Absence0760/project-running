@@ -16,6 +16,7 @@ import {
 	OSM_FALLBACK_STYLE_URL,
 	resolveStyleOverride,
 	slugIsDark,
+	styleUrlForSlug,
 	type MaptilerSlug,
 } from './map-style-url';
 
@@ -313,4 +314,58 @@ test('basemapIsDarkForSlug — override and keyless precedence match basemapIsDa
 	// for, so imagery does not carry a dark verdict into a light fallback.
 	assert.equal(basemapIsDarkForSlug('hybrid', ''), false);
 	assert.equal(basemapIsDarkForSlug('hybrid', '   '), false);
+});
+
+// `styleUrlForSlug` is the URL half of the same pair, and its whole reason for
+// existing is the branch a private slug table skipped: the route builder built
+// its three URLs from `maptilerStyleUrl` and so had no keyless fallback at all
+// — a 403 and a blank canvas where every other surface rendered OSM raster,
+// with no basemap credit either, because MapLibre reads the credit out of the
+// style document that loaded (§ 491).
+
+test('styleUrlForSlug — every builder slug falls back to OSM raster with no key', () => {
+	// The population, not just the property: all three rungs the builder can
+	// select, and the two blank spellings a missing env var produces.
+	const builderSlugs: MaptilerSlug[] = ['streets-v2', 'streets-v2-dark', 'hybrid', 'outdoor-v2'];
+	assert.equal(builderSlugs.length, 4, 'the builder resolves four slugs across its three rungs');
+	for (const slug of builderSlugs) {
+		for (const key of ['', '   ']) {
+			assert.equal(
+				styleUrlForSlug(slug, key),
+				OSM_FALLBACK_STYLE_URL,
+				`${slug} with key ${JSON.stringify(key)} must degrade to the keyless style`,
+			);
+		}
+	}
+});
+
+test('styleUrlForSlug — the override wins over both the key and the fallback', () => {
+	const override = 'http://localhost:8080/style.json';
+	assert.equal(styleUrlForSlug('hybrid', 'KEY', override), override);
+	assert.equal(styleUrlForSlug('hybrid', '', override), override);
+	assert.equal(styleUrlForSlug('outdoor-v2', 'KEY', '  ' + override + '  '), override);
+	// Blank overrides are absent, not a style URL.
+	assert.equal(styleUrlForSlug('hybrid', 'KEY', '   '), maptilerStyleUrl('hybrid', 'KEY'));
+	assert.equal(styleUrlForSlug('hybrid', '', ''), OSM_FALLBACK_STYLE_URL);
+});
+
+test('styleUrlForSlug and buildMapStyleUrl are one precedence, not two', () => {
+	const pairs: Array<[Parameters<typeof buildMapStyleUrl>[0], boolean, MaptilerSlug]> = [
+		['streets', false, 'streets-v2'],
+		['streets', true, 'streets-v2-dark'],
+		['dark', false, 'streets-v2-dark'],
+		['satellite', false, 'satellite'],
+		['outdoors', true, 'outdoor-v2'],
+	];
+	for (const [chosen, prefersDark, slug] of pairs) {
+		for (const key of ['KEY', '']) {
+			for (const override of [undefined, 'http://localhost:8080/style.json']) {
+				assert.equal(
+					buildMapStyleUrl(chosen, key, prefersDark, override),
+					styleUrlForSlug(slug, key, override),
+					`${chosen}/${key}/${override} must resolve identically through both entry points`,
+				);
+			}
+		}
+	}
 });

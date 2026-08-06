@@ -75,9 +75,14 @@ test.describe('/share/route/[id] — anon', () => {
 		// endpoint here). The image URL includes the route id so the
 		// unfurl card carries a real track preview rather than the
 		// static favicon.
+		// The unfurl image is ABSOLUTE (§ 546): a remote crawler fetches it
+		// off-site, so a root-relative value has no origin to resolve against.
+		// Asserted as a suffix rather than a literal — `PUBLIC_SITE_URL` is unset
+		// locally and set on preview / prod, so the host is env-dependent while
+		// "absolute, ending at this entity's path" is not (§ 500).
 		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
 			'content',
-			`/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
+			new RegExp(`^https?://.*/og/route/${RUNNER_PUBLIC_ROUTE_ID}\\.png$`)
 		);
 		await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute(
 			'content',
@@ -101,7 +106,7 @@ test.describe('/share/route/[id] — anon', () => {
 		);
 		await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute(
 			'content',
-			`/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
+			new RegExp(`^https?://.*/og/route/${RUNNER_PUBLIC_ROUTE_ID}\\.png$`)
 		);
 	});
 

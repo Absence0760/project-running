@@ -14,6 +14,7 @@ import {
 	buildRouteShareDescription,
 	buildRouteShareCanonical,
 	buildRouteJsonLd,
+	buildRouteOgImageUrl,
 	normaliseSiteUrl,
 	type ShareRouteMeta as ShareRouteMetaFields,
 } from './share_meta';
@@ -45,7 +46,7 @@ export function buildShareRouteHead(input: ShareRouteMetaInput): ShareRouteHead 
 		title: buildRouteShareTitle(route),
 		description: buildRouteShareDescription(route),
 		canonical: buildRouteShareCanonical(siteUrl, id),
-		ogImageUrl: `${base}/og/route/${id}.png`,
+		ogImageUrl: buildRouteOgImageUrl(base, id),
 		jsonLd: buildRouteJsonLd(route, { id, base: siteUrl }),
 	};
 }

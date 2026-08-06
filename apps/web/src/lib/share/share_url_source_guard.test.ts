@@ -41,27 +41,43 @@ const lambdaRoot = resolve(webRoot, 'lambda');
 /// `${normaliseSiteUrl(base)}/share/badge/${id}`. Requires the entity segment
 /// and its trailing slash so prose like "`${base}/share/...`" in a doc comment
 /// is not a match on its own — comment lines are stripped below regardless.
-const SHARE_PATH = /\$\{[^}]*\}\/(?:recap\/share\/|share\/[a-z]+\/)/g;
+///
+/// § 546 widened this to the `/og/<entity>/<id>.png` unfurl-image family. § 531
+/// had drawn the boundary at "a shareable URL, not a navigation" and excluded
+/// root-relative in-app hrefs on the grounds that they *cannot get the origin
+/// wrong*. An `og:image` is neither: it is metadata fetched by a REMOTE
+/// crawler, so the origin is exactly what it can get wrong — and § 531's own
+/// reason therefore excludes it from § 531's own exemption. Measured before
+/// fixing: the og-image path was assembled at **13** sites for four entities —
+/// six with an interpolated base (the run and route paths each spelled TWICE,
+/// once as `ogImageUrl` and once inside the entity's JSON-LD) and seven
+/// root-relative in four page heads. `/share/run/[id]`'s head advertised the
+/// image at two different URLs at once: absolute inside its JSON-LD
+/// `primaryImageOfPage`, root-relative in the `og:image` five lines above it.
+const SHARE_PATH = /\$\{[^}]*\}\/(?:recap\/share\/|share\/[a-z]+\/|og\/[a-z]+\/)/g;
+
+/// A root-relative unfurl-image path in markup: `content="/og/run/{id}.png"`.
+/// Scoped to `/og/` and NOT to `/share/`, which is the § 531 boundary above:
+/// a root-relative `/share/...` in an `href` is a navigation, while a
+/// root-relative `/og/...` only ever lands in an `og:image` / `twitter:image`
+/// a crawler resolves off-site.
+const ROOT_RELATIVE_OG_PATH = /["'=]\/og\/[a-z]+\//g;
 
 /// Every allowed site, `path relative to apps/web` -> `[count, why]`. The
 /// canonical builders are the definitions; everything else here is a debt.
 const REGISTER: Record<string, [number, string]> = {
-	'src/lib/share/share_meta.ts': [2, 'defines the run + route share paths'],
-	'src/lib/share/share_badge_meta.ts': [1, 'defines the badge share path'],
+	'src/lib/share/share_meta.ts': [
+		4,
+		'defines the run + route share paths and their two og-image paths',
+	],
+	'src/lib/share/share_badge_meta.ts': [2, 'defines the badge share + og-image paths'],
 	'src/lib/share/share_club_meta.ts': [1, 'defines the club share path'],
 	'src/lib/share/share_event_meta.ts': [1, 'defines the event share path'],
 	'src/lib/share/share_profile_meta.ts': [1, 'defines the profile share path'],
 	'src/lib/share/share_race_meta.ts': [1, 'defines the race share path'],
-	'src/lib/share/share_recap_meta.ts': [1, 'defines the recap share path'],
+	'src/lib/share/share_recap_meta.ts': [2, 'defines the recap share + og-image paths'],
 	'src/lib/share/share_session_meta.ts': [1, 'defines the session share path'],
 	'src/lib/share/share_workout_meta.ts': [1, 'defines the workout share path'],
-	// Open debt, not an exemption: both recap pages hand-spell the path that
-	// `buildRecapShareCanonical` now defines, and the fix is to call it with
-	// `location.origin`. Left standing because round 14's file partition put
-	// these two pages in another agent's tree; landing an edit to them from
-	// here is what §515 recorded as costing a round.
-	'src/routes/recap/[year]/+page.svelte': [1, 'DEBT: use buildRecapShareCanonical'],
-	'src/routes/recap/[year]/[month]/+page.svelte': [1, 'DEBT: use buildRecapShareCanonical'],
 };
 
 /// Strip `//`-style comments so a path written in prose inside a doc comment
@@ -89,10 +105,10 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 	return out;
 }
 
-function scan(): Map<string, number> {
+function scan(pattern: RegExp = SHARE_PATH): Map<string, number> {
 	const found = new Map<string, number>();
 	for (const file of [...sourceFiles(srcRoot), ...sourceFiles(lambdaRoot)]) {
-		const hits = stripComments(readFileSync(file, 'utf-8')).match(SHARE_PATH);
+		const hits = stripComments(readFileSync(file, 'utf-8')).match(pattern);
 		if (!hits) continue;
 		found.set(relative(webRoot, file).split('\\').join('/'), hits.length);
 	}
@@ -101,6 +117,13 @@ function scan(): Map<string, number> {
 
 test('every hand-assembled share path is registered with its count', () => {
 	const found = scan();
+	// § 534: assert the population. A scan whose regex has stopped matching
+	// anything satisfies every "no unregistered site" assertion below.
+	assert.ok(
+		found.size >= Object.keys(REGISTER).length,
+		`the scan found ${found.size} construction sites against ${Object.keys(REGISTER).length} ` +
+			'registered — a matcher that matches nothing must not pass',
+	);
 	const unregistered: string[] = [];
 	const drifted: string[] = [];
 	for (const [file, count] of found) {
@@ -140,17 +163,80 @@ test('a registered file that stops assembling the path fails the register', () =
 	);
 });
 
-/// The three copy-links §520 left hand-spelled, pinned by their surface so a
-/// revert is a failure rather than a silent regression to the old shape.
+test('no unfurl image is advertised at a root-relative path', () => {
+	const found = [...scan(ROOT_RELATIVE_OG_PATH)].map(([file, n]) => `${file} (${n})`);
+	assert.deepEqual(
+		found,
+		[],
+		`these files advertise an og:image at a root-relative path: ${found.join(', ')}. ` +
+			'An og:image is fetched by a remote crawler off-site, so it must be absolute — ' +
+			'call the entity\'s build<X>OgImageUrl with the page\'s siteUrl, which is the same ' +
+			'URL the Lambda-injected head and the JSON-LD already use.',
+	);
+});
+
+/// Both directions for both matchers, because § 536's lesson is that the regex
+/// defines the population, and § 531's is that the population was 4x what the
+/// finding said. Each `must flag` line is the literal pre-fix source of a site
+/// this round closed.
+const MATCHER_FIXTURES: Array<{ line: string; share: number; rootOg: number; why: string }> = [
+	// --- must flag, SHARE_PATH ---
+	{ line: 'const url = `${location.origin}/recap/share/${id}`;', share: 1, rootOg: 0, why: 'the recap copy-link, pre-fix' },
+	{ line: 'ogImageUrl: `${base}/og/run/${id}.png`,', share: 1, rootOg: 0, why: 'the run og-image, pre-fix' },
+	{ line: 'url: `${base}/og/route/${opts.id}.png`,', share: 1, rootOg: 0, why: 'the second spelling inside buildRouteJsonLd' },
+	{ line: 'return `${normaliseSiteUrl(base)}/share/badge/${id}`;', share: 1, rootOg: 0, why: 'a canonical definition still counts — the register holds definitions too' },
+	// --- must flag, ROOT_RELATIVE_OG_PATH ---
+	{ line: '<meta property="og:image" content="/og/run/{data.id}.png" />', share: 0, rootOg: 1, why: 'the run page head, pre-fix' },
+	{ line: '<meta name="twitter:image" content="/og/recap/{data.id}.png" />', share: 0, rootOg: 1, why: 'the recap page head, pre-fix' },
+	// --- must spare, both ---
+	{ line: 'const url = buildRecapShareCanonical(location.origin, id);', share: 0, rootOg: 0, why: 'the fix' },
+	{ line: '<meta property="og:image" content={ogImageUrl} />', share: 0, rootOg: 0, why: 'the fixed page head' },
+	{ line: 'ogImageUrl: buildRunOgImageUrl(base, id),', share: 0, rootOg: 0, why: 'the fixed builder call' },
+	// § 531's declared exemption, which § 546 did NOT widen: a root-relative
+	// `/share/...` in an href is an in-app navigation and cannot get the
+	// origin wrong. Only `/og/` moved into scope.
+	{ line: '<a class="entry-body" href="/share/run/{entry.id}">', share: 0, rootOg: 0, why: 'an in-app navigation stays out of scope' },
+	{ line: "return r.run_id ? `/share/run/${r.run_id}` : null;", share: 0, rootOg: 0, why: 'notification_link, no base interpolated' },
+	// A path segment mentioned in prose or a route-file path is not a
+	// construction site. (Comment lines are stripped before the scan; these
+	// pin the matcher itself.)
+	{ line: 'const dir = "src/routes/og/run/[id].png";', share: 0, rootOg: 0, why: 'a route-file path, not a URL' },
+];
+
+test('the share-path and root-relative-og matchers agree in both directions', () => {
+	assert.equal(MATCHER_FIXTURES.length, 12, 'the fixture population');
+	for (const { line, share, rootOg, why } of MATCHER_FIXTURES) {
+		assert.equal(
+			(line.match(SHARE_PATH) ?? []).length,
+			share,
+			`SHARE_PATH (${why}): ${line}`,
+		);
+		assert.equal(
+			(line.match(ROOT_RELATIVE_OG_PATH) ?? []).length,
+			rootOg,
+			`ROOT_RELATIVE_OG_PATH (${why}): ${line}`,
+		);
+	}
+});
+
+/// The copy-links §520 and §531 left hand-spelled, pinned by their surface so a
+/// revert is a failure rather than a silent regression to the old shape. The
+/// two recap rows were §531's named open debts and are closed here.
 const COPY_LINK_SITES: Array<[string, RegExp]> = [
 	['src/routes/runs/[id]/+page.svelte', /buildRunShareCanonical\(\s*window\.location\.origin/],
 	['src/routes/routes/[id]/+page.svelte', /buildRouteShareCanonical\(\s*window\.location\.origin/],
 	['src/routes/u/[id]/+page.svelte', /buildBadgeShareCanonical\(\s*location\.origin/],
 	['src/routes/sessions/[id]/+page.svelte', /buildSessionShareCanonical\(\s*location\.origin/],
 	['src/routes/gym/[id]/+page.svelte', /buildWorkoutShareCanonical\(\s*location\.origin/],
+	['src/routes/recap/[year]/+page.svelte', /buildRecapShareCanonical\(\s*location\.origin/],
+	[
+		'src/routes/recap/[year]/[month]/+page.svelte',
+		/buildRecapShareCanonical\(\s*location\.origin/,
+	],
 ];
 
 test('a copy-link resolves the builder against the live origin, not the site URL', () => {
+	assert.equal(COPY_LINK_SITES.length, 7, 'the copy-link surfaces this check covers');
 	for (const [file, pattern] of COPY_LINK_SITES) {
 		const source = readFileSync(resolve(webRoot, file), 'utf-8');
 		assert.match(

@@ -66,6 +66,28 @@ export function buildMapStyleUrl(
 	prefersDark: boolean,
 	overrideUrl: string | undefined = undefined,
 ): string {
+	return styleUrlForSlug(maptilerSlug(chosen, prefersDark), key, overrideUrl);
+}
+
+/// [buildMapStyleUrl] for a surface that resolves its own slug rather than a
+/// [MapStyle] preference — the route builder, whose three-way switcher offers
+/// `hybrid` imagery and no dark rung. Sibling of [basemapIsDarkForSlug], and
+/// paired with it for the same reason: the override / keyless / keyed
+/// precedence is spelled ONCE here, so the only thing such a surface still
+/// owns is WHICH slug it asked for.
+///
+/// The route builder used to assemble its three URLs from [maptilerStyleUrl]
+/// directly, which skipped the keyless branch below: with no key it requested
+/// `…/style.json?key=`, took a 403 and rendered nothing at all, where every
+/// other surface degraded to the OSM raster. That also took the attribution
+/// with it — MapLibre's control reads the credit out of whichever style
+/// document loaded (§ 491), so no style means no basemap credit, which is a
+/// licensing gap and not a cosmetic one.
+export function styleUrlForSlug(
+	slug: MaptilerSlug,
+	key: string,
+	overrideUrl: string | undefined = undefined,
+): string {
 	// When `PUBLIC_TILE_STYLE_URL` is set in `.env.local` (typically
 	// pointing at a local Protomaps tileserver-gl), the override
 	// wins outright — local dev mode runs against a single
@@ -84,7 +106,7 @@ export function buildMapStyleUrl(
 	// Same semantic as mobile's `resolveTileUrl` OSM fallback.
 	if (key.trim().length === 0) return OSM_FALLBACK_STYLE_URL;
 
-	return maptilerStyleUrl(maptilerSlug(chosen, prefersDark), key);
+	return maptilerStyleUrl(slug, key);
 }
 
 /// The MapTiler style-document URL for a slug. The one place the endpoint is

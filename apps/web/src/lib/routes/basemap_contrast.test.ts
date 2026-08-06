@@ -30,6 +30,7 @@ import {
 	mapPinnedLine,
 	mapStartColour,
 	mapTrackLine,
+	mapZoneBoundary,
 } from './basemap_contrast';
 
 function channels(hex: string): [number, number, number] {
@@ -85,9 +86,13 @@ const GROUND_RUNGS: Array<[string, (dark: boolean) => string]> = [
 	['live line', mapLiveLine],
 	['hint line', mapHintLine],
 	['featured halo', mapFeaturedHalo],
+	['zone boundary', mapZoneBoundary],
 ];
 
 test('every overlay rung clears 1.4.11 against the basemap it lands on', () => {
+	// § 534: assert the population, not only the property. A loop over an
+	// emptied list passes every assertion inside it.
+	assert.equal(GROUND_RUNGS.length, 13, 'the number of rungs this sweep graded');
 	for (const [name, resolve] of GROUND_RUNGS) {
 		const onDark = contrast(resolve(true), DARK_BASEMAP_SAMPLE);
 		assert.ok(
@@ -175,6 +180,77 @@ test('a translucent casing cannot carry the floor, which is why the line does', 
 	// …and the line it sits under clears it unaided, on both grounds.
 	assert.ok(contrast(mapTrackLine(true), DARK_BASEMAP_SAMPLE) >= MAP_OVERLAY_FLOOR);
 	assert.ok(contrast(mapTrackLine(false), LIGHT_BASEMAP_SAMPLE) >= MAP_OVERLAY_FLOOR);
+});
+
+// The zone circle's own derivation, kept beside the rung it justifies. § 500:
+// no absolute fit is asserted — every number below is recomputed from the
+// module's exported samples, and the claim is a RELATION (this rung beats the
+// old single hue on the ground the old one nearly failed, and the wash cannot
+// be the thing carrying the floor).
+test('the privacy-zone boundary beats the single hue it replaced on every ground', () => {
+	const OLD = '#dc2626';
+	const LIGHT_GROUNDS = [
+		LIGHT_BASEMAP_SAMPLE,
+		LIGHT_BASEMAP_WATER_SAMPLE,
+		OSM_FALLBACK_BACKDROP,
+	];
+	assert.equal(LIGHT_GROUNDS.length, 3, 'the light grounds the picker can resolve to');
+
+	// The pre-fix figure that made this a finding: the old hue cleared the
+	// floor over light-basemap water by 0.4 %, which is a value sitting ON a
+	// floor rather than above it (§ 522 / § 536).
+	const oldOnWater = contrast(OLD, LIGHT_BASEMAP_WATER_SAMPLE);
+	assert.ok(oldOnWater >= MAP_OVERLAY_FLOOR, `${oldOnWater.toFixed(3)}:1 — it did clear`);
+	assert.ok(
+		oldOnWater < MAP_OVERLAY_FLOOR * 1.01,
+		`the old hue's water margin was under 1 %: ${oldOnWater.toFixed(3)}:1`,
+	);
+
+	// And the split rungs each beat it on the ground they now own.
+	for (const ground of LIGHT_GROUNDS) {
+		const now = contrast(mapZoneBoundary(false), ground);
+		assert.ok(
+			now > contrast(OLD, ground),
+			`the light rung must gain headroom on ${ground}: ${now.toFixed(3)}:1 vs ` +
+				`${contrast(OLD, ground).toFixed(3)}:1`,
+		);
+	}
+	const nowOnDark = contrast(mapZoneBoundary(true), DARK_BASEMAP_SAMPLE);
+	assert.ok(
+		nowOnDark > contrast(OLD, DARK_BASEMAP_SAMPLE),
+		`the dark rung must gain headroom: ${nowOnDark.toFixed(3)}:1`,
+	);
+
+	// No single red could have done it: any hue that clears the tightest
+	// light ground by the margin the light rung now has is below the floor on
+	// the dark one. Demonstrated with the rung itself rather than asserted.
+	assert.ok(
+		contrast(mapZoneBoundary(false), DARK_BASEMAP_SAMPLE) < MAP_OVERLAY_FLOOR,
+		'the light rung on dark ground — which is why the pair exists',
+	);
+	assert.ok(
+		contrast(mapZoneBoundary(true), LIGHT_BASEMAP_WATER_SAMPLE) < MAP_OVERLAY_FLOOR,
+		'the dark rung over light-basemap water — the mirror image',
+	);
+});
+
+test('the zone wash is decoration, so the boundary carries the floor', () => {
+	// The 0.18 fill inside the circle, at the opacity the picker really uses.
+	// Same footing as the track casing: it cannot be counted as the zone's
+	// contrast, and is asserted below the floor so a future round cannot
+	// justify a paler boundary by pointing at it.
+	for (const [dark, ground] of [
+		[true, DARK_BASEMAP_SAMPLE],
+		[false, LIGHT_BASEMAP_SAMPLE],
+		[false, LIGHT_BASEMAP_WATER_SAMPLE],
+		[false, OSM_FALLBACK_BACKDROP],
+	] as Array<[boolean, string]>) {
+		const wash = composite(mapZoneBoundary(dark), ground, 0.18);
+		assert.ok(
+			contrast(wash, ground) < MAP_OVERLAY_FLOOR,
+			`the 0.18 wash over ${ground} reads ${contrast(wash, ground).toFixed(3)}:1`,
+		);
+	}
 });
 
 test('basemapIsDark follows the resolved basemap, not the OS preference', () => {

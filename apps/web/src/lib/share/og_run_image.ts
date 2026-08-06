@@ -14,15 +14,16 @@
 /// acceptable.
 
 import { formatDateStable, formatKmStable } from './share_meta';
+import { OG_CARD_LIGHT } from './og_card_palette';
 
 const W = 1200;
 const H = 630;
 const PAD = 40;
 
-const BG = '#ffffff';
-const BRAND = '#3b82f6'; // brand blue
-const STAT_FILL = '#0f172a'; // slate-900
-const META_FILL = '#64748b'; // slate-500
+const BG = OG_CARD_LIGHT.bg;
+const BRAND = OG_CARD_LIGHT.brand;
+const STAT_FILL = OG_CARD_LIGHT.ink;
+const META_FILL = OG_CARD_LIGHT.muted;
 
 export type RunImageInput = {
 	distance_m?: number | null;

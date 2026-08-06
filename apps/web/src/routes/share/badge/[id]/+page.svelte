@@ -4,6 +4,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { englishBadge, type AchievementTier } from '$lib/social/badges';
 	import { formatDateStable } from '$lib/share/share_meta';
+	import { buildBadgeOgImageUrl } from '$lib/share/share_badge_meta';
 
 	let { data } = $props();
 
@@ -18,6 +19,9 @@
 	let description = $derived(resolved?.desc ?? m('badges.notFound'));
 	let tier = $derived((data.badge?.tier ?? 'bronze') as AchievementTier);
 	let earned = $derived(formatDateStable(data.badge?.earned_at ?? null));
+	// Absolute, from the builder the Lambda-injected head also uses. A
+	// root-relative og:image is read by a REMOTE crawler (§ 546).
+	let ogImageUrl = $derived(buildBadgeOgImageUrl(data.siteUrl, data.id));
 </script>
 
 <svelte:head>
@@ -27,7 +31,7 @@
 	<meta property="og:description" content={description} />
 	<meta property="og:type" content="article" />
 	<meta property="og:site_name" content="Threkir" />
-	<meta property="og:image" content="/og/badge/{data.id}.png" />
+	<meta property="og:image" content={ogImageUrl} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />

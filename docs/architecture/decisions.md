@@ -7242,3 +7242,168 @@ Round 16's finding S15 accused the mobile apps of having no motion system and of
 **Web needed nothing, which is a correction to the finding's framing.** The canonical surface already honours `prefers-reduced-motion` in both halves: a global `* { animation-duration: 0.01ms; transition-duration: 0.01ms; animation-iteration-count: 1; scroll-behavior: auto }` net in `app.css` pinned by a committed guard, plus **35** per-component `@media (prefers-reduced-motion: reduce)` blocks, and it already carries duration rungs (`--transition-fast: 150ms`, `--transition-base: 200ms`). Mobile's independently-derived `brief` landing on 200 ms is a convergence on web's existing base rung. The only JS-driven animation on web is `RunMap`'s replay behind an explicit Replay/Stop button — the twin of the mobile case left deliberately uncollapsed, for the same reason. Left open on web, with the number: **265** `transition`/`animation` declarations across the app and only two token rungs, so most sites still hard-code (0.4s ×6, 0.15s ×5, 0.12s ×5, …). That is a token-adoption sweep across ~40 files with no accessibility consequence, not the S15 defect.
 
 **§ 538's loose end, closed.** `period_summary_screen`'s share rasteriser slept **300 ms** before `toImage`. The card is a solid `Container` of `Text` — no tiles, no images, nothing asynchronous to paint — so the sleep was 300 ms charged to every user for nothing, which is why § 538 declined to reach for `MapTileReadiness` here. It is one `await endOfFrame`, matching `finisher_certificate_card`, the other tile-free rasteriser, which had always been written that way. The guard asserts both cards are still rasterisers and that neither sleeps, so a future map on either would have to go and get the § 538 mechanism rather than a timer.
+## 546. A red that clears every ground by 0.4 % has not cleared it; a path with a builder is spelled twice as often as the class that named it; and a register's scope limit was a decision nobody had made
+
+**Date:** 2026-08-06
+
+Round 16's web map / graphic-honesty package. Every one of the four inherited
+items was still live, but three of the four inherited *figures* moved once
+re-derived, and in each case the number was right and the **population** it
+described was wrong — which is § 536's lesson recurring for the third round
+running.
+
+**A margin is not a pass, and the register said so without acting on it.** Round
+15 registered `PrivacyZonePicker`'s single `#dc2626` as
+`'unkeyed'` on the honest grounds that it *does* clear WCAG 1.4.11's 3:1 on
+every basemap the picker can resolve to, and recorded all four figures. Every
+one reproduces here to the digit: **4.208:1** on `LIGHT_BASEMAP_SAMPLE`
+(#F2EFE9), **3.560** on `DARK_BASEMAP_SAMPLE` (#1A1B20), **3.522** on the
+keyless `OSM_FALLBACK_BACKDROP` (#DCDCDC), and **3.011** on
+`LIGHT_BASEMAP_WATER_SAMPLE` (#AAD3DF) — a **0.4 %** margin, on the one overlay
+in the app whose job is to tell a runner which of their locations is being
+redacted. § 522 minted the rule ("a scale built to exactly meet a floor cannot
+survive a later alpha") and § 535's amendment restated it in pixels ("a margin
+of 2 px is not a pass"); this is the same reading in contrast, and the register
+entry that recorded the figure had drawn the opposite conclusion from it. The
+claim that no other red does better is also true and is *why* the fix is a
+pair: sweeping the red ramp, `#B91C1C` clears the three light grounds
+(5.638 / 4.034 / 4.718) and fails dark at 2.657; `#EF4444` clears dark (4.568)
+and fails water at 2.346; nothing in between clears all four with headroom.
+That is § 541's finding — a mark owing 3:1 twice cannot be paid by one colour —
+so `mapZoneBoundary` joins the twelve other ground-graded rungs: **#991B1B**
+light (7.241 land / **5.181 water** / 6.060 OSM backdrop) and **#EF4444** dark
+(4.568), each measured against the ground it owns and against 1.4.11's 3:1.
+The picker consequently stops being the one map surface with no basemap
+question and resolves through `basemapIsDarkFromEnv` like the other six. Its
+0.18 wash is asserted **below** the floor (1.14–1.31:1 on all four grounds), on
+the same footing § 526 gave the translucent casing: what that forbids is
+offering the wash as the circle's contrast, and the 2 px boundary clears
+unaided.
+
+**The route builder's blank canvas and its missing credit were one bug, and it
+was in the URL, not the paint.** § 531 split the builder's private slug table
+from its private answer about basemap luminance, routing the second through
+`basemapIsDarkForSlug` while leaving the first alone — correctly, because
+pointing its satellite rung at the preference union's slug would silently
+change `hybrid` (imagery with labels, which is what makes it usable for placing
+waypoints) to bare `satellite`. What went unnoticed is that the builder also
+assembled its own **URLs**, from `maptilerStyleUrl` directly, and so skipped the
+keyless branch `buildMapStyleUrl` performs: with no `PUBLIC_MAPTILER_KEY` it
+requested `…/style.json?key=`, took a 403, and rendered nothing where every
+other surface degraded to `osm-fallback-style.json`. **The attribution gap is a
+consequence of that, not a second defect**: on web MapLibre's control reads the
+credit out of the style document that loaded (§ 491), so a style that never
+loads credits nobody, and wiring the fallback restores the OSM credit the
+fallback style declares on its own source — the credit follows the *resolved*
+basemap by construction, which is exactly § 491's rule and needs no per-surface
+string. `styleUrlForSlug` is therefore the URL half of the pair
+`basemapIsDarkForSlug` is the luminance half of: one precedence (override →
+keyless raster → keyed slug), spelled once, with `buildMapStyleUrl` delegating
+to it so the two entry points are provably one answer. The guard now fails any
+registered map surface that calls `maptilerStyleUrl` itself.
+
+**The share-path class was 2 sites by its own regex and 15 by its own
+reasoning.** § 531 measured "not three sites but fourteen" and left two named
+open debts: the recap year and month pages hand-spelling `/recap/share/${id}`
+for their copy-link. Those close in two lines. Re-deriving the class found the
+regex had defined it: **`/og/<entity>/<id>.png` had no builder at all**, and was
+assembled at **13** sites for four entities — six with an interpolated base (the
+run and route paths each spelled **twice**, once as `ogImageUrl` and once inside
+that entity's JSON-LD, in different modules) and seven root-relative in four
+page heads. `/share/run/[id]` advertised its unfurl image at **two different
+URLs in one `<head>`**: absolute inside the JSON-LD `primaryImageOfPage`,
+root-relative in the `og:image` five lines above it. § 531 had excluded
+root-relative in-app paths from scope with a reason — "they are navigations, and
+they cannot get the origin wrong, which is the failure the class is about" — and
+that reason **excludes an `og:image` from the exemption rather than granting it**:
+an unfurl image is metadata a remote crawler fetches off-site, so the origin is
+precisely what it can get wrong. So the guard widens to `/og/<entity>/` and only
+there; the in-app `href` exemption is now pinned by a must-spare fixture instead
+of resting on prose. Four builders are minted (`buildRunOgImageUrl`,
+`buildRouteOgImageUrl`, `buildBadgeOgImageUrl`, `buildRecapOgImageUrl`), and the
+recap asymmetry is recorded where it can be read: its share page is
+`/recap/share/[id]` while its unfurl image *is* under `/og/recap/`, so the two
+paths cannot be flattened onto one shape.
+
+Closing the recap copy-links broke `seo_render_map_guard` in an instructive way,
+and the instructive part is that greening it the easy way would have written a
+false doc row. That guard inferred "this page folds onto its share twin" from a
+`build<X>ShareCanonical(` call alone, and the two recap pages are the first to
+call the builder for a **copy-link only** — § 520's whole point being that the
+builder takes its base as a parameter so one path definition serves both uses. A
+recap has no share id until the runner publishes, so it cannot canonical onto
+`/recap/share/[id]` and belongs in no row of that table. The predicate now
+requires the `<link rel="canonical">` too, which is the property the sibling test
+already asserted for documented rows: § 528's rule, that a guard must pin the
+property and not a proxy for it.
+
+**The hex register's scope limit becomes a decision, and its `.ts` figure
+decomposes exactly like the figure it replaced.** § 536 declared the gap with a
+number — "**199** six-digit literals live in `.ts` under `apps/web/src`" — in the
+same entry where it caught the round-14 index's "308" for counting comment prose
+and token declarations. Run the register's own matcher over `.ts` and 199
+decomposes the same way: **87 painted in 11 production files, 72 inside
+`.test.ts` fixtures, 40 in comment bodies** (87 + 72 + 40 = 199). Rules 1 and 2
+stay on `.svelte`/`.css`, and that is now argued rather than inherited: their
+failure message is "route it onto the token", and in `basemap_contrast.ts` that
+is *impossible* — MapLibre parses paint values itself and throws on a `var()`
+(§ 528) — while a rasterised card has no theme to follow at all. A guard whose
+remedy the caller cannot perform is § 515's failure mode. Rule 3 asks for a
+**role**, which every one of these can answer, so rule 3 is the one that reaches
+`.ts`. The `.test.ts` exclusion is asserted non-empty rather than trusted, per
+§ 534: a scope decision that has quietly stopped excluding anything has become
+dead machinery.
+
+Both halves shrank. The style half went **95 → 92** literals across **19 → 18**
+files when the picker's three reds moved onto `mapZoneBoundary`; the `.ts` half
+went **87 → 76** across **11 → 9**, because five card builders had each spelled
+the same two rasterised-card palettes independently — **22 literals expressing 9
+values, with the two recap cards byte-identical**. `og_card_palette.ts` holds
+both, and holds each ink's measured ratio and ground with it (light card on
+#FFFFFF: brand 3.678:1, which is WCAG large text at 28–32 px/700–800 so its
+floor is 3:1 not 4.5; ink 17.853; muted 4.759. Dark card on #0F172A: brand
+7.022, hero 17.853, label 6.963, stat 14.482). Whole tree: **182 → 168**. Two
+cards of the same product drifting apart is invisible until someone puts the
+unfurl and the shared PNG side by side.
+
+**And widening the register found a live failure, which is the argument for
+widening it.** `sourceColor` in `core/mock-data.ts` returns one of eight frozen
+per-source hues, and five surfaces paint it as an **opaque `.source-badge` fill
+with real text on it** at 0.65–0.7 rem weight 600 — 10.4–11.2 px, which is not
+WCAG large text, so AA's 4.5:1 applies. With `color: white` (`RunShareView`,
+`PeriodSummary`) **six of the eight fail**: watch **2.771**, healthconnect
+**2.780**, strava 3.402, app 3.679, healthkit 4.347, garmin 4.496. With
+`color: var(--color-surface)` (`/dashboard`, `/runs`) there is **no theme in
+which all eight pass** — light fails the same six, and dark fails race
+**2.564**, parkrun 3.290, garmin 3.595, healthkit 3.718. `/runs` is worse again
+because its badge carries `opacity: 0.92`, which is § 522's warning arriving
+literally: race falls to **2.353** on dark, healthconnect to 2.559 on light. The
+same 0.5 rem dot on `/runs/[id]` is *not* a finding — the localized source label
+sits beside it, so it carries no information required to identify anything
+(§ 526's halo reasoning). This is § 529's defect one surface over — an identity
+hue asked to be both the fill and the ground for its own ink — and § 541's
+conclusion holds: the fix is the shape (hue as a tint, an `-ink` rung as the
+text), not a value. It is recorded as the register's one `OPEN_DEBTS` entry with
+its worst figure and that figure's ground, because its five call sites sit in
+four other agents' trees this round. That is the same reason § 531 gave for the
+two debts this round closed, and it is the argument for the mechanism: a
+register that can say "known bad, not yet fixed" gets audited next round; one
+that drops the finding to stay green is how § 511's hole opened.
+
+**Left open, with numbers.** The default-host string `'https://threkir.com'` is
+spelled **27** times in production code across `src` and `lambda` (plus test
+fixtures, which are inputs): **15** `const DEFAULT_SITE_URL` declarations — ten
+in the `/share/*` + `/recap/share` loaders, three in the `/learn` loaders, one in
+the landing loader, one in `sitemap.xml` — **7** inline
+`env.PUBLIC_SITE_URL || …` fallbacks at copy-link call sites, and **5**
+`process.env.PUBLIC_SITE_URL ?? …` in Lambda handlers. It is the same class one
+level up from the path builders, and the two loaders this round touched follow
+the existing 15-way convention rather than minting a shared constant with 2 of 27
+callers; the sweep belongs to a round that owns those files. Two of the register's
+new `.ts` entries are TS↔Dart parity pairs (`route_markers.ts` at 7 literals,
+`pace_segments.ts` at 6), so a future value change there is a two-platform change
+and the register entry should say so before anyone edits it — it does. And the
+mobile twin of the `sourceColor` finding is unexamined: whatever paints a source
+badge on the Flutter side owes the same measurement against the same grounds,
+and should take web's figures rather than minting a ninth guess, the way § 542
+did for § 529's two inks.

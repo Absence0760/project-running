@@ -26,15 +26,17 @@ export type RecapOgInput = {
 	periodLabel?: string | null;
 };
 
+import { OG_CARD_DARK } from './og_card_palette';
+
 const W = 1200;
 const H = 630;
 const PAD = 64;
 
-const BG = '#0f172a'; // slate-900
-const BRAND = '#60a5fa';
-const HERO_FILL = '#ffffff';
-const LABEL_FILL = '#94a3b8'; // slate-400
-const STAT_FILL = '#e2e8f0'; // slate-200
+const BG = OG_CARD_DARK.bg;
+const BRAND = OG_CARD_DARK.brand;
+const HERO_FILL = OG_CARD_DARK.hero;
+const LABEL_FILL = OG_CARD_DARK.label;
+const STAT_FILL = OG_CARD_DARK.stat;
 
 function fmtDistanceKm(meters: number | null | undefined, unit: 'km' | 'mi'): string {
 	const m = meters ?? 0;
