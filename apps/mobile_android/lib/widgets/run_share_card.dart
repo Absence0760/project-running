@@ -14,11 +14,20 @@ import 'map_attribution.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/date_format.dart';
+import '../map_tile_readiness.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../widgets/top_banner.dart';
+
+/// Whether the share card for [run] draws a basemap at all, and therefore
+/// whether a capture has any tiles to wait for. A track that short renders the
+/// activity glyph instead.
+bool runShareCardHasMap(Run run) => run.track.length >= 2;
+
+/// [runShareCardHasMap] over the already-projected points.
+bool runShareCardHasMapPoints(List<LatLng> track) => track.length >= 2;
 
 /// Opens a modal sheet showing a portrait "share card" for [run] — a branded
 /// preview of the route map plus headline stats — and lets the user share
@@ -60,6 +69,7 @@ class _ShareRunSheet extends StatefulWidget {
 
 class _ShareRunSheetState extends State<_ShareRunSheet> {
   final GlobalKey _cardKey = GlobalKey();
+  final MapTileReadiness _tiles = MapTileReadiness();
   bool _capturing = false;
 
   String _caption(AppLocalizations l10n) {
@@ -77,11 +87,12 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
     final l10n = AppLocalizations.of(context);
     setState(() => _capturing = true);
     try {
-      // Give map tiles a beat to load in before grabbing the frame. Cached
-      // tiles (the common case — user just viewed the detail screen) resolve
-      // in the first endOfFrame; the extra delay covers a cold fetch.
-      await WidgetsBinding.instance.endOfFrame;
-      await Future.delayed(const Duration(milliseconds: 700));
+      // Wait for the tiles the card is actually showing, not for a guessed
+      // interval: a fixed sleep rasterised a part-black map whenever a cold
+      // fetch outran it, and made every cached share wait for nothing.
+      if (runShareCardHasMap(widget.run)) {
+        await _tiles.settled();
+      }
       await WidgetsBinding.instance.endOfFrame;
 
       final boundary = _cardKey.currentContext!.findRenderObject()
@@ -167,6 +178,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
                       run: widget.run,
                       preferences: widget.preferences,
                       title: widget.title,
+                      tileReadiness: _tiles,
                     ),
                   ),
                 ),
@@ -225,11 +237,16 @@ class RunShareCard extends StatelessWidget {
   final Preferences preferences;
   final String title;
 
+  /// Set by the sheet that rasterises this card, so it can wait for the
+  /// basemap instead of sleeping. Null for a plain on-screen render.
+  final MapTileReadiness? tileReadiness;
+
   const RunShareCard({
     super.key,
     required this.run,
     required this.preferences,
     required this.title,
+    this.tileReadiness,
   });
 
   /// Tile URL for the share card. Honours the `TILE_URL_TEMPLATE`
@@ -269,7 +286,7 @@ class RunShareCard extends StatelessWidget {
   }
 
   Widget _buildMap(List<LatLng> track) {
-    if (track.length < 2) {
+    if (!runShareCardHasMapPoints(track)) {
       return const Center(
         child: Icon(Icons.directions_run,
             size: 96, color: Color(0xFF4F46E5)),
@@ -312,7 +329,10 @@ class RunShareCard extends StatelessWidget {
     return FlutterMap(
       options: options,
       children: [
-        basemapTileLayer(urlTemplate: _tileUrl),
+        basemapTileLayer(
+          urlTemplate: _tileUrl,
+          tileBuilder: tileReadiness?.observe,
+        ),
         PolylineLayer(
           polylines: [
             Polyline(

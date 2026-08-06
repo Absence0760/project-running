@@ -10,11 +10,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../map_tile_readiness.dart';
 import '../preferences.dart';
 import 'live_run_map.dart'
     show basemapTileLayer, basemapVoidColour, tileUrlFor;
 import 'map_attribution.dart';
 import '../widgets/top_banner.dart';
+
+/// Whether the share card for [route] draws a basemap at all, and therefore
+/// whether a capture has any tiles to wait for. A route that short renders
+/// the route glyph instead.
+bool routeShareCardHasMap(cm.Route route) => route.waypoints.length >= 2;
 
 /// Open a portrait "share card" modal for [route] — a branded preview
 /// of the route map plus headline stats — and let the user share the
@@ -58,6 +64,7 @@ class _ShareRouteSheet extends StatefulWidget {
 
 class _ShareRouteSheetState extends State<_ShareRouteSheet> {
   final GlobalKey _cardKey = GlobalKey();
+  final MapTileReadiness _tiles = MapTileReadiness();
   bool _capturing = false;
 
   String get _caption {
@@ -70,12 +77,12 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
     if (_capturing) return;
     setState(() => _capturing = true);
     try {
-      // Give map tiles a beat to land before snapshotting. Cached
-      // tiles (the common case — user just viewed the detail screen)
-      // resolve in the first endOfFrame; the extra delay covers a
-      // cold fetch.
-      await WidgetsBinding.instance.endOfFrame;
-      await Future.delayed(const Duration(milliseconds: 700));
+      // Wait for the tiles the card is actually showing, not for a guessed
+      // interval: a fixed sleep rasterised a part-black map whenever a cold
+      // fetch outran it, and made every cached share wait for nothing.
+      if (routeShareCardHasMap(widget.route)) {
+        await _tiles.settled();
+      }
       await WidgetsBinding.instance.endOfFrame;
 
       final boundary = _cardKey.currentContext!.findRenderObject()
@@ -134,6 +141,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
                     child: _ShareCardContent(
                       route: widget.route,
                       preferences: widget.preferences,
+                      tileReadiness: _tiles,
                     ),
                   ),
                 ),
@@ -167,9 +175,14 @@ class _ShareCardContent extends StatelessWidget {
   final cm.Route route;
   final Preferences preferences;
 
+  /// Set by the sheet that rasterises this card, so it can wait for the
+  /// basemap instead of sleeping.
+  final MapTileReadiness? tileReadiness;
+
   const _ShareCardContent({
     required this.route,
     required this.preferences,
+    this.tileReadiness,
   });
 
   /// Honours `TILE_URL_TEMPLATE` for local Protomaps dev → falls
@@ -215,7 +228,10 @@ class _ShareCardContent extends StatelessWidget {
         ),
       ),
       children: [
-        basemapTileLayer(urlTemplate: _tileUrl),
+        basemapTileLayer(
+          urlTemplate: _tileUrl,
+          tileBuilder: tileReadiness?.observe,
+        ),
         PolylineLayer(
           polylines: [
             Polyline(
