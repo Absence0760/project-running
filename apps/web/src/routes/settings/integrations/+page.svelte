@@ -711,34 +711,39 @@
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.4rem;
 	}
+	/* The disc keeps the provider's brand hue; the glyph takes the theme-keyed
+	   --provider-<x>-ink rung beside it. A brand's MARK is fixed by the brand,
+	   its hue reused as our ink is not — and on the card these actually land on
+	   the frozen inks failed 1.4.11 in one theme each (Strava 2.921:1 light,
+	   ultrasignup 2.690 and chronotrack 2.886 dark, decisions § 529). */
 	.integration-icon[data-provider="strava"] {
 		background: rgba(252, 76, 2, 0.12);
-		color: #fc4c02;
+		color: var(--provider-strava-ink);
 	}
 	.integration-icon[data-provider="parkrun"] {
 		background: rgba(217, 122, 84, 0.14);
-		color: var(--color-secondary-text);
+		color: var(--provider-parkrun-ink);
 	}
 	.integration-icon[data-provider="garmin"] {
 		background: rgba(0, 119, 200, 0.12);
-		color: #0077c8;
+		color: var(--provider-garmin-ink);
 	}
 	.integration-icon[data-provider="healthkit"] {
 		background: rgba(252, 61, 90, 0.12);
-		color: #fc3d5a;
+		color: var(--provider-healthkit-ink);
 	}
 	.integration-icon[data-provider="runsignup"] {
 		background: rgba(217, 142, 207, 0.14);
-		color: #b85aad;
+		color: var(--provider-runsignup-ink);
 	}
 	.integration-icon[data-provider="ultrasignup"] {
 		background: rgba(76, 145, 92, 0.14);
-		color: #3f7a4f;
+		color: var(--provider-ultrasignup-ink);
 	}
 
 	.integration-icon[data-provider="chronotrack"] {
 		background: rgba(56, 142, 142, 0.14);
-		color: #2f7e7e;
+		color: var(--provider-chronotrack-ink);
 	}
 
 	.runsignup-card {

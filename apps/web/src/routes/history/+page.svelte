@@ -790,9 +790,12 @@
 		background: var(--color-bg-tertiary);
 	}
 	/* Per-kind accent on the glyph chip — a secondary cue; the glyph
-	   shape + the row text carry the type, never colour alone. */
-	.timeline-glyph[data-kind='lift'] { color: #4e7c5e; background: color-mix(in srgb, #8fbf9f 18%, transparent); }
-	.timeline-glyph[data-kind='meal'] { color: #9a6b2f; background: color-mix(in srgb, #d9a25a 20%, transparent); }
+	   shape + the row text carry the type, never colour alone. Each kind
+	   reads the shared --section-* pair, so a chip here is the same hue as
+	   its sidebar entry; the fixed inks these replaced were 2.359 / 2.396:1
+	   on the dark card (decisions § 529). */
+	.timeline-glyph[data-kind='lift'] { color: var(--section-gym-ink); background: color-mix(in srgb, var(--section-gym) 18%, transparent); }
+	.timeline-glyph[data-kind='meal'] { color: var(--section-nutrition-ink); background: color-mix(in srgb, var(--section-nutrition) 20%, transparent); }
 	.timeline-glyph[data-kind='run'] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
 	.timeline-glyph .material-symbols { font-size: 1.25rem; }
 	.timeline-main {
