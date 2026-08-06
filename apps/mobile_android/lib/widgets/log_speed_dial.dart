@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppMotion, motionDuration;
 
 import '../l10n/gen/app_localizations.dart';
 import 'log_sheet.dart';
@@ -90,11 +91,20 @@ class _LogSpeedDial extends StatefulWidget {
 
 class _LogSpeedDialState extends State<_LogSpeedDial>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 200),
-  )..forward();
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: AppMotion.brief);
   bool _closing = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Zero duration completes `forward()` synchronously, so under
+    // reduce-motion the fan is simply present rather than flying out.
+    _controller.duration = motionDuration(context, AppMotion.brief);
+    if (_controller.value == 0 && !_controller.isAnimating) {
+      _controller.forward();
+    }
+  }
 
   @override
   void dispose() {
@@ -169,7 +179,7 @@ class _LogSpeedDialState extends State<_LogSpeedDial>
     final start = (index / count) * 0.4;
     final anim = CurvedAnimation(
       parent: _controller,
-      curve: Interval(start, 1, curve: Curves.easeOutBack),
+      curve: Interval(start, 1, curve: AppMotion.curveOvershoot),
     );
     final button = Semantics(
       button: true,

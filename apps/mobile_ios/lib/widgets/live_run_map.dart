@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../basemap_credits.dart' show tileEnv;
 import '../l10n/gen/app_localizations.dart';
@@ -552,15 +553,31 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
+      duration: AppMotion.pulse,
+    );
     _pulseAnimation = Tween<double>(begin: 0.4, end: 0.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeOut),
+      CurvedAnimation(parent: _pulseController, curve: AppMotion.curveStandard),
     );
     _positionController = AnimationController(
       vsync: this,
       duration: _positionTweenDuration,
     )..addListener(_onPositionTick);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The pulse is L4 on the recording stack, and this map is L2 under it: a
+    // failure to start or park the halo must not reach the trace, the camera
+    // or the clock. It is also the reason the loop is driven from here rather
+    // than from `initState` — the runner can turn reduce-motion on mid-run,
+    // and a ticker left repeating for a 100-hour race costs battery on the
+    // app's highest-traffic screen for an effect nobody asked to see.
+    try {
+      syncMotionLoop(context, _pulseController);
+    } catch (e) {
+      debugPrint('live run map: position-pulse motion sync failed: $e');
+    }
   }
 
   @override
@@ -591,7 +608,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
     final start = _tweenStart;
     final end = _tweenEnd;
     if (start == null || end == null) return;
-    final t = Curves.linear.transform(_positionController.value);
+    final t = AppMotion.curveLinear.transform(_positionController.value);
     final next = LatLng(
       start.latitude + (end.latitude - start.latitude) * t,
       start.longitude + (end.longitude - start.longitude) * t,

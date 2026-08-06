@@ -10,7 +10,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
-import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
+import 'package:ui_kit/ui_kit.dart'
+    show AppMotion, ChoiceChipOption, ChoiceChipRow, syncMotionLoop;
 import 'package:uuid/uuid.dart';
 
 import '../auth_error.dart';
@@ -1674,10 +1675,13 @@ class _WaypointPinState extends State<_WaypointPin>
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
-      duration: const Duration(milliseconds: 1100),
-      vsync: this,
-    )..repeat();
+    _pulse = AnimationController(duration: AppMotion.pulse, vsync: this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    syncMotionLoop(context, _pulse);
   }
 
   @override
