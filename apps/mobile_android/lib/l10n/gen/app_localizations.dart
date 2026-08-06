@@ -758,7 +758,7 @@ abstract class AppLocalizations {
   /// Header label on the dashboard readiness-to-run card
   ///
   /// In en, this message translates to:
-  /// **'READINESS'**
+  /// **'Readiness'**
   String get readinessCardHeader;
 
   /// Readiness band pill label for a high readiness score
@@ -12257,7 +12257,7 @@ abstract class AppLocalizations {
   /// Card header over the calendar activity heatmap on the dashboard
   ///
   /// In en, this message translates to:
-  /// **'ACTIVITY'**
+  /// **'Activity'**
   String get dashboardHeatmapTitle;
 
   /// Low-intensity end label of the activity-heatmap legend
@@ -12515,7 +12515,7 @@ abstract class AppLocalizations {
   /// Title of the dashboard mileage card
   ///
   /// In en, this message translates to:
-  /// **'MILEAGE'**
+  /// **'Mileage'**
   String get mileageTitle;
 
   /// Weekly segment label on the mileage view toggle

@@ -76,13 +76,14 @@ const _register = <String, int>{
   // Two map overlay panels plus three washes (1.109/1.087, 1.143/1.162,
   // 1.184/1.207); the type and glyph on each is full strength.
   'lib/screens/run_screen.dart': 5,
-  // The multi-select selected-row fill (1.065/1.223). Not the cue: the leading
-  // slot forks `check_circle` / `radio_button_unchecked` and the row carries
-  // `Semantics(selected:)`.
-  'lib/screens/runs_screen.dart': 1,
   // The live stats panel, blurred over the map. Type >= 11.292/9.165 at both
   // tile extremes.
   'lib/widgets/collapsible_panel.dart': 1,
+  // The multi-select selected-row fill (1.065/1.223), moved here with the row
+  // itself when #666 C8 consolidated the two forks of it. Not the cue: the
+  // leading slot forks `check_circle` / `radio_button_unchecked` and the row
+  // carries `Semantics(selected:)`.
+  'lib/widgets/run_list_tile.dart': 1,
   // `surface@0.95` over the PAGE, not a map — the only one of the family that
   // is not an overlay, and in dark it is a lighter fill on a darker page
   // (1.163:1), so its `dividerColor` border is what separates it.

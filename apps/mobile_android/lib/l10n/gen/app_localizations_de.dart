@@ -447,7 +447,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Vorschläge konnten nicht geladen werden.';
 
   @override
-  String get readinessCardHeader => 'BEREITSCHAFT';
+  String get readinessCardHeader => 'Bereitschaft';
 
   @override
   String get readinessBandHigh => 'hoch';
@@ -7476,7 +7476,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get dashboardStreakStart => 'Lauf heute, um eine zu starten';
 
   @override
-  String get dashboardHeatmapTitle => 'AKTIVITÄT';
+  String get dashboardHeatmapTitle => 'Aktivität';
 
   @override
   String get dashboardHeatmapLess => 'Weniger';
@@ -7629,7 +7629,7 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get mileageTitle => 'LAUFLEISTUNG';
+  String get mileageTitle => 'Kilometerleistung';
 
   @override
   String get mileageWeek => 'Woche';

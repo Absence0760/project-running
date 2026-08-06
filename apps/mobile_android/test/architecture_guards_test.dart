@@ -1864,24 +1864,32 @@ void main() {
       );
     });
 
-    test('profile_screen passes runId + ownerUserId to RunTrackPreview', () {
+    test('the shared run row passes runId + ownerUserId to RunTrackPreview',
+        () {
       // Reason: /u/[id] (the public profile) renders OTHER users' runs.
       // Pre-fix the runs-tab thumbnail mounted RunTrackPreview without
       // ownerUserId, which makes _shouldClip return false and serves
-      // the unclipped polyline. audit/privacy-zones, May 2026.
-      final source =
-          File('lib/screens/profile_screen.dart').readAsStringSync();
+      // the unclipped polyline. audit/privacy-zones, May 2026. The mount moved
+      // into the shared row when #666 C8 consolidated the two forks of it;
+      // the clip requirement moved with it.
+      final row = File('lib/widgets/run_list_tile.dart').readAsStringSync();
       expect(
-        source,
+        row,
         matches(RegExp(r'RunTrackPreview\([^)]*runId:', dotAll: true)),
-        reason: 'profile_screen must thread the run id into '
-            'RunTrackPreview so the clip-public-track EF can resolve it.',
+        reason: 'the run row must thread the run id into RunTrackPreview so '
+            'the clip-public-track EF can resolve it.',
       );
       expect(
-        source,
+        row,
         matches(RegExp(r'RunTrackPreview\([^)]*ownerUserId:', dotAll: true)),
-        reason: 'profile_screen must thread the run owner id into '
+        reason: 'the run row must thread the run owner id into '
             'RunTrackPreview so the privacy-zone clip kicks in.',
+      );
+      expect(
+        File('lib/screens/profile_screen.dart').readAsStringSync(),
+        contains('ownerUserId: widget.userId'),
+        reason: 'and the profile must supply it — this list is the one that '
+            'shows other runners\' runs.',
       );
     });
 

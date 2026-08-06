@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show StatTile;
+import 'package:ui_kit/ui_kit.dart' show ChartCardHeader, StatTile;
 
 import '../fitness.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -68,121 +68,115 @@ class FitnessCard extends StatelessWidget {
     String fmt(double? v, {int digits = 1}) =>
         v == null ? '—' : formatFixed(v, digits, activeLocaleTag);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(l10n.fitnessTitle, style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ChartCardHeader(title: l10n.fitnessTitle),
+            const SizedBox(height: 10),
+            // Each stat is Expanded so the row degrades by ellipsizing
+            // labels instead of overflowing — the expanded (tablet)
+            // dashboard mounts this card in a ~half-width grid column.
+            Row(
               children: [
-                // Each stat is Expanded so the row degrades by ellipsizing
-                // labels instead of overflowing — the expanded (tablet)
-                // dashboard mounts this card in a ~half-width grid column.
-                Row(
-                  children: [
-                    Expanded(
-                      child: FitnessStat(
-                        label: l10n.fitnessStatVo2Max,
-                        value: fmt(snapshot.vo2Max),
-                        tooltip: l10n.fitnessStatVo2MaxTooltip,
-                      ),
-                    ),
-                    Expanded(
-                      child: FitnessStat(
-                        label: l10n.fitnessStatVdot,
-                        value: fmt(snapshot.vdot),
-                        tooltip: l10n.fitnessStatVdotTooltip,
-                      ),
-                    ),
-                    Expanded(
-                      child: FitnessStat(
-                        label: l10n.fitnessStatRuns,
-                        value: '${snapshot.qualifyingRunCount}',
-                        tooltip: l10n.fitnessStatRunsTooltip,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FitnessStat(
-                        label: l10n.fitnessStatCtl,
-                        value: fmt(load?.ctl, digits: 0),
-                        tooltip: l10n.fitnessStatCtlTooltip,
-                      ),
-                    ),
-                    Expanded(
-                      child: FitnessStat(
-                        label: l10n.fitnessStatAtl,
-                        value: fmt(load?.atl, digits: 0),
-                        tooltip: l10n.fitnessStatAtlTooltip,
-                      ),
-                    ),
-                    Expanded(
-                      child: FitnessStat(
-                        label: l10n.fitnessStatTsb,
-                        value: fmt(load?.tsb, digits: 0),
-                        tooltip: l10n.fitnessStatTsbTooltip,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(8),
+                Expanded(
+                  child: FitnessStat(
+                    label: l10n.fitnessStatVo2Max,
+                    value: fmt(snapshot.vo2Max),
+                    tooltip: l10n.fitnessStatVo2MaxTooltip,
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.health_and_safety,
-                        size: 18,
-                        color: theme.colorScheme.onSecondaryContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              advice,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSecondaryContainer,
-                              ),
-                            ),
-                            if (daysToHard != null && daysToHard >= 1) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                'Next hard session in ~$daysToHard '
-                                '${daysToHard == 1 ? 'day' : 'days'} of easy running.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSecondaryContainer,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+                ),
+                Expanded(
+                  child: FitnessStat(
+                    label: l10n.fitnessStatVdot,
+                    value: fmt(snapshot.vdot),
+                    tooltip: l10n.fitnessStatVdotTooltip,
+                  ),
+                ),
+                Expanded(
+                  child: FitnessStat(
+                    label: l10n.fitnessStatRuns,
+                    value: '${snapshot.qualifyingRunCount}',
+                    tooltip: l10n.fitnessStatRunsTooltip,
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: FitnessStat(
+                    label: l10n.fitnessStatCtl,
+                    value: fmt(load?.ctl, digits: 0),
+                    tooltip: l10n.fitnessStatCtlTooltip,
+                  ),
+                ),
+                Expanded(
+                  child: FitnessStat(
+                    label: l10n.fitnessStatAtl,
+                    value: fmt(load?.atl, digits: 0),
+                    tooltip: l10n.fitnessStatAtlTooltip,
+                  ),
+                ),
+                Expanded(
+                  child: FitnessStat(
+                    label: l10n.fitnessStatTsb,
+                    value: fmt(load?.tsb, digits: 0),
+                    tooltip: l10n.fitnessStatTsbTooltip,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.health_and_safety,
+                    size: 18,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          advice,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                        if (daysToHard != null && daysToHard >= 1) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Next hard session in ~$daysToHard '
+                            '${daysToHard == 1 ? 'day' : 'days'} of easy running.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSecondaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
-      ],
+      ),
     );
   }
 }

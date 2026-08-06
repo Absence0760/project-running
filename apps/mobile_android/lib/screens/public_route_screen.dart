@@ -11,6 +11,7 @@ import 'package:ui_kit/ui_kit.dart'
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../detail_map_height.dart';
 import '../fab_clearance.dart';
 import '../main.dart' show pendingStartRunWithRoute;
 import '../preferences.dart';
@@ -246,16 +247,19 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
                         ),
                       ),
                     )
-                  : _buildBody(theme, _route!),
+                  : LayoutBuilder(
+                      builder: (context, viewport) =>
+                          _buildBody(theme, _route!, viewport.maxHeight),
+                    ),
     );
   }
 
-  Widget _buildBody(ThemeData theme, cm.Route route) {
+  Widget _buildBody(ThemeData theme, cm.Route route, double viewportHeight) {
     final l10n = AppLocalizations.of(context);
     return ListView(
       children: [
         SizedBox(
-          height: 320,
+          height: detailMapHeight(viewportHeight),
           child: LiveRunMap(
             track: const [],
             plannedRoute: _waypoints,

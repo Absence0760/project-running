@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
@@ -147,13 +148,13 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 0,
-        bottom: TabBar(
+        bottom: AppTabBar(
           controller: _controller,
-          tabs: [
-            Tab(text: l10n.fitnessTabAll),
-            Tab(text: l10n.fitnessTabRuns),
-            Tab(text: l10n.fitnessTabGym),
-            Tab(text: l10n.fitnessTabNutrition),
+          labels: [
+            l10n.fitnessTabAll,
+            l10n.fitnessTabRuns,
+            l10n.fitnessTabGym,
+            l10n.fitnessTabNutrition,
           ],
         ),
       ),
