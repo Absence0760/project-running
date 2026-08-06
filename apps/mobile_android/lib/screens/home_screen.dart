@@ -702,7 +702,23 @@ class _HomeScreenState extends State<HomeScreen>
               },
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: body),
+            // This branch has no `bottomNavigationBar`, so `Scaffold` leaves
+            // the whole system bottom inset on the body's `MediaQuery` — where
+            // the phone branch below spends it on the `BottomAppBar` and
+            // `Scaffold` therefore zeroes it. The pages were written against
+            // that zero (`SafeArea(bottom: false)` on dashboard and You), so
+            // without this the last card on a tablet sits under the
+            // gesture / nav bar. `SafeArea` both pads and removes, so a page
+            // sees the same zero either way (decisions § 538); left / right
+            // stay for the pages, matching the phone branch.
+            Expanded(
+              child: SafeArea(
+                top: false,
+                left: false,
+                right: false,
+                child: body,
+              ),
+            ),
           ],
         ),
       );
