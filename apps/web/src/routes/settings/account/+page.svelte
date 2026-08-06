@@ -9,6 +9,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import { changePassword, type PasswordChangeReason } from '$lib/core/password_change';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
+	import { TEXT_LIMITS } from '$lib/core/text_limits';
 	import { TABLES } from '$lib/core/schema';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 	import { downloadFile } from '$lib/routes/gpx';
@@ -895,7 +896,7 @@
 		<div class="form-grid">
 			<label>
 				<span class="label-text">{m('settingsAccount.displayName')}</span>
-				<input type="text" bind:value={displayName} />
+				<input type="text" bind:value={displayName} maxlength={TEXT_LIMITS.displayName} />
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.handleLabel')}</span>

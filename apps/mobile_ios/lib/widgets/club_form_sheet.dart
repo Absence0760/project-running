@@ -6,6 +6,7 @@ import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
 import '../l10n/gen/app_localizations.dart';
 import '../rate_limit_errors.dart';
 import '../social_service.dart';
+import '../text_limits.dart';
 import 'full_screen_form.dart';
 
 /// Show the "New club" form (or an edit form when [existing] is set) as a
@@ -214,7 +215,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
               TextField(
                 controller: _name,
                 autofocus: true,
-                maxLength: 80,
+                maxLength: kClubNameMaxLength,
                 decoration: InputDecoration(
                   labelText: l10n.clubFormNameLabel,
                   errorText: _nameError,
@@ -227,7 +228,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
               TextField(
                 controller: _description,
                 maxLines: 3,
-                maxLength: 500,
+                maxLength: kClubDescriptionMaxLength,
                 decoration: InputDecoration(
                   labelText: l10n.clubFormDescriptionLabel,
                 ),
@@ -235,7 +236,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _location,
-                maxLength: 80,
+                maxLength: kClubLocationLabelMaxLength,
                 decoration: InputDecoration(
                   labelText: l10n.clubFormLocationLabel,
                   hintText: l10n.clubFormLocationHint,

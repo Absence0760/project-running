@@ -6,6 +6,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../locale_defaults.dart';
 import '../onboarding.dart';
 import '../preferences.dart';
+import '../text_limits.dart';
 import '../settings_sync.dart';
 import '../widgets/top_banner.dart';
 
@@ -257,7 +258,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
           hint: l10n.setupNameHint,
           child: TextField(
             controller: _displayNameCtl,
-            maxLength: 60,
+            maxLength: kDisplayNameMaxLength,
             textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               labelText: l10n.setupNameLabel,

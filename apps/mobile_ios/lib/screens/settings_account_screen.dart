@@ -22,6 +22,7 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../password_change.dart';
 import '../preferences.dart';
+import '../text_limits.dart';
 import '../settings_sync.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/password_field.dart';
@@ -146,6 +147,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
         content: TextField(
           controller: ctl,
           autofocus: true,
+          maxLength: kDisplayNameMaxLength,
           textCapitalization: TextCapitalization.words,
           decoration: InputDecoration(
             labelText: l10n.settingsAccountDisplayName,
