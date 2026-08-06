@@ -125,10 +125,7 @@ const BELOW_FLOOR = <Record<string, number>>{
 
 	// --- Micro-labels that are simply under the floor. Every one of these is
 	// owed a fix; they are pinned so the count can only shrink, not so they are
-	// blessed. The two week ribbons carry the same 0.55/0.6rem narrow-viewport
-	// shrink `PlanCalendar` just lost and should be closed next.
-	'lib/components/CurrentWeekStrip.svelte': 4,
-	'lib/components/ThisWeekStrip.svelte': 3,
+	// blessed.
 	'routes/dashboard/+page.svelte': 3,
 	'lib/components/BadgeGrid.svelte': 1,
 	'lib/components/CoachChat.svelte': 1,
