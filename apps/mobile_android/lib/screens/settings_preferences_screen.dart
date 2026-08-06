@@ -12,6 +12,7 @@ import '../push_messaging_bridge.dart';
 import '../settings_sync.dart';
 import '../undo_queue.dart';
 import '../widgets/top_banner.dart';
+import 'privacy_zones_screen.dart';
 import 'settings_body_metrics_screen.dart';
 
 class SettingsPreferencesScreen extends StatefulWidget {
@@ -1514,6 +1515,22 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onChanged:
                   _bagReady ? (_) => _editDiscoverableInSearch() : null,
             ),
+            // Mirrors web's `/settings/preferences` privacy-zones section
+            // (#666 I11). It used to sit under Account, which is sign-in /
+            // backup / deletion — a zone is a sharing preference.
+            if (widget.settingsSync != null)
+              ListTile(
+                title: Text(l10n.privacyZonesTitle),
+                subtitle: Text(l10n.privacyZonesSubtitle),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        PrivacyZonesScreen(settingsSync: widget.settingsSync!),
+                  ),
+                ),
+              ),
 
             _sectionLabel(l10n.prefsSectionAiCoach),
             ListTile(

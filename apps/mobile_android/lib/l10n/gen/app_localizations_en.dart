@@ -5952,24 +5952,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get settingsAccountViewProfile => 'View profile';
+  String get guidedRunsTitle => 'Guided runs';
 
   @override
-  String get settingsAccountViewProfileSubtitle =>
-      'Your runs, followers, following, notifications';
-
-  @override
-  String get settingsAccountGuidedRuns => 'Guided runs';
-
-  @override
-  String get settingsAccountGuidedRunsSubtitle =>
+  String get guidedRunsSubtitle =>
       'Coach-voice scripted workouts with TTS cues';
 
   @override
-  String get settingsAccountPrivacyZones => 'Privacy zones';
+  String get privacyZonesTitle => 'Privacy zones';
 
   @override
-  String get settingsAccountPrivacyZonesSubtitle =>
+  String get privacyZonesSubtitle =>
       'Clip start/end of public tracks near home';
 
   @override
@@ -6443,7 +6436,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutLegalSection => 'Legal';
 
   @override
-  String get devicesTitle => 'Devices';
+  String get devicesTitle => 'Signed-in devices';
 
   @override
   String get devicesRenameTitle => 'Rename device';
@@ -6760,9 +6753,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gearRotationDone => 'Done';
-
-  @override
-  String get privacyZonesTitle => 'Privacy zones';
 
   @override
   String get privacyZonesSaved => 'Privacy zones saved.';
@@ -7205,7 +7195,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardRecapTooltip => 'Year in running';
 
   @override
-  String get dashboardProfileTooltip => 'My profile';
+  String get dashboardProfileTooltip => 'Your profile';
 
   @override
   String get dashboardWelcomeTitle => 'Welcome!';
@@ -9086,7 +9076,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsDevicesSignedOutSubtitle =>
-      'Sign in to manage your devices';
+      'Sign in to see where you\'re signed in';
 
   @override
   String get verifiedClubTooltip => 'Official verified club';
@@ -9104,7 +9094,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get raceDistanceMarathon => 'Marathon';
 
   @override
-  String get settingsTabAccountSubtitle => 'Sign in, backup, delete account';
+  String get settingsTabAccountSubtitle =>
+      'Sign-in, profile, import and backup, delete account';
 
   @override
   String get settingsTabPreferencesSubtitle =>
@@ -9112,11 +9103,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTabIntegrationsSubtitle =>
-      'Strava, parkrun, heart-rate strap';
+      'Strava, parkrun, race calendar, heart-rate strap, treadmill, watch';
 
   @override
   String get settingsTabDevicesSubtitle =>
-      'Where you\'re signed in and per-device overrides';
+      'Where you\'re signed in and per-device overrides — pair a strap or treadmill under Integrations';
 
   @override
   String get settingsTabGearSubtitle =>

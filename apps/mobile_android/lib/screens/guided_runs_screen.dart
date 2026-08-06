@@ -21,7 +21,7 @@ class GuidedRunsScreen extends StatelessWidget {
     final library = guidedRunLibrary(l10n);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.settingsAccountGuidedRuns)),
+      appBar: AppBar(title: Text(l10n.guidedRunsTitle)),
       body: ListView.builder(
         padding: EdgeInsets.fromLTRB(0, 8, 0, 8 + bottomInset),
         itemCount: library.length,

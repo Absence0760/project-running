@@ -8054,28 +8054,20 @@
       }
     }
   },
-  "settingsAccountViewProfile": "View profile",
-  "@settingsAccountViewProfile": {
-    "description": "Tile title that opens the user's own profile"
-  },
-  "settingsAccountViewProfileSubtitle": "Your runs, followers, following, notifications",
-  "@settingsAccountViewProfileSubtitle": {
-    "description": "Subtitle of the View profile tile"
-  },
-  "settingsAccountGuidedRuns": "Guided runs",
-  "@settingsAccountGuidedRuns": {
+  "guidedRunsTitle": "Guided runs",
+  "@guidedRunsTitle": {
     "description": "Tile title for guided runs"
   },
-  "settingsAccountGuidedRunsSubtitle": "Coach-voice scripted workouts with TTS cues",
-  "@settingsAccountGuidedRunsSubtitle": {
+  "guidedRunsSubtitle": "Coach-voice scripted workouts with TTS cues",
+  "@guidedRunsSubtitle": {
     "description": "Subtitle of the Guided runs tile"
   },
-  "settingsAccountPrivacyZones": "Privacy zones",
-  "@settingsAccountPrivacyZones": {
+  "privacyZonesTitle": "Privacy zones",
+  "@privacyZonesTitle": {
     "description": "Tile title for privacy zones"
   },
-  "settingsAccountPrivacyZonesSubtitle": "Clip start/end of public tracks near home",
-  "@settingsAccountPrivacyZonesSubtitle": {
+  "privacyZonesSubtitle": "Clip start/end of public tracks near home",
+  "@privacyZonesSubtitle": {
     "description": "Subtitle of the Privacy zones tile"
   },
   "settingsAccountSendErrorReports": "Send error reports",
@@ -8701,7 +8693,7 @@
   "@aboutLegalSection": {
     "description": "Section header above the legal-document links on the About screen"
   },
-  "devicesTitle": "Devices",
+  "devicesTitle": "Signed-in devices",
   "@devicesTitle": {
     "description": "AppBar title for the Settings > Devices screen"
   },
@@ -9685,7 +9677,7 @@
   "@dashboardRecapTooltip": {
     "description": "Dashboard toolbar tooltip for the year-in-running recap action"
   },
-  "dashboardProfileTooltip": "My profile",
+  "dashboardProfileTooltip": "Your profile",
   "@dashboardProfileTooltip": {
     "description": "Dashboard toolbar tooltip for opening the user's own profile"
   },
@@ -12341,7 +12333,7 @@
   "@settingsAccountSignedIn": {
     "description": "Account settings tile subtitle shown when signed in but no email address is available"
   },
-  "settingsDevicesSignedOutSubtitle": "Sign in to manage your devices",
+  "settingsDevicesSignedOutSubtitle": "Sign in to see where you're signed in",
   "@settingsDevicesSignedOutSubtitle": {
     "description": "Devices settings tile subtitle shown when signed out"
   },
@@ -12365,7 +12357,7 @@
   "@raceDistanceMarathon": {
     "description": "Best-effort race distance label: marathon"
   },
-  "settingsTabAccountSubtitle": "Sign in, backup, delete account",
+  "settingsTabAccountSubtitle": "Sign-in, profile, import and backup, delete account",
   "@settingsTabAccountSubtitle": {
     "description": "Settings landing: Account tile subtitle when signed out"
   },
@@ -12373,11 +12365,11 @@
   "@settingsTabPreferencesSubtitle": {
     "description": "Settings landing: Preferences tile subtitle"
   },
-  "settingsTabIntegrationsSubtitle": "Strava, parkrun, heart-rate strap",
+  "settingsTabIntegrationsSubtitle": "Strava, parkrun, race calendar, heart-rate strap, treadmill, watch",
   "@settingsTabIntegrationsSubtitle": {
     "description": "Settings landing: Integrations tile subtitle"
   },
-  "settingsTabDevicesSubtitle": "Where you're signed in and per-device overrides",
+  "settingsTabDevicesSubtitle": "Where you're signed in and per-device overrides — pair a strap or treadmill under Integrations",
   "@settingsTabDevicesSubtitle": {
     "description": "Settings landing: Devices tile subtitle when signed in"
   },

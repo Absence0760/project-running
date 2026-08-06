@@ -5668,23 +5668,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get settingsAccountViewProfile => 'プロフィールを表示';
+  String get guidedRunsTitle => 'ガイド付きラン';
 
   @override
-  String get settingsAccountViewProfileSubtitle => 'ラン、フォロワー、フォロー中、通知';
+  String get guidedRunsSubtitle => 'コーチの音声とTTSキューによるスクリプト式ワークアウト';
 
   @override
-  String get settingsAccountGuidedRuns => 'ガイド付きラン';
+  String get privacyZonesTitle => 'プライバシーゾーン';
 
   @override
-  String get settingsAccountGuidedRunsSubtitle =>
-      'コーチの音声とTTSキューによるスクリプト式ワークアウト';
-
-  @override
-  String get settingsAccountPrivacyZones => 'プライバシーゾーン';
-
-  @override
-  String get settingsAccountPrivacyZonesSubtitle => '自宅付近で公開トラックの開始・終了を切り取る';
+  String get privacyZonesSubtitle => '自宅付近で公開トラックの開始・終了を切り取る';
 
   @override
   String get settingsAccountSendErrorReports => 'エラーレポートを送信';
@@ -6140,7 +6133,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get aboutLegalSection => '法的情報';
 
   @override
-  String get devicesTitle => 'デバイス';
+  String get devicesTitle => 'サインイン中のデバイス';
 
   @override
   String get devicesRenameTitle => 'デバイス名を変更';
@@ -6445,9 +6438,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gearRotationDone => '完了';
-
-  @override
-  String get privacyZonesTitle => 'プライバシーゾーン';
 
   @override
   String get privacyZonesSaved => 'プライバシーゾーンを保存しました。';
@@ -6880,7 +6870,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dashboardRecapTooltip => 'ランニングの一年';
 
   @override
-  String get dashboardProfileTooltip => 'マイプロフィール';
+  String get dashboardProfileTooltip => 'あなたのプロフィール';
 
   @override
   String get dashboardWelcomeTitle => 'ようこそ！';
@@ -8712,7 +8702,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAccountSignedIn => 'サインイン済み';
 
   @override
-  String get settingsDevicesSignedOutSubtitle => 'デバイスを管理するにはサインインしてください';
+  String get settingsDevicesSignedOutSubtitle => 'サインインすると、サインイン中のデバイスを確認できます';
 
   @override
   String get verifiedClubTooltip => '公式認証済みクラブ';
@@ -8730,16 +8720,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get raceDistanceMarathon => 'マラソン';
 
   @override
-  String get settingsTabAccountSubtitle => 'サインイン、バックアップ、アカウント削除';
+  String get settingsTabAccountSubtitle => 'サインイン、プロフィール、インポートとバックアップ、アカウント削除';
 
   @override
   String get settingsTabPreferencesSubtitle => '単位、テーマ、記録、トレーニング、プライバシー';
 
   @override
-  String get settingsTabIntegrationsSubtitle => 'Strava、parkrun、心拍センサー';
+  String get settingsTabIntegrationsSubtitle =>
+      'Strava、parkrun、レースカレンダー、心拍ベルト、トレッドミル、ウォッチ';
 
   @override
-  String get settingsTabDevicesSubtitle => 'サインイン中のデバイスとデバイスごとの設定';
+  String get settingsTabDevicesSubtitle =>
+      'サインイン中の場所とデバイスごとの上書き設定。ベルトやトレッドミルのペアリングは「連携」から';
 
   @override
   String get settingsTabGearSubtitle => 'シューズ・バイクとアイテムごとの走行距離を記録';

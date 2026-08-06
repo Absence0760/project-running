@@ -37,9 +37,9 @@ void main() {
   setUpAll(_ensureSupabase);
 
   group('DevicesScreen — initial render', () {
-    testWidgets('renders the Devices app-bar title', (tester) async {
+    testWidgets('renders the Signed-in devices app-bar title', (tester) async {
       await _pump(tester);
-      expect(find.text('Devices'), findsOneWidget);
+      expect(find.text('Signed-in devices'), findsOneWidget);
     });
 
     testWidgets('first frame shows the list skeleton', (tester) async {

@@ -9,6 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/coach_screen.dart';
+import '../lib/screens/guided_runs_screen.dart';
+import '../lib/widgets/surface_peer_strip.dart';
 import '../lib/widgets/sign_in_required_state.dart';
 import '../lib/training_service.dart';
 import 'realtime_drain.dart';
@@ -183,6 +185,40 @@ void main() {
     testWidgets('renders the Coach app-bar title', (tester) async {
       await _pump(tester);
       expect(find.text('Coach'), findsOneWidget);
+      await _drain(tester);
+    });
+
+    testWidgets(
+        'the consented view names Guided runs as a peer of Coach (#666 I7)',
+        (tester) async {
+      // Web reaches the guided-run library from a rail on `/coach`; on mobile
+      // the library used to be filed under Settings -> Account. Pin the peer
+      // and pin that tapping it opens the library.
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: CoachScreen(api: _ConsentedApi(), training: TrainingService()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final strip = find.byType(SurfacePeerStrip);
+      expect(strip, findsOneWidget);
+      // Assert the population: both peers are on the strip, and the current
+      // one is the coach itself, so the pass cannot come from an empty strip.
+      final peers = tester.widget<SurfacePeerStrip>(strip).peers;
+      expect(peers.map((p) => p.label).toList(), ['Coach', 'Guided runs']);
+      expect(peers.first.isCurrent, isTrue);
+
+      await tester.tap(find.descendant(
+        of: strip,
+        matching: find.text('Guided runs'),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(GuidedRunsScreen), findsOneWidget);
       await _drain(tester);
     });
 

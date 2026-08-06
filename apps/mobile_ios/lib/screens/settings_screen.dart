@@ -16,6 +16,7 @@ import '../widgets/top_banner.dart';
 import 'coaching_screen.dart';
 import 'devices_screen.dart';
 import 'gear_screen.dart';
+import 'guided_runs_screen.dart';
 import 'settings_about_screen.dart';
 import 'settings_account_screen.dart';
 import 'settings_integrations_screen.dart';
@@ -154,6 +155,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     api: widget.apiClient!,
                     preferences: widget.preferences,
                   )),
+            ),
+            // Guided runs is coaching content, so it belongs beside Coaching
+            // rather than three taps down inside Account, whose subject is
+            // sign-in / backup / deletion (#666 I7). It stays on the landing
+            // and not behind the sign-in-gated Coach screen because the
+            // library is local TTS scripts with no API dependency — the
+            // signed-out floor `settings_screen_test` already pins.
+            _tab(
+              icon: Icons.headset,
+              label: l10n.guidedRunsTitle,
+              subtitle: l10n.guidedRunsSubtitle,
+              onTap: () => _open((_) => const GuidedRunsScreen()),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),

@@ -27,9 +27,6 @@ import '../widgets/confirm_destructive.dart';
 import '../widgets/password_field.dart';
 import '../widgets/top_banner.dart';
 import 'import_screen.dart';
-import 'guided_runs_screen.dart';
-import 'privacy_zones_screen.dart';
-import 'profile_screen.dart';
 import 'sign_in_screen.dart';
 
 class SettingsAccountScreen extends StatefulWidget {
@@ -929,55 +926,6 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                       )
                     : const Icon(Icons.edit_outlined),
                 onTap: _displayNameBusy ? null : _editDisplayName,
-              ),
-            if (signedIn)
-              ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: Text(l10n.settingsAccountViewProfile),
-                subtitle: Text(l10n.settingsAccountViewProfileSubtitle),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  final api = widget.apiClient;
-                  final uid = api?.userId;
-                  if (api == null || uid == null) return;
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ProfileScreen(api: api, userId: uid),
-                    ),
-                  );
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.headset),
-              title: Text(l10n.settingsAccountGuidedRuns),
-              subtitle: Text(l10n.settingsAccountGuidedRunsSubtitle),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const GuidedRunsScreen(),
-                  ),
-                );
-              },
-            ),
-            if (signedIn)
-              ListTile(
-                leading: const Icon(Icons.privacy_tip_outlined),
-                title: Text(l10n.settingsAccountPrivacyZones),
-                subtitle: Text(l10n.settingsAccountPrivacyZonesSubtitle),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  final s = widget.settingsSync;
-                  if (s == null) return;
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PrivacyZonesScreen(settingsSync: s),
-                    ),
-                  );
-                },
               ),
             SwitchListTile(
               secondary: const Icon(Icons.bug_report_outlined),

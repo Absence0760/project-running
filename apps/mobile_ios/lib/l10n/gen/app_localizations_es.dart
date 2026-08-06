@@ -6015,24 +6015,17 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get settingsAccountViewProfile => 'Ver perfil';
+  String get guidedRunsTitle => 'Carreras guiadas';
 
   @override
-  String get settingsAccountViewProfileSubtitle =>
-      'Tus carreras, seguidores, seguidos, notificaciones';
-
-  @override
-  String get settingsAccountGuidedRuns => 'Carreras guiadas';
-
-  @override
-  String get settingsAccountGuidedRunsSubtitle =>
+  String get guidedRunsSubtitle =>
       'Entrenamientos guionizados con voz de entrenador y avisos TTS';
 
   @override
-  String get settingsAccountPrivacyZones => 'Zonas de privacidad';
+  String get privacyZonesTitle => 'Zonas de privacidad';
 
   @override
-  String get settingsAccountPrivacyZonesSubtitle =>
+  String get privacyZonesSubtitle =>
       'Recorta el inicio/fin de los trazados públicos cerca de casa';
 
   @override
@@ -6511,7 +6504,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get aboutLegalSection => 'Legal';
 
   @override
-  String get devicesTitle => 'Dispositivos';
+  String get devicesTitle => 'Dispositivos con sesión';
 
   @override
   String get devicesRenameTitle => 'Renombrar dispositivo';
@@ -6833,9 +6826,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get gearRotationDone => 'Listo';
-
-  @override
-  String get privacyZonesTitle => 'Zonas de privacidad';
 
   @override
   String get privacyZonesSaved => 'Zonas de privacidad guardadas.';
@@ -7283,7 +7273,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get dashboardRecapTooltip => 'Año en carrera';
 
   @override
-  String get dashboardProfileTooltip => 'Mi perfil';
+  String get dashboardProfileTooltip => 'Tu perfil';
 
   @override
   String get dashboardWelcomeTitle => '¡Bienvenido!';
@@ -9185,7 +9175,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsDevicesSignedOutSubtitle =>
-      'Inicia sesión para gestionar tus dispositivos';
+      'Inicia sesión para ver dónde tienes sesión iniciada';
 
   @override
   String get verifiedClubTooltip => 'Club verificado oficial';
@@ -9204,7 +9194,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsTabAccountSubtitle =>
-      'Iniciar sesión, copia de seguridad, eliminar cuenta';
+      'Inicio de sesión, perfil, importación y copia de seguridad, eliminar cuenta';
 
   @override
   String get settingsTabPreferencesSubtitle =>
@@ -9212,11 +9202,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsTabIntegrationsSubtitle =>
-      'Strava, parkrun, banda de frecuencia cardíaca';
+      'Strava, parkrun, calendario de carreras, banda de frecuencia cardíaca, cinta de correr, reloj';
 
   @override
   String get settingsTabDevicesSubtitle =>
-      'Dónde tienes la sesión iniciada y ajustes por dispositivo';
+      'Dónde tienes sesión iniciada y las anulaciones por dispositivo: vincula la banda o la cinta en Integraciones';
 
   @override
   String get settingsTabGearSubtitle =>

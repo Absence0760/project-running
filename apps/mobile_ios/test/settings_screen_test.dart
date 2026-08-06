@@ -67,12 +67,14 @@ void main() {
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
       for (final label in const ['Profile', 'Apps & data', 'Account & legal']) {
+        await tester.scrollUntilVisible(find.text(label.toUpperCase()), 200,
+            scrollable: find.byType(Scrollable).first);
         expect(find.text(label.toUpperCase()), findsOneWidget,
             reason: '$label section header must render');
       }
     });
 
-    testWidgets('renders all seven tab tiles', (tester) async {
+    testWidgets('renders every tab tile', (tester) async {
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
       final list = find.byType(Scrollable).first;
@@ -80,8 +82,9 @@ void main() {
         'Account',
         'Preferences',
         'Coaching',
+        'Guided runs',
         'Integrations',
-        'Devices',
+        'Signed-in devices',
         'Gear',
         'Pro & support',
         'About & updates',
@@ -93,7 +96,7 @@ void main() {
       }
     });
 
-    testWidgets('Devices tile surfaces a sign-in subtitle when signed-out',
+    testWidgets('Signed-in devices tile surfaces a sign-in subtitle when signed-out',
         (tester) async {
       // Devices is server-only (user_device_settings table); the tile
       // stays tappable but the subtitle tells the user sign-in is
@@ -102,19 +105,24 @@ void main() {
       // sign-in state.
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
+      await tester.scrollUntilVisible(find.text('Signed-in devices'), 200,
+          scrollable: find.byType(Scrollable).first);
       final devices = tester.widget<ListTile>(find.ancestor(
-        of: find.text('Devices'),
-        matching: find.byType(ListTile),
-      ));
-      final gear = tester.widget<ListTile>(find.ancestor(
-        of: find.text('Gear'),
+        of: find.text('Signed-in devices'),
         matching: find.byType(ListTile),
       ));
       expect(devices.onTap, isNotNull,
           reason: 'Devices tile must stay tappable when signed-out');
+      expect(find.text("Sign in to see where you're signed in"), findsOneWidget);
+
+      await tester.scrollUntilVisible(find.text('Gear'), 200,
+          scrollable: find.byType(Scrollable).first);
+      final gear = tester.widget<ListTile>(find.ancestor(
+        of: find.text('Gear'),
+        matching: find.byType(ListTile),
+      ));
       expect(gear.onTap, isNotNull,
           reason: 'Gear tile must stay tappable when signed-out');
-      expect(find.text('Sign in to manage your devices'), findsOneWidget);
       expect(find.text('Track shoes + bikes and per-item mileage'),
           findsOneWidget,
           reason:
@@ -168,8 +176,7 @@ void main() {
   });
 
   group('SettingsAccountScreen (offline affordances)', () {
-    testWidgets(
-        'Sentry opt-out + Guided runs render when signed-out (local data)',
+    testWidgets('Sentry opt-out renders when signed-out (local data)',
         (tester) async {
       final s = await _makeStores();
       await tester.pumpWidget(MaterialApp(
@@ -184,25 +191,25 @@ void main() {
       expect(find.text('Send error reports'), findsOneWidget,
           reason: 'Sentry opt-out is a local GDPR control — must be '
               'reachable without an account.');
-      expect(find.text('Guided runs'), findsOneWidget,
-          reason: 'Guided runs is a local screen with no API '
-              'dependency — must not require sign-in.');
     });
 
-    testWidgets('View profile + Privacy zones are hidden when signed-out',
+    testWidgets('Guided runs stays reachable signed-out from the landing',
         (tester) async {
+      // The tile moved off the account screen to sit beside Coaching on the
+      // landing (#666 I7), but the invariant it used to pin here is
+      // unchanged: the library is local TTS scripts with no API dependency,
+      // so it must not acquire a sign-in gate on the way.
       final s = await _makeStores();
-      await tester.pumpWidget(MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: SettingsAccountScreen(
-          apiClient: null,
-          preferences: s.prefs,
-          settingsSync: null,
-        ),
+      await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
+      await tester.scrollUntilVisible(find.text('Guided runs'), 200,
+          scrollable: find.byType(Scrollable).first);
+      final tile = tester.widget<ListTile>(find.ancestor(
+        of: find.text('Guided runs'),
+        matching: find.byType(ListTile),
       ));
-      expect(find.text('View profile'), findsNothing);
-      expect(find.text('Privacy zones'), findsNothing);
+      expect(tile.onTap, isNotNull,
+          reason: 'Guided runs is a local screen with no API '
+              'dependency — must not require sign-in.');
     });
   });
 }
