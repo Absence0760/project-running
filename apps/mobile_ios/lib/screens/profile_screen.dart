@@ -12,6 +12,7 @@ import '../social_service.dart';
 import '../training_service.dart';
 import '../undo_queue.dart';
 import '../widgets/badge_grid.dart';
+import '../widgets/collapsing_tab_host.dart';
 import '../widgets/error_state.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/run_list_tile.dart';
@@ -666,46 +667,43 @@ class _ProfileScreenState extends State<ProfileScreen>
               onPressed: _blockBusy ? null : _toggleBlock,
             ),
         ],
-        bottom: AppTabBar(
-          controller: _tabs,
-          labels: [for (final tab in order) _tabLabel(l10n, tab)],
-        ),
       ),
-      body: _loading
-          // Header-plus-tabs, so neither a list nor a plain body: the two
-          // primitives are composed into the shape the profile settles into,
-          // and each tab's own `_tabScope` skeleton takes over from here.
-          ? Column(
-              children: [
-                ListSkeleton.section(
-                  label: l10n.commonLoading,
-                  rows: 1,
-                  rowHeight: 56,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                ),
-                const Divider(height: 1),
-                Expanded(child: ListSkeleton(label: l10n.commonLoading)),
-              ],
+      // One shape in every state, so the tab strip a user reached for is not
+      // withdrawn by a slow or failed fetch — the header band and the current
+      // tab's body are what swap. Before § 545 the strip sat in
+      // `AppBar.bottom`, where it survived loading and error for free.
+      body: CollapsingTabHost(
+        controller: _tabs,
+        labels: [for (final tab in order) _tabLabel(l10n, tab)],
+        header: [
+          if (_summary == null)
+            ListSkeleton.section(
+              label: l10n.commonLoading,
+              rows: 1,
+              rowHeight: 56,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             )
-          : _loadError != null
-          ? ErrorState(message: l10n.profileLoadError, onRetry: _load)
-          : _summary == null
-          ? Center(child: Text(l10n.profileNotFound))
-          : Column(
-              children: [
-                _buildHeader(theme),
-                const Divider(height: 1),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabs,
-                    children: [
-                      for (final tab in order) _tabView(theme, l10n, tab),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          else
+            _buildHeader(theme),
+          const Divider(height: 1),
+        ],
+        tabs: [for (final tab in order) _surfaceFor(theme, l10n, tab)],
+      ),
     );
+  }
+
+  Widget _surfaceFor(ThemeData theme, AppLocalizations l10n, ProfileTab tab) {
+    if (_loading) return ListSkeleton(label: l10n.commonLoading);
+    if (_loadError != null) {
+      return ErrorState(message: l10n.profileLoadError, onRetry: _load);
+    }
+    if (_summary == null) {
+      return EmptyState(
+        icon: Icons.person_off_outlined,
+        title: l10n.profileNotFound,
+      );
+    }
+    return _tabView(theme, l10n, tab);
   }
 
   Widget _buildHeader(ThemeData theme) {
@@ -841,21 +839,17 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildRunsTab(ThemeData theme) {
     if (_runs.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            _isSelf
-                ? AppLocalizations.of(context).profileRunsEmptySelf
-                : AppLocalizations.of(context).profileRunsEmptyOther,
-            style: theme.textTheme.bodyMedium,
-          ),
-        ),
+      return EmptyState(
+        icon: Icons.directions_run_outlined,
+        title: _isSelf
+            ? AppLocalizations.of(context).profileRunsEmptySelf
+            : AppLocalizations.of(context).profileRunsEmptyOther,
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _runs.length,
         itemBuilder: (_, i) {
@@ -896,6 +890,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: 8),
         // +1 row for the Load-more footer when the cloud might still
         // have more pages (api hint is `lastPage.length == pageSize`).
@@ -999,19 +994,16 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
         Expanded(
           child: visible.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      _notifFilter == 'unread'
-                          ? l10n.profileNotifsCaughtUp
-                          : l10n.profileNotifsEmpty,
-                    ),
-                  ),
+              ? EmptyState(
+                  icon: Icons.notifications_none,
+                  title: _notifFilter == 'unread'
+                      ? l10n.profileNotifsCaughtUp
+                      : l10n.profileNotifsEmpty,
                 )
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: entries.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),

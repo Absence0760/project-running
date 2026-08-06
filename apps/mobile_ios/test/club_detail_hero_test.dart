@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/club_detail_screen.dart';
@@ -205,6 +206,27 @@ void main() {
         },
       );
     }
+
+    // § 545: the band the clamp bounds now also travels. A club whose hero is
+    // long enough to be worth scrolling past can be scrolled past, and the tab
+    // strip it labels comes with it and then pins.
+    realtimeWidgetTest('the hero scrolls away and the tab strip pins',
+        (tester) async {
+      await _pump(tester, description: _longDescription);
+
+      expect(find.text(_longDescription), findsOneWidget);
+      final scrollTop = tester.getTopLeft(find.byType(NestedScrollView)).dy;
+      expect(tester.getTopLeft(find.byType(AppTabBar)).dy,
+          greaterThan(scrollTop));
+
+      await tester.drag(find.byType(AppTabBar), const Offset(0, -400));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(IdentityAvatar), findsNothing,
+          reason: 'the hero did not scroll away');
+      expect(tester.getTopLeft(find.byType(AppTabBar)).dy, scrollTop,
+          reason: 'the strip did not pin at the top of the scroll view');
+    });
 
     realtimeWidgetTest('a small phone no longer overflows on a long '
         'description', (tester) async {
