@@ -1277,7 +1277,7 @@
 	}
 
 	.live-stat-label {
-		font-size: 0.68rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
@@ -1428,7 +1428,7 @@
 		flex-wrap: wrap;
 	}
 	.cutoff-title {
-		font-size: 0.68rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		font-weight: 700;

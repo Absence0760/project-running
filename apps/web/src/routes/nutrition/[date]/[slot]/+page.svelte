@@ -296,7 +296,7 @@
 		color: var(--color-text-secondary);
 	}
 	.trend-day {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 	}
 	.empty {

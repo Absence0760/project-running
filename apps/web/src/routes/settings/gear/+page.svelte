@@ -1071,7 +1071,7 @@
 		display: inline-flex;
 		align-items: center;
 		padding: 0.1rem 0.5rem;
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -1226,7 +1226,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.wear-area-pill {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		letter-spacing: 0.03em;
 		text-transform: uppercase;

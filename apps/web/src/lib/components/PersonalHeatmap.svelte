@@ -490,7 +490,7 @@
 	.legend-scale-labels {
 		display: flex;
 		justify-content: space-between;
-		font-size: 0.68rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		margin-top: 0.15rem;
 	}

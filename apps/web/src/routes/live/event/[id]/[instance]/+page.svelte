@@ -1044,7 +1044,7 @@
 		margin-inline-start: 0.35rem;
 		padding: 0.05rem 0.4rem;
 		border-radius: 9999px;
-		font-size: 0.62rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;

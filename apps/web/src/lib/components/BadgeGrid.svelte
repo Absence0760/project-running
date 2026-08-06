@@ -148,7 +148,7 @@
 		position: absolute;
 		top: var(--space-xs);
 		inset-inline-end: var(--space-xs);
-		font-size: 0.625rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: var(--color-text-secondary);
