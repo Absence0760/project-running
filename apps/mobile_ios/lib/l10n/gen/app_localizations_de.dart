@@ -514,9 +514,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get navYou => 'Du';
 
   @override
-  String get fitnessTabAll => 'Alle';
-
-  @override
   String get fitnessTabRuns => 'Läufe';
 
   @override

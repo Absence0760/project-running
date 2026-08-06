@@ -698,10 +698,6 @@
   "@navYou": {
     "description": "Bottom-nav label for the You tab (profile + settings)"
   },
-  "fitnessTabAll": "All",
-  "@fitnessTabAll": {
-    "description": "Fitness hub sub-tab showing the unified cross-modal activity timeline"
-  },
   "fitnessTabRuns": "Runs",
   "@fitnessTabRuns": {
     "description": "Fitness hub sub-tab for the run list and routes"

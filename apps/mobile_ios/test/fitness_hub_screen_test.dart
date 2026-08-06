@@ -111,7 +111,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('renders the four sub-tabs All / Runs / Gym / Nutrition',
+  testWidgets('renders the four sub-tabs History / Runs / Gym / Nutrition',
       (tester) async {
     await pump(tester, runs: [runRow('r1')]);
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
@@ -119,10 +119,13 @@ void main() {
     final labels = [
       for (final t in tabBar.tabs) (t as Tab).text,
     ];
-    expect(labels, ['All', 'Runs', 'Gym', 'Nutrition']);
+    // The first tab used to read "All" over a child AppBar reading "History"
+    // — two names for one surface, stacked (#666 I9). Every tab now agrees
+    // with the screen it mounts.
+    expect(labels, ['History', 'Runs', 'Gym', 'Nutrition']);
   });
 
-  testWidgets('All tab shows the unified timeline when stores are seeded',
+  testWidgets('History tab shows the unified timeline when stores are seeded',
       (tester) async {
     await pump(tester,
         runs: [runRow('r1')], lifts: [liftRow('l1', 'Leg day')]);
@@ -131,6 +134,10 @@ void main() {
     // chips suppressed (the hub TabBar owns that axis).
     expect(find.byType(ActivityTimelineList), findsOneWidget);
     expect(find.text('Leg day'), findsOneWidget);
+    // The tab and the AppBar 48dp below it now say the same thing. This is
+    // the mount where the contradiction showed: the timeline title only
+    // renders once a second modality has data (#666 I9).
+    expect(find.text('History'), findsNWidgets(2));
     // No in-screen kind chips — the hub TabBar is the single kind selector.
     expect(find.text('Lifts'), findsNothing);
   });

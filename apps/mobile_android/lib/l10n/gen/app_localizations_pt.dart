@@ -513,9 +513,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get navYou => 'Você';
 
   @override
-  String get fitnessTabAll => 'Tudo';
-
-  @override
   String get fitnessTabRuns => 'Corridas';
 
   @override
@@ -13073,9 +13070,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get navYou => 'Você';
-
-  @override
-  String get fitnessTabAll => 'Tudo';
 
   @override
   String get fitnessTabRuns => 'Corridas';

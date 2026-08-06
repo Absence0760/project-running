@@ -496,9 +496,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get navYou => 'あなた';
 
   @override
-  String get fitnessTabAll => 'すべて';
-
-  @override
   String get fitnessTabRuns => 'ラン';
 
   @override

@@ -887,12 +887,6 @@ abstract class AppLocalizations {
   /// **'You'**
   String get navYou;
 
-  /// Fitness hub sub-tab showing the unified cross-modal activity timeline
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get fitnessTabAll;
-
   /// Fitness hub sub-tab for the run list and routes
   ///
   /// In en, this message translates to:
