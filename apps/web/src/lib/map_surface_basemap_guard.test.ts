@@ -224,6 +224,73 @@ test('the route builder still requests exactly the tiles it did before', () => {
 	);
 });
 
+/// A surface may choose its slug; it may not re-implement the precedence that
+/// turns a slug into a style URL. `styleUrlForSlug` (and the `MapStyle`-keyed
+/// `buildMapStyleUrl` / `mapStyleUrl*` in front of it) spell it once: override,
+/// then the keyless OSM raster fallback, then the keyed MapTiler slug. Calling
+/// `maptilerStyleUrl` from a surface skips the middle rung, which is exactly
+/// how the route builder became the only map in the app that rendered a blank
+/// canvas — and, because MapLibre reads the credit out of the style document
+/// that loaded (§ 491), the only one that displayed tiles crediting nobody.
+const STYLE_RESOLVER = /\b(styleUrlForSlug|buildMapStyleUrl|mapStyleUrlFromEnv|mapStyleUrl)\(/;
+const RAW_ENDPOINT = /\bmaptilerStyleUrl\(/;
+
+test('a map surface resolves its style URL through the shared precedence', () => {
+	const missing: string[] = [];
+	const raw: string[] = [];
+	for (const key of Object.keys(MAP_SURFACES)) {
+		const source = read(key);
+		if (!STYLE_RESOLVER.test(source)) missing.push(key);
+		if (RAW_ENDPOINT.test(source)) raw.push(key);
+	}
+	assert.equal(
+		Object.keys(MAP_SURFACES).length,
+		7,
+		'the population this scan ran over — a shrinking register would let it pass over nothing',
+	);
+	assert.deepEqual(
+		missing,
+		[],
+		`these map surfaces build no style URL through the shared resolver: ${missing.join(', ')}`,
+	);
+	assert.deepEqual(
+		raw,
+		[],
+		`these map surfaces call maptilerStyleUrl directly: ${raw.join(', ')}. That skips the ` +
+			'keyless OSM-raster branch, so a deploy with no PUBLIC_MAPTILER_KEY renders a blank ' +
+			'canvas with no basemap credit. Pass the slug to styleUrlForSlug instead.',
+	);
+});
+
+test('the style-resolver scan flags a raw endpoint call and spares the resolver', () => {
+	// Both directions, because the check is a regex over source and § 536's
+	// lesson is that the matcher defines the population.
+	for (const line of [
+		"\tstreets: maptilerStyleUrl(BUILDER_SLUGS.streets, KEY),",
+		"\tconst u = maptilerStyleUrl('hybrid', key);",
+	]) {
+		assert.ok(RAW_ENDPOINT.test(line), `must flag: ${line}`);
+	}
+	for (const line of [
+		"\tstreets: styleUrlForSlug(BUILDER_SLUGS.streets, KEY, OVERRIDE),",
+		'\tstyle: mapStyleUrlFromEnv(PUBLIC_MAPTILER_KEY, prefersDark),',
+		"\timport { maptilerStyleUrl } from '$lib/routes/map-style-url';",
+	]) {
+		assert.ok(!RAW_ENDPOINT.test(line), `must spare: ${line}`);
+	}
+	for (const line of [
+		'\tstyle: mapStyleUrl(key, prefersDark),',
+		'\tconst u = buildMapStyleUrl(chosen, key, prefersDark);',
+		'\tstreets: styleUrlForSlug(slug, key, override),',
+	]) {
+		assert.ok(STYLE_RESOLVER.test(line), `must count as a resolver: ${line}`);
+	}
+	assert.ok(
+		!STYLE_RESOLVER.test("\tconst u = maptilerStyleUrl('hybrid', key);"),
+		'the raw endpoint must not satisfy the resolver requirement',
+	);
+});
+
 test('no MapLibre paint value is a CSS expression MapLibre cannot parse', () => {
 	const offenders: string[] = [];
 	for (const key of Object.keys(MAP_SURFACES)) {

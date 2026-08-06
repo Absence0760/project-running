@@ -48,7 +48,7 @@
 	} from '$lib/routes/basemap_contrast';
 	import {
 		basemapIsDarkForSlug,
-		maptilerStyleUrl,
+		styleUrlForSlug,
 		type MaptilerSlug,
 	} from '$lib/routes/map-style-url';
 	import type { TrackPoint } from '$lib/types';
@@ -240,25 +240,21 @@
 		terrain: 'outdoor-v2',
 	};
 
-	// Style URLs honour the PUBLIC_TILE_STYLE_URL override the same
-	// way the other map components do (see `decisions.md § 68`). On a
-	// local Protomaps dev stack we don't have separate satellite /
-	// terrain styles — all three fall back to the single self-hosted
-	// style so the style-switcher buttons in the route-builder UI
-	// still work (they just don't visually differ). On the MapTiler
-	// production path the three distinct slugs are used.
+	// Every rung resolves through the SAME precedence the rest of the app
+	// uses — `styleUrlForSlug`: the PUBLIC_TILE_STYLE_URL override first
+	// (`decisions.md § 68` — a local Protomaps dev stack has no separate
+	// satellite / terrain style, so all three rungs land on the one
+	// self-hosted style and the switcher buttons still work, they just don't
+	// visually differ), then the keyless OSM raster fallback, then the keyed
+	// MapTiler slug. This surface owns WHICH slug it asks for and nothing else:
+	// assembling the URL itself is what left it as the only map in the app that
+	// showed a blank canvas — and no basemap credit — on a missing key.
 	const TILE_STYLE_OVERRIDE = (env.PUBLIC_TILE_STYLE_URL ?? '').trim();
-	const MAP_STYLES: Record<string, string> = TILE_STYLE_OVERRIDE.length > 0
-		? {
-			streets: TILE_STYLE_OVERRIDE,
-			satellite: TILE_STYLE_OVERRIDE,
-			terrain: TILE_STYLE_OVERRIDE,
-		}
-		: {
-			streets: maptilerStyleUrl(BUILDER_SLUGS.streets, PUBLIC_MAPTILER_KEY),
-			satellite: maptilerStyleUrl(BUILDER_SLUGS.satellite, PUBLIC_MAPTILER_KEY),
-			terrain: maptilerStyleUrl(BUILDER_SLUGS.terrain, PUBLIC_MAPTILER_KEY),
-		};
+	const MAP_STYLES: Record<string, string> = {
+		streets: styleUrlForSlug(BUILDER_SLUGS.streets, PUBLIC_MAPTILER_KEY, TILE_STYLE_OVERRIDE),
+		satellite: styleUrlForSlug(BUILDER_SLUGS.satellite, PUBLIC_MAPTILER_KEY, TILE_STYLE_OVERRIDE),
+		terrain: styleUrlForSlug(BUILDER_SLUGS.terrain, PUBLIC_MAPTILER_KEY, TILE_STYLE_OVERRIDE),
+	};
 
 	const darkBasemap = $derived(
 		basemapIsDarkForSlug(BUILDER_SLUGS[mapStyle], PUBLIC_MAPTILER_KEY, TILE_STYLE_OVERRIDE),
