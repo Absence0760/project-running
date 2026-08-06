@@ -841,7 +841,21 @@ What breaks it is almost never a page. Five mechanisms account for every failure
 
 **Measure the narrowest fit, not the pass at 320.** Bisect the viewport width at which a route stops fitting; that number is renderer-independent, and "passes at 320" is not. CI's Linux font stack measures 12-20 px wider than macOS, which is how a route with a 318 px narrowest fit passed a developer's 320 px check and failed CI at 330 (§ 535 amendment). Keep new surfaces at or under ~280 px.
 
-`tests-e2e/cross-cutting/reflow-narrow-viewport.spec.ts` drives 16 routes at 300, 320 and 360 px — the 300 px row is renderer headroom, not a stricter reading of the criterion. Add a route to it when you add a surface with a grid, a toolbar or a table.
+`tests-e2e/cross-cutting/reflow-narrow-viewport.spec.ts` drives 16 routes at 300, 320 and 360 px — the 300 px row is renderer headroom, not a stricter reading of the criterion. Add a route to it when you add a surface with a grid, a toolbar or a table. The measurement contract itself lives in `tests-e2e/fixtures/reflow.ts`, shared with `reflow-seeded-routes.spec.ts`, which supplies runtime fixtures for the five families that render from no seed.
+
+**A "0 elements measured" result is a missing anchor until you have ruled that out.** The reflow measurement is taken inside the page region, so a route with no `<main>` reports zero content no matter what is in the database — and that reads exactly like absent fixtures. Confirm the landmark exists before attributing an empty measurement to data ([decisions.md § 543](decisions.md)).
+
+## A shell-less route owns its own `<main>` landmark
+
+`+layout.svelte` renders three branches. The signed-in shell and the anon-allowed content branch each wrap the slot in `<main id="main-content">` behind a skip link. The third — `isShellless()`, covering `/`, `/login`, the `/auth/*` flows, `/onboarding`, `/safety/confirm`, and everything under `/share/`, `/live/`, `/learn`, `/clubs/join/` and `/coaching/accept/` — renders a bare `<slot />` and gives its routes nothing. **A page added to that family must render its own `<main id="main-content">`, in every branch a visitor can reach**, or it ships with no main region at all (WCAG 1.3.1). Eleven of twenty-four did; see § 543.
+
+Two things make this easy to get wrong:
+
+- **Put the landmark on an element that already exists** where that element is a flex child of the page shell (`<section class="hero">` becomes `<main class="hero">`). A new wrapper moves the flex child and reflows the page. Wrap only where the child centres itself inside any full-width parent.
+- **Every branch of the chain needs one, not just the one you were looking at.** The commonest form of this defect is a landmark in the *not-found* card while the found entity renders a bare `<section>` — which passes any "does this file contain a `<main>`" check. `src/lib/shellless_landmark_guards.test.ts` derives the family from the layout and enforces branch consistency; a landmark in some branches of a top-level `{#if}` chain but not others fails it.
+
+Do **not** solve this by putting one `<main>` in a shared wrapper like `SharePageShell`: it nests each page's `<header>` inside `main`, demoting it from `banner`, and `recap/share/[id]` uses that component while sitting inside the layout's own `<main>`, which would produce two landmarks.
+
 ## A sentence is a catalogue key, not a template plus a fragment
 
 A message that interpolates a fragment carrying its own grammar will double it. The notification templates said `"{name} gave kudos to your {dist}"` and filled `{dist}` with `"your run"` when a run had no recorded distance, so every locale shipped a doubled possessive: "your your run", "deinem deinen Lauf", "a tu tu carrera", "à ton ta course", "à sua sua corrida", "あなたのあなたのラン" ([decisions.md § 536](decisions.md); mobile's twin was `profileNotifYourRun`).
