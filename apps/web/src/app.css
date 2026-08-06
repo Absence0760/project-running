@@ -19,6 +19,15 @@
 	   branches below flip this to `dark`. */
 	color-scheme: light;
 
+	/* Sign of the inline axis, +1 in LTR and -1 in RTL. `transform`,
+	   `transform-origin` and a `box-shadow` x-offset have no logical forms, so a
+	   decorative nudge, a drain direction or a leading-edge accent rail written
+	   physically cannot mirror on its own — multiply the offset by this instead.
+	   The rtl branch is keyed off the `dir` attribute the i18n runtime stamps on
+	   <html> (i18n/store.svelte.ts), the same single switch-point app.html
+	   documents. Guarded by lib/rtl_css_guards.test.ts. */
+	--dir-sign: 1;
+
 	--color-primary: #2C5F6E;
 	--color-primary-hover: #1F4854;
 	--color-primary-light: rgba(44, 95, 110, 0.10);
@@ -365,6 +374,14 @@
 	--z-modal: 201;
 	--z-toast: 300;
 	--z-cookie: 400;
+}
+
+/* The one place the inline axis flips. Written against the attribute rather
+   than a locale list so it holds for any RTL locale added later — none of the
+   six shipped today is RTL, so this is reachable only by forcing `dir` (which
+   is what tests-e2e/cross-cutting/rtl-layout.spec.ts does). */
+:root[dir='rtl'] {
+	--dir-sign: -1;
 }
 
 /* Narrow viewports: the same breakpoint at which the sidebar locks to
@@ -761,7 +778,10 @@ img {
 	background: var(--color-primary);
 	color: #fff;
 	text-decoration: none;
-	border-radius: 0 0 var(--radius-md) 0;
+	/* Pinned to the inline-start corner, so the one rounded corner is the
+	   block-end/inline-end one. The physical `0 0 X 0` shorthand kept it
+	   bottom-right even when the pill itself mirrored to the right edge. */
+	border-end-end-radius: var(--radius-md);
 	transform: translateY(-100%);
 	transition: transform 0.1s ease;
 }

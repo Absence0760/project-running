@@ -169,7 +169,12 @@
 		inset-inline-start: 0;
 		height: 2px;
 		background: var(--color-primary);
-		transform-origin: left center;
+		/* Drain from the bar's inline-start edge. `transform-origin` has no
+		   logical keyword and its percentages are measured from the physical
+		   left, so the inline-start edge is 0% in LTR and 100% in RTL — which
+		   is what this maps --dir-sign onto. A plain `left center` drained from
+		   the wrong end once the bar itself mirrored. */
+		transform-origin: calc((1 - var(--dir-sign)) * 50%) center;
 		animation-name: undo-countdown;
 		animation-timing-function: linear;
 		animation-fill-mode: forwards;

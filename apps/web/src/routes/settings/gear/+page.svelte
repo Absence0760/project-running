@@ -1066,7 +1066,7 @@
 	}
 	.gear-row.is-default {
 		border-color: var(--color-primary);
-		box-shadow: inset 3px 0 0 var(--color-primary);
+		box-shadow: inset calc(3px * var(--dir-sign)) 0 0 var(--color-primary);
 	}
 	.default-pill {
 		display: inline-flex;
