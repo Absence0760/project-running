@@ -1,6 +1,14 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme, EmptyState;
+import 'package:ui_kit/ui_kit.dart' show
+        AppSemanticColors,
+        AppTheme,
+        ChoiceChipOption,
+        ChoiceChipRow,
+        EmptyState,
+        ProgressBar,
+        StatusPill,
+        StatusPillSize;
 
 import '../gear_backfill.dart';
 import '../gear_wear.dart';
@@ -316,21 +324,21 @@ class _GearScreenState extends State<GearScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: SegmentedButton<String>(
-              segments: [
-                ButtonSegment(
+            child: ChoiceChipRow<String>(
+              options: [
+                ChoiceChipOption(
                   value: 'shoe',
-                  label: Text(l10n.gearShoes),
-                  icon: const Icon(Icons.directions_run),
+                  label: l10n.gearShoes,
+                  icon: Icons.directions_run,
                 ),
-                ButtonSegment(
+                ChoiceChipOption(
                   value: 'bike',
-                  label: Text(l10n.gearBikes),
-                  icon: const Icon(Icons.directions_bike),
+                  label: l10n.gearBikes,
+                  icon: Icons.directions_bike,
                 ),
               ],
-              selected: {_activeKind},
-              onSelectionChanged: (s) => setState(() => _activeKind = s.first),
+              selected: _activeKind,
+              onChanged: (v) => setState(() => _activeKind = v),
             ),
           ),
           Expanded(
@@ -395,26 +403,12 @@ class _GearScreenState extends State<GearScreen> {
       _ => (Colors.transparent, Colors.transparent, Icons.circle, ''),
     };
     if (label.isEmpty) return null;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: fg),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
+    return StatusPill(
+      label: label,
+      foreground: fg,
+      fill: bg,
+      icon: icon,
+      size: StatusPillSize.compact,
     );
   }
 
@@ -474,18 +468,18 @@ class _GearScreenState extends State<GearScreen> {
                               color: theme.colorScheme.onSurfaceVariant)),
                     const SizedBox(height: 6),
                     if (hasTarget)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: prog.pct,
-                          minHeight: 6,
-                          color: switch (wear.status) {
-                            GearWearStatus.due =>
-                              AppSemanticColors.ofTheme(theme).warning,
-                            GearWearStatus.worn => theme.colorScheme.error,
-                            _ => null,
-                          },
-                        ),
+                      ProgressBar(
+                        value: prog.pct,
+                        // Not colorScheme.error: it is 2.991:1 against the
+                        // bar's track in light. danger is the token that
+                        // clears it.
+                        fill: switch (wear.status) {
+                          GearWearStatus.due =>
+                            AppSemanticColors.ofTheme(theme).warning,
+                          GearWearStatus.worn =>
+                            AppSemanticColors.ofTheme(theme).danger,
+                          _ => null,
+                        },
                       ),
                     const SizedBox(height: 4),
                     Row(

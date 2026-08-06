@@ -10,6 +10,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
 import 'package:uuid/uuid.dart';
 
 import '../auth_error.dart';
@@ -1611,49 +1612,32 @@ class _ModeToggle extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: theme.dividerColor),
       ),
-      child: SegmentedButton<RouteBuilderMode>(
-        // User reported "the text wraps to the next line for Road
-        // and Straight items." Default SegmentedButton labels can
-        // wrap when the segment width is constrained by the FAB
-        // column / map. Pin maxLines=1 + softWrap=false so the
-        // labels stay on a single line; the icon stays inline,
-        // so a really cramped viewport still reads "🏔 Trail",
-        // "🚗 Road", "📏 Straight" each as one chip.
-        segments: [
-          ButtonSegment(
+      // The earlier field report here — "the text wraps to the next line for
+      // Road and Straight items" — was the segmented control dividing the map
+      // overlay's width three ways. `maxLines: 1` + a fade stopped the wrap
+      // and started losing characters instead: Spanish "Sendero" got 36.7 px
+      // of the 52.5 it needs at 320 dp / 1.0x. Chips are sized by their own
+      // labels and the run reflows, so neither happens.
+      child: ChoiceChipRow<RouteBuilderMode>(
+        options: [
+          ChoiceChipOption(
             value: RouteBuilderMode.trail,
-            label: Text(
-              l10n.routeBuilderModeTrail,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.fade,
-            ),
-            icon: const Icon(Icons.terrain),
+            label: l10n.routeBuilderModeTrail,
+            icon: Icons.terrain,
           ),
-          ButtonSegment(
+          ChoiceChipOption(
             value: RouteBuilderMode.road,
-            label: Text(
-              l10n.routeBuilderModeRoad,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.fade,
-            ),
-            icon: const Icon(Icons.directions_car),
+            label: l10n.routeBuilderModeRoad,
+            icon: Icons.directions_car,
           ),
-          ButtonSegment(
+          ChoiceChipOption(
             value: RouteBuilderMode.straight,
-            label: Text(
-              l10n.routeBuilderModeStraight,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.fade,
-            ),
-            icon: const Icon(Icons.straighten),
+            label: l10n.routeBuilderModeStraight,
+            icon: Icons.straighten,
           ),
         ],
-        selected: {mode},
-        onSelectionChanged:
-            onChanged == null ? null : (s) => onChanged!(s.first),
+        selected: mode,
+        onChanged: onChanged,
       ),
     );
   }

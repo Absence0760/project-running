@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatGrid, StatTile;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatGrid, StatTile, StatusPill;
 
 import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
@@ -2243,28 +2243,12 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.20)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+    return StatusPill(
+      label: label,
+      foreground: color,
+      fill: color.withValues(alpha: 0.10),
+      outline: color.withValues(alpha: 0.20),
+      icon: icon,
     );
   }
 }

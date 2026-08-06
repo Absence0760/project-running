@@ -16,7 +16,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ui_kit/ui_kit.dart' show EmptyState, ListSkeleton;
+import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow, EmptyState, ListSkeleton;
 
 import '../l10n/gen/app_localizations.dart';
 import '../reactive_ble_watch_transport.dart';
@@ -549,17 +549,16 @@ class _ScreenCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: SegmentedButton<WatchLayout>(
-                segments: [
+              child: ChoiceChipRow<WatchLayout>(
+                options: [
                   for (final layout in WatchLayout.values)
-                    ButtonSegment(
+                    ChoiceChipOption(
                       value: layout,
-                      label: Text(watchLayoutLabel(l10n, layout)),
+                      label: watchLayoutLabel(l10n, layout),
                     ),
                 ],
-                selected: {draft.layout},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) => onLayout(s.first),
+                selected: draft.layout,
+                onChanged: onLayout,
               ),
             ),
             const SizedBox(height: 8),

@@ -1,6 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ProgressBar;
 
 import '../exercise_history.dart';
 import '../l10n/date_format.dart';
@@ -220,15 +220,7 @@ class _GymExerciseScreenState extends State<GymExerciseScreen> {
               ),
               if (s.bestEst1RmKg != null) ...[
                 const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: _barFraction(s, p),
-                    minHeight: 6,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
+                ProgressBar(value: _barFraction(s, p)),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 16,

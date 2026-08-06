@@ -136,6 +136,12 @@ const _derivedAllowlist = <_Family, Map<String, int>>{
     // `_SetPip` builds a (colour, icon) pair and the colour reaches nothing but
     // `Icon(color:)` — the pip has no label of its own.
     'lib/widgets/gym_execution_band.dart': 1,
+    // `StatusPill(outline:)` — a `Border.all` one frame away, inside ui_kit,
+    // where the classifier can no longer see the constructor. The pill splits
+    // its colours by role, so a boundary token reaching `foreground:` (the
+    // label) instead would be a real defect this entry does NOT cover: it is
+    // count-pinned at the one site that outlines a pill in the line token.
+    'lib/screens/coaching_athlete_screen.dart': 1,
   },
   _Family.palette: {
     // Each of these holds the scale (or one entry of it) in a local and paints

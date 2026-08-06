@@ -649,14 +649,7 @@ class _SessionExecutionBand extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 8,
-                backgroundColor: theme.dividerColor,
-              ),
-            ),
+            ProgressBar(value: progress),
           ],
           if (step.cue != null && step.cue!.isNotEmpty) ...[
             const SizedBox(height: 16),

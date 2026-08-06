@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, TextLane;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChoiceChipOption, ChoiceChipRow, TextLane;
 
 import '../auth_error.dart';
 import '../goals.dart';
@@ -155,20 +155,19 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
             const SizedBox(height: 24),
             FormSectionLabel(l10n.goalEditorPeriod),
             const SizedBox(height: 8),
-            SegmentedButton<GoalPeriod>(
-              showSelectedIcon: false,
-              segments: [
-                ButtonSegment(
+            ChoiceChipRow<GoalPeriod>(
+              options: [
+                ChoiceChipOption(
                   value: GoalPeriod.week,
-                  label: Text(l10n.goalEditorThisWeek),
+                  label: l10n.goalEditorThisWeek,
                 ),
-                ButtonSegment(
+                ChoiceChipOption(
                   value: GoalPeriod.month,
-                  label: Text(l10n.goalEditorThisMonth),
+                  label: l10n.goalEditorThisMonth,
                 ),
               ],
-              selected: {_period},
-              onSelectionChanged: (s) => setState(() => _period = s.first),
+              selected: _period,
+              onChanged: (v) => setState(() => _period = v),
             ),
             const SizedBox(height: 24),
             FormSectionLabel(l10n.goalEditorTargets),

@@ -3,7 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:ui_kit/ui_kit.dart'
-    show AppSemanticColors, ChartCardHeader, ChartPalette;
+    show AppSemanticColors, ChartCardHeader, ChartPalette, ProgressBar;
 
 import '../adaptive_width.dart';
 import '../age_grade.dart';
@@ -1601,14 +1601,7 @@ class _TargetRow extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: t.percent,
-            minHeight: 6,
-            color: accent,
-          ),
-        ),
+        ProgressBar(value: t.percent, fill: accent),
         const SizedBox(height: 5),
         Row(
           children: [

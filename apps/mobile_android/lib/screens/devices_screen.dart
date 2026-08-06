@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
+import 'package:ui_kit/ui_kit.dart' show ListSkeleton, StatusPill, StatusPillSize;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -241,22 +241,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                     child: Text(d.label ?? d.platform),
                                   ),
                                   if (isCurrent)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.primaryContainer,
-                                        borderRadius:
-                                            BorderRadius.circular(999),
-                                      ),
-                                      child: Text(
-                                        l10n.devicesThisDevice,
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                          color: theme
-                                              .colorScheme.onPrimaryContainer,
-                                        ),
-                                      ),
+                                    StatusPill(
+                                      label: l10n.devicesThisDevice,
+                                      foreground: theme
+                                          .colorScheme.onPrimaryContainer,
+                                      fill:
+                                          theme.colorScheme.primaryContainer,
+                                      size: StatusPillSize.compact,
                                     ),
                                 ],
                               ),

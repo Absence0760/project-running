@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show StatusPill;
 
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -337,22 +338,10 @@ class _RouteConditionsState extends State<RouteConditions> {
                   child: Row(
                     children: [
                       Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: sevColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            routeConditionKindLabel(l10n, c.condition),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: sevColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                        child: StatusPill(
+                          label: routeConditionKindLabel(l10n, c.condition),
+                          foreground: sevColor,
+                          fill: sevColor.withValues(alpha: 0.12),
                         ),
                       ),
                       const SizedBox(width: 8),

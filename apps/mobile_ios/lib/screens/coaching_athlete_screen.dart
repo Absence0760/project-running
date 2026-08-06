@@ -1,7 +1,14 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton, TextLane;
+import 'package:ui_kit/ui_kit.dart'
+    show
+        IdentityAvatar,
+        ListSkeleton,
+        ProgressBar,
+        StatusPill,
+        StatusPillSize,
+        TextLane;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -303,30 +310,17 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
             ),
             if (_assignedByMe) ...[
               const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(l10n.coachingAthleteAssignedByYou,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w700,
-                    )),
+              StatusPill(
+                label: l10n.coachingAthleteAssignedByYou,
+                foreground: theme.colorScheme.onPrimaryContainer,
+                fill: theme.colorScheme.primaryContainer,
+                size: StatusPillSize.compact,
               ),
             ],
           ],
         ),
         const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: (pct / 100).clamp(0.0, 1.0),
-            minHeight: 8,
-          ),
-        ),
+        ProgressBar(value: (pct / 100).clamp(0.0, 1.0)),
         const SizedBox(height: 6),
         Text.rich(
           TextSpan(children: [
@@ -419,15 +413,11 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(label,
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: color, fontWeight: FontWeight.w700)),
+          StatusPill(
+            label: label,
+            foreground: color,
+            fill: color.withValues(alpha: 0.16),
+            size: StatusPillSize.compact,
           ),
         ],
       ),
@@ -493,17 +483,11 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
           if (!r.isPublic)
             Padding(
               padding: const EdgeInsets.only(left: 6),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
-                decoration: BoxDecoration(
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(l10n.coachingAthletePrivate,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    )),
+              child: StatusPill(
+                label: l10n.coachingAthletePrivate,
+                foreground: theme.colorScheme.onSurfaceVariant,
+                outline: theme.colorScheme.outlineVariant,
+                size: StatusPillSize.compact,
               ),
             ),
         ],
