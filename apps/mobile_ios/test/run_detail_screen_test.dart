@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/detail_map_height.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
@@ -751,9 +752,14 @@ void main() {
       await _pump(tester, run);
 
       final mapRect = tester.getRect(find.byType(LiveRunMap));
-      expect(mapRect.height, closeTo(280, 1));
+      // The hero is a share of the scroll viewport, not a fixed strip (#666
+      // C9), so the assertion is the derivation: 800dp logical less the
+      // AppBar leaves a 744dp viewport.
+      expect(mapRect.height, closeTo(detailMapHeight(800 - kToolbarHeight), 1));
       final distanceRect = tester.getRect(find.text('Distance'));
       expect(distanceRect.top, greaterThan(mapRect.bottom));
+      expect(800 - kToolbarHeight - mapRect.height,
+          greaterThanOrEqualTo(kDetailMapMinPeek));
     });
   });
 

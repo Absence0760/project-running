@@ -13,6 +13,7 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatGrid, StatTile;
 import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
 import '../backend_timeout.dart';
+import '../detail_map_height.dart';
 import '../dev_auto_login.dart' show isLocalSupabaseUrl;
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -1058,99 +1059,137 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: ListView(
-          controller: _scrollController,
-          children: [
-            // Keep the map alive across ListView scroll. A bare list child is
-            // disposed once it scrolls past the cache extent, tearing down the
-            // FlutterMap + MapController; scrolling back rebuilt it from
-            // scratch — a visible tile reload plus a jank spike. Keeping it
-            // alive also pauses its pulse ticker while off-screen.
-            _KeepAliveMap(
-              child: SizedBox(
-                height: 320,
-                child: LiveRunMap(
-                  track: const [],
-                  plannedRoute: _displayWaypoints,
-                  followRunner: false,
-                  courseMarkers: _markerPins,
-                  markerPlacing: _markerPlacing,
-                  onMarkerPlace: (wp) =>
-                      _markersPanelKey.currentState?.placeAt(wp),
-                  onMarkerTap: (id) =>
-                      _markersPanelKey.currentState?.selectMarker(id),
-                  // Only mount the preview-runner pulse while the user
-                  // is actually scrubbing — releasing the thumb fades
-                  // back to the static polyline view so the marker
-                  // doesn't sit at the start indefinitely after a
-                  // single drag.
-                  previewPosition: _scrubbing
-                      ? interpolateAlongRoute(
-                          _displayWaypoints,
-                          _scrubFraction,
-                        )
-                      : null,
+        child: LayoutBuilder(
+          builder: (context, viewport) => ListView(
+            controller: _scrollController,
+            children: [
+              // Keep the map alive across ListView scroll. A bare list child is
+              // disposed once it scrolls past the cache extent, tearing down the
+              // FlutterMap + MapController; scrolling back rebuilt it from
+              // scratch — a visible tile reload plus a jank spike. Keeping it
+              // alive also pauses its pulse ticker while off-screen.
+              _KeepAliveMap(
+                child: SizedBox(
+                  height: detailMapHeight(viewport.maxHeight),
+                  child: LiveRunMap(
+                    track: const [],
+                    plannedRoute: _displayWaypoints,
+                    followRunner: false,
+                    courseMarkers: _markerPins,
+                    markerPlacing: _markerPlacing,
+                    onMarkerPlace: (wp) =>
+                        _markersPanelKey.currentState?.placeAt(wp),
+                    onMarkerTap: (id) =>
+                        _markersPanelKey.currentState?.selectMarker(id),
+                    // Only mount the preview-runner pulse while the user
+                    // is actually scrubbing — releasing the thumb fades
+                    // back to the static polyline view so the marker
+                    // doesn't sit at the start indefinitely after a
+                    // single drag.
+                    previewPosition: _scrubbing
+                        ? interpolateAlongRoute(
+                            _displayWaypoints,
+                            _scrubFraction,
+                          )
+                        : null,
+                  ),
                 ),
               ),
-            ),
-            // Diagnostic for the "I'm still not seeing the map"
-            // user report — when `MAPTILER_KEY` isn't set in
-            // `.env.local`, the LiveRunMap above renders the
-            // polyline on a blank grey backdrop (the tile fetch
-            // returns 401 with an empty key). The hint widget
-            // surfaces the exact fix-instruction instead of the
-            // user having to scroll logs.
-            const MissingMapTilesHint(),
-            // Route preview scrubber — drag the thumb to see the
-            // direction of the run. Hidden when the polyline is too
-            // short to interpolate (`< 2` waypoints — clipped-to-
-            // empty privacy outcome or a degenerate route).
-            if (_displayWaypoints.length >= 2)
-              _RoutePreviewScrubber(
-                fraction: _scrubFraction,
-                totalDistanceM: route.distanceMetres,
-                unit: unit,
-                onChangeStart: () => setState(() => _scrubbing = true),
-                onChanged: (f) => setState(() => _scrubFraction = f),
-                onChangeEnd: () => setState(() => _scrubbing = false),
-              ),
+              // Diagnostic for the "I'm still not seeing the map"
+              // user report — when `MAPTILER_KEY` isn't set in
+              // `.env.local`, the LiveRunMap above renders the
+              // polyline on a blank grey backdrop (the tile fetch
+              // returns 401 with an empty key). The hint widget
+              // surfaces the exact fix-instruction instead of the
+              // user having to scroll logs.
+              const MissingMapTilesHint(),
+              // Route preview scrubber — drag the thumb to see the
+              // direction of the run. Hidden when the polyline is too
+              // short to interpolate (`< 2` waypoints — clipped-to-
+              // empty privacy outcome or a degenerate route).
+              if (_displayWaypoints.length >= 2)
+                _RoutePreviewScrubber(
+                  fraction: _scrubFraction,
+                  totalDistanceM: route.distanceMetres,
+                  unit: unit,
+                  onChangeStart: () => setState(() => _scrubbing = true),
+                  onChanged: (f) => setState(() => _scrubFraction = f),
+                  onChangeEnd: () => setState(() => _scrubbing = false),
+                ),
 
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: StatGrid(
-                cells: [
-                  StatTile.large(
-                    label: l10n.routeDetailStatDistance,
-                    value: UnitFormat.distanceValue(route.distanceMetres, unit),
-                    unit: UnitFormat.distanceLabel(unit),
-                  ),
-                  StatTile.large(
-                    label: l10n.routeDetailStatElevation,
-                    value: '${route.elevationGainMetres.round()}',
-                    unit: 'm',
-                  ),
-                  if (_avgRating > 0)
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: StatGrid(
+                  cells: [
                     StatTile.large(
-                      label: l10n.routeDetailStatReviews(_reviews.length),
-                      value: formatFixed(_avgRating, 1, activeLocaleTag),
-                      unit: '/ 5',
-                    )
-                  else
-                    StatTile.large(
-                      label: l10n.routeDetailStatWaypoints,
-                      value: '${route.waypoints.length}',
+                      label: l10n.routeDetailStatDistance,
+                      value: UnitFormat.distanceValue(route.distanceMetres, unit),
+                      unit: UnitFormat.distanceLabel(unit),
                     ),
-                ],
+                    StatTile.large(
+                      label: l10n.routeDetailStatElevation,
+                      value: '${route.elevationGainMetres.round()}',
+                      unit: 'm',
+                    ),
+                    if (_avgRating > 0)
+                      StatTile.large(
+                        label: l10n.routeDetailStatReviews(_reviews.length),
+                        value: formatFixed(_avgRating, 1, activeLocaleTag),
+                        unit: '/ 5',
+                      )
+                    else
+                      StatTile.large(
+                        label: l10n.routeDetailStatWaypoints,
+                        value: '${route.waypoints.length}',
+                      ),
+                  ],
+                ),
               ),
-            ),
 
-            // Inline Visibility row for the route owner — surfaced
-            // here in the body (in addition to the AppBar icon) so
-            // the affordance is impossible to miss. Pre-fix, users
-            // who didn't notice the small globe icon in the AppBar
-            // couldn't figure out how to make their routes public
-            // on mobile.
-            if (widget.isOwner)
+              // Inline Visibility row for the route owner — surfaced
+              // here in the body (in addition to the AppBar icon) so
+              // the affordance is impossible to miss. Pre-fix, users
+              // who didn't notice the small globe icon in the AppBar
+              // couldn't figure out how to make their routes public
+              // on mobile.
+              if (widget.isOwner)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Row(
+                      children: [
+                        Icon(
+                          _isPublic ? Icons.public : Icons.lock_outline,
+                          size: 20,
+                          color: _isPublic
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _isPublic
+                                ? l10n.routeDetailPublicRoute
+                                : l10n.routeDetailPrivateRoute,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      _isPublic
+                          ? l10n.routeDetailPublicSubtitle
+                          : l10n.routeDetailPrivateSubtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    value: _isPublic,
+                    onChanged: _publicBusy ? null : (_) => _togglePublic(),
+                  ),
+                ),
+
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
                 child: SwitchListTile(
@@ -1158,343 +1197,307 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   title: Row(
                     children: [
                       Icon(
-                        _isPublic ? Icons.public : Icons.lock_outline,
+                        _isOfflinePinned
+                            ? Icons.download_done
+                            : Icons.download_outlined,
                         size: 20,
-                        color: _isPublic
-                            ? Theme.of(context).colorScheme.primary
+                        color: _isOfflinePinned
+                            ? semantic.success
                             : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          _isPublic
-                              ? l10n.routeDetailPublicRoute
-                              : l10n.routeDetailPrivateRoute,
+                          _isOfflinePinned
+                              ? l10n.routeDetailSavedForOffline
+                              : l10n.routeDetailSaveForOfflineTitle,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                   subtitle: Text(
-                    _isPublic
-                        ? l10n.routeDetailPublicSubtitle
-                        : l10n.routeDetailPrivateSubtitle,
+                    _isOfflinePinned
+                        ? l10n.routeDetailOfflinePinnedSubtitle
+                        : l10n.routeDetailOfflineUnpinnedSubtitle,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
-                  value: _isPublic,
-                  onChanged: _publicBusy ? null : (_) => _togglePublic(),
+                  value: _isOfflinePinned,
+                  onChanged: _offlinePinBusy ? null : (_) => _toggleOfflinePin(),
                 ),
               ),
 
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-              child: SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Row(
-                  children: [
-                    Icon(
-                      _isOfflinePinned
-                          ? Icons.download_done
-                          : Icons.download_outlined,
-                      size: 20,
-                      color: _isOfflinePinned
-                          ? semantic.success
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _isOfflinePinned
-                            ? l10n.routeDetailSavedForOffline
-                            : l10n.routeDetailSaveForOfflineTitle,
-                        overflow: TextOverflow.ellipsis,
+              if (route.description != null && route.description!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.routeDetailDescriptionHeading,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        route.description!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: _describeBlock(theme, l10n),
                 ),
-                subtitle: Text(
-                  _isOfflinePinned
-                      ? l10n.routeDetailOfflinePinnedSubtitle
-                      : l10n.routeDetailOfflineUnpinnedSubtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+
+              // Surface + run-count + featured metadata. Left-aligned
+              // (was centered + orphaned-feeling) and uses the same
+              // chip language as the new VerifiedBadge / sync-pill
+              // affordances elsewhere.
+              if (route.surface != null ||
+                  route.runCount > 0 ||
+                  route.featured)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      if (route.surface != null)
+                        _MetaChip(
+                          icon: _surfaceIcon(route.surface!),
+                          label: _surfaceLabel(l10n, route.surface!),
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      if (route.runCount > 0)
+                        _MetaChip(
+                          icon: Icons.directions_run,
+                          label: l10n.routeDetailRunCount(route.runCount),
+                          color: theme.colorScheme.primary,
+                        ),
+                      if (route.featured)
+                        _MetaChip(
+                          icon: Icons.star,
+                          label: l10n.routeDetailFeatured,
+                          color: semantic.crown,
+                        ),
+                    ],
+                  ),
                 ),
-                value: _isOfflinePinned,
-                onChanged: _offlinePinBusy ? null : (_) => _toggleOfflinePin(),
-              ),
-            ),
 
-            if (route.description != null && route.description!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.routeDetailDescriptionHeading,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      route.description!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                child: _describeBlock(theme, l10n),
-              ),
-
-            // Surface + run-count + featured metadata. Left-aligned
-            // (was centered + orphaned-feeling) and uses the same
-            // chip language as the new VerifiedBadge / sync-pill
-            // affordances elsewhere.
-            if (route.surface != null ||
-                route.runCount > 0 ||
-                route.featured)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    if (route.surface != null)
-                      _MetaChip(
-                        icon: _surfaceIcon(route.surface!),
-                        label: _surfaceLabel(l10n, route.surface!),
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    if (route.runCount > 0)
-                      _MetaChip(
-                        icon: Icons.directions_run,
-                        label: l10n.routeDetailRunCount(route.runCount),
-                        color: theme.colorScheme.primary,
-                      ),
-                    if (route.featured)
-                      _MetaChip(
-                        icon: Icons.star,
-                        label: l10n.routeDetailFeatured,
-                        color: semantic.crown,
-                      ),
-                  ],
-                ),
-              ),
-
-            // Tags — display + owner-only inline editor.
-            _RouteTagsRow(
-              route: route,
-              isOwner: _isOwner,
-              apiClient: widget.apiClient,
-              onChange: (next) {
-                setState(() => _tags = next);
-              },
-              initialTags: _tags,
-            ),
-
-            const Divider(),
-
-            // Course markers — aid stations, cutoffs, crew access, etc.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-              child: RouteMarkersPanel(
-                key: _markersPanelKey,
-                api: widget.apiClient,
-                routeId: route.id,
+              // Tags — display + owner-only inline editor.
+              _RouteTagsRow(
+                route: route,
                 isOwner: _isOwner,
-                viewerId: widget.apiClient?.userId,
-                routeOwnerId: widget.route.userId,
-                routeLine: _displayWaypoints,
-                onPinsChanged: (pins) {
-                  if (mounted) setState(() => _markerPins = pins);
+                apiClient: widget.apiClient,
+                onChange: (next) {
+                  setState(() => _tags = next);
                 },
-                onPlacingChanged: (placing) {
-                  if (!mounted) return;
-                  setState(() => _markerPlacing = placing);
-                  if (placing) _revealMap();
-                },
+                initialTags: _tags,
               ),
-            ),
-            if (_markerPins.isNotEmpty)
+
+              const Divider(),
+
+              // Course markers — aid stations, cutoffs, crew access, etc.
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => RoadbookScreen(
-                        route: widget.route,
-                        waypoints: _displayWaypoints,
-                        api: widget.apiClient,
-                        preferences: widget.preferences,
-                      ),
-                    ),
-                  ),
-                  icon: const Icon(Icons.table_chart_outlined, size: 18),
-                  label: Text(AppLocalizations.of(context).roadbookCrewSheet),
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+                child: RouteMarkersPanel(
+                  key: _markersPanelKey,
+                  api: widget.apiClient,
+                  routeId: route.id,
+                  isOwner: _isOwner,
+                  viewerId: widget.apiClient?.userId,
+                  routeOwnerId: widget.route.userId,
+                  routeLine: _displayWaypoints,
+                  onPinsChanged: (pins) {
+                    if (mounted) setState(() => _markerPins = pins);
+                  },
+                  onPlacingChanged: (placing) {
+                    if (!mounted) return;
+                    setState(() => _markerPlacing = placing);
+                    if (placing) _revealMap();
+                  },
                 ),
               ),
-
-            const Divider(),
-
-            // Segments panel — list segments + leaderboards. Owners
-            // can create new ones; cascades drop their efforts.
-            if (widget.apiClient != null)
-              SegmentsPanel(
-                api: widget.apiClient!,
-                routeId: route.id,
-                routeDistanceM: route.distanceMetres,
-                // Any signed-in viewer can add a segment (community
-                // contribution); only the owner moderates others' segments.
-                canCreate: widget.apiClient?.userId != null,
-                isRouteOwner: _isOwner,
-              ),
-
-            const Divider(),
-
-            // Reviews section
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(l10n.routeDetailReviewsHeading,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium),
-                  ),
-                  TextButton.icon(
-                    onPressed: _submitReview,
-                    icon: const Icon(Icons.rate_review, size: 18),
-                    label: Text(l10n.routeDetailRate),
-                  ),
-                ],
-              ),
-            ),
-
-            if (_loadingReviews)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else if (_reviews.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                child: Text(
-                  _reviewsOffline
-                      ? l10n.routeDetailReviewsOffline
-                      : l10n.routeDetailNoReviews,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              )
-            else
-              ..._reviews.map((review) => Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                ...List.generate(
-                                  5,
-                                  (i) => Icon(
-                                    i < review.rating
-                                        ? Icons.star
-                                        : Icons.star_border,
-                                    size: 16,
-                                    color: AppSemanticColors.of(context).crown,
-                                  ),
-                                ),
-                                const Spacer(),
-                                if (review.createdAt != null)
-                                  Text(
-                                    formatDateShort(review.createdAt!,
-                                        localeToTag(Localizations.localeOf(context))),
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                if (widget.apiClient?.userId != null)
-                                  if (widget.apiClient!.userId != review.userId)
-                                    IconButton(
-                                      icon: const Icon(Icons.flag_outlined, size: 16),
-                                      tooltip: l10n.routeDetailReportReview,
-                                      padding: const EdgeInsets.only(left: 8),
-                                      constraints: const BoxConstraints(
-                                        minWidth: 48,
-                                        minHeight: 48,
-                                      ),
-                                      color: theme.colorScheme.outline,
-                                      onPressed: () => showReportSheet(
-                                        context,
-                                        api: widget.apiClient!,
-                                        targetKind: 'route_review',
-                                        targetId: review.id,
-                                      ),
-                                    )
-                                  else
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, size: 16),
-                                      tooltip: l10n.routeDetailDeleteReview,
-                                      padding: const EdgeInsets.only(left: 8),
-                                      constraints: const BoxConstraints(
-                                        minWidth: 48,
-                                        minHeight: 48,
-                                      ),
-                                      color: theme.colorScheme.outline,
-                                      onPressed: _deleteOwnReview,
-                                    ),
-                              ],
-                            ),
-                            if (review.comment != null &&
-                                review.comment!.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(review.comment!,
-                                  style: theme.textTheme.bodySmall),
-                            ],
-                          ],
+              if (_markerPins.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => RoadbookScreen(
+                          route: widget.route,
+                          waypoints: _displayWaypoints,
+                          api: widget.apiClient,
+                          preferences: widget.preferences,
                         ),
                       ),
                     ),
-                  )),
+                    icon: const Icon(Icons.table_chart_outlined, size: 18),
+                    label: Text(AppLocalizations.of(context).roadbookCrewSheet),
+                  ),
+                ),
 
-            if (widget.apiClient != null) ...[
-              const SizedBox(height: 8),
-              RoutePhotos(
-                api: widget.apiClient!,
-                routeId: widget.route.id,
-                routeOwnerId: widget.route.userId,
+              const Divider(),
+
+              // Segments panel — list segments + leaderboards. Owners
+              // can create new ones; cascades drop their efforts.
+              if (widget.apiClient != null)
+                SegmentsPanel(
+                  api: widget.apiClient!,
+                  routeId: route.id,
+                  routeDistanceM: route.distanceMetres,
+                  // Any signed-in viewer can add a segment (community
+                  // contribution); only the owner moderates others' segments.
+                  canCreate: widget.apiClient?.userId != null,
+                  isRouteOwner: _isOwner,
+                ),
+
+              const Divider(),
+
+              // Reviews section
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(l10n.routeDetailReviewsHeading,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium),
+                    ),
+                    TextButton.icon(
+                      onPressed: _submitReview,
+                      icon: const Icon(Icons.rate_review, size: 18),
+                      label: Text(l10n.routeDetailRate),
+                    ),
+                  ],
+                ),
               ),
-              RouteConditions(
-                api: widget.apiClient!,
-                routeId: widget.route.id,
-                routeOwnerId: widget.route.userId,
-              ),
+
+              if (_loadingReviews)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (_reviews.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: Text(
+                    _reviewsOffline
+                        ? l10n.routeDetailReviewsOffline
+                        : l10n.routeDetailNoReviews,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                ..._reviews.map((review) => Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  ...List.generate(
+                                    5,
+                                    (i) => Icon(
+                                      i < review.rating
+                                          ? Icons.star
+                                          : Icons.star_border,
+                                      size: 16,
+                                      color: AppSemanticColors.of(context).crown,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  if (review.createdAt != null)
+                                    Text(
+                                      formatDateShort(review.createdAt!,
+                                          localeToTag(Localizations.localeOf(context))),
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  if (widget.apiClient?.userId != null)
+                                    if (widget.apiClient!.userId != review.userId)
+                                      IconButton(
+                                        icon: const Icon(Icons.flag_outlined, size: 16),
+                                        tooltip: l10n.routeDetailReportReview,
+                                        padding: const EdgeInsets.only(left: 8),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 48,
+                                          minHeight: 48,
+                                        ),
+                                        color: theme.colorScheme.outline,
+                                        onPressed: () => showReportSheet(
+                                          context,
+                                          api: widget.apiClient!,
+                                          targetKind: 'route_review',
+                                          targetId: review.id,
+                                        ),
+                                      )
+                                    else
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 16),
+                                        tooltip: l10n.routeDetailDeleteReview,
+                                        padding: const EdgeInsets.only(left: 8),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 48,
+                                          minHeight: 48,
+                                        ),
+                                        color: theme.colorScheme.outline,
+                                        onPressed: _deleteOwnReview,
+                                      ),
+                                ],
+                              ),
+                              if (review.comment != null &&
+                                  review.comment!.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(review.comment!,
+                                    style: theme.textTheme.bodySmall),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    )),
+
+              if (widget.apiClient != null) ...[
+                const SizedBox(height: 8),
+                RoutePhotos(
+                  api: widget.apiClient!,
+                  routeId: widget.route.id,
+                  routeOwnerId: widget.route.userId,
+                ),
+                RouteConditions(
+                  api: widget.apiClient!,
+                  routeId: widget.route.id,
+                  routeOwnerId: widget.route.userId,
+                ),
+              ],
+
+              // Trailing bottom-of-scroll padding so the FAB doesn't
+              // sit on top of the last review card.
+              SizedBox(height: fabScrollClearance(context)),
             ],
-
-            // Trailing bottom-of-scroll padding so the FAB doesn't
-            // sit on top of the last review card.
-            SizedBox(height: fabScrollClearance(context)),
-          ],
+          ),
         ),
       ),
     );
