@@ -294,7 +294,7 @@ test('exactly six font-size declarations use the unresolvable em unit', () => {
 // The token every micro-label should reach for. It clears the floor by 0.2 px,
 // which is headroom rather than an exact meet — so, unlike a value that lands ON
 // a floor (§ 522), it survives a small later adjustment. It is deliberately NOT
-// theme- or breakpoint-overridden: a media query that shrank it would move 129
+// theme- or breakpoint-overridden: a media query that shrank it would move 132
 // declarations under the floor at once, which is the bug § 525 closed on
 // `.kind-pill` generalised to the whole tree. `sectionLabelTokenPx` pins the
 // single-declaration half on load.
