@@ -1,0 +1,123 @@
+import { expect, test } from '@playwright/test';
+
+import { USER_A } from '../fixtures/users';
+
+/**
+ * WCAG 1.4.10 reflow: no route may make the document scroll sideways at the
+ * 320 CSS px the criterion names, at the 360 px a common phone reports, nor at
+ * the 300 px this spec adds as renderer headroom (see below).
+ *
+ * The assertion is the derivation, never a pixel (§ 500): a page conforms when
+ * `documentElement.scrollWidth` is no wider than its `clientWidth`. Content
+ * that genuinely cannot reflow — a data table, a segmented control, a course
+ * editor's set grid — is allowed to scroll *inside its own* `overflow-x: auto`
+ * box, which is exactly what that comparison tolerates and a hard px bound
+ * would not.
+ *
+ * The population check is not decoration (§ 534). Every route here is behind
+ * an auth gate or a data fetch, and a page that rendered a spinner, a redirect
+ * stub, or nothing at all trivially fits any viewport. Both halves — a visible
+ * control or heading inside the page region, and a node-count floor under it —
+ * are the weakest pair that still rules that out. A heading alone would not
+ * do: `/routes` and `/plans` carry their title in the surface-tab strip and
+ * have no `h1` in their loaded state at all.
+ *
+ * The 300 px row is headroom, not a stricter reading of the criterion. A page
+ * whose narrowest fit is 318 px passes at 320 on one renderer and fails on
+ * another: CI's Linux font stack measured these routes 12-20 px wider than a
+ * macOS run, which is exactly how `/routes` (318 px narrowest fit locally)
+ * passed here and failed CI at 330. Asserting one viewport below the
+ * requirement converts that invisible 2 px into a visible 20 px, and it is the
+ * same derivation — no absolute width is asserted anywhere (§ 500). Every
+ * guarded route's narrowest fit is at or under 280 px today, so this leaves
+ * real room rather than pinning the current layout.
+ */
+
+const VIEWPORTS = [
+	{ width: 300, height: 720 },
+	{ width: 320, height: 720 },
+	{ width: 360, height: 720 }
+];
+
+/** Enough descendants that a spinner or a redirect stub cannot satisfy it. */
+const MIN_MAIN_NODES = 10;
+
+async function expectReflows(page: import('@playwright/test').Page, route: string) {
+	for (const viewport of VIEWPORTS) {
+		await page.setViewportSize(viewport);
+		await page.goto(route);
+		// Several of these routes paint an auth-gate stub first and fill in
+		// once their fetch lands; measuring the stub would measure nothing.
+		await page.waitForLoadState('networkidle');
+		await expect(
+			page.locator('#main-content').locator('a, button, h1, h2').first()
+		).toBeVisible({ timeout: 15_000 });
+
+		const measured = await page.evaluate(() => {
+			const de = document.documentElement;
+			const main = document.querySelector('#main-content') ?? document.body;
+			return {
+				scrollWidth: de.scrollWidth,
+				clientWidth: de.clientWidth,
+				mainNodes: main.querySelectorAll('*').length
+			};
+		});
+
+		expect(
+			measured.mainNodes,
+			`${route} at ${viewport.width}px rendered ${measured.mainNodes} nodes — too few to be measuring the real page`
+		).toBeGreaterThanOrEqual(MIN_MAIN_NODES);
+
+		expect(
+			measured.scrollWidth,
+			`${route} scrolls horizontally at ${viewport.width}px: scrollWidth ${measured.scrollWidth} vs clientWidth ${measured.clientWidth}`
+		).toBeLessThanOrEqual(measured.clientWidth);
+	}
+}
+
+test.describe('no horizontal document scroll at 300 / 320 / 360 px', () => {
+	test('the cookie notice, whose consent tables scroll in their own box', async ({ page }) => {
+		// Public on purpose: the only route in this spec reachable logged out,
+		// and the one carrying raw <table> markup with no page chrome to hide
+		// behind.
+		await expectReflows(page, '/cookie-notice');
+	});
+
+	test.describe('signed in', () => {
+		test.use({ storageState: USER_A.storageStatePath });
+
+		test.beforeEach(async ({ context }) => {
+			await context.addInitScript(() => {
+				localStorage.setItem(
+					'cookie_consent',
+					JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+				);
+			});
+		});
+
+		// /dashboard is the route the audit named; the rest are the other
+		// shapes the same sweep found — a card grid, a filter toolbar, a
+		// timeline, a settings shell, and the two split/grid editors.
+		for (const route of [
+			'/dashboard',
+			'/runs',
+			'/routes',
+			'/explore',
+			'/history',
+			'/gym',
+			'/nutrition',
+			'/plans',
+			'/challenges',
+			'/coaching',
+			'/sessions',
+			'/settings',
+			'/settings/licenses',
+			'/plans/new',
+			'/gym/routines/new'
+		]) {
+			test(route, async ({ page }) => {
+				await expectReflows(page, route);
+			});
+		}
+	});
+});

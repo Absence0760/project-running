@@ -25,10 +25,10 @@ import 'runs_screen.dart';
 /// The Fitness modality hub — a review/plan destination distinct from the
 /// keep-alive capture pages reached via the centre Log action. A top sub-tab
 /// strip switches between four surfaces:
-///   - All: the unified cross-modal activity timeline (the former standalone
-///     History tab, absorbed here) — `RunsScreen` mounted WITH the gym + food
-///     stores, with its own kind chips suppressed since the hub's TabBar owns
-///     that axis.
+///   - History: the unified cross-modal activity timeline (the former
+///     standalone History tab, absorbed here) — `RunsScreen` mounted WITH the
+///     gym + food stores, with its own kind chips suppressed since the hub's
+///     TabBar owns that axis.
 ///   - Runs: the dedicated offline-first run list (`RunsScreen` WITHOUT a gym
 ///     store) plus a Routes entry, relocated here out of Social.
 ///   - Gym: `GymScreen`.
@@ -59,7 +59,8 @@ class FitnessHubScreen extends StatefulWidget {
   /// run starts on the keep-alive recorder page.
   final void Function(cm.Route route)? onStartRun;
 
-  /// Sub-tab to open on first mount. 0 = All, 1 = Runs, 2 = Gym, 3 = Nutrition.
+  /// Sub-tab to open on first mount. 0 = History, 1 = Runs, 2 = Gym,
+  /// 3 = Nutrition.
   final int initialTab;
 
   const FitnessHubScreen({
@@ -151,7 +152,12 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
         bottom: AppTabBar(
           controller: _controller,
           labels: [
-            l10n.fitnessTabAll,
+            // The hub's tabs are destinations, not kind filters: web's
+            // equivalent of this one IS `/history`, and the RunsScreen it
+            // mounts titles its own AppBar `navHistory` 48dp below. Naming
+            // the tab "All" put two different names for one surface directly
+            // on top of each other (#666 I9).
+            l10n.navHistory,
             l10n.fitnessTabRuns,
             l10n.fitnessTabGym,
             l10n.fitnessTabNutrition,

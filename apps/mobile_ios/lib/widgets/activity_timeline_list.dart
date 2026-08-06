@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart' show ActivityRow;
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show SectionAccents;
 
 import '../activity_timeline.dart';
 import '../l10n/date_format.dart';
@@ -117,7 +118,7 @@ class _ActivityRowTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final (icon, accent) = _glyph(row.kind, theme);
+    final (icon, fill, ink) = _glyph(row.kind, theme);
     final (primary, secondary) = _summary(l10n);
     final tappable =
         row.kind == ActivityRow.kindRun || row.kind == ActivityRow.kindLift;
@@ -126,8 +127,8 @@ class _ActivityRowTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: accent.withValues(alpha: 0.16),
-          child: Icon(icon, color: accent, size: 20),
+          backgroundColor: fill.withValues(alpha: 0.16),
+          child: Icon(icon, color: ink, size: 20),
         ),
         title: Text(primary,
             maxLines: 1, overflow: TextOverflow.ellipsis,
@@ -147,11 +148,21 @@ class _ActivityRowTile extends StatelessWidget {
     );
   }
 
-  (IconData, Color) _glyph(String kind, ThemeData theme) => switch (kind) {
-        'lift' => (Icons.fitness_center, const Color(0xFF4E7C5E)),
-        'meal' => (Icons.restaurant, const Color(0xFF9A6B2F)),
-        _ => (Icons.directions_run, theme.colorScheme.primary),
-      };
+  /// The disc's tint takes the section FILL, the glyph on it takes the section
+  /// INK. `primary` needs no split: it is 8.271:1 light / 5.698:1 dark on its
+  /// own 16 % disc.
+  (IconData, Color, Color) _glyph(String kind, ThemeData theme) {
+    final section = SectionAccents.ofTheme(theme);
+    return switch (kind) {
+      'lift' => (Icons.fitness_center, section.gym, section.gymInk),
+      'meal' => (Icons.restaurant, section.nutrition, section.nutritionInk),
+      _ => (
+          Icons.directions_run,
+          theme.colorScheme.primary,
+          theme.colorScheme.primary
+        ),
+    };
+  }
 
   /// Per-kind (primary, secondary) lines from the thin view `summary` jsonb.
   /// Mirrors the web `activitySummary`.

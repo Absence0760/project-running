@@ -150,7 +150,7 @@
 	}
 	.strip-row {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(0, 1fr));
 		gap: 0.35rem;
 	}
 	.day {
@@ -162,7 +162,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.15rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text);
 		text-decoration: none;
 		position: relative;
@@ -206,7 +206,7 @@
 		white-space: nowrap;
 	}
 	.dist {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text);
 		font-weight: 600;
 	}

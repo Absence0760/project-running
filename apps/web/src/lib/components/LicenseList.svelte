@@ -234,7 +234,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 42rem;
 	}
 	h1 {
@@ -277,6 +277,10 @@
 		gap: 0.4rem;
 	}
 	.lic-list li {
+		/* The package link is nowrap + ellipsis, which makes the whole
+		   package name this row's min-content width unless the grid item
+		   is allowed below it. Without this the ellipsis never engages. */
+		min-width: 0;
 		padding: 0.35rem 0;
 		border-bottom: 1px solid var(--color-border);
 	}
@@ -285,9 +289,10 @@
 	}
 	.lic-head {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
-		gap: 0.8rem;
+		gap: 0.4rem 0.8rem;
 	}
 	.lic-head a {
 		flex: 1;
@@ -299,7 +304,6 @@
 	.lic-badge {
 		font-size: 0.78rem;
 		color: var(--color-text-tertiary);
-		white-space: nowrap;
 	}
 	.lic-toggle {
 		background: transparent;

@@ -48,12 +48,26 @@
 //     exact count. That one subsumes (1)'s coverage — (1) is kept for its
 //     message, not its reach.
 // None of the three polices 3-digit shorthands or rgb()/hsl() spellings.
+//
+// Nor do they reach outside `.svelte` / `.css`. § 536 measured that gap rather
+// than leaving it implied: 199 six-digit literals live in `.ts` under
+// apps/web/src, and the largest single holder is `routes/basemap_contrast.ts`,
+// the canonical home of every map-overlay hue. Those are not unexamined — every
+// one is graded against real basemap samples by `basemap_contrast.test.ts`,
+// which is a stricter bar than a register entry — but "COMPLETE" below means
+// complete over the two style extensions, not over the tree. § 536 also
+// re-measured the register's own size: 98 painted literals across 19 files, not
+// the 308 the round-14 index reported. That figure counted every six-digit hex
+// in `.svelte` / `.css` including COMMENT prose and app.css's own token
+// declarations; the decomposition is 183 declarations + 27 in comments + 98 real.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { mapPinnedLine } from './routes/basemap_contrast';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = resolve(__dirname, '..');
@@ -450,9 +464,14 @@ test('app.css pairs a --color-primary fill with --color-on-primary, not a litera
 //  * 'gradient-stop' a stop of a decorative ramp. Anything drawn over it is
 //                    measured by gradient_foreground_guard.test.ts.
 //  * 'svg-art'       illustration geometry with no text on it.
-//  * 'theme-pair'    a literal that IS theme-keyed, declared once per theme
-//                    as a local custom property. Wants a token; the entry
-//                    records the debt.
+//
+// § 536 RETIRED an eighth role, 'theme-pair' — a literal that IS theme-keyed,
+// declared once per theme as a local custom property, the entry recording the
+// debt. Its only holder was RouteHeatmap's `--kept-accent`, and the honest
+// reading of that entry is that a theme-keyed value is never a reason to freeze
+// a hex: it is a token that has not been minted yet. Leaving the role in the
+// vocabulary would keep the cheap option available at exactly the moment the
+// durable one is obvious, so the role is gone rather than merely unused.
 type LiteralRole =
 	| 'cartographic'
 	| 'brand-mark'
@@ -460,8 +479,7 @@ type LiteralRole =
 	| 'data'
 	| 'fixed-canvas'
 	| 'gradient-stop'
-	| 'svg-art'
-	| 'theme-pair';
+	| 'svg-art';
 
 const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 	// Running-shoe / apple loader illustration. No text on it.
@@ -515,10 +533,11 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 	// Route + club pin FILLS, whose basemap-keyed ring carries the 3:1
 	// (17.191:1 on dark ground, 13.930 on light). MapLibre paint cannot
 	// consume a CSS custom property, so a literal here is structural. The
-	// violet pair is the kept-route accent, declared once per theme.
+	// kept-route violet pair that used to sit beside them as a local
+	// `--kept-accent` is gone: § 536 minted --color-route-pinned in app.css,
+	// which is the token the old entry's own comment asked for.
 	'lib/components/RouteHeatmap.svelte': {
 		'7FB3C2': [1, 'cartographic'], F2A07B: [2, 'cartographic'],
-		'6D28D9': [1, 'theme-pair'], A78BFA: [2, 'theme-pair'],
 	},
 	// Marketing hero + closing-CTA ramps and the on-hero button. Every ink
 	// over them is measured by gradient_foreground_guard.test.ts.
@@ -714,6 +733,44 @@ test('the open-debt set is exactly what is recorded', () => {
 			`${rel} was closed in § 529 — a new entry for it needs a new open debt`,
 		);
 	}
+});
+
+// Minting --color-route-pinned moved three literals out of the register and into
+// app.css, but the same two rungs are also painted on the map by
+// `mapPinnedLine`, and a MapLibre paint property cannot read a CSS custom
+// property — so the value genuinely has to exist twice. Duplication is what put
+// the violet in the register in the first place, so the second copy is pinned to
+// the first rather than trusted: `basemap_contrast.ts` stays the one place that
+// SPELLS the pair, and app.css is asserted equal to it in both themes. The list
+// rail and the map line are the same affordance and must not drift apart.
+test('--color-route-pinned carries mapPinnedLine’s two rungs in both themes', () => {
+	const css = readFileSync(join(SRC_ROOT, 'app.css'), 'utf-8');
+	const rungs = [...css.matchAll(/--color-route-pinned:\s*(#[0-9a-fA-F]{6})\s*;/g)].map((m) =>
+		m[1].toUpperCase(),
+	);
+	// One light declaration plus the two dark scopes app.css keeps in lockstep
+	// (the prefers-color-scheme branch and the explicit data-theme="dark" one).
+	assert.equal(
+		rungs.length,
+		3,
+		`--color-route-pinned is declared ${rungs.length} times; app.css keys every themed token ` +
+			`in a light block and BOTH dark blocks, so a missing rung means one dark path silently ` +
+			`falls back to the light violet.`,
+	);
+	assert.equal(rungs[0], mapPinnedLine(false).toUpperCase(), 'the light rung');
+	assert.deepEqual(
+		rungs.slice(1),
+		[mapPinnedLine(true).toUpperCase(), mapPinnedLine(true).toUpperCase()],
+		'both dark rungs',
+	);
+	// And the hues are genuinely gone from the component, so the register's
+	// shrink is real rather than a moved entry.
+	const heatmap = readFileSync(join(SRC_ROOT, 'lib/components/RouteHeatmap.svelte'), 'utf-8');
+	assert.equal(
+		literalsOn(maskComments(heatmap)).filter((h) => h === '6D28D9' || h === 'A78BFA').length,
+		0,
+		'RouteHeatmap still spells a kept-route violet',
+	);
 });
 
 test('the register is keyed on the hue, never on the CSS property', () => {

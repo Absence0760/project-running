@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:ui_kit/ui_kit.dart' show ChoiceChipRow;
 
 import '../lib/social_service.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -123,7 +124,7 @@ class _LauncherState extends State<_Launcher> {
 
 Future<void> _openSheet(WidgetTester tester, {SocialService? social}) async {
   // Bottom sheet content overflows the default 600x800 test viewport;
-  // give it room so the SegmentedButton at the bottom of the form
+  // give it room so the chip row at the bottom of the form
   // actually paints into the layer tree.
   await tester.binding.setSurfaceSize(const Size(600, 1200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -150,12 +151,12 @@ void main() {
           findsOneWidget);
     });
 
-    testWidgets('renders the Public / Private visibility segmented button',
+    testWidgets('renders the Public / Private visibility chip row',
         (tester) async {
       await _openSheet(tester);
       expect(find.text('Public'), findsOneWidget);
       expect(find.text('Private'), findsOneWidget);
-      expect(find.byType(SegmentedButton<bool>), findsOneWidget);
+      expect(find.byType(ChoiceChipRow<bool>), findsOneWidget);
     });
 
     testWidgets(

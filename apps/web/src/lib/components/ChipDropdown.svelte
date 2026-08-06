@@ -253,7 +253,7 @@
 		white-space: nowrap;
 	}
 	.opt-sub {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 	}
 	.opt.selected .opt-sub {

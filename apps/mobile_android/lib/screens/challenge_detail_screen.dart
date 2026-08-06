@@ -238,10 +238,7 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
         ),
         if (frac != null) ...[
           const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(value: frac, minHeight: 8),
-          ),
+          ProgressBar(value: frac),
         ],
         if (!complete) _paceHint(context, c, value),
         if (c.completedAt != null) ...[

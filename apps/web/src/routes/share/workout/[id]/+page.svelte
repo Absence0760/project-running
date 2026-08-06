@@ -184,7 +184,7 @@
 
 	.summary-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr));
 		gap: var(--space-sm);
 		margin-bottom: var(--space-lg);
 	}

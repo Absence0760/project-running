@@ -170,4 +170,26 @@
 		background: var(--color-primary);
 		outline: none;
 	}
+
+	/* Narrow viewports: `min` reserves 280px for each pane, which is more
+	   than a 320px screen has beside the app rail, and a drag-to-resize
+	   splitter is not a touch affordance anyway. The panes stack and the
+	   splitter goes away. `!important` is required because the drag writes
+	   the pane width as an inline style. */
+	@media (max-width: 40rem) {
+		.split-pane {
+			flex-direction: column;
+			height: auto;
+		}
+		.split-left {
+			width: 100% !important;
+			height: auto;
+		}
+		.split-divider {
+			display: none;
+		}
+		.split-right {
+			min-height: 60vh;
+		}
+	}
 </style>

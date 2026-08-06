@@ -75,9 +75,10 @@
 	}
 	.card-head {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-sm);
+		gap: var(--space-2xs) var(--space-sm);
 		margin-bottom: var(--space-md);
 	}
 	.card-head h2 {
@@ -86,7 +87,7 @@
 	.steadiness-chip {
 		padding: 0.1rem 0.55rem;
 		border-radius: 999px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;

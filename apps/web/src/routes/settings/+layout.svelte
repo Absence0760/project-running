@@ -127,7 +127,7 @@
 		margin-bottom: var(--space-md);
 	}
 	.nav-section-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -207,5 +207,39 @@
 		font-style: normal;
 		display: inline-block;
 		line-height: 1;
+	}
+
+	/* Narrow viewports: a 14rem rail beside the app's own 4.5rem rail
+	   leaves a 320px screen no content column at all. The two stack and
+	   the section list wraps into rows — nothing is hidden and nothing
+	   scrolls sideways, so the heading, the group labels and the legal
+	   links all stay reachable. */
+	@media (max-width: 60rem) {
+		.settings-shell {
+			flex-direction: column;
+		}
+		.settings-nav {
+			width: auto;
+			flex-direction: row;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: var(--space-2xs);
+			padding: var(--space-md) var(--page-padding-x);
+			border-inline-end: none;
+			border-block-end: 1px solid var(--color-border);
+		}
+		.settings-nav h2,
+		.nav-section-label,
+		.legal-links {
+			flex: 0 0 100%;
+			margin: 0;
+			padding: var(--space-2xs) 0 0;
+		}
+		.nav-item {
+			flex: 0 0 auto;
+		}
+		.finish-setup {
+			margin-inline: var(--page-padding-x);
+		}
 	}
 </style>

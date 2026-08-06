@@ -544,9 +544,15 @@
 		display: flex;
 		gap: 0.5rem;
 		border-bottom: 1px solid var(--color-border);
+		/* Tabs share one underlined baseline, so they scroll rather than
+		   wrap. Second strip on this route — `.surface-tabs` above it got
+		   the same treatment. */
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
 	.tab {
+		flex: 0 0 auto;
 		background: none;
 		border: none;
 		padding: 0.6rem 0.2rem;
@@ -637,7 +643,7 @@
 
 	.route-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 
@@ -1012,10 +1018,15 @@
 		.select-group {
 			width: 100%;
 		}
-		.select-group .toolbar-select,
-		.select-group .starred-toggle {
+		.select-group .toolbar-select {
 			flex: 1 1 0;
 			min-width: 0;
+		}
+		/* The toggle carries an icon plus a word, so a shared `min-width: 0`
+		   crushed its box to 35px and let 31px of label spill out of the
+		   document. It keeps its content width and wraps instead. */
+		.select-group .starred-toggle {
+			flex: 0 0 auto;
 		}
 		.toolbar-actions .btn {
 			flex: 1 1 0;

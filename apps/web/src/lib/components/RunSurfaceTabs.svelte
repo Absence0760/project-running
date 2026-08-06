@@ -30,9 +30,15 @@
 		gap: 0.5rem;
 		border-bottom: 1px solid var(--color-border);
 		margin-bottom: var(--space-lg);
+		/* Five tabs on one underlined baseline can't wrap without
+		   breaking that baseline, so the strip scrolls itself rather
+		   than widening the document (WCAG 1.4.10). */
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
 	.surface-tab {
+		flex: 0 0 auto;
 		padding: 0.6rem 0.2rem;
 		margin-inline-end: 1rem;
 		font-size: 0.95rem;

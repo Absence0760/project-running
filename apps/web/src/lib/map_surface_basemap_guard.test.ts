@@ -20,9 +20,11 @@
 //
 // Deliberately NOT checked: `prefers-color-scheme` in a surface's <style>
 // block. A map component's CSS also styles its list rows and chrome, which
-// ARE theme surfaces — §526's own violet `--kept-accent` on RouteHeatmap is
+// ARE theme surfaces — § 526's violet `--kept-accent` on RouteHeatmap was
 // exactly that, keyed on the theme on purpose. A guard that banned the media
-// query outright would be wrong about half its matches.
+// query outright would be wrong about half its matches. (That particular
+// example is now app.css's `--color-route-pinned`, § 536 — the reasoning holds,
+// but the local declaration it named is gone.)
 //
 // Invocation:
 //   npx tsx --test src/lib/map_surface_basemap_guard.test.ts

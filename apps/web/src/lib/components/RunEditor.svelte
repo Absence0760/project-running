@@ -234,7 +234,7 @@
 	.activity-field .field-label { padding: 0; }
 	.row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.75rem; }
 	@media (max-width: 30rem) {
-		.row { grid-template-columns: 1fr 1fr; }
+		.row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 	.chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 	.chip {

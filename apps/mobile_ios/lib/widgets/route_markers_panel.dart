@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -380,7 +381,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
         if (_saving)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
-            child: LinearProgressIndicator(minHeight: 2),
+            child: ProgressBar(value: null),
           ),
         if (_placing) ...[
           Padding(
@@ -726,15 +727,13 @@ class _TimeModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: AlignmentDirectional.centerStart,
-      child: SegmentedButton<bool>(
-        showSelectedIcon: false,
-        style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        segments: [
-          ButtonSegment(value: false, label: Text(clockLabel)),
-          ButtonSegment(value: true, label: Text(elapsedLabel)),
+      child: ChoiceChipRow<bool>(
+        options: [
+          ChoiceChipOption(value: false, label: clockLabel),
+          ChoiceChipOption(value: true, label: elapsedLabel),
         ],
-        selected: {elapsed},
-        onSelectionChanged: (sel) => onChanged(sel.first),
+        selected: elapsed,
+        onChanged: onChanged,
       ),
     );
   }

@@ -513,9 +513,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get navYou => 'Vous';
 
   @override
-  String get fitnessTabAll => 'Tout';
-
-  @override
   String get fitnessTabRuns => 'Courses';
 
   @override
@@ -4219,6 +4216,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubDetailTabPhotos => 'Photos';
 
   @override
+  String get clubDetailReadMore => 'Lire la suite';
+
+  @override
   String get clubDetailReportClub => 'Signaler le club';
 
   @override
@@ -6033,24 +6033,17 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get settingsAccountViewProfile => 'Voir le profil';
+  String get guidedRunsTitle => 'Courses guidées';
 
   @override
-  String get settingsAccountViewProfileSubtitle =>
-      'Tes courses, abonnés, abonnements, notifications';
-
-  @override
-  String get settingsAccountGuidedRuns => 'Courses guidées';
-
-  @override
-  String get settingsAccountGuidedRunsSubtitle =>
+  String get guidedRunsSubtitle =>
       'Séances scriptées avec voix de coach et repères TTS';
 
   @override
-  String get settingsAccountPrivacyZones => 'Zones de confidentialité';
+  String get privacyZonesTitle => 'Zones de confidentialité';
 
   @override
-  String get settingsAccountPrivacyZonesSubtitle =>
+  String get privacyZonesSubtitle =>
       'Masque le début/la fin des tracés publics près de chez toi';
 
   @override
@@ -6530,7 +6523,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get aboutLegalSection => 'Mentions légales';
 
   @override
-  String get devicesTitle => 'Appareils';
+  String get devicesTitle => 'Appareils connectés';
 
   @override
   String get devicesRenameTitle => 'Renommer l\'appareil';
@@ -6851,9 +6844,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gearRotationDone => 'Terminé';
-
-  @override
-  String get privacyZonesTitle => 'Zones de confidentialité';
 
   @override
   String get privacyZonesSaved => 'Zones de confidentialité enregistrées.';
@@ -7302,7 +7292,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get dashboardRecapTooltip => 'Année en course';
 
   @override
-  String get dashboardProfileTooltip => 'Mon profil';
+  String get dashboardProfileTooltip => 'Ton profil';
 
   @override
   String get dashboardWelcomeTitle => 'Bienvenue !';
@@ -9207,7 +9197,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get settingsDevicesSignedOutSubtitle =>
-      'Connectez-vous pour gérer vos appareils';
+      'Connecte-toi pour voir où tu es connecté';
 
   @override
   String get verifiedClubTooltip => 'Club officiel vérifié';
@@ -9226,7 +9216,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get settingsTabAccountSubtitle =>
-      'Connexion, sauvegarde, suppression du compte';
+      'Connexion, profil, import et sauvegarde, suppression du compte';
 
   @override
   String get settingsTabPreferencesSubtitle =>
@@ -9234,11 +9224,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get settingsTabIntegrationsSubtitle =>
-      'Strava, parkrun, ceinture cardiaque';
+      'Strava, parkrun, calendrier des courses, ceinture cardio, tapis de course, montre';
 
   @override
   String get settingsTabDevicesSubtitle =>
-      'Où vous êtes connecté et réglages par appareil';
+      'Où tu es connecté et les réglages par appareil — appaire une ceinture ou un tapis dans Intégrations';
 
   @override
   String get settingsTabGearSubtitle =>
@@ -12598,4 +12588,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routeMarkerRemoved => 'Repère supprimé';
+
+  @override
+  String get roadbookNeedsRouteLine =>
+      'Ajoutez au moins deux points à cet itinéraire pour créer un roadbook.';
+
+  @override
+  String get settingsGearUnavailable =>
+      'L\'équipement n\'est pas disponible dans cette version';
 }

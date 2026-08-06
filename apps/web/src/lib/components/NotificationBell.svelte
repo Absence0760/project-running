@@ -115,14 +115,19 @@
 
 	function verbFor(item: NotificationView): string {
 		const name = item.actor?.display_name ?? m('notificationBell.someone');
-		const dist = item.run_distance_m
-			? fmtKm(item.run_distance_m)
-			: m('notificationBell.yourRun');
+		// See NotificationsList.verbFor: the template carries the possessive, so
+		// the no-distance branch takes a whole sentence rather than a "your run"
+		// fragment that doubles it.
+		const dist = item.run_distance_m ? fmtKm(item.run_distance_m) : null;
 		switch (item.row.kind) {
 			case 'kudos':
-				return m('notificationBell.kudos', { name, dist });
+				return dist
+					? m('notificationBell.kudos', { name, dist })
+					: m('notificationBell.kudosNoDistance', { name });
 			case 'comment':
-				return m('notificationBell.comment', { name, dist });
+				return dist
+					? m('notificationBell.comment', { name, dist })
+					: m('notificationBell.commentNoDistance', { name });
 			case 'comment_reply':
 				return m('notificationBell.commentReply', { name });
 			case 'follow':

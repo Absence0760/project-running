@@ -132,7 +132,11 @@ void main() {
               {'HIGH', 'MODERATE', 'LOW'}.contains((w.data ?? '').toUpperCase()))
           .first);
       expect(chip.maxLines, 1);
-      expect(chip.softWrap, isFalse);
+      // The chip sits in an `Expanded(flex: 4)` lane, so the old pairing of
+      // `softWrap: false` with `TextOverflow.visible` kept it on one line by
+      // painting the surplus over the pace column beside it (§ 501). StatusPill
+      // ellipsizes inside its own bounds instead.
+      expect(chip.overflow, TextOverflow.ellipsis);
     });
   });
 }

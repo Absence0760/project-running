@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ProgressBar;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../fundraiser_progress.dart';
@@ -117,16 +117,11 @@ class _FundraiserSectionState extends State<FundraiserSection> {
               ),
             ),
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: progress.fillPct / 100,
-                minHeight: 10,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                color: progress.state == ThermometerState.exceeded
-                    ? AppSemanticColors.of(context).success
-                    : theme.colorScheme.primary,
-              ),
+            ProgressBar(
+              value: progress.fillPct / 100,
+              fill: progress.state == ThermometerState.exceeded
+                  ? AppSemanticColors.of(context).success
+                  : null,
             ),
             const SizedBox(height: 8),
             Row(

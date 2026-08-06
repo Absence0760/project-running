@@ -6,7 +6,7 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChoiceChipOption, ChoiceChipRow;
 
 import '../elevation.dart';
 import '../fuel_plan.dart';
@@ -462,14 +462,15 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          SegmentedButton<PacingModel>(
-            segments: [
-              ButtonSegment(value: PacingModel.effort, label: Text(l10n.roadbookEffort)),
-              ButtonSegment(value: PacingModel.even, label: Text(l10n.roadbookEven)),
+          ChoiceChipRow<PacingModel>(
+            options: [
+              ChoiceChipOption(
+                  value: PacingModel.effort, label: l10n.roadbookEffort),
+              ChoiceChipOption(value: PacingModel.even, label: l10n.roadbookEven),
             ],
-            selected: {_model},
-            onSelectionChanged: (s) {
-              setState(() => _model = s.first);
+            selected: _model,
+            onChanged: (v) {
+              setState(() => _model = v);
               _persistPlan();
             },
           ),

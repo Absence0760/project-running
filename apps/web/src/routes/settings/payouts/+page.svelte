@@ -98,7 +98,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 48rem;
 	}
 	.hero {
@@ -108,7 +108,7 @@
 	.kicker {
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		margin: 0 0 var(--space-2xs);

@@ -446,6 +446,11 @@
 		background: var(--color-surface);
 		padding: var(--space-2xs);
 		gap: var(--space-2xs);
+		/* A segmented control is one continuous track — wrapping it
+		   splits the pill. It scrolls itself rather than widening the
+		   document (WCAG 1.4.10). */
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
 	.activity-btn {
@@ -480,7 +485,7 @@
 		background: var(--color-primary-hover);
 	}
 	.count-pill {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		padding: 0 var(--space-xs);
 		border-radius: 9999px;
@@ -559,7 +564,7 @@
 
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 
@@ -610,7 +615,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;

@@ -234,12 +234,14 @@ TileLayer basemapTileLayer({
   TileProvider? tileProvider,
   int maxNativeZoom = 19,
   double maxZoom = 19,
+  TileBuilder? tileBuilder,
 }) =>
     TileLayer(
       urlTemplate: urlTemplate,
       userAgentPackageName: 'com.threkir.app',
       maxNativeZoom: maxNativeZoom,
       maxZoom: maxZoom,
+      tileBuilder: tileBuilder,
       evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
       errorTileCallback: (tile, error, _) {
         _tileFailures++;

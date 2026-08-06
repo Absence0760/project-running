@@ -6,7 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart'
-    show ActivityLoaderKind, AppSemanticColors, FullBodyLoader;
+    show
+        ActivityLoaderKind,
+        AppSemanticColors,
+        FullBodyLoader,
+        ProgressBar,
+        StatusPill;
 
 import '../l10n/gen/app_localizations.dart';
 import '../live_cutoff_eta.dart';
@@ -613,30 +618,11 @@ class _StatusBadge extends StatelessWidget {
           theme.colorScheme.onSurfaceVariant,
         ),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
+    return StatusPill(
+      label: label,
+      foreground: color,
+      fill: color.withValues(alpha: 0.15),
+      dot: true,
     );
   }
 }
@@ -752,17 +738,7 @@ class _CourseProgress extends StatelessWidget {
     return Row(
       key: const Key('course-progress'),
       children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: fraction,
-              minHeight: 6,
-              backgroundColor: theme.colorScheme.outlineVariant,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-        ),
+        Expanded(child: ProgressBar(value: fraction)),
         const SizedBox(width: 12),
         Text(
           label,

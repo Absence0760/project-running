@@ -587,9 +587,15 @@
 		background: var(--color-bg-secondary);
 		padding: var(--space-2xs);
 		gap: var(--space-2xs);
+		/* A segmented control is one continuous pill — wrapping it
+		   splits the track. It scrolls itself instead of widening the
+		   document (WCAG 1.4.10). */
+		max-width: 100%;
+		overflow-x: auto;
 	}
 	.seg-btn {
 		display: inline-flex;
+		flex: 0 0 auto;
 		align-items: center;
 		justify-content: center;
 		gap: var(--space-xs);
@@ -729,7 +735,7 @@
 	   cells read left-to-right, top-to-bottom. */
 	.timeline {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(30rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(30rem, 100%), 1fr));
 		gap: var(--space-xl);
 		align-items: start;
 	}

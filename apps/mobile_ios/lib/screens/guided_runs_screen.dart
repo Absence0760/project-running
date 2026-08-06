@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show TextLane;
+import 'package:ui_kit/ui_kit.dart' show StatusPill, TextLane;
 
 import '../auth_error.dart';
 import '../audio_cues.dart';
@@ -21,7 +21,7 @@ class GuidedRunsScreen extends StatelessWidget {
     final library = guidedRunLibrary(l10n);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.settingsAccountGuidedRuns)),
+      appBar: AppBar(title: Text(l10n.guidedRunsTitle)),
       body: ListView.builder(
         padding: EdgeInsets.fromLTRB(0, 8, 0, 8 + bottomInset),
         itemCount: library.length,
@@ -57,20 +57,10 @@ class _GuidedRunCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      l10n.guidedRunMinutesBadge(minutes),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  StatusPill(
+                    label: l10n.guidedRunMinutesBadge(minutes),
+                    foreground: theme.colorScheme.onPrimaryContainer,
+                    fill: theme.colorScheme.primaryContainer,
                   ),
                   const Spacer(),
                   Icon(Icons.chevron_right,

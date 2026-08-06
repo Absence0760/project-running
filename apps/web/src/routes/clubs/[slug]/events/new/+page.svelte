@@ -105,7 +105,7 @@
 <style>
 	.page {
 		max-width: 64rem;
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 	.back {
 		display: inline-flex;

@@ -1400,12 +1400,12 @@
 />
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
+	.page { padding: var(--page-padding-y) var(--page-padding-x); max-width: 64rem; }
 	.page-head { margin-bottom: var(--space-xl); }
 	.kicker {
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		margin: 0 0 var(--space-2xs);
@@ -1424,7 +1424,7 @@
 	.avatar-row { display: flex; align-items: flex-start; gap: var(--space-md); margin-bottom: var(--space-lg); }
 	.avatar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
 	.avatar-hint { flex-basis: 100%; margin-bottom: 0; }
-	.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-lg); }
+	.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: var(--space-md); margin-bottom: var(--space-lg); }
 	.label-text { display: block; font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: var(--space-xs); }
 	input { width: 100%; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.9rem; background: var(--color-bg); }
 	input:focus { outline: none; border-color: var(--color-primary); }

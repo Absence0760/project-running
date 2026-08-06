@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatGrid, StatTile;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatGrid, StatTile, StatusPill;
 
 import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
@@ -1328,24 +1328,52 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   },
                 ),
               ),
-              if (_markerPins.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => RoadbookScreen(
-                          route: widget.route,
-                          waypoints: _displayWaypoints,
-                          api: widget.apiClient,
-                          preferences: widget.preferences,
+              // The roadbook is a goal-time pacing sheet first and a
+              // checkpoint schedule second: with no markers it still projects
+              // start → finish. Gating its only entry point on
+              // `_markerPins.isNotEmpty` left a runner who had never placed a
+              // marker with no way to learn the surface exists. Show it
+              // always; disable it only when there is no line to walk.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _displayWaypoints.length < 2
+                          ? null
+                          : () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => RoadbookScreen(
+                                    route: widget.route,
+                                    waypoints: _displayWaypoints,
+                                    api: widget.apiClient,
+                                    preferences: widget.preferences,
+                                  ),
+                                ),
+                              ),
+                      icon: const Icon(Icons.table_chart_outlined, size: 18),
+                      label:
+                          Text(AppLocalizations.of(context).roadbookCrewSheet),
+                    ),
+                    if (_displayWaypoints.length < 2)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          AppLocalizations.of(context).roadbookNeedsRouteLine,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
                         ),
                       ),
-                    ),
-                    icon: const Icon(Icons.table_chart_outlined, size: 18),
-                    label: Text(AppLocalizations.of(context).roadbookCrewSheet),
-                  ),
+                  ],
                 ),
+              ),
 
               const Divider(),
 
@@ -2215,28 +2243,12 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.20)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+    return StatusPill(
+      label: label,
+      foreground: color,
+      fill: color.withValues(alpha: 0.10),
+      outline: color.withValues(alpha: 0.20),
+      icon: icon,
     );
   }
 }

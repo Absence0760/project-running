@@ -13,7 +13,7 @@ import 'discover_screen.dart';
 import 'feed_screen.dart';
 import 'people_screen.dart';
 
-/// The Social tab — mirrors the web `/social` hub (decisions §54). Four
+/// The Social tab — mirrors the web `/social` hub (decisions §54). Five
 /// sub-tabs:
 ///   - Feed: 14-day activity feed of public runs from people you follow.
 ///   - People: name search + suggested-from-clubs discovery.
@@ -21,6 +21,13 @@ import 'people_screen.dart';
 ///   - Discover: cross-club activity search over `search_public_events`
 ///     (public clubs only; category/cadence/weekday/time/price filters,
 ///     decisions §147).
+///   - Challenges: the joinable-challenge board + the user's own entries.
+///
+/// The five English labels need a 609 dp strip, so on a phone `AppTabBar`
+/// derives `isScrollable` true and Challenges starts off the right edge. The
+/// four that preceded it needed 436 dp and did not fit a 360 dp phone either
+/// — this is § 533's derivation behaving, not something the fifth tab
+/// introduced (measured in `social_tab_strip_width_test`).
 ///
 /// Routes used to live here as a fourth sub-tab; the Fitness-hub redesign
 /// relocated it to Fitness → Runs (a run-modality surface, not a
@@ -42,7 +49,8 @@ class SocialScreen extends StatefulWidget {
   /// Still required — `ClubsScreen` takes it to surface club-owned routes.
   final LocalRouteStore routeStore;
   /// Sub-tab to open on first mount. 0 = Feed, 1 = People, 2 = Clubs,
-  /// 3 = Discover. Defaults to Feed (0) so a tap on the bottom-nav lands
+  /// 3 = Discover, 4 = Challenges. Defaults to Feed (0) so a tap on the
+  /// bottom-nav lands
   /// on fresh follower activity — that's the highest-value default for
   /// most sessions; users heading to a club still get there in one tap.
   final int initialTab;

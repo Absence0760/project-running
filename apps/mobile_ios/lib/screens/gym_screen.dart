@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart' show MetadataKeys;
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import '../adaptive_width.dart';
 import '../exercise_records.dart';
 import '../gym_prs.dart';
 import '../l10n/date_format.dart';
@@ -418,51 +419,54 @@ class _GymScreenState extends State<GymScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          SurfacePeerStrip(
-            label: l10n.gymSurfaceLabel,
-            peers: _peers(l10n, workouts),
-          ),
-          if (!_isOnline && !pending)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: theme.colorScheme.surfaceContainerHigh,
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_off_outlined, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.gymOfflineCached,
-                      style: theme.textTheme.bodySmall,
+      body: contentColumn(
+        context,
+        Column(
+          children: [
+            SurfacePeerStrip(
+              label: l10n.gymSurfaceLabel,
+              peers: _peers(l10n, workouts),
+            ),
+            if (!_isOnline && !pending)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: theme.colorScheme.surfaceContainerHigh,
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_off_outlined, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.gymOfflineCached,
+                        style: theme.textTheme.bodySmall,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+              ),
+            PendingSyncBanner(
+              api: widget.api,
+              isOnline: _isOnline,
+              stores: [widget.store, _routineStore],
+            ),
+            if (_resumableDraft() case final d?) _draftCard(d, theme, l10n),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                child: workouts.isEmpty
+                    ? EmptyState(
+                        icon: Icons.fitness_center,
+                        title: l10n.gymEmptyTitle,
+                        body: l10n.gymEmptyBody,
+                        ctaLabel: l10n.gymLog,
+                        onCta: _create,
+                      )
+                    : _list(workouts, theme, l10n),
               ),
             ),
-          PendingSyncBanner(
-            api: widget.api,
-            isOnline: _isOnline,
-            stores: [widget.store, _routineStore],
-          ),
-          if (_resumableDraft() case final d?) _draftCard(d, theme, l10n),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refresh,
-              child: workouts.isEmpty
-                  ? EmptyState(
-                      icon: Icons.fitness_center,
-                      title: l10n.gymEmptyTitle,
-                      body: l10n.gymEmptyBody,
-                      ctaLabel: l10n.gymLog,
-                      onCta: _create,
-                    )
-                  : _list(workouts, theme, l10n),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

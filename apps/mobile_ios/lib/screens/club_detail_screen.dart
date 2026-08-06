@@ -484,9 +484,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 if (c.row.description != null && c.row.description!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      c.row.description!,
-                      style: theme.textTheme.bodyMedium,
+                    child: _ClubDescription(
+                      description: c.row.description!,
+                      clubName: c.row.name,
                     ),
                   ),
                 _clubLinks(context, c),
@@ -1689,6 +1689,92 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           canModerate: c.isAdmin,
         ),
       ],
+    );
+  }
+}
+
+/// Lines of club description the hero shows before offering the rest in a
+/// sheet.
+///
+/// The hero is a fixed band above `Expanded(TabBarView)` in a non-scrolling
+/// `Column`, so an unbounded description does not merely read long — it takes
+/// the tab bodies' height and then overflows the `Column`. `clubs.description`
+/// carries no DB length constraint, and even at the composer's cap the
+/// paragraph measured 440 dp against real Roboto on a 360 dp phone, leaving
+/// the six tabs 32 dp and overflowing outright from 1.15x text scale
+/// (decisions § 537). Clamping the band's one unbounded child bounds the band.
+const int kClubDescriptionMaxLines = 3;
+
+/// The hero's club description: clamped to [kClubDescriptionMaxLines] with the
+/// whole text one tap away in a scrollable sheet, so the clamp hides nothing.
+class _ClubDescription extends StatelessWidget {
+  const _ClubDescription({required this.description, required this.clubName});
+
+  final String description;
+  final String clubName;
+
+  void _openFull(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(clubName, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 12),
+                Text(description, style: theme.textTheme.bodyMedium),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final style = theme.textTheme.bodyMedium;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: description, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: kClubDescriptionMaxLines,
+        )..layout(maxWidth: constraints.maxWidth);
+        final clamped = painter.didExceedMaxLines;
+        painter.dispose();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              description,
+              style: style,
+              maxLines: kClubDescriptionMaxLines,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (clamped)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  onPressed: () => _openFull(context),
+                  child: Text(l10n.clubDetailReadMore),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

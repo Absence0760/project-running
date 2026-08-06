@@ -435,8 +435,11 @@
 		display: block;
 	}
 
+	/* Individually bordered pills, not one continuous track, so they wrap
+	   rather than scroll. */
 	.mode-tabs {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-xs);
 		margin-bottom: var(--space-md);
 	}
@@ -656,7 +659,7 @@
 
 	.route-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 

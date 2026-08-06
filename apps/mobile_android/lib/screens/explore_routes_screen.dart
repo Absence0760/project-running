@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow, StatusPill, StatusPillSize;
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
@@ -370,22 +371,22 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
           // Mode toggle
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: SegmentedButton<_ExploreMode>(
-              segments: [
-                ButtonSegment(
+            child: ChoiceChipRow<_ExploreMode>(
+              options: [
+                ChoiceChipOption(
                   value: _ExploreMode.search,
-                  icon: const Icon(Icons.search, size: 18),
-                  label: Text(l10n.exploreRoutesModeSearch),
+                  icon: Icons.search,
+                  label: l10n.exploreRoutesModeSearch,
                 ),
-                ButtonSegment(
+                ChoiceChipOption(
                   value: _ExploreMode.nearMe,
-                  icon: const Icon(Icons.near_me, size: 18),
-                  label: Text(l10n.exploreRoutesModeNearMe),
+                  icon: Icons.near_me,
+                  label: l10n.exploreRoutesModeNearMe,
                 ),
               ],
-              selected: {_mode},
-              onSelectionChanged: (s) {
-                setState(() => _mode = s.first);
+              selected: _mode,
+              onChanged: (v) {
+                setState(() => _mode = v);
                 if (_mode == _ExploreMode.nearMe) {
                   _searchNearby();
                 } else {
@@ -760,21 +761,12 @@ class _RouteCard extends StatelessWidget {
                         runSpacing: 4,
                         children: [
                           for (final t in route.tags.take(4))
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                t,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
+                            StatusPill(
+                              label: t,
+                              foreground: theme.colorScheme.onSurfaceVariant,
+                              fill:
+                                  theme.colorScheme.surfaceContainerHighest,
+                              size: StatusPillSize.compact,
                             ),
                         ],
                       ),

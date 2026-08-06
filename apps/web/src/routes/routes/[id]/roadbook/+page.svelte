@@ -477,11 +477,12 @@
 
 <style>
 	.roadbook-page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 64rem;
 	}
 	.rb-header {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: flex-end;
 		justify-content: space-between;
 		gap: var(--space-md);
@@ -500,6 +501,7 @@
 	}
 	.rb-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-sm);
 	}
 	.rb-controls {

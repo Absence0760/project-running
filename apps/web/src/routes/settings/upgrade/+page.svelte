@@ -216,7 +216,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 64rem;
 	}
 	.hero {
@@ -226,7 +226,7 @@
 	.kicker {
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		margin: 0 0 var(--space-2xs);
@@ -246,7 +246,7 @@
 
 	.tier-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
 		gap: var(--space-lg);
 		margin-bottom: var(--space-2xl);
 	}
@@ -274,7 +274,7 @@
 		inset-inline-end: var(--space-lg);
 		background: var(--color-primary);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.2rem 0.7rem;
 		border-radius: 9999px;
@@ -319,7 +319,7 @@
 		/* WCAG AA: white on --color-success was 3.28/2.22:1; -strong is 5.13:1. */
 		background: var(--color-success-strong);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.2rem 0.6rem;
 		border-radius: 9999px;
@@ -417,7 +417,7 @@
 		padding: var(--space-xl);
 		flex-wrap: wrap;
 	}
-	.donate-text { flex: 1; min-width: 16rem; }
+	.donate-text { flex: 1; min-width: min(16rem, 100%); }
 	.donate-text h2 {
 		font-size: 1.1rem;
 		font-weight: 700;

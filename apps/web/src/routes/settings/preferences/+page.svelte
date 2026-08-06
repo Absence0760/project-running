@@ -1287,12 +1287,12 @@
 />
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; }
+	.page { padding: var(--page-padding-y) var(--page-padding-x); max-width: 64rem; }
 	.page-head { margin-bottom: var(--space-xl); }
 	.kicker {
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		margin: 0 0 var(--space-2xs);
@@ -1363,7 +1363,7 @@
 	}
 	.skel-grid {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-md);
 	}
 	.skel {
@@ -1425,8 +1425,8 @@
 		font-size: 1.4rem;
 	}
 	.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-lg); margin-bottom: var(--space-xl); }
-	.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: var(--space-lg); }
-	.form-grid.zones { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
+	.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: var(--space-md); margin-bottom: var(--space-lg); }
+	.form-grid.zones { grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr)); }
 	.form-stack { display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-lg); }
 	.field { display: flex; flex-direction: column; }
 	.checkbox-row { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.9rem; }
@@ -1467,7 +1467,7 @@
 		outline-offset: 2px;
 	}
 
-	.toggle-row { display: flex; gap: var(--space-sm); }
+	.toggle-row { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 	.toggle-btn { flex: 1; padding: var(--space-sm) var(--space-md); border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); font-size: 0.85rem; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all var(--transition-fast); }
 	.toggle-btn:hover { border-color: var(--color-primary); }
 	.toggle-btn.active { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); }

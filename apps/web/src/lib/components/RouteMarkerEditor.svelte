@@ -893,7 +893,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.2rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		line-height: 1;
 		padding: 0.15rem 0.45rem;
@@ -952,7 +952,7 @@
 	}
 	.coord-fields {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-sm);
 	}
 	.markers-drag-hint {

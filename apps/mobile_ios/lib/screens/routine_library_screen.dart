@@ -9,6 +9,7 @@ import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../social_service.dart';
 import '../widgets/pending_sync_banner.dart';
+import '../widgets/surface_peer_strip.dart';
 import '../widgets/routine_builder_sheet.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
 import 'routine_detail_screen.dart';
@@ -184,11 +185,6 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
         title: Text(l10n.gymRoutineTitle),
         actions: [
           IconButton(
-            tooltip: l10n.gymLibraryLink,
-            icon: const Icon(Icons.public),
-            onPressed: _openPublicLibrary,
-          ),
-          IconButton(
             tooltip: l10n.gymRoutineNew,
             icon: const Icon(Icons.add),
             onPressed: _refreshing ? null : _create,
@@ -197,6 +193,19 @@ class _RoutineLibraryScreenState extends State<RoutineLibraryScreen> {
       ),
       body: Column(
         children: [
+          // The public routine library was an icon-only `Icons.public` glyph
+          // whose name lived in a tooltip; web renders it as a labelled link
+          // in the routines header (#666 I8).
+          SurfacePeerStrip(
+            label: l10n.gymRoutineTitle,
+            peers: [
+              SurfacePeer(label: l10n.gymRoutineTitle),
+              SurfacePeer(
+                label: l10n.gymLibraryLink,
+                onTap: _openPublicLibrary,
+              ),
+            ],
+          ),
           PendingSyncBanner(
             api: widget.api,
             isOnline: _isOnline,

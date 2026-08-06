@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatusPill;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -362,20 +362,6 @@ class AdherencePill extends StatelessWidget {
       'abandoned' => l10n.workoutReviewAdherenceAbandoned,
       _ => adherence,
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: fg,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-        ),
-      ),
-    );
+    return StatusPill(label: label, foreground: fg, fill: bg);
   }
 }

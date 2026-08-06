@@ -325,12 +325,15 @@
 </div>
 
 <style>
-	.summary { display: grid; gap: var(--space-lg); }
+	/* The implicit single column is an `auto` track, which floors at the
+	   widest child's max-content and takes the page with it. */
+	.summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); }
 	.nav-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
 	}
 	.center-labels { text-align: center; display: grid; gap: 0.5rem; }
 	.nav-btn {
@@ -453,7 +456,7 @@
 		padding: 0.1rem 0.4rem;
 		border-radius: var(--radius-sm);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		align-self: center;
 		text-align: center;

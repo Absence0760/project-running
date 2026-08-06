@@ -437,14 +437,14 @@
 		color: var(--color-primary);
 		padding: 0.1rem 0.5rem;
 		border-radius: 999px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 	}
 	.intensity {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-secondary);
 	}
@@ -470,7 +470,7 @@
 		line-height: 1.35;
 	}
 	.guided-card-meta {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		margin: 0.15rem 0 0;
 	}

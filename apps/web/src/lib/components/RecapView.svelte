@@ -320,7 +320,7 @@
 
 	.cards {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
 		gap: var(--space-md);
 		margin-bottom: var(--space-xl);
 	}
@@ -393,7 +393,7 @@
 	}
 	.bars {
 		display: grid;
-		grid-template-columns: repeat(12, 1fr);
+		grid-template-columns: repeat(12, minmax(0, 1fr));
 		gap: 0.4rem;
 		align-items: end;
 		height: 13rem;
@@ -456,7 +456,7 @@
 	}
 	.badge-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.badge {

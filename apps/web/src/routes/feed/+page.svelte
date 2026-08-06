@@ -21,6 +21,6 @@
 </div>
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); }
+	.page { padding: var(--page-padding-y) var(--page-padding-x); }
 	.muted { color: var(--color-text-tertiary); }
 </style>

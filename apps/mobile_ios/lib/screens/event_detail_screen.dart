@@ -9,8 +9,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
+import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../event_category.dart';
 import '../event_gym_template.dart';
@@ -690,355 +690,341 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(e.row.title)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        children: [
-          if (e.freq != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  Icon(Icons.autorenew, size: 14,
-                      color: theme.colorScheme.primary),
-                  const SizedBox(width: 4),
-                  Expanded(
+      body: contentColumn(
+        context,
+        ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          children: [
+            if (e.freq != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.autorenew, size: 14,
+                        color: theme.colorScheme.primary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        desc.toUpperCase(),
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (e.row.isPublic == false)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: StatusPill(
+                    label: l10n.clubEventMembersOnly,
+                    foreground: theme.colorScheme.onSurfaceVariant,
+                    fill: theme.colorScheme.surfaceContainerHighest,
+                    icon: Icons.lock,
+                  ),
+                ),
+              ),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 16,
+                    color: theme.colorScheme.outline),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    fmtEventDate(active, localeToTag(Localizations.localeOf(context))),
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                if (e.row.durationMin != null) ...[
+                  const SizedBox(width: 6),
+                  Flexible(
                     child: Text(
-                      desc.toUpperCase(),
+                      l10n.eventDurationMin(e.row.durationMin!),
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-          if (e.row.isPublic == false)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Align(
+            if (e.row.meetLabel != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.place, size: 16,
+                      color: theme.colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(e.row.meetLabel!)),
+                ],
+              ),
+            ],
+            if (_meetPoint != null) ..._buildMeetPoint(theme, e),
+            if (!athletic &&
+                e.row.category == 'class' &&
+                (e.row.discipline?.trim().isNotEmpty ?? false)) ...[
+              const SizedBox(height: 12),
+              EventDisciplineLabel(discipline: e.row.discipline!.trim()),
+            ],
+            if (_canLogAsWorkout) ...[
+              const SizedBox(height: 12),
+              Align(
                 alignment: Alignment.centerLeft,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.lock, size: 14,
-                          color: theme.colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text(
-                        l10n.clubEventMembersOnly,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                        ),
+                child: ElevatedButton.icon(
+                  key: const Key('log-as-workout'),
+                  onPressed: _logAsWorkout,
+                  icon: const Icon(Icons.fitness_center, size: 18),
+                  label: Text(l10n.clubEventLogAsWorkout),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.clubEventLogAsWorkoutHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            if (e.row.description != null && e.row.description!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(e.row.description!, style: theme.textTheme.bodyMedium),
+            ],
+            const SizedBox(height: 16),
+            if (_instances.length > 1) ...[
+              Text(
+                l10n.eventPickOccurrence,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  letterSpacing: 0.8,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final dt in _instances)
+                    ChoiceChip(
+                      showCheckmark: false,
+                      label: Text(formatDateShort(
+                          dt, localeToTag(Localizations.localeOf(context)))),
+                      selected: dt == _activeInstance,
+                      onSelected: (_) => _pickInstance(dt),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (_activeInstance != null &&
+                _cancelled.contains(_activeInstance!.toUtc()))
+              // A cancelled occurrence reached by a direct link (the picker
+              // already hides it): say so and withhold the RSVP controls rather
+              // than letting a member sign up for a run that isn't happening.
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_busy,
+                        size: 18, color: theme.colorScheme.onErrorContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.eventOccurrenceCancelled,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onErrorContainer),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              )
+            else
+              _buildRsvpRow(theme, e),
+            if (athletic &&
+                (e.row.distanceM != null || e.row.paceTargetSec != null)) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  if (e.row.distanceM != null) ...[
+                    _metric(theme, l10n.runStatDistance,
+                        formatDistanceForPref(e.row.distanceM!)),
+                    const SizedBox(width: 24),
+                  ],
+                  if (e.row.paceTargetSec != null)
+                    _metric(theme, l10n.eventTargetPace,
+                        fmtPace(e.row.paceTargetSec!)),
+                ],
               ),
-            ),
-          Row(
-            children: [
-              Icon(Icons.calendar_today, size: 16,
-                  color: theme.colorScheme.outline),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  fmtEventDate(active, localeToTag(Localizations.localeOf(context))),
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium,
-                ),
-              ),
-              if (e.row.durationMin != null) ...[
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    l10n.eventDurationMin(e.row.durationMin!),
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+            ],
+            if (athletic && _club?.isRaceDirector == true) ...[
+              const SizedBox(height: 24),
+              _buildRaceControl(theme, active),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CheckpointCheckinScreen(
+                      eventId: e.row.id,
+                      instanceStart: active,
                     ),
                   ),
                 ),
-              ],
+                icon: const Icon(Icons.where_to_vote_outlined),
+                label: Text(l10n.checkpointCheckinAction),
+              ),
             ],
-          ),
-          if (e.row.meetLabel != null) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(Icons.place, size: 16,
-                    color: theme.colorScheme.outline),
-                const SizedBox(width: 6),
-                Expanded(child: Text(e.row.meetLabel!)),
-              ],
+            EventPhotos(
+              api: ApiClient(),
+              eventId: e.row.id,
+              instanceStart: active,
+              canAdd: widget.social.currentUserId != null,
+              myEventRunId: _myEventRunId(),
+              fetchRecentRuns: () => widget.social.fetchRecentRuns(limit: 20),
             ),
-          ],
-          if (_meetPoint != null) ..._buildMeetPoint(theme, e),
-          if (!athletic &&
-              e.row.category == 'class' &&
-              (e.row.discipline?.trim().isNotEmpty ?? false)) ...[
-            const SizedBox(height: 12),
-            EventDisciplineLabel(discipline: e.row.discipline!.trim()),
-          ],
-          if (_canLogAsWorkout) ...[
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: ElevatedButton.icon(
-                key: const Key('log-as-workout'),
-                onPressed: _logAsWorkout,
-                icon: const Icon(Icons.fitness_center, size: 18),
-                label: Text(l10n.clubEventLogAsWorkout),
-              ),
-            ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 24),
+            FundraiserSection(social: widget.social, eventId: e.row.id),
             Text(
-              l10n.clubEventLogAsWorkoutHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-          if (e.row.description != null && e.row.description!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(e.row.description!, style: theme.textTheme.bodyMedium),
-          ],
-          const SizedBox(height: 16),
-          if (_instances.length > 1) ...[
-            Text(
-              l10n.eventPickOccurrence,
+              l10n.eventAttendees(_attendees.length),
               style: theme.textTheme.labelSmall?.copyWith(
                 letterSpacing: 0.8,
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final dt in _instances)
-                  ChoiceChip(
-                    showCheckmark: false,
-                    label: Text(formatDateShort(
-                        dt, localeToTag(Localizations.localeOf(context)))),
-                    selected: dt == _activeInstance,
-                    onSelected: (_) => _pickInstance(dt),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (_activeInstance != null &&
-              _cancelled.contains(_activeInstance!.toUtc()))
-            // A cancelled occurrence reached by a direct link (the picker
-            // already hides it): say so and withhold the RSVP controls rather
-            // than letting a member sign up for a run that isn't happening.
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.event_busy,
-                      size: 18, color: theme.colorScheme.onErrorContainer),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.eventOccurrenceCancelled,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onErrorContainer),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            _buildRsvpRow(theme, e),
-          if (athletic &&
-              (e.row.distanceM != null || e.row.paceTargetSec != null)) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                if (e.row.distanceM != null) ...[
-                  _metric(theme, l10n.runStatDistance,
-                      formatDistanceForPref(e.row.distanceM!)),
-                  const SizedBox(width: 24),
-                ],
-                if (e.row.paceTargetSec != null)
-                  _metric(theme, l10n.eventTargetPace,
-                      fmtPace(e.row.paceTargetSec!)),
-              ],
-            ),
-          ],
-          if (athletic && _club?.isRaceDirector == true) ...[
-            const SizedBox(height: 24),
-            _buildRaceControl(theme, active),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => CheckpointCheckinScreen(
-                    eventId: e.row.id,
-                    instanceStart: active,
-                  ),
+            if (_attendees.isEmpty)
+              Text(
+                l10n.eventNoRsvps,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-              ),
-              icon: const Icon(Icons.where_to_vote_outlined),
-              label: Text(l10n.checkpointCheckinAction),
-            ),
-          ],
-          EventPhotos(
-            api: ApiClient(),
-            eventId: e.row.id,
-            instanceStart: active,
-            canAdd: widget.social.currentUserId != null,
-            myEventRunId: _myEventRunId(),
-            fetchRecentRuns: () => widget.social.fetchRecentRuns(limit: 20),
-          ),
-          const SizedBox(height: 24),
-          FundraiserSection(social: widget.social, eventId: e.row.id),
-          Text(
-            l10n.eventAttendees(_attendees.length),
-            style: theme.textTheme.labelSmall?.copyWith(
-              letterSpacing: 0.8,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 6),
-          if (_attendees.isEmpty)
-            Text(
-              l10n.eventNoRsvps,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final a in _attendees)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: theme.dividerColor),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IdentityAvatar(
-                            seed: a.userId,
-                            name: a.displayName,
-                            size: 18,
-                            fontSize: 10),
-                        const SizedBox(width: 6),
-                        Text(a.displayName ?? l10n.eventAttendeeMember,
-                            style: theme.textTheme.bodySmall),
-                        if (a.status != 'going') ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            l10n.eventAttendeeStatus(a.status),
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                        if (canMarkAttendance) ...[
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final a in _attendees)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: theme.dividerColor),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IdentityAvatar(
+                              seed: a.userId,
+                              name: a.displayName,
+                              size: 18,
+                              fontSize: 10),
                           const SizedBox(width: 6),
-                          IconButton(
-                            constraints: const BoxConstraints(
-                                minWidth: 48, minHeight: 48),
-                            padding: EdgeInsets.zero,
-                            iconSize: 18,
-                            tooltip: l10n.eventMarkAttended,
-                            color: a.attendance == 'attended'
-                                ? AppSemanticColors.of(context).success
-                                : theme.colorScheme.outline,
-                            icon: const Icon(Icons.check_circle_outline),
-                            onPressed: _markingAttendance != null
-                                ? null
-                                : () => _markAttendance(
-                                    a.userId, a.attendance, 'attended'),
-                          ),
-                          IconButton(
-                            constraints: const BoxConstraints(
-                                minWidth: 48, minHeight: 48),
-                            padding: EdgeInsets.zero,
-                            iconSize: 18,
-                            tooltip: l10n.eventMarkNoShow,
-                            color: a.attendance == 'no_show'
-                                ? theme.colorScheme.error
-                                : theme.colorScheme.outline,
-                            icon: const Icon(Icons.cancel_outlined),
-                            onPressed: _markingAttendance != null
-                                ? null
-                                : () => _markAttendance(
-                                    a.userId, a.attendance, 'no_show'),
-                          ),
-                        ] else if (a.attendance != null) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            a.attendance == 'attended'
-                                ? l10n.eventAttendanceAttended
-                                : l10n.eventAttendanceNoShow,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
+                          Text(a.displayName ?? l10n.eventAttendeeMember,
+                              style: theme.textTheme.bodySmall),
+                          if (a.status != 'going') ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.eventAttendeeStatus(a.status),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                          if (canMarkAttendance) ...[
+                            const SizedBox(width: 6),
+                            IconButton(
+                              constraints: const BoxConstraints(
+                                  minWidth: 48, minHeight: 48),
+                              padding: EdgeInsets.zero,
+                              iconSize: 18,
+                              tooltip: l10n.eventMarkAttended,
                               color: a.attendance == 'attended'
                                   ? AppSemanticColors.of(context).success
-                                  : theme.colorScheme.error,
+                                  : theme.colorScheme.outline,
+                              icon: const Icon(Icons.check_circle_outline),
+                              onPressed: _markingAttendance != null
+                                  ? null
+                                  : () => _markAttendance(
+                                      a.userId, a.attendance, 'attended'),
                             ),
-                          ),
+                            IconButton(
+                              constraints: const BoxConstraints(
+                                  minWidth: 48, minHeight: 48),
+                              padding: EdgeInsets.zero,
+                              iconSize: 18,
+                              tooltip: l10n.eventMarkNoShow,
+                              color: a.attendance == 'no_show'
+                                  ? theme.colorScheme.error
+                                  : theme.colorScheme.outline,
+                              icon: const Icon(Icons.cancel_outlined),
+                              onPressed: _markingAttendance != null
+                                  ? null
+                                  : () => _markAttendance(
+                                      a.userId, a.attendance, 'no_show'),
+                            ),
+                          ] else if (a.attendance != null) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              a.attendance == 'attended'
+                                  ? l10n.eventAttendanceAttended
+                                  : l10n.eventAttendanceNoShow,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: a.attendance == 'attended'
+                                    ? AppSemanticColors.of(context).success
+                                    : theme.colorScheme.error,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          if (athletic) ...[
-            const SizedBox(height: 24),
-            EventResultsSection(
-              results: _results,
-              myUserId: widget.social.currentUserId,
-              submitting: _submittingResult,
-              onSubmit: _submitMyTime,
-              onRemove: _removeMyResult,
-              eventTitle: e.row.title,
-              clubName: _club?.row.name,
-              certificateDate: _activeInstance ?? e.row.startsAt,
-            ),
+                ],
+              ),
+            if (athletic) ...[
+              const SizedBox(height: 24),
+              EventResultsSection(
+                results: _results,
+                myUserId: widget.social.currentUserId,
+                submitting: _submittingResult,
+                onSubmit: _submitMyTime,
+                onRemove: _removeMyResult,
+                eventTitle: e.row.title,
+                clubName: _club?.row.name,
+                certificateDate: _activeInstance ?? e.row.startsAt,
+              ),
+            ],
+            if (isMember) ...[
+              const SizedBox(height: 24),
+              _AdminUpdateComposer(
+                onSubmit: (body) async {
+                  await widget.social.createPost(
+                    clubId: _club!.row.id,
+                    eventId: e.row.id,
+                    eventInstanceStart: e.freq != null ? active : null,
+                    body: body,
+                  );
+                  if (!mounted) return;
+                  showTopBanner(
+                      context, AppLocalizations.of(context).eventUpdatePosted);
+                },
+              ),
+            ],
           ],
-          if (isMember) ...[
-            const SizedBox(height: 24),
-            _AdminUpdateComposer(
-              onSubmit: (body) async {
-                await widget.social.createPost(
-                  clubId: _club!.row.id,
-                  eventId: e.row.id,
-                  eventInstanceStart: e.freq != null ? active : null,
-                  body: body,
-                );
-                if (!mounted) return;
-                showTopBanner(
-                    context, AppLocalizations.of(context).eventUpdatePosted);
-              },
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

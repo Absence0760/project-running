@@ -435,7 +435,7 @@
 	}
 	.manual-toggle .material-symbols { font-size: 1.1rem; }
 	.manual { display: flex; flex-direction: column; gap: var(--space-md); }
-	.macro-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-md); }
+	.macro-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md); }
 	.field { display: flex; flex-direction: column; gap: var(--space-xs); }
 	.field input {
 		width: 100%;
@@ -490,7 +490,7 @@
 	.portion-grid {
 		flex: 1;
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: var(--space-md);
 		margin: 0;
 	}
@@ -510,7 +510,7 @@
 	}
 	.portion-extended {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(7rem, 100%), 1fr));
 		gap: var(--space-sm) var(--space-md);
 		margin: 0;
 		padding: var(--space-md);

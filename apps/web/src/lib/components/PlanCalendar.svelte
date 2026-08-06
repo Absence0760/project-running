@@ -229,11 +229,11 @@
 	}
 	.dow-row {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(0, 1fr));
 		gap: 0.35rem;
 		margin-bottom: 0.4rem;
 		text-align: center;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -241,7 +241,7 @@
 	}
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(7, 1fr);
+		grid-template-columns: repeat(7, minmax(0, 1fr));
 		gap: 0.35rem;
 	}
 	.cell {
@@ -253,7 +253,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text);
 		text-decoration: none;
 		position: relative;
@@ -287,7 +287,7 @@
 		background: var(--color-success-light);
 	}
 	.day-num {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-secondary);
 		align-self: flex-end;
@@ -304,7 +304,7 @@
 		white-space: nowrap;
 	}
 	.dist {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text);
 		font-weight: 600;
 	}

@@ -3,7 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:ui_kit/ui_kit.dart'
-    show AppSemanticColors, ChartCardHeader, ChartPalette;
+    show AppSemanticColors, ChartCardHeader, ChartPalette, ProgressBar;
 
 import '../adaptive_width.dart';
 import '../age_grade.dart';
@@ -705,20 +705,6 @@ class _DashboardScreenState extends State<DashboardScreen>
             MaterialPageRoute(builder: (_) => FeedScreen(api: api)),
           ),
         ),
-        IconButton(
-          tooltip: l10n.dashboardRecapTooltip,
-          icon: const Icon(Icons.calendar_today_outlined),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => RecapScreen(
-                runStore: widget.runStore,
-                preferences: widget.preferences,
-                api: api,
-              ),
-            ),
-          ),
-        ),
         if (viewerId != null) NotificationBell(api: api),
         if (viewerId != null)
           IconButton(
@@ -820,6 +806,30 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ],
       );
+      // The recap used to be an unlabelled calendar glyph on the toolbar —
+      // which reads as a date picker — and was the surface's only entry point
+      // in the app (#666 I8). Web renders it as a labelled link beside the
+      // dashboard stat grid; this is that link, under the period cards it
+      // summarises.
+      final recapLink = api == null
+          ? null
+          : Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => RecapScreen(
+                      runStore: widget.runStore,
+                      preferences: widget.preferences,
+                      api: api,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: Text(l10n.dashboardRecapTooltip),
+              ),
+            );
       final thisWeekCard = Card(
         child: Padding(
           padding: _kCardPadding,
@@ -950,62 +960,62 @@ class _DashboardScreenState extends State<DashboardScreen>
         ));
         if (liftsCard != null) addBlock(liftsCard);
 
-        content = Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _kExpandedMaxWidth),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                if (actionToolbar != null) actionToolbar,
-                if (coach != null) ...[coach, _kSectionGap],
-                if (workoutCard != null || modalityBody != null)
-                  Row(
-                    key: const Key('dashboardExpandedLeadRow'),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (workoutCard != null) workoutCard,
-                            if (workoutCard != null && modalityBody != null)
-                              _kSectionGap,
-                            if (modalityBody != null) modalityBody,
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(child: goalsSection),
-                    ],
-                  )
-                else
-                  goalsSection,
-                _kSectionGap,
-                periodRow,
-                _kSectionGap,
-                thisWeekCard,
-                _kSectionGap,
+        content = contentColumn(
+          context,
+          maxWidth: _kExpandedMaxWidth,
+          ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              if (actionToolbar != null) actionToolbar,
+              if (coach != null) ...[coach, _kSectionGap],
+              if (workoutCard != null || modalityBody != null)
                 Row(
-                  key: const Key('dashboardExpandedChartColumns'),
+                  key: const Key('dashboardExpandedLeadRow'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: left,
+                        children: [
+                          if (workoutCard != null) workoutCard,
+                          if (workoutCard != null && modalityBody != null)
+                            _kSectionGap,
+                          if (modalityBody != null) modalityBody,
+                        ],
                       ),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: right,
-                      ),
-                    ),
+                    Expanded(child: goalsSection),
                   ],
-                ),
-              ],
-            ),
+                )
+              else
+                goalsSection,
+              _kSectionGap,
+              periodRow,
+              if (recapLink != null) recapLink,
+              _kSectionGap,
+              thisWeekCard,
+              _kSectionGap,
+              Row(
+                key: const Key('dashboardExpandedChartColumns'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: left,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: right,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         );
       } else {
@@ -1023,6 +1033,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             goalsSection,
             _kSectionGap,
             periodRow,
+            if (recapLink != null) recapLink,
             _kSectionGap,
             // Every card below names itself with a ChartCardHeader, so the
             // stack separates by the card grammar (§482's 4dp vertical margin
@@ -1590,14 +1601,7 @@ class _TargetRow extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: t.percent,
-            minHeight: 6,
-            color: accent,
-          ),
-        ),
+        ProgressBar(value: t.percent, fill: accent),
         const SizedBox(height: 5),
         Row(
           children: [

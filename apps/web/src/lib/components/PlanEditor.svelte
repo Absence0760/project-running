@@ -683,7 +683,7 @@
 	}
 	@media (max-width: 60rem) {
 		.grid {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 	.form,
@@ -703,6 +703,9 @@
 		gap: 0.3rem;
 		font-size: 0.9rem;
 		font-weight: 600;
+		/* The UA sheet gives every fieldset `min-width: min-content`, which
+		   is what stops this one shrinking into its grid track. */
+		min-width: 0;
 	}
 	.optional {
 		font-weight: 400;
@@ -769,11 +772,13 @@
 	}
 	.time-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.4rem;
 	}
 	.time-row input {
 		width: 4rem;
+		min-width: 0;
 		text-align: center;
 	}
 	.time-row span {
@@ -836,7 +841,7 @@
 	}
 	.paces {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
 		gap: 0.4rem 0.8rem;
 	}
 	.pace-row {
@@ -953,7 +958,7 @@
 	}
 	@media (max-width: 50rem) {
 		.wo-row {
-			grid-template-columns: repeat(2, 1fr);
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 	.wo-date {
@@ -966,7 +971,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.15rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;

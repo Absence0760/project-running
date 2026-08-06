@@ -514,9 +514,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get navYou => 'Du';
 
   @override
-  String get fitnessTabAll => 'Alle';
-
-  @override
   String get fitnessTabRuns => 'Läufe';
 
   @override
@@ -4218,6 +4215,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubDetailTabPhotos => 'Fotos';
 
   @override
+  String get clubDetailReadMore => 'Mehr lesen';
+
+  @override
   String get clubDetailReportClub => 'Club melden';
 
   @override
@@ -6026,24 +6026,17 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get settingsAccountViewProfile => 'Profil ansehen';
+  String get guidedRunsTitle => 'Geführte Läufe';
 
   @override
-  String get settingsAccountViewProfileSubtitle =>
-      'Deine Läufe, Follower, Gefolgte, Benachrichtigungen';
-
-  @override
-  String get settingsAccountGuidedRuns => 'Geführte Läufe';
-
-  @override
-  String get settingsAccountGuidedRunsSubtitle =>
+  String get guidedRunsSubtitle =>
       'Skriptgesteuerte Workouts mit Coach-Stimme und TTS-Hinweisen';
 
   @override
-  String get settingsAccountPrivacyZones => 'Datenschutzzonen';
+  String get privacyZonesTitle => 'Datenschutzzonen';
 
   @override
-  String get settingsAccountPrivacyZonesSubtitle =>
+  String get privacyZonesSubtitle =>
       'Anfang/Ende öffentlicher Tracks in Wohnungsnähe abschneiden';
 
   @override
@@ -6523,7 +6516,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get aboutLegalSection => 'Rechtliches';
 
   @override
-  String get devicesTitle => 'Geräte';
+  String get devicesTitle => 'Angemeldete Geräte';
 
   @override
   String get devicesRenameTitle => 'Gerät umbenennen';
@@ -6843,9 +6836,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get gearRotationDone => 'Fertig';
-
-  @override
-  String get privacyZonesTitle => 'Datenschutzzonen';
 
   @override
   String get privacyZonesSaved => 'Datenschutzzonen gespeichert.';
@@ -7292,7 +7282,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get dashboardRecapTooltip => 'Jahresrückblick im Laufen';
 
   @override
-  String get dashboardProfileTooltip => 'Mein Profil';
+  String get dashboardProfileTooltip => 'Dein Profil';
 
   @override
   String get dashboardWelcomeTitle => 'Willkommen!';
@@ -9192,7 +9182,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsDevicesSignedOutSubtitle =>
-      'Melde dich an, um deine Geräte zu verwalten';
+      'Melde dich an, um deine angemeldeten Geräte zu sehen';
 
   @override
   String get verifiedClubTooltip => 'Offiziell verifizierter Club';
@@ -9210,7 +9200,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get raceDistanceMarathon => 'Marathon';
 
   @override
-  String get settingsTabAccountSubtitle => 'Anmelden, sichern, Konto löschen';
+  String get settingsTabAccountSubtitle =>
+      'Anmeldung, Profil, Import und Backup, Konto löschen';
 
   @override
   String get settingsTabPreferencesSubtitle =>
@@ -9218,11 +9209,11 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsTabIntegrationsSubtitle =>
-      'Strava, parkrun, Herzfrequenzgurt';
+      'Strava, parkrun, Rennkalender, Herzfrequenzgurt, Laufband, Uhr';
 
   @override
   String get settingsTabDevicesSubtitle =>
-      'Wo du angemeldet bist und gerätespezifische Einstellungen';
+      'Wo du angemeldet bist, plus geräteweise Überschreibungen — Gurt oder Laufband koppelst du unter Integrationen';
 
   @override
   String get settingsTabGearSubtitle =>
@@ -12577,4 +12568,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routeMarkerRemoved => 'Markierung entfernt';
+
+  @override
+  String get roadbookNeedsRouteLine =>
+      'Füge dieser Route mindestens zwei Punkte hinzu, um ein Roadbook zu erstellen.';
+
+  @override
+  String get settingsGearUnavailable =>
+      'Ausrüstung ist in diesem Build nicht verfügbar';
 }

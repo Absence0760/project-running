@@ -504,7 +504,7 @@
 <style>
 	.page {
 		max-width: 56rem;
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 
 		/* Per-kind tint for the hero accent, step bars and timeline — the same
 		   measured mark scale the plan calendar draws its cell edges in, so the
@@ -622,7 +622,7 @@
 		border-radius: var(--radius-sm);
 		background: color-mix(in srgb, var(--kind-tint) 18%, transparent);
 		color: var(--color-text);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		letter-spacing: 0.05em;
 		white-space: nowrap;
@@ -725,7 +725,7 @@
 	}
 	.relink-current-tag {
 		margin-inline-start: auto;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -902,7 +902,7 @@
 	.skel-w-60 { width: 60%; }
 	.skel-w-80 { width: 80%; }
 	.skel-hero {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(0, 1fr);
 	}
 	.skel-hero-text {
 		display: flex;
@@ -942,11 +942,11 @@
 
 	@media (max-width: 50rem) {
 		.hero {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 		.completed-card { align-self: stretch; justify-content: center; }
 		.step {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 			gap: 0.25rem;
 		}
 	}

@@ -687,15 +687,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: widthClassOf(context) != WidthClass.expanded
-            ? body
-            : Center(
-                child: ConstrainedBox(
-                  constraints:
-                      const BoxConstraints(maxWidth: _kExpandedBodyMaxWidth),
-                  child: body,
-                ),
-              ),
+        child: contentColumn(context, body, maxWidth: _kExpandedBodyMaxWidth),
       ),
     );
   }

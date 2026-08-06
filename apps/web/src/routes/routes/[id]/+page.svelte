@@ -766,11 +766,31 @@
 					bind:snapEnabled={markerSnap}
 					bind:pendingDrag={markerPendingDrag}
 				/>
-				{#if markerPins.length > 0}
+				<!-- The roadbook is a goal-time pacing sheet first and a
+				     checkpoint schedule second: with no markers it still
+				     projects start → finish. Gating the only link to it on
+				     `markerPins.length > 0` meant a runner who had never
+				     added a marker had no way to learn the surface exists.
+				     Show it always; disable it only when the route carries
+				     no line for `buildRoadbook` to walk, and say why. -->
+				{#if displayWaypoints.length >= 2}
 					<a class="btn btn-outline btn-sm roadbook-link" href={`/routes/${route.id}/roadbook`}>
 						<span class="material-symbols" aria-hidden="true">table_chart</span>
 						{m('roadbook.crewSheet')}
 					</a>
+				{:else}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm roadbook-link"
+						disabled
+						aria-describedby="roadbook-disabled-reason"
+					>
+						<span class="material-symbols" aria-hidden="true">table_chart</span>
+						{m('roadbook.crewSheet')}
+					</button>
+					<p id="roadbook-disabled-reason" class="roadbook-reason">
+						{m('roadbook.needsRouteLine')}
+					</p>
 				{/if}
 			</section>
 
@@ -1010,7 +1030,7 @@
 	 * pushed the description / tags / scrubber way down). */
 	.key-stats {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(112px, 100%), 1fr));
 		gap: 1px;
 		margin-bottom: var(--space-xl);
 		background: var(--color-border);
@@ -1035,7 +1055,7 @@
 		color: var(--color-text);
 	}
 	.key-stat-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -1097,7 +1117,7 @@
 		}
 		/* Tag chips can wrap freely without overflow. */
 		.stats-panel :global(.tag-chip) {
-			font-size: 0.7rem;
+			font-size: var(--font-size-section-label);
 			padding: 0.15rem 0.5rem;
 		}
 	}
@@ -1208,6 +1228,12 @@
 
 	.section {
 		margin-top: var(--space-xl);
+	}
+
+	.roadbook-reason {
+		margin: var(--space-xs) 0 0;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
 	}
 
 	.route-meta {
@@ -1457,7 +1483,7 @@
 	.featured-pill {
 		background: var(--color-primary);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.15rem 0.5rem;
 		border-radius: 9999px;
@@ -1529,13 +1555,13 @@
 		 * auto-fit form orphaned the 4th tile at panel widths between
 		 * 3 and 4 columns. 2-col here gives a perfect 2×2 at most
 		 * widths and stacks 1-col only on truly tiny panels. */
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-sm);
 		margin-bottom: var(--space-md);
 	}
 	@container stats (min-width: 600px) {
 		.elev-grid {
-			grid-template-columns: repeat(4, 1fr);
+			grid-template-columns: repeat(4, minmax(0, 1fr));
 		}
 	}
 	.elev-tile {
@@ -1550,7 +1576,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;

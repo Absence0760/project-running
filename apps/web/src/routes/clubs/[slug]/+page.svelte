@@ -1776,7 +1776,7 @@
 
 <style>
 	.page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 
 	.back {
@@ -1790,7 +1790,7 @@
 
 	.hero {
 		display: grid;
-		grid-template-columns: auto 1fr auto;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		gap: var(--space-md);
 		align-items: start;
 		padding: var(--space-lg);
@@ -1850,7 +1850,7 @@
 	}
 
 	.badge {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--color-text-tertiary);
@@ -2262,7 +2262,7 @@
 
 	.member-list {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
 		gap: 0.6rem;
 	}
 
@@ -2332,7 +2332,7 @@
 
 	.role-badge {
 		display: inline-block;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: capitalize;
 		letter-spacing: 0.02em;
@@ -2428,7 +2428,7 @@
 
 	.club-route-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 
@@ -2753,7 +2753,7 @@
 	   under the text block so it doesn't compress the title. */
 	@media (max-width: 50rem) {
 		.hero {
-			grid-template-columns: auto 1fr;
+			grid-template-columns: auto minmax(0, 1fr);
 		}
 		.hero-actions {
 			grid-column: 1 / -1;
@@ -2767,6 +2767,15 @@
 		}
 		.tab {
 			flex-shrink: 0;
+		}
+	}
+
+	/* <=26rem. The avatar column plus a text column leaves the text ~78px
+	   on a 320px screen, narrower than a single club name. The avatar
+	   stacks above the text instead. */
+	@media (max-width: 26rem) {
+		.hero {
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 

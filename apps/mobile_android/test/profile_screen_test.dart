@@ -4,7 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/l10n/gen/app_localizations.dart';
@@ -414,4 +414,79 @@ void main() {
           source.contains('widget.api.unblockUser(widget.userId)'), isTrue);
     });
   });
+
+  group('profile header (issue #666 C12)', () {
+    // The header is a fixed band above `Expanded(TabBarView)` in a
+    // non-scrolling `Column`, and `user_profiles.display_name` has no DB
+    // length constraint. The derivation, not an absolute: name LENGTH must
+    // not move the header/tabs split — font-independent, where an absolute
+    // "the tabs get N dp" would not be measurable in CI (decisions § 500).
+    testWidgets('display-name length does not move the header/tabs split',
+        (tester) async {
+      await _ensureSupabase();
+      tester.view.physicalSize = const Size(360 * 3, 640 * 3);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      Future<double> splitFor(String name) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            // Keyed by the name: without it the second pump reuses the first
+            // State, which never re-fetches, and the assertions would run
+            // against the first name twice.
+            home: ProfileScreen(
+              key: ValueKey(name),
+              api: _NamedApi(name),
+              userId: 'me',
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        // The AppBar title carries the same string; the header copy is the
+        // one that can grow the band, and it is the capped one.
+        expect(find.byType(IdentityAvatar), findsOneWidget);
+        expect(
+          tester
+              .widgetList<Text>(find.text(name))
+              .map((t) => t.maxLines)
+              .toList(),
+          contains(kProfileNameMaxLines),
+        );
+        return tester.getSize(find.byType(TabBarView)).height;
+      }
+
+      final atCap = await splitFor('Alexandra Bartholomew-Ngu' * 2);
+      final tenTimesLonger =
+          await splitFor('Alexandra Bartholomew-Ngu' * 20);
+
+      expect(atCap, greaterThan(0));
+      expect(tester.takeException(), isNull);
+      expect(
+        tenTimesLonger,
+        atCap,
+        reason: 'a longer display name still eats the tab bodies',
+      );
+    });
+  });
+}
+
+/// Self-profile whose display name the caller chooses, so the header's
+/// unbounded child can be driven directly.
+class _NamedApi extends _SelfApi {
+  _NamedApi(this.name);
+
+  final String name;
+
+  @override
+  Future<ProfileSummary?> fetchProfileSummary(String userId) async =>
+      ProfileSummary(
+        id: 'me',
+        displayName: name,
+        followerCount: 0,
+        followingCount: 0,
+        viewerFollows: false,
+      );
 }

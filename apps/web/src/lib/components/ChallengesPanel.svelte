@@ -128,9 +128,10 @@
 	}
 	header {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-sm);
+		gap: var(--space-2xs) var(--space-sm);
 	}
 	.head-ident {
 		display: inline-flex;
@@ -165,7 +166,7 @@
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.mini {

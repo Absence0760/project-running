@@ -311,7 +311,7 @@
 		background: var(--color-primary);
 		color: var(--color-bg);
 		border-radius: 999px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		padding: 0.05rem 0.4rem;
 		font-weight: 700;
 	}
@@ -393,7 +393,7 @@
 
 	@media (max-width: 48rem) {
 		.layout {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 		/* On narrow screens show one pane at a time. */
 		.threads.has-active {

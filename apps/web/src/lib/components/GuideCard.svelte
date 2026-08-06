@@ -36,7 +36,7 @@
 		align-self: flex-start;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-primary);
 		background: var(--color-primary-light);

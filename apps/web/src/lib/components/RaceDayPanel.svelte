@@ -301,7 +301,7 @@
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(8rem, 100%), 1fr));
 		gap: 0.4rem;
 	}
 	.splits li {
@@ -316,7 +316,7 @@
 
 	.checklist-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.checklist-section {

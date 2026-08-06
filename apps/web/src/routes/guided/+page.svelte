@@ -75,7 +75,7 @@
 </div>
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); max-width: 64rem; margin: 0 auto; }
+	.page { padding: var(--page-padding-y) var(--page-padding-x); max-width: 64rem; margin: 0 auto; }
 	.back-link {
 		display: inline-flex;
 		align-items: center;
@@ -123,7 +123,7 @@
 	}
 	.library {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.card {

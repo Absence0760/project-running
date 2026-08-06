@@ -386,7 +386,7 @@
 	.toolbar-actions .material-symbols { font-size: 1.05rem; }
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.card {
@@ -428,7 +428,7 @@
 	}
 	.location .material-symbols { font-size: 0.95rem; }
 	.badge {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--color-text-tertiary);

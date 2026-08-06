@@ -34,6 +34,11 @@ const int _kFollowsPageSize = 20;
 /// was inserted ahead of it).
 enum ProfileTab { runs, badges, followers, following, notifications }
 
+/// Lines the profile header gives a display name. A name is a name; two lines
+/// is generous, and the cap is what keeps the header from starving the tabs
+/// below it (decisions § 537).
+const int kProfileNameMaxLines = 2;
+
 /// Public profile screen — mirrors the web `/u/[id]` page (decisions §31).
 ///
 /// Tabs: Runs (public-only), Achievements, Followers, Following,
@@ -723,6 +728,14 @@ class _ProfileScreenState extends State<ProfileScreen>
               children: [
                 Text(
                   s.displayName ?? l10n.profileRunnerFallback,
+                  // Same fixed-band-above-a-TabBarView shape as club detail
+                  // (decisions § 537): this header is the only unbounded
+                  // child of a `Column` whose sibling is `Expanded`, and
+                  // `user_profiles.display_name` has no DB length constraint,
+                  // so an uncapped name takes the tabs' height and then
+                  // overflows.
+                  maxLines: kProfileNameMaxLines,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -967,21 +980,14 @@ class _ProfileScreenState extends State<ProfileScreen>
             crossAxisAlignment: WrapCrossAlignment.center,
             runSpacing: 4,
             children: [
-              SegmentedButton<String>(
-                segments: [
-                  ButtonSegment(
-                    value: 'all',
-                    label: Text(l10n.profileNotifAll),
-                  ),
-                  ButtonSegment(
-                    value: 'unread',
-                    label: Text(l10n.profileNotifUnread),
-                  ),
+              ChoiceChipRow<String>(
+                options: [
+                  ChoiceChipOption(value: 'all', label: l10n.profileNotifAll),
+                  ChoiceChipOption(
+                      value: 'unread', label: l10n.profileNotifUnread),
                 ],
-                selected: {_notifFilter},
-                onSelectionChanged: (s) =>
-                    setState(() => _notifFilter = s.first),
-                showSelectedIcon: false,
+                selected: _notifFilter,
+                onChanged: (v) => setState(() => _notifFilter = v),
               ),
               if (hasUnread)
                 TextButton(

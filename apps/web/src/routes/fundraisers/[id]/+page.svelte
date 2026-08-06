@@ -287,7 +287,7 @@
 	.fundraiser-page {
 		max-width: 48rem;
 		margin: 0 auto;
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-lg);

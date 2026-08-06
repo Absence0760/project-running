@@ -74,7 +74,7 @@
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 	.badge-tile {
@@ -117,7 +117,7 @@
 		color: var(--color-text-secondary);
 	}
 	.badge-tier {
-		font-size: 0.6875rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		font-weight: 700;

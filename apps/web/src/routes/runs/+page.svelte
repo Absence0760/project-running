@@ -975,10 +975,16 @@
 		background: var(--color-bg-secondary);
 		padding: var(--space-2xs);
 		gap: var(--space-2xs);
+		/* A segmented control is one continuous pill — wrapping it
+		   splits the track. It scrolls itself instead of widening the
+		   document (WCAG 1.4.10). */
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
 	.seg-btn {
 		display: inline-flex;
+		flex: 0 0 auto;
 		align-items: center;
 		justify-content: center;
 		gap: var(--space-xs);
@@ -1097,7 +1103,7 @@
 
 	.run-list {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
 		gap: var(--space-md);
 	}
 
@@ -1151,7 +1157,7 @@
 		opacity: 0.7;
 	}
 	.run-map-placeholder .no-track-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;

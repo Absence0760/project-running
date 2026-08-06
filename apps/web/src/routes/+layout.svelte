@@ -1000,6 +1000,12 @@
 
 	.main-content {
 		flex: 1;
+		/* A flex item defaults to min-width:auto, so this one refuses to
+		   shrink below its content's min-content width and the whole
+		   document grows a horizontal scrollbar instead of reflowing
+		   (WCAG 1.4.10). Zero lets the page box track the viewport;
+		   anything inside that genuinely can't reflow scrolls itself. */
+		min-width: 0;
 		margin-inline-start: var(--sidebar-width);
 		min-height: 100vh;
 		transition: margin-inline-start var(--transition-base);
