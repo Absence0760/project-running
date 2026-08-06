@@ -16,6 +16,7 @@ import '../widgets/top_banner.dart';
 import 'coaching_screen.dart';
 import 'devices_screen.dart';
 import 'gear_screen.dart';
+import 'guided_runs_screen.dart';
 import 'settings_about_screen.dart';
 import 'settings_account_screen.dart';
 import 'settings_integrations_screen.dart';
@@ -82,13 +83,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// A landing tile. Pass a null [onTap] for a tile whose destination cannot
+  /// be built on this mount — it renders disabled with [subtitle] carrying the
+  /// reason, never as a tappable row that silently does nothing (#666 I16).
   Widget _tab({
     required IconData icon,
     required String label,
     required String subtitle,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return ListTile(
+      enabled: onTap != null,
       leading: Icon(icon),
       title: Text(label),
       subtitle: Text(subtitle),
@@ -155,6 +160,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     preferences: widget.preferences,
                   )),
             ),
+            // Guided runs is coaching content, so it belongs beside Coaching
+            // rather than three taps down inside Account, whose subject is
+            // sign-in / backup / deletion (#666 I7). It stays on the landing
+            // and not behind the sign-in-gated Coach screen because the
+            // library is local TTS scripts with no API dependency — the
+            // signed-out floor `settings_screen_test` already pins.
+            _tab(
+              icon: Icons.headset,
+              label: l10n.guidedRunsTitle,
+              subtitle: l10n.guidedRunsSubtitle,
+              onTap: () => _open((_) => const GuidedRunsScreen()),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
               child: SectionHeader(label: l10n.settingsSectionAppsData),
@@ -182,21 +199,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     currentDeviceId: widget.preferences.deviceId,
                   )),
             ),
-            _tab(
-              icon: Icons.directions_run,
-              label: l10n.gearTitle,
-              subtitle: l10n.settingsTabGearSubtitle,
-              onTap: () {
-                final gearStore = widget.gearStore;
-                if (gearStore == null) return;
-                _open((_) => GearScreen(
-                      api: widget.apiClient,
-                      preferences: widget.preferences,
-                      store: gearStore,
-                      runStore: widget.runStore,
-                    ));
-              },
-            ),
+            () {
+              final gearStore = widget.gearStore;
+              return _tab(
+                icon: Icons.directions_run,
+                label: l10n.gearTitle,
+                subtitle: gearStore == null
+                    ? l10n.settingsGearUnavailable
+                    : l10n.settingsTabGearSubtitle,
+                onTap: gearStore == null
+                    ? null
+                    : () => _open((_) => GearScreen(
+                          api: widget.apiClient,
+                          preferences: widget.preferences,
+                          store: gearStore,
+                          runStore: widget.runStore,
+                        )),
+              );
+            }(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
               child: SectionHeader(label: l10n.settingsSectionAccountLegal),

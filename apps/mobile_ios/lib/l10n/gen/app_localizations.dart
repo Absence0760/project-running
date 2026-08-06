@@ -887,12 +887,6 @@ abstract class AppLocalizations {
   /// **'You'**
   String get navYou;
 
-  /// Fitness hub sub-tab showing the unified cross-modal activity timeline
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get fitnessTabAll;
-
   /// Fitness hub sub-tab for the run list and routes
   ///
   /// In en, this message translates to:
@@ -9909,41 +9903,29 @@ abstract class AppLocalizations {
   /// **'Couldn\'t update photo: {error}'**
   String settingsAccountAvatarFailed(Object error);
 
-  /// Tile title that opens the user's own profile
-  ///
-  /// In en, this message translates to:
-  /// **'View profile'**
-  String get settingsAccountViewProfile;
-
-  /// Subtitle of the View profile tile
-  ///
-  /// In en, this message translates to:
-  /// **'Your runs, followers, following, notifications'**
-  String get settingsAccountViewProfileSubtitle;
-
   /// Tile title for guided runs
   ///
   /// In en, this message translates to:
   /// **'Guided runs'**
-  String get settingsAccountGuidedRuns;
+  String get guidedRunsTitle;
 
   /// Subtitle of the Guided runs tile
   ///
   /// In en, this message translates to:
   /// **'Coach-voice scripted workouts with TTS cues'**
-  String get settingsAccountGuidedRunsSubtitle;
+  String get guidedRunsSubtitle;
 
-  /// Tile title for privacy zones
+  /// AppBar title for the Settings > Privacy zones screen
   ///
   /// In en, this message translates to:
   /// **'Privacy zones'**
-  String get settingsAccountPrivacyZones;
+  String get privacyZonesTitle;
 
   /// Subtitle of the Privacy zones tile
   ///
   /// In en, this message translates to:
   /// **'Clip start/end of public tracks near home'**
-  String get settingsAccountPrivacyZonesSubtitle;
+  String get privacyZonesSubtitle;
 
   /// Toggle title for Sentry error reporting
   ///
@@ -10698,7 +10680,7 @@ abstract class AppLocalizations {
   /// AppBar title for the Settings > Devices screen
   ///
   /// In en, this message translates to:
-  /// **'Devices'**
+  /// **'Signed-in devices'**
   String get devicesTitle;
 
   /// Title of the rename-device dialog
@@ -11198,12 +11180,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Done'**
   String get gearRotationDone;
-
-  /// AppBar title for the Settings > Privacy zones screen
-  ///
-  /// In en, this message translates to:
-  /// **'Privacy zones'**
-  String get privacyZonesTitle;
 
   /// Banner shown after saving privacy zones
   ///
@@ -11988,7 +11964,7 @@ abstract class AppLocalizations {
   /// Dashboard toolbar tooltip for opening the user's own profile
   ///
   /// In en, this message translates to:
-  /// **'My profile'**
+  /// **'Your profile'**
   String get dashboardProfileTooltip;
 
   /// Dashboard empty-state welcome headline
@@ -15203,7 +15179,7 @@ abstract class AppLocalizations {
   /// Devices settings tile subtitle shown when signed out
   ///
   /// In en, this message translates to:
-  /// **'Sign in to manage your devices'**
+  /// **'Sign in to see where you\'re signed in'**
   String get settingsDevicesSignedOutSubtitle;
 
   /// Tooltip on the verified-club badge
@@ -15239,7 +15215,7 @@ abstract class AppLocalizations {
   /// Settings landing: Account tile subtitle when signed out
   ///
   /// In en, this message translates to:
-  /// **'Sign in, backup, delete account'**
+  /// **'Sign-in, profile, import and backup, delete account'**
   String get settingsTabAccountSubtitle;
 
   /// Settings landing: Preferences tile subtitle
@@ -15251,13 +15227,13 @@ abstract class AppLocalizations {
   /// Settings landing: Integrations tile subtitle
   ///
   /// In en, this message translates to:
-  /// **'Strava, parkrun, heart-rate strap'**
+  /// **'Strava, parkrun, race calendar, heart-rate strap, treadmill, watch'**
   String get settingsTabIntegrationsSubtitle;
 
   /// Settings landing: Devices tile subtitle when signed in
   ///
   /// In en, this message translates to:
-  /// **'Where you\'re signed in and per-device overrides'**
+  /// **'Where you\'re signed in and per-device overrides — pair a strap or treadmill under Integrations'**
   String get settingsTabDevicesSubtitle;
 
   /// Settings landing: Gear tile subtitle
@@ -21013,6 +20989,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Marker removed'**
   String get routeMarkerRemoved;
+
+  /// Reason shown beside the disabled crew-sheet button when the route has fewer than two points
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least two points to this route to build a roadbook.'**
+  String get roadbookNeedsRouteLine;
+
+  /// Reason on the disabled Gear tile when no gear store is wired on this mount
+  ///
+  /// In en, this message translates to:
+  /// **'Gear isn\'t available on this build'**
+  String get settingsGearUnavailable;
 }
 
 class _AppLocalizationsDelegate

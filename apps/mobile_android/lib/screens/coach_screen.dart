@@ -22,7 +22,9 @@ import '../l10n/number_format.dart';
 import '../training_service.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/sign_in_required_state.dart';
+import '../widgets/surface_peer_strip.dart';
 import '../widgets/top_banner.dart';
+import 'guided_runs_screen.dart';
 
 /// Truncate a coach message to a sidebar-thread title. Strips repeated
 /// whitespace so multi-line user prompts collapse to a single line, then
@@ -977,6 +979,25 @@ class _CoachScreenState extends State<CoachScreen> {
       drawer: _buildArchivesDrawer(theme, l10n),
       body: Column(
         children: [
+          // Guided runs are coach-driven training content, and web reaches
+          // them from a rail on `/coach`. On mobile they were filed under
+          // Settings → Account, where nothing about the surrounding screen
+          // (sign-in, backup, delete account) suggests a workout library
+          // (#666 I7). A labelled peer is the mobile shape of that rail.
+          SurfacePeerStrip(
+            label: l10n.coachTitle,
+            peers: [
+              SurfacePeer(label: l10n.coachTitle),
+              SurfacePeer(
+                label: l10n.guidedRunsTitle,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const GuidedRunsScreen(),
+                  ),
+                ),
+              ),
+            ],
+          ),
           if (_ctx != null) _buildContextStrip(theme, l10n),
           if (_viewingArchiveAt != null) _buildArchiveBanner(theme, l10n),
           if (_remaining <= 3) _buildLimitBanner(theme, l10n, cs),

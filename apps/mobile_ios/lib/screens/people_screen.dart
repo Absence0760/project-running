@@ -14,9 +14,9 @@ import 'profile_screen.dart';
 
 /// People discovery — name search + "suggested" people pulled from the
 /// viewer's clubs. Mirrors `apps/web/src/lib/components/SocialPeople.svelte`
-/// + the People tab on web's `/social` hub. Reached from the Clubs and
-/// Feed AppBars on mobile (mobile has no top-level "Social" tab — the
-/// bottom-nav Clubs entry hosts the social discovery entry point).
+/// + the People tab on web's `/social` hub. Mounted as the **People**
+/// sub-tab of `social_screen.dart` (the Social bottom-nav destination); the
+/// standalone Scaffold path is kept for any direct caller.
 class PeopleScreen extends StatefulWidget {
   final ApiClient api;
   /// Embedded mode skips the Scaffold/AppBar wrapping — the search
