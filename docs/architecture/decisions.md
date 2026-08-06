@@ -7378,10 +7378,10 @@ the landing loader, one in `sitemap.xml` — **7** inline
 `process.env.PUBLIC_SITE_URL ?? …` in Lambda handlers. It is the same class one
 level up from the path builders, and the two loaders this round touched follow
 the existing 15-way convention rather than minting a shared constant with 2 of 27
-callers; the sweep belongs to a round that owns those files. The `.ts` register's
-two largest entries are TS↔Dart parity pairs (`route_markers.ts`,
-`pace_segments.ts`), so a future value change there is a two-platform change and
-the register entry should say so before anyone edits it — it does. And the
+callers; the sweep belongs to a round that owns those files. Two of the register's
+new `.ts` entries are TS↔Dart parity pairs (`route_markers.ts` at 7 literals,
+`pace_segments.ts` at 6), so a future value change there is a two-platform change
+and the register entry should say so before anyone edits it — it does. And the
 mobile twin of the `sourceColor` finding is unexamined: whatever paints a source
 badge on the Flutter side owes the same measurement against the same grounds,
 and should take web's figures rather than minting a ninth guess, the way § 542
