@@ -412,6 +412,85 @@ void main() {
     });
   });
 
+  group('GoalEditorSheet — the §486 action row', () {
+    // Delete sits at one end and Cancel/Save at the other, so this is §486's
+    // OPPOSING-ENDS shape rather than a run of buttons: the grouped side goes
+    // in an `Expanded(Wrap)` and the lone anchor keeps the leading edge
+    // through the reflow. An `OverflowBar` would have stacked all three into
+    // one end-aligned column and put Delete next to Save.
+    //
+    // Both cases pin the DERIVATION, never a width: flutter_test's font is
+    // fixed-advance and 2-6x wider than Roboto (§500), so "reflowed here"
+    // holds a fortiori on a device, and "one run at 1.0x on a comfortable
+    // surface" pins that the mechanism only fires when it must.
+    Future<void> pumpEditing(WidgetTester tester,
+        {required double scale, required double width}) async {
+      final prefs = await _makePrefs();
+      await tester.binding.setSurfaceSize(Size(width, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () => showGoalEditorSheet(
+                  ctx,
+                  preferences: prefs,
+                  existing: const RunGoal(
+                    id: 'g1',
+                    period: GoalPeriod.week,
+                    distanceMetres: 40000,
+                  ),
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.ensureVisible(find.text('Cancel'));
+      await tester.pump();
+    }
+
+    testWidgets('lays out as one run at 1.0x, Delete leading', (tester) async {
+      await pumpEditing(tester, scale: 1.0, width: 400);
+      final del = tester.getRect(find.text('Delete'));
+      final cancel = tester.getRect(find.text('Cancel'));
+      final save = tester.getRect(find.text('Save'));
+      expect(cancel.top, save.top, reason: 'Cancel/Save left their shared run');
+      expect(save.left, greaterThan(cancel.right),
+          reason: 'Save must follow Cancel, end-aligned');
+      expect(del.left, lessThan(cancel.left),
+          reason: 'Delete must hold the leading edge');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the grouped end reflows at 2.0x and Delete keeps its edge',
+        (tester) async {
+      await pumpEditing(tester, scale: 2.0, width: 320);
+      final del = tester.getRect(find.text('Delete'));
+      final cancel = tester.getRect(find.text('Cancel'));
+      final save = tester.getRect(find.text('Save'));
+      expect(save.top, greaterThanOrEqualTo(cancel.bottom),
+          reason: 'the grouped end did not reflow onto a second run');
+      expect(del.left, lessThanOrEqualTo(cancel.left),
+          reason: 'Delete lost the leading edge to the reflow');
+      expect(del.top, lessThanOrEqualTo(cancel.bottom),
+          reason: 'Delete must stay on the first run');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('GoalEditorSheet — the target-field label lane', () {
     // Each target row leads with an 80px label box. Spanish "Ritmo medio"
     // needs 79.3px in real Roboto at bodyMedium — inside the box by 0.7px at
@@ -422,10 +501,6 @@ void main() {
     // Pinned as a derivation, never as an absolute fit: flutter_test renders a
     // fixed-advance font 2-6x wider than Roboto, so a lane whose floor tracks
     // the scale here tracks it on a device too.
-    // The 2x pass needs a wider surface than the sheet's usual 400: its
-    // Cancel/Save row is a §486 end-aligned action row that never became an
-    // OverflowBar and overflows at 2x on its own account, which this round
-    // does not own.
     Future<void> pumpSpanish(WidgetTester tester,
         {double scale = 1.0, double width = 400}) async {
       final prefs = await _makePrefs();
@@ -476,7 +551,7 @@ void main() {
     });
 
     testWidgets('the lane floors grow with the OS text scale', (tester) async {
-      await pumpSpanish(tester, scale: 2.0, width: 700);
+      await pumpSpanish(tester, scale: 2.0, width: 400);
       final lanes = find.byType(TextLane);
       expect(lanes, findsWidgets);
       for (var i = 0; i < lanes.evaluate().length; i++) {
