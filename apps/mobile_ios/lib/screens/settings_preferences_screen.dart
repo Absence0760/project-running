@@ -10,6 +10,7 @@ import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
 import '../push_messaging_bridge.dart';
 import '../settings_sync.dart';
+import '../undo_queue.dart';
 import '../widgets/top_banner.dart';
 import 'settings_body_metrics_screen.dart';
 
@@ -786,6 +787,43 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
+  /// The bag is the source of truth once it has loaded; before that, the
+  /// locally-mirrored value keeps the row honest offline.
+  int get _undoWindowS {
+    final raw = _bagValue<num>(SettingsKeys.undoWindowS);
+    return raw == null
+        ? widget.preferences.undoWindowS
+        : undoWindowSFromPref(raw);
+  }
+
+  String _undoWindowLabel(AppLocalizations l10n, int seconds) {
+    switch (seconds) {
+      case 0:
+        return l10n.prefsUndoWindowManual;
+      case 30:
+        return l10n.prefsUndoWindow30s;
+      default:
+        return l10n.prefsUndoWindow8s;
+    }
+  }
+
+  Future<void> _editUndoWindow() async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await _pickRadio<int>(
+      title: l10n.prefsUndoWindow,
+      options: kUndoWindowChoicesS,
+      labels: [
+        for (final s in kUndoWindowChoicesS) _undoWindowLabel(l10n, s),
+      ],
+      current: _undoWindowS,
+    );
+    if (picked == null) return;
+    // Mirror locally first so the offer honours the new choice even while the
+    // bag write is still queued, and so it survives a cold start offline.
+    await widget.preferences.setUndoWindowS(picked);
+    await _putUniversal(SettingsKeys.undoWindowS, picked);
+  }
+
   Future<void> _editStravaAutoShare() async {
     final current = _bagValue<bool>(SettingsKeys.stravaAutoShare) ?? false;
     await _putUniversal(SettingsKeys.stravaAutoShare, !current);
@@ -1151,6 +1189,13 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 themeModeNotifier.value = mode;
                 widget.preferences.setThemeMode(mode);
               },
+            ),
+            ListTile(
+              title: Text(l10n.prefsUndoWindow),
+              subtitle: Text(_undoWindowLabel(l10n, _undoWindowS)),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _bagReady,
+              onTap: _editUndoWindow,
             ),
             SwitchListTile(
               title: Text(l10n.prefsShowCalories),

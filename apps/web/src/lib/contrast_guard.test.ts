@@ -10,7 +10,7 @@
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -942,6 +942,397 @@ test('the line/fill scans split on the CSS property, not on the token alone', ()
 	}
 });
 
+// § 518 recorded the line token as failing 3:1 "on eight dark tinted-gradient
+// cards, 2.551-2.998:1" and could not close it. Re-derived here, that figure
+// turns out to be the TOKEN measured against the tint (2.539-2.776 in 8-bit) —
+// but seven of those eight cards do not paint the token: they paint
+// `color-mix(<their own accent> 28-35%, var(--color-border))`, which lands
+// 3.152-3.744 dark and 3.388-4.579 light. § 503's "measure where it lands"
+// trap, one round further on. The residue was five sites the token-level look
+// could not see and one it hid, so the check that closes it has to be composited
+// per call site, which is what this is.
+//
+// It resolves, per theme: the tint stops a rule paints as
+// `color-mix(in srgb, var(--A) N%, var(--SURFACE))`, the border colour that
+// actually applies to that rule's subject (the last declaration per edge among
+// the rules whose subject's class AND pseudo-class sets are subsets of this
+// one's — which is why `.relink-run:hover`, whose own hover rule moves the edge
+// to primary, is not a finding and `.btn-secondary:hover`, whose does not, is),
+// and then the ratio between them. A tint over `transparent` is deliberately out
+// of scope: the source does not name what is behind it, so nothing here can
+// resolve it, and asserting on a guess is how § 503 got its name.
+const TINT_OVER_SURFACE =
+	/color-mix\(\s*in srgb\s*,\s*var\(\s*--([\w-]+)\s*\)\s*([\d.]+)%\s*,\s*var\(\s*--([\w-]+)\s*\)\s*\)/g;
+const LINE_MIXED_WITH_ACCENT =
+	/color-mix\(\s*in srgb\s*,\s*var\(\s*--([\w-]+)\s*\)\s*([\d.]+)%\s*,\s*var\(\s*--color-border\s*\)\s*\)/;
+// Every edge a border longhand or shorthand can set. The shorthands widen to the
+// edges they cover so a later `border-top` override is not read as replacing the
+// whole box — the plan grid's kind stripe is exactly that shape.
+const BORDER_EDGES: Record<string, readonly string[]> = {
+	border: ['top', 'right', 'bottom', 'left'],
+	'border-color': ['top', 'right', 'bottom', 'left'],
+	'border-block': ['top', 'bottom'],
+	'border-block-color': ['top', 'bottom'],
+	'border-block-start': ['top'],
+	'border-block-end': ['bottom'],
+	'border-inline': ['inline-start', 'inline-end'],
+	'border-inline-color': ['inline-start', 'inline-end'],
+	'border-inline-start': ['inline-start'],
+	'border-inline-start-color': ['inline-start'],
+	'border-inline-end': ['inline-end'],
+	'border-inline-end-color': ['inline-end'],
+	'border-top': ['top'],
+	'border-top-color': ['top'],
+	'border-bottom': ['bottom'],
+	'border-bottom-color': ['bottom'],
+	'border-left': ['left'],
+	'border-left-color': ['left'],
+	'border-right': ['right'],
+	'border-right-color': ['right'],
+};
+
+type Rule = { selector: string; body: string; at: number; line: number };
+
+// Leaf CSS rules only — a declaration block with no nested block inside it. That
+// skips `@media`/`@supports` wrappers as containers while still reaching the
+// rules within them, which is where two of the six findings lived.
+function leafRules(source: string): Rule[] {
+	const out: Rule[] = [];
+	for (let i = 0; i < source.length; i++) {
+		if (source[i] !== '{') continue;
+		let depth = 0;
+		let j = i;
+		for (; j < source.length; j++) {
+			if (source[j] === '{') depth++;
+			else if (source[j] === '}' && --depth === 0) break;
+		}
+		if (j >= source.length) continue;
+		const body = source.slice(i + 1, j);
+		if (body.includes('{')) continue;
+		let k = i - 1;
+		while (k >= 0 && !'}{;'.includes(source[k])) k--;
+		out.push({
+			selector: source.slice(k + 1, i).replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+			// Comments are stripped from the BODY too: a `/* ... */` between two
+			// declarations survives the `;` split and prefixes the next one, so a
+			// commented `border-color:` stopped matching the property regex.
+			body: body.replace(/\/\*[\s\S]*?\*\//g, ''),
+			at: i,
+			line: source.slice(0, i).split('\n').length,
+		});
+	}
+	return out;
+}
+
+// The compound that a selector actually styles. `.feature .feature-icon` styles
+// the icon, not the card, so `.feature`'s border must not be attributed to it —
+// reading the whole selector's classes made four landing tiles a false positive.
+function subject(selector: string): string {
+	const parts = selector.split(/\s*[>+~]\s*|\s+/).filter(Boolean);
+	return parts[parts.length - 1] ?? '';
+}
+const subjectClasses = (s: string) =>
+	new Set([...subject(s).matchAll(/\.([\w-]+)/g)].map((m) => m[1]));
+const subjectPseudos = (s: string) =>
+	new Set([...subject(s).matchAll(/::?[\w-]+(?:\([^)]*\))?/g)].map((m) => m[0]));
+
+const TINTABLE_SURFACES = [...SURFACE_TOKENS, 'color-fill-subtle'];
+
+// A token that app.css does not declare is a component custom property the file
+// itself points at one (`--kind-tint: var(--kind-3)`). EVERY value it is pointed
+// at is resolved and checked, because a guard written against the one the author
+// had in mind is § 519's lesson: `.hero` there resolves six kind tints and the
+// two extremes are 0.4 apart.
+function tintCandidates(
+	marker: string,
+	token: string,
+	source: string,
+): Array<{ name: string; hex: string }> {
+	try {
+		return [{ name: token, hex: resolveToken(marker, token) }];
+	} catch {
+		const out: Array<{ name: string; hex: string }> = [];
+		for (const m of source.matchAll(
+			new RegExp(`--${token}:\\s*var\\(\\s*--([\\w-]+)\\s*\\)`, 'g'),
+		)) {
+			try {
+				out.push({ name: m[1], hex: resolveToken(marker, m[1]) });
+			} catch {
+				/* points at another undeclared property; nothing to resolve */
+			}
+		}
+		return out;
+	}
+}
+
+type TintFinding = {
+	where: string;
+	selector: string;
+	theme: string;
+	tint: string;
+	background: string;
+	border: string;
+	ratio: number;
+};
+
+function tintedBoundaryFindings(): { findings: TintFinding[]; deferred: string[] } {
+	const srcRoot = resolve(__dirname, '..');
+	const SKIP_DIRS = new Set(['node_modules', '.svelte-kit', 'build', 'dist']);
+	const findings: TintFinding[] = [];
+	const deferred = new Set<string>();
+	const files: string[] = [];
+	(function walk(dir: string): void {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const path = join(dir, entry.name);
+			if (entry.isDirectory()) {
+				if (!SKIP_DIRS.has(entry.name)) walk(path);
+			} else if (/\.(svelte|css)$/.test(entry.name)) files.push(path);
+		}
+	})(srcRoot);
+
+	for (const path of files) {
+		const source = readFileSync(path, 'utf-8');
+		const rules = leafRules(source);
+		// File-local custom properties, kept with their selector so a border that
+		// reads one resolves through the value that WINS on the element being
+		// checked. The plan grid needs this: `.day` draws its box and its kind
+		// stripe from one `--day-line`, and `.day.completed` re-points it.
+		const localProps: Array<{
+			classes: Set<string>;
+			pseudos: Set<string>;
+			name: string;
+			value: string;
+		}> = [];
+		for (const rule of rules) {
+			for (const declaration of rule.body.split(';')) {
+				const m = declaration.match(/^\s*--([\w-]+)\s*:\s*([\s\S]+)$/);
+				if (!m) continue;
+				for (const one of rule.selector.split(',')) {
+					localProps.push({
+						classes: subjectClasses(one),
+						pseudos: subjectPseudos(one),
+						name: m[1],
+						value: m[2].trim(),
+					});
+				}
+			}
+		}
+		const expandLocals = (
+			declaration: string,
+			classes: Set<string>,
+			pseudos: Set<string>,
+		): string => {
+			let out = declaration;
+			for (let hop = 0; hop < 4; hop++) {
+				let changed = false;
+				for (const name of [...out.matchAll(/var\(\s*--([\w-]+)/g)].map((m) => m[1])) {
+					const applicable = localProps.filter(
+						(p) =>
+							p.name === name &&
+							[...p.classes].every((c) => classes.has(c)) &&
+							[...p.pseudos].every((x) => pseudos.has(x)),
+					);
+					if (!applicable.length) continue;
+					const winner = applicable[applicable.length - 1].value;
+					out = out.replace(new RegExp(`var\\(\\s*--${name}\\s*\\)`, 'g'), winner);
+					changed = true;
+				}
+				if (!changed) break;
+			}
+			return out;
+		};
+		const borderDecls: Array<{
+			selector: string;
+			classes: Set<string>;
+			pseudos: Set<string>;
+			edges: readonly string[];
+			declaration: string;
+			line: number;
+		}> = [];
+		for (const rule of rules) {
+			for (const declaration of rule.body.split(';')) {
+				const property = declaration.match(/^\s*(border[\w-]*)\s*:/)?.[1];
+				const edges = property ? BORDER_EDGES[property] : undefined;
+				if (!edges) continue;
+				for (const one of rule.selector.split(',')) {
+					borderDecls.push({
+						selector: one.trim(),
+						classes: subjectClasses(one),
+						pseudos: subjectPseudos(one),
+						edges,
+						declaration: declaration.trim(),
+						line: rule.line,
+					});
+				}
+			}
+		}
+		for (const rule of rules) {
+			const backgrounds = rule.body
+				.split(';')
+				.filter((d) => /^\s*(background|background-image)\s*:/.test(d));
+			if (!backgrounds.length) continue;
+			const tints: Array<{ token: string | null; share: number; over: string }> = [];
+			for (const declaration of backgrounds) {
+				for (const m of declaration.matchAll(TINT_OVER_SURFACE)) {
+					if (TINTABLE_SURFACES.includes(m[3])) {
+						tints.push({ token: m[1], share: parseFloat(m[2]), over: m[3] });
+					}
+				}
+				const plain = declaration.match(/^\s*background\s*:\s*var\(\s*--([\w-]+)\s*\)\s*$/)?.[1];
+				if (plain === 'color-fill-subtle') tints.push({ token: null, share: 0, over: plain });
+			}
+			if (!tints.length) continue;
+			for (const one of rule.selector.split(',').map((s) => s.trim())) {
+				const classes = subjectClasses(one);
+				const pseudos = subjectPseudos(one);
+				if (!classes.size) continue;
+				const applicable = borderDecls.filter(
+					(b) =>
+						b.classes.size > 0 &&
+						[...b.classes].every((c) => classes.has(c)) &&
+						[...b.pseudos].every((p) => pseudos.has(p)),
+				);
+				const perEdge: Record<string, (typeof applicable)[number]> = {};
+				for (const b of applicable) for (const edge of b.edges) perEdge[edge] = b;
+				const effective = [...new Set(Object.values(perEdge))]
+					.map((b) => ({ ...b, painted: expandLocals(b.declaration, classes, pseudos) }))
+					.filter((b) => b.painted.includes('--color-border'));
+				for (const edge of effective) {
+					// `var(--x, var(--color-border))` is a per-instance default a
+					// parent sets inline — css_token_guard.test.ts draws the same
+					// line — so the fallback is not the painted value here.
+					if (/var\(\s*--[\w-]+\s*,/.test(edge.painted)) {
+						deferred.add(`${path}:${edge.line}  ${edge.declaration.trim()}`);
+						continue;
+					}
+					const accentMix = edge.painted.match(LINE_MIXED_WITH_ACCENT);
+					for (const { label, marker } of THEMES) {
+						const line = resolveToken(marker, 'color-border');
+						for (const tint of tints) {
+							const surface = resolveToken(marker, tint.over);
+							const candidates = tint.token
+								? tintCandidates(marker, tint.token, source)
+								: [{ name: tint.over, hex: surface }];
+							if (!candidates.length) {
+								deferred.add(`${path}:${rule.line}  unresolvable tint --${tint.token}`);
+								continue;
+							}
+							for (const candidate of candidates) {
+								const background = tint.token
+									? mixOverHex(candidate.hex, tint.share, surface)
+									: surface;
+								// A card that mixes its own tint into the line resolves BOTH
+								// halves from the same property, so they must move together —
+								// `.hero`'s six kind tints would otherwise be crossed with
+								// each other and read six ratios that no render produces.
+								const accents = !accentMix
+									? [line]
+									: accentMix[1] === tint.token
+										? [mixOverHex(candidate.hex, parseFloat(accentMix[2]), line)]
+										: tintCandidates(marker, accentMix[1], source).map((c) =>
+												mixOverHex(c.hex, parseFloat(accentMix[2]), line),
+											);
+								for (const border of accents) {
+									const ratio = contrastRatio(border, background);
+									if (ratio >= AA_NON_TEXT) continue;
+									findings.push({
+										where: `${path}:${rule.line} (border at :${edge.line})`,
+										selector: one,
+										theme: label,
+										tint: tint.token
+											? `--${candidate.name} @${tint.share}% over --${tint.over}`
+											: `--${tint.over}`,
+										background,
+										border,
+										ratio,
+									});
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return { findings, deferred: [...deferred] };
+}
+
+test('every boundary drawn on a tinted surface clears 3:1 where it lands', () => {
+	const { findings } = tintedBoundaryFindings();
+	assert.equal(
+		findings.length,
+		0,
+		`A --color-border boundary is drawn on an accent-tinted background and falls below ` +
+			`${AA_NON_TEXT}:1 (WCAG 1.4.11). Mix the surface's OWN accent into the line at ` +
+			`roughly twice the tint's share — that moves the line further toward the accent ` +
+			`than the tint moved the surface, so the gap widens:\n` +
+			findings
+				.map(
+					(f) =>
+						`  ${f.ratio.toFixed(3)}:1  ${f.where}  ${f.selector}  [${f.theme}]  ` +
+						`${f.tint} = ${f.background}, border ${f.border}`,
+				)
+				.join('\n'),
+	);
+});
+
+// Count-pinned so the one shape the scan cannot resolve stays the one shape it
+// cannot resolve. A new `var(--x, var(--color-border))` edge on a tinted surface
+// fails here rather than passing silently.
+test('exactly one tinted-surface boundary defers to a per-instance fallback', () => {
+	const { deferred } = tintedBoundaryFindings();
+	assert.equal(
+		deferred.length,
+		1,
+		`the tinted-boundary scan defers ${deferred.length} declaration(s), expected 1 ` +
+			`(the plan grid's kind stripe):\n${deferred.join('\n')}`,
+	);
+	assert.match(deferred[0], /plans\/\[id\]\/\+page\.svelte/);
+});
+
+// The scan's own machinery, in both directions. Each of these is a bug it had
+// while being written, and each would make it silently useless rather than loud.
+test('the tinted-boundary scan attributes borders to the right element', () => {
+	const rules = leafRules('.a { color: red; }\n@media (x) {\n.b:hover { border: 0; }\n}\n');
+	assert.deepEqual(
+		rules.map((r) => r.selector),
+		['.a', '.b:hover'],
+		'leafRules must reach into @media and must not return the wrapper itself',
+	);
+	assert.deepEqual([...subjectClasses('.feature:nth-child(1) .feature-icon')], ['feature-icon']);
+	assert.deepEqual([...subjectClasses('.day.completed')].sort(), ['completed', 'day']);
+	assert.deepEqual([...subjectPseudos('.relink-run:hover:not(:disabled)')], [
+		':hover',
+		':not(:disabled)',
+	]);
+	assert.deepEqual(BORDER_EDGES['border'], ['top', 'right', 'bottom', 'left']);
+	assert.deepEqual(BORDER_EDGES['border-top'], ['top']);
+});
+
+// A planted violation on the real tree, so the scan is proved to fire and to
+// name its site rather than merely to pass today.
+test('the tinted-boundary scan fires on a planted violation', () => {
+	const path = resolve(__dirname, '../routes/clubs/[slug]/+page.svelte');
+	const original = readFileSync(path, 'utf-8');
+	const planted = original.replace(
+		'border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));',
+		'border: 1px solid var(--color-border);',
+	);
+	assert.notEqual(planted, original, '.next-event-card no longer carries the tinted line');
+	writeFileSync(path, planted);
+	try {
+		const { findings } = tintedBoundaryFindings();
+		const hit = findings.find((f) => f.selector === '.next-event-card');
+		assert.ok(hit, 'the scan did not flag the planted bare line token');
+		assert.ok(
+			hit!.ratio < AA_NON_TEXT,
+			`the planted violation reports ${hit!.ratio.toFixed(3)}:1, which is not a failure`,
+		);
+	} finally {
+		writeFileSync(path, original);
+	}
+});
+
 // The race-day hero is a FIXED canvas — it paints its own gradient and follows
 // no theme — so its colours cannot be checked against a surface token and were
 // therefore never checked at all: `color: white` sat at 2.803:1 on the orange
@@ -1197,5 +1588,37 @@ test('success/danger -text tokens match mobile AppSemanticColors', () => {
 				`--color-${status}-text in ${marker} has drifted from AppSemanticColors.${symbol}.${status}.`,
 			);
 		}
+	}
+});
+
+// The accent foreground is the same idea on both platforms and, since round 13,
+// the same value: mobile's light `colorScheme.secondary` is `AppTheme.coralMark`
+// because every mobile site that reads `secondary` paints an icon, and the base
+// coral it used to hold reads 2.767:1 on parchment. Rather than mint a second
+// guess at "coral, but legible", it took the value web had already measured for
+// exactly this. Mobile's FILL coral — the FAB background and the navigation
+// bar's indicator tint — stays `AppTheme.coralDeep`, which is web's
+// `--color-secondary`; that half of the pair is asserted here too, so a change
+// to either colour has to face both platforms. Dark is excluded on purpose:
+// web's dark `-text` token aliases to its base and mobile's dark `secondary` is
+// lilac, so there is no shared value to pin.
+test('the light accent foreground and fill match mobile AppTheme', () => {
+	const dart = readFileSync(
+		resolve(__dirname, '../../../../packages/ui_kit/lib/src/theme/app_theme.dart'),
+		'utf-8',
+	);
+	for (const [symbol, token] of [
+		['coralMark', 'color-secondary-text'],
+		['coralDeep', 'color-secondary'],
+	] as const) {
+		const hex: string | undefined = dart.match(
+			new RegExp(`static const Color ${symbol} = Color\\(0xFF([0-9A-Fa-f]{6})\\)`),
+		)?.[1];
+		assert.ok(hex, `app_theme.dart has no ${symbol}`);
+		assert.equal(
+			resolveToken(':root {', token).toUpperCase(),
+			`#${hex!.toUpperCase()}`,
+			`--${token} has drifted from AppTheme.${symbol}.`,
+		);
 	}
 });

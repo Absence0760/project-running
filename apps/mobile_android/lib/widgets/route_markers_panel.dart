@@ -9,9 +9,10 @@ import '../preferences.dart';
 import '../route_geometry.dart';
 import '../route_markers.dart';
 import '../route_snap.dart';
-import 'confirm_destructive.dart';
+import '../undo_queue.dart';
 import 'live_run_map.dart';
 import 'top_banner.dart';
+import 'undo_bar.dart';
 
 /// Course-marker panel for the route-detail screen (Flutter twin of web
 /// `RouteMarkerEditor.svelte`). Renders an ordered course-schedule list and
@@ -255,27 +256,33 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
     }
   }
 
-  Future<void> _confirmDelete(RouteMarkerRow row) async {
-    final l10n = AppLocalizations.of(context);
-    final ok = await confirmDestructive(
-      context,
-      title: l10n.routeMarkerDeleteConfirmTitle,
-      body: l10n.routeMarkerDeleteConfirmMessage,
-      confirmLabel: l10n.routeMarkerDelete,
-      cancelLabel: l10n.routeMarkerCancel,
-    );
-    if (!ok) return;
+  /// One pin, no children — and its `position_m` is derived server-side, which
+  /// survives precisely BECAUSE the deferred delete never touches the row: a
+  /// compensating re-insert would have had to re-derive it (decisions § 514).
+  void _delete(RouteMarkerRow row) {
     final api = widget.api;
     if (api == null) return;
-    try {
-      await api.deleteRouteMarker(row.id);
-      await _reload();
-    } catch (e) {
-      debugPrint('route marker delete failed: $e');
-      if (mounted) {
-        showTopBanner(context, l10n.routeMarkerDeleteFailed(friendlyError(l10n, e)));
-      }
-    }
+    final l10n = AppLocalizations.of(context);
+    final snapshot = _markers;
+    setState(() => _markers =
+        _markers.where((m) => m.id != row.id).toList(growable: false));
+    deferDestructive(
+      context,
+      DeferredDestruction(
+        message: l10n.routeMarkerRemoved,
+        commit: () => api.deleteRouteMarker(row.id),
+        restore: () {
+          if (!mounted) return;
+          setState(() => _markers = snapshot);
+        },
+        onCommitError: (e) {
+          debugPrint('route marker delete failed: $e');
+          if (!mounted) return;
+          showTopBanner(
+              context, l10n.routeMarkerDeleteFailed(friendlyError(l10n, e)));
+        },
+      ),
+    );
   }
 
   String _kindLabel(AppLocalizations l10n, String kind) {
@@ -499,7 +506,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
                         const BoxConstraints(minWidth: 48, minHeight: 48),
                     tooltip: l10n.routeMarkerDelete,
                     icon: const Icon(Icons.delete_outline, size: 18),
-                    onPressed: () => _confirmDelete(m),
+                    onPressed: () => _delete(m),
                   ),
                 ],
               ],

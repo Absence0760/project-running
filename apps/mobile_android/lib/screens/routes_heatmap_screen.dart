@@ -763,6 +763,10 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                 ),
               // Pinned ("kept") route lines — violet, distinct from the
               // cyan preview, drawn below it and persistent until unpinned.
+              // Cartographic, like the cyan and the casing under both: chosen
+              // against arbitrary basemap tiles, so it is a fixed hex on the
+              // MAP and nowhere else. The chrome that names the same state
+              // takes `colorScheme.primary`, which is measured per brightness.
               if (_pinnedIds.isNotEmpty)
                 PolylineLayer(
                   key: const ValueKey('heatmap-pinned-routes'),
@@ -960,7 +964,8 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
               Text(label, style: theme.textTheme.titleSmall),
               if (_pinnedIds.isNotEmpty) ...[
                 const SizedBox(width: 10),
-                const Icon(Icons.push_pin, size: 14, color: Color(0xFF8B5CF6)),
+                Icon(Icons.push_pin,
+                    size: 14, color: theme.colorScheme.primary),
                 const SizedBox(width: 2),
                 Text(
                   '${_pinnedIds.length}',
@@ -1079,7 +1084,9 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
               ? Icons.push_pin
               : Icons.push_pin_outlined,
           size: 20,
-          color: _pinnedIds.contains(p.id) ? const Color(0xFF8B5CF6) : null,
+          color: _pinnedIds.contains(p.id)
+              ? Theme.of(context).colorScheme.primary
+              : null,
         ),
         tooltip: _pinnedIds.contains(p.id)
             ? AppLocalizations.of(context).heatmapUnpinFromMap
@@ -1188,7 +1195,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                         : l10n.heatmapKeep),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: theme.colorScheme.primary,
-                      side: const BorderSide(color: Color(0xFF8B5CF6)),
+                      side: BorderSide(color: theme.colorScheme.primary),
                     ),
                   ),
                 ],

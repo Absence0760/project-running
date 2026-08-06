@@ -10,6 +10,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/route_geometry.dart' show markerPointAtDistance;
 import '../lib/widgets/route_markers_panel.dart';
+import '../lib/widgets/undo_bar.dart';
 
 RouteMarkerRow _marker({
   required String id,
@@ -89,6 +90,11 @@ class _MarkersApi extends ApiClient {
     updatedLng = lng;
     updatedMeta = meta;
   }
+
+  final List<String> deletedIds = [];
+
+  @override
+  Future<void> deleteRouteMarker(String id) async => deletedIds.add(id);
 }
 
 /// Marker add blocks on a gate the test controls, to observe the save spinner.
@@ -148,6 +154,67 @@ Widget _host({
 }
 
 void main() {
+  tearDown(debugResetUndo);
+
+  // Issue #666 U8, mobile half: the marker delete dropped its confirm for a
+  // deferred, undoable mutation. `position_m` is derived server-side and
+  // survives precisely BECAUSE the deferred delete never touches the row — a
+  // compensating re-insert would have had to re-derive it (decisions § 514).
+  group('delete offers undo instead of a confirm', () {
+    testWidgets('the pin leaves the list and the delete is held',
+        (tester) async {
+      final api = _MarkersApi();
+      await tester.pumpWidget(_host(
+        isOwner: true,
+        api: api,
+        markers: [
+          _marker(id: 'm1', kind: 'aid_station', label: 'Water', positionM: 500),
+        ],
+      ));
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Delete'));
+      await tester.pump();
+
+      expect(find.byType(AlertDialog), findsNothing,
+          reason: 'confirm and undo are alternatives, not partners');
+      expect(find.text('Water'), findsNothing);
+      expect(find.text('Marker removed'), findsOneWidget);
+      expect(api.deletedIds, isEmpty);
+
+      await tester.pump(const Duration(seconds: 9));
+      expect(api.deletedIds, ['m1']);
+    });
+
+    testWidgets('Undo restores the schedule snapshot, ordering intact',
+        (tester) async {
+      final api = _MarkersApi();
+      await tester.pumpWidget(_host(
+        isOwner: true,
+        api: api,
+        markers: [
+          _marker(id: 'm1', kind: 'aid_station', label: 'Water', positionM: 500),
+          _marker(id: 'm2', kind: 'cutoff', label: 'Gate', positionM: 1500),
+        ],
+      ));
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Delete').first);
+      await tester.pump();
+      expect(find.text('Water'), findsNothing);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pump();
+      expect(find.text('Water'), findsOneWidget);
+      expect(find.text('Gate'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 9));
+      expect(api.deletedIds, isEmpty);
+      // Drain the Restored banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
+    });
+  });
+
   testWidgets('renders the schedule with kind labels + detail lines', (tester) async {
     await tester.pumpWidget(_host(
       isOwner: true,

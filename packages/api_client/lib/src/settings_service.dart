@@ -120,6 +120,14 @@ class SettingsKeys {
   /// + lift→load math elsewhere are unaffected; only the readiness series
   /// drops lifts. Web twin: `exclude_gym_from_readiness` (decisions §134).
   static const excludeGymFromReadiness = 'exclude_gym_from_readiness';
+  /// How long a destructive action stays reversible before its deferred
+  /// server mutation commits — `8` (default) | `30` | `0` = no time limit.
+  /// `0` is the WCAG 2.2.1 *Timing Adjustable* ("Turn off") route: a
+  /// countdown must not be the only way to reach the only undo affordance.
+  /// Universal so the accessibility choice follows the user to every device.
+  /// An absent, non-numeric or unrecognised value falls back to `8` and
+  /// NEVER to `0` — a corrupt bag must not pin every deletion open forever.
+  static const undoWindowS = 'undo_window_s';
   /// The runner's primary goal, set by the post-signup setup wizard
   /// (`'general_fitness' | 'weight_loss' | '5k' | '10k' | 'half_marathon'
   /// | 'marathon'`). Drives the planned post-onboarding plan suggestion.

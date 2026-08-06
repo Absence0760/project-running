@@ -414,6 +414,8 @@ On the Flutter apps, good/warning/bad/crown colouring comes from the `AppSemanti
 
 The guard scans **`lib` and `packages/ui_kit/lib`**. It used to walk `lib` alone, so moving a palette into the shared package took its hexes out of reach without touching the allowlist — a file that is no longer scanned needs no exemption. When a shared package starts carrying colour, add its root to `_roots`, not an exemption.
 
+**A cartographic colour stays on the map.** A hue picked to survive arbitrary basemap tiles — a route line, a pin, a scrim — is correctly a fixed hex, because there is no theme surface behind it to measure against. The moment the same hue names the same state in the **chrome** around the map it stops being cartographic and becomes an unmeasured accent: the route heatmap's "kept on map" violet had reached a sheet icon, a list-row icon and a button border, where a single fixed value cannot be right in both brightnesses (3.828:1 light and 3.817:1 dark on the surface those three used, but 2.902:1 one container deeper). So **chrome takes a theme token** (`colorScheme.primary` there, 7.766–11.005:1), the legend link is carried by the icon's own shape fork rather than by hue, and the map's hex is count-pinned in the literal guard so a fourth chrome site cannot land unmeasured. This is not a licence to add hexes: a hue earns an entry by being drawn on tiles, not by being hard to theme.
+
 ## Mobile muted text — `onSurfaceVariant`, never a 3:1 colour source
 
 `colorScheme.outline` is a **3:1 boundary token** ([§ 487](decisions.md)): correct for a hairline, a border, a divider, or an icon tint, and wrong for type. Measured against the real tokens it reads **4.058:1 on the light card**, 3.486:1 on light `surfaceContainerHighest` and 2.952:1 on dark `tertiaryContainer` — short of WCAG 1.4.3's 4.5:1 for the 11–14 sp body and label type that reached for it. It *does* clear AA on the dark card (5.117:1), which is the point: `outline` cannot be **relied on** as text, while `onSurfaceVariant` can (8.459:1 light card, 9.474:1 dark card, 5.465:1 on its worst real background).
@@ -443,6 +445,14 @@ Same rule on web, same shape of guard. Good/warning/bad/crown colouring comes fr
 - **Fixed canvases** that never follow the device theme — the `@media print` sheet (white paper, so a token would resolve to the *screen* theme and print dark-on-dark), the race-day brand hero's verdict green, and `/runs/[id]`'s map overlay pill. A fixed canvas is exempt from *theming*, not from contrast, and it owes a guard of its own — see § Web boundaries. Two literals on such a canvas **invert** relative to the theme: the pill's hairline reads 6.084:1 as the old border value and 2.366:1 as the 3:1 line token, and its label read 1.402:1 as `--color-text-secondary`.
 
 Two things the sweep behind it taught, both worth carrying forward. **The frozen fill is the commoner defect, not the frozen ink**: a confidence chip's `#d1fae5` read 14.253:1 against the dark card it sat on — a pale mint panel blazing on dark purple — while its own ink was a respectable 4.835:1, so a fix justified only on foreground contrast misses the worse half. And **the naive token swap can be much worse than the literal**: a gold star over a *fixed* 0.65-black scrim reads 4.196:1 as `#fbbf24` and 1.123:1 as `--color-crown`, because crown is deliberately the dark gold for light surfaces. Measure it on the surface the site actually paints ([decisions.md § 503](decisions.md)).
+
+Round 13 **inverted the ban into a complete register**, because a named-hue list cannot close the hole it leaves — the next frozen fill just picks a fortieth hue, and § 511 had logged the size of that hole (172 literals across 29 files carrying hues outside the status vocabulary). Every six-digit literal outside `app.css`'s declaration lines must now appear in `REGISTER` with an **exact count and a role** from a closed vocabulary: `cartographic`, `brand-mark`, `brand-hue`, `data`, `fixed-canvas`, `gradient-stop`, `svg-art`, `theme-pair`. The named-hue rule is kept for its *message* (for a status role, "route it onto the token" is always the answer), not for its reach.
+
+That settles a question § 511 deferred: it considered a "no hex in a border" rule and declined it as a second allowlist duplicating the first. **There is one register, and it is keyed on `(file, hue)` — never on the CSS property** — so a border literal is an entry like any other, and a test asserts both surviving border literals are in it. Two role distinctions carry weight. A third party's **logo geometry** is theirs to tone (`brand-mark`: the Google "G", Apple's required black); the same party's **hue reused as our own paint** is not covered by that requirement (`brand-hue`), and measured on the tinted disc it lands on rather than on the bare surface, five of six provider glyph inks miss 1.4.11's 3:1 floor. And where a literal is a measured failure the register records it as an **open debt with its figure and the ground it was measured on**, as a frozen set — a register whose point is completeness must be able to say "known bad, not yet fixed", or the honest finding gets dropped to keep the suite green.
+
+**A map overlay's contrast is owed to the basemap, and the basemap is not the theme.** `basemap_contrast.ts` holds every colour the six map surfaces paint, keyed on `basemapIsDark` (which sits beside `buildMapStyleUrl` and shares its slug switch, so URL and palette cannot drift). Keying on `prefers-color-scheme` is wrong in both directions, because the map-style preference decouples basemap luminance from the OS theme: `outdoors` is a light basemap under a dark OS, `dark` and `satellite` are dark ones under a light OS. Two facts shape the module and are pinned as tests rather than left as comments: **a translucent casing cannot carry the floor** (2.273:1 at 0.25 over the dark sample), so every line clears its ground unaided; and **a label halo is ground-coloured on purpose** (1.038 / 1.148:1), so it holds a glyph apart from mid-tone map *features*, not from the land fill, and the ink must clear the ground on its own.
+
+**A gradient is a fill, and its palest stop sets the ink.** `gradient_foreground_guard.test.ts` reads each text-bearing ramp out of the source, extracts its stops, and measures the declared foreground against every one — bare and under each declared translucent veil at that veil's own peak. It pins the expected stop *count* per ramp for the reason § 511 gave about floors read out of the tree: a regex that matches nothing must not pass. Overlapping veils are measured one at a time when they peak at opposite corners, because stacking them asserts a composite no pixel shows.
 
 ## Web boundaries — `--color-border` is a line, `--color-fill-subtle` is a fill
 
@@ -493,6 +503,9 @@ On the Flutter apps, presentation that every instance of a widget should share l
 - **Bottom sheets.** `bottomSheetTheme` owns background, top radius, drag handle and `clipBehavior`; a call site names only what it genuinely differs on. `useSafeArea` is **not** a theme field, so the rule is per call: **`isScrollControlled: true` implies `useSafeArea: true`**, or a tall sheet paints under the status bar. `bottom_sheet_safe_area_guard_test.dart` (both twins) fails the pair.
 - **Text fields.** `inputDecorationTheme` names the outlined language at radius 12. **Don't declare `border: OutlineInputBorder()` at a call site** — it re-pins the radius to Material's default 4. A field that is deliberately a different component (a filled borderless search box, a pill composer) still says so locally.
 - **Cards.** The card theme carries **no horizontal margin**. Horizontal insets are the layout's job, so every card in a list starts at its parent's padding edge; a card that insets itself lands at a different left edge from its siblings. The vertical 4 stays, because stacked-card sites rely on it for separation.
+- **Accent coral is two tokens, a fill and a mark.** `AppTheme.coralDeep` is the light theme's accent **fill** — the FAB background and the navigation bar's indicator tint — and nothing else: at 2.767:1 on parchment it can carry neither a glyph nor type. `AppTheme.coralMark` is the accent **foreground**, and is light `colorScheme.secondary` for that reason (≥ 4.566:1 on every light surface). Dark needs no split: its `secondary` is `lilac`, already legible. The mark value is web's `--color-secondary-text` and the fill value is web's `--color-secondary`, and both halves of that lockstep are asserted from `apps/web/src/lib/contrast_guard.test.ts`.
+
+**A component theme owes the same measurement a call site does, on the surface the widget actually paints.** `AppTheme` is where the tokens are declared, which is exactly why nobody re-measures it — two of its own pairings shipped under 1.4.11's 3:1 for a year. Both were found only by asking what pixel sits behind the mark, per [§ 503](decisions.md): the navigation bar's **selected icon is drawn inside the indicator pill**, not on the bar, so the tint is its background (`coralDeep` read 2.337:1 there and 2.767:1 on the bar — the flattering figure was the one on the bar); and a **FAB is a fill with its own elevation and shadow**, so the boundary is not the fill's to earn and the *glyph* is what owed the ratio (the fix moved the foreground to `ink`, 5.757:1, not the fill). `packages/ui_kit/test/app_theme_nav_fab_contrast_test.dart` computes all of it in both brightnesses and pins each repair in both directions.
 
 ## Mobile type sizes — a step on the scale, never a `fontSize:` literal
 
@@ -502,6 +515,7 @@ So: **name the step.** `theme.textTheme.<step>`, or `.copyWith(...)` on it when 
 
 - **A value between two steps snaps upward.** 13 was the commonest literal in the tree (eight sites) and is not a step at all; every one went to 14. Never shrink type to reach a step.
 - **Naming a step replaces the ambient style, it does not merge into it.** The M3 geometry styles are `inherit: false`, which is only safe because every step already carries `onSurface`. Inside a host that supplies its own foreground — a button, a chip — dropping the `fontSize:` is right and naming a step would repaint the label.
+- **A theme override that displaces a step has to restate it, and that literal belongs in `AppTheme`.** Some Material component themes resolve `theme ?? defaults` as an **OR, not a merge**: `RawChip` takes `chipTheme.labelStyle ?? chipDefaults.labelStyle`, so the `labelStyle` that exists to carry the selected/unselected `WidgetStateColor` ([§ 476](decisions.md)) displaced M3's `labelLarge` whole and left every chip label in the app sizeless, landing on the ambient 14 by coincidence. The size is now restated in `AppTheme` beside the colour — the theme's own definition of a step is the one legitimate home for a `fontSize:` literal, count-pinned like the other exemptions. Keep `inherit: true` when you do it, so the locale geometry's family and baseline still arrive by merge, and check the value against all three of Material's geometries before hardcoding it (`labelLarge` is 14 / w500 / 0.1 / 1.43 in every one; only the baseline differs).
 
 `font_size_literal_guard_test.dart` (both mobile twins, scanning `lib` + `packages/ui_kit/lib`) fails a numeric `fontSize:` and classifies by enclosing constructor, because one case is genuinely not on the scale: `IdentityAvatar.fontSize` sizes an initial inside a circle whose diameter the caller chose, so it is a **graphic** argument. A named constant or a read off the scale (`kMapAttributionFontSize`, `theme.textTheme.labelSmall?.fontSize`) is the durable form and needs no exemption. The recorded exemptions are count-pinned per file on the § 480 model — the fixed-canvas share rasterisers, map overlay chips and pins, two load-bearing graphics (`BoxFit.scaleDown` per § 497), and `ErrorWidget.builder`, which has no `Theme` ancestor at all.
 
@@ -613,7 +627,7 @@ Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.mod
 
 `ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
 
-## Web destructive actions — confirm OR undo, never both, and never a fake undo
+## Destructive actions — confirm OR undo, never both, and never a fake undo
 
 A destructive action gets **exactly one** guard. Pick it by asking whether the
 action can honestly be reversed:
@@ -670,10 +684,43 @@ setting. The list is the optimistic surface; a server-sourced aggregate is not.
 
 **A timed undo is an accessibility surface.** WCAG 2.2.1 requires the limit be
 turnable-off, adjustable, or extendable; the `undo_window_s` preference
-(`/settings/preferences`, registered in [settings.md](../backend/settings.md))
-carries a `0` = *no time limit* choice, and hover/focus pauses a running window.
-Keep the countdown out of the `aria-live` region — a ticking number re-announces
-on every tick — and never let the bar steal focus.
+(`/settings/preferences` on web, Settings → Preferences on mobile, registered in
+[settings.md](../backend/settings.md)) carries a `0` = *no time limit* choice, and
+hover/focus (web) or backgrounding (mobile) pauses a running window. Keep the
+countdown out of the announced region — a ticking number re-announces on every
+tick — and never let the bar steal focus. A platform that only *reads* the pref
+fails 2.2.1: whatever surface offers a timed undo has to offer the adjust route
+too.
+
+### On mobile the same rules hold, with a different host
+
+`deferDestructive` lives in `lib/widgets/undo_bar.dart` and takes the same
+`DeferredDestruction { message, commit, restore, onCommitError }`. Three things
+are mobile-specific:
+
+- **The host is a root `Overlay` entry, never a `SnackBar`.** A snack bar is
+  rendered inside its route's `Scaffold`, and a modal route's barrier carries
+  `BlockSemantics`, which drops the whole route beneath it from the compiled
+  semantics tree. Measured in `undo_bar_test.dart`: a snack bar raised while a
+  dialog is up produces **no semantics node at all**, so TalkBack and VoiceOver
+  can neither announce nor reach it — WCAG 2.1.1, the same violation web fixed by
+  widening its Tab ring. An `Overlay.insert` entry lands above every existing
+  entry including the barrier, so it stays reachable. This is why an in-sheet
+  delete needs no exemption on this platform, and `showSnackBar` is separately
+  banned in `lib/screens` / `lib/widgets` by an architecture guard.
+- **A route pop does not flush.** The queue is a top-level singleton and its
+  timer belongs to it, not to a `State`, so a pop cannot discard a pending
+  commit — the mutation still lands. Web flushes on navigation because its bar
+  describes a list the user has left; forcing an early commit here would be the
+  only way to *lose* the offer, so we don't.
+- **Therefore `commit` may not touch a `BuildContext` and `restore` must be
+  mount-guarded.** Resolve `message` and any error copy before the call, capture
+  app-scoped services (the api client, a store) in the closures, and open
+  `restore` with `if (!mounted) return;`. Each adopting list is rebuilt from the
+  server (or from the local store) on its next load, so an undo whose surface has
+  gone self-heals. All three are pinned per call site by the
+  `deferred-commit undo outlives its surface` group in
+  `architecture_guards_test.dart`.
 
 ## Web cards — `.card-elevated` is the shared elevated panel
 
@@ -692,6 +739,29 @@ The `--color-warning` / `--color-secondary` / `--color-accent-cyan` (and `--colo
 - **Foreground TEXT / ICON** (a stat value, a chip label, an inline warning): use the **theme-aware `--color-<token>-text`** variant (dark on light surfaces, reverts to the base hue on dark surfaces; ≥4.5:1 both themes, incl. on the same-hue chip tint). A blind swap to `-strong` here fails dark mode (2.98:1). For a status word tinted toward the body text on a same-status chip, `color: color-mix(<status> N%, var(--color-text))` is also valid within the mix caps below.
 
 `contrast_guard.test.ts` enforces all three: `-strong` stays theme-independent + AA-with-white and is never used as text; every `-text` token clears AA as text (surface + chip) in all three theme blocks; and no source file uses a bare `--color-warning` / `-secondary` / `-accent-cyan` as a `color:`. Add a new accent that needs a foreground use → add its `-text` pair (light dark-value + dark base-value) and it's covered automatically.
+
+## Web boundaries on a tinted surface — mix the surface's own accent into the line
+
+`--color-border` is the one LINE token and its whole guarantee is WCAG 1.4.11's 3:1 ([decisions.md § 518](decisions.md)). It clears that on the plain surfaces with very little to spare — **3.906:1** on the light card, **3.330:1** on the dark one — so a card that tints itself with an accent spends the remainder: on `color-mix(var(--color-primary) N%, var(--color-surface))` the dark line reads **3.000:1 at 6 %** and **2.539:1 at 14 %**.
+
+So: **a boundary drawn on an accent-tinted surface mixes that surface's own accent into the line**, at roughly twice the tint's share — `border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border))` on a 12 % primary tint. That widens the gap rather than closing it, because the border mix moves the line further toward the accent than the tint moved the surface, and it tracks the card's hue automatically. Thirteen call sites already did this before the rule was written, and mobile arrived at the same shape independently (`route_detail_screen.dart`'s marker chip: a 0.10 alpha fill under a 0.20 alpha border of the same colour).
+
+**Do not mint a second line token for it.** The tint's share and its hue are both per-card free variables, so a fixed second value is tuned for one tint and wrong at the next — and it restores the fail-open default § 518 removed, where a plain `border: 1px solid var(--color-border)` is right everywhere by construction. Nor does reducing the tints work: for the plain dark line to clear 3:1 the cap is 5 % on a primary tint, 3 % on the palest kind tint, and 2 % over `--color-bg-tertiary`, which is deleting the tint rather than tinting less.
+
+Two corollaries, both measured:
+
+- **`--color-border` may not edge `--color-fill-subtle`.** They are the same value one generation apart (§ 518 moved the fills onto the line token's old value), so they sit **2.678:1** light / **2.508:1** dark from each other, and in dark the gap cannot be opened from the fill's end at all: it would have to drop to luminance 0.02211 to reach 3:1, and `--color-surface` is at 0.01496, so a chip would fall from 1.328:1 to 1.110:1 against the card it sits on. A control whose fill flips to the subtle fill on hover moves its **edge** instead — `.btn-secondary:hover` takes `--color-primary`, following `.btn-outline:hover`.
+- **Measure where the border lands, not what the token is.** § 518 recorded eight tinted cards as failing at 2.551–2.998:1; seven of them never painted the bare token, and the real residue was five sites a token-level reading could not see plus one it hid. `contrast_guard.test.ts` now resolves each rule's tint stops and the border colour that actually applies to that rule's subject — including through a file-local custom property and through a `:hover` rule that moves the edge — and asserts 3:1 per theme.
+
+## Web type sizes — 11 px is the floor, and `--font-size-section-label` is the step to reach for
+
+Mobile pins **11 px** as the smallest type any surface may use (`labelSmall`, [decisions.md § 482](decisions.md)). Web owes the same conformance floor, and until round 13 had nothing enforcing it: **45** `font-size` declarations sat below it, the narrowest at 8 px, and `PlanCalendar`'s `.kind-pill` dropped to 8.8 px under a 40 rem media query on the one plan surface every phone user opens.
+
+`font_size_floor_guard.test.ts` reads the floor **out of `app_theme.dart`** so the two platforms cannot drift, then fails any `rem`/`px` `font-size` under it. Prefer `var(--font-size-section-label)` (0.7rem = 11.2 px — headroom over the floor, not an exact meet, so § 522's no-later-multiplier rule does not bite it); 80 declarations already use that size.
+
+It is a **floor** guard, not mobile's "name the step" literal guard, and the difference is structural rather than convenience: mobile's scale is closed at seven steps on one `textTheme`, so a literal is always a step spelled by hand or a value between two. Web's CSS carries 1886 numeric `font-size` declarations against three named size tokens, so a literal ban would need an allowlist longer than the code and would assert nothing.
+
+**When a narrow viewport no longer fits the text, tighten the box or let the text reflow — never shrink the type.** SC 1.4.4 and 1.4.10 both ask for reflow, and a `min-height` already permits the row to grow. The 42 declarations still below the floor are count-pinned per file, split into text-inside-a-graphic (the class mobile exempts too — a numeral inside a map pin, SVG labels inside a plot) and plain debt whose count can only shrink.
 
 ## Web CSS custom properties — a fallback is a default, never a substitute for the token
 

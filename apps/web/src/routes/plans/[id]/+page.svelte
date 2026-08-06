@@ -2231,16 +2231,17 @@
 		}
 	}
 	.day {
+		--day-line: var(--color-border);
 		display: flex;
 		flex-direction: column;
 		gap: 0.15rem;
 		padding: 0.5rem 0.55rem;
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--day-line);
 		color: inherit;
 		font-size: 0.8rem;
-		border-top: 3px solid var(--kind-color, var(--color-border));
+		border-top: 3px solid var(--kind-color, var(--day-line));
 		position: relative;
 		min-height: 4.5rem;
 	}
@@ -2277,6 +2278,7 @@
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent);
 	}
 	.day.completed {
+		--day-line: color-mix(in srgb, var(--color-success) 30%, var(--color-border));
 		background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
 	}
 	.day.skipped {

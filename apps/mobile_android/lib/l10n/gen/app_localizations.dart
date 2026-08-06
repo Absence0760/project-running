@@ -5326,24 +5326,6 @@ abstract class AppLocalizations {
   /// **'Delete your review'**
   String get routeDetailDeleteReview;
 
-  /// Title of the confirm dialog for deleting your own route review
-  ///
-  /// In en, this message translates to:
-  /// **'Delete your review?'**
-  String get routeDetailDeleteReviewTitle;
-
-  /// Body of the confirm dialog for deleting your own route review
-  ///
-  /// In en, this message translates to:
-  /// **'Your rating and comment will be removed from this route. You can leave a new review afterwards.'**
-  String get routeDetailDeleteReviewBody;
-
-  /// Confirm action in the delete-your-review dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete review'**
-  String get routeDetailDeleteReviewCta;
-
   /// Banner shown when deleting your own route review fails
   ///
   /// In en, this message translates to:
@@ -12692,18 +12674,6 @@ abstract class AppLocalizations {
   /// **'Report reply'**
   String get runSocialReportReply;
 
-  /// Confirm dialog title before deleting a run comment
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this comment?'**
-  String get runSocialDeleteCommentTitle;
-
-  /// Confirm dialog body before deleting a run comment
-  ///
-  /// In en, this message translates to:
-  /// **'This comment will be permanently removed. This can\'t be undone.'**
-  String get runSocialDeleteCommentMessage;
-
   /// Button to post a comment
   ///
   /// In en, this message translates to:
@@ -16682,18 +16652,6 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get nutritionDelete;
 
-  /// No description provided for @nutritionDeleteEntryTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this entry?'**
-  String get nutritionDeleteEntryTitle;
-
-  /// Confirm dialog body before deleting a logged food entry
-  ///
-  /// In en, this message translates to:
-  /// **'{item} will be removed from today\'s log.'**
-  String nutritionDeleteEntryMessage(String item);
-
   /// Banner when deleting a logged food entry fails
   ///
   /// In en, this message translates to:
@@ -18062,18 +18020,6 @@ abstract class AppLocalizations {
   /// **'Could not delete marker: {error}'**
   String routeMarkerDeleteFailed(String error);
 
-  /// Delete-marker confirm title
-  ///
-  /// In en, this message translates to:
-  /// **'Delete marker?'**
-  String get routeMarkerDeleteConfirmTitle;
-
-  /// Delete-marker confirm message
-  ///
-  /// In en, this message translates to:
-  /// **'This removes the marker from the route permanently.'**
-  String get routeMarkerDeleteConfirmMessage;
-
   /// Marker kind: aid station
   ///
   /// In en, this message translates to:
@@ -19136,18 +19082,6 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get routeConditionsDelete;
 
-  /// Title of the delete-condition confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete report?'**
-  String get routeConditionsDeleteTitle;
-
-  /// Body of the delete-condition confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'This removes the condition report permanently.'**
-  String get routeConditionsDeleteConfirm;
-
   /// Error banner when deleting a condition report fails
   ///
   /// In en, this message translates to:
@@ -19951,24 +19885,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove'**
   String get gymEditorRemoveExerciseConfirm;
-
-  /// Title of the wear-log delete confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete this note?'**
-  String get gearWearLogDeleteTitle;
-
-  /// Body of the wear-log delete confirmation dialog
-  ///
-  /// In en, this message translates to:
-  /// **'This wear-log note will be permanently deleted.'**
-  String get gearWearLogDeleteBody;
-
-  /// Confirm button of the wear-log delete dialog
-  ///
-  /// In en, this message translates to:
-  /// **'Delete'**
-  String get gearWearLogDeleteConfirm;
 
   /// Error when the submit-time sheet fails to load recent runs
   ///
@@ -20989,6 +20905,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get commonMore;
+
+  /// Label of the undo bar action button that cancels the pending destructive action
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undoAction;
+
+  /// Tooltip on the undo bar close button, which commits the pending destructive action now
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get undoDismiss;
+
+  /// Screen-reader-only sentence appended to the undo bar announcement
+  ///
+  /// In en, this message translates to:
+  /// **'Undo is available for a short time.'**
+  String get undoHint;
+
+  /// Banner shown after the user taps Undo and the row is back
+  ///
+  /// In en, this message translates to:
+  /// **'Restored'**
+  String get undoRestored;
+
+  /// Preferences row label for how long a destructive action stays reversible
+  ///
+  /// In en, this message translates to:
+  /// **'Undo window'**
+  String get prefsUndoWindow;
+
+  /// Undo window choice: eight seconds (the default)
+  ///
+  /// In en, this message translates to:
+  /// **'8 seconds'**
+  String get prefsUndoWindow8s;
+
+  /// Undo window choice: thirty seconds
+  ///
+  /// In en, this message translates to:
+  /// **'30 seconds'**
+  String get prefsUndoWindow30s;
+
+  /// Undo window choice: no time limit, the offer waits for an explicit dismiss
+  ///
+  /// In en, this message translates to:
+  /// **'Until I dismiss it'**
+  String get prefsUndoWindowManual;
+
+  /// Undo bar sentence after dismissing one or more notifications
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Notification dismissed} other{{count} notifications dismissed}}'**
+  String undoDismissed(int count);
+
+  /// Undo bar sentence after removing a route condition report
+  ///
+  /// In en, this message translates to:
+  /// **'Condition report removed'**
+  String get routeConditionsRemoved;
+
+  /// Undo bar sentence after removing a gear wear-log observation
+  ///
+  /// In en, this message translates to:
+  /// **'Observation removed'**
+  String get gearWearLogRemoved;
+
+  /// Undo bar sentence after removing a logged food entry
+  ///
+  /// In en, this message translates to:
+  /// **'{item} removed'**
+  String nutritionEntryRemoved(String item);
+
+  /// Undo bar sentence after removing a run comment or reply
+  ///
+  /// In en, this message translates to:
+  /// **'Comment removed'**
+  String get runSocialCommentRemoved;
+
+  /// Undo bar sentence after removing the viewer's own route review
+  ///
+  /// In en, this message translates to:
+  /// **'Review removed'**
+  String get routeDetailReviewRemoved;
+
+  /// Undo bar sentence after removing a course marker
+  ///
+  /// In en, this message translates to:
+  /// **'Marker removed'**
+  String get routeMarkerRemoved;
 }
 
 class _AppLocalizationsDelegate

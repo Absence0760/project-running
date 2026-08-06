@@ -9,6 +9,7 @@
 
 import { env } from '$env/dynamic/public';
 import {
+	basemapIsDark,
 	buildMapStyleUrl,
 	resolveStyleOverride,
 	type MapStyle,
@@ -74,4 +75,17 @@ export function mapStyleUrlFromEnv(
 	envGetter: () => string | undefined = () => env.PUBLIC_TILE_STYLE_URL,
 ): string {
 	return mapStyleUrl(key, prefersDark, resolveStyleOverride(envGetter));
+}
+
+/// Companion to [mapStyleUrlFromEnv]: whether the basemap that call just
+/// resolved is dark, so overlay paint can be picked for the ground it lands
+/// on. Every map surface reads this instead of `prefers-color-scheme` —
+/// see `basemap_contrast.ts` for why the two are not the same question.
+export function basemapIsDarkFromEnv(
+	key: string,
+	prefersDark: boolean,
+	envGetter: () => string | undefined = () => env.PUBLIC_TILE_STYLE_URL,
+): boolean {
+	const chosen = style.value ?? (prefersDark ? 'dark' : 'streets');
+	return basemapIsDark(chosen, key, prefersDark, resolveStyleOverride(envGetter));
 }

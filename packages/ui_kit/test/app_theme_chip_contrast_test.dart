@@ -54,6 +54,22 @@ void main() {
         );
       });
 
+      test('the labelStyle carries labelLarge\'s size as well as the color', () {
+        // Both properties live on one `TextStyle` because `RawChip` takes
+        // `chipTheme.labelStyle ?? chipDefaults.labelStyle` — the override that
+        // buys the state-resolved color costs M3's step, so the two have to be
+        // guarded as a pair or a fix to either can drop the other.
+        final style = theme.chipTheme.labelStyle!;
+        expect(style.fontSize, 14);
+        expect(style.fontWeight, FontWeight.w500);
+        expect(style.letterSpacing, 0.1);
+        expect(style.inherit, isTrue,
+            reason: 'inherit false would replace the locale geometry\'s family '
+                'and baseline instead of merging into them');
+        expect(style.color, isA<WidgetStateColor>(),
+            reason: 'the state fork must stay on the color itself');
+      });
+
       test('checkmark is legible over selectedColor', () {
         final checkmark = theme.chipTheme.checkmarkColor;
         expect(checkmark, isNotNull);

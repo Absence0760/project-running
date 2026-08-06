@@ -1225,11 +1225,25 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         ),
         child: Row(
           children: [
+            // The tint above is 1.003:1 light / 1.140:1 dark against the row
+            // beside it, so it cannot be what says "today" — the dot and the
+            // weight are.
+            SizedBox(
+              width: 12,
+              child: isToday
+                  ? Semantics(
+                      label: l10n.planDetailToday,
+                      child: Icon(Icons.circle,
+                          size: 6, color: theme.colorScheme.primary),
+                    )
+                  : null,
+            ),
             TextLane(
                 width: 34,
                 child: Text(dow,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: isToday ? FontWeight.w700 : null,
                     ))),
             Expanded(
               child: Text(

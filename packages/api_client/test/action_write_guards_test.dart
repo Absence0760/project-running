@@ -55,9 +55,14 @@ void main() {
       expect(api.markAllNotificationsRead(), throwsStateError);
     });
 
-    test('deleteNotification', () {
+    test('deleteNotifications', () {
       final api = ApiClient.withClient(signedOut);
-      expect(api.deleteNotification('n1'), throwsStateError);
+      expect(api.deleteNotifications(['n1']), throwsStateError);
+    });
+
+    test('deleteNotifications is a no-op on an empty list, not a throw', () {
+      final api = ApiClient.withClient(signedOut);
+      expect(api.deleteNotifications(const []), completes);
     });
   });
 

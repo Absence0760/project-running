@@ -476,6 +476,7 @@
 	}
 	.item-wrap.unread {
 		background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+		border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
 	}
 	.item-main {
 		display: flex;

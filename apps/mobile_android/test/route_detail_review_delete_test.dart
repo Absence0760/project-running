@@ -9,6 +9,7 @@ import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/route_detail_screen.dart';
 import '../lib/widgets/top_banner.dart';
+import '../lib/widgets/undo_bar.dart';
 
 cm.Route _route() => cm.Route(
       id: 'r1',
@@ -100,6 +101,7 @@ void main() {
   setUpAll(() {
     dotenv.loadFromString(isOptional: true);
   });
+  tearDown(debugResetUndo);
 
   group('route review delete', () {
     testWidgets('shows delete on your own review, not report', (tester) async {
@@ -119,64 +121,62 @@ void main() {
       expect(_deleteReviewButton(tester), findsNothing);
     });
 
-    testWidgets('cancelling the confirm dialog does not delete', (tester) async {
+    // Issue #666 U8, mobile half: the review delete dropped its confirm for a
+    // deferred, undoable mutation (decisions § 514). The three tests below
+    // replace the cancel / confirm / failure trio that pinned the dialog. The
+    // property the cancel test really guarded — that one tap cannot lose the
+    // review — is now Undo's job, and the replacement asserts the STRONGER
+    // thing the confirm never offered: after Undo the server was never called
+    // at all, so the row keeps its own id and created_at.
+    testWidgets('the delete is deferred and Undo never calls the server',
+        (tester) async {
       final api = _ReviewsApi(reviewerId: 'viewer');
       await _pump(tester, api);
 
       await tester.tap(_deleteReviewButton(tester));
       await tester.pump();
-      await tester.pump(Duration.zero);
 
-      final l10n =
-          AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)));
-      expect(find.text(l10n.routeDetailDeleteReviewTitle), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing,
+          reason: 'confirm and undo are alternatives, not partners');
+      expect(find.text('Review removed'), findsOneWidget);
+      expect(api.deleteCalls, 0);
 
-      final dialog = find.byType(AlertDialog);
-      await tester.tap(find.descendant(
-          of: dialog, matching: find.text(l10n.routeDetailCancel)));
+      await tester.tap(find.text('Undo'));
       await tester.pump();
-      await tester.pump(Duration.zero);
-
-      expect(api.deleteCalls, 0,
-          reason: 'a dismissed confirm must not delete the review');
+      await tester.pump(const Duration(seconds: 9));
+      expect(api.deleteCalls, 0);
+      expect(_deleteReviewButton(tester), findsOneWidget,
+          reason: 'the same review row is back, not a re-inserted copy');
+      hideTopBanner();
+      await tester.pump();
     });
 
-    testWidgets('confirming deletes and refetches', (tester) async {
+    testWidgets('the window closing deletes for real', (tester) async {
       final api = _ReviewsApi(reviewerId: 'viewer');
       await _pump(tester, api);
 
       await tester.tap(_deleteReviewButton(tester));
       await tester.pump();
-      await tester.pump(Duration.zero);
+      expect(api.deleteCalls, 0);
 
-      final l10n =
-          AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)));
-      await tester.tap(find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.text(l10n.routeDetailDeleteReviewCta)));
-      await tester.pump();
-      await tester.pump(Duration.zero);
-
+      await tester.pump(const Duration(seconds: 9));
       expect(api.deleteCalls, 1);
     });
 
-    testWidgets('a failing delete surfaces a banner', (tester) async {
+    testWidgets('a failing commit restores the review and banners',
+        (tester) async {
       final api = _ReviewsApi(reviewerId: 'viewer', deleteThrows: true);
       await _pump(tester, api);
 
       await tester.tap(_deleteReviewButton(tester));
       await tester.pump();
-      await tester.pump(Duration.zero);
-
-      final l10n =
-          AppLocalizations.of(tester.element(find.byType(RouteDetailScreen)));
-      await tester.tap(find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.text(l10n.routeDetailDeleteReviewCta)));
+      await tester.pump(const Duration(seconds: 9));
       await tester.pump();
-      await tester.pump(Duration.zero);
 
       expect(api.deleteCalls, 1);
+      expect(_deleteReviewButton(tester), findsOneWidget,
+          reason: 'a list must never claim a row is gone while the server '
+              'still holds it');
       expect(find.textContaining("Couldn't delete the review"), findsOneWidget);
 
       // showTopBanner schedules an auto-dismiss timer; the binding asserts on

@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'goals.dart';
 import 'l10n/locale_support.dart';
 import 'l10n/number_format.dart';
+import 'undo_queue.dart';
 
 enum DistanceUnit { km, mi }
 
@@ -254,6 +255,7 @@ class Preferences extends ChangeNotifier {
   static const _kGoalsJson = 'goals_json';
   static const _kAdvancedGps = 'advanced_gps';
   static const _kSplitIntervalMetres = 'split_interval_metres';
+  static const _kUndoWindowS = 'undo_window_s';
   // Device-local: which pace the split cue reads out (SplitPaceMode).
   static const _kSplitPaceMode = 'split_pace_mode';
   // Mirrors the universal `default_activity_type` settings-bag key.
@@ -385,6 +387,7 @@ class Preferences extends ChangeNotifier {
   List<RunGoal> _goals = [];
   bool _advancedGps = false;
   int _splitIntervalMetres = 0;
+  int _undoWindowS = kDefaultUndoWindowS;
   String _splitPaceMode = SplitPaceMode.split;
   String _deviceId = '';
   String _defaultActivityType = 'run';
@@ -416,6 +419,12 @@ class Preferences extends ChangeNotifier {
   /// Custom split interval in metres. 0 means use the activity-type default
   /// (1 km for run/walk/hike, 5 km for cycling).
   int get splitIntervalMetres => _splitIntervalMetres;
+
+  /// How long a destructive action stays reversible, in seconds. `0` means
+  /// no time limit at all — the WCAG 2.2.1 "Turn off" route. Mirrored from
+  /// the `undo_window_s` universal bag key; a corrupt stored value reads
+  /// back as the 8 s default, never as `0`.
+  int get undoWindowS => _undoWindowS;
 
   /// Which pace the spoken split cue reads: the split's own pace
   /// ([SplitPaceMode.split], default), the cumulative average pace so
@@ -721,6 +730,7 @@ class Preferences extends ChangeNotifier {
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
     _writeToHealthConnect = _prefs.getBool(_kWriteToHealthConnect) ?? false;
     _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
+    _undoWindowS = undoWindowSFromPref(_prefs.getInt(_kUndoWindowS));
     _splitPaceMode = SplitPaceMode.coerce(_prefs.getString(_kSplitPaceMode));
     _defaultActivityType =
         _prefs.getString(_kDefaultActivityType) ?? 'run';
@@ -854,6 +864,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setSplitIntervalMetres(int v) async {
     _splitIntervalMetres = v;
     await _prefs.setInt(_kSplitIntervalMetres, v);
+    notifyListeners();
+  }
+
+  Future<void> setUndoWindowS(int v) async {
+    _undoWindowS = undoWindowSFromPref(v);
+    await _prefs.setInt(_kUndoWindowS, _undoWindowS);
     notifyListeners();
   }
 

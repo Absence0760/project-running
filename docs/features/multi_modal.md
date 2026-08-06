@@ -640,6 +640,30 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 > byte-identical iOS twin. In the Art 20 DSAR export (ingredients nested).
 > **Per-ingredient quantity editing + shared/public recipes + an edit path stay deferred.**
 
+> **Status (targets peer — shipped web 2026-08-05, issue #666 M1):** the rule
+> below that "each modality owns its planning assets ... nutrition owns
+> targets/recipes" held for recipes and meal templates and **did not hold for
+> targets**: the number every ring was measured against was computed on
+> `/nutrition` but reachable nowhere, its only editor a card partway down
+> `/settings/preferences`, and the untargeted rings state named Settings in
+> prose without linking it. `/nutrition/targets` is now the peer — linked from
+> the `/nutrition` header the way `/gym` links Routines / Sessions / Records,
+> **ungated** because a user with no targets yet is precisely who needs it
+> (the §63-amendment entry-point rule). It shows the *derivation* — BMR, the
+> activity factor, the goal delta, the base, today's workout add-on, then the
+> macro split — composed entirely from what `nutrition_targets.ts` already
+> exports (`mifflinStJeorBmr`, `ACTIVITY_LEVELS`, `GOAL_KCAL_DELTA`,
+> `PROTEIN_G_PER_KG`, `FAT_KCAL_FRACTION`, `MIN_CALORIE_TARGET`), so **no new
+> arithmetic and no new obligation on the `.dart` twin**. Activity level +
+> weight goal are editable inline (non-sensitive prefs that already auto-saved);
+> **height / weight / DOB / sex stay editable in Settings only** — they are Art 9
+> special-category data behind an explicit-consent gate, and a second entry
+> point would be a second consent surface. Both surfaces deep-link
+> `/settings/preferences#body-metrics`. Deliberately **not** a new always-on
+> card on the day view: `/nutrition` keeps exactly one primary action
+> (anti-clutter checklist). Mobile is the follow-up, not drift — see the
+> parity row.
+
 ## Cross-modality touches (Tier 1 — ship with Phase 4; this is the headline)
 
 - **Home** composes all three modalities per the ordering above. *(Web gym
@@ -910,7 +934,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 
 The multi-modal expansion left the nav incoherent on **where a modality's *planning tools* live**:
 
-- **Routes is mis-placed on both platforms.** On web it's a **top-level sidebar peer** of Gym/Nutrition (`+layout.svelte` nav item `/routes`), which over-weights a *run-planning tool* as if it were a fourth modality. On mobile it's **buried under Social**, conceptually wrong (a course-planning tool under the people/feed layer) and inconsistent with web. Meanwhile Gym's routines and Nutrition's targets correctly live *inside* their modality surfaces — Routes is the odd one out.
+- **Routes is mis-placed on both platforms.** On web it's a **top-level sidebar peer** of Gym/Nutrition (`+layout.svelte` nav item `/routes`), which over-weights a *run-planning tool* as if it were a fourth modality. On mobile it's **buried under Social**, conceptually wrong (a course-planning tool under the people/feed layer) and inconsistent with web. Meanwhile Gym's routines and Nutrition's targets correctly live *inside* their modality surfaces — Routes is the odd one out. *(Correction, 2026-08-05: the targets half of that sentence was not true when written and stayed untrue for over a year — targets lived in Settings on both platforms. Web closed it as the targets peer above; mobile has not. Read the status block, not this line.)*
 - **Mobile modalities have no persistent front-door.** You can *capture* via `Log` and *review* via History's `View all`, but there's no "go to my running / my gym / my nutrition" home to plan or browse. `Settings` also eats a scarce top-five slot despite being low-frequency.
 
 The fix unifies the rule: **each modality owns its planning assets** — runs own routes + training plans, gym owns routines, nutrition owns targets/recipes — and they all hang off that modality's surface, never as a top-level peer and never under Social.

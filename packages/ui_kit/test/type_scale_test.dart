@@ -170,10 +170,14 @@ void main() {
     // A `Chip` is the exception, and it is why the tag chip names a step
     // explicitly instead of deleting its style. `RawChip` resolves
     // `chipTheme.labelStyle ?? chipDefaults.labelStyle` — an OR, not a merge —
-    // so §482's `labelStyle`, which exists only to carry the selected/
-    // unselected `WidgetStateColor`, displaces M3's `labelLarge` entirely and
-    // leaves the label with no size of its own. It falls through to the
-    // ambient step, which is the same 14 by coincidence and not by design.
-    expect(chip.fontSize, isNull);
+    // so §482's `labelStyle`, which exists to carry the selected/unselected
+    // `WidgetStateColor`, displaces M3's `labelLarge` outright. It used to
+    // leave the label sizeless, falling through to an ambient step that was the
+    // same 14 by coincidence; the theme now restates labelLarge's four values,
+    // so the 14 is the theme's and a framework move in the ambient step can no
+    // longer resize every chip in the app.
+    expect(chip.fontSize, 14);
+    expect(chip.fontWeight, FontWeight.w500);
+    expect(chip.letterSpacing, 0.1);
   });
 }

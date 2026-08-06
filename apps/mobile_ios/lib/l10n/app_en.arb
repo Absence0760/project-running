@@ -4250,18 +4250,6 @@
   "@routeDetailDeleteReview": {
     "description": "Tooltip on the delete button for the viewer's own route review"
   },
-  "routeDetailDeleteReviewTitle": "Delete your review?",
-  "@routeDetailDeleteReviewTitle": {
-    "description": "Title of the confirm dialog for deleting your own route review"
-  },
-  "routeDetailDeleteReviewBody": "Your rating and comment will be removed from this route. You can leave a new review afterwards.",
-  "@routeDetailDeleteReviewBody": {
-    "description": "Body of the confirm dialog for deleting your own route review"
-  },
-  "routeDetailDeleteReviewCta": "Delete review",
-  "@routeDetailDeleteReviewCta": {
-    "description": "Confirm action in the delete-your-review dialog"
-  },
   "routeDetailReviewDeleteFailed": "Couldn't delete the review: {error}",
   "@routeDetailReviewDeleteFailed": {
     "description": "Banner shown when deleting your own route review fails",
@@ -10258,14 +10246,6 @@
   "@runSocialReportReply": {
     "description": "Accessibility label / tooltip on the flag button of another user's reply"
   },
-  "runSocialDeleteCommentTitle": "Delete this comment?",
-  "@runSocialDeleteCommentTitle": {
-    "description": "Confirm dialog title before deleting a run comment"
-  },
-  "runSocialDeleteCommentMessage": "This comment will be permanently removed. This can't be undone.",
-  "@runSocialDeleteCommentMessage": {
-    "description": "Confirm dialog body before deleting a run comment"
-  },
   "runSocialPost": "Post",
   "@runSocialPost": {
     "description": "Button to post a comment"
@@ -13069,16 +13049,6 @@
     "description": "Per-meal nutrition detail screen"
   },
   "nutritionDelete": "Delete",
-  "nutritionDeleteEntryTitle": "Delete this entry?",
-  "nutritionDeleteEntryMessage": "{item} will be removed from today's log.",
-  "@nutritionDeleteEntryMessage": {
-    "description": "Confirm dialog body before deleting a logged food entry",
-    "placeholders": {
-      "item": {
-        "type": "String"
-      }
-    }
-  },
   "nutritionDeleteFailed": "Couldn’t delete the entry: {error}",
   "@nutritionDeleteFailed": {
     "description": "Banner when deleting a logged food entry fails",
@@ -14153,14 +14123,6 @@
       }
     }
   },
-  "routeMarkerDeleteConfirmTitle": "Delete marker?",
-  "@routeMarkerDeleteConfirmTitle": {
-    "description": "Delete-marker confirm title"
-  },
-  "routeMarkerDeleteConfirmMessage": "This removes the marker from the route permanently.",
-  "@routeMarkerDeleteConfirmMessage": {
-    "description": "Delete-marker confirm message"
-  },
   "routeMarkerKindAidStation": "Aid station",
   "@routeMarkerKindAidStation": {
     "description": "Marker kind: aid station"
@@ -14987,14 +14949,6 @@
   "@routeConditionsDelete": {
     "description": "Delete a condition report"
   },
-  "routeConditionsDeleteTitle": "Delete report?",
-  "@routeConditionsDeleteTitle": {
-    "description": "Title of the delete-condition confirmation dialog"
-  },
-  "routeConditionsDeleteConfirm": "This removes the condition report permanently.",
-  "@routeConditionsDeleteConfirm": {
-    "description": "Body of the delete-condition confirmation dialog"
-  },
   "routeConditionsDeleteFailed": "Could not delete report",
   "@routeConditionsDeleteFailed": {
     "description": "Error banner when deleting a condition report fails"
@@ -15579,18 +15533,6 @@
   "@gymEditorRemoveExerciseConfirm": {
     "description": "Confirm button of the remove-exercise dialog"
   },
-  "gearWearLogDeleteTitle": "Delete this note?",
-  "@gearWearLogDeleteTitle": {
-    "description": "Title of the wear-log delete confirmation dialog"
-  },
-  "gearWearLogDeleteBody": "This wear-log note will be permanently deleted.",
-  "@gearWearLogDeleteBody": {
-    "description": "Body of the wear-log delete confirmation dialog"
-  },
-  "gearWearLogDeleteConfirm": "Delete",
-  "@gearWearLogDeleteConfirm": {
-    "description": "Confirm button of the wear-log delete dialog"
-  },
   "eventSubmitRunsLoadError": "Couldn't load your recent runs.",
   "@eventSubmitRunsLoadError": {
     "description": "Error when the submit-time sheet fails to load recent runs"
@@ -15968,5 +15910,75 @@
   },
   "@commonLoading": {
     "description": "Generic screen-reader announcement for a surface that is still loading"
+  },
+  "undoAction": "Undo",
+  "@undoAction": {
+    "description": "Label of the undo bar action button that cancels the pending destructive action"
+  },
+  "undoDismiss": "Dismiss",
+  "@undoDismiss": {
+    "description": "Tooltip on the undo bar close button, which commits the pending destructive action now"
+  },
+  "undoHint": "Undo is available for a short time.",
+  "@undoHint": {
+    "description": "Screen-reader-only sentence appended to the undo bar announcement"
+  },
+  "undoRestored": "Restored",
+  "@undoRestored": {
+    "description": "Banner shown after the user taps Undo and the row is back"
+  },
+  "prefsUndoWindow": "Undo window",
+  "@prefsUndoWindow": {
+    "description": "Preferences row label for how long a destructive action stays reversible"
+  },
+  "prefsUndoWindow8s": "8 seconds",
+  "@prefsUndoWindow8s": {
+    "description": "Undo window choice: eight seconds (the default)"
+  },
+  "prefsUndoWindow30s": "30 seconds",
+  "@prefsUndoWindow30s": {
+    "description": "Undo window choice: thirty seconds"
+  },
+  "prefsUndoWindowManual": "Until I dismiss it",
+  "@prefsUndoWindowManual": {
+    "description": "Undo window choice: no time limit, the offer waits for an explicit dismiss"
+  },
+  "undoDismissed": "{count, plural, =1{Notification dismissed} other{{count} notifications dismissed}}",
+  "@undoDismissed": {
+    "description": "Undo bar sentence after dismissing one or more notifications",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeConditionsRemoved": "Condition report removed",
+  "@routeConditionsRemoved": {
+    "description": "Undo bar sentence after removing a route condition report"
+  },
+  "gearWearLogRemoved": "Observation removed",
+  "@gearWearLogRemoved": {
+    "description": "Undo bar sentence after removing a gear wear-log observation"
+  },
+  "nutritionEntryRemoved": "{item} removed",
+  "@nutritionEntryRemoved": {
+    "description": "Undo bar sentence after removing a logged food entry",
+    "placeholders": {
+      "item": {
+        "type": "String"
+      }
+    }
+  },
+  "runSocialCommentRemoved": "Comment removed",
+  "@runSocialCommentRemoved": {
+    "description": "Undo bar sentence after removing a run comment or reply"
+  },
+  "routeDetailReviewRemoved": "Review removed",
+  "@routeDetailReviewRemoved": {
+    "description": "Undo bar sentence after removing the viewer's own route review"
+  },
+  "routeMarkerRemoved": "Marker removed",
+  "@routeMarkerRemoved": {
+    "description": "Undo bar sentence after removing a course marker"
   }
 }

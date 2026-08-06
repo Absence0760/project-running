@@ -147,7 +147,18 @@
 	   mobile's AppTheme.parchmentLine / duskLine (decisions § 487); the
 	   lockstep and the floor are both pinned in contrast_guard.test.ts.
 	   A boundary token has no headroom to be thinned or re-used as a fill:
-	   see --color-fill-subtle below. */
+	   see --color-fill-subtle below.
+	   It also has almost no headroom LEFT over the floor — 3.906:1 on the light
+	   card, 3.330:1 on the dark one — so a card that tints itself with an accent
+	   spends what remains: at 6% the dark line is already 3.000:1 and at 14% it
+	   is 2.539:1. A boundary drawn on a tinted surface therefore mixes that
+	   surface's OWN accent into the line, at roughly twice the tint's share
+	   (`color-mix(in srgb, var(--color-primary) 30%, var(--color-border))` on a
+	   12% primary tint), which moves the line further toward the accent than the
+	   tint moved the surface and so widens the gap instead of closing it. No
+	   single value can replace that: the share and the hue are both per-card, so
+	   a second fixed line token would be tuned for one tint and wrong at the
+	   next. Enforced per call site, composited, in contrast_guard.test.ts. */
 	--color-border: #8A806A;
 	--color-text: #1F2328;
 	--color-text-secondary: #56616B;
@@ -162,7 +173,14 @@
 	   they would have painted a mid-tan panel and a chip whose own label lost
 	   contrast. It holds the value --color-border shipped with, so nothing that
 	   was a fill moved visually. A border token is a LINE or a FILL, never
-	   both — the same rule § 503 drew for status tokens, one role over. */
+	   both — the same rule § 503 drew for status tokens, one role over.
+	   The corollary: --color-border may not EDGE this fill either. They are the
+	   same value one generation apart, so they sit 2.678:1 light / 2.508:1 dark
+	   from each other, and in dark the gap cannot be opened from this end — the
+	   fill would have to drop to luminance 0.02211 to put 3:1 between them, and
+	   --color-surface is already at 0.01496, so the chip would fall from 1.328:1
+	   to 1.110:1 against the card it sits on. A control whose fill flips to this
+	   on hover moves its edge instead (see .btn-secondary:hover). */
 	--color-fill-subtle: #DDD5C5;
 
 	/* Neutral metadata chip (tag / count / label pills on a card). Aliased
@@ -244,6 +262,13 @@
 		'Liberation Mono', monospace;
 	--font-size-page-title: 1.5rem;
 	--font-size-section-title: 1rem;
+	/* Also the micro-label step every small label should reach for: 11.2 px, which
+	   clears mobile's 11 px labelSmall floor (§ 482) by 0.2 px rather than meeting
+	   it exactly, so it survives a small later adjustment where a value ON a floor
+	   would not (§ 522). Never override it per theme or per breakpoint — a media
+	   query that shrank it would put 80 declarations under the floor at once.
+	   font_size_floor_guard.test.ts pins the floor and this token's single
+	   declaration. */
 	--font-size-section-label: 0.7rem;
 	--section-label-tracking: 0.05em;
 
@@ -674,6 +699,10 @@ img {
 }
 .btn-secondary:hover:not(:disabled) {
 	background: var(--color-fill-subtle);
+	/* The line token cannot edge the fill token — see --color-fill-subtle's
+	   note — so the hover edge follows .btn-outline:hover onto primary
+	   (4.849:1 light / 5.848:1 dark on the hover fill). */
+	border-color: var(--color-primary);
 }
 .btn-outline {
 	background: transparent;
