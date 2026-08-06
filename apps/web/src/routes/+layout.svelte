@@ -171,14 +171,18 @@
 	// mobile's always-reachable Log sheet, decisions §63 amendment) — the
 	// pure-runner clutter is kept off the *content* surfaces instead, which
 	// self-hide their gym/nutrition cards on no data (/dashboard, /history).
-	const navItemsBase: { href: string; labelKey: MessageKey; icon: string; accent: string }[] = [
-		{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
-		{ href: '/history', labelKey: 'nav.history', icon: 'timeline', accent: '#D97A54' },
-		{ href: '/runs', labelKey: 'nav.runs', icon: 'directions_run', accent: '#6FA8DC' },
-		{ href: '/gym', labelKey: 'nav.gym', icon: 'fitness_center', accent: '#8FBF9F' },
-		{ href: '/nutrition', labelKey: 'nav.nutrition', icon: 'nutrition', accent: '#E8C07D' },
-		{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
-		{ href: '/social', labelKey: 'nav.social', icon: 'public', accent: '#C98ECF' },
+	// `section` names the --section-<x> / --section-<x>-ink token pair in
+	// app.css. The hue cannot live here as a hex: the ink half has to flip per
+	// theme and a TS string cannot, which is how all seven glyphs came to read
+	// 1.594-2.659:1 on their own tint over the light sidebar (decisions § 529).
+	const navItemsBase: { href: string; labelKey: MessageKey; icon: string; section: string }[] = [
+		{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', section: 'dashboard' },
+		{ href: '/history', labelKey: 'nav.history', icon: 'timeline', section: 'history' },
+		{ href: '/runs', labelKey: 'nav.runs', icon: 'directions_run', section: 'runs' },
+		{ href: '/gym', labelKey: 'nav.gym', icon: 'fitness_center', section: 'gym' },
+		{ href: '/nutrition', labelKey: 'nav.nutrition', icon: 'nutrition', section: 'nutrition' },
+		{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', section: 'coach' },
+		{ href: '/social', labelKey: 'nav.social', icon: 'public', section: 'social' },
 	];
 	// The AI Coach nav entry is hidden when the Coach is off (rock-bottom
 	// deploy, PUBLIC_COACH_ENABLED unset) — don't surface a nav door that
@@ -457,7 +461,7 @@
 							href={item.href}
 							class="nav-link"
 							class:active={isActive(item.href, $page.url.pathname)}
-							style="--accent: {item.accent};"
+							style="--accent: var(--section-{item.section}); --accent-ink: var(--section-{item.section}-ink);"
 							title={sidebarCollapsed ? m(item.labelKey) : undefined}
 						>
 							<span class="nav-icon-wrap">
@@ -714,7 +718,8 @@
 	}
 
 	.nav-link {
-		--accent: #F2A07B;
+		--accent: var(--section-dashboard);
+		--accent-ink: var(--section-dashboard-ink);
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
@@ -742,7 +747,7 @@
 		height: 2.25rem;
 		border-radius: 10px;
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
-		color: var(--accent);
+		color: var(--accent-ink);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 		transition:
 			background var(--transition-base),
@@ -795,7 +800,7 @@
 
 	.nav-link.active .nav-icon-wrap {
 		background: var(--accent);
-		color: #1B1628;
+		color: var(--section-on-accent);
 		box-shadow:
 			inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
 			0 8px 22px -6px color-mix(in srgb, var(--accent) 60%, transparent);
@@ -813,7 +818,7 @@
 		bottom: 18%;
 		width: 3px;
 		border-radius: 0 2px 2px 0;
-		background: var(--accent);
+		background: var(--accent-ink);
 	}
 	.sidebar.collapsed .nav-link.active::before {
 		display: none;

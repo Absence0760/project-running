@@ -468,15 +468,16 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
               ),
             ],
             const SizedBox(height: 16),
-            Row(
+            OverflowBar(
+              alignment: MainAxisAlignment.end,
+              overflowAlignment: OverflowBarAlignment.end,
+              spacing: 8,
               children: [
-                const Spacer(),
                 TextButton(
                   onPressed:
                       _saving ? null : () => Navigator.maybePop(context),
                   child: Text(l10n.gymEditorCancel),
                 ),
-                const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _saving ? null : _save,
                   child: _saving

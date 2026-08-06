@@ -335,11 +335,13 @@
 		padding: 0 var(--space-xs);
 		display: inline-grid;
 		place-items: center;
-		/* WCAG AA: 0.62rem bold white on --color-danger was 3.06:1 in dark
-		   (normal-text threshold applies at this size); -strong is 6.06:1. */
+		/* WCAG AA: bold white on --color-danger was 3.06:1 in dark; -strong is
+		   6.06:1. The normal-text threshold applies either way — the count sits
+		   at the 11.2 px micro-label floor, well under the 18.66 px bold that
+		   would make it large text. */
 		background: var(--color-danger-strong);
 		color: white;
-		font-size: 0.62rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		border-radius: 9999px;
 		font-variant-numeric: tabular-nums;

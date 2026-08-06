@@ -188,14 +188,14 @@
 		background: var(--color-success-light);
 	}
 	.dow {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
 	.kind {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text);
 		text-transform: uppercase;
@@ -218,16 +218,12 @@
 		font-size: 0.95rem;
 		color: var(--color-success-text);
 	}
+	/* The narrow-viewport cell tightens its box, not its type — the same shrink
+	   § 525 removed from `PlanCalendar`, which this strip carried verbatim. */
 	@media (max-width: 40rem) {
 		.day {
 			min-height: 3.25rem;
 			padding: 0.25rem;
-		}
-		.kind {
-			font-size: 0.55rem;
-		}
-		.dist {
-			font-size: 0.6rem;
 		}
 	}
 </style>

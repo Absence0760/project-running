@@ -345,7 +345,7 @@
 	}
 
 	.stat-label {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;

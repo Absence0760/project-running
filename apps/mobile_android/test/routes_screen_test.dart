@@ -453,6 +453,56 @@ void main() {
   });
 
   group('RoutesScreen — selection mode (bulk delete)', () {
+    testWidgets('the long-press hint is shown, then yields to the app bar',
+        (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        // ignore: invalid_use_of_visible_for_testing_member
+        ..debugSeed(_makeRoutes(3));
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RoutesScreen(
+          apiClient: null,
+          routeStore: routeStore,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      // A long press is the only route into multi-select, so it is announced
+      // while there is something to select.
+      expect(find.text(l10n.routesSelectionHint), findsOneWidget);
+
+      await tester.longPress(find.text('Route 0'));
+      await tester.pump();
+
+      // Once selecting, the app bar carries the affordances and the hint is
+      // spent — leaving it would restate a mode the user is already in.
+      expect(find.text(l10n.routesSelectionHint), findsNothing);
+    });
+
+    testWidgets('no long-press hint when nothing on screen is selectable',
+        (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore();
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RoutesScreen(
+          apiClient: null,
+          routeStore: routeStore,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.routesSelectionHint), findsNothing);
+    });
+
     testWidgets('long-press on a route enters selection mode + shows banner',
         (tester) async {
       final prefs = await _makePrefs();

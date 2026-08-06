@@ -392,16 +392,15 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             ),
           ),
         ],
-        bottom: TabBar(
+        bottom: AppTabBar(
           controller: _tabs,
-          isScrollable: true,
-          tabs: [
-            Tab(text: AppLocalizations.of(context).clubDetailTabFeed),
-            Tab(text: AppLocalizations.of(context).clubDetailTabEvents),
-            Tab(text: AppLocalizations.of(context).clubDetailTabMembers),
-            Tab(text: AppLocalizations.of(context).clubDetailTabRoutes),
-            Tab(text: AppLocalizations.of(context).clubDetailTabTemplates),
-            Tab(text: AppLocalizations.of(context).clubDetailTabPhotos),
+          labels: [
+            AppLocalizations.of(context).clubDetailTabFeed,
+            AppLocalizations.of(context).clubDetailTabEvents,
+            AppLocalizations.of(context).clubDetailTabMembers,
+            AppLocalizations.of(context).clubDetailTabRoutes,
+            AppLocalizations.of(context).clubDetailTabTemplates,
+            AppLocalizations.of(context).clubDetailTabPhotos,
           ],
         ),
       ),

@@ -1,5 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
@@ -98,21 +99,14 @@ class _SocialScreenState extends State<SocialScreen>
         // the AppBar so the TabBar sits at the canonical Material
         // spot (under the system status bar).
         toolbarHeight: 0,
-        bottom: TabBar(
+        bottom: AppTabBar(
           controller: _controller,
-          isScrollable: true,
-          tabs: [
-            Tab(text: l10n.socialTabFeed, icon: const Icon(Icons.dynamic_feed)),
-            Tab(
-                text: l10n.socialTabPeople,
-                icon: const Icon(Icons.person_search)),
-            Tab(text: l10n.socialTabClubs, icon: const Icon(Icons.groups)),
-            Tab(
-                text: l10n.socialTabDiscover,
-                icon: const Icon(Icons.event_available)),
-            Tab(
-                text: l10n.challengesTitle,
-                icon: const Icon(Icons.emoji_events_outlined)),
+          labels: [
+            l10n.socialTabFeed,
+            l10n.socialTabPeople,
+            l10n.socialTabClubs,
+            l10n.socialTabDiscover,
+            l10n.challengesTitle,
           ],
         ),
       ),

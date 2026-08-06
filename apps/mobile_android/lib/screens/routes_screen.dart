@@ -7,7 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, SelectionHint;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -843,53 +843,65 @@ class RoutesScreenState extends State<RoutesScreen> {
                   (showLoadMore && !emptyAfterFilter ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == 0) {
-                  return _RoutesFilterHeader(
-                    search: _search,
-                    surfaceFilter: _surfaceFilter,
-                    distanceFilter: _distanceFilter,
-                    sort: _sort,
-                    starredOnly: _starredOnly,
-                    visibleCount: routes.length,
-                    totalCount: mergedRoutes.length,
-                    filtersActive: _filtersActive(),
-                    onSearchChanged: (v) {
-                      setState(() {
-                        _search = v;
-                        _visibleCount = _kRoutesPageSize;
-                      });
-                      _persistFilters();
-                    },
-                    onSurfaceChanged: (v) {
-                      setState(() {
-                        _surfaceFilter = v;
-                        _visibleCount = _kRoutesPageSize;
-                      });
-                      _persistFilters();
-                    },
-                    onDistanceChanged: (v) {
-                      setState(() {
-                        _distanceFilter = v;
-                        _visibleCount = _kRoutesPageSize;
-                      });
-                      _persistFilters();
-                    },
-                    onSortChanged: (v) {
-                      setState(() {
-                        _sort = v;
-                        _visibleCount = _kRoutesPageSize;
-                      });
-                      _persistFilters();
-                    },
-                    onStarredOnlyToggled: () {
-                      final turningOn = !_starredOnly;
-                      setState(() {
-                        _starredOnly = turningOn;
-                        _visibleCount = _kRoutesPageSize;
-                      });
-                      _persistFilters();
-                      if (turningOn) _ensureStarredLoaded();
-                    },
-                    onClearFilters: _clearFilters,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _RoutesFilterHeader(
+                        search: _search,
+                        surfaceFilter: _surfaceFilter,
+                        distanceFilter: _distanceFilter,
+                        sort: _sort,
+                        starredOnly: _starredOnly,
+                        visibleCount: routes.length,
+                        totalCount: mergedRoutes.length,
+                        filtersActive: _filtersActive(),
+                        onSearchChanged: (v) {
+                          setState(() {
+                            _search = v;
+                            _visibleCount = _kRoutesPageSize;
+                          });
+                          _persistFilters();
+                        },
+                        onSurfaceChanged: (v) {
+                          setState(() {
+                            _surfaceFilter = v;
+                            _visibleCount = _kRoutesPageSize;
+                          });
+                          _persistFilters();
+                        },
+                        onDistanceChanged: (v) {
+                          setState(() {
+                            _distanceFilter = v;
+                            _visibleCount = _kRoutesPageSize;
+                          });
+                          _persistFilters();
+                        },
+                        onSortChanged: (v) {
+                          setState(() {
+                            _sort = v;
+                            _visibleCount = _kRoutesPageSize;
+                          });
+                          _persistFilters();
+                        },
+                        onStarredOnlyToggled: () {
+                          final turningOn = !_starredOnly;
+                          setState(() {
+                            _starredOnly = turningOn;
+                            _visibleCount = _kRoutesPageSize;
+                          });
+                          _persistFilters();
+                          if (turningOn) _ensureStarredLoaded();
+                        },
+                        onClearFilters: _clearFilters,
+                      ),
+                      // Long-press is the only way into multi-select, so it
+                      // needs saying. Suppressed once selecting (the app bar
+                      // has taken over the surface) and when nothing on
+                      // screen is selectable — only OWNED routes are.
+                      if (!_selecting &&
+                          routes.any((r) => ownedIds.contains(r.id)))
+                        SelectionHint(label: l10n.routesSelectionHint),
+                    ],
                   );
                 }
                 if (emptyAfterFilter && index == 1) {

@@ -1385,7 +1385,7 @@
 		line-height: 1.1;
 	}
 	.builder-stat-label {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -1822,7 +1822,7 @@
 	}
 	.waypoint-tag {
 		flex-shrink: 0;
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: var(--color-text-secondary);

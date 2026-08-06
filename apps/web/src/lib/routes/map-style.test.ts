@@ -9,9 +9,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+	basemapIsDark,
+	basemapIsDarkForSlug,
 	buildMapStyleUrl,
+	maptilerStyleUrl,
 	OSM_FALLBACK_STYLE_URL,
 	resolveStyleOverride,
+	slugIsDark,
+	type MaptilerSlug,
 } from './map-style-url';
 
 test('no override + light mode → MapTiler streets-v2', () => {
@@ -232,3 +237,80 @@ test('resolveStyleOverride: getter is invoked at call time (not memoised)',
 		nextValue = 'http://second.local/s';
 		assert.equal(resolveStyleOverride(getter), 'http://second.local/s');
 	});
+
+// ---------------- the slug vocabulary ----------------
+
+// The route builder resolves its own slugs (`hybrid` for satellite, no dark
+// rung), so the shared piece is the slug -> URL template and the slug ->
+// luminance classification. Both are pinned literally: § 526's whole finding
+// was that a second, private answer to "is this ground dark" is how 35 of 49
+// cartographic literals came to be painted on the wrong basemap.
+
+const ALL_SLUGS: MaptilerSlug[] = [
+	'streets-v2',
+	'streets-v2-dark',
+	'satellite',
+	'hybrid',
+	'outdoor-v2',
+];
+
+test('maptilerStyleUrl — one spelling of the style-document endpoint', () => {
+	assert.equal(
+		maptilerStyleUrl('hybrid', 'KEY'),
+		'https://api.maptiler.com/maps/hybrid/style.json?key=KEY',
+	);
+	assert.equal(
+		maptilerStyleUrl('outdoor-v2', 'KEY'),
+		'https://api.maptiler.com/maps/outdoor-v2/style.json?key=KEY',
+	);
+});
+
+test('buildMapStyleUrl still routes through maptilerStyleUrl for every preference', () => {
+	const cases: Array<[Parameters<typeof buildMapStyleUrl>[0], boolean, MaptilerSlug]> = [
+		['streets', false, 'streets-v2'],
+		['streets', true, 'streets-v2-dark'],
+		['dark', false, 'streets-v2-dark'],
+		['satellite', false, 'satellite'],
+		['outdoors', true, 'outdoor-v2'],
+	];
+	for (const [chosen, prefersDark, slug] of cases) {
+		assert.equal(
+			buildMapStyleUrl(chosen, 'KEY', prefersDark),
+			maptilerStyleUrl(slug, 'KEY'),
+			`${chosen} (prefersDark=${prefersDark}) must resolve to ${slug}`,
+		);
+	}
+});
+
+test('slugIsDark — both imagery slugs are dark, outdoor-v2 is not', () => {
+	assert.deepEqual(
+		ALL_SLUGS.map(slugIsDark),
+		[false, true, true, true, false],
+	);
+});
+
+test('slugIsDark answers for every slug (no undefined ground)', () => {
+	for (const slug of ALL_SLUGS) assert.equal(typeof slugIsDark(slug), 'boolean');
+});
+
+test('basemapIsDarkForSlug — the route builder gets the same verdict basemapIsDark gives', () => {
+	// The builder's three rungs against the preference that resolves to the
+	// same ground. `hybrid` and `satellite` are different tiles and the SAME
+	// ground, which is the distinction the two functions exist to keep.
+	assert.equal(basemapIsDarkForSlug('hybrid', 'KEY'), basemapIsDark('satellite', 'KEY', false));
+	assert.equal(basemapIsDarkForSlug('outdoor-v2', 'KEY'), basemapIsDark('outdoors', 'KEY', true));
+	assert.equal(basemapIsDarkForSlug('streets-v2', 'KEY'), basemapIsDark('streets', 'KEY', false));
+	assert.equal(
+		basemapIsDarkForSlug('streets-v2-dark', 'KEY'),
+		basemapIsDark('streets', 'KEY', true),
+	);
+});
+
+test('basemapIsDarkForSlug — override and keyless precedence match basemapIsDark', () => {
+	assert.equal(basemapIsDarkForSlug('hybrid', 'KEY', 'http://localhost:8080/dark.json'), true);
+	assert.equal(basemapIsDarkForSlug('hybrid', 'KEY', 'http://localhost:8080/style.json'), false);
+	// No key: the OSM raster fallback is light ground whatever slug was asked
+	// for, so imagery does not carry a dark verdict into a light fallback.
+	assert.equal(basemapIsDarkForSlug('hybrid', ''), false);
+	assert.equal(basemapIsDarkForSlug('hybrid', '   '), false);
+});

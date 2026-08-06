@@ -38,7 +38,7 @@ void main() {
   group('ReadinessCard', () {
     testWidgets('renders the header and a band badge', (tester) async {
       await _pump(tester);
-      expect(find.text('READINESS'), findsOneWidget);
+      expect(find.text('Readiness'), findsOneWidget);
     });
 
     testWidgets('header row survives a narrow width without overflowing',
@@ -47,7 +47,7 @@ void main() {
       // Header + band badge share one row; at 200 the header must
       // ellipsize instead of throwing a RenderFlex overflow (the harness
       // fails the test on one).
-      expect(find.text('READINESS'), findsOneWidget);
+      expect(find.text('Readiness'), findsOneWidget);
     });
   });
 }

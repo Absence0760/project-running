@@ -18,6 +18,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import 'run_detail_screen.dart';
+import '../widgets/run_list_tile.dart';
 import '../widgets/top_banner.dart';
 
 enum PeriodType { week, month, all }
@@ -366,11 +367,11 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             ),
             const SizedBox(height: 8),
             for (final run in _periodRuns)
-              _RunTile(
+              RunListTile.owned(
                 key: ValueKey(run.id),
                 run: run,
                 unit: unit,
-                theme: theme,
+                api: null,
                 onTap: () async {
                   // `run` is a track-less summary; hydrate the full run (track
                   // + complete metadata) before opening detail, falling back to
@@ -519,57 +520,6 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
 // ── Reusable widgets ───────────────────────────────────────────────────
 
 
-class _RunTile extends StatelessWidget {
-  final Run run;
-  final DistanceUnit unit;
-  final ThemeData theme;
-  final VoidCallback onTap;
-
-  const _RunTile({
-    super.key,
-    required this.run,
-    required this.unit,
-    required this.theme,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final dist = UnitFormat.distance(run.distanceMetres, unit);
-    final dur = _formatDuration(run.duration);
-    final paceSecPerKm = run.distanceMetres < 10
-        ? null
-        : run.duration.inSeconds / (run.distanceMetres / 1000);
-    final activity =
-        ActivityType.fromName(run.metadata?['activity_type'] as String?);
-    final trailingMetric = activity.usesSpeed
-        ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
-        : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
-    final date =
-        formatDateShort(run.startedAt, localeToTag(Localizations.localeOf(context)));
-
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Icon(activity.icon, color: theme.colorScheme.primary),
-        ),
-        title: Text(dist),
-        subtitle: Text('$date  •  $dur'),
-        trailing: Text(trailingMetric, style: theme.textTheme.bodySmall),
-        onTap: onTap,
-      ),
-    );
-  }
-
-  static String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    final s = d.inSeconds % 60;
-    if (h > 0) return '${h}h ${m}m';
-    return '${m}m ${s}s';
-  }
-}
 
 // ── Share sheet ─────────────────────────────────────────────────────────
 

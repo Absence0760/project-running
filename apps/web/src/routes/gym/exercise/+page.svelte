@@ -297,7 +297,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.2rem;
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		color: #fff;

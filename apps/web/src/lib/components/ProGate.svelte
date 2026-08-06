@@ -63,7 +63,7 @@
 		display: inline-block;
 		background: var(--color-primary);
 		color: white;
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 800;
 		letter-spacing: 0.08em;
 		padding: 0.15rem 0.6rem;

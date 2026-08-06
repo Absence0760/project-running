@@ -35,6 +35,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { env } from '$env/dynamic/public';
+	import { buildBadgeShareCanonical } from '$lib/share/share_badge_meta';
 	import { buildProfileShareCanonical } from '$lib/share/share_profile_meta';
 	import RunShareView from '$lib/components/RunShareView.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
@@ -130,7 +131,7 @@
 	}
 
 	function shareBadge(b: Achievement) {
-		const url = `${location.origin}/share/badge/${b.id}`;
+		const url = buildBadgeShareCanonical(location.origin, b.id);
 		navigator.clipboard?.writeText(url).then(
 			() => showToast(m('badges.shareLinkCopied'), 'success'),
 			() => showToast(m('profile.copyLinkError'), 'error')

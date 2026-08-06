@@ -54,7 +54,7 @@ export function buildRaceJsonLd(
 	opts: { id: string; base: string | null | undefined },
 ): string {
 	const base = normaliseSiteUrl(opts.base);
-	const canonical = `${base}/share/race/${opts.id}`;
+	const canonical = buildRaceShareCanonical(base, opts.id);
 	const graph: Record<string, unknown> = {
 		'@context': 'https://schema.org',
 		'@type': 'SportsEvent',

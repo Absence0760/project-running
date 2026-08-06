@@ -5,8 +5,20 @@
 /// The badge page carries no JSON-LD node yet, so `jsonLd` is left unset.
 
 import { englishBadge, type AchievementTier } from '../social/badges';
+import { normaliseSiteUrl } from './share_meta';
 import type { ShareRunMeta } from './share_run_meta';
 import type { SharedBadge } from './share_badge_lookup';
+
+/// Absolute URL of a badge's public share page. The one definition of the
+/// path: the `<head>` canonical below resolves it against `PUBLIC_SITE_URL`,
+/// and the profile page's copy-to-clipboard resolves it against
+/// `location.origin` so a preview host yields a preview link (§ 520).
+export function buildBadgeShareCanonical(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/share/badge/${id}`;
+}
 
 export interface ShareBadgeMetaInput {
 	id: string;
@@ -29,7 +41,7 @@ export function buildShareBadgeMeta(input: ShareBadgeMetaInput): ShareRunMeta {
 	return {
 		title,
 		description,
-		canonical: `${base}/share/badge/${id}`,
+		canonical: buildBadgeShareCanonical(base, id),
 		ogImageUrl: `${base}/og/badge/${id}.png`,
 	};
 }

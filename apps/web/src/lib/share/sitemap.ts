@@ -9,6 +9,11 @@
 ///     run + route counts are far below either ceiling for the
 ///     foreseeable future.
 
+import { buildClubShareCanonical } from './share_club_meta';
+import { buildEventShareCanonical } from './share_event_meta';
+import { buildRaceShareCanonical } from './share_race_meta';
+import { buildRouteShareCanonical, buildRunShareCanonical } from './share_meta';
+
 export type SitemapEntry = {
 	loc: string;
 	lastmod?: string; // ISO 8601 (or any subset the spec accepts)
@@ -104,7 +109,7 @@ export function composeEntries(
 	for (const r of routes) {
 		const count = runCountByRouteId?.get(r.id) ?? 0;
 		entries.push({
-			loc: `${b}/share/route/${r.id}`,
+			loc: buildRouteShareCanonical(b, r.id),
 			lastmod: r.updated_at ?? undefined,
 			changefreq: changefreqForRunCount(count),
 			priority: priorityForRunCount(count),
@@ -112,7 +117,7 @@ export function composeEntries(
 	}
 	for (const r of runs) {
 		entries.push({
-			loc: `${b}/share/run/${r.id}`,
+			loc: buildRunShareCanonical(b, r.id),
 			lastmod: r.updated_at ?? r.started_at ?? undefined,
 			changefreq: 'monthly',
 			priority: 0.6,
@@ -137,7 +142,7 @@ export function entityEntries(
 	const entries: SitemapEntry[] = [];
 	for (const e of events) {
 		entries.push({
-			loc: `${b}/share/event/${e.id}`,
+			loc: buildEventShareCanonical(b, e.id),
 			lastmod: e.updated_at ?? undefined,
 			changefreq: 'weekly',
 			priority: 0.6,
@@ -145,7 +150,7 @@ export function entityEntries(
 	}
 	for (const c of clubs) {
 		entries.push({
-			loc: `${b}/share/club/${c.slug}`,
+			loc: buildClubShareCanonical(b, c.slug),
 			lastmod: c.updated_at ?? undefined,
 			changefreq: 'weekly',
 			priority: 0.6,
@@ -153,7 +158,7 @@ export function entityEntries(
 	}
 	for (const r of races) {
 		entries.push({
-			loc: `${b}/share/race/${r.id}`,
+			loc: buildRaceShareCanonical(b, r.id),
 			lastmod: r.updated_at ?? undefined,
 			changefreq: 'weekly',
 			priority: 0.6,

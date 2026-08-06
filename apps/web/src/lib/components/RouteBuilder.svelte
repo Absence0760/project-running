@@ -46,6 +46,11 @@
 		mapOverlayOutline,
 		mapStartColour,
 	} from '$lib/routes/basemap_contrast';
+	import {
+		basemapIsDarkForSlug,
+		maptilerStyleUrl,
+		type MaptilerSlug,
+	} from '$lib/routes/map-style-url';
 	import type { TrackPoint } from '$lib/types';
 
 	// Bound the recentre pan to a fixed, snappy duration. maplibre's default
@@ -216,6 +221,25 @@
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
+	// The builder keeps its own three-way switcher, so it keeps its own slug
+	// table: `hybrid` (imagery WITH labels — the labels are what make it
+	// usable for placing waypoints) where the map-style preference resolves to
+	// bare `satellite`, and no dark rung at all. Those are real differences in
+	// which tiles are requested, which is why § 526 declined to route this
+	// surface through `basemapIsDarkFromEnv` — that resolver keys on the
+	// preference union and would have changed the imagery.
+	//
+	// What it no longer owns is the CLASSIFICATION. `basemapIsDarkForSlug`
+	// takes the slug this table resolved and answers whether it is dark
+	// ground, so the overlay palette below cannot disagree with the basemap
+	// about what it was drawn over — and the OS theme reaches only the streets
+	// rung, where it picks the basemap, never the paint.
+	const BUILDER_SLUGS: Record<'streets' | 'satellite' | 'terrain', MaptilerSlug> = {
+		streets: prefersDark ? 'streets-v2-dark' : 'streets-v2',
+		satellite: 'hybrid',
+		terrain: 'outdoor-v2',
+	};
+
 	// Style URLs honour the PUBLIC_TILE_STYLE_URL override the same
 	// way the other map components do (see `decisions.md § 68`). On a
 	// local Protomaps dev stack we don't have separate satellite /
@@ -223,23 +247,6 @@
 	// style so the style-switcher buttons in the route-builder UI
 	// still work (they just don't visually differ). On the MapTiler
 	// production path the three distinct slugs are used.
-	// Whether the basemap THIS switcher resolved to is dark, so overlay paint
-	// clears the ground it lands on rather than the OS theme (§ 491, and see
-	// `basemap_contrast.ts`). Deliberately local rather than
-	// `basemapIsDarkFromEnv`: the builder owns its own three-way switcher
-	// with its own slugs — `hybrid` for satellite, and a `terrain` key the
-	// shared `MapStyle` union has no member for — so routing it through the
-	// shared resolver would silently change which satellite tiles it
-	// requests. Same override rule, same classification of imagery as dark.
-	const darkBasemap = $derived.by(() => {
-		if (TILE_STYLE_OVERRIDE.length > 0)
-			return TILE_STYLE_OVERRIDE.toLowerCase().includes('dark');
-		if (PUBLIC_MAPTILER_KEY.trim().length === 0) return false;
-		if (mapStyle === 'satellite') return true;
-		if (mapStyle === 'terrain') return false;
-		return prefersDark;
-	});
-
 	const TILE_STYLE_OVERRIDE = (env.PUBLIC_TILE_STYLE_URL ?? '').trim();
 	const MAP_STYLES: Record<string, string> = TILE_STYLE_OVERRIDE.length > 0
 		? {
@@ -248,10 +255,14 @@
 			terrain: TILE_STYLE_OVERRIDE,
 		}
 		: {
-			streets: `https://api.maptiler.com/maps/${prefersDark ? 'streets-v2-dark' : 'streets-v2'}/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-			satellite: `https://api.maptiler.com/maps/hybrid/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-			terrain: `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+			streets: maptilerStyleUrl(BUILDER_SLUGS.streets, PUBLIC_MAPTILER_KEY),
+			satellite: maptilerStyleUrl(BUILDER_SLUGS.satellite, PUBLIC_MAPTILER_KEY),
+			terrain: maptilerStyleUrl(BUILDER_SLUGS.terrain, PUBLIC_MAPTILER_KEY),
 		};
+
+	const darkBasemap = $derived(
+		basemapIsDarkForSlug(BUILDER_SLUGS[mapStyle], PUBLIC_MAPTILER_KEY, TILE_STYLE_OVERRIDE),
+	);
 
 	const SNAP_DISTANCE_PX = 25;
 	const METRES_PER_MILE = 1609.344;

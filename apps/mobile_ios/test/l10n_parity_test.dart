@@ -36,6 +36,19 @@ Map<String, dynamic> _readArb(String tag) {
   return jsonDecode(raw) as Map<String, dynamic>;
 }
 
+/// The shortest run of 3+ characters that appears twice back-to-back in [s],
+/// or null when none does. "your your run" yields "your ".
+String? _adjacentRepeat(String s) {
+  for (var len = 3; len <= s.length ~/ 2; len++) {
+    for (var i = 0; i + 2 * len <= s.length; i++) {
+      if (s.substring(i, i + len) == s.substring(i + len, i + 2 * len)) {
+        return s.substring(i, i + len);
+      }
+    }
+  }
+  return null;
+}
+
 void main() {
   // Every catalogue file present in lib/l10n. `pt` is the base fallback
   // gen-l10n requires for `pt_BR`; both are validated.
@@ -81,6 +94,29 @@ void main() {
           final actual = _placeholders(arb[key] as String);
           expect(actual, equals(expected),
               reason: '$key placeholders differ in app_$tag.arb');
+        }
+      });
+
+      // `profileNotifYourRun` is the {dist} fallback for a notification whose
+      // run distance is unknown, and every template that consumes {dist}
+      // already supplies the possessive ("your {dist}", "deinem {dist}",
+      // "à sua {dist}", "あなたの{dist}"). A fallback that carries its own
+      // therefore renders it twice — "gave kudos to your your run" — which
+      // shipped in all seven locales until it was measured.
+      //
+      // Pinned as a derivation rather than per-locale copy: substitute the
+      // fallback in and assert nothing in the result repeats back-to-back.
+      // That is language-agnostic, needs no possessive vocabulary, and holds
+      // for the space-free ja catalogue too.
+      test('the {dist} fallback does not double the template possessive', () {
+        final fallback = arb['profileNotifYourRun'] as String;
+        for (final key in ['profileNotifKudos', 'profileNotifComment']) {
+          final rendered = (arb[key] as String)
+              .replaceAll('{name}', 'Ana')
+              .replaceAll('{dist}', fallback);
+          final repeat = _adjacentRepeat(rendered);
+          expect(repeat, isNull,
+              reason: '$key repeats "$repeat" in app_$tag.arb: $rendered');
         }
       });
     });

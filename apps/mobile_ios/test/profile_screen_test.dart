@@ -326,26 +326,34 @@ void main() {
     });
   });
 
-  group('runs tab — visual upgrade', () {
-    // Source-level guards on the Runs tab polish (see the History
-    // tab's _RunTile pattern). Driving the full widget tree requires
-    // a populated _runs list which means a fake Supabase fetch —
-    // expensive for a polish guard. Pin the structural pieces by
-    // grep so a future refactor that reverts to the bare ListTile
-    // fails loud.
+  group('runs tab — the shared run row', () {
+    // Source-level guards on the Runs tab. Driving the full widget tree
+    // requires a populated _runs list which means a fake Supabase fetch —
+    // expensive for a structural guard. Pin the pieces by grep so a refactor
+    // that re-forks the row (#666 C8) fails loud.
     final source =
         File('lib/screens/profile_screen.dart').readAsStringSync();
 
-    test('Runs tab uses RunTrackPreview as the leading thumbnail', () {
-      expect(source.contains('RunTrackPreview('), isTrue,
+    test('Runs tab draws the shared run row, not a fork of it', () {
+      expect(source.contains('RunListTile.public('), isTrue,
           reason:
-              'Runs tab must render a track preview thumbnail when the '
-              'run has a track_url — same affordance as the History '
-              'tab so the tile reads consistently across the app.');
-      expect(source.contains('trackUrl: trackUrl'), isTrue,
+              'the Runs tab had its own ListTile — no card, Divider '
+              'separators, a 56dp leading slot against the shared row\'s 72, '
+              'no vert chip and the pace in the subtitle — under a comment '
+              'claiming it mirrored the History tab (#666 C8).');
+      expect(source.contains('RunTrackPreview('), isFalse,
           reason:
-              'The RunTrackPreview mount must forward the row trackUrl '
-              'so the thumbnail actually has a polyline to render.');
+              'the thumbnail belongs to the shared row; mounting one here is '
+              'how the two lists drifted to different sizes in the first '
+              'place.');
+    });
+
+    test('a non-owner thumbnail is clipped against the profile owner', () {
+      expect(source.contains('ownerUserId: widget.userId'), isTrue,
+          reason:
+              'this list shows OTHER runners\' runs, so the thumbnail must go '
+              'through the clip-public-track function rather than pulling the '
+              'unclipped blob from Storage (decisions §33).');
     });
 
     test('Runs tab tile tap routes into PublicRunScreen', () {

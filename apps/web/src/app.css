@@ -131,6 +131,78 @@
 	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
 
+	/* Seven per-section identity accents — the sidebar nav's per-section hue,
+	   and the same hue wherever a content surface marks the modality (the
+	   dashboard's gym card, the history timeline's lift / meal chips). Each
+	   name is a FILL or TINT; the `-ink` rung beside it is what any glyph,
+	   thin rail, border or label takes. One frozen hue cannot be both, and
+	   these shipped trying: #8FBF9F is 2.075:1 as a 3 px rail on the light
+	   card, #4E7C5E is 2.359:1 as a glyph on the dark one, and all seven nav
+	   glyphs read 1.594-2.659:1 on their own 14 % disc over the light sidebar
+	   (1.219-1.911 on the 24 % hover disc). Splitting fill from ink is what
+	   § 503 did for status roles and § 524 for mobile's marks.
+	   Section IDENTITY survives the split because it moves LIGHTNESS only:
+	   every ink's hue angle is within 2.6 deg of its accent (0 deg for four of
+	   the seven), so the seven hues a user learns are the seven that stay. The
+	   accents were never separated by luminance anyway — pairwise they sit
+	   1.003:1 apart, the inks 1.002:1 — which is the same bargain --zone-* and
+	   --kind-* record, and it is why colour is a secondary cue on every one of
+	   these surfaces: the glyph shape and the localized label carry the
+	   section, colour only speeds the scan.
+	   Worst ink figure over every share the source paints (14 / 18 / 20 / 24 %
+	   discs on all four page steps): 3.530:1 light, 4.301:1 dark. The dark
+	   rung is the accent itself wherever the accent already clears — a pastel
+	   on near-black — and a lightened rung where it did not.
+	   Enforced per call site, composited, in contrast_guard.test.ts. */
+	--section-dashboard: var(--color-accent-orange);
+	--section-dashboard-ink: var(--color-accent-orange-text);
+	/* Equal to --color-secondary / -secondary-text in light, but NOT aliased
+	   to the base: --color-secondary is violet in dark, and a section hue that
+	   changes family between themes is a different section. The dark blocks
+	   therefore re-declare the ink. */
+	--section-history: #D97A54;
+	--section-history-ink: var(--color-secondary-text);
+	--section-runs: #6FA8DC;
+	--section-runs-ink: #245F95;
+	--section-gym: #8FBF9F;
+	--section-gym-ink: #3B684A;
+	--section-nutrition: #E8C07D;
+	--section-nutrition-ink: #825A17;
+	--section-coach: var(--color-accent-cyan);
+	--section-coach-ink: var(--color-accent-cyan-text);
+	--section-social: #C98ECF;
+	--section-social-ink: #893D91;
+	/* Foreground for the ACTIVE nav disc, which fills with the whole accent.
+	   Theme-independent because the accents are: 5.757-10.291:1 on all seven.
+	   The § 506 --color-on-primary shape, one vocabulary over. */
+	--section-on-accent: #1B1628;
+
+	/* Provider glyph inks. A third party's MARK is theirs to tone (the Google
+	   "G", Apple's required black); the same party's hue reused as OUR paint
+	   carries no such requirement, and as a glyph on its own 12-14 % disc it
+	   was failing on the card it actually lands on — Strava 2.921:1 in light,
+	   ultrasignup 2.690 and chronotrack 2.886 in dark. The disc keeps the
+	   brand hue (it is the larger recognition cue, and the provider's NAME is
+	   set beside it); the ink is theme-keyed off the same hue, lightness only.
+	   parkrun's brand coral IS the history accent, so it shares that ink
+	   rather than re-spelling it. Worst measured: 5.138:1 light, 5.135 dark. */
+	--provider-strava-ink: #9C2F01;
+	--provider-parkrun-ink: var(--section-history-ink);
+	--provider-garmin-ink: #005691;
+	--provider-healthkit-ink: #AD031C;
+	--provider-runsignup-ink: #98338B;
+	--provider-ultrasignup-ink: #33613E;
+	--provider-chronotrack-ink: #265F5F;
+
+	/* The verified-club ribbon. Two-tone, so it is clamped from BOTH ends: the
+	   ribbon owes 1.4.11's 3:1 to the card it sits on, and the check cut out
+	   of it owes 3:1 to the ribbon — lightening the ribbon for dark spends the
+	   second to buy the first. The single frozen #2563EB sat at 5.169:1 on the
+	   light card and 3.127:1 on the dark one, i.e. one theme's worth of
+	   margin; each rung is picked at the balance point of its own theme
+	   (5.169 / 5.169 light, 4.014 / 4.027 dark), same hue angle. */
+	--color-verified: #2563EB;
+
 	--color-bg: #F7F3EC;
 	--color-bg-secondary: #F1ECE0;
 	--color-bg-tertiary: #EBE5D8;
@@ -313,6 +385,25 @@
 		--color-accent-pink: #B9A7E8;
 		--color-accent-cyan: #8FB8C7;
 
+		/* Section inks on the dark sidebar / card: the pastel accent already
+		   clears its own disc for gym and nutrition, so those revert to it; the
+		   other three are lightened a step. dashboard and coach follow their
+		   --color-accent-*-text aliases, which already revert here. */
+		--section-history-ink: #DF9171;
+		--section-runs-ink: #7AAFDF;
+		--section-gym-ink: var(--section-gym);
+		--section-nutrition-ink: var(--section-nutrition);
+		--section-social-ink: #CE98D3;
+
+		--provider-strava-ink: #FD763E;
+		--provider-garmin-ink: #139FFF;
+		--provider-healthkit-ink: #FD7086;
+		--provider-runsignup-ink: #DB95D2;
+		--provider-ultrasignup-ink: #66AF77;
+		--provider-chronotrack-ink: #45AEAE;
+
+		--color-verified: #4479EE;
+
 		/* Dark surfaces: the base accent hues already pass as text (>=7.5:1),
 		   so those -text tokens revert to them. Success and danger do NOT: the
 		   base green/red on a same-hue chip tint computes to 5.22 / 4.06:1 and
@@ -403,6 +494,23 @@
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #B9A7E8;
 	--color-accent-cyan: #8FB8C7;
+
+	/* Section inks on the dark sidebar / card — see the prefers-color-scheme
+	   block above for why gym and nutrition revert to their accent. */
+	--section-history-ink: #DF9171;
+	--section-runs-ink: #7AAFDF;
+	--section-gym-ink: var(--section-gym);
+	--section-nutrition-ink: var(--section-nutrition);
+	--section-social-ink: #CE98D3;
+
+	--provider-strava-ink: #FD763E;
+	--provider-garmin-ink: #139FFF;
+	--provider-healthkit-ink: #FD7086;
+	--provider-runsignup-ink: #DB95D2;
+	--provider-ultrasignup-ink: #66AF77;
+	--provider-chronotrack-ink: #45AEAE;
+
+	--color-verified: #4479EE;
 
 	/* Dark surfaces: the base accent hues already pass as text; those -text
 	   tokens revert. Success and danger take mobile's AppSemanticColors.dark

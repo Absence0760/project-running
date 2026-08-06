@@ -306,7 +306,7 @@
 		margin-inline-start: auto;
 	}
 	.tt-label {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;

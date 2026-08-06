@@ -574,24 +574,6 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 		'047857': [2, 'fixed-canvas'], '8A4A00': [2, 'fixed-canvas'],
 		'991B1B': [2, 'fixed-canvas'], '8F2F24': [1, 'fixed-canvas'],
 	},
-	// --- Registered and OPEN. Each is a measured failure, not an exemption;
-	// the figures and grounds are in OPEN_DEBTS below, which pins the set so
-	// it cannot grow quietly.
-	'routes/+layout.svelte': {
-		F2A07B: [2, 'data'], D97A54: [1, 'data'], '6FA8DC': [1, 'data'],
-		'8FBF9F': [1, 'data'], E8C07D: [1, 'data'], '7FB3C2': [1, 'data'],
-		C98ECF: [1, 'data'], '1B1628': [1, 'data'],
-	},
-	'routes/dashboard/+page.svelte': { '8FBF9F': [5, 'data'], '4E7C5E': [2, 'data'] },
-	'routes/history/+page.svelte': {
-		'4E7C5E': [1, 'data'], '8FBF9F': [1, 'data'],
-		'9A6B2F': [1, 'data'], D9A25A: [1, 'data'],
-	},
-	'routes/settings/integrations/+page.svelte': {
-		FC4C02: [1, 'brand-hue'], '0077C8': [1, 'brand-hue'], FC3D5A: [1, 'brand-hue'],
-		B85AAD: [1, 'brand-hue'], '3F7A4F': [1, 'brand-hue'], '2F7E7E': [1, 'brand-hue'],
-	},
-	'lib/components/VerifiedBadge.svelte': { '2563EB': [1, 'data'] },
 };
 
 // Every literal the register knows is still a measured FAILURE, with the
@@ -601,32 +583,36 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 // dropped from the register to keep the suite green, which is how § 511's
 // hole opened in the first place. Pinned as an exact set, so closing one
 // forces its removal and a new failure cannot join without an edit here.
-const OPEN_DEBTS: Record<string, string> = {
-	// The per-section nav accent is the label INK on a 14% tint of itself.
-	// On the light sidebar (#FFFFFF → #F1ECE0) all seven read 1.460–2.655:1
-	// as text, worst #E8C07D at 1.460. The active pill is fine — dark ink on
-	// the FULL accent, 5.757–10.291:1 — so the defect is the tinted-idle
-	// state only. Wants a per-section *-text rung, like --color-*-text.
-	'routes/+layout.svelte': '1.460:1 (#E8C07D ink on its own 14% tint over #FFFFFF)',
-	// The gym accent as a 3px rail, an icon and a border on the light
-	// surface: 2.075:1, under even the 3:1 non-text floor. Its glyph ink
-	// #4E7C5E reads 2.348:1 on the dark surface's tinted chip.
-	'routes/dashboard/+page.svelte': '2.075:1 (#8FBF9F rail/icon on #FFFFFF)',
-	// The same two accents on the history timeline glyphs, plus the meal
-	// pair: 2.348 and 2.398:1 on the dark surface, 3.507 / 3.314 on the
-	// light hover fill.
-	'routes/history/+page.svelte': '2.348:1 (#4E7C5E on an 18% #8FBF9F chip over #241B3D)',
-	// A provider's brand hue is fixed for their MARK, which is why the
-	// Google "G" above is exempt — but these are the hue reused as our glyph
-	// ink on our own tinted disc, which the brand does not require. Five of
-	// six fail the 3:1 floor on the ground they land on: Strava 2.375,
-	// HealthKit 2.446, ultrasignup 2.799, runsignup 2.831, chronotrack
-	// 2.961. Garmin alone clears, at 3.087.
-	'routes/settings/integrations/+page.svelte': '2.375:1 (#FC4C02 glyph on its own 12% disc over #EBE5D8)',
-	// 5.169:1 in light, 3.127:1 on the dark surface — AA in one theme only,
-	// the exact shape § 511 described.
-	'lib/components/VerifiedBadge.svelte': '3.127:1 (#2563EB as text on #241B3D)',
-};
+//
+// EMPTY as of § 529: all five entries § 526 recorded were closed together,
+// because all five were one defect — an identity or brand accent frozen as a
+// hex and then asked to be BOTH the tint and the ink on it. Each is now a
+// `--section-<x>` / `--provider-<x>` fill with a theme-keyed `-ink` rung
+// beside it (app.css), and every call site is measured composited in
+// contrast_guard.test.ts. § 526's own figures were leads, not facts: three of
+// the five were measured against the wrong ground or the wrong floor. The
+// provider glyphs sit on the CARD, not on --color-bg-tertiary (the per-provider
+// rule replaces that background outright), which moves Strava from 2.375 to
+// 2.921:1 and clears four of the six § 526 failed; the VerifiedBadge ribbon is
+// aria-hidden SVG geometry, so it owes 1.4.11's 3:1 and not AA text — it was
+// never failing at 3.127. Two failures § 526 missed showed up instead: the
+// dashboard's `.gym-footer-cta` is real TEXT in #4E7C5E and owed 4.5:1 at
+// 4.346 light / 3.949 dark, and ultrasignup + chronotrack fail in DARK.
+const OPEN_DEBTS: Record<string, string> = {};
+
+// The figure format the entries above must carry, pinned in both directions so
+// the rule survives the set being empty — § 511's point about a floor read out
+// of the tree: a matcher that matches nothing must not pass for that reason.
+const DEBT_FIGURE_FIXTURES: Array<[ok: boolean, figure: string]> = [
+	[true, '2.375:1 (#FC4C02 glyph on its own 12% disc over #EBE5D8)'],
+	[true, '10.291:1 (white on the full accent)'],
+	// A figure with no ground is exactly § 503's trap: a convenient background.
+	[false, '2.375:1'],
+	// Two decimals is a rounded claim, not a measurement.
+	[false, '2.37:1 (#FC4C02 on #EBE5D8)'],
+	// A ground with no figure records the worry and not the number.
+	[false, 'fails on #EBE5D8'],
+];
 
 const ANY_SIX_HEX = /#([0-9a-fA-F]{6})(?![0-9a-fA-F])/g;
 
@@ -694,20 +680,38 @@ test('the open-debt set is exactly what is recorded', () => {
 		);
 	}
 	// Frozen so closing one is a deliberate edit here, and so a future round
-	// cannot quietly reclassify a new failure as an old one.
-	assert.deepEqual(Object.keys(OPEN_DEBTS).sort(), [
+	// cannot quietly reclassify a new failure as an old one. Empty since § 529
+	// closed all five; the fixtures below keep the format rule alive regardless.
+	assert.deepEqual(Object.keys(OPEN_DEBTS).sort(), []);
+	const FIGURE = /^\d+\.\d{3}:1 \(.+\)$/;
+	for (const [rel, figure] of Object.entries(OPEN_DEBTS)) {
+		assert.match(
+			figure,
+			FIGURE,
+			`${rel}: an open debt must carry its measured figure AND the ground ` +
+				`it was measured against — § 503's trap is a convenient background`,
+		);
+	}
+	for (const [ok, figure] of DEBT_FIGURE_FIXTURES) {
+		assert.equal(
+			FIGURE.test(figure),
+			ok,
+			`the open-debt figure format ${ok ? 'must accept' : 'must reject'} ${figure}`,
+		);
+	}
+	// Every file § 526 recorded a debt against carries no six-digit literal at
+	// all now, so the closure cannot be undone by re-freezing one of the hues
+	// under a different name: the register scan above would fail on it.
+	for (const rel of [
 		'lib/components/VerifiedBadge.svelte',
 		'routes/+layout.svelte',
 		'routes/dashboard/+page.svelte',
 		'routes/history/+page.svelte',
 		'routes/settings/integrations/+page.svelte',
-	]);
-	for (const [rel, figure] of Object.entries(OPEN_DEBTS)) {
-		assert.match(
-			figure,
-			/^\d+\.\d{3}:1 \(.+\)$/,
-			`${rel}: an open debt must carry its measured figure AND the ground ` +
-				`it was measured against — § 503's trap is a convenient background`,
+	]) {
+		assert.ok(
+			!(rel in REGISTER),
+			`${rel} was closed in § 529 — a new entry for it needs a new open debt`,
 		);
 	}
 });

@@ -56,7 +56,7 @@ export function buildClubJsonLd(
 	opts: { slug: string; base: string | null | undefined },
 ): string {
 	const base = normaliseSiteUrl(opts.base);
-	const canonical = `${base}/share/club/${opts.slug}`;
+	const canonical = buildClubShareCanonical(base, opts.slug);
 	const graph: Record<string, unknown> = {
 		'@context': 'https://schema.org',
 		'@type': 'SportsOrganization',

@@ -446,7 +446,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível carregar as sugestões.';
 
   @override
-  String get readinessCardHeader => 'PRONTIDÃO';
+  String get readinessCardHeader => 'Prontidão';
 
   @override
   String get readinessBandHigh => 'alta';
@@ -2487,6 +2487,14 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint =>
+      'Toca e mantém numa corrida para selecionar várias';
+
+  @override
+  String get routesSelectionHint =>
+      'Toca e mantém numa rota para selecionar várias';
+
+  @override
   String get routesEmptyTitle => 'Nenhuma rota ainda';
 
   @override
@@ -3889,10 +3897,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get profileNotifsCaughtUp => 'Você está em dia.';
+  String get profileNotifsCaughtUp => 'Estás em dia.';
 
   @override
-  String get profileNotifsEmpty => 'Nenhuma notificação ainda.';
+  String get profileNotifsEmpty => 'Ainda não há notificações.';
 
   @override
   String get profileDismiss => 'Dispensar';
@@ -3906,7 +3914,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get profileNotifSomeone => 'Alguém';
 
   @override
-  String get profileNotifYourRun => 'sua corrida';
+  String get profileNotifYourRun => 'corrida';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {
@@ -3923,42 +3931,42 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String profileNotifKudos(String name, String dist) {
-    return '$name deu kudos à sua $dist';
+    return '$name deu kudos à tua $dist';
   }
 
   @override
   String profileNotifComment(String name, String dist) {
-    return '$name comentou na sua $dist';
+    return '$name comentou na tua $dist';
   }
 
   @override
   String profileNotifCommentReply(String name) {
-    return '$name respondeu ao seu comentário';
+    return '$name respondeu ao teu comentário';
   }
 
   @override
   String profileNotifFollow(String name) {
-    return '$name começou a seguir você';
+    return '$name começou a seguir-te';
   }
 
   @override
   String profileNotifEventRsvpTitled(String name, String title) {
-    return '$name confirmou presença no seu evento \"$title\"';
+    return '$name confirmou presença no teu evento \"$title\"';
   }
 
   @override
   String profileNotifEventRsvp(String name) {
-    return '$name confirmou presença no seu evento';
+    return '$name confirmou presença no teu evento';
   }
 
   @override
   String profileNotifPlanUpdate(String name) {
-    return '$name atualizou seu plano de treino';
+    return '$name atualizou o teu plano de treino';
   }
 
   @override
   String profileNotifMessage(String name) {
-    return '$name enviou uma mensagem para você';
+    return '$name enviou-te uma mensagem';
   }
 
   @override
@@ -3968,7 +3976,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String profileNotifClubPost(String name) {
-    return '$name publicou em um clube do qual você participa';
+    return '$name publicou num clube em que participas';
   }
 
   @override
@@ -3983,7 +3991,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String profileNotifPlanAssigned(String name) {
-    return '$name atribuiu um plano de treino a você';
+    return '$name atribuiu-te um plano de treino';
   }
 
   @override
@@ -3993,30 +4001,30 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get profileNotifEventCancel =>
-      'Uma ocorrência de evento que você confirmou foi cancelada';
+      'Uma ocorrência de um evento que confirmaste foi cancelada';
 
   @override
   String profileNotifEventReminderTitled(String title) {
-    return '\"$title\" está chegando';
+    return '\"$title\" está a chegar';
   }
 
   @override
   String get profileNotifEventReminder =>
-      'Um evento ao qual você vai comparecer está chegando';
+      'Um evento a que vais comparecer está a chegar';
 
   @override
-  String get profileNotifAchievement => 'Você conquistou uma nova conquista';
+  String get profileNotifAchievement => 'Ganhaste uma nova conquista';
 
   @override
-  String get profileNotifChallengeComplete => 'Você completou um desafio';
+  String get profileNotifChallengeComplete => 'Completaste um desafio';
 
   @override
   String get profileNotifContentHidden =>
-      'Uma das suas publicações foi ocultada após ser denunciada';
+      'Uma das tuas publicações foi ocultada após ser denunciada';
 
   @override
   String profileNotifGeneric(String name) {
-    return '$name interagiu com sua atividade';
+    return '$name interagiu com a tua atividade';
   }
 
   @override
@@ -7455,7 +7463,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get dashboardStreakStart => 'corra hoje para começar uma';
 
   @override
-  String get dashboardHeatmapTitle => 'ATIVIDADE';
+  String get dashboardHeatmapTitle => 'Atividade';
 
   @override
   String get dashboardHeatmapLess => 'Menos';
@@ -7605,7 +7613,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get mileageTitle => 'QUILOMETRAGEM';
+  String get mileageTitle => 'Quilometragem';
 
   @override
   String get mileageWeek => 'Semana';
@@ -13001,7 +13009,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Não foi possível carregar as sugestões.';
 
   @override
-  String get readinessCardHeader => 'PRONTIDÃO';
+  String get readinessCardHeader => 'Prontidão';
 
   @override
   String get readinessBandHigh => 'alta';
@@ -15041,6 +15049,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get historySelectionHint =>
+      'Toque e segure em uma corrida para selecionar várias';
+
+  @override
+  String get routesSelectionHint =>
+      'Toque e segure em uma rota para selecionar várias';
+
+  @override
   String get routesEmptyTitle => 'Nenhuma rota ainda';
 
   @override
@@ -16460,7 +16476,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get profileNotifSomeone => 'Alguém';
 
   @override
-  String get profileNotifYourRun => 'sua corrida';
+  String get profileNotifYourRun => 'corrida';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {
@@ -20008,7 +20024,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get dashboardStreakStart => 'corra hoje para começar uma';
 
   @override
-  String get dashboardHeatmapTitle => 'ATIVIDADE';
+  String get dashboardHeatmapTitle => 'Atividade';
 
   @override
   String get dashboardHeatmapLess => 'Menos';
@@ -20158,7 +20174,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get mileageTitle => 'QUILOMETRAGEM';
+  String get mileageTitle => 'Quilometragem';
 
   @override
   String get mileageWeek => 'Semana';

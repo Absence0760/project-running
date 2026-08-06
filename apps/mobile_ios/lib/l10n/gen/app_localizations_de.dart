@@ -447,7 +447,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Vorschläge konnten nicht geladen werden.';
 
   @override
-  String get readinessCardHeader => 'BEREITSCHAFT';
+  String get readinessCardHeader => 'Bereitschaft';
 
   @override
   String get readinessBandHigh => 'hoch';
@@ -2497,6 +2497,14 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint =>
+      'Halte einen Lauf gedrückt, um mehrere auszuwählen';
+
+  @override
+  String get routesSelectionHint =>
+      'Halte eine Route gedrückt, um mehrere auszuwählen';
+
+  @override
   String get routesEmptyTitle => 'Noch keine Routen';
 
   @override
@@ -3918,7 +3926,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileNotifSomeone => 'Jemand';
 
   @override
-  String get profileNotifYourRun => 'deinen Lauf';
+  String get profileNotifYourRun => 'Lauf';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {
@@ -7468,7 +7476,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get dashboardStreakStart => 'Lauf heute, um eine zu starten';
 
   @override
-  String get dashboardHeatmapTitle => 'AKTIVITÄT';
+  String get dashboardHeatmapTitle => 'Aktivität';
 
   @override
   String get dashboardHeatmapLess => 'Weniger';
@@ -7621,7 +7629,7 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get mileageTitle => 'LAUFLEISTUNG';
+  String get mileageTitle => 'Kilometerleistung';
 
   @override
   String get mileageWeek => 'Woche';

@@ -2450,21 +2450,25 @@
 	}
 	.event-arrow { color: var(--color-text-tertiary); }
 
-	/* Gym (multi-modal) accent — matches the Gym sidebar accent (#8FBF9F).
-	   Kept distinct from the running/primary accent so a runner reads the
-	   modality at a glance without relying on it (label + glyph carry it). */
+	/* Gym (multi-modal) accent — the shared --section-gym pair, so this card
+	   and the Gym sidebar entry are the same green by construction. Kept
+	   distinct from the running/primary accent so a runner reads the modality
+	   at a glance without relying on it (label + glyph carry it). The `-ink`
+	   rung is what the rail, the glyph and the CTA take: the pastel fill is
+	   2.075:1 on the light card and the fixed deep green was 2.359:1 on the
+	   dark one, so neither half can serve both themes (decisions § 529). */
 	.today-lift-card {
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-md) var(--space-lg);
-		border-inline-start: 3px solid #8fbf9f;
+		border-inline-start: 3px solid var(--section-gym-ink);
 		text-decoration: none;
 		color: inherit;
 		transition: background var(--transition-fast), box-shadow var(--transition-fast);
 	}
 	.today-lift-card:hover {
-		background: color-mix(in srgb, #8fbf9f 8%, var(--color-surface));
+		background: color-mix(in srgb, var(--section-gym) 8%, var(--color-surface));
 		box-shadow: var(--shadow-sm);
 	}
 	.today-lift-icon {
@@ -2474,8 +2478,8 @@
 		width: 2.5rem;
 		height: 2.5rem;
 		border-radius: 50%;
-		background: color-mix(in srgb, #8fbf9f 18%, transparent);
-		color: #4e7c5e;
+		background: color-mix(in srgb, var(--section-gym) 18%, transparent);
+		color: var(--section-gym-ink);
 		flex-shrink: 0;
 	}
 	.today-lift-body {
@@ -2517,12 +2521,12 @@
 		border: 1px dashed var(--color-border);
 		border-radius: var(--radius-md);
 	}
-	.gym-footer-prompt:hover { border-color: #8fbf9f; }
-	.gym-footer-prompt .material-symbols { color: #8fbf9f; font-size: 1.2rem; }
+	.gym-footer-prompt:hover { border-color: var(--section-gym-ink); }
+	.gym-footer-prompt .material-symbols { color: var(--section-gym-ink); font-size: 1.2rem; }
 	.gym-footer-prompt > span:nth-child(2) { flex: 1; }
 	.gym-footer-cta {
 		font-weight: 600;
-		color: #4e7c5e;
+		color: var(--section-gym-ink);
 		white-space: nowrap;
 	}
 

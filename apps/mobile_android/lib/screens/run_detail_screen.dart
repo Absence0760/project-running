@@ -17,6 +17,7 @@ import '../auth_error.dart';
 import '../age_grade.dart';
 import '../backend_timeout.dart';
 import '../calories.dart';
+import '../detail_map_height.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -878,12 +879,16 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ),
       body: SafeArea(
         top: false,
-        child: _buildBody(theme, l10n, unit),
+        child: LayoutBuilder(
+          builder: (context, viewport) =>
+              _buildBody(theme, l10n, unit, viewport.maxHeight),
+        ),
       ),
     );
   }
 
-  Widget _buildBody(ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
+  Widget _buildBody(ThemeData theme, AppLocalizations l10n, DistanceUnit unit,
+      double viewportHeight) {
     final hasMap = run.track.isNotEmpty || _linkedRoute != null;
     final sections = _buildSections(theme, l10n, unit);
     // Expanded (>= 840dp — a landscape tablet) mirrors the web run-detail
@@ -912,7 +917,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           // alive also pauses its pulse ticker while off-screen.
           _KeepAliveMap(
             child: SizedBox(
-              height: 280,
+              height: detailMapHeight(viewportHeight),
               child: _buildMapStack(l10n),
             ),
           ),

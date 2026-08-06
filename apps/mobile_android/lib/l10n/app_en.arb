@@ -610,7 +610,7 @@
   "@peopleSuggestionsLoadFailed": {
     "description": "Error-state message when the suggested-people list fails to load"
   },
-  "readinessCardHeader": "READINESS",
+  "readinessCardHeader": "Readiness",
   "@readinessCardHeader": {
     "description": "Header label on the dashboard readiness-to-run card"
   },
@@ -3288,6 +3288,14 @@
       }
     }
   },
+  "historySelectionHint": "Long-press a run to select several",
+  "@historySelectionHint": {
+    "description": "Caption under the History filters telling the reader a long press opens multi-select"
+  },
+  "routesSelectionHint": "Long-press a route to select several",
+  "@routesSelectionHint": {
+    "description": "Caption under the Routes filters telling the reader a long press opens multi-select"
+  },
   "routesEmptyTitle": "No routes yet",
   "@routesEmptyTitle": {
     "description": "Empty-state title shown when the route library is empty"
@@ -5228,9 +5236,9 @@
   "@profileNotifSomeone": {
     "description": "Fallback actor name in notification text"
   },
-  "profileNotifYourRun": "your run",
+  "profileNotifYourRun": "run",
   "@profileNotifYourRun": {
-    "description": "Fallback for a run reference in notification text when distance is unknown"
+    "description": "Fallback noun for a run reference in notification text when the distance is unknown. Carries NO possessive: every consuming template already supplies one (\"your {dist}\")"
   },
   "profileNotifNameAndOthers": "{name} and {count} others",
   "@profileNotifNameAndOthers": {
@@ -9935,7 +9943,7 @@
   "@dashboardStreakStart": {
     "description": "Encouraging run-streak readout when the user has never had a streak"
   },
-  "dashboardHeatmapTitle": "ACTIVITY",
+  "dashboardHeatmapTitle": "Activity",
   "@dashboardHeatmapTitle": {
     "description": "Card header over the calendar activity heatmap on the dashboard"
   },
@@ -10130,7 +10138,7 @@
       }
     }
   },
-  "mileageTitle": "MILEAGE",
+  "mileageTitle": "Mileage",
   "@mileageTitle": {
     "description": "Title of the dashboard mileage card"
   },

@@ -63,7 +63,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		color: #2563eb;
+		color: var(--color-verified);
 		vertical-align: middle;
 		margin-inline-start: 4px;
 		line-height: 0;

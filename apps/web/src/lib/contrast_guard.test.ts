@@ -1622,3 +1622,245 @@ test('the light accent foreground and fill match mobile AppTheme', () => {
 		);
 	}
 });
+
+// ---------------------------------------------------------------------------
+// § 529: the seven per-section identity accents and the seven provider brand
+// hues. Each is a fixed FILL with a theme-keyed `-ink` rung; every surface that
+// paints one paints the ink as a glyph, a thin rail, a border or a label, on a
+// tint of the FILL. § 503's trap is the whole difficulty here — the ground is
+// never the bare surface, it is the accent's own tint over it, which pulls the
+// ground toward the ink and eats the margin. Every share the source actually
+// paints is measured, over every page step it can land on.
+
+// Hue angle in degrees. What makes the fill/ink split safe for IDENTITY: an ink
+// is its accent with the lightness moved, so the seven hues a user learns are
+// the seven that survive. Seven categorical marks cannot be pairwise 3:1 (six
+// such steps need 729:1 and sRGB offers 21:1) — the accents sit 1.003:1 apart
+// and the inks 1.002:1 — so hue is what separates them and luminance never did.
+function hueAngle(hex: string): number {
+	const [r, g, b] = channelsOf(hex).map((c) => c / 255);
+	const mx = Math.max(r, g, b);
+	const d = mx - Math.min(r, g, b);
+	if (d === 0) return 0;
+	const raw = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+	const deg = raw * 60;
+	return deg < 0 ? deg + 360 : deg;
+}
+
+function channelsOf(hex: string): [number, number, number] {
+	const n = parseInt(hex.slice(1), 16);
+	return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+// The sidebar is a gradient, so a nav disc's ground depends on where the row
+// sits in it. Read both stops out of the theme block rather than naming them
+// here — the § 526 lesson about floors read out of the tree.
+function sidebarStops(marker: string): string[] {
+	const themeBlock = marker === ':root {' ? block(':root {') : block(marker);
+	const value = (themeBlock.match(/--gradient-sidebar:\s*([^;]+);/)
+		?? block(':root {').match(/--gradient-sidebar:\s*([^;]+);/))?.[1];
+	assert.ok(value, `app.css has no --gradient-sidebar in ${marker}`);
+	const stops = value!.match(/#[0-9A-Fa-f]{6}/g) ?? [];
+	assert.equal(stops.length, 2, `--gradient-sidebar in ${marker} has ${stops.length} stops`);
+	return stops;
+}
+
+const SECTIONS = [
+	'dashboard', 'history', 'runs', 'gym', 'nutrition', 'coach', 'social',
+] as const;
+
+// Every tint share the tree paints an ink on: the nav disc idle (14) and hover
+// (24), the dashboard lift disc and the history lift chip (18), the meal chip
+// (20), and 0 for the bare-surface cases (the 3 px rail, the footer CTA text).
+const SECTION_TINT_SHARES = [0, 14, 18, 20, 24];
+
+for (const { label, marker } of THEMES) {
+	test(`section accent inks clear 1.4.11 on every tint they paint — ${label}`, () => {
+		const grounds = [
+			...SURFACE_TOKENS.map((n) => [n, resolveToken(marker, n)] as const),
+			...sidebarStops(marker).map((s, i) => [`--gradient-sidebar stop ${i}`, s] as const),
+		];
+		// The nav row itself darkens (light) / lightens (dark) on hover before
+		// the disc tint goes on top, so the deepest ground is measured layered.
+		const hoverVeil = marker === ':root {' ? ['#1F2328', 6] as const : ['#F7F3EC', 6] as const;
+		for (const section of SECTIONS) {
+			const fill = resolveToken(marker, `section-${section}`);
+			const ink = resolveToken(marker, `section-${section}-ink`);
+			for (const [groundName, ground] of grounds) {
+				const veiled = mixOverHex(hoverVeil[0], hoverVeil[1], ground);
+				for (const base of [ground, veiled]) {
+					for (const share of SECTION_TINT_SHARES) {
+						const tinted = mixOverHex(fill, share, base);
+						const ratio = contrastRatio(ink, tinted);
+						assert.ok(
+							ratio >= AA_NON_TEXT,
+							`--section-${section}-ink (${ink}) on a ${share}% --section-${section} tint over ${groundName} (${tinted}) is ${ratio.toFixed(3)}:1 in ${label}; a glyph / rail / border needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+						);
+					}
+				}
+			}
+			// Hue is the separator, so the split may move lightness only. Four of
+			// the seven are 0 deg off; the loosest is coach at 2.6 deg, where the
+			// ink reuses the existing --color-accent-cyan-text rung.
+			const drift = Math.abs(((hueAngle(ink) - hueAngle(fill) + 540) % 360) - 180);
+			assert.ok(
+				drift <= 3,
+				`--section-${section}-ink (${ink}) sits ${drift.toFixed(1)} deg from --section-${section} (${fill}) in ${label}; the ink is the accent with its LIGHTNESS moved — a hue shift renames the section.`,
+			);
+			// The active nav disc fills with the whole accent and puts one shared
+			// foreground on it, so that pairing is checked per accent too.
+			const onAccent = resolveToken(marker, 'section-on-accent');
+			const activeRatio = contrastRatio(onAccent, fill);
+			assert.ok(
+				activeRatio >= AA_NON_TEXT,
+				`--section-on-accent (${onAccent}) on --section-${section} (${fill}) is ${activeRatio.toFixed(3)}:1 in ${label}.`,
+			);
+		}
+		const fills = SECTIONS.map((s) => resolveToken(marker, `section-${s}`));
+		const inks = SECTIONS.map((s) => resolveToken(marker, `section-${s}-ink`));
+		assert.equal(new Set(fills).size, 7, `section accents collide in ${label}`);
+		assert.equal(new Set(inks).size, 7, `section inks collide in ${label}`);
+		// Non-regression per PAIR rather than an absolute floor, because no
+		// absolute floor is available: dashboard's peach and history's terracotta
+		// are 1.6 deg apart as shipped accents and are the closest pair either
+		// way, so seven-way hue separation is not something the split can be
+		// asked to create — only something it must not spend. Capped at 12 deg
+		// because past that a pair is plainly two colours and its exact angle is
+		// free to move (runs and history sit ~168 deg apart, near-opposite, where
+		// a 2 deg wobble means nothing). The 0.6 deg slack under the cap is
+		// integer-channel rounding on a pure lightness move.
+		const gapBetween = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+		for (let i = 0; i < SECTIONS.length; i++) {
+			for (let j = i + 1; j < SECTIONS.length; j++) {
+				const inkGap = gapBetween(hueAngle(inks[i]), hueAngle(inks[j]));
+				const owed = Math.min(gapBetween(hueAngle(fills[i]), hueAngle(fills[j])), 12) - 0.6;
+				assert.ok(
+					inkGap >= owed,
+					`--section-${SECTIONS[i]}-ink and --section-${SECTIONS[j]}-ink are ${inkGap.toFixed(1)} deg apart in ${label}, under the ${owed.toFixed(1)} their accents already carry; the fill/ink split must not pull two sections closer together.`,
+				);
+			}
+		}
+	});
+}
+
+// The one section ink that is real TEXT: the dashboard's first-run gym CTA
+// ("Log a lift"), 0.85rem at weight 600, which is not WCAG large text. It was
+// #4E7C5E at 4.346:1 light / 3.949 dark — a failure § 526 did not record
+// because it measured the rail and the glyph, not the label beside them.
+for (const { label, marker } of THEMES) {
+	test(`the gym CTA label clears AA as text on the page — ${label}`, () => {
+		const ink = resolveToken(marker, 'section-gym-ink');
+		const page = resolveToken(marker, 'color-bg');
+		const ratio = contrastRatio(ink, page);
+		assert.ok(
+			ratio >= AA_NORMAL,
+			`--section-gym-ink (${ink}) on --color-bg (${page}) is ${ratio.toFixed(3)}:1 in ${label}; .gym-footer-cta is normal-weight-size text and needs >=${AA_NORMAL}:1.`,
+		);
+	});
+}
+
+// The provider discs. The tint is an `rgba()` brand literal in the integrations
+// stylesheet and the ink is a token, so the two can drift — the tint is read
+// OUT OF THE SOURCE and composited, exactly as § 526 did for the ramps. The
+// ground is --color-surface, NOT --color-bg-tertiary: the per-provider rule
+// REPLACES the base `.integration-icon` background rather than tinting over it,
+// which is the ground § 526 measured against and the reason four of the six
+// figures it recorded were too pessimistic.
+const PROVIDERS = [
+	'strava', 'parkrun', 'garmin', 'healthkit', 'runsignup', 'ultrasignup', 'chronotrack',
+] as const;
+
+for (const { label, marker } of THEMES) {
+	test(`provider glyph inks clear 1.4.11 on their own brand disc — ${label}`, () => {
+		const src = readFileSync(
+			resolve(__dirname, '../routes/settings/integrations/+page.svelte'),
+			'utf-8',
+		);
+		const card = resolveToken(marker, 'color-surface');
+		for (const provider of PROVIDERS) {
+			const rule = src.match(
+				new RegExp(`\\[data-provider="${provider}"\\]\\s*\\{([^}]*)\\}`),
+			);
+			assert.ok(rule, `the integrations sheet has no [data-provider="${provider}"] rule`);
+			const tint = rule![1].match(/background:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+			assert.ok(tint, `[data-provider="${provider}"] declares no rgba() brand tint`);
+			assert.match(
+				rule![1],
+				new RegExp(`color:\\s*var\\(--provider-${provider}-ink\\)`),
+				`[data-provider="${provider}"] must paint its glyph in --provider-${provider}-ink, not a frozen brand hex.`,
+			);
+			const brand =
+				'#' + [1, 2, 3].map((i) => Number(tint![i]).toString(16).padStart(2, '0')).join('');
+			const disc = mixOverHex(brand, Number(tint![4]) * 100, card);
+			const ink = resolveToken(marker, `provider-${provider}-ink`);
+			const ratio = contrastRatio(ink, disc);
+			assert.ok(
+				ratio >= AA_NON_TEXT,
+				`--provider-${provider}-ink (${ink}) on its own ${tint![4]} brand disc over --color-surface (${disc}) is ${ratio.toFixed(3)}:1 in ${label}; the glyph needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+			);
+		}
+	});
+}
+
+// The verified-club ribbon is clamped from BOTH ends, which is why one frozen
+// blue could not carry both themes: the ribbon owes 1.4.11's 3:1 to the card,
+// and the check cut out of it owes 3:1 to the ribbon, so lightening for dark
+// spends the second to buy the first. The inner tone is a `#fff` fill on the
+// SVG path — a presentation attribute cannot take a var(), so it stays a
+// literal and is read out of the component rather than assumed here.
+for (const { label, marker } of THEMES) {
+	test(`the verified ribbon clears 3:1 against the card AND its own check — ${label}`, () => {
+		const src = readFileSync(resolve(__dirname, 'components/VerifiedBadge.svelte'), 'utf-8');
+		assert.match(
+			src,
+			/color:\s*var\(--color-verified\)/,
+			'VerifiedBadge must take --color-verified, not a frozen blue.',
+		);
+		const inner = src.match(/fill="#[0-9A-Fa-f]{3,6}"/g)?.map((m) => m.slice(6, -1));
+		assert.ok(inner?.includes('#fff'), 'VerifiedBadge no longer cuts a #fff check out of the ribbon');
+		const ribbon = resolveToken(marker, 'color-verified');
+		const card = resolveToken(marker, 'color-surface');
+		const onCard = contrastRatio(ribbon, card);
+		const onRibbon = contrastRatio('#FFFFFF', ribbon);
+		assert.ok(
+			onCard >= AA_NON_TEXT,
+			`--color-verified (${ribbon}) on --color-surface (${card}) is ${onCard.toFixed(3)}:1 in ${label}; the mark needs >=${AA_NON_TEXT}:1 (WCAG 1.4.11).`,
+		);
+		assert.ok(
+			onRibbon >= AA_NON_TEXT,
+			`the #fff check on --color-verified (${ribbon}) is ${onRibbon.toFixed(3)}:1 in ${label}; lightening the ribbon for dark cannot be paid for out of the check.`,
+		);
+	});
+}
+
+// The five surfaces § 529 closed must keep reading the pairs. Without this the
+// register alone would let a surface drop the accent entirely (no literal, no
+// entry, no failure) and the modality cue would just vanish.
+const SECTION_ACCENT_SURFACES: Array<[file: string, tokens: string[]]> = [
+	['routes/+layout.svelte', ['--section-dashboard', '--section-dashboard-ink', '--section-on-accent']],
+	['routes/dashboard/+page.svelte', ['--section-gym', '--section-gym-ink']],
+	['routes/history/+page.svelte', ['--section-gym-ink', '--section-nutrition-ink']],
+];
+
+test('the surfaces that mark a modality still read the section pairs', () => {
+	const root = resolve(__dirname, '..');
+	for (const [file, tokens] of SECTION_ACCENT_SURFACES) {
+		const src = readFileSync(join(root, file), 'utf-8');
+		for (const token of tokens) {
+			assert.ok(
+				src.includes(`var(${token})`),
+				`${file} no longer reads var(${token}) — if the mark moved, move this guard with it.`,
+			);
+		}
+	}
+	// The nav accents cannot go back to being hexes in the TS array: the ink
+	// half has to flip per theme and a TS string cannot.
+	const layout = readFileSync(join(root, 'routes/+layout.svelte'), 'utf-8');
+	for (const section of SECTIONS) {
+		assert.match(
+			layout,
+			new RegExp(`section: '${section}'`),
+			`the nav item for ${section} must name its --section-${section} pair, not carry a hex.`,
+		);
+	}
+});

@@ -45,6 +45,13 @@ cm.Route _route() => cm.Route(
     );
 
 Future<void> _pump(WidgetTester tester, ApiClient api) async {
+  // Tall surface so the whole body builds without a drag. The reviews section
+  // sits below the hero map, which is now a share of the viewport (#666 C9), so
+  // a fixed drag stops reaching it the moment the surface changes size — and a
+  // drag started on the map is claimed by FlutterMap rather than the list.
+  tester.view.physicalSize = const Size(800, 4000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   SharedPreferences.setMockInitialValues({});
   final prefs = Preferences();
   await prefs.init();
@@ -68,9 +75,11 @@ Future<void> _pump(WidgetTester tester, ApiClient api) async {
   });
   await tester.pump();
   await tester.pump(Duration.zero);
-  // The reviews section sits below the map + stats; scroll it up.
-  await tester.drag(find.byType(ListView), const Offset(0, -600));
-  await tester.pump();
+  // The reviews section sits below the map + stats. Drag until it is built
+  // rather than by a fixed offset: the hero map is a share of the viewport
+  // (#666 C9), so a constant drag stops reaching the moment the surface
+  // changes size. `pumpAndSettle` is not available here — LiveRunMap runs a
+  // repeating pulse — so each drag is settled with a bounded pump.
 }
 
 void main() {

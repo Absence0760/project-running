@@ -732,8 +732,70 @@ void main() {
     });
 
     // The text-scale half of the derivation is pinned on the sibling lane in
-    // gym_detail_screen_test: this sheet's Cancel/Save row overflows at 2x on
-    // its own account (a §486 end-aligned action row that never became an
-    // OverflowBar), which this round does not own.
+    // gym_detail_screen_test: the surface carries other narrow-width lanes
+    // that overflow at 2x on their own account under the fixed-advance test
+    // font, which this round does not own.
+  });
+
+  group('GymComposeSheet — the §486 action row', () {
+    // Cancel/Save is a RUN OF BUTTONS with nothing at the opposite end, so it
+    // takes §486's end-aligned treatment (`OverflowBar`) rather than the
+    // opposing-ends `Expanded(Wrap)` the goal editor needs — there is no
+    // anchor to preserve.
+    //
+    // Both cases pin the DERIVATION, never a width: flutter_test's font is
+    // fixed-advance and 2-6x wider than Roboto (§500), so "stacked here" holds
+    // a fortiori on a device, and the 1.0x case pins that the bar only
+    // overflows when it must.
+    Future<void> pumpSheet(WidgetTester tester, LocalGymStore store,
+        {required double scale, required double width}) async {
+      await tester.binding.setSurfaceSize(Size(width, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
+        home: Scaffold(body: GymComposeSheet(store: store)),
+      ));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Cancel'));
+      await tester.pump();
+    }
+
+    testWidgets('keeps Cancel and Save on one run at 1.0x', (tester) async {
+      final f = await _store('bar1x_');
+      try {
+        await pumpSheet(tester, f.store, scale: 1.0, width: 800);
+        final cancel = tester.getRect(find.text('Cancel'));
+        final save = tester.getRect(find.text('Save workout'));
+        expect(cancel.top, save.top, reason: 'the bar reflowed with room left');
+        expect(save.left, greaterThan(cancel.right),
+            reason: 'Save must follow Cancel, end-aligned');
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
+
+    // 480, not 320: under the fixed-advance test font the sheet's set-type
+    // dropdown and exercise header overflow on their own account below ~470,
+    // and this round owns only the action row. 480 still puts the pre-fix
+    // Cancel/Save row over its lane, so the reflow is genuinely exercised.
+    testWidgets('stacks Cancel over Save at 2.0x on a narrow surface',
+        (tester) async {
+      final f = await _store('bar2x_');
+      try {
+        await pumpSheet(tester, f.store, scale: 2.0, width: 480);
+        final cancel = tester.getRect(find.text('Cancel'));
+        final save = tester.getRect(find.text('Save workout'));
+        expect(save.top, greaterThanOrEqualTo(cancel.bottom),
+            reason: 'the action row striped instead of stacking');
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
   });
 }

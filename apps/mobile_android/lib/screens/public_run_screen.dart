@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import '../detail_map_height.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -168,11 +169,15 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
                         ),
                       ),
                     )
-                  : _buildBody(theme, l10n, _row!),
+                  : LayoutBuilder(
+                      builder: (context, viewport) =>
+                          _buildBody(theme, l10n, _row!, viewport.maxHeight),
+                    ),
     );
   }
 
-  Widget _buildBody(ThemeData theme, AppLocalizations l10n, RunRow row) {
+  Widget _buildBody(ThemeData theme, AppLocalizations l10n, RunRow row,
+      double viewportHeight) {
     final unit = activeDistanceUnit;
     final pace = (row.distanceM > 0 && row.durationS > 0)
         ? row.durationS / (row.distanceM / 1000)
@@ -180,7 +185,7 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
     return ListView(
       children: [
         SizedBox(
-          height: 300,
+          height: detailMapHeight(viewportHeight),
           child: LiveRunMap(
             track: _track,
             plannedRoute: const [],

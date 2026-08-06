@@ -36,6 +36,39 @@ const _surfaces = <String, String?>{
   'lib/screens/dashboard_screen.dart': 'class _RunHeatmap',
 };
 
+/// Dashboard cards that carry a header but draw no marks, so only the header
+/// half of the contract applies (issue #666 C7).
+///
+/// The dashboard used to change grammar halfway down. Above the fold a card was
+/// headed by an external `_SectionHeader` (titleMedium) and separated by a 24 dp
+/// `_kSectionGap`; below it, `FitnessCard` and `RacePredictorCard` hand-rolled
+/// the same titleMedium heading *inside their own widget* and then padded
+/// themselves with a trailing `SizedBox(height: 24)`, `ReadinessCard` inlined a
+/// byte-for-byte copy of `ChartCardHeader`'s typography, and `RecentLiftsCard` a
+/// fifth variant with a TextButton beside it. Measured, the analytics run's
+/// seams came out at 64 / 32 / 8 dp — three values, none of them the 24 above.
+///
+/// Every card now names itself with `ChartCardHeader`, which is also what web
+/// does (`<section class="card-elevated"><h2>`), so the whole stack separates by
+/// the card grammar alone and `_kSectionGap` marks only a real block boundary.
+const _headerSurfaces = <String>[
+  'lib/widgets/fitness_card.dart',
+  'lib/widgets/race_predictor_card.dart',
+  'lib/widgets/readiness_card.dart',
+  'lib/widgets/recent_lifts_card.dart',
+  'lib/widgets/current_week_strip.dart',
+];
+
+/// A card that heads itself has no reason to reach for the section-title size,
+/// and reaching for it is exactly how four of these grew a fifth grammar. Zero
+/// per file, so a new external heading fails rather than passing quietly.
+const _bannedInCards = 'textTheme.titleMedium';
+
+/// `_SectionHeader` survives for the ONE thing it is: a heading over a *group*
+/// of cards plus that group's action — the goals section. Two occurrences, the
+/// declaration and that single use. A card is not a group and names itself.
+const _dashboardSectionHeaders = 2;
+
 /// surface -> token -> exact expected occurrences. Every entry is a documented
 /// non-mark, non-text use.
 const _allowed = <String, Map<String, int>>{
@@ -67,6 +100,33 @@ void main() {
       expect(_region(entry.key, entry.value), contains('ChartCardHeader'),
           reason: '${entry.key} builds its own chart header');
     }
+  });
+
+  test('every dashboard card names itself with the shared header', () {
+    for (final path in [..._headerSurfaces, ..._surfaces.keys]) {
+      expect(File(path).existsSync(), isTrue,
+          reason: '$path is guarded but missing — if it moved, move the entry');
+      expect(File(path).readAsStringSync(), contains('ChartCardHeader'),
+          reason: '$path builds its own card header');
+    }
+  });
+
+  test('no dashboard card reaches for the section-title size', () {
+    for (final path in [..._headerSurfaces, ..._surfaces.keys]) {
+      if (path.endsWith('dashboard_screen.dart')) continue;
+      expect(_bannedInCards.allMatches(File(path).readAsStringSync()).length, 0,
+          reason: '$path heads itself, so a titleMedium in it is a second '
+              'header grammar — pass the title to ChartCardHeader instead');
+    }
+  });
+
+  test('the dashboard keeps one section header, over the goals group', () {
+    final source = File('lib/screens/dashboard_screen.dart').readAsStringSync();
+    expect('_SectionHeader('.allMatches(source).length,
+        _dashboardSectionHeaders,
+        reason: 'a _SectionHeader heads a GROUP of cards and its action; a '
+            'single card names itself with ChartCardHeader, which is what '
+            'the streak and personal-bests cards now do');
   });
 
   test('every chart surface takes its marks from ChartPalette', () {

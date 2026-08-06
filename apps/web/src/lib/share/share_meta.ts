@@ -147,7 +147,7 @@ export function buildRunJsonLd(
 	opts: { id: string; base: string | null | undefined; displayName?: string | null },
 ): string {
 	const base = normaliseSiteUrl(opts.base);
-	const canonical = `${base}/share/run/${opts.id}`;
+	const canonical = buildRunShareCanonical(base, opts.id);
 	const name = runShareName(run, opts.displayName);
 	const graph = {
 		'@context': 'https://schema.org',
@@ -239,7 +239,7 @@ export function buildRouteJsonLd(
 	opts: { id: string; base: string | null | undefined },
 ): string {
 	const base = normaliseSiteUrl(opts.base);
-	const canonical = `${base}/share/route/${opts.id}`;
+	const canonical = buildRouteShareCanonical(base, opts.id);
 	const name = (route?.name ?? '').trim() || 'Route';
 	const graph = {
 		'@context': 'https://schema.org',

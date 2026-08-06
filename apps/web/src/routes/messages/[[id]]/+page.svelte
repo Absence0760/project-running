@@ -362,7 +362,7 @@
 		color: var(--color-bg);
 	}
 	.bubble .when {
-		font-size: 0.65rem;
+		font-size: var(--font-size-section-label);
 		opacity: 0.7;
 	}
 	.send-error {
