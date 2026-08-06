@@ -2795,6 +2795,7 @@ export const messages = {
 	"routeMarker.service.drop_bag": "Drop bag",
 	"roadbook.heading": "Roadbook",
 	"roadbook.crewSheet": "Roadbook (planilha da equipe)",
+	"roadbook.needsRouteLine": 'Adicione pelo menos dois pontos a esta rota para montar um roadbook.',
 	"roadbook.loading": "Carregando…",
 	"roadbook.routeNotFound": "Percurso não encontrado.",
 	"roadbook.copy": "Copiar",

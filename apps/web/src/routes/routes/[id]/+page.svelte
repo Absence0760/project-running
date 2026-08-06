@@ -766,11 +766,31 @@
 					bind:snapEnabled={markerSnap}
 					bind:pendingDrag={markerPendingDrag}
 				/>
-				{#if markerPins.length > 0}
+				<!-- The roadbook is a goal-time pacing sheet first and a
+				     checkpoint schedule second: with no markers it still
+				     projects start → finish. Gating the only link to it on
+				     `markerPins.length > 0` meant a runner who had never
+				     added a marker had no way to learn the surface exists.
+				     Show it always; disable it only when the route carries
+				     no line for `buildRoadbook` to walk, and say why. -->
+				{#if displayWaypoints.length >= 2}
 					<a class="btn btn-outline btn-sm roadbook-link" href={`/routes/${route.id}/roadbook`}>
 						<span class="material-symbols" aria-hidden="true">table_chart</span>
 						{m('roadbook.crewSheet')}
 					</a>
+				{:else}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm roadbook-link"
+						disabled
+						aria-describedby="roadbook-disabled-reason"
+					>
+						<span class="material-symbols" aria-hidden="true">table_chart</span>
+						{m('roadbook.crewSheet')}
+					</button>
+					<p id="roadbook-disabled-reason" class="roadbook-reason">
+						{m('roadbook.needsRouteLine')}
+					</p>
 				{/if}
 			</section>
 
@@ -1208,6 +1228,12 @@
 
 	.section {
 		margin-top: var(--space-xl);
+	}
+
+	.roadbook-reason {
+		margin: var(--space-xs) 0 0;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
 	}
 
 	.route-meta {

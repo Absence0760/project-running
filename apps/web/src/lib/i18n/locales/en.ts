@@ -2804,6 +2804,7 @@ export const en = {
 	"routeMarker.service.drop_bag": "Drop bag",
 	"roadbook.heading": "Roadbook",
 	"roadbook.crewSheet": "Roadbook (crew sheet)",
+	"roadbook.needsRouteLine": 'Add at least two points to this route to build a roadbook.',
 	"roadbook.loading": "Loading…",
 	"roadbook.routeNotFound": "Route not found.",
 	"roadbook.copy": "Copy",

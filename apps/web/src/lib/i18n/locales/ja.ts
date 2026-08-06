@@ -2791,6 +2791,7 @@ export const messages = {
 	"routeMarker.service.drop_bag": "ドロップバッグ",
 	"roadbook.heading": "ロードブック",
 	"roadbook.crewSheet": "ロードブック（クルーシート）",
+	"roadbook.needsRouteLine": 'ロードブックを作成するには、このルートに 2 点以上を追加してください。',
 	"roadbook.loading": "読み込み中…",
 	"roadbook.routeNotFound": "ルートが見つかりません。",
 	"roadbook.copy": "コピー",

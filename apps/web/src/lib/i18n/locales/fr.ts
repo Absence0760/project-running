@@ -2796,6 +2796,7 @@ export const messages = {
 	"routeMarker.service.drop_bag": "Sac de ravitaillement",
 	"roadbook.heading": "Roadbook",
 	"roadbook.crewSheet": "Roadbook (feuille d'assistance)",
+	"roadbook.needsRouteLine": "Ajoutez au moins deux points à cet itinéraire pour créer un roadbook.",
 	"roadbook.loading": "Chargement…",
 	"roadbook.routeNotFound": "Parcours introuvable.",
 	"roadbook.copy": "Copier",
