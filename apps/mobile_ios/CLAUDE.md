@@ -50,7 +50,7 @@ Flutter iOS app. **`lib/` and `test/` are now byte-for-byte identical to `apps/m
 
 ## Internationalization (i18n)
 
-Shares the Flutter gen-l10n setup with the Android twin ([decisions.md § 113](../../docs/architecture/decisions.md#113-mobile-i18n-uses-flutter-gen-l10n--arb-with-committed-non-synthetic-output-and-a-per-device-locale); full notes in [apps/mobile_android/CLAUDE.md § Internationalization](../mobile_android/CLAUDE.md#internationalization-i18n)). The `lib/l10n/` ARB catalogues + committed `lib/l10n/gen/` output are part of the byte-identical `lib/` surface — they ride the same mirror. iOS-specific: the six locales are advertised in `ios/Runner/Info.plist` via `CFBundleLocalizations`. After regenerating l10n on Android, copy `lib/l10n/gen/` here in the same commit.
+Shares the Flutter gen-l10n setup with the Android twin ([decisions.md § 113](../../docs/architecture/decisions.md#113-mobile-i18n-uses-flutter-gen-l10n--arb-with-committed-non-synthetic-output-and-a-per-device-locale); full notes in [apps/mobile_android/CLAUDE.md § Internationalization](../mobile_android/CLAUDE.md#internationalization-i18n)). The `lib/l10n/` ARB catalogues + committed `lib/l10n/gen/` output are part of the byte-identical `lib/` surface — they ride the same mirror. iOS-specific: the **seven** locales are advertised in `ios/Runner/Info.plist` via `CFBundleLocalizations` — `pt-PT` was added there alongside `pt-BR` when the European-Portuguese catalogue became reachable (decisions § 547); a locale absent from that array is one the OS will not offer the app in, however complete its ARB. After regenerating l10n on Android, copy `lib/l10n/gen/` here in the same commit.
 
 ## What "done" means
 

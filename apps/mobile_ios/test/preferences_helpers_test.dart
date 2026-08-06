@@ -180,15 +180,12 @@ void main() {
   });
 
   group('ActivityType', () {
-    test('label maps each enum value to its display string', () {
-      expect(ActivityType.run.label, 'Run');
-      expect(ActivityType.walk.label, 'Walk');
-      expect(ActivityType.cycle.label, 'Cycle');
-      // Surfaced as "Trail run" on the picker so runners pick a
-      // more natural label for off-road runs. Internal enum name
-      // stays `hike` for back-compat with the runs.metadata
-      // CHECK constraint + Strava / Health Connect importers.
-      expect(ActivityType.hike.label, 'Trail run');
+    // The display name is no longer on the enum — it needed an
+    // AppLocalizations and lived here as hardcoded English. See
+    // `activity_type_vocabulary_test.dart` for the per-locale names.
+    test('the wire name is the enum name, unchanged by the label move', () {
+      expect(ActivityType.hike.name, 'hike');
+      expect(ActivityType.stroller.name, 'stroller');
     });
 
     test('usesSpeed is true only for cycle', () {

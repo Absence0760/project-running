@@ -44,9 +44,10 @@ void main() {
       expect(negotiateLocale('ja', const [Locale('en')]), const Locale('ja'));
     });
 
-    test('stored base language resolves to the shipped variant', () {
-      expect(negotiateLocale('pt', const []), const Locale('pt', 'BR'));
+    test('a regional tag we do not carry resolves to its base language', () {
       expect(negotiateLocale('fr-CA', const []), const Locale('fr'));
+      expect(negotiateLocale('de-AT', const []), const Locale('de'));
+      expect(negotiateLocale('es-MX', const []), const Locale('es'));
     });
 
     test('device locale is used when no stored pref', () {
@@ -86,11 +87,58 @@ void main() {
   });
 
   group('isSupportedTag', () {
-    test('recognises the six canonical tags case-insensitively', () {
+    test('recognises the seven canonical tags case-insensitively', () {
       expect(isSupportedTag('en'), isTrue);
       expect(isSupportedTag('PT-BR'), isTrue);
+      expect(isSupportedTag('pt'), isTrue);
       expect(isSupportedTag('it'), isFalse);
       expect(isSupportedTag(null), isFalse);
+    });
+  });
+
+  // `app_pt.arb` shipped 3478 European-Portuguese strings, 247 of which
+  // genuinely differ from the Brazilian catalogue, and NONE of them could be
+  // reached: `pt` was absent from `supportedLocales` and `_baseToLocale`
+  // mapped the base onto `pt-BR`, so `negotiate('pt-PT')` measured `pt-BR`.
+  // Every case below is one of the measurements taken when closing that.
+  group('Portuguese ships as two reachable catalogues', () {
+    test('pt-PT reaches the European catalogue, not the Brazilian one', () {
+      expect(
+        negotiateLocale(null, const [Locale('pt', 'PT')]),
+        const Locale('pt'),
+      );
+    });
+
+    test('a bare pt reaches the European catalogue', () {
+      expect(negotiateLocale(null, const [Locale('pt')]), const Locale('pt'));
+    });
+
+    test('pt-BR still matches Brazil exactly', () {
+      expect(
+        negotiateLocale(null, const [Locale('pt', 'BR')]),
+        const Locale('pt', 'BR'),
+      );
+    });
+
+    test('pt-AO reaches European Portuguese (Angola uses that orthography)',
+        () {
+      expect(
+        negotiateLocale(null, const [Locale('pt', 'AO')]),
+        const Locale('pt'),
+      );
+    });
+
+    test('both variants are offered, and each has a picker endonym', () {
+      expect(supportedLocales, contains(const Locale('pt')));
+      expect(supportedLocales, contains(const Locale('pt', 'BR')));
+      // A locale the picker cannot name is a blank row, so the label table is
+      // part of shipping a locale, not decoration.
+      for (final locale in supportedLocales) {
+        final label = localeLabels[localeToTag(locale)];
+        expect(label, isNotNull, reason: 'no endonym for $locale');
+        expect(label, isNotEmpty);
+      }
+      expect(localeLabels.length, supportedLocales.length);
     });
   });
 }

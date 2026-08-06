@@ -1,3 +1,4 @@
+import '../activity_type_labels.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
@@ -46,13 +47,10 @@ class _FeedScreenState extends State<FeedScreen> {
   String _activityLabel(AppLocalizations l10n, String value) {
     switch (value) {
       case 'run':
-        return l10n.feedActivityRun;
       case 'walk':
-        return l10n.feedActivityWalk;
       case 'cycle':
-        return l10n.feedActivityCycle;
       case 'hike':
-        return l10n.feedActivityHike;
+        return activityTypeLabelFor(l10n, value);
       case 'lift':
         return l10n.feedActivityLift;
       default:

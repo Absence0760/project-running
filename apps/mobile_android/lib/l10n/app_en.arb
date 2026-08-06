@@ -4852,25 +4852,36 @@
   "@feedFindPeople": {
     "description": "Tooltip on the find-people button in the feed AppBar"
   },
+  "runNotificationPausedTitle": "{activity} • paused",
+  "@runNotificationPausedTitle": {
+    "description": "Lock-screen notification title while the recording is manually paused",
+    "placeholders": {
+      "activity": { "type": "String" }
+    }
+  },
+  "activityTypeRun": "Run",
+  "@activityTypeRun": {
+    "description": "The one activity_type vocabulary — road/track running"
+  },
+  "activityTypeWalk": "Walk",
+  "@activityTypeWalk": {
+    "description": "The one activity_type vocabulary — walking"
+  },
+  "activityTypeHike": "Trail run",
+  "@activityTypeHike": {
+    "description": "The one activity_type vocabulary — off-road running (stored as `hike`)"
+  },
+  "activityTypeCycle": "Cycle",
+  "@activityTypeCycle": {
+    "description": "The one activity_type vocabulary — cycling"
+  },
+  "activityTypeStroller": "Stroller",
+  "@activityTypeStroller": {
+    "description": "The one activity_type vocabulary — running while pushing a stroller"
+  },
   "feedActivityAll": "All",
   "@feedActivityAll": {
     "description": "Feed activity filter chip — all activity types"
-  },
-  "feedActivityRun": "Run",
-  "@feedActivityRun": {
-    "description": "Feed activity filter chip — running"
-  },
-  "feedActivityWalk": "Walk",
-  "@feedActivityWalk": {
-    "description": "Feed activity filter chip — walking"
-  },
-  "feedActivityCycle": "Cycle",
-  "@feedActivityCycle": {
-    "description": "Feed activity filter chip — cycling"
-  },
-  "feedActivityHike": "Hike",
-  "@feedActivityHike": {
-    "description": "Feed activity filter chip — hiking"
   },
   "feedActivityLift": "Lift",
   "@feedActivityLift": {
@@ -7373,7 +7384,7 @@
   "@workoutAdviceRest": {
     "description": "Advice text for rest days"
   },
-  "coachTitle": "Coach",
+  "coachTitle": "AI Coach",
   "@coachTitle": {
     "description": "Coach screen AppBar title"
   },
@@ -9308,22 +9319,6 @@
         "type": "String"
       }
     }
-  },
-  "prefsActivityRun": "Run",
-  "@prefsActivityRun": {
-    "description": "Activity-type label: run"
-  },
-  "prefsActivityWalk": "Walk",
-  "@prefsActivityWalk": {
-    "description": "Activity-type label: walk"
-  },
-  "prefsActivityHike": "Hike",
-  "@prefsActivityHike": {
-    "description": "Activity-type label: hike"
-  },
-  "prefsActivityCycle": "Cycle",
-  "@prefsActivityCycle": {
-    "description": "Activity-type label: cycle"
   },
   "prefsPaceFormat": "Pace format",
   "@prefsPaceFormat": {
@@ -13621,7 +13616,7 @@
   "@sessionRunSwitchSides": {
     "description": "Spoken cue when a per-side movement switches from left to right in the session player"
   },
-  "coachingTitle": "Coaching",
+  "coachingTitle": "Athletes & coaches",
   "@coachingTitle": {
     "description": "Title of the coach-athlete roster screen"
   },

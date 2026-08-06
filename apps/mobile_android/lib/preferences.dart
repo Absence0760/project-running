@@ -40,31 +40,10 @@ enum ActivityType {
   hike,
   stroller;
 
-  String get label {
-    switch (this) {
-      case ActivityType.run:
-        return 'Run';
-      case ActivityType.walk:
-        return 'Walk';
-      case ActivityType.cycle:
-        return 'Cycle';
-      case ActivityType.hike:
-        // Surfaced as "Trail run" on the activity picker. The
-        // internal enum + database value stays `hike` for back-
-        // compat (existing rows, the SQL CHECK constraint, the
-        // Strava + Health Connect importers, and the `parity.md`
-        // matrix all key on the name), but the user-facing label
-        // is the more accurate "Trail run" — a runner picking
-        // this typically means "off-road run", not a hike. User
-        // surfaced the old label as confusing because trail
-        // runners didn't see themselves represented in the
-        // picker and assumed selecting Hike meant they'd be
-        // pushed onto roads.
-        return 'Trail run';
-      case ActivityType.stroller:
-        return 'Stroller';
-    }
-  }
+  /// The user-facing name is NOT here: it needs an [AppLocalizations], and
+  /// keeping it as a hardcoded getter printed five English words in all six
+  /// non-English locales. Resolve it through
+  /// `activity_type_labels.dart#activityTypeLabel`.
 
   IconData get icon {
     switch (this) {

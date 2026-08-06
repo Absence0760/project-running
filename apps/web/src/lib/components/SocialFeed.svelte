@@ -22,13 +22,18 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import { tierFor, type AchievementTier } from '$lib/social/badges';
+	import { ACTIVITY_TYPE_ICONS, activityTypeKey } from '$lib/runs/activity_type';
 
+	// `all` and `lift` are not `activity_type` values — they are feed scopes, so
+	// they keep their own keys. The four real activity values resolve through the
+	// one vocabulary.
 	const FEED_ACTIVITIES: { value: string; labelKey: MessageKey; icon: string }[] = [
 		{ value: 'all', labelKey: 'socialFeed.activityAll', icon: 'apps' },
-		{ value: 'run', labelKey: 'socialFeed.activityRun', icon: 'directions_run' },
-		{ value: 'walk', labelKey: 'socialFeed.activityWalk', icon: 'directions_walk' },
-		{ value: 'cycle', labelKey: 'socialFeed.activityCycle', icon: 'directions_bike' },
-		{ value: 'hike', labelKey: 'socialFeed.activityHike', icon: 'terrain' },
+		...(['run', 'walk', 'cycle', 'hike'] as const).map((v) => ({
+			value: v as string,
+			labelKey: activityTypeKey(v),
+			icon: ACTIVITY_TYPE_ICONS[v],
+		})),
 		{ value: 'lift', labelKey: 'socialFeed.activityLift', icon: 'fitness_center' },
 	];
 

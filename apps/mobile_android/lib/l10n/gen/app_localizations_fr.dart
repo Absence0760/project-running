@@ -3647,19 +3647,27 @@ class AppLocalizationsFr extends AppLocalizations {
   String get feedFindPeople => 'Trouver des gens';
 
   @override
+  String runNotificationPausedTitle(String activity) {
+    return '$activity • en pause';
+  }
+
+  @override
+  String get activityTypeRun => 'Course';
+
+  @override
+  String get activityTypeWalk => 'Marche';
+
+  @override
+  String get activityTypeHike => 'Trail';
+
+  @override
+  String get activityTypeCycle => 'Vélo';
+
+  @override
+  String get activityTypeStroller => 'Poussette';
+
+  @override
   String get feedActivityAll => 'Tout';
-
-  @override
-  String get feedActivityRun => 'Course';
-
-  @override
-  String get feedActivityWalk => 'Marche';
-
-  @override
-  String get feedActivityCycle => 'Vélo';
-
-  @override
-  String get feedActivityHike => 'Rando';
 
   @override
   String get feedActivityLift => 'Muscu';
@@ -5511,7 +5519,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Jour de repos — si vous devez bouger, marchez ou étirez-vous.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'Coach IA';
 
   @override
   String get coachNewConversation => 'Nouvelle conversation';
@@ -7009,18 +7017,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
     return '$pace $paceLabel — les alertes d\'écart d\'allure parlent dès 30 s d\'écart';
   }
-
-  @override
-  String get prefsActivityRun => 'Course';
-
-  @override
-  String get prefsActivityWalk => 'Marche';
-
-  @override
-  String get prefsActivityHike => 'Randonnée';
-
-  @override
-  String get prefsActivityCycle => 'Vélo';
 
   @override
   String get prefsPaceFormat => 'Format d\'allure';
@@ -10518,7 +10514,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get sessionRunSwitchSides => 'Changez de côté';
 
   @override
-  String get coachingTitle => 'Coaching';
+  String get coachingTitle => 'Athlètes et coachs';
 
   @override
   String get coachingLede =>

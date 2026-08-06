@@ -38,7 +38,7 @@ test.describe('/settings — side-nav structure', () => {
 			{ href: '/settings/devices', label: 'Signed-in devices' },
 			{ href: '/settings/gear', label: 'Gear' },
 			{ href: '/settings/upgrade', label: 'Pro & support' },
-			{ href: '/settings/licenses', label: 'Licenses' },
+			{ href: '/settings/licenses', label: 'About' },
 		];
 		for (const { href, label } of expected) {
 			const link = nav.locator(`a[href="${href}"]`);

@@ -12,6 +12,7 @@ import '../auth_error.dart';
 import '../fab_clearance.dart';
 import '../goals.dart';
 import '../l10n/date_format.dart';
+import '../activity_type_labels.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_activities.dart';
@@ -1880,7 +1881,7 @@ class _RunsFilterHeader extends StatelessWidget {
               for (final type in ActivityType.values) ...[
                 FilterChip(
                   avatar: Icon(type.icon, size: 18),
-                  label: Text(type.label),
+                  label: Text(activityTypeLabel(l10n, type)),
                   selected: activityFilter == type,
                   onSelected: (_) => onActivityChanged(type),
                 ),

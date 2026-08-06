@@ -64,6 +64,8 @@
 	import { supabase } from '$lib/core/supabase';
 	import { TABLES, METADATA_KEYS } from '$lib/core/schema';
 	import { m } from '$lib/i18n/store.svelte';
+	import { activityTypeIcon } from '$lib/runs/activity_type';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import { buildRunShareCanonical } from '$lib/share/share_meta';
 	import type { Run } from '$lib/types';
 
@@ -740,23 +742,13 @@
 		downloadFile(gpx, `${safeName}.gpx`, 'application/gpx+xml');
 	}
 
-	/**
-	 * The activity lives on the real `runs.activity_type` column (20261207_001).
-	 * Map to a human label + Material Symbols icon.
-	 */
-	// $derived so the m() labels track locale changes (a plain const captures
-	// the locale once at init and never updates).
-	const activityMeta = $derived<Record<string, { label: string; icon: string }>>({
-		run: { label: m('runDetail.activityRun'), icon: 'directions_run' },
-		walk: { label: m('runDetail.activityWalk'), icon: 'directions_walk' },
-		cycle: { label: m('runDetail.activityCycle'), icon: 'directions_bike' },
-		hike: { label: m('runDetail.activityHike'), icon: 'terrain' },
-	});
-
+	// The activity lives on the real `runs.activity_type` column (20261207_001).
+	// $derived so the label tracks locale changes (a plain const captures the
+	// locale once at init and never updates).
 	let activity = $derived.by(() => {
 		const key = run?.activity_type;
 		if (typeof key !== 'string') return null;
-		return activityMeta[key] ?? { label: key, icon: 'directions_run' };
+		return { label: activityTypeLabel(key), icon: activityTypeIcon(key) };
 	});
 
 	/// Activity tag the map uses to scale its pace-heatmap breakpoints.

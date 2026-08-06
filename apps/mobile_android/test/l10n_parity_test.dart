@@ -50,8 +50,11 @@ String? _adjacentRepeat(String s) {
 }
 
 void main() {
-  // Every catalogue file present in lib/l10n. `pt` is the base fallback
-  // gen-l10n requires for `pt_BR`; both are validated.
+  // Every catalogue file present in lib/l10n. `pt` and `pt_BR` are BOTH real
+  // shipped locales — European and Brazilian Portuguese, 247 of whose 3478
+  // strings genuinely differ. `pt` was long described here as a gen-l10n base
+  // fallback, and was in fact unreachable at runtime until `supportedLocales`
+  // learned it (see `locale_negotiation_test.dart`).
   const localeTags = ['en', 'de', 'fr', 'es', 'ja', 'pt', 'pt_BR'];
 
   final en = _readArb('en');

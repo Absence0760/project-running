@@ -29,6 +29,7 @@ import '../ble_treadmill.dart';
 import '../embedded_bests.dart';
 import '../goal_time.dart';
 import '../health_connect_exporter.dart';
+import '../activity_type_labels.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -2577,7 +2578,7 @@ class _RunScreenState extends State<RunScreen> {
           // each split replaces the previous row instead of stacking,
           // and the row auto-dismisses instead of demanding a swipe.
           _lockScreen.updateSplit(
-            title: _activityType.label,
+            title: activityTypeLabel(_l10n, _activityType),
             text: splitText,
           );
           if (widget.preferences.audioCues &&
@@ -2651,7 +2652,9 @@ class _RunScreenState extends State<RunScreen> {
         : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
 
     _lockScreen.update(
-      title: _manualPaused ? '${_activityType.label} • paused' : _activityType.label,
+      title: _manualPaused
+          ? _l10n.runNotificationPausedTitle(activityTypeLabel(_l10n, _activityType))
+          : activityTypeLabel(_l10n, _activityType),
       text: '$timeStr  •  $distanceStr  •  $paceStr',
       bigText:
           'Time: $timeStr\nDistance: $distanceStr\n${_activityType.usesSpeed ? "Speed" : "Pace"}: $paceStr',
@@ -3771,7 +3774,7 @@ class _RunScreenState extends State<RunScreen> {
                               children: [
                                 Icon(t.icon, size: 16),
                                 const SizedBox(width: 4),
-                                Text(t.label),
+                                Text(activityTypeLabel(_l10n, t)),
                               ],
                             ),
                             selected: selected,

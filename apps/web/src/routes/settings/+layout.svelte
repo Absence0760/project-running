@@ -57,7 +57,7 @@
 			label: m('settingsLayout.sectionAccountLegal'),
 			tabs: [
 				{ href: '/settings/upgrade', label: m('settingsLayout.tabProSupport'), icon: 'favorite' },
-				{ href: '/settings/licenses', label: m('settingsLayout.tabLicenses'), icon: 'description' },
+				{ href: '/settings/licenses', label: m('settingsLayout.tabAbout'), icon: 'description' },
 			],
 		},
 	]);

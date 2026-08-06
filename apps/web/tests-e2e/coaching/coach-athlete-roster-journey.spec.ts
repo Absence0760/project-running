@@ -146,7 +146,7 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 			await test.step('coach mints an invite link and captures the token', async () => {
 				await coachPage.goto('/coaching');
 				await expect(
-					coachPage.getByRole('heading', { level: 1, name: 'Coaching' })
+					coachPage.getByRole('heading', { level: 1, name: 'Athletes & coaches' })
 				).toBeVisible({ timeout: 15_000 });
 				// Clean roster: a fresh saga coach has no athletes and no pending invite.
 				await expect(coachPage.getByText('Pending invite')).toHaveCount(0);
@@ -210,7 +210,7 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 			await test.step('coach sees the new athlete on the roster', async () => {
 				await coachPage.goto('/coaching');
 				await expect(
-					coachPage.getByRole('heading', { level: 1, name: 'Coaching' })
+					coachPage.getByRole('heading', { level: 1, name: 'Athletes & coaches' })
 				).toBeVisible({ timeout: 10_000 });
 				await expect(coachPage.getByText('Pending invite')).toHaveCount(0, { timeout: 10_000 });
 				await expect(
@@ -302,7 +302,7 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 				const athletePage = await athleteContext!.newPage();
 				await athletePage.goto('/coaching');
 				await expect(
-					athletePage.getByRole('heading', { level: 1, name: 'Coaching' })
+					athletePage.getByRole('heading', { level: 1, name: 'Athletes & coaches' })
 				).toBeVisible({ timeout: 10_000 });
 				await expect(athletePage.locator(`a[href="/u/${coach.id}"]`)).toHaveCount(0, {
 					timeout: 10_000

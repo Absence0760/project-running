@@ -6058,35 +6058,47 @@ abstract class AppLocalizations {
   /// **'Find people'**
   String get feedFindPeople;
 
+  /// Lock-screen notification title while the recording is manually paused
+  ///
+  /// In en, this message translates to:
+  /// **'{activity} • paused'**
+  String runNotificationPausedTitle(String activity);
+
+  /// The one activity_type vocabulary — road/track running
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get activityTypeRun;
+
+  /// The one activity_type vocabulary — walking
+  ///
+  /// In en, this message translates to:
+  /// **'Walk'**
+  String get activityTypeWalk;
+
+  /// The one activity_type vocabulary — off-road running (stored as `hike`)
+  ///
+  /// In en, this message translates to:
+  /// **'Trail run'**
+  String get activityTypeHike;
+
+  /// The one activity_type vocabulary — cycling
+  ///
+  /// In en, this message translates to:
+  /// **'Cycle'**
+  String get activityTypeCycle;
+
+  /// The one activity_type vocabulary — running while pushing a stroller
+  ///
+  /// In en, this message translates to:
+  /// **'Stroller'**
+  String get activityTypeStroller;
+
   /// Feed activity filter chip — all activity types
   ///
   /// In en, this message translates to:
   /// **'All'**
   String get feedActivityAll;
-
-  /// Feed activity filter chip — running
-  ///
-  /// In en, this message translates to:
-  /// **'Run'**
-  String get feedActivityRun;
-
-  /// Feed activity filter chip — walking
-  ///
-  /// In en, this message translates to:
-  /// **'Walk'**
-  String get feedActivityWalk;
-
-  /// Feed activity filter chip — cycling
-  ///
-  /// In en, this message translates to:
-  /// **'Cycle'**
-  String get feedActivityCycle;
-
-  /// Feed activity filter chip — hiking
-  ///
-  /// In en, this message translates to:
-  /// **'Hike'**
-  String get feedActivityHike;
 
   /// Feed activity filter chip — gym lifts
   ///
@@ -9067,7 +9079,7 @@ abstract class AppLocalizations {
   /// Coach screen AppBar title
   ///
   /// In en, this message translates to:
-  /// **'Coach'**
+  /// **'AI Coach'**
   String get coachTitle;
 
   /// Default active-thread title when empty
@@ -11450,30 +11462,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{pace} {paceLabel} — Off-pace alerts speak when you drift 30s+'**
   String prefsLivePaceAlertOn(String pace, String paceLabel);
-
-  /// Activity-type label: run
-  ///
-  /// In en, this message translates to:
-  /// **'Run'**
-  String get prefsActivityRun;
-
-  /// Activity-type label: walk
-  ///
-  /// In en, this message translates to:
-  /// **'Walk'**
-  String get prefsActivityWalk;
-
-  /// Activity-type label: hike
-  ///
-  /// In en, this message translates to:
-  /// **'Hike'**
-  String get prefsActivityHike;
-
-  /// Activity-type label: cycle
-  ///
-  /// In en, this message translates to:
-  /// **'Cycle'**
-  String get prefsActivityCycle;
 
   /// Tile and picker title for the pace format
   ///
@@ -17411,7 +17399,7 @@ abstract class AppLocalizations {
   /// Title of the coach-athlete roster screen
   ///
   /// In en, this message translates to:
-  /// **'Coaching'**
+  /// **'Athletes & coaches'**
   String get coachingTitle;
 
   /// Intro line on the coaching roster screen

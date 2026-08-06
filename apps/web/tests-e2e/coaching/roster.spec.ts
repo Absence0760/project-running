@@ -56,7 +56,7 @@ test.describe('coach roster dashboard', () => {
 
 		test('renders a populated roster and drills into the review surface', async ({ page }) => {
 			await page.goto('/coaching');
-			await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+			await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 				timeout: 10_000
 			});
 
@@ -101,7 +101,7 @@ test.describe('coach roster dashboard', () => {
 
 		test('sees no roster section', async ({ page }) => {
 			await page.goto('/coaching');
-			await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+			await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 				timeout: 10_000
 			});
 			// The roster section only renders when there are rows (or an error).

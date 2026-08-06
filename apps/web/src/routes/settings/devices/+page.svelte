@@ -13,6 +13,8 @@
 	} from '$lib/util/push';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { ACTIVITY_TYPES } from '$lib/runs/activity_type';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 
@@ -275,12 +277,7 @@
 			label: m('settingsDevices.keyDefaultActivity'),
 			shape: {
 				kind: 'enum',
-				options: [
-					{ value: 'run', label: m('settingsDevices.activityRun') },
-					{ value: 'walk', label: m('settingsDevices.activityWalk') },
-					{ value: 'hike', label: m('settingsDevices.activityHike') },
-					{ value: 'cycle', label: m('settingsDevices.activityCycle') },
-				],
+				options: ACTIVITY_TYPES.map((v) => ({ value: v as string, label: activityTypeLabel(v) })),
 			},
 		},
 		{
