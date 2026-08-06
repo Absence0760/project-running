@@ -622,7 +622,7 @@
 		border-radius: var(--radius-sm);
 		background: color-mix(in srgb, var(--kind-tint) 18%, transparent);
 		color: var(--color-text);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		letter-spacing: 0.05em;
 		white-space: nowrap;
@@ -725,7 +725,7 @@
 	}
 	.relink-current-tag {
 		margin-inline-start: auto;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;

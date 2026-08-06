@@ -88,7 +88,7 @@
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		font-size: 11px;
+		font-size: var(--font-size-section-label);
 	}
 	.reached {
 		margin-inline-start: auto;
@@ -102,7 +102,7 @@
 	.ends {
 		display: flex;
 		justify-content: space-between;
-		font-size: 11px;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-secondary);
 		padding: 0 4px;
 	}

@@ -3201,7 +3201,7 @@
 	.bar-tooltip {
 		position: absolute;
 		top: -1.5rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-secondary);
 		opacity: 0;

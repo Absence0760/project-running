@@ -226,7 +226,7 @@
 	.kicker {
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		margin: 0 0 var(--space-2xs);
@@ -274,7 +274,7 @@
 		inset-inline-end: var(--space-lg);
 		background: var(--color-primary);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.2rem 0.7rem;
 		border-radius: 9999px;
@@ -319,7 +319,7 @@
 		/* WCAG AA: white on --color-success was 3.28/2.22:1; -strong is 5.13:1. */
 		background: var(--color-success-strong);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.2rem 0.6rem;
 		border-radius: 9999px;

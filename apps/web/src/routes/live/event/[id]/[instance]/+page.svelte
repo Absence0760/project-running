@@ -1076,7 +1076,7 @@
 	.pending-tag {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 		color: var(--color-warning-text);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.15rem 0.5rem;
 		border-radius: 999px;

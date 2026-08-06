@@ -1035,7 +1035,7 @@
 		color: var(--color-text);
 	}
 	.key-stat-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -1097,7 +1097,7 @@
 		}
 		/* Tag chips can wrap freely without overflow. */
 		.stats-panel :global(.tag-chip) {
-			font-size: 0.7rem;
+			font-size: var(--font-size-section-label);
 			padding: 0.15rem 0.5rem;
 		}
 	}
@@ -1457,7 +1457,7 @@
 	.featured-pill {
 		background: var(--color-primary);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.15rem 0.5rem;
 		border-radius: 9999px;
@@ -1550,7 +1550,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;

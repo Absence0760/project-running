@@ -1709,7 +1709,7 @@
 		min-width: 1.1rem;
 		height: 1.1rem;
 		padding: 0 0.3rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-on-primary);
 		background: var(--color-primary);
@@ -1754,7 +1754,7 @@
 		gap: 0.45rem;
 	}
 	.filter-group-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -1805,7 +1805,7 @@
 		accent-color: var(--color-primary);
 	}
 	.layer-count {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;
 	}
@@ -1846,7 +1846,7 @@
 	}
 	.results-updated {
 		margin-inline-start: auto;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;
 	}

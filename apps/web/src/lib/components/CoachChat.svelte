@@ -1232,7 +1232,7 @@
 	.thread-meta {
 		grid-column: 1 / -1;
 		grid-row: 2;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 	}
 	.thread-delete {
@@ -1272,7 +1272,7 @@
 		padding: 0 0.3rem;
 		background: var(--color-bg-tertiary);
 		border-radius: 9999px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-align: center;
 		line-height: 1.4;

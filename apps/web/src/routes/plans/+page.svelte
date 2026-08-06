@@ -480,7 +480,7 @@
 		background: var(--color-primary-hover);
 	}
 	.count-pill {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		padding: 0 var(--space-xs);
 		border-radius: 9999px;
@@ -610,7 +610,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;

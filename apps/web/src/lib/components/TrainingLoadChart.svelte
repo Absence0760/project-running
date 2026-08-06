@@ -273,7 +273,7 @@
 	.y-axis {
 		position: relative;
 		flex: 0 0 2.4rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;
 	}

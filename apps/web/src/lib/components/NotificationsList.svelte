@@ -411,7 +411,7 @@
 		background: rgba(255, 255, 255, 0.25);
 		color: inherit;
 		border-radius: 9999px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 	}
 

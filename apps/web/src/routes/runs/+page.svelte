@@ -1151,7 +1151,7 @@
 		opacity: 0.7;
 	}
 	.run-map-placeholder .no-track-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;

@@ -127,7 +127,7 @@
 		margin-bottom: var(--space-md);
 	}
 	.nav-section-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
