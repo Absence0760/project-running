@@ -268,7 +268,7 @@
 		border: 1px solid var(--color-border);
 		border-radius: 999px;
 		background: var(--color-surface);
-		min-width: 14rem;
+		min-width: min(14rem, 100%);
 	}
 	.search:focus-within {
 		border-color: var(--color-primary);
@@ -316,9 +316,10 @@
 	}
 	.row-top {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: flex-start;
 		justify-content: space-between;
-		gap: var(--space-sm);
+		gap: var(--space-2xs) var(--space-sm);
 	}
 	.title {
 		font-weight: 600;

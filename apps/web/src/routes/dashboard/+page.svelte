@@ -3334,8 +3334,10 @@
 	.run-list { display: flex; flex-direction: column; }
 	.run-row {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
+		gap: var(--space-2xs) var(--space-sm);
 		padding: var(--space-sm) 0;
 		border-bottom: 1px solid var(--color-bg-secondary);
 		transition: background var(--transition-fast);

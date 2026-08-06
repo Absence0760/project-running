@@ -544,9 +544,15 @@
 		display: flex;
 		gap: 0.5rem;
 		border-bottom: 1px solid var(--color-border);
+		/* Tabs share one underlined baseline, so they scroll rather than
+		   wrap. Second strip on this route — `.surface-tabs` above it got
+		   the same treatment. */
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
 	.tab {
+		flex: 0 0 auto;
 		background: none;
 		border: none;
 		padding: 0.6rem 0.2rem;

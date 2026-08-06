@@ -4,7 +4,8 @@ import { USER_A } from '../fixtures/users';
 
 /**
  * WCAG 1.4.10 reflow: no route may make the document scroll sideways at the
- * 320 CSS px the criterion names, nor at the 360 px a common phone reports.
+ * 320 CSS px the criterion names, at the 360 px a common phone reports, nor at
+ * the 300 px this spec adds as renderer headroom (see below).
  *
  * The assertion is the derivation, never a pixel (§ 500): a page conforms when
  * `documentElement.scrollWidth` is no wider than its `clientWidth`. Content
@@ -20,9 +21,20 @@ import { USER_A } from '../fixtures/users';
  * are the weakest pair that still rules that out. A heading alone would not
  * do: `/routes` and `/plans` carry their title in the surface-tab strip and
  * have no `h1` in their loaded state at all.
+ *
+ * The 300 px row is headroom, not a stricter reading of the criterion. A page
+ * whose narrowest fit is 318 px passes at 320 on one renderer and fails on
+ * another: CI's Linux font stack measured these routes 12-20 px wider than a
+ * macOS run, which is exactly how `/routes` (318 px narrowest fit locally)
+ * passed here and failed CI at 330. Asserting one viewport below the
+ * requirement converts that invisible 2 px into a visible 20 px, and it is the
+ * same derivation — no absolute width is asserted anywhere (§ 500). Every
+ * guarded route's narrowest fit is at or under 280 px today, so this leaves
+ * real room rather than pinning the current layout.
  */
 
 const VIEWPORTS = [
+	{ width: 300, height: 720 },
 	{ width: 320, height: 720 },
 	{ width: 360, height: 720 }
 ];
@@ -63,7 +75,7 @@ async function expectReflows(page: import('@playwright/test').Page, route: strin
 	}
 }
 
-test.describe('no horizontal document scroll at 320 / 360 px', () => {
+test.describe('no horizontal document scroll at 300 / 320 / 360 px', () => {
 	test('the cookie notice, whose consent tables scroll in their own box', async ({ page }) => {
 		// Public on purpose: the only route in this spec reachable logged out,
 		// and the one carrying raw <table> markup with no page chrome to hide
@@ -90,6 +102,7 @@ test.describe('no horizontal document scroll at 320 / 360 px', () => {
 			'/dashboard',
 			'/runs',
 			'/routes',
+			'/explore',
 			'/history',
 			'/gym',
 			'/nutrition',

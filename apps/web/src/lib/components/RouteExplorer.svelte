@@ -435,8 +435,11 @@
 		display: block;
 	}
 
+	/* Individually bordered pills, not one continuous track, so they wrap
+	   rather than scroll. */
 	.mode-tabs {
 		display: flex;
+		flex-wrap: wrap;
 		gap: var(--space-xs);
 		margin-bottom: var(--space-md);
 	}

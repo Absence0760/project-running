@@ -954,9 +954,10 @@
 
 	.card-head {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: baseline;
-		gap: var(--space-md);
+		gap: var(--space-sm) var(--space-md);
 		margin-bottom: var(--space-md);
 	}
 	.card-meta {
@@ -1111,10 +1112,13 @@
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
 	}
+	/* The +/- buttons hold a 2.5rem tap target, so this row wraps rather
+	   than letting them shrink below it. */
 	.water-controls {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-md);
+		gap: var(--space-sm) var(--space-md);
 	}
 	.water-btn {
 		min-width: 2.5rem;
@@ -1148,8 +1152,9 @@
 
 	.meals-head-right {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-md);
+		gap: var(--space-sm) var(--space-md);
 	}
 
 	/* Meal templates — a self-hiding section above the day's meals, mirroring
@@ -1359,7 +1364,13 @@
 		outline: 2px solid var(--color-primary);
 		outline-offset: 2px;
 	}
-	.trend-bars { display: flex; flex-direction: column; gap: var(--space-xs); }
+	/* Seven day-columns each need room for a 4-digit calorie label, which
+	   is more than a 320px screen leaves. The bars and their day labels
+	   scroll as ONE block so a column stays over its own label; a shared
+	   min-width keeps them in register (WCAG 1.4.10). */
+	.trend-bars { display: flex; flex-direction: column; gap: var(--space-xs); max-width: 100%; overflow-x: auto; }
+	.trend-track,
+	.trend-days { min-width: calc(7 * 1.75rem + 6 * var(--space-sm)); }
 	.trend-track {
 		display: flex;
 		align-items: flex-end;

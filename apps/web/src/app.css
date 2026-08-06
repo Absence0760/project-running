@@ -888,6 +888,16 @@ img {
  * would regress every flat-card page). Compose with a page-scoped modifier
  * for layout: `class="card-elevated rings-card"`.
  */
+/* A long unbroken token — an env-var name, an id, a URL — offers the line
+   breaker no opportunity, so its min-content width is the whole string and it
+   widens the page instead of wrapping (WCAG 1.4.10). `anywhere` rather than
+   `break-word` on purpose: only `anywhere` is taken into account when the
+   intrinsic minimum is computed, which is the size that was doing the damage.
+   Scoped off `pre`, whose own block keeps its formatting. */
+:not(pre) > code {
+	overflow-wrap: anywhere;
+}
+
 /* A data table's columns are its own axis — dropping one to fit a 320px
    screen loses information, so the table scrolls inside this wrapper
    rather than widening the page. WCAG 1.4.10 exempts content requiring

@@ -70,68 +70,70 @@
 		<div class="card-head">
 			<h2>{m('trends.title')}</h2>
 		</div>
-		<table class="trend-table">
-			<thead>
-				<tr>
-					<th scope="col" class="metric-col"><span class="visually-hidden">{m('trends.metricCol')}</span></th>
-					<th scope="col">{m('trends.weekCol')}</th>
-					<th scope="col">{m('trends.monthCol')}</th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr>
-					<th scope="row">{m('trends.distanceRow')}</th>
-					<td>
-						<span class="cur">{fmtKm(trend.week.distanceM.current)}</span>
-						<span class="delta delta-{trend.week.distanceM.direction}" data-testid="trend-week-distance">
-							<span class="material-symbols" aria-hidden="true">{arrow(trend.week.distanceM)}</span>
-							{deltaText(trend.week.distanceM)}
-						</span>
-					</td>
-					<td>
-						<span class="cur">{fmtKm(trend.month.distanceM.current)}</span>
-						<span class="delta delta-{trend.month.distanceM.direction}" data-testid="trend-month-distance">
-							<span class="material-symbols" aria-hidden="true">{arrow(trend.month.distanceM)}</span>
-							{deltaText(trend.month.distanceM)}
-						</span>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">{m('trends.timeRow')}</th>
-					<td>
-						<span class="cur">{compactDuration(trend.week.durationS.current)}</span>
-						<span class="delta delta-{trend.week.durationS.direction}">
-							<span class="material-symbols" aria-hidden="true">{arrow(trend.week.durationS)}</span>
-							{deltaText(trend.week.durationS)}
-						</span>
-					</td>
-					<td>
-						<span class="cur">{compactDuration(trend.month.durationS.current)}</span>
-						<span class="delta delta-{trend.month.durationS.direction}">
-							<span class="material-symbols" aria-hidden="true">{arrow(trend.month.durationS)}</span>
-							{deltaText(trend.month.durationS)}
-						</span>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">{m('trends.runsRow')}</th>
-					<td>
-						<span class="cur">{trend.week.runs.current}</span>
-						<span class="delta delta-{trend.week.runs.direction}" data-testid="trend-week-runs">
-							<span class="material-symbols" aria-hidden="true">{arrow(trend.week.runs)}</span>
-							{deltaText(trend.week.runs)}
-						</span>
-					</td>
-					<td>
-						<span class="cur">{trend.month.runs.current}</span>
-						<span class="delta delta-{trend.month.runs.direction}">
-							<span class="material-symbols" aria-hidden="true">{arrow(trend.month.runs)}</span>
-							{deltaText(trend.month.runs)}
-						</span>
-					</td>
-				</tr>
-			</tbody>
-		</table>
+		<div class="table-scroll" tabindex="0">
+			<table class="trend-table">
+				<thead>
+					<tr>
+						<th scope="col" class="metric-col"><span class="visually-hidden">{m('trends.metricCol')}</span></th>
+						<th scope="col">{m('trends.weekCol')}</th>
+						<th scope="col">{m('trends.monthCol')}</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<th scope="row">{m('trends.distanceRow')}</th>
+						<td>
+							<span class="cur">{fmtKm(trend.week.distanceM.current)}</span>
+							<span class="delta delta-{trend.week.distanceM.direction}" data-testid="trend-week-distance">
+								<span class="material-symbols" aria-hidden="true">{arrow(trend.week.distanceM)}</span>
+								{deltaText(trend.week.distanceM)}
+							</span>
+						</td>
+						<td>
+							<span class="cur">{fmtKm(trend.month.distanceM.current)}</span>
+							<span class="delta delta-{trend.month.distanceM.direction}" data-testid="trend-month-distance">
+								<span class="material-symbols" aria-hidden="true">{arrow(trend.month.distanceM)}</span>
+								{deltaText(trend.month.distanceM)}
+							</span>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">{m('trends.timeRow')}</th>
+						<td>
+							<span class="cur">{compactDuration(trend.week.durationS.current)}</span>
+							<span class="delta delta-{trend.week.durationS.direction}">
+								<span class="material-symbols" aria-hidden="true">{arrow(trend.week.durationS)}</span>
+								{deltaText(trend.week.durationS)}
+							</span>
+						</td>
+						<td>
+							<span class="cur">{compactDuration(trend.month.durationS.current)}</span>
+							<span class="delta delta-{trend.month.durationS.direction}">
+								<span class="material-symbols" aria-hidden="true">{arrow(trend.month.durationS)}</span>
+								{deltaText(trend.month.durationS)}
+							</span>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">{m('trends.runsRow')}</th>
+						<td>
+							<span class="cur">{trend.week.runs.current}</span>
+							<span class="delta delta-{trend.week.runs.direction}" data-testid="trend-week-runs">
+								<span class="material-symbols" aria-hidden="true">{arrow(trend.week.runs)}</span>
+								{deltaText(trend.week.runs)}
+							</span>
+						</td>
+						<td>
+							<span class="cur">{trend.month.runs.current}</span>
+							<span class="delta delta-{trend.month.runs.direction}">
+								<span class="material-symbols" aria-hidden="true">{arrow(trend.month.runs)}</span>
+								{deltaText(trend.month.runs)}
+							</span>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
 		<p class="footnote">{m('trends.footnote')}</p>
 	</section>
 {/if}

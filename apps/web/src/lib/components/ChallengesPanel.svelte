@@ -128,9 +128,10 @@
 	}
 	header {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-sm);
+		gap: var(--space-2xs) var(--space-sm);
 	}
 	.head-ident {
 		display: inline-flex;
