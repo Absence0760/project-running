@@ -53,19 +53,20 @@ void main() {
     });
   });
 
-  group('ActivityType.label', () {
-    // Reason: the activity-type chip row on RunScreen, all dashboard
-    // cards, the run-detail header, and every share-card binding read
-    // `t.label` for display. A regression that re-cased / re-spelled
-    // any of these (e.g. "Running") would surface everywhere at once.
-    test('returns the canonical capitalised English noun', () {
-      expect(ActivityType.run.label, 'Run');
-      expect(ActivityType.walk.label, 'Walk');
-      expect(ActivityType.cycle.label, 'Cycle');
-      // Surfaced as "Trail run" — see kdoc on label getter. The
-      // enum name stays `hike` for back-compat with the SQL CHECK
-      // constraint + Strava / Health Connect importer mappings.
-      expect(ActivityType.hike.label, 'Trail run');
+  group('ActivityType has no hardcoded label', () {
+    // The display name used to be a `label` getter returning English, read by
+    // eight render sites, so every non-English locale printed "Run" / "Walk" /
+    // "Trail run". It now lives in `activity_type_labels.dart` behind an
+    // AppLocalizations; the enum carries only the physics. The names are
+    // pinned per locale by `activity_type_vocabulary_test.dart`.
+    test('every value is still reachable by its wire name', () {
+      expect(
+        ActivityType.values.map((a) => a.name),
+        ['run', 'walk', 'cycle', 'hike', 'stroller'],
+      );
+      expect(ActivityType.fromName('hike'), ActivityType.hike);
+      expect(ActivityType.fromName('nonsense'), ActivityType.run);
+      expect(ActivityType.fromName(null), ActivityType.run);
     });
   });
 

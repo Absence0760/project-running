@@ -1,6 +1,12 @@
 import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { lookupSharedRecap, recapPeriodLabel } from '$lib/share/share_recap_lookup';
+
+// Canonical host for the absolute og:image URL, same source + fallback as the
+// sibling share loaders and /sitemap.xml. An og:image is fetched by a remote
+// crawler, so it cannot be root-relative the way an in-app href can.
+const DEFAULT_SITE_URL = 'https://threkir.com';
 
 // Per-request SSR via apps/web/lambda/share-recap in production — CloudFront
 // routes /recap/share/* to the Lambda Function URL, which fetches the frozen
@@ -22,5 +28,10 @@ export const load: PageLoad = async ({ params }) => {
 			: null,
 	);
 	const periodLabel = recap ? recapPeriodLabel(recap.periodKind, recap.periodKey) : null;
-	return { id: params.id, recap, periodLabel };
+	return {
+		id: params.id,
+		recap,
+		periodLabel,
+		siteUrl: env.PUBLIC_SITE_URL || DEFAULT_SITE_URL,
+	};
 };

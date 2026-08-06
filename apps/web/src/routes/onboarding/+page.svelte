@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { TEXT_LIMITS } from '$lib/core/text_limits';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { m } from '$lib/i18n/store.svelte';
@@ -344,7 +345,7 @@
 		{/each}
 	</div>
 
-	<main class="card">
+	<main class="card" id="main-content">
 		{#if !ready}
 			<p class="loading-hint">{m('shell.loading')}</p>
 		{:else if step === 1}
@@ -358,7 +359,7 @@
 					<input
 						type="text"
 						bind:value={displayName}
-						maxlength="60"
+						maxlength={TEXT_LIMITS.displayName}
 						placeholder={m('onboarding.displayNamePlaceholder')}
 					/>
 				</label>

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../motion.dart';
+
 /// Which animated athlete figure the loader shows.
 enum ActivityLoaderKind { run, train, fuel }
 
@@ -50,14 +52,7 @@ class _ActivityLoaderState extends State<ActivityLoader>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduce) {
-      _controller
-        ..stop()
-        ..value = 0;
-    } else if (!_controller.isAnimating) {
-      _controller.repeat();
-    }
+    syncMotionLoop(context, _controller);
   }
 
   @override

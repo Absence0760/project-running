@@ -448,11 +448,17 @@ Two things the sweep behind it taught, both worth carrying forward. **The frozen
 
 Round 13 **inverted the ban into a complete register**, because a named-hue list cannot close the hole it leaves — the next frozen fill just picks a fortieth hue, and § 511 had logged the size of that hole (172 literals across 29 files carrying hues outside the status vocabulary). Every six-digit literal outside `app.css`'s declaration lines must now appear in `REGISTER` with an **exact count and a role** from a closed vocabulary: `cartographic`, `brand-mark`, `brand-hue`, `data`, `fixed-canvas`, `gradient-stop`, `svg-art`. The named-hue rule is kept for its *message* (for a status role, "route it onto the token" is always the answer), not for its reach.
 
-§ 536 **retired an eighth role, `theme-pair`** — a literal declared once per theme as a local custom property, the entry recording the debt. Its only holder was RouteHeatmap's kept-route violet, and the honest reading is that a theme-keyed value is never a reason to freeze a hex: it is a token nobody has minted yet. Keeping the role would keep the cheap option available exactly where the durable one is obvious, so the violet became `--color-route-pinned` and the role went with it. Two numbers worth carrying: the register holds **95 painted literals across 19 files** (not the 308 an earlier count reported — that figure swept in `app.css`'s own 186 declarations and 27 hexes inside comment prose), and the scan reaches `.svelte` / `.css` only, so the **199** six-digit literals in `.ts` are outside it. Those are not unexamined — `basemap_contrast.ts` holds most of them and `basemap_contrast.test.ts` grades each against real basemap samples at 3:1 — but "complete" means complete over the two style extensions.
+§ 536 **retired an eighth role, `theme-pair`** — a literal declared once per theme as a local custom property, the entry recording the debt. Its only holder was RouteHeatmap's kept-route violet, and the honest reading is that a theme-keyed value is never a reason to freeze a hex: it is a token nobody has minted yet. Keeping the role would keep the cheap option available exactly where the durable one is obvious, so the violet became `--color-route-pinned` and the role went with it. Two numbers worth carrying: as of § 536 the register held **95 painted literals across 19 files** (not the 308 an earlier count reported — that figure swept in `app.css`'s own 186 declarations and 27 hexes inside comment prose), and the scan reached `.svelte` / `.css` only, so the **199** six-digit literals in `.ts` were outside it. Those are not unexamined — `basemap_contrast.ts` holds most of them and `basemap_contrast.test.ts` grades each against real basemap samples at 3:1 — but "complete" means complete over the two style extensions.
+
+§ 546 **took the register into `.ts`, and split the rules by whether their remedy exists.** The `199` figure decomposed the same way the `308` had: **87 painted in 11 production `.ts` files, 72 inside `.test.ts` fixtures, 40 in comment bodies.** The named-hue ban and the dead-fallback rule *stay* on `.svelte` / `.css`, and that is now a decision rather than an omission — their failure message is "route it onto the token", and in `basemap_contrast.ts` that is impossible (MapLibre parses paint values itself and throws on a `var()`) while a rasterised share card has no theme to follow at all. **A guard whose remedy the caller cannot perform teaches the next round to loosen the assertion.** The complete register asks for a *role*, which every `.ts` literal can answer, so it is the rule that reaches `.ts`. Both halves also shrank that round: the style side to **92 across 18 files** (the privacy-zone circle's three reds moved onto `mapZoneBoundary`), the `.ts` side to **76 across 9** (five card builders stopped spelling the same two palettes). Two consequences worth knowing before editing one: two of the `.ts` entries (`route_markers.ts` at 7 literals, `pace_segments.ts` at 6) are **TS↔Dart parity pairs**, so a value change there is a two-platform change; and the `.test.ts` exclusion is asserted **non-empty**, because a scope decision that has quietly stopped excluding anything has become dead machinery (§ 534).
+
+**A rasterised card's palette lives in one module.** `lib/share/og_card_palette.ts` holds the light card (run / route / badge unfurls) and the dark one (recap unfurl + the in-app recap share PNG), each ink carrying its measured ratio and the ground it was measured against. Five card builders had each spelled these independently — 22 literals for 9 values, the two recap cards byte-identical — and two cards of the same product drifting apart is invisible until someone sees the unfurl and the shared PNG side by side. A card keeps only the hues that are genuinely its own (the route card's start / finish caps).
 
 That settles a question § 511 deferred: it considered a "no hex in a border" rule and declined it as a second allowlist duplicating the first. **There is one register, and it is keyed on `(file, hue)` — never on the CSS property** — so a border literal is an entry like any other, and a test asserts both surviving border literals are in it. Two role distinctions carry weight. A third party's **logo geometry** is theirs to tone (`brand-mark`: the Google "G", Apple's required black); the same party's **hue reused as our own paint** is not covered by that requirement (`brand-hue`), and measured on the tinted disc it lands on rather than on the bare surface, five of six provider glyph inks miss 1.4.11's 3:1 floor. And where a literal is a measured failure the register records it as an **open debt with its figure and the ground it was measured on**, as a frozen set — a register whose point is completeness must be able to say "known bad, not yet fixed", or the honest finding gets dropped to keep the suite green.
 
-**A map overlay's contrast is owed to the basemap, and the basemap is not the theme.** `basemap_contrast.ts` holds every colour the six map surfaces paint, keyed on `basemapIsDark` (which sits beside `buildMapStyleUrl` and shares its slug switch, so URL and palette cannot drift). Keying on `prefers-color-scheme` is wrong in both directions, because the map-style preference decouples basemap luminance from the OS theme: `outdoors` is a light basemap under a dark OS, `dark` and `satellite` are dark ones under a light OS. Two facts shape the module and are pinned as tests rather than left as comments: **a translucent casing cannot carry the floor** (2.273:1 at 0.25 over the dark sample), so every line clears its ground unaided; and **a label halo is ground-coloured on purpose** (1.038 / 1.148:1), so it holds a glyph apart from mid-tone map *features*, not from the land fill, and the ink must clear the ground on its own.
+**A map overlay's contrast is owed to the basemap, and the basemap is not the theme.** `basemap_contrast.ts` holds every colour the seven map surfaces paint, keyed on `basemapIsDark` (which sits beside `buildMapStyleUrl` and shares its slug switch, so URL and palette cannot drift). Keying on `prefers-color-scheme` is wrong in both directions, because the map-style preference decouples basemap luminance from the OS theme: `outdoors` is a light basemap under a dark OS, `dark` and `satellite` are dark ones under a light OS. Two facts shape the module and are pinned as tests rather than left as comments: **a translucent casing cannot carry the floor** (2.273:1 at 0.25 over the dark sample), so every line clears its ground unaided; and **a label halo is ground-coloured on purpose** (1.038 / 1.148:1), so it holds a glyph apart from mid-tone map *features*, not from the land fill, and the ink must clear the ground on its own.
+
+Every rung is graded against **four** grounds, not two: the dark land sample, and — because land is the *pale* end of a light basemap — the light land sample, the light-basemap water fill, and the keyless OSM raster backdrop. **A rung that clears its tightest ground by a fraction of a percent has not cleared it** (§ 522 / § 535): the privacy-zone circle's single `#dc2626` read 3.011:1 over light-basemap water against a 3:1 floor, and no single red does better because a red dark enough for the pale grounds fails the dark one — so it split into `mapZoneBoundary`'s pair like every other rung (§ 546). A surface may own its **slug table** (the route builder does, for `hybrid` imagery-with-labels), but never the *precedence* that turns a slug into a URL nor the *classification* of that slug's luminance: `styleUrlForSlug` and `basemapIsDarkForSlug` are the two halves, and `map_surface_basemap_guard.test.ts` fails any registered surface that calls `maptilerStyleUrl` itself. Skipping that precedence skips the keyless OSM-raster fallback, which on web also drops the basemap **credit** — MapLibre reads it out of whichever style document loaded, so no style means no attribution, a licensing gap and not a cosmetic one (§ 491).
 
 **A gradient is a fill, and its palest stop sets the ink.** `gradient_foreground_guard.test.ts` reads each text-bearing ramp out of the source, extracts its stops, and measures the declared foreground against every one — bare and under each declared translucent veil at that veil's own peak. It pins the expected stop *count* per ramp for the reason § 511 gave about floors read out of the tree: a regex that matches nothing must not pass. Overlapping veils are measured one at a time when they peak at opposite corners, because stacking them asserts a composite no pixel shows.
 
@@ -613,6 +619,21 @@ On the Flutter apps, a card that needs a title carries it *inside* as `ChartCard
 ## Mobile run rows — `RunListTile`, one row for every list of runs
 
 On the Flutter apps, every list of runs draws `RunListTile` (`lib/widgets/run_list_tile.dart`): `.owned` from a local `Run` (selection mode, unsynced marker, inline track), `.public` from a `RunRow` plus the profile owner's id so a non-owner thumbnail is clipped server-side. Four surfaces had forked it — different leading widths, icon colours, distance weights, subtitle grammars and trailing slots, one of them under a comment claiming it mirrored another. **Two named constructors, not nullable parameters**, because the surfaces differ in which fields exist (§509). Deliberately not folded in: `activity_timeline_list`'s `_ActivityRowTile`, the cross-modal row over the `activities` view's thin `summary` jsonb, which has no `track_url` to draw and whose tinted avatar names the modality. `run_row_guard_test.dart` (both twins) pins the list of run surfaces, forbids a run thumbnail outside the shared row, and pins the cross-modal exclusion in both directions.
+
+## Mobile motion — `AppMotion`'s rungs, and a loop that stops rather than hurries
+
+On the Flutter apps, an animation's duration comes from `AppMotion` (`packages/ui_kit/lib/src/motion.dart`) — `brief` (200 ms, an element changing in place), `standard` (300 ms, an animated scroll or page change), `pulse` (1500 ms, a repeating loop) — and its curve from `AppMotion.curveStandard` / `curveEmphasised` / `curveOvershoot` / `curveLinear`. Each rung is the **modal value of its role** in what was already shipping, so the tier moved the off-mode sites and left the majority alone; a new role with no mode to derive from gets a documented local, not an invented fourth rung (the indeterminate-progress cadences — typing dots at 600, skeleton shimmer at 900, `ActivityLoader`'s web-ported 720/1050/1500 gait — are that case). `reduce_motion_test.dart` (both twins) fails any `Curves.` outside `motion.dart` and requires every rung to have an adopter.
+
+**Reduce-motion is not a duration problem, and the framework only half-covers it.** Flutter scales a one-shot `forward`/`reverse`/`animateTo` to 5 % when `MediaQuery.disableAnimations` is set, so implicit widgets and one-shot controllers are handled already. It does **not** touch `repeat()` — `AnimationController._animateToInternal` holds the scale and `repeat` does not, for the reason its own source gives — and it does not touch an animated scroll, because `DrivenScrollActivity` runs on an `AnimationController.unbounded` that defaults to `AnimationBehavior.preserve`. Those two are the whole gap:
+
+- **A repeating controller is driven by `syncMotionLoop(context, controller)` from `didChangeDependencies`**, never by a bare `..repeat()` in `initState`. Under reduce-motion it *stops* and parks at a rest value, so nothing ticks — animating faster still costs a frame callback per frame, and on the recording screen that ran for the length of the run. Driving it from `didChangeDependencies` is also what lets the runner flip the OS switch mid-session.
+- **An animated scroll goes through `motionScrollTo`**, which calls `jumpTo` under reduce-motion. Feeding `animateTo` a zero duration is not an alternative: `DrivenScrollActivity`'s constructor asserts `duration > Duration.zero`. `PageController.nextPage` is the same activity and takes the same branch (`jumpToPage`).
+- **`AnimatedSize` / `AnimatedCrossFade` may not be given `Duration.zero` either** — `RenderAnimatedSize` completes a zero-duration controller inside its own `performLayout` and asserts on re-dirtying itself. Render the target child directly instead of the animating widget. Everything else (`AnimatedSwitcher`, `AnimatedContainer`) takes `motionDuration(context, rung)` happily.
+- **Motion is L4.** On the recording stack, wrap the `syncMotionLoop` call in its own try/catch + `debugPrint` so a halo cannot reach the trace, the camera or the clock.
+
+Two animations deliberately do **not** collapse, and a new one that plays continuously should say which case it is: `run_detail_screen`'s trace replay and `undo_bar`'s countdown ring. The first is playback the user pressed play on and can stop (WCAG 2.2.2 is met by the control, and killing it would remove the feature); the second reports a real deadline, and a vestibular user needs the remaining time as much as anyone.
+
+On web the same decision is already in force and needs no mirror: `app.css` carries the global `@media (prefers-reduced-motion: reduce)` net (pinned by `security_guards.test.ts`) plus per-component blocks, and `--transition-fast` / `--transition-base` are its duration rungs. Mobile's derived `brief` landing on 200 ms — web's existing `--transition-base` — is a convergence, not a copy.
 
 ## Local-tz date strings
 
@@ -841,7 +862,21 @@ What breaks it is almost never a page. Five mechanisms account for every failure
 
 **Measure the narrowest fit, not the pass at 320.** Bisect the viewport width at which a route stops fitting; that number is renderer-independent, and "passes at 320" is not. CI's Linux font stack measures 12-20 px wider than macOS, which is how a route with a 318 px narrowest fit passed a developer's 320 px check and failed CI at 330 (§ 535 amendment). Keep new surfaces at or under ~280 px.
 
-`tests-e2e/cross-cutting/reflow-narrow-viewport.spec.ts` drives 16 routes at 300, 320 and 360 px — the 300 px row is renderer headroom, not a stricter reading of the criterion. Add a route to it when you add a surface with a grid, a toolbar or a table.
+`tests-e2e/cross-cutting/reflow-narrow-viewport.spec.ts` drives 16 routes at 300, 320 and 360 px — the 300 px row is renderer headroom, not a stricter reading of the criterion. Add a route to it when you add a surface with a grid, a toolbar or a table. The measurement contract itself lives in `tests-e2e/fixtures/reflow.ts`, shared with `reflow-seeded-routes.spec.ts`, which supplies runtime fixtures for the five families that render from no seed.
+
+**A "0 elements measured" result is a missing anchor until you have ruled that out.** The reflow measurement is taken inside the page region, so a route with no `<main>` reports zero content no matter what is in the database — and that reads exactly like absent fixtures. Confirm the landmark exists before attributing an empty measurement to data ([decisions.md § 543](decisions.md)).
+
+## A shell-less route owns its own `<main>` landmark
+
+`+layout.svelte` renders three branches. The signed-in shell and the anon-allowed content branch each wrap the slot in `<main id="main-content">` behind a skip link. The third — `isShellless()`, covering `/`, `/login`, the `/auth/*` flows, `/onboarding`, `/safety/confirm`, and everything under `/share/`, `/live/`, `/learn`, `/clubs/join/` and `/coaching/accept/` — renders a bare `<slot />` and gives its routes nothing. **A page added to that family must render its own `<main id="main-content">`, in every branch a visitor can reach**, or it ships with no main region at all (WCAG 1.3.1). Eleven of twenty-four did; see § 543.
+
+Two things make this easy to get wrong:
+
+- **Put the landmark on an element that already exists** where that element is a flex child of the page shell (`<section class="hero">` becomes `<main class="hero">`). A new wrapper moves the flex child and reflows the page. Wrap only where the child centres itself inside any full-width parent.
+- **Every branch of the chain needs one, not just the one you were looking at.** The commonest form of this defect is a landmark in the *not-found* card while the found entity renders a bare `<section>` — which passes any "does this file contain a `<main>`" check. `src/lib/shellless_landmark_guards.test.ts` derives the family from the layout and enforces branch consistency; a landmark in some branches of a top-level `{#if}` chain but not others fails it.
+
+Do **not** solve this by putting one `<main>` in a shared wrapper like `SharePageShell`: it nests each page's `<header>` inside `main`, demoting it from `banner`, and `recap/share/[id]` uses that component while sitting inside the layout's own `<main>`, which would produce two landmarks.
+
 ## A sentence is a catalogue key, not a template plus a fragment
 
 A message that interpolates a fragment carrying its own grammar will double it. The notification templates said `"{name} gave kudos to your {dist}"` and filled `{dist}` with `"your run"` when a run had no recorded distance, so every locale shipped a doubled possessive: "your your run", "deinem deinen Lauf", "a tu tu carrera", "à ton ta course", "à sua sua corrida", "あなたのあなたのラン" ([decisions.md § 536](decisions.md); mobile's twin was `profileNotifYourRun`).
@@ -910,6 +945,15 @@ onMount(() => {
 ```
 
 Capture the heaviest stateful arrays (the items list, pagination cursors), not derived values — derived state recomputes from restored inputs. Filters that already live in `localStorage` don't need to be in the snapshot.
+
+## Web share URLs — the path is defined once, the base belongs to the caller
+
+Every public path an entity has is spelled in exactly one builder, and the builder takes the base as a parameter. There are **two** such paths per entity, not one: the share page (`build<X>ShareCanonical`) and its unfurl image (`build<X>OgImageUrl`). Never interpolate a base into a path at a call site — `${window.location.origin}/share/run/${id}` is the defect, `buildRunShareCanonical(window.location.origin, id)` is the same URL with the path defined once. Which base depends on the *use*, and both are correct: a `<head>` canonical resolves against `PUBLIC_SITE_URL` (the public home of the content is not whichever host the reader is on), while a copy-to-clipboard link resolves against `location.origin` (a preview host has to yield a preview link). See [decisions.md § 520](decisions.md) / [§ 531](decisions.md) / [§ 546](decisions.md).
+
+- **An `og:image` must be absolute.** It is fetched by a remote crawler off-site, so unlike an in-app `href` it genuinely can get the origin wrong. A page whose `<head>` advertises the same image at two URLs — absolute in its JSON-LD, root-relative in its `og:image` — fails invisibly.
+- **A root-relative `/share/…` in an `href` is fine.** It is an in-app navigation and cannot get the origin wrong, which is the failure the rule is about. Routing those through a builder would read as `buildRunShareCanonical('', id)` at every call site — a legible template traded for an obscure one.
+- **Calling a share-canonical builder is not a canonical fold.** `/recap/[year]` calls one for its copy-link and emits no `<link rel="canonical">`; it belongs in no row of `seo.md`'s consolidation table, because a recap has no share id until the runner publishes.
+- `share_url_source_guard.test.ts` registers every construction site with an **exact count** and a reason, in both directions: a count that rises is a second spelling of a path that already has a builder, one that falls is a builder that lost its last caller.
 
 ## Web back links — pop to the referrer, don't hardcode a parent
 
@@ -984,6 +1028,60 @@ Once the user has asked for work, commit **after each discrete piece** as you go
 **Authorization scope.** "Commit after each piece" is in tension with the older "never commit without being asked" rule. The reconciliation: once the user has asked for a piece of work (or a sequence — "do the punch list", "ship the cache module"), the per-piece-commit cadence is implicitly authorized. The "without being asked" rule still guards against proactively committing speculative work the user didn't ask for, ad-hoc workstation tweaks (port changes, dev-only env), or work that got partially aborted.
 
 Pairs with the "Test hygiene" section below — tests for a piece go in the **same commit** as the piece itself, not a follow-up commit.
+
+## A value domain gets ONE vocabulary, and a destination gets a name of its own
+
+Two rules from the same failure — a user-facing name that more than one place
+was allowed to decide (decisions § 547).
+
+**A closed value domain has exactly one catalogue namespace and one resolver.**
+When a column's value set is fixed by a CHECK constraint (`activity_type`,
+`workout_kind`, …), every surface that names a value resolves through the one
+helper — web `runs/activity_type.svelte.ts#activityTypeLabel`, mobile
+`activity_type_labels.dart#activityTypeLabel`. Do NOT mint
+`<surface>.activity<Value>` keys for a picker, a filter chip and a detail
+header: seven such namespaces existed for five values and they disagreed
+*inside* a locale (German `hike` was both "Wandern" and "Wanderung"), and four
+of them silently omitted a value, which is what made `/runs/[id]` print the raw
+token "stroller" in every language. Corollaries:
+
+- **Never hand-capitalise an identifier in place of a label.**
+  `x.charAt(0).toUpperCase() + x.slice(1)` (and its Dart template form
+  `'${x[0].toUpperCase()}${x.substring(1)}'`) prints English on a localized
+  page and loses whatever words the catalogue adds. Both platforms carry a
+  tree-wide source sweep with a *named* allowlist — web in
+  `training/workout_labels.test.ts`, mobile in `activity_type_vocabulary_test.dart`
+  — so a new one fails wherever it lands, and an entry must say why the value
+  cannot be resolved (an open vendor string like a FIT `sub_sport` can; a closed
+  domain cannot).
+- **Derive the value set, don't restate it.** The guards parse the CHECK out of
+  the migration, so widening the domain fails the build until every catalogue
+  carries the new key.
+- **An unrecognised value renders VERBATIM, never title-cased.** A title-cased
+  token is indistinguishable from a real translation and hides the drift on
+  exactly the surface where it would be noticed.
+
+**Two destinations may not have names a reader cannot tell apart.** A
+destination's name is the thing a user searches for, so "Coach" (the AI chat)
+beside "Coaching" (the human coach↔athlete roster) is a contradiction on one
+surface. `i18n/destination_names.test.ts` compares every top-level destination
+name pairwise **in every locale**, because the collision is a property of the
+words: separating the two in English can leave them colliding in German, and
+nothing else would notice (its first run found "Über"/"Übersicht" and
+"Einstellungen" naming both Settings and its Preferences tab). Add a new
+sidebar item, popover entry or Settings tab to `DESTINATION_KEYS`.
+
+## A tab index is an ordered enum, never a raw int
+
+`initialTab` on a tab host takes a named enum whose declaration order IS the
+strip order, and the labels, the views, the FAB switch and any deep link all
+read that one order (`ProfileTab`, `FitnessTab`, `SocialTab`). Do not take an
+int and clamp it: the clamp is what *hid* § 490's live bug rather than catching
+it — a stale `initialTab: 3` literal stayed in range after the tab set changed,
+so the notification bell opened the wrong tab in silence. With an enum, out of
+range is unrepresentable, so the test to write is not a clamp test but the
+property a clamp cannot give: every value opens its own tab, and the strip is
+exactly as long as the enum.
 
 ## Docs hygiene
 

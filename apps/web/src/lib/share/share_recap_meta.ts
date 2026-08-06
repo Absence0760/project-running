@@ -23,6 +23,17 @@ export function buildRecapShareCanonical(
 	return `${normaliseSiteUrl(base)}/recap/share/${id}`;
 }
 
+/// Absolute URL of the per-recap `og:image` PNG. Note that this one DOES sit
+/// under `/og/<entity>/` like the rest of the family even though the share
+/// page above does not — the two paths are independent and flattening either
+/// onto the other's shape 404s.
+export function buildRecapOgImageUrl(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/og/recap/${id}.png`;
+}
+
 export interface ShareRecapMetaInput {
 	id: string;
 	recap: SharedRecap | null;
@@ -53,7 +64,7 @@ export function buildShareRecapMeta(input: ShareRecapMetaInput): ShareRecapMeta 
 		title,
 		description,
 		ogUrl: buildRecapShareCanonical(base, id),
-		ogImageUrl: `${base}/og/recap/${id}.png`,
+		ogImageUrl: buildRecapOgImageUrl(base, id),
 	};
 }
 

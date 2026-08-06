@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../badges.dart';
 import '../l10n/date_format.dart';
@@ -167,22 +168,14 @@ class BadgeGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     if (badges.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Text(
-            isOwner ? l10n.badgesEmpty : l10n.badgesEmptyOther,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
+      return EmptyState(
+        icon: Icons.emoji_events_outlined,
+        title: isOwner ? l10n.badgesEmpty : l10n.badgesEmptyOther,
       );
     }
     return GridView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 200,

@@ -1,8 +1,30 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { expect, test, type Page } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { clearUserSettingKey, setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+
+/**
+ * The chip's visible word, read out of the en catalogue.
+ *
+ * Capitalising the stored value was the previous spelling, and it was the same
+ * hand-capitalisation the activity vocabulary replaced — `hike` renders as
+ * "Trail run", so the derived "Hike" matched no chip and the click timed out.
+ * Read by regex rather than imported: this file runs under Playwright, where the
+ * `$lib` alias the catalogue module uses internally does not resolve.
+ */
+function activityLabel(value: string): string {
+	const catalogue = readFileSync(
+		resolve(import.meta.dirname, '..', '..', 'src', 'lib', 'i18n', 'locales', 'en.ts'),
+		'utf-8'
+	);
+	const found = new RegExp(`'activityType\\.${value}':\\s*'([^']+)'`).exec(catalogue);
+	if (!found) throw new Error(`no activityType.${value} key in the en catalogue`);
+	return found[1];
+}
 
 /**
  * /runs/new — standalone manual-run wrapper around RunEditor.
@@ -340,8 +362,7 @@ test.describe('/runs/new', () => {
 				page.getByRole('heading', { level: 1, name: 'Add a run' })
 			).toBeVisible({ timeout: 10_000 });
 
-			const chipLabel =
-				activity.charAt(0).toUpperCase() + activity.slice(1);
+			const chipLabel = activityLabel(activity);
 			await page.getByRole('radio', { name: chipLabel, exact: true }).click();
 			await expect(
 				page.getByRole('radio', { name: chipLabel, exact: true })

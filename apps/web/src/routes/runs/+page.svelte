@@ -17,6 +17,8 @@
 	import type { Run, RunSource } from '$lib/types';
 	import { formatElevation } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { ACTIVITY_TYPE_ICONS } from '$lib/runs/activity_type';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import type { Snapshot } from './$types';
 
 	// The full run list — filters, pagination, bulk-delete, manual entry.
@@ -313,11 +315,11 @@
 
 	const activities = $derived<{ value: string; label: string; icon: string }[]>([
 		{ value: 'all', label: m('runs.activityAll'), icon: 'apps' },
-		{ value: 'run', label: m('runs.activityRun'), icon: 'directions_run' },
-		{ value: 'walk', label: m('runs.activityWalk'), icon: 'directions_walk' },
-		{ value: 'cycle', label: m('runs.activityCycle'), icon: 'directions_bike' },
-		{ value: 'hike', label: m('runs.activityHike'), icon: 'terrain' },
-		{ value: 'stroller', label: m('runs.activityStroller'), icon: 'child_friendly' },
+		...(['run', 'walk', 'cycle', 'hike', 'stroller'] as const).map((v) => ({
+			value: v as string,
+			label: activityTypeLabel(v),
+			icon: ACTIVITY_TYPE_ICONS[v],
+		})),
 	]);
 
 	/// Monotonic generation counter. Every loadInitial() captures the

@@ -71,6 +71,10 @@
 		justify-content: space-between;
 		align-items: baseline;
 		font-weight: 600;
+		/* "£320 of £5,000" and its percentage are each unsplittable; wrap rather
+		 * than hold one line at min-content width. */
+		flex-wrap: wrap;
+		gap: var(--space-xs);
 	}
 	.pct {
 		color: var(--color-text-secondary);

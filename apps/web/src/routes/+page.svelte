@@ -75,13 +75,13 @@
 />
 
 {#if !showLanding}
-	<div class="landing-loading">
+	<main class="landing-loading" id="main-content">
 		<span>{m('landing.loading')}</span>
-	</div>
+	</main>
 {:else}
 <PublicHeader overlay />
 
-<main class="hero">
+<main class="hero" id="main-content">
 	<h1>{m('landing.heroLine1')}<br />{m('landing.heroLine2')}<br />{m('landing.heroLine3')}</h1>
 	<p class="hero-sub">
 		{m('landing.heroSub')}

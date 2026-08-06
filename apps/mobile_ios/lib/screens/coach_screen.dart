@@ -10,7 +10,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ActivityLoaderKind, FullBodyLoader, ListSkeleton;
+import 'package:ui_kit/ui_kit.dart'
+    show
+        AppSemanticColors,
+        ActivityLoaderKind,
+        FullBodyLoader,
+        ListSkeleton,
+        motionScrollTo,
+        reduceMotion,
+        syncMotionLoop;
 
 import '../backend_timeout.dart';
 import '../auth_error.dart';
@@ -404,11 +412,11 @@ class _CoachScreenState extends State<CoachScreen> {
 
   Future<void> _scrollToBottom() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
-    if (!_scrollCtrl.hasClients) return;
-    _scrollCtrl.animateTo(
+    if (!mounted || !_scrollCtrl.hasClients) return;
+    await motionScrollTo(
+      context,
+      _scrollCtrl,
       _scrollCtrl.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
     );
   }
 
@@ -1645,15 +1653,38 @@ class _Dot extends StatefulWidget {
 
 class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
-  bool _started = false;
+  bool _scheduled = false;
 
   @override
   void initState() {
     super.initState();
+    // Off-tier deliberately: a typing rhythm is content, not chrome timing.
+    // See `AppMotion` in ui_kit for why there is no rung for this role.
     _c = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (reduceMotion(context)) {
+      syncMotionLoop(context, _c);
+      return;
+    }
+    if (_scheduled) {
+      syncMotionLoop(context, _c, reverse: true);
+      return;
+    }
+    // The three dots are staggered so the row reads as a wave rather than a
+    // blink, which `syncMotionLoop` has no notion of — hence the delay here
+    // and the seam call inside it.
+    _scheduled = true;
+    Future.delayed(Duration(milliseconds: widget.delayMs), () {
+      if (!mounted) return;
+      syncMotionLoop(context, _c, reverse: true);
+    });
   }
 
   @override
@@ -1671,23 +1702,10 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    // WCAG 2.3.3 (Animation from Interactions) — honour the OS
-    // "reduce motion" setting: render a static dot instead of the
-    // repeating fade so a vestibular-sensitive user isn't subjected
-    // to the looping typing indicator.
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduceMotion) {
-      if (_c.isAnimating) _c.stop();
-      return _dot(cs.onSurfaceVariant);
-    }
-    if (!_started) {
-      _started = true;
-      Future.delayed(Duration(milliseconds: widget.delayMs), () {
-        if (!mounted) return;
-        if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) return;
-        _c.repeat(reverse: true);
-      });
-    }
+    // WCAG 2.3.3 (Animation from Interactions) — a parked controller sits at
+    // 0.3 opacity, which reads as a disabled dot rather than a still one, so
+    // the reduced pose is a full-strength static dot instead.
+    if (reduceMotion(context)) return _dot(cs.onSurfaceVariant);
     return FadeTransition(
       opacity: Tween<double>(begin: 0.3, end: 1).animate(_c),
       child: _dot(cs.onSurfaceVariant),

@@ -23,6 +23,7 @@ import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
 import '../widgets/club_photos.dart';
+import '../widgets/collapsing_tab_host.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
 import '../widgets/event_form_sheet.dart';
@@ -392,20 +393,18 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             ),
           ),
         ],
-        bottom: AppTabBar(
-          controller: _tabs,
-          labels: [
-            AppLocalizations.of(context).clubDetailTabFeed,
-            AppLocalizations.of(context).clubDetailTabEvents,
-            AppLocalizations.of(context).clubDetailTabMembers,
-            AppLocalizations.of(context).clubDetailTabRoutes,
-            AppLocalizations.of(context).clubDetailTabTemplates,
-            AppLocalizations.of(context).clubDetailTabPhotos,
-          ],
-        ),
       ),
-      body: Column(
-        children: [
+      body: CollapsingTabHost(
+        controller: _tabs,
+        labels: [
+          AppLocalizations.of(context).clubDetailTabFeed,
+          AppLocalizations.of(context).clubDetailTabEvents,
+          AppLocalizations.of(context).clubDetailTabMembers,
+          AppLocalizations.of(context).clubDetailTabRoutes,
+          AppLocalizations.of(context).clubDetailTabTemplates,
+          AppLocalizations.of(context).clubDetailTabPhotos,
+        ],
+        header: [
           _buildHero(theme, c),
           if (_error != null)
             Padding(
@@ -423,19 +422,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 ),
               ),
             ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabs,
-              children: [
-                _buildFeedTab(theme, c),
-                _buildEventsTab(theme, c),
-                _buildMembersTab(theme, c),
-                _buildRoutesTab(theme, c),
-                _buildTemplatesTab(theme, c),
-                _buildPhotosTab(theme, c),
-              ],
-            ),
-          ),
+        ],
+        tabs: [
+          _buildFeedTab(theme, c),
+          _buildEventsTab(theme, c),
+          _buildMembersTab(theme, c),
+          _buildRoutesTab(theme, c),
+          _buildTemplatesTab(theme, c),
+          _buildPhotosTab(c),
         ],
       ),
     );
@@ -579,6 +573,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         children: [
           if (_upcoming.isNotEmpty) _buildNextEventCard(theme, c, _upcoming.first),
@@ -885,37 +880,21 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     // matches, so gating on isAdmin locked the role out on mobile only.
     final showCreate = c.isEventOrganiser;
     if (_upcoming.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                showCreate
-                    ? AppLocalizations.of(context).clubDetailNoEventsAdmin
-                    : AppLocalizations.of(context).clubDetailNoEvents,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (showCreate) ...[
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () => _createEvent(c),
-                  icon: const Icon(Icons.add),
-                  label: Text(AppLocalizations.of(context).clubDetailCreateEvent),
-                ),
-              ],
-            ],
-          ),
-        ),
+      return EmptyState(
+        icon: Icons.event_outlined,
+        title: showCreate
+            ? AppLocalizations.of(context).clubDetailNoEventsAdmin
+            : AppLocalizations.of(context).clubDetailNoEvents,
+        ctaLabel: showCreate
+            ? AppLocalizations.of(context).clubDetailCreateEvent
+            : null,
+        onCta: showCreate ? () => _createEvent(c) : null,
       );
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: _upcoming.length + (showCreate ? 1 : 0),
         separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -1116,6 +1095,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           if (c.isAdmin && _pending.isNotEmpty) ...[
@@ -1396,10 +1376,30 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     final canBuild = c.isAdmin &&
         widget.apiClient != null &&
         widget.routeStore != null;
-    final buildCta = canBuild
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: SizedBox(
+    if (_routes.isEmpty) {
+      return EmptyState(
+        icon: Icons.route_outlined,
+        title: canBuild
+            ? AppLocalizations.of(context).clubDetailRoutesEmptyBuild
+            : c.isAdmin
+                ? AppLocalizations.of(context).clubDetailRoutesEmptyAdmin
+                : AppLocalizations.of(context).clubDetailRoutesEmpty,
+        ctaLabel:
+            canBuild ? AppLocalizations.of(context).clubDetailBuildRoute : null,
+        onCta: canBuild ? () => _buildClubRoute(c) : null,
+        ctaIcon: Icons.add_road,
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadRoutes,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _routes.length + (canBuild ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, index) {
+          if (canBuild && index == 0) {
+            return SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 key: const Key('club-detail-build-route'),
@@ -1407,46 +1407,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 icon: const Icon(Icons.add_road),
                 label: Text(AppLocalizations.of(context).clubDetailBuildRoute),
               ),
-            ),
-          )
-        : null;
-    if (_routes.isEmpty) {
-      return Column(
-        children: [
-          if (buildCta != null) buildCta,
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Text(
-                  canBuild
-                      ? AppLocalizations.of(context).clubDetailRoutesEmptyBuild
-                      : c.isAdmin
-                          ? AppLocalizations.of(context)
-                              .clubDetailRoutesEmptyAdmin
-                          : AppLocalizations.of(context).clubDetailRoutesEmpty,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return Column(
-      children: [
-        if (buildCta != null) buildCta,
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadRoutes,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _routes.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) {
+            );
+          }
+          final i = index - (canBuild ? 1 : 0);
           final r = _routes[i];
           return Card(
             child: ListTile(
@@ -1491,11 +1454,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             ),
           );
         },
-            ),  // ListView.separated
-          ),    // RefreshIndicator
-        ),      // Expanded
-      ],
-    );          // Column
+      ),
+    );
   }
 
   Widget _buildTemplatesTab(ThemeData theme, ClubView c) {
@@ -1510,22 +1470,17 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     if (_templates.isEmpty &&
         _sessionTemplates.isEmpty &&
         _gymRoutineTemplates.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            c.isAdmin ? l10n.clubDetailNoTemplatesAdmin : l10n.clubDetailNoTemplates,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
+      return EmptyState(
+        icon: Icons.assignment_outlined,
+        title: c.isAdmin
+            ? l10n.clubDetailNoTemplatesAdmin
+            : l10n.clubDetailNoTemplates,
       );
     }
     return RefreshIndicator(
       onRefresh: _loadTemplates,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           for (final t in _templates) ...[
@@ -1663,23 +1618,18 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     );
   }
 
-  Widget _buildPhotosTab(ThemeData theme, ClubView c) {
+  Widget _buildPhotosTab(ClubView c) {
     // The ClubInviteScreen redemption path omits apiClient; the gallery
     // needs a client to fetch / upload, so fall back to a quiet message.
     final api = widget.apiClient;
     if (api == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            AppLocalizations.of(context).clubPhotosEmpty,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-        ),
+      return EmptyState(
+        icon: Icons.photo_library_outlined,
+        title: AppLocalizations.of(context).clubPhotosEmpty,
       );
     }
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       children: [
         ClubPhotos(
@@ -1696,13 +1646,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 /// Lines of club description the hero shows before offering the rest in a
 /// sheet.
 ///
-/// The hero is a fixed band above `Expanded(TabBarView)` in a non-scrolling
-/// `Column`, so an unbounded description does not merely read long — it takes
-/// the tab bodies' height and then overflows the `Column`. `clubs.description`
-/// carries no DB length constraint, and even at the composer's cap the
-/// paragraph measured 440 dp against real Roboto on a 360 dp phone, leaving
-/// the six tabs 32 dp and overflowing outright from 1.15x text scale
-/// (decisions § 537). Clamping the band's one unbounded child bounds the band.
+/// The hero scrolls away since § 545, so an over-long description can no longer
+/// overflow — but at rest it still takes the tab bodies' height, and at the
+/// composer's cap the paragraph measured 440 dp against real Roboto on a 360 dp
+/// phone, leaving the six tabs 32 dp (decisions § 537). Clamping the band's one
+/// unbounded child is what keeps the tabs on screen without a scroll.
 const int kClubDescriptionMaxLines = 3;
 
 /// The hero's club description: clamped to [kClubDescriptionMaxLines] with the

@@ -95,9 +95,14 @@ test.describe('/share/run/[id] — anon', () => {
 			'Threkir'
 		);
 		// Per-run og:image is the prerendered PNG under /og/run/<id>.png.
+		// The unfurl image is ABSOLUTE (§ 546): a remote crawler fetches it
+		// off-site, so a root-relative value has no origin to resolve against.
+		// Asserted as a suffix rather than a literal — `PUBLIC_SITE_URL` is unset
+		// locally and set on preview / prod, so the host is env-dependent while
+		// "absolute, ending at this entity's path" is not (§ 500).
 		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
 			'content',
-			`/og/run/${RUNNER_PUBLIC_RUN_ID}.png`
+			new RegExp(`^https?://.*/og/run/${RUNNER_PUBLIC_RUN_ID}\\.png$`)
 		);
 		await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute(
 			'content',
@@ -113,7 +118,7 @@ test.describe('/share/run/[id] — anon', () => {
 		);
 		await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute(
 			'content',
-			`/og/run/${RUNNER_PUBLIC_RUN_ID}.png`
+			new RegExp(`^https?://.*/og/run/${RUNNER_PUBLIC_RUN_ID}\\.png$`)
 		);
 	});
 

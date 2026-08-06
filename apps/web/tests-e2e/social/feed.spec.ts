@@ -87,7 +87,7 @@ test.describe('/social?tab=feed — feed surface', () => {
 		// the time Cycle is clicked (otherwise the click can race the
 		// initial load and the re-fetch never fires).
 		await expect(page.locator('article').first()).toBeVisible({ timeout: 10_000 });
-		await page.getByRole('button', { name: 'Cycle' }).click();
+		await page.getByRole('button', { name: 'Cycle', exact: true }).click();
 		await expect(
 			page.getByRole('heading', { name: 'No matches' })
 		).toBeVisible({ timeout: 10_000 });
@@ -102,7 +102,10 @@ test.describe('/social?tab=feed — feed surface', () => {
 		// planted Run vanishing under the Run filter.
 		await page.goto('/social?tab=feed');
 		await expect(page.locator('article').first()).toBeVisible({ timeout: 10_000 });
-		await page.getByRole('button', { name: 'Run' }).click();
+		// `exact`, because accessible-name matching is substring by default and the
+		// activity vocabulary calls `hike` "Trail run" — so a bare 'Run' matches two
+		// of these chips.
+		await page.getByRole('button', { name: 'Run', exact: true }).click();
 		// At least one article still renders + it shows the runner.
 		await expect(page.locator('article').first()).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByText(/Jared/).first()).toBeVisible();

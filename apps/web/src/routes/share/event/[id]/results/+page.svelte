@@ -101,7 +101,7 @@
 	<meta name="description" content={m('checkpoint.publicSplits')} />
 </svelte:head>
 
-<div class="results-page">
+<main class="results-page" id="main-content">
 	{#if loading}
 		<p class="muted">{m('checkpoint.publicLoading')}</p>
 	{:else if notFound}
@@ -151,7 +151,7 @@
 			</div>
 		{/if}
 	{/if}
-</div>
+</main>
 
 <style>
 	.results-page {

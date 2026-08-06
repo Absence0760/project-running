@@ -95,6 +95,50 @@ merits case, but consistency with the four siblings would have been enough.
 `seo_render_map_guard.test.ts` now fails if this table and the routes drift
 apart in either direction.
 
+**Calling a share-canonical builder is not a fold.** The builder takes its base
+as a parameter precisely so the same one path definition serves a `<head>`
+canonical (against `PUBLIC_SITE_URL`) *and* a copy-to-clipboard link (against
+`location.origin`) — decisions §520. `/recap/[year]` and `/recap/[year]/[month]`
+call `buildRecapShareCanonical` for the copy-link only and belong in **no** row
+above: a recap has no share id until the runner publishes one, so there is
+nothing to canonical onto. The guard's fold predicate therefore requires the
+`<link rel="canonical">` as well as the builder call (§546).
+
+## Share and unfurl-image paths
+
+Every entity's public path is defined **once**, in a builder that takes the base
+as a parameter. That covers two paths per entity, not one:
+
+| Path | Builder | Home |
+|---|---|---|
+| `/share/run/[id]` | `buildRunShareCanonical` | `share_meta.ts` |
+| `/og/run/[id].png` | `buildRunOgImageUrl` | `share_meta.ts` |
+| `/share/route/[id]` | `buildRouteShareCanonical` | `share_meta.ts` |
+| `/og/route/[id].png` | `buildRouteOgImageUrl` | `share_meta.ts` |
+| `/share/badge/[id]` | `buildBadgeShareCanonical` | `share_badge_meta.ts` |
+| `/og/badge/[id].png` | `buildBadgeOgImageUrl` | `share_badge_meta.ts` |
+| `/recap/share/[id]` | `buildRecapShareCanonical` | `share_recap_meta.ts` |
+| `/og/recap/[id].png` | `buildRecapOgImageUrl` | `share_recap_meta.ts` |
+| `/share/{event,profile,club,race,session,workout}/…` | `build<X>ShareCanonical` | `share_<x>_meta.ts` |
+
+Note the recap asymmetry: its share page is `/recap/share/[id]` (it predates the
+`/share/<entity>/` family) while its unfurl image *is* under `/og/<entity>/`.
+The two paths are independent — flattening either onto the other's shape 404s.
+
+**An `og:image` must be absolute.** It is fetched by a remote crawler off-site,
+so unlike an in-app `href` it genuinely can get the origin wrong; a page that
+advertises the same image at two URLs (absolute in its JSON-LD, root-relative in
+its `og:image`) fails invisibly. `share_url_source_guard.test.ts` registers every
+site that assembles a share **or** unfurl-image path with an exact count, and
+separately fails any root-relative `/og/<entity>/` in markup. Root-relative
+`/share/…` **hrefs** stay out of scope (they are in-app navigations and cannot
+get the origin wrong — decisions §531), pinned by a must-spare fixture.
+
+The two rasterised card palettes both share builders paint with live in
+`lib/share/og_card_palette.ts` — one light (run / route / badge unfurls) and one
+dark (recap unfurl + the in-app recap share PNG), each ink carrying its measured
+ratio and the ground it was measured against.
+
 ## The shared entity-SSR Lambda
 
 `apps/web/lambda/share-entity/` — **one HTML-only Lambda** dispatching the

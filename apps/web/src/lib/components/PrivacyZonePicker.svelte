@@ -4,7 +4,11 @@
 	import maplibregl from '$lib/routes/maplibre';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import {
+		basemapIsDarkFromEnv,
+		mapStyleUrlFromEnv as mapStyleUrl,
+	} from '$lib/routes/map-style.svelte';
+	import { mapZoneBoundary } from '$lib/routes/basemap_contrast';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import type { PrivacyZone } from '$lib/routes/privacy';
 	import { m } from '$lib/i18n/store.svelte';
@@ -33,6 +37,16 @@
 	// the affirmative act under ePrivacy Art 5(3).
 	let mapConsented = $state(hasAcceptedConsent());
 
+	const prefersDark =
+		typeof window !== 'undefined' &&
+		window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+	// The ground the zone circle is drawn over, which is the basemap and not
+	// the OS theme — the map-style preference decouples the two in both
+	// directions (§ 526). Read at draw time rather than at module scope: the
+	// preference signal is set by the root layout on mount.
+	const darkBasemap = $derived(basemapIsDarkFromEnv(PUBLIC_MAPTILER_KEY, prefersDark));
+
 	onMount(() => {
 		if (mapConsented) initMap();
 	});
@@ -46,9 +60,6 @@
 
 	function initMap() {
 		if (map || !mapEl) return;
-		const prefersDark =
-			typeof window !== 'undefined' &&
-			window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 		map = new maplibregl.Map({
 			container: mapEl,
@@ -81,7 +92,7 @@
 		lng = nextLng;
 		if (!map) return;
 		if (!marker) {
-			marker = new maplibregl.Marker({ color: '#dc2626', draggable: true })
+			marker = new maplibregl.Marker({ color: mapZoneBoundary(darkBasemap), draggable: true })
 				.setLngLat([nextLng, nextLat])
 				.addTo(map);
 			marker.on('dragend', () => {
@@ -127,7 +138,7 @@
 				type: 'fill',
 				source: 'zone-circle',
 				paint: {
-					'fill-color': '#dc2626',
+					'fill-color': mapZoneBoundary(darkBasemap),
 					'fill-opacity': 0.18,
 				},
 			});
@@ -136,7 +147,7 @@
 				type: 'line',
 				source: 'zone-circle',
 				paint: {
-					'line-color': '#dc2626',
+					'line-color': mapZoneBoundary(darkBasemap),
 					'line-width': 2,
 				},
 			});

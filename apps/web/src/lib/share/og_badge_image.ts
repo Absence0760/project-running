@@ -8,15 +8,16 @@
 import { englishBadge, type AchievementTier } from '../social/badges';
 import { formatDateStable } from './share_meta';
 import { xmlEscape } from './og_run_image';
+import { OG_CARD_LIGHT } from './og_card_palette';
 
 const W = 1200;
 const H = 630;
 const PAD = 40;
 
-const BG = '#ffffff';
-const BRAND = '#3b82f6';
-const STAT_FILL = '#0f172a';
-const META_FILL = '#64748b';
+const BG = OG_CARD_LIGHT.bg;
+const BRAND = OG_CARD_LIGHT.brand;
+const STAT_FILL = OG_CARD_LIGHT.ink;
+const META_FILL = OG_CARD_LIGHT.muted;
 
 const TIER_COLOR: Record<AchievementTier, string> = {
 	bronze: '#b08d57',

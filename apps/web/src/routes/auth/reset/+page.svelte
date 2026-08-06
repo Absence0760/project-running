@@ -87,7 +87,7 @@
 		</a>
 	</header>
 
-	<main class="reset-main">
+	<main class="reset-main" id="main-content">
 		<div class="reset-card">
 			<p class="kicker">{m('authReset.kicker')}</p>
 			<h1>{m('authReset.heading')}</h1>

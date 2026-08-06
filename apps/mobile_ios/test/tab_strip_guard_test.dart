@@ -28,6 +28,12 @@ const _hosts = <String>[
   'lib/screens/club_detail_screen.dart',
 ];
 
+/// `profile` and `club_detail` reach the strip through the shared
+/// hero-scrolls-away host rather than building it inline (decisions § 545), so
+/// they satisfy the guard indirectly — and the host itself is guarded, so the
+/// indirection cannot become an escape hatch.
+const _stripHost = 'lib/widgets/collapsing_tab_host.dart';
+
 /// A `TabBar(` construction. `TabBarView(` and `TabBarTheme(` must not match.
 final _tabBar = RegExp(r'\bTabBar\(');
 
@@ -49,9 +55,16 @@ void main() {
   });
 
   test('every tab host takes the shared strip', () {
+    expect(File(_stripHost).readAsStringSync(), contains('AppTabBar('),
+        reason: '$_stripHost stopped building the shared strip, so the screens '
+            'that delegate to it have no strip at all');
     for (final path in _hosts) {
-      expect(File(path).readAsStringSync(), contains('AppTabBar('),
-          reason: '$path builds its own tab strip');
+      final src = File(path).readAsStringSync();
+      expect(
+        src.contains('AppTabBar(') || src.contains('CollapsingTabHost('),
+        isTrue,
+        reason: '$path builds its own tab strip',
+      );
     }
   });
 

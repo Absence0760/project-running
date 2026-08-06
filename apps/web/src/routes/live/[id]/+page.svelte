@@ -841,6 +841,10 @@
 		{/if}
 	</header>
 
+	<!-- Shell-less routes get no <main> from +layout.svelte, so each one owns
+	     its landmark — every /share/* sibling already does. Without it this
+	     page shipped no main region at all (WCAG 1.3.1). -->
+	<main id="main-content">
 	{#if status === 'not-found'}
 		<div class="live-empty">
 			<div class="live-empty-icon" aria-hidden="true">
@@ -1061,6 +1065,7 @@
 			{/if}
 		</div>
 	{/if}
+	</main>
 </div>
 
 <style>
@@ -1069,6 +1074,21 @@
 		flex-direction: column;
 		height: 100vh;
 		background: var(--color-bg);
+	}
+
+	/* The landmark sits between .live-page's column and the rows that depend on
+	 * it — .live-map-wrap is `flex: 1` against the page height — so it has to
+	 * carry the column itself, or the map resolves against nothing and its
+	 * controls land off-screen. `min-width: 0` for the § 535 reason: a flex
+	 * item defaults to `min-width: auto` and floors at its content's
+	 * min-content width, which is the page ceasing to be a function of the
+	 * viewport. */
+	.live-page > main {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		min-width: 0;
 	}
 
 	.live-header {
@@ -1259,6 +1279,12 @@
 		display: flex;
 		gap: var(--space-2xl);
 		align-items: center;
+		/* Independent values, so a row that no longer fits should reflow rather
+		 * than push the strip's padding box open: without these the row sits at
+		 * its min-content width and overflows the strip it lives in. */
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		min-width: 0;
 	}
 
 	.live-stat {
@@ -1329,6 +1355,8 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: 0 var(--space-2xl) var(--space-md);
+		flex-wrap: wrap;
+		min-width: 0;
 	}
 	.course-progress-track {
 		flex: 1;

@@ -1900,7 +1900,7 @@
 		background: var(--color-bg-tertiary);
 	}
 	.result-row.kept {
-		box-shadow: inset 3px 0 0 var(--color-route-pinned);
+		box-shadow: inset calc(3px * var(--dir-sign)) 0 0 var(--color-route-pinned);
 	}
 	.result-kept {
 		font-size: 0.95rem;
@@ -1948,7 +1948,7 @@
 	 * an inset box-shadow so it layers over the featured gold border
 	 * instead of clobbering it. */
 	.result-row.hovered {
-		box-shadow: inset 3px 0 0 var(--color-primary);
+		box-shadow: inset calc(3px * var(--dir-sign)) 0 0 var(--color-primary);
 	}
 	.result-row.featured {
 		border-inline-start: 3px solid var(--color-crown);
@@ -1997,7 +1997,12 @@
 		}
 		.sidebar-toggle {
 			top: 0;
-			inset-inline-start: 50%;
+			/* Physical `left` on purpose: this is the direction-agnostic
+			   centering pair. `inset-inline-start: 50%` puts the element's
+			   inline-start edge at the centre, which under RTL is its RIGHT
+			   edge — and the physical translateX then shifts it a further half
+			   width the same way, landing the handle a full width off-centre. */
+			left: 50%;
 			transform: translateX(-50%);
 			width: 48px;
 			height: 22px;
@@ -2173,7 +2178,7 @@
 		min-width: 0;
 	}
 	:global(.heatmap-cluster-popup .cluster-route.kept) {
-		box-shadow: inset 3px 0 0 var(--color-route-pinned);
+		box-shadow: inset calc(3px * var(--dir-sign)) 0 0 var(--color-route-pinned);
 	}
 	:global(.heatmap-cluster-popup .cluster-route.kept .cluster-route-name) {
 		color: var(--color-route-pinned);

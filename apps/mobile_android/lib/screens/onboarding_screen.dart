@@ -2,6 +2,8 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:ui_kit/ui_kit.dart'
+    show AppMotion, motionDuration, reduceMotion;
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
@@ -74,10 +76,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _next() async {
     if (_page < _pageCount - 1) {
-      _controller.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      // `nextPage` is a driven scroll, which the platform reduce-motion flag
+      // does not reach (`AnimationController.unbounded` defaults to
+      // `AnimationBehavior.preserve`) and which asserts against a zero
+      // duration — so the reduced path has to be a jump, not a faster slide.
+      if (reduceMotion(context)) {
+        _controller.jumpToPage(_page + 1);
+      } else {
+        _controller.nextPage(
+          duration: AppMotion.standard,
+          curve: AppMotion.curveStandard,
+        );
+      }
     } else {
       // Persist the privacy choice locally (drives is_public on every
       // run save) AND push it to the universal bag so it's an explicit
@@ -115,10 +125,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final infoPages = _infoPages(l10n);
-    // WCAG 2.3.3 — honour the OS "reduce motion" setting: collapse the
-    // page-indicator width tween to an instant swap when animations
-    // are disabled.
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final indicatorDuration = motionDuration(context, AppMotion.brief);
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -193,8 +200,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(_pageCount, (i) {
                 return AnimatedContainer(
-                  duration:
-                      reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
+                  duration: indicatorDuration,
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   width: i == _page ? 24 : 8,
                   height: 8,

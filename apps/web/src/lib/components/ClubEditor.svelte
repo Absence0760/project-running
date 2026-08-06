@@ -6,6 +6,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { untrack } from 'svelte';
 	import { trackDirty } from '$lib/core/form_dirty';
+	import { TEXT_LIMITS } from '$lib/core/text_limits';
 	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
 	interface Props {
@@ -119,7 +120,7 @@
 			bind:value={name}
 			placeholder={m('clubEditor.namePlaceholder')}
 			required
-			maxlength="80"
+			maxlength={TEXT_LIMITS.clubName}
 		/>
 	</label>
 
@@ -129,13 +130,18 @@
 			bind:value={description}
 			placeholder={m('clubEditor.descriptionPlaceholder')}
 			rows="4"
-			maxlength="600"
+			maxlength={TEXT_LIMITS.clubDescription}
 		></textarea>
 	</label>
 
 	<label>
 		<span>{m('clubEditor.location')} <span class="optional">{m('clubEditor.optional')}</span></span>
-		<input type="text" bind:value={location} placeholder={m('clubEditor.locationPlaceholder')} maxlength="80" />
+		<input
+			type="text"
+			bind:value={location}
+			placeholder={m('clubEditor.locationPlaceholder')}
+			maxlength={TEXT_LIMITS.clubLocationLabel}
+		/>
 	</label>
 
 	<fieldset>

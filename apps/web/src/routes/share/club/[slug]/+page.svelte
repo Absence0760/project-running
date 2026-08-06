@@ -41,7 +41,10 @@
 
 <SharePageShell>
 	{#if hasClub}
-		<section class="hero">
+		<!-- The landmark rides the hero rather than a wrapper: .hero is a flex
+		     child of SharePageShell's .share-page, so wrapping it would move
+		     the flex child and reflow the page. -->
+		<main class="hero" id="main-content">
 			<div class="avatar-wrap">
 				<Avatar name={data.club?.name ?? null} url={data.club?.avatar_url ?? null} size="96px" font="2.2rem" bg="seed" />
 			</div>
@@ -56,9 +59,9 @@
 			<div class="hero-actions">
 				<a class="btn btn-primary" href={appHref}>{m('shareRun.goToThrekir')}</a>
 			</div>
-		</section>
+		</main>
 	{:else}
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareRun.notFoundKicker')}</p>
 				<h1>{m('shareClub.notFoundTitle')}</h1>

@@ -1,6 +1,12 @@
 import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import { lookupSharedBadge } from '$lib/share/share_badge_lookup';
+
+// Canonical host for the absolute og:image URL, same source + fallback as the
+// sibling share loaders and /sitemap.xml. An og:image is fetched by a remote
+// crawler, so it cannot be root-relative the way an in-app href can.
+const DEFAULT_SITE_URL = 'https://threkir.com';
 
 // Per-request SSR via apps/web/lambda/share-badge in production. This PageLoad
 // runs under the SvelteKit dev server so /share/badge/[id] works locally
@@ -15,5 +21,10 @@ export const load: PageLoad = async ({ params }) => {
 			? { supabaseUrl: PUBLIC_SUPABASE_URL, supabaseAnonKey: PUBLIC_SUPABASE_ANON_KEY }
 			: null,
 	);
-	return { id: params.id, badge: lookup.badge, displayName: lookup.displayName };
+	return {
+		id: params.id,
+		badge: lookup.badge,
+		displayName: lookup.displayName,
+		siteUrl: env.PUBLIC_SITE_URL || DEFAULT_SITE_URL,
+	};
 };

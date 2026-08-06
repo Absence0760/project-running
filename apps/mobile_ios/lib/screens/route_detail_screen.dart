@@ -8,7 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatGrid, StatTile, StatusPill;
+import 'package:ui_kit/ui_kit.dart'
+    show AppSemanticColors, StatGrid, StatTile, StatusPill, motionScrollTo;
 
 import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
@@ -246,11 +247,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   void _revealMap() {
     if (!_scrollController.hasClients) return;
     try {
-      _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      motionScrollTo(context, _scrollController, 0);
     } catch (e) {
       debugPrint('route detail: reveal map for marker placement failed: $e');
     }

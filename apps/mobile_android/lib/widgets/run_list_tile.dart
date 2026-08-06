@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/date_format.dart';
+import '../activity_type_labels.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
@@ -168,7 +169,7 @@ class RunListTile extends StatelessWidget {
     );
 
     final semanticsLabel = [
-      '$dist ${activity.label.toLowerCase()}',
+      '$dist ${activityTypeLabel(l10n, activity).toLowerCase()}',
       date,
       dur,
       trailingMetric,
@@ -210,7 +211,7 @@ class RunListTile extends StatelessWidget {
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              '$date  ·  $dur  ·  ${activity.label.toLowerCase()}$vertLabel',
+              '$date  ·  $dur  ·  ${activityTypeLabel(l10n, activity).toLowerCase()}$vertLabel',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

@@ -3646,19 +3646,27 @@ class AppLocalizationsDe extends AppLocalizations {
   String get feedFindPeople => 'Personen finden';
 
   @override
+  String runNotificationPausedTitle(String activity) {
+    return '$activity • pausiert';
+  }
+
+  @override
+  String get activityTypeRun => 'Laufen';
+
+  @override
+  String get activityTypeWalk => 'Gehen';
+
+  @override
+  String get activityTypeHike => 'Traillauf';
+
+  @override
+  String get activityTypeCycle => 'Radfahren';
+
+  @override
+  String get activityTypeStroller => 'Kinderwagen';
+
+  @override
   String get feedActivityAll => 'Alle';
-
-  @override
-  String get feedActivityRun => 'Lauf';
-
-  @override
-  String get feedActivityWalk => 'Gehen';
-
-  @override
-  String get feedActivityCycle => 'Radfahren';
-
-  @override
-  String get feedActivityHike => 'Wandern';
 
   @override
   String get feedActivityLift => 'Kraft';
@@ -5509,7 +5517,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ruhetag — wenn du dich bewegen musst, geh spazieren oder dehne dich.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'KI-Coach';
 
   @override
   String get coachNewConversation => 'Neue Unterhaltung';
@@ -6920,7 +6928,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get discardChangesDiscard => 'Verwerfen';
 
   @override
-  String get prefsTitle => 'Einstellungen';
+  String get prefsTitle => 'Voreinstellungen';
 
   @override
   String get prefsUnitMetric => 'km, m';
@@ -6998,18 +7006,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
     return '$pace $paceLabel — Tempoabweichungs-Warnungen sprechen bei 30 s+ Abweichung';
   }
-
-  @override
-  String get prefsActivityRun => 'Laufen';
-
-  @override
-  String get prefsActivityWalk => 'Gehen';
-
-  @override
-  String get prefsActivityHike => 'Wandern';
-
-  @override
-  String get prefsActivityCycle => 'Radfahren';
 
   @override
   String get prefsPaceFormat => 'Tempoformat';
@@ -10504,7 +10500,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sessionRunSwitchSides => 'Seite wechseln';
 
   @override
-  String get coachingTitle => 'Coaching';
+  String get coachingTitle => 'Athleten & Trainer';
 
   @override
   String get coachingLede =>

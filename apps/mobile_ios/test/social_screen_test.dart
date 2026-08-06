@@ -61,7 +61,7 @@ Widget _wrap(SocialScreen child) => MaterialApp(
       home: child,
     );
 
-Future<SocialScreen> _socialScreen({int initialTab = 0}) async {
+Future<SocialScreen> _socialScreen({SocialTab initialTab = SocialTab.feed}) async {
   return SocialScreen(
     api: ApiClient(),
     social: SocialService(),
@@ -136,15 +136,15 @@ void main() {
     expect(tabBar.tabAlignment, TabAlignment.start);
   });
 
-  testWidgets('initialTab=3 selects the Discover tab on first frame',
+  testWidgets('initialTab SocialTab.discover selects the Discover tab on first frame',
       (tester) async {
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 3)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: SocialTab.discover)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.controller!.index, 3);
   });
 
-  testWidgets('initialTab=0 (default) selects the Feed tab',
+  testWidgets('the default initialTab selects the Feed tab',
       (tester) async {
     // Bottom-nav default — fresh follower activity is the most-likely
     // reason a user taps Social, so Feed wins the default slot.
@@ -154,32 +154,47 @@ void main() {
     expect(tabBar.controller!.index, 0);
   });
 
-  testWidgets('initialTab=2 selects the Clubs tab on first frame',
+  testWidgets('initialTab SocialTab.clubs selects the Clubs tab on first frame',
       (tester) async {
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 2)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: SocialTab.clubs)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.controller!.index, 2);
   });
 
-  testWidgets('initialTab=1 selects the People tab on first frame',
+  testWidgets('initialTab SocialTab.people selects the People tab on first frame',
       (tester) async {
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 1)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: SocialTab.people)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
     expect(tabBar.controller!.index, 1);
   });
 
-  testWidgets('initialTab out-of-range clamps to a valid index',
-      (tester) async {
-    // Defensive: a future deep link that points at an unknown tab
-    // (e.g. ?tab=99 after a tab is added then removed) must NOT
-    // crash. Pin the clamp behaviour. Upper bound is now 4 (Challenges).
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 99)));
-    await tester.pump();
-    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.controller!.index, lessThanOrEqualTo(4));
-    expect(tabBar.controller!.index, greaterThanOrEqualTo(0));
+  // This replaces an out-of-range clamp test. `initialTab` was an int, and the
+  // clamp is what HID the § 490 bug rather than catching it: a stale
+  // `initialTab: 3` literal stayed IN RANGE after the tab set changed, so the
+  // notification bell opened the wrong tab in silence. With an enum, out of
+  // range is unrepresentable — so what is worth pinning instead is the
+  // property a clamp could never give: every value has its own tab, and the
+  // strip is exactly as long as the enum.
+  testWidgets('every SocialTab opens its own tab, and the strip is exactly as '
+      'long as the enum', (tester) async {
+    for (final tab in SocialTab.values) {
+      // Unmount first: pumping another SocialScreen straight over the previous
+      // one reuses the element, so the TabController built in initState (and
+      // with it initialIndex) survives and the next value silently reads as the
+      // last one's tab.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(_wrap(await _socialScreen(initialTab: tab)));
+      await tester.pump();
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      expect(tabBar.controller!.index, tab.index,
+          reason: '$tab did not open its own tab');
+      expect(tabBar.tabs.length, SocialTab.values.length,
+          reason: 'the strip and the enum disagree on how many tabs exist');
+    }
+    // Assert the population: an empty enum would satisfy the loop above.
+    expect(SocialTab.values.length, greaterThan(1));
   });
 
   testWidgets('the default Feed tab shows no FAB', (tester) async {
@@ -195,7 +210,7 @@ void main() {
     // The Clubs sub-tab (index 2) is the only one with a create surface;
     // SocialScreen hoists its FAB. The FAB resolves off the ClubsScreen
     // GlobalKey state, which binds via a scheduled post-frame rebuild.
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 2)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: SocialTab.clubs)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(FloatingActionButton), findsOneWidget);
@@ -204,7 +219,7 @@ void main() {
 
   testWidgets('switching from Clubs to Discover drops the FAB',
       (tester) async {
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 2)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: SocialTab.clubs)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(FloatingActionButton), findsOneWidget);
@@ -219,7 +234,7 @@ void main() {
   });
 
   testWidgets('the People tab shows no FAB', (tester) async {
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 1)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: SocialTab.people)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(FloatingActionButton), findsNothing);

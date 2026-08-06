@@ -4,6 +4,7 @@
 	import { m as t } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import type { YearInRunningRecap } from '$lib/runs/recap';
+	import { buildRecapOgImageUrl } from '$lib/share/share_recap_meta';
 
 	let { data } = $props();
 
@@ -53,6 +54,10 @@
 		recap ? t('recap.shareMetaDescription', { period: periodLabel }) : t('recap.shareNotFoundSub')
 	);
 
+	// Absolute, from the builder the Lambda-injected head also uses. A
+	// root-relative og:image is read by a REMOTE crawler (§ 546).
+	let ogImageUrl = $derived(buildRecapOgImageUrl(data.siteUrl, data.id));
+
 	// Read-only on the public page: a viewer (often anon) can't publish or
 	// re-share someone else's recap — the share + publish actions belong to the
 	// owner on /recap/[year]. So no onshare/onpublish passed to RecapView.
@@ -66,13 +71,13 @@
 	<meta property="og:description" content={description} />
 	<meta property="og:type" content="article" />
 	<meta property="og:site_name" content="Threkir" />
-	<meta property="og:image" content="/og/recap/{data.id}.png" />
+	<meta property="og:image" content={ogImageUrl} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
-	<meta name="twitter:image" content="/og/recap/{data.id}.png" />
+	<meta name="twitter:image" content={ogImageUrl} />
 </svelte:head>
 
 <SharePageShell>

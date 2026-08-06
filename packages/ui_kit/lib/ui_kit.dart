@@ -1,6 +1,7 @@
 /// Shared Flutter widgets for the Run app.
 library ui_kit;
 
+export 'src/motion.dart';
 export 'src/widgets/activity_loader.dart';
 export 'src/widgets/app_tab_bar.dart';
 export 'src/widgets/stat_tile.dart';

@@ -182,14 +182,14 @@ void main() {
       await _drain(tester);
     });
 
-    testWidgets('renders the Coach app-bar title', (tester) async {
+    testWidgets('renders the AI Coach app-bar title', (tester) async {
       await _pump(tester);
-      expect(find.text('Coach'), findsOneWidget);
+      expect(find.text('AI Coach'), findsOneWidget);
       await _drain(tester);
     });
 
     testWidgets(
-        'the consented view names Guided runs as a peer of Coach (#666 I7)',
+        'the consented view names Guided runs as a peer of AI Coach (#666 I7)',
         (tester) async {
       // Web reaches the guided-run library from a rail on `/coach`; on mobile
       // the library used to be filed under Settings -> Account. Pin the peer
@@ -209,7 +209,7 @@ void main() {
       // Assert the population: both peers are on the strip, and the current
       // one is the coach itself, so the pass cannot come from an empty strip.
       final peers = tester.widget<SurfacePeerStrip>(strip).peers;
-      expect(peers.map((p) => p.label).toList(), ['Coach', 'Guided runs']);
+      expect(peers.map((p) => p.label).toList(), ['AI Coach', 'Guided runs']);
       expect(peers.first.isCurrent, isTrue);
 
       await tester.tap(find.descendant(

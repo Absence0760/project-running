@@ -16,7 +16,8 @@ import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, StatTile;
+import 'package:ui_kit/ui_kit.dart'
+    show AppMotion, AppSemanticColors, StatTile, motionDuration;
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -28,6 +29,7 @@ import '../ble_treadmill.dart';
 import '../embedded_bests.dart';
 import '../goal_time.dart';
 import '../health_connect_exporter.dart';
+import '../activity_type_labels.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -2576,7 +2578,7 @@ class _RunScreenState extends State<RunScreen> {
           // each split replaces the previous row instead of stacking,
           // and the row auto-dismisses instead of demanding a swipe.
           _lockScreen.updateSplit(
-            title: _activityType.label,
+            title: activityTypeLabel(_l10n, _activityType),
             text: splitText,
           );
           if (widget.preferences.audioCues &&
@@ -2650,7 +2652,9 @@ class _RunScreenState extends State<RunScreen> {
         : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
 
     _lockScreen.update(
-      title: _manualPaused ? '${_activityType.label} • paused' : _activityType.label,
+      title: _manualPaused
+          ? _l10n.runNotificationPausedTitle(activityTypeLabel(_l10n, _activityType))
+          : activityTypeLabel(_l10n, _activityType),
       text: '$timeStr  •  $distanceStr  •  $paceStr',
       bigText:
           'Time: $timeStr\nDistance: $distanceStr\n${_activityType.usesSpeed ? "Speed" : "Pace"}: $paceStr',
@@ -3770,7 +3774,7 @@ class _RunScreenState extends State<RunScreen> {
                               children: [
                                 Icon(t.icon, size: 16),
                                 const SizedBox(width: 4),
-                                Text(t.label),
+                                Text(activityTypeLabel(_l10n, t)),
                               ],
                             ),
                             selected: selected,
@@ -4084,21 +4088,16 @@ class _RunScreenState extends State<RunScreen> {
                   Container(color: Colors.black.withValues(alpha: 0.45)),
                   Center(
                     // audit/accessibility (May 2026) High — WCAG
-                    // 2.3.3. Honour MediaQuery.disableAnimations so
-                    // the 350 ms scale + fade collapses to an
-                    // instant cut when the OS has reduced-motion on.
-                    // AnimatedSwitcher always animates (no
-                    // null-duration accepted), so we just feed it
-                    // Duration.zero — it still fires the right
-                    // build callbacks but skips the transition.
+                    // 2.3.3. AnimatedSwitcher always animates (no
+                    // null-duration accepted), so the reduced pose is
+                    // Duration.zero — it still fires the right build
+                    // callbacks but skips the transition.
                     child: AnimatedSwitcher(
-                      duration: MediaQuery.of(context).disableAnimations
-                          ? Duration.zero
-                          : const Duration(milliseconds: 350),
+                      duration: motionDuration(context, AppMotion.brief),
                       transitionBuilder: (child, anim) => ScaleTransition(
                         scale: Tween<double>(begin: 1.4, end: 1.0).animate(
                           CurvedAnimation(
-                              parent: anim, curve: Curves.easeOutCubic),
+                              parent: anim, curve: AppMotion.curveEmphasised),
                         ),
                         child: FadeTransition(opacity: anim, child: child),
                       ),

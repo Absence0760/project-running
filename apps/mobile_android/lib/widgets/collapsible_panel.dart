@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show AppMotion, reduceMotion;
 
 import '../l10n/gen/app_localizations.dart';
 
@@ -30,7 +31,6 @@ class _CollapsiblePanelState extends State<CollapsiblePanel> {
   late bool _expanded = widget.initiallyExpanded;
 
   static const _flickVelocity = 200.0;
-  static const _animationDuration = Duration(milliseconds: 260);
 
   void _toggle() => setState(() => _expanded = !_expanded);
 
@@ -84,22 +84,34 @@ class _CollapsiblePanelState extends State<CollapsiblePanel> {
                   ),
                 ),
               ),
-              AnimatedCrossFade(
-                duration: _animationDuration,
-                sizeCurve: Curves.easeOutCubic,
-                alignment: Alignment.topCenter,
-                crossFadeState: _expanded
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                firstChild: SizedBox(
+              // Reduce-motion skips the widget rather than passing it a zero
+              // duration: `RenderAnimatedSize` completes a zero-duration
+              // controller inside its own performLayout and asserts on
+              // re-dirtying itself mid-layout. Web's global net has the same
+              // shape for the same reason (0.01ms, not 0).
+              if (reduceMotion(context))
+                SizedBox(
                   width: double.infinity,
-                  child: widget.collapsedChild,
+                  child:
+                      _expanded ? widget.expandedChild : widget.collapsedChild,
+                )
+              else
+                AnimatedCrossFade(
+                  duration: AppMotion.brief,
+                  sizeCurve: AppMotion.curveEmphasised,
+                  alignment: Alignment.topCenter,
+                  crossFadeState: _expanded
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  firstChild: SizedBox(
+                    width: double.infinity,
+                    child: widget.collapsedChild,
+                  ),
+                  secondChild: SizedBox(
+                    width: double.infinity,
+                    child: widget.expandedChild,
+                  ),
                 ),
-                secondChild: SizedBox(
-                  width: double.infinity,
-                  child: widget.expandedChild,
-                ),
-              ),
               SizedBox(height: bottomSafe + 12),
             ],
           ),

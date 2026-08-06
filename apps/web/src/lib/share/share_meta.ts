@@ -118,6 +118,23 @@ export function buildRunShareCanonical(
 	return `${normaliseSiteUrl(base)}/share/run/${id}`;
 }
 
+/// Absolute URL of the per-run `og:image` PNG. Sibling of
+/// [buildRunShareCanonical] and defined here for the same reason § 520 gave
+/// for the canonical: the path is one definition and the BASE belongs to the
+/// caller. The run's own share page had spelled it three ways in one `<head>`
+/// — absolute inside the JSON-LD `primaryImageOfPage`, absolute in the
+/// Lambda-injected `og:image`, and root-relative in the SvelteKit `og:image`
+/// two lines above it. An `og:image` is read by a REMOTE crawler, so unlike an
+/// in-app `href` it genuinely can get the origin wrong; and a head that
+/// advertises two URLs for one image fails invisibly, exactly like § 531's
+/// sitemap `<loc>` disagreeing with the canonical it pointed at.
+export function buildRunOgImageUrl(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/og/run/${id}.png`;
+}
+
 /// The run's display name without the trailing " — Threkir" site suffix
 /// buildRunShareTitle appends — used as the JSON-LD `name` / breadcrumb
 /// leaf (which shouldn't carry the site tagline).
@@ -157,7 +174,7 @@ export function buildRunJsonLd(
 		url: canonical,
 		primaryImageOfPage: {
 			'@type': 'ImageObject',
-			url: `${base}/og/run/${opts.id}.png`,
+			url: buildRunOgImageUrl(base, opts.id),
 		},
 		breadcrumb: {
 			'@type': 'BreadcrumbList',
@@ -210,6 +227,16 @@ export function buildRouteShareCanonical(
 	return `${normaliseSiteUrl(base)}/share/route/${id}`;
 }
 
+/// Absolute URL of the per-route `og:image` PNG. Twin of
+/// [buildRunOgImageUrl]; see its comment for why an og:image path owes a
+/// builder where an in-app `href` does not.
+export function buildRouteOgImageUrl(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/og/route/${id}.png`;
+}
+
 /// Escape the three characters that let a string break out of a
 /// `<script type="application/ld+json">` block when the JSON is
 /// injected verbatim into HTML. `<` is the only strictly necessary
@@ -249,7 +276,7 @@ export function buildRouteJsonLd(
 		url: canonical,
 		primaryImageOfPage: {
 			'@type': 'ImageObject',
-			url: `${base}/og/route/${opts.id}.png`,
+			url: buildRouteOgImageUrl(base, opts.id),
 		},
 		breadcrumb: {
 			'@type': 'BreadcrumbList',

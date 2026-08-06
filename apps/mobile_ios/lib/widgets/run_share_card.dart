@@ -15,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../l10n/date_format.dart';
 import '../map_tile_readiness.dart';
+import '../activity_type_labels.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
@@ -415,7 +416,7 @@ class RunShareCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${activity.label} · ${formatDateMed(run.startedAt, activeLocaleTag)}',
+                '${activityTypeLabel(l10n, activity)} · ${formatDateMed(run.startedAt, activeLocaleTag)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(

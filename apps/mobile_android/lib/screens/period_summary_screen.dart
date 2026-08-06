@@ -555,8 +555,11 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
     final l10n = AppLocalizations.of(context);
     setState(() => _capturing = true);
     try {
-      await WidgetsBinding.instance.endOfFrame;
-      await Future.delayed(const Duration(milliseconds: 300));
+      // One frame, no sleep: this card is a solid Container of Text, so there
+      // is no asynchronous paint to wait on (§538 — the only two rasterisers
+      // that draw tiles use `MapTileReadiness`, and this is not one of them).
+      // The frame is for the `_capturing` rebuild, matching
+      // `finisher_certificate_card`, the other tile-free card.
       await WidgetsBinding.instance.endOfFrame;
 
       final boundary = _cardKey.currentContext!.findRenderObject()

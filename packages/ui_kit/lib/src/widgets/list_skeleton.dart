@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../motion.dart';
+
 /// Placeholder rows for a list surface that is still loading.
 ///
 /// A centred spinner tells the user only that something is happening; it
@@ -58,14 +60,7 @@ class _ListSkeletonState extends State<ListSkeleton>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduce) {
-      _controller
-        ..stop()
-        ..value = 0.5;
-    } else if (!_controller.isAnimating) {
-      _controller.repeat(reverse: true);
-    }
+    syncMotionLoop(context, _controller, restValue: 0.5, reverse: true);
   }
 
   @override

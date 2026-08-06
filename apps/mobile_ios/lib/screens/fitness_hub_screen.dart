@@ -43,6 +43,27 @@ import 'runs_screen.dart';
 /// `Runs · Routes · Plans · Races` (mirroring web's `RunSurfaceTabs`), so run
 /// planning has a named destination instead of hanging off tooltip-only
 /// glyphs (decisions § 488).
+/// The Fitness hub's sub-tabs, in strip order. Named + ordered rather than the
+/// raw int this was, for the reason § 490 records — see `SocialTab`.
+enum FitnessTab {
+  history,
+  runs,
+  gym,
+  nutrition;
+
+  String label(AppLocalizations l10n) => switch (this) {
+        // The hub's tabs are destinations, not kind filters: web's equivalent
+        // of this one IS `/history`, and the RunsScreen it mounts titles its
+        // own AppBar `navHistory` 48dp below. Naming the tab "All" put two
+        // different names for one surface directly on top of each other
+        // (#666 I9).
+        FitnessTab.history => l10n.navHistory,
+        FitnessTab.runs => l10n.fitnessTabRuns,
+        FitnessTab.gym => l10n.fitnessTabGym,
+        FitnessTab.nutrition => l10n.fitnessTabNutrition,
+      };
+}
+
 class FitnessHubScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final SocialService? social;
@@ -59,9 +80,8 @@ class FitnessHubScreen extends StatefulWidget {
   /// run starts on the keep-alive recorder page.
   final void Function(cm.Route route)? onStartRun;
 
-  /// Sub-tab to open on first mount. 0 = History, 1 = Runs, 2 = Gym,
-  /// 3 = Nutrition.
-  final int initialTab;
+  /// Sub-tab to open on first mount.
+  final FitnessTab initialTab;
 
   const FitnessHubScreen({
     super.key,
@@ -75,7 +95,7 @@ class FitnessHubScreen extends StatefulWidget {
     required this.training,
     this.settingsSync,
     this.onStartRun,
-    this.initialTab = 0,
+    this.initialTab = FitnessTab.history,
   });
 
   @override
@@ -91,9 +111,9 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
   void initState() {
     super.initState();
     _controller = TabController(
-      length: 4,
+      length: FitnessTab.values.length,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 3),
+      initialIndex: widget.initialTab.index,
     );
   }
 
@@ -152,15 +172,7 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
         bottom: AppTabBar(
           controller: _controller,
           labels: [
-            // The hub's tabs are destinations, not kind filters: web's
-            // equivalent of this one IS `/history`, and the RunsScreen it
-            // mounts titles its own AppBar `navHistory` 48dp below. Naming
-            // the tab "All" put two different names for one surface directly
-            // on top of each other (#666 I9).
-            l10n.navHistory,
-            l10n.fitnessTabRuns,
-            l10n.fitnessTabGym,
-            l10n.fitnessTabNutrition,
+            for (final t in FitnessTab.values) t.label(l10n),
           ],
         ),
       ),

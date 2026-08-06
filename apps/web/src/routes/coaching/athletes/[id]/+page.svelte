@@ -17,6 +17,7 @@
 	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { formatDuration, formatDate } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import { isWorkoutSkipped } from '$lib/training/training';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 
@@ -114,8 +115,7 @@
 	}
 
 	function activityLabel(r: AthleteRunSummary): string {
-		const a = r.activity_type ?? 'run';
-		return a.charAt(0).toUpperCase() + a.slice(1);
+		return activityTypeLabel(r.activity_type);
 	}
 
 	function paceLabel(r: AthleteRunSummary): string {

@@ -6,6 +6,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		buildRunJsonLd,
+		buildRunOgImageUrl,
 		buildRunShareCanonical,
 		buildRunShareDescription,
 		buildRunShareTitle,
@@ -21,6 +22,10 @@
 	// surface (which canonicals here) onto this single public page —
 	// parity with share/route, which already does both this + JSON-LD.
 	let canonicalUrl = $derived(buildRunShareCanonical(data.siteUrl, data.id));
+	// Absolute, from the same builder the JSON-LD below and the Lambda-injected
+	// head both use. A root-relative og:image is read by a REMOTE crawler and
+	// disagreed with the absolute URL two tags down (§ 546).
+	let ogImageUrl = $derived(buildRunOgImageUrl(data.siteUrl, data.id));
 	// JSON-LD WebPage + breadcrumb. Injected via {@html} because a
 	// literal <script> in Svelte markup would be hoisted/compiled; the
 	// builder pre-escapes < / > / & so a malicious caption can't
@@ -58,13 +63,13 @@
 	<meta property="og:type" content="article" />
 	<meta property="og:url" content={canonicalUrl} />
 	<meta property="og:site_name" content="Threkir" />
-	<meta property="og:image" content="/og/run/{data.id}.png" />
+	<meta property="og:image" content={ogImageUrl} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />
 	<meta name="twitter:description" content={description} />
-	<meta name="twitter:image" content="/og/run/{data.id}.png" />
+	<meta name="twitter:image" content={ogImageUrl} />
 	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
@@ -90,11 +95,11 @@
 			</section>
 		{/if}
 
-		<main class="content">
+		<main class="content" id="main-content">
 			<RunShareView runId={data.id} headerless hideAnonCta />
 		</main>
 	{:else}
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareRun.notFoundKicker')}</p>
 				<h1>{m('shareRun.notFoundTitle')}</h1>

@@ -40,7 +40,11 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // 20270501: run_streaks_for_user() RPC only (create function + grant/revoke)
 // — no table DDL of any kind; the scanner passed it with zero violations
 // before this bump.
-export const GRANDFATHER_CUTOFF = '20270501';
+// 20270502: length CHECKs on clubs.name / description / location_label and
+// user_profiles.display_name. Neither table is in GUARDED_TABLES, and the
+// migration takes the NOT VALID + VALIDATE two-step anyway, so the scanner
+// passed it with zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270502';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

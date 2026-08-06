@@ -7220,3 +7220,319 @@ Round 15 of the issue #666 audit closed three mobile cross-cutting systems, and 
 **Date:** 2026-08-05
 
 § 529 recorded that `activity_timeline_list.dart` carried the two inks web had just retired as theme-independent `const Color`s, each doing both jobs at once — `0xFF4E7C5E` and `0xFF9A6B2F` were the `CircleAvatar`'s 16 % tint *and* the glyph on that tint, which is the tightest ground a mark can be measured against. Re-derived here to the digit: **2.875:1 (lift) and 2.962:1 (meal) on duskDeep**, 3.585 / 3.473 on parchment, against 1.4.11's 3:1 for a graphical object — so the defect is dark-only and § 529's figures were exact. The fix takes web's `--section-gym` / `-ink` and `--section-nutrition` / `-ink` verbatim into a new `SectionAccents` in `ui_kit`, shaped like `ChartPalette` (a per-brightness const pair, not a `ThemeExtension`) rather than minting new values: the disc keeps the fill, the glyph takes the ink, and dark's ink *is* its fill because a pastel on near-black already clears. Measured after: **5.297 / 5.183 light, 5.712 / 6.633 dark** on the same 16 % disc. Only the two modalities mobile paints are ported — web's other five section hues belong to its sidebar, which mobile has no twin of, so porting them would be a preemptive abstraction rather than a parity debt. The run kind was left on `colorScheme.primary` because it needs no split: **8.271:1 light / 5.698:1 dark** on its own disc. The pinning test reads the rendered `CircleAvatar` background and `Icon` colour and composites the alpha itself (`withValues` carries an alpha, it does not blend), so it measures the ground the glyph actually lands on; reverting the two constants reproduces 2.875:1 exactly.
+
+## 543. The `/live` tree's missing reflow measurement was a missing `<main>`, not missing seed data — and the shell-less branch owes every route its own landmark
+
+**Date:** 2026-08-06
+
+§ 535 recorded three route families as "measured" at **0 elements under `main`** and attributed the zero to fixtures nothing seeded. For `/live/[id]` and `/live/event/[id]/[instance]` that ground is wrong: the entire `/live/` tree contains **no `<main>` and no `role="main"`**. `/live/` sits in `isShellless()` (`+layout.svelte:214`), whose branch renders a bare `<slot />`, while the layout's other two branches — the signed-in shell and the anon-allowed content branch — each wrap the slot in `<main id="main-content">` behind a skip link. The population anchor was structurally absent regardless of what was in the database, so § 535's `.main-content { min-width: 0 }` fix never applied to the shell-less family at all, and no amount of seeding would have produced a figure.
+
+Auditing the whole family found the same defect on **11 of 24** shell-less pages. Three had no landmark in any state (`/auth/callback`, `/learn/[slug]`, `/share/event/[id]/results`). Seven carried one only in a branch a visitor usually does not reach: `/share/{event,race,club,profile}` put it in their **not-found** card while the found entity — the primary state of four public, indexed, SEO-bearing pages — rendered a bare `<section class="hero">`; `/share/route/[id]` covered its loaded state but neither loading nor not-found. The eleventh was the landing page's pre-auth loading branch, which the guard found rather than a human. This is a live WCAG 1.3.1 failure on each, not a harness artifact. It survived because the 2026-05-30 audit behind `cross-cutting/skip-link.spec.ts` fixed exactly the *anon* branch and left this one: a route can sit in `isShellless` and pass every a11y check in the tree.
+
+The landmark is put on an element that already exists (`<section class="hero">` becomes `<main class="hero">`) wherever that element is a flex child of its page shell — a wrapper would move the flex child and reflow the page. `/learn/[slug]` is wrapped instead, because a guide genuinely is an `<article>` (its JSON-LD says so) and `.learn-article` centres itself inside any full-width parent. Putting one `<main>` in `SharePageShell` was considered and **rejected**: it would demote all nine share pages' `<header>` from `banner` to generic by nesting it, and `recap/share/[id]` uses that component while sitting *inside* the layout's own `<main>`, so the shell would have produced nested landmarks there.
+
+On what the guard actually reaches — three of `shellless_landmark_guards.test.ts`'s five predicates are structural and **would not have caught the dominant form of this bug**. A file-contains-a-`<main>` check passes on all seven branch-level offenders, which is why a grep-shaped guard was not enough. The predicate that catches them requires that if any branch of a top-level `{#if}` chain carries a landmark, every branch does; it fires on the pre-fix `/share/event` and found the landing-page case unaided. Each predicate was verified to fire by reverting one fix at a time, and the population is derived from `+layout.svelte` rather than hard-coded, so a new shell-less prefix enrols its pages instead of quietly opting them out. Branch coverage in states no source parse can see stays the e2e sweep's job.
+
+Separately, the reflow fixtures for the five unmeasurable families are built at **runtime** through the service-role client with teardown, not by growing `seed.sql`. A seed addition needs `supabase db reset` to take effect, which wipes a stack several sessions share, and its live / stale / finished rows decay against the wall clock until they no longer mean what they were written to mean. A 205-line seed draft was written first and is dropped rather than committed.
+
+**No reflow figure is recorded here.** Docker Desktop on the authoring workstation was wedged after a disk-exhaustion event and neither socket would accept a connection, so the local stack never started and `reflow-seeded-routes.spec.ts` has never been executed. Per § 534 the honest entry is the absence: the spec is committed so the CI gate runs it on the PR, and no `scrollWidth` number for `/live/[id]`, `/live/event/[id]/[instance]`, `/fundraisers/[id]`, `/segments/[id]` or a populated `/messages/[[id]]` may be quoted until it has passed.
+
+Still open, with counts rather than adjectives: the shell-less branch has **no skip link at all**, so WCAG 2.4.1 remains unaddressed for all 24 routes — every `<main>` now carries `id="main-content"` precisely so one link in that branch closes it, but adding a visible control to the landing page and `/login` is a product-visible change and was not smuggled in here. The direction-blind layer likewise still owes **80** Material directional ligatures (`arrow_back` 47, `chevron_right` 25, `chevron_left` 6, `arrow_forward` 2), **9** literal markup glyphs, **~84** `→` occurrences across 14 i18n keys × 6 locales, and **17** asymmetric block-axis padding/margin shorthands; none of it is user-reachable until an RTL locale ships, since `SUPPORTED_LOCALES` carries no RTL entry and `dirForLocale` can never return `rtl` in production today.
+
+## 544. There is a motion tier now, and each rung is the modal value of its role; reduce-motion is a `repeat()` problem and a scroll problem, not a duration problem
+
+**Date:** 2026-08-06
+
+Round 16's finding S15 accused the mobile apps of having no motion system and of ignoring `MediaQuery.disableAnimations` at six of nine sites, singling out the `repeat()`-ing 1500 ms live-map pulse that runs for the whole of a recording. **The accusation is right; four of its five figures are not.**
+
+**Re-measured.** There are **3** implicit-animation widgets in `apps/mobile_android/lib` + `packages/ui_kit/lib` + `packages/run_recorder/lib`, not 9 — an `AnimatedContainer`, an `AnimatedSwitcher` and an `AnimatedCrossFade`. The **9** is the `AnimationController` count (across 8 files), which is a different population and the one the ratio was taken over. The file count is **362** Dart files (338 in mobile `lib/` outside `l10n/gen`, 19 ui_kit, 5 run_recorder), not 143. The duration list "ten distinct (180/200/260/300/350/600/900/1100/1500)" enumerates **nine** values and omits three that ship: `ActivityLoader`'s 720 and 1050, and `run_detail`'s 15 000 ms replay. And `disableAnimations` was honoured at **5** sites, not 3 — the audit missed `activity_loader` and `list_skeleton`, which had each hand-rolled the correct `didChangeDependencies` stop-and-park. The one figure that held exactly is **four curves app-wide** (`easeOut` ×4, `easeOutCubic` ×2, `linear` ×1, `easeOutBack` ×1). The pulse itself reproduced; its line numbers had moved from 409–415 to 553–559.
+
+**The framework covers half of this, and knowing which half is the whole design.** `AnimationController._animateToInternal` scales a one-shot `forward`/`reverse`/`animateTo` to **5 %** of its duration when the platform flag is set, so every implicit widget and every one-shot controller — including the live map's 900 ms position tween, which nobody had gated — was already effectively instant. `repeat()` gets **no** scaling at all, and the framework's own comment says why: *"the common pattern of an eternally repeating animation might cause an endless loop if it weren't delayed for at least one frame."* An animated scroll gets none either, because `DrivenScrollActivity` runs on an `AnimationController.unbounded`, which defaults to `AnimationBehavior.preserve`. So the real defect was exactly two shapes: **2 unguarded `repeat()` sites** (the live-map pulse, the route-builder waypoint pin) and **3 animated scrolls** (coach scroll-to-bottom, route-detail reveal-map, the onboarding page advance), of which none was guarded. The other four "unhonoured" controllers were fine by the framework's own hand.
+
+**`syncMotionLoop` stops the loop; it does not hurry it.** A controller run 20× faster still requests a frame callback every frame, and this one is on the recording screen — a 100-hour race is 100 hours of rebuilding a 48 dp ring for a runner who asked not to see it move. The seam parks the controller at a rest value and is called from `didChangeDependencies`, not `initState`, so flipping the OS switch mid-run takes effect. The pinning test is `pumpAndSettle` versus `transientCallbackCount`: settling is only possible with nothing repeating, and the same test asserts the unreduced branch *is* ticking, so it cannot pass over a widget that never animated (§ 534). Reverting the `..repeat()` fails three of the eight cases, two of them by hanging.
+
+**Two Flutter widgets refuse `Duration.zero`, for opposite-looking reasons that are the same reason.** `ScrollController.animateTo` asserts `duration > Duration.zero`, so the reduced path has to be a different *call* (`jumpTo`, `jumpToPage`) rather than a different number — that is what `motionScrollTo` is. And `AnimatedCrossFade`/`AnimatedSize` completes a zero-duration controller *inside its own `performLayout`* and then asserts on re-dirtying itself, so the reduced path renders the target child instead of the animating widget. Web's global net has the identical shape and the identical cause: it sets `0.01ms`, not `0`, and its comment already said so. `AnimatedSwitcher` and `AnimatedContainer` take a true zero without complaint.
+
+**The tier is the modal value per role, and one role deliberately has no rung.** `brief` = **200 ms** (mode of 200, 200, 260, 350 — the four one-shot element transitions); `standard` = **300 ms** (mode of 180, 300, 300 — the three animated scrolls); `pulse` = **1500 ms** (mode of 600, 720, 900, 1050, 1100, 1500, 1500 — every repeating loop, and the only value there that occurs twice). Nine sites moved onto them. The four **indeterminate-progress cadences** stay off-tier and are named as such: `ActivityLoader`'s 720/1050/1500 are ported frame-for-frame from web's `ActivityLoader.svelte` so the cross-platform match is the contract, and the typing dots (600) and skeleton shimmer (900) are content rhythms with no mode between them — a fourth rung there would be an invented number wearing a tier's clothes, which is what § 542 warned about. Also off-tier with reasons: the live map's 900 ms position tween (the ~1 Hz GPS fix interval, not a styling choice), `run_detail`'s 15 s replay (a playback length), and `undo_bar`'s window (a user preference). A first draft of this tier claimed 1500 was modal over a *pulse-only* population of {1100, 1500}; the guard that asserts each population actually has a mode is what caught it, which is the argument for writing the guard that way.
+
+**No `PageTransitionsTheme`, and that is the decision.** Setting none is why each twin gets its platform's own route transition — `ZoomPageTransitionsBuilder` on Android, `CupertinoPageTransitionsBuilder` on iOS — which is what a user of that OS expects; picking one builder would make one of the two byte-identical twins feel foreign on every push. Route transitions are also already covered on the reduce-motion axis: they are one-shot `forward()`s, so the framework's 5 % scale reaches them. A route-transition change is felt on every screen and this one has nothing to fix.
+
+**Web needed nothing, which is a correction to the finding's framing.** The canonical surface already honours `prefers-reduced-motion` in both halves: a global `* { animation-duration: 0.01ms; transition-duration: 0.01ms; animation-iteration-count: 1; scroll-behavior: auto }` net in `app.css` pinned by a committed guard, plus **35** per-component `@media (prefers-reduced-motion: reduce)` blocks, and it already carries duration rungs (`--transition-fast: 150ms`, `--transition-base: 200ms`). Mobile's independently-derived `brief` landing on 200 ms is a convergence on web's existing base rung. The only JS-driven animation on web is `RunMap`'s replay behind an explicit Replay/Stop button — the twin of the mobile case left deliberately uncollapsed, for the same reason. Left open on web, with the number: **265** `transition`/`animation` declarations across the app and only two token rungs, so most sites still hard-code (0.4s ×6, 0.15s ×5, 0.12s ×5, …). That is a token-adoption sweep across ~40 files with no accessibility consequence, not the S15 defect.
+
+**§ 538's loose end, closed.** `period_summary_screen`'s share rasteriser slept **300 ms** before `toImage`. The card is a solid `Container` of `Text` — no tiles, no images, nothing asynchronous to paint — so the sleep was 300 ms charged to every user for nothing, which is why § 538 declined to reach for `MapTileReadiness` here. It is one `await endOfFrame`, matching `finisher_certificate_card`, the other tile-free rasteriser, which had always been written that way. The guard asserts both cards are still rasterisers and that neither sleeps, so a future map on either would have to go and get the § 538 mechanism rather than a timer.
+## 545. A `NestedScrollView` collapses its header out of the *outer* scrollable's drag, so a non-scrolling tab body costs the body's own scroll, not the collapse; and a client cap above an absent DB constraint is the worst of both
+
+**Date:** 2026-08-06
+
+§ 537 clamped `club_detail`'s description and `profile`'s display name to bound a hero band that was fixed above `Expanded(TabBarView)` in a non-scrolling `Column`, and deferred the real fix — the `NestedScrollView` shape web has — with a stated reason: *"three of the six club tabs return a bare non-scrolling `Center` empty state and a fourth returns a `Column` around one, and a `NestedScrollView` whose inner body is not a scrollable neither collapses its header nor scrolls."* **The first half of that is wrong, and measuring it is what made the rewrite tractable.** The outer `_NestedScrollViewCustomScrollView` spans the body's area too, so a vertical drag over a bare `Center` is picked up by the *outer* `Scrollable` and the coordinator applies it to the outer position: the header collapses. Probed directly — a 300 dp hero over a `Center(child: Text(…))` body travelled the full 150 dp of a 150 dp drag, and so did a short `ListView` with default (not `AlwaysScrollableScrollPhysics`) physics, which was the other case suspected of swallowing it. What a non-scrolling body genuinely costs is its **own** scroll: `TabBarView` hands each child a bounded box, so an empty state that does not fit overflows it — reproduced at **620 px of `RenderFlex` overflow** on a 320×568 phone at 2.0x with the four-element empty state club detail actually renders (against `flutter_test`'s fixed-advance font, so the real-Roboto figure is smaller; the *sign* is what the guard pins, per § 500). And `RefreshIndicator` needs a scrollable at all.
+
+So the rewrite lands for the right reasons rather than the recorded one. `widgets/collapsing_tab_host.dart` is the shape both screens take: header slivers (hero + the whole-surface error banner) that scroll away, then the strip as a `SliverAppBar(primary: false, pinned: true, toolbarHeight: 0, bottom: AppTabBar(...))` inside a `SliverOverlapAbsorber`, over a `TabBarView` whose children each take a `Padding(top: AppTabBar.height)`. **`SliverAppBar` rather than a hand-rolled `SliverPersistentHeaderDelegate`** because it already resolves `appBarTheme`'s `WidgetStateColor` scrolled-under fill + `scrolledUnderElevation` off `ScrollNotificationObserver`; a custom delegate cannot see that signal (`overlapsContent` reports the *preceding* sliver's overlap, which is zero here), so the strip would have stayed `parchment` while the AppBar above it went `parchmentDim` — a visible seam. **The `Padding` rather than a `SliverOverlapInjector`** because the injector needs a sliver and therefore a `Builder` per tab, and the absorbed amount is provably constant: a fully pinned header reports `maxScrollObstructionExtent = minExtent`, so the handle's `layoutExtent` is exactly `AppTabBar.height` (48 = 46 + 2) at every offset. The guard asserts that equality *and* that the first row sits exactly that far below the strip, so the two cannot drift.
+
+Nine bodies changed. Four bare-`Center` empty states (club Events / Templates / Photos, profile Runs) and `BadgeGrid`'s took ui_kit's `EmptyState`, whose bounded branch is already the fill-and-centre `SingleChildScrollView` on `AlwaysScrollableScrollPhysics` this needs — § 484 solved it, so nothing new was written. Club **Routes** folded its `Column(cta, Expanded(Center))` into `EmptyState`'s own CTA slot and moved the build-route button into the list as row 0 (the shape the Events tab already used), which also lets it scroll away. Every `ListView`/`GridView` took `AlwaysScrollableScrollPhysics` so a one-row list still accepts a drag. **`profile_screen` now renders the host in every state**, because moving the strip out of `AppBar.bottom` would otherwise have withdrawn it during loading and on a failed fetch — where it used to survive for free — so the header band swaps skeleton-for-hero and the current tab's body swaps skeleton / `ErrorState` / not-found. The two `ListSkeleton` loading branches keep `NeverScrollableScrollPhysics` and therefore do not collapse the header while a fetch is in flight; that is deliberate (a skeleton is not a scroll) and transient.
+
+With the strip inside the scroll view, § 538's clamp finally applies: `contentColumn` wraps the whole `NestedScrollView`, so at a 1200 dp width the strip and the body measure the same 720 dp at the same left edge — the alignment § 538 said a body-only clamp would break. § 537's two clamp guards still hold unchanged (description and name length still do not move the hero/tabs split, because the clamp is what bounds it at rest — the scroll only removes the *overflow*).
+
+**The length constraints, and what the audit's count was.** Round 15 reported "three missing DB length constraints (`clubs.description`, `user_profiles.display_name`)" — a sentence that names two and counts three. Re-derived structurally across all 396 migrations: **there is not one `varchar`, `character varying` or `citext` in the schema**, so a CHECK is the only possible cap, and **51** user-writable text columns have none. Seven of those are URLs, slugs or a `text[]`, leaving **44** free-text prose-or-name fields. `20270502_001` caps **4** — the hero content of the two screens this round rewrote — and **40** remain, enumerated in `api_database.md` so the next round does not re-survey. The caps are the numbers the clients *already stated*: `clubs.name` 80 and `clubs.location_label` 80 (both composers agreed), `user_profiles.display_name` 60 (both setup wizards agreed while both settings screens capped at nothing), and `clubs.description` **2000** — the sibling standard from `events.description` and `challenges.description`, chosen over web's 600 or mobile's 500 because a cap *below* the constraint is merely conservative while the two composers disagreeing with each other and with an absent constraint is the worst arrangement: the 600 web allowed was unenforced and the 500 mobile allowed was arbitrary. One stated number per client (`core/text_limits.ts`, `lib/text_limits.dart`) and a guard on each side that **parses the migration** rather than restating the number, so a composer can never cap above a constraint and hand the user a 23514 it cannot explain. Unlike `20261124_001` — which added three `NOT VALID` caps and never emitted a `VALIDATE`, leaving those rows permanently unchecked — this one validates, and the pgtap test asserts `convalidated` on all four rather than merely `pg_constraint` membership.
+
+## 546. A red that clears every ground by 0.4 % has not cleared it; a path with a builder is spelled twice as often as the class that named it; and a register's scope limit was a decision nobody had made
+
+**Date:** 2026-08-06
+
+Round 16's web map / graphic-honesty package. Every one of the four inherited
+items was still live, but three of the four inherited *figures* moved once
+re-derived, and in each case the number was right and the **population** it
+described was wrong — which is § 536's lesson recurring for the third round
+running.
+
+**A margin is not a pass, and the register said so without acting on it.** Round
+15 registered `PrivacyZonePicker`'s single `#dc2626` as
+`'unkeyed'` on the honest grounds that it *does* clear WCAG 1.4.11's 3:1 on
+every basemap the picker can resolve to, and recorded all four figures. Every
+one reproduces here to the digit: **4.208:1** on `LIGHT_BASEMAP_SAMPLE`
+(#F2EFE9), **3.560** on `DARK_BASEMAP_SAMPLE` (#1A1B20), **3.522** on the
+keyless `OSM_FALLBACK_BACKDROP` (#DCDCDC), and **3.011** on
+`LIGHT_BASEMAP_WATER_SAMPLE` (#AAD3DF) — a **0.4 %** margin, on the one overlay
+in the app whose job is to tell a runner which of their locations is being
+redacted. § 522 minted the rule ("a scale built to exactly meet a floor cannot
+survive a later alpha") and § 535's amendment restated it in pixels ("a margin
+of 2 px is not a pass"); this is the same reading in contrast, and the register
+entry that recorded the figure had drawn the opposite conclusion from it. The
+claim that no other red does better is also true and is *why* the fix is a
+pair: sweeping the red ramp, `#B91C1C` clears the three light grounds
+(5.638 / 4.034 / 4.718) and fails dark at 2.657; `#EF4444` clears dark (4.568)
+and fails water at 2.346; nothing in between clears all four with headroom.
+That is § 541's finding — a mark owing 3:1 twice cannot be paid by one colour —
+so `mapZoneBoundary` joins the twelve other ground-graded rungs: **#991B1B**
+light (7.241 land / **5.181 water** / 6.060 OSM backdrop) and **#EF4444** dark
+(4.568), each measured against the ground it owns and against 1.4.11's 3:1.
+The picker consequently stops being the one map surface with no basemap
+question and resolves through `basemapIsDarkFromEnv` like the other six. Its
+0.18 wash is asserted **below** the floor (1.14–1.31:1 on all four grounds), on
+the same footing § 526 gave the translucent casing: what that forbids is
+offering the wash as the circle's contrast, and the 2 px boundary clears
+unaided.
+
+**The route builder's blank canvas and its missing credit were one bug, and it
+was in the URL, not the paint.** § 531 split the builder's private slug table
+from its private answer about basemap luminance, routing the second through
+`basemapIsDarkForSlug` while leaving the first alone — correctly, because
+pointing its satellite rung at the preference union's slug would silently
+change `hybrid` (imagery with labels, which is what makes it usable for placing
+waypoints) to bare `satellite`. What went unnoticed is that the builder also
+assembled its own **URLs**, from `maptilerStyleUrl` directly, and so skipped the
+keyless branch `buildMapStyleUrl` performs: with no `PUBLIC_MAPTILER_KEY` it
+requested `…/style.json?key=`, took a 403, and rendered nothing where every
+other surface degraded to `osm-fallback-style.json`. **The attribution gap is a
+consequence of that, not a second defect**: on web MapLibre's control reads the
+credit out of the style document that loaded (§ 491), so a style that never
+loads credits nobody, and wiring the fallback restores the OSM credit the
+fallback style declares on its own source — the credit follows the *resolved*
+basemap by construction, which is exactly § 491's rule and needs no per-surface
+string. `styleUrlForSlug` is therefore the URL half of the pair
+`basemapIsDarkForSlug` is the luminance half of: one precedence (override →
+keyless raster → keyed slug), spelled once, with `buildMapStyleUrl` delegating
+to it so the two entry points are provably one answer. The guard now fails any
+registered map surface that calls `maptilerStyleUrl` itself.
+
+**The share-path class was 2 sites by its own regex and 15 by its own
+reasoning.** § 531 measured "not three sites but fourteen" and left two named
+open debts: the recap year and month pages hand-spelling `/recap/share/${id}`
+for their copy-link. Those close in two lines. Re-deriving the class found the
+regex had defined it: **`/og/<entity>/<id>.png` had no builder at all**, and was
+assembled at **13** sites for four entities — six with an interpolated base (the
+run and route paths each spelled **twice**, once as `ogImageUrl` and once inside
+that entity's JSON-LD, in different modules) and seven root-relative in four
+page heads. `/share/run/[id]` advertised its unfurl image at **two different
+URLs in one `<head>`**: absolute inside the JSON-LD `primaryImageOfPage`,
+root-relative in the `og:image` five lines above it. § 531 had excluded
+root-relative in-app paths from scope with a reason — "they are navigations, and
+they cannot get the origin wrong, which is the failure the class is about" — and
+that reason **excludes an `og:image` from the exemption rather than granting it**:
+an unfurl image is metadata a remote crawler fetches off-site, so the origin is
+precisely what it can get wrong. So the guard widens to `/og/<entity>/` and only
+there; the in-app `href` exemption is now pinned by a must-spare fixture instead
+of resting on prose. Four builders are minted (`buildRunOgImageUrl`,
+`buildRouteOgImageUrl`, `buildBadgeOgImageUrl`, `buildRecapOgImageUrl`), and the
+recap asymmetry is recorded where it can be read: its share page is
+`/recap/share/[id]` while its unfurl image *is* under `/og/recap/`, so the two
+paths cannot be flattened onto one shape.
+
+Closing the recap copy-links broke `seo_render_map_guard` in an instructive way,
+and the instructive part is that greening it the easy way would have written a
+false doc row. That guard inferred "this page folds onto its share twin" from a
+`build<X>ShareCanonical(` call alone, and the two recap pages are the first to
+call the builder for a **copy-link only** — § 520's whole point being that the
+builder takes its base as a parameter so one path definition serves both uses. A
+recap has no share id until the runner publishes, so it cannot canonical onto
+`/recap/share/[id]` and belongs in no row of that table. The predicate now
+requires the `<link rel="canonical">` too, which is the property the sibling test
+already asserted for documented rows: § 528's rule, that a guard must pin the
+property and not a proxy for it.
+
+**The hex register's scope limit becomes a decision, and its `.ts` figure
+decomposes exactly like the figure it replaced.** § 536 declared the gap with a
+number — "**199** six-digit literals live in `.ts` under `apps/web/src`" — in the
+same entry where it caught the round-14 index's "308" for counting comment prose
+and token declarations. Run the register's own matcher over `.ts` and 199
+decomposes the same way: **87 painted in 11 production files, 72 inside
+`.test.ts` fixtures, 40 in comment bodies** (87 + 72 + 40 = 199). Rules 1 and 2
+stay on `.svelte`/`.css`, and that is now argued rather than inherited: their
+failure message is "route it onto the token", and in `basemap_contrast.ts` that
+is *impossible* — MapLibre parses paint values itself and throws on a `var()`
+(§ 528) — while a rasterised card has no theme to follow at all. A guard whose
+remedy the caller cannot perform is § 515's failure mode. Rule 3 asks for a
+**role**, which every one of these can answer, so rule 3 is the one that reaches
+`.ts`. The `.test.ts` exclusion is asserted non-empty rather than trusted, per
+§ 534: a scope decision that has quietly stopped excluding anything has become
+dead machinery.
+
+Both halves shrank. The style half went **95 → 92** literals across **19 → 18**
+files when the picker's three reds moved onto `mapZoneBoundary`; the `.ts` half
+went **87 → 76** across **11 → 9**, because five card builders had each spelled
+the same two rasterised-card palettes independently — **22 literals expressing 9
+values, with the two recap cards byte-identical**. `og_card_palette.ts` holds
+both, and holds each ink's measured ratio and ground with it (light card on
+#FFFFFF: brand 3.678:1, which is WCAG large text at 28–32 px/700–800 so its
+floor is 3:1 not 4.5; ink 17.853; muted 4.759. Dark card on #0F172A: brand
+7.022, hero 17.853, label 6.963, stat 14.482). Whole tree: **182 → 168**. Two
+cards of the same product drifting apart is invisible until someone puts the
+unfurl and the shared PNG side by side.
+
+**And widening the register found a live failure, which is the argument for
+widening it.** `sourceColor` in `core/mock-data.ts` returns one of eight frozen
+per-source hues, and five surfaces paint it as an **opaque `.source-badge` fill
+with real text on it** at 0.65–0.7 rem weight 600 — 10.4–11.2 px, which is not
+WCAG large text, so AA's 4.5:1 applies. With `color: white` (`RunShareView`,
+`PeriodSummary`) **six of the eight fail**: watch **2.771**, healthconnect
+**2.780**, strava 3.402, app 3.679, healthkit 4.347, garmin 4.496. With
+`color: var(--color-surface)` (`/dashboard`, `/runs`) there is **no theme in
+which all eight pass** — light fails the same six, and dark fails race
+**2.564**, parkrun 3.290, garmin 3.595, healthkit 3.718. `/runs` is worse again
+because its badge carries `opacity: 0.92`, which is § 522's warning arriving
+literally: race falls to **2.353** on dark, healthconnect to 2.559 on light. The
+same 0.5 rem dot on `/runs/[id]` is *not* a finding — the localized source label
+sits beside it, so it carries no information required to identify anything
+(§ 526's halo reasoning). This is § 529's defect one surface over — an identity
+hue asked to be both the fill and the ground for its own ink — and § 541's
+conclusion holds: the fix is the shape (hue as a tint, an `-ink` rung as the
+text), not a value. It is recorded as the register's one `OPEN_DEBTS` entry with
+its worst figure and that figure's ground, because its five call sites sit in
+four other agents' trees this round. That is the same reason § 531 gave for the
+two debts this round closed, and it is the argument for the mechanism: a
+register that can say "known bad, not yet fixed" gets audited next round; one
+that drops the finding to stay green is how § 511's hole opened.
+
+**Left open, with numbers.** The default-host string `'https://threkir.com'` is
+spelled **27** times in production code across `src` and `lambda` (plus test
+fixtures, which are inputs): **15** `const DEFAULT_SITE_URL` declarations — ten
+in the `/share/*` + `/recap/share` loaders, three in the `/learn` loaders, one in
+the landing loader, one in `sitemap.xml` — **7** inline
+`env.PUBLIC_SITE_URL || …` fallbacks at copy-link call sites, and **5**
+`process.env.PUBLIC_SITE_URL ?? …` in Lambda handlers. It is the same class one
+level up from the path builders, and the two loaders this round touched follow
+the existing 15-way convention rather than minting a shared constant with 2 of 27
+callers; the sweep belongs to a round that owns those files. Two of the register's
+new `.ts` entries are TS↔Dart parity pairs (`route_markers.ts` at 7 literals,
+`pace_segments.ts` at 6), so a future value change there is a two-platform change
+and the register entry should say so before anyone edits it — it does. And the
+mobile twin of the `sourceColor` finding is unexamined: whatever paints a source
+badge on the Flutter side owes the same measurement against the same grounds,
+and should take web's figures rather than minting a ninth guess, the way § 542
+did for § 529's two inks.
+## 547. One `activity_type` vocabulary instead of seven; European Portuguese was translated and unreachable; a destination gets a name a reader can tell from the others
+
+**Date:** 2026-08-06
+
+Four items from the issue #666 audit, all of them the same failure at different
+depths: a user-facing *name* that more than one place was allowed to decide.
+
+**The `activity_type` vocabulary.** Five values (`run`, `walk`, `hike`,
+`cycle`, `stroller` — the `runs_activity_type_check` CHECK from migration
+`20261207_001`) were named by **seven** independent web catalogue namespaces and
+**three** mobile ones. The hand audit had counted six on web; the guard's first
+run found the seventh (`prefs.activity*`, driving the Preferences
+default-activity select). They disagreed *inside* a locale, not merely across
+platforms: German `hike` was both "Wandern" and "Wanderung", German `run` "Lauf"
+and "Laufen", Spanish `run` "Carrera" and "Correr", Spanish `stroller`
+"Cochecito" and "Carrito", Japanese `walk` "ウォーク" and "ウォーキング", Brazilian
+`cycle` "Ciclismo" and "Pedalada" — 13 measured within-locale disagreements.
+Four of the seven web namespaces omitted `stroller` entirely, so `/runs/[id]`
+rendered the raw token "stroller" in all six languages and **neither** settings
+surface (`/settings/devices`, `/settings/preferences`) could offer it as a
+default activity. `/coaching/athletes/[id]` hand-capitalised the column and
+`ChallengeEditor` rendered the bare value. On mobile the third vocabulary was
+worse than a disagreement: `ActivityType.label` was a hardcoded English getter
+reached from **eight** render sites — run detail, the runs filter chips, the
+add-run picker, the run-screen activity chips, two lock-screen notification
+titles, the run-list tile's subtitle *and* its semantics label, and the share
+card — so a German runner's notification read "Run" and their list rows "run".
+
+The fix is one namespace and one resolver per platform (`activityType.<value>` +
+`activityTypeLabel`; `activityTypeRun` + `activity_type_labels.dart`), 5 keys ×
+6 web locales and 5 × 7 ARBs, with all 30 duplicate keys deleted. Where the two
+platforms disagreed, the side with recorded user evidence won: `hike` reads
+**"Trail run"** everywhere, because a runner picking it means an off-road run
+and a user had surfaced "Hike" as the reason trail runners did not see
+themselves in the picker. The enum name and the database value stay `hike`.
+
+The value domain is **derived** in both guards — parsed out of the migration —
+so widening the CHECK fails the build until the catalogues catch up. The
+tree-wide hand-capitalisation sweep is deliberately **not** duplicated: web's
+lives in `workout_labels.test.ts` and the allowlist entry it carried for the
+coaching label is retired, which is the proof the fix landed. The Dart sweep is
+separate because it must catch a shape web's cannot — the mobile defect was a
+string *template* with no `+`, written through a one-letter alias, so a matcher
+keyed on an `activity`-ish identifier would have spared the very line it
+existed for. Both matchers carry must-flag / must-spare fixtures, and the Dart
+sweep's allowlist is asserted non-stale, which immediately dropped one entry
+written from the CLAUDE.md description rather than from a measurement.
+
+**European Portuguese.** `app_pt.arb` carried 3478 keys, and **247 of them
+genuinely differed** from `app_pt_BR.arb` in real European Portuguese prose —
+"partilhar" not "compartilhar", "em direto" not "ao vivo", "Inicie sessão" not
+"Faça login", "Modo passadeira" not "Modo esteira" — with **zero** of them left
+as English. Every one was unreachable: `supportedLocales` omitted `Locale('pt')`
+and `_baseToLocale` mapped the base onto `pt-BR`, measured as
+`negotiate('pt-PT') = pt-BR`. Round 14 recorded the measurement and left the
+call open; guarding the two files identical would have *destroyed* finished
+translation work, so the decision is to **ship it**. `pt` joins
+`supportedLocales` and the picker (endonym "Português (Portugal)"), and the base
+mapping now points at the European variant, so `pt-PT` and `pt-AO` (Angola uses
+that orthography) reach it while `pt-BR` still matches exactly. Re-measured:
+`negotiate('pt-PT') = pt`. Web ships only `pt-BR`, so a pt-PT reader still gets
+Brazilian there — that is a **missing web catalogue, not a reason to keep a
+finished mobile one dark**, and it is the one open item this leaves.
+
+**Destination names.** The sidebar's `/coach` read "Coach" and the account
+popover's `/coaching` read "Coaching" — one letter apart, for two unrelated
+features (the AI chat and the human coach↔athlete roster). Round 15 filed it as
+mobile-only; web carried the identical pair, so the rename landed web-first
+(§ 24): "AI Coach" and "Athletes & coaches", both platforms, every catalogue.
+Settings' "Licenses" tab becomes "About", and the four legal documents move onto
+it — they had been reachable *only* from the public footer, which the signed-in
+shell does not render, so a signed-in reader had no path to the terms they had
+agreed to (mobile closed this in round 1 as I4). Web keeps "About" rather than
+mobile's "About & updates" because a web app has no update path to offer; the
+suffix mobile earns is the only thing that differs.
+
+The guard checks every locale, because the collision is a property of the
+*words*. On its first run it found two pre-existing German pairs nobody was
+looking for: "Über" (About) one ending away from "Übersicht" (Dashboard), and
+"Einstellungen" naming **both** Settings and its Preferences tab — the latter on
+web *and* mobile. Now "Über die App" and "Voreinstellungen". The predicate flags
+a short morphological ending, not any shared prefix: Portuguese "Conta"
+(Account) must not read as colliding with "Contatos de segurança" (Safety
+contacts), which is a real pair in that catalogue.
+
+**The `initialTab` seam.** `FitnessHubScreen.initialTab` and
+`SocialScreen.initialTab` were raw ints documented in a comment, clamped into
+range. No production caller passed a non-default value, so § 490's bug was not
+live here — but the clamp is what *hid* that bug rather than catching it: a
+stale `initialTab: 3` literal stayed in range after the tab set changed and the
+notification bell opened the wrong tab in silence. Both take a named, ordered
+enum (`FitnessTab`, `SocialTab`) that the label row, the view row, the FAB
+switch and any future deep link all read, which also retires the bare `case 2:`
+that decided whether to hoist the Clubs FAB. Out of range is now
+unrepresentable, so the clamp test is replaced by the property no clamp could
+give: every value opens its own tab, and the strip is exactly as long as the
+enum. Both halves were proven to fail on a reverted source.

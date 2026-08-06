@@ -610,6 +610,10 @@
 		</div>
 	</header>
 
+	<!-- Shell-less routes get no <main> from +layout.svelte, so each one owns
+	     its landmark — every /share/* sibling already does. Without it this
+	     page shipped no main region at all (WCAG 1.3.1). -->
+	<main id="main-content">
 	{#if loading}
 		<p class="muted">{m('shell.loading')}</p>
 	{:else if loadError}
@@ -748,6 +752,7 @@
 			</section>
 		{/if}
 	{/if}
+	</main>
 </div>
 
 <style>
@@ -776,6 +781,12 @@
 		font-weight: 800;
 		margin: 0 0 var(--space-sm);
 		line-height: 1.2;
+		/* The title is user-supplied, so one unbreakable token — a URL, a German
+		 * compound, a long id — is wider at 2rem than a narrow viewport's text
+		 * column, and an unbreakable word pushes the whole document open (the
+		 * § 535 failure, from content rather than from a rule). A length CHECK
+		 * cannot prevent this: it bounds the string, not the longest word. */
+		overflow-wrap: break-word;
 	}
 	.status-row {
 		display: inline-flex;
@@ -974,7 +985,7 @@
 	}
 	.runner:hover {
 		border-color: var(--color-border);
-		transform: translateX(2px);
+		transform: translateX(calc(2px * var(--dir-sign)));
 	}
 	.runner.pending {
 		opacity: 0.75;

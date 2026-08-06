@@ -77,7 +77,7 @@ test.describe('/coaching — a coach with two active athletes (USER_B)', () => {
 		page
 	}) => {
 		await page.goto('/coaching');
-		await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+		await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 			timeout: 10_000
 		});
 

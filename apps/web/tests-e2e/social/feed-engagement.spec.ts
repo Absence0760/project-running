@@ -289,7 +289,7 @@ test.describe('/social?tab=feed — clear-filters recovery', () => {
 		await expect(page.locator('article.entry').first()).toBeVisible({
 			timeout: 10_000
 		});
-		await page.getByRole('button', { name: 'Cycle' }).click();
+		await page.getByRole('button', { name: 'Cycle', exact: true }).click();
 		await expect(
 			page.getByRole('heading', { name: 'No matches' })
 		).toBeVisible({ timeout: 10_000 });
