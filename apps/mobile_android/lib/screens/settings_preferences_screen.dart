@@ -1,3 +1,4 @@
+import '../activity_type_labels.dart';
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show SectionHeader;
@@ -267,21 +268,6 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       .split('_')
       .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
       .join(' ');
-
-  static String _activityTypeLabel(AppLocalizations l10n, String raw) {
-    switch (raw) {
-      case 'run':
-        return l10n.prefsActivityRun;
-      case 'walk':
-        return l10n.prefsActivityWalk;
-      case 'hike':
-        return l10n.prefsActivityHike;
-      case 'cycle':
-        return l10n.prefsActivityCycle;
-      default:
-        return _toTitle(raw);
-    }
-  }
 
   static String _paceFormatLabel(AppLocalizations l10n, String raw) {
     switch (raw) {
@@ -557,12 +543,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   Future<void> _editDefaultActivityType() async {
     final l10n = AppLocalizations.of(context);
-    const opts = ['run', 'walk', 'hike', 'cycle'];
+    final opts = [for (final a in ActivityType.values) a.name];
     final labels = [
-      l10n.prefsActivityRun,
-      l10n.prefsActivityWalk,
-      l10n.prefsActivityHike,
-      l10n.prefsActivityCycle,
+      for (final a in ActivityType.values) activityTypeLabel(l10n, a),
     ];
     final picked = await _pickRadio<String>(
       title: l10n.prefsDefaultActivity,
@@ -1323,10 +1306,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                     ListTile(
                       title: Text(l10n.prefsDefaultActivity),
                       subtitle: Text(
-                        _activityTypeLabel(
+                        activityTypeLabelFor(
                           l10n,
-                          _bagValue<String>(SettingsKeys.defaultActivityType) ??
-                              'run',
+                          _bagValue<String>(SettingsKeys.defaultActivityType),
                         ),
                       ),
                       trailing: const Icon(Icons.chevron_right),

@@ -3634,19 +3634,27 @@ class AppLocalizationsPt extends AppLocalizations {
   String get feedFindPeople => 'Encontrar pessoas';
 
   @override
+  String runNotificationPausedTitle(String activity) {
+    return '$activity • em pausa';
+  }
+
+  @override
+  String get activityTypeRun => 'Corrida';
+
+  @override
+  String get activityTypeWalk => 'Caminhada';
+
+  @override
+  String get activityTypeHike => 'Trail';
+
+  @override
+  String get activityTypeCycle => 'Ciclismo';
+
+  @override
+  String get activityTypeStroller => 'Carrinho de bebé';
+
+  @override
   String get feedActivityAll => 'Tudo';
-
-  @override
-  String get feedActivityRun => 'Corrida';
-
-  @override
-  String get feedActivityWalk => 'Caminhada';
-
-  @override
-  String get feedActivityCycle => 'Ciclismo';
-
-  @override
-  String get feedActivityHike => 'Trilha';
 
   @override
   String get feedActivityLift => 'Força';
@@ -6987,18 +6995,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
     return '$pace $paceLabel — os alertas de desvio de ritmo falam ao desviar 30 s ou mais';
   }
-
-  @override
-  String get prefsActivityRun => 'Corrida';
-
-  @override
-  String get prefsActivityWalk => 'Caminhada';
-
-  @override
-  String get prefsActivityHike => 'Trilha';
-
-  @override
-  String get prefsActivityCycle => 'Ciclismo';
 
   @override
   String get prefsPaceFormat => 'Formato de ritmo';
@@ -16195,19 +16191,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get feedFindPeople => 'Encontrar pessoas';
 
   @override
+  String runNotificationPausedTitle(String activity) {
+    return '$activity • pausado';
+  }
+
+  @override
+  String get activityTypeRun => 'Corrida';
+
+  @override
+  String get activityTypeWalk => 'Caminhada';
+
+  @override
+  String get activityTypeHike => 'Trilha';
+
+  @override
+  String get activityTypeCycle => 'Ciclismo';
+
+  @override
+  String get activityTypeStroller => 'Carrinho';
+
+  @override
   String get feedActivityAll => 'Tudo';
-
-  @override
-  String get feedActivityRun => 'Corrida';
-
-  @override
-  String get feedActivityWalk => 'Caminhada';
-
-  @override
-  String get feedActivityCycle => 'Ciclismo';
-
-  @override
-  String get feedActivityHike => 'Trilha';
 
   @override
   String get feedActivityLift => 'Força';
@@ -19547,18 +19551,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
     return '$pace $paceLabel — os alertas de desvio de ritmo falam ao desviar 30 s ou mais';
   }
-
-  @override
-  String get prefsActivityRun => 'Corrida';
-
-  @override
-  String get prefsActivityWalk => 'Caminhada';
-
-  @override
-  String get prefsActivityHike => 'Trilha';
-
-  @override
-  String get prefsActivityCycle => 'Ciclismo';
 
   @override
   String get prefsPaceFormat => 'Formato de ritmo';

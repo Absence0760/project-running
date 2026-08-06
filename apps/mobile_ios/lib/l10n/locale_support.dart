@@ -10,15 +10,22 @@ import 'dart:ui';
 /// a stored choice wins, otherwise the device's preferred locales are
 /// negotiated, falling back to English.
 
-/// The six locales we ship, matching web's `SUPPORTED_LOCALES`. `pt-BR`
-/// carries an explicit country code; gen-l10n also emits a base `pt`
-/// fallback, but `pt-BR` is the canonical entry shown in the picker.
+/// The seven locales we ship. Portuguese ships TWICE, as two real catalogues:
+/// `app_pt.arb` is European Portuguese and `app_pt_BR.arb` Brazilian, and 247
+/// of their 3478 strings genuinely differ ("partilhar" vs "compartilhar", "em
+/// direto" vs "ao vivo", "Modo passadeira" vs "Modo esteira"). `pt` was absent
+/// from this list until 2026-08-06, which made every one of those 3478
+/// translated strings unreachable: `negotiateLocale` mapped base `pt` — and so
+/// `pt-PT` — onto `pt-BR`. Web ships only `pt-BR`, so a pt-PT reader still gets
+/// Brazilian there; that is a missing web catalogue, not a reason to keep a
+/// finished mobile one dark.
 const List<Locale> supportedLocales = <Locale>[
   Locale('en'),
   Locale('de'),
   Locale('fr'),
   Locale('es'),
   Locale('ja'),
+  Locale('pt'),
   Locale('pt', 'BR'),
 ];
 
@@ -32,6 +39,7 @@ const Map<String, String> localeLabels = <String, String>{
   'fr': 'Français',
   'es': 'Español',
   'ja': '日本語',
+  'pt': 'Português (Portugal)',
   'pt-BR': 'Português (Brasil)',
 };
 
@@ -43,18 +51,22 @@ const Map<String, Locale> _exact = <String, Locale>{
   'fr': Locale('fr'),
   'es': Locale('es'),
   'ja': Locale('ja'),
+  'pt': Locale('pt'),
   'pt-br': Locale('pt', 'BR'),
 };
 
-// Base-language fallback: a tag we don't carry exactly (fr-CA, pt-PT,
-// de-AT) still resolves to the one variant we ship for that language.
+// Base-language fallback: a tag we don't carry exactly (fr-CA, de-AT) still
+// resolves to the one variant we ship for that language. Portuguese is the
+// exception with two variants, and its base maps to the EUROPEAN one: `pt-PT`
+// and `pt-AO` (Angola uses the European orthography) reach it via this table
+// while `pt-BR` matches `_exact` first, so Brazil is unaffected.
 const Map<String, Locale> _baseToLocale = <String, Locale>{
   'en': Locale('en'),
   'de': Locale('de'),
   'fr': Locale('fr'),
   'es': Locale('es'),
   'ja': Locale('ja'),
-  'pt': Locale('pt', 'BR'),
+  'pt': Locale('pt'),
 };
 
 // RTL base languages. None of the current six is RTL, but the switch-point

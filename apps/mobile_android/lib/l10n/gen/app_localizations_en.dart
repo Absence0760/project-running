@@ -3604,19 +3604,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get feedFindPeople => 'Find people';
 
   @override
+  String runNotificationPausedTitle(String activity) {
+    return '$activity • paused';
+  }
+
+  @override
+  String get activityTypeRun => 'Run';
+
+  @override
+  String get activityTypeWalk => 'Walk';
+
+  @override
+  String get activityTypeHike => 'Trail run';
+
+  @override
+  String get activityTypeCycle => 'Cycle';
+
+  @override
+  String get activityTypeStroller => 'Stroller';
+
+  @override
   String get feedActivityAll => 'All';
-
-  @override
-  String get feedActivityRun => 'Run';
-
-  @override
-  String get feedActivityWalk => 'Walk';
-
-  @override
-  String get feedActivityCycle => 'Cycle';
-
-  @override
-  String get feedActivityHike => 'Hike';
 
   @override
   String get feedActivityLift => 'Lift';
@@ -6915,18 +6923,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
     return '$pace $paceLabel — Off-pace alerts speak when you drift 30s+';
   }
-
-  @override
-  String get prefsActivityRun => 'Run';
-
-  @override
-  String get prefsActivityWalk => 'Walk';
-
-  @override
-  String get prefsActivityHike => 'Hike';
-
-  @override
-  String get prefsActivityCycle => 'Cycle';
 
   @override
   String get prefsPaceFormat => 'Pace format';

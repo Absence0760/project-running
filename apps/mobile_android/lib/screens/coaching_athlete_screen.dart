@@ -1,3 +1,4 @@
+import '../activity_type_labels.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
@@ -471,7 +472,7 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
           ),
           TextLane(
             width: 64,
-            child: Text(_activityLabel(r.activityType),
+            child: Text(activityTypeLabelFor(l10n, r.activityType),
                 style: theme.textTheme.bodyMedium
                     ?.copyWith(fontWeight: FontWeight.w600)),
           ),
@@ -501,11 +502,6 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
     return _isoOf(w.scheduledDate).compareTo(_todayISO()) < 0
         ? 'missed'
         : 'upcoming';
-  }
-
-  static String _activityLabel(String a) {
-    final s = a.isEmpty ? 'run' : a;
-    return '${s[0].toUpperCase()}${s.substring(1)}';
   }
 
   static String _formatDuration(int seconds) {

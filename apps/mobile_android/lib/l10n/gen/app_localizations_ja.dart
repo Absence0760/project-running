@@ -3417,19 +3417,27 @@ class AppLocalizationsJa extends AppLocalizations {
   String get feedFindPeople => 'ユーザーを探す';
 
   @override
+  String runNotificationPausedTitle(String activity) {
+    return '$activity • 一時停止中';
+  }
+
+  @override
+  String get activityTypeRun => 'ランニング';
+
+  @override
+  String get activityTypeWalk => 'ウォーキング';
+
+  @override
+  String get activityTypeHike => 'トレイルラン';
+
+  @override
+  String get activityTypeCycle => 'サイクリング';
+
+  @override
+  String get activityTypeStroller => 'ベビーカー';
+
+  @override
   String get feedActivityAll => 'すべて';
-
-  @override
-  String get feedActivityRun => 'ラン';
-
-  @override
-  String get feedActivityWalk => 'ウォーク';
-
-  @override
-  String get feedActivityCycle => 'サイクリング';
-
-  @override
-  String get feedActivityHike => 'ハイク';
 
   @override
   String get feedActivityLift => '筋トレ';
@@ -6594,18 +6602,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
     return '$pace $paceLabel — 30秒以上ずれると「ペースずれアラート」が読み上げます';
   }
-
-  @override
-  String get prefsActivityRun => 'ラン';
-
-  @override
-  String get prefsActivityWalk => 'ウォーク';
-
-  @override
-  String get prefsActivityHike => 'ハイク';
-
-  @override
-  String get prefsActivityCycle => 'サイクリング';
 
   @override
   String get prefsPaceFormat => 'ペース形式';

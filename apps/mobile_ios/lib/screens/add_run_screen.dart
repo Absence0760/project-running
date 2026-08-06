@@ -1,3 +1,4 @@
+import '../activity_type_labels.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
@@ -276,7 +277,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
               children: ActivityType.values.map((a) {
                 final selected = _activityType == a;
                 return ChoiceChip(
-                  label: Text(a.label),
+                  label: Text(activityTypeLabel(l10n, a)),
                   avatar: Icon(a.icon, size: 18),
                   selected: selected,
                   onSelected: (_) => setState(() => _activityType = a),

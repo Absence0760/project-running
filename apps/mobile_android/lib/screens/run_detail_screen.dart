@@ -1,3 +1,4 @@
+import '../activity_type_labels.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -1120,7 +1121,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                _activityType.label,
+                activityTypeLabel(l10n, _activityType),
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,

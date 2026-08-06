@@ -3632,19 +3632,27 @@ class AppLocalizationsEs extends AppLocalizations {
   String get feedFindPeople => 'Buscar personas';
 
   @override
+  String runNotificationPausedTitle(String activity) {
+    return '$activity • en pausa';
+  }
+
+  @override
+  String get activityTypeRun => 'Carrera';
+
+  @override
+  String get activityTypeWalk => 'Caminata';
+
+  @override
+  String get activityTypeHike => 'Trail';
+
+  @override
+  String get activityTypeCycle => 'Ciclismo';
+
+  @override
+  String get activityTypeStroller => 'Cochecito';
+
+  @override
   String get feedActivityAll => 'Todo';
-
-  @override
-  String get feedActivityRun => 'Carrera';
-
-  @override
-  String get feedActivityWalk => 'Caminata';
-
-  @override
-  String get feedActivityCycle => 'Ciclismo';
-
-  @override
-  String get feedActivityHike => 'Senderismo';
 
   @override
   String get feedActivityLift => 'Fuerza';
@@ -6989,18 +6997,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String prefsLivePaceAlertOn(String pace, String paceLabel) {
     return '$pace $paceLabel — las alertas de desvío de ritmo suenan al desviarte 30 s o más';
   }
-
-  @override
-  String get prefsActivityRun => 'Correr';
-
-  @override
-  String get prefsActivityWalk => 'Caminar';
-
-  @override
-  String get prefsActivityHike => 'Senderismo';
-
-  @override
-  String get prefsActivityCycle => 'Ciclismo';
 
   @override
   String get prefsPaceFormat => 'Formato de ritmo';
