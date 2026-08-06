@@ -12569,4 +12569,8 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get routeMarkerRemoved => 'Marcador eliminado';
+
+  @override
+  String get roadbookNeedsRouteLine =>
+      'Añade al menos dos puntos a esta ruta para crear un roadbook.';
 }

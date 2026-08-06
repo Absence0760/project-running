@@ -12565,6 +12565,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeMarkerRemoved => 'Marcador removido';
+
+  @override
+  String get roadbookNeedsRouteLine =>
+      'Adicione pelo menos dois pontos a esta rota para montar um roadbook.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -25123,4 +25127,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routeMarkerRemoved => 'Marcador removido';
+
+  @override
+  String get roadbookNeedsRouteLine =>
+      'Adicione pelo menos dois pontos a esta rota para montar um roadbook.';
 }

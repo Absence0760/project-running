@@ -15988,5 +15988,9 @@
   "routeMarkerRemoved": "Marker removed",
   "@routeMarkerRemoved": {
     "description": "Undo bar sentence after removing a course marker"
+  },
+  "roadbookNeedsRouteLine": "Add at least two points to this route to build a roadbook.",
+  "@roadbookNeedsRouteLine": {
+    "description": "Reason shown beside the disabled crew-sheet button when the route has fewer than two points"
   }
 }

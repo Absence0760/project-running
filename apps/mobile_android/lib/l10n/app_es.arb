@@ -3660,5 +3660,6 @@
   "nutritionEntryRemoved": "{item} eliminado",
   "runSocialCommentRemoved": "Comentario eliminado",
   "routeDetailReviewRemoved": "Reseña eliminada",
-  "routeMarkerRemoved": "Marcador eliminado"
+  "routeMarkerRemoved": "Marcador eliminado",
+  "roadbookNeedsRouteLine": "Añade al menos dos puntos a esta ruta para crear un roadbook."
 }

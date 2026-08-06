@@ -12598,4 +12598,8 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routeMarkerRemoved => 'Repère supprimé';
+
+  @override
+  String get roadbookNeedsRouteLine =>
+      'Ajoutez au moins deux points à cet itinéraire pour créer un roadbook.';
 }

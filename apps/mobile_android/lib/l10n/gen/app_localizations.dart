@@ -21007,6 +21007,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Marker removed'**
   String get routeMarkerRemoved;
+
+  /// Reason shown beside the disabled crew-sheet button when the route has fewer than two points
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least two points to this route to build a roadbook.'**
+  String get roadbookNeedsRouteLine;
 }
 
 class _AppLocalizationsDelegate
