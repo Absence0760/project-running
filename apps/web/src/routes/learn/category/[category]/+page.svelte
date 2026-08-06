@@ -45,7 +45,7 @@
 		<h1>{categoryLabel}</h1>
 	</section>
 
-	<main class="content">
+	<main class="content" id="main-content">
 		<div class="guide-grid">
 			{#each data.guides as guide (guide.slug)}
 				<GuideCard {guide} />

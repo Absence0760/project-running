@@ -63,7 +63,7 @@
 		</a>
 	</header>
 
-	<main class="invite-main">
+	<main class="invite-main" id="main-content">
 		{#if status === 'joining'}
 			<section class="invite-card joining-card" aria-live="polite">
 				<p class="kicker">{m('coachingAccept.joiningKicker')}</p>

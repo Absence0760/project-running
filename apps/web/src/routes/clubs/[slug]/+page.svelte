@@ -2214,7 +2214,7 @@
 
 	.event-row:hover {
 		border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
-		transform: translateX(2px);
+		transform: translateX(calc(2px * var(--dir-sign)));
 	}
 
 	.event-row.past {

@@ -95,11 +95,11 @@
 			</section>
 		{/if}
 
-		<main class="content">
+		<main class="content" id="main-content">
 			<RunShareView runId={data.id} headerless hideAnonCta />
 		</main>
 	{:else}
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareRun.notFoundKicker')}</p>
 				<h1>{m('shareRun.notFoundTitle')}</h1>

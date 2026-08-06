@@ -293,7 +293,7 @@
 		margin: 0;
 	}
 	.tier-price {
-		margin: 0 0 0 auto;
+		margin-inline-start: auto;
 		display: flex;
 		align-items: baseline;
 		gap: 0.25rem;

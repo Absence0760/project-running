@@ -50,7 +50,7 @@
 </svelte:head>
 
 <div class="confirm-page">
-	<main class="card">
+	<main class="card" id="main-content">
 		<h1>{m('confirmAge.heading')}</h1>
 		<p class="lede">
 			{m('confirmAge.lede')}

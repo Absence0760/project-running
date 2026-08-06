@@ -69,14 +69,14 @@
 	});
 </script>
 
-<div class="callback-page">
+<main class="callback-page" id="main-content">
 	{#if error}
 		<p class="error">{m('authCallback.failed', { error })}</p>
 		<a href="/login">{m('authCallback.backToLogin')}</a>
 	{:else}
 		<p>{m('authCallback.signingIn')}</p>
 	{/if}
-</div>
+</main>
 
 <style>
 	.callback-page {

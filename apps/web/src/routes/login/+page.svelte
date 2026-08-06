@@ -317,7 +317,7 @@
 		<p class="brand-foot">{m('login.brandFoot')}</p>
 	</aside>
 
-	<main class="form-pane">
+	<main class="form-pane" id="main-content">
 		<div class="login-card">
 			<a href="/" class="logo logo-mobile">
 				<img src="/logo-mark.svg" alt="" class="logo-mark" />

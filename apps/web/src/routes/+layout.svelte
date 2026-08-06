@@ -786,7 +786,7 @@
 	}
 
 	.nav-link:hover .nav-label {
-		transform: translateX(2px);
+		transform: translateX(calc(2px * var(--dir-sign)));
 	}
 
 	.nav-link:active .nav-icon-wrap {
@@ -817,7 +817,8 @@
 		top: 18%;
 		bottom: 18%;
 		width: 3px;
-		border-radius: 0 2px 2px 0;
+		border-start-end-radius: 2px;
+		border-end-end-radius: 2px;
 		background: var(--accent-ink);
 	}
 	.sidebar.collapsed .nav-link.active::before {

@@ -345,7 +345,7 @@
 		{/each}
 	</div>
 
-	<main class="card">
+	<main class="card" id="main-content">
 		{#if !ready}
 			<p class="loading-hint">{m('shell.loading')}</p>
 		{:else if step === 1}

@@ -98,7 +98,7 @@
 			</p>
 		</section>
 
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="summary-grid">
 				<div class="summary-stat">
 					<span class="summary-value">{data.session!.items.length}</span>
@@ -125,7 +125,7 @@
 			</section>
 		</main>
 	{:else}
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareSession.notFoundKicker')}</p>
 				<h1>{m('shareSession.notFoundTitle')}</h1>

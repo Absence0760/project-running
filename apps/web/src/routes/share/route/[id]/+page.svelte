@@ -82,9 +82,9 @@
 
 <SharePageShell>
 	{#if loading}
-		<div class="content"><p class="status">{m('shell.loading')}</p></div>
+		<main class="content" id="main-content"><p class="status">{m('shell.loading')}</p></main>
 	{:else if notFound}
-		<div class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareRoute.notFoundKicker')}</p>
 				<h1>{m('shareRoute.notFoundHeading')}</h1>
@@ -96,7 +96,7 @@
 					<a class="btn btn-outline" href="/">{m('shareRoute.goToThrekir')}</a>
 				</div>
 			</div>
-		</div>
+		</main>
 	{:else if route}
 		<section class="hero">
 			<p class="kicker">{m('shareRoute.heroKicker')}</p>
@@ -112,7 +112,7 @@
 			</p>
 		</section>
 
-		<main class="content">
+		<main class="content" id="main-content">
 			{#if waypoints.length > 0}
 				<div class="map-container">
 					<RunMap track={waypoints} requireExplicitConsent />
