@@ -50,7 +50,10 @@
 
 <SharePageShell>
 	{#if hasEvent}
-		<section class="hero">
+		<!-- The landmark rides the hero rather than a wrapper: .hero is a flex
+		     child of SharePageShell's .share-page, so wrapping it would move
+		     the flex child and reflow the page. -->
+		<main class="hero" id="main-content">
 			<p class="kicker">{m('shareEvent.heroKicker')}</p>
 			<h1>{data.event?.title}</h1>
 			<p class="subtitle">
@@ -64,9 +67,9 @@
 			<div class="hero-actions">
 				<a class="btn btn-primary" href={appHref}>{m('shareRun.goToThrekir')}</a>
 			</div>
-		</section>
+		</main>
 	{:else}
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareEvent.notFoundKicker')}</p>
 				<h1>{m('shareEvent.notFoundTitle')}</h1>

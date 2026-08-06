@@ -40,7 +40,7 @@
 		<p class="hero-sub">{m('learn.hubSub')}</p>
 	</section>
 
-	<main class="content">
+	<main class="content" id="main-content">
 		{#each data.categories as category (category.id)}
 			<section class="category-section" aria-labelledby="cat-{category.id}">
 				<h2 id="cat-{category.id}">{m(category.labelKey)}</h2>

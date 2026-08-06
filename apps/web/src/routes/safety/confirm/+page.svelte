@@ -47,7 +47,7 @@
 	<title>{m('safetyConfirm.title')}</title>
 </svelte:head>
 
-<main class="confirm-card">
+<main class="confirm-card" id="main-content">
 	<div class="card" data-testid="safety-confirm-card" data-state={phase}>
 		<h1>{m('safetyConfirm.title')}</h1>
 		<p class:ok={phase === 'success'} class:bad={phase === 'failure' || phase === 'missing'}>

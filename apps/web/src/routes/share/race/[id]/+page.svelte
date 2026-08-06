@@ -47,7 +47,10 @@
 
 <SharePageShell>
 	{#if hasRace}
-		<section class="hero">
+		<!-- The landmark rides the hero rather than a wrapper: .hero is a flex
+		     child of SharePageShell's .share-page, so wrapping it would move
+		     the flex child and reflow the page. -->
+		<main class="hero" id="main-content">
 			<p class="kicker">{m('shareRace.subtitle')}</p>
 			<h1>{data.race?.name}</h1>
 			<p class="subtitle">
@@ -66,9 +69,9 @@
 				{/if}
 				<a class="btn btn-outline" href="/races">{m('shareRace.calendar')}</a>
 			</div>
-		</section>
+		</main>
 	{:else}
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareRun.notFoundKicker')}</p>
 				<h1>{m('shareRace.notFoundTitle')}</h1>

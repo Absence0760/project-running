@@ -68,6 +68,10 @@
 <div class="learn-page">
 	<PublicHeader />
 
+	<!-- Wraps rather than replaces the <article>: a guide is genuinely an
+	     article (its JSON-LD says so), and .learn-article centres itself inside
+	     whatever full-width flex child holds it, so the wrapper costs no layout. -->
+	<main id="main-content">
 	<article class="learn-article">
 		<nav class="breadcrumb" aria-label={m('learn.breadcrumbNav')}>
 			<a href="/">{m('learn.breadcrumbHome')}</a>
@@ -92,6 +96,7 @@
 
 		<LearnCta feature={data.guide.cta?.feature} />
 	</article>
+	</main>
 
 	<PublicFooter />
 </div>

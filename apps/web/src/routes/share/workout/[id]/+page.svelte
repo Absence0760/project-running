@@ -88,7 +88,7 @@
 			{#if heroDate}<p class="subtitle">{heroDate}</p>{/if}
 		</section>
 
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="summary-grid">
 				<div class="summary-stat">
 					<span class="summary-value">{exerciseCount}</span>
@@ -121,7 +121,7 @@
 			{/each}
 		</main>
 	{:else}
-		<main class="content">
+		<main class="content" id="main-content">
 			<div class="notfound-card">
 				<p class="kicker">{m('shareWorkout.notFoundKicker')}</p>
 				<h1>{m('shareWorkout.notFoundTitle')}</h1>

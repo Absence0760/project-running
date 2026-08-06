@@ -36,7 +36,7 @@
 </svelte:head>
 
 <SharePageShell>
-	<main class="share-badge">
+	<main class="share-badge" id="main-content">
 		{#if hasBadge}
 			<div class="badge-card tier-{tier}">
 				<span class="badge-icon material-symbols" aria-hidden="true">{resolved?.icon}</span>

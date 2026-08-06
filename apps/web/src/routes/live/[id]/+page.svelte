@@ -841,6 +841,10 @@
 		{/if}
 	</header>
 
+	<!-- Shell-less routes get no <main> from +layout.svelte, so each one owns
+	     its landmark — every /share/* sibling already does. Without it this
+	     page shipped no main region at all (WCAG 1.3.1). -->
+	<main id="main-content">
 	{#if status === 'not-found'}
 		<div class="live-empty">
 			<div class="live-empty-icon" aria-hidden="true">
@@ -1061,6 +1065,7 @@
 			{/if}
 		</div>
 	{/if}
+	</main>
 </div>
 
 <style>

@@ -610,6 +610,10 @@
 		</div>
 	</header>
 
+	<!-- Shell-less routes get no <main> from +layout.svelte, so each one owns
+	     its landmark — every /share/* sibling already does. Without it this
+	     page shipped no main region at all (WCAG 1.3.1). -->
+	<main id="main-content">
 	{#if loading}
 		<p class="muted">{m('shell.loading')}</p>
 	{:else if loadError}
@@ -748,6 +752,7 @@
 			</section>
 		{/if}
 	{/if}
+	</main>
 </div>
 
 <style>
@@ -974,7 +979,7 @@
 	}
 	.runner:hover {
 		border-color: var(--color-border);
-		transform: translateX(2px);
+		transform: translateX(calc(2px * var(--dir-sign)));
 	}
 	.runner.pending {
 		opacity: 0.75;
