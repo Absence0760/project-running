@@ -4,6 +4,7 @@ library ui_kit;
 export 'src/widgets/activity_loader.dart';
 export 'src/widgets/app_tab_bar.dart';
 export 'src/widgets/stat_tile.dart';
+export 'src/widgets/status_pill.dart';
 export 'src/widgets/stat_grid.dart';
 export 'src/widgets/chart_card_header.dart';
 export 'src/widgets/choice_chip_row.dart';
