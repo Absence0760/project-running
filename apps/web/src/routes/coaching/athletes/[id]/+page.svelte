@@ -18,6 +18,7 @@
 	import { formatDuration, formatDate } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
 	import { isWorkoutSkipped } from '$lib/training/training';
+	import { workoutKindLabel } from '$lib/training/workout_labels';
 
 	const athleteId = $derived($page.params.id);
 
@@ -135,8 +136,7 @@
 	}
 
 	function workoutLabel(w: PlanWorkout): string {
-		const k = (w.kind ?? 'run').replace(/_/g, ' ');
-		return k.charAt(0).toUpperCase() + k.slice(1);
+		return workoutKindLabel(w.kind);
 	}
 
 	// Compliance counts over the whole plan (rest days excluded).
