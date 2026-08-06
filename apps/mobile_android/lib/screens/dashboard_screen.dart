@@ -950,10 +950,10 @@ class _DashboardScreenState extends State<DashboardScreen>
         ));
         if (liftsCard != null) addBlock(liftsCard);
 
-        content = Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _kExpandedMaxWidth),
-            child: ListView(
+        content = contentColumn(
+          context,
+          maxWidth: _kExpandedMaxWidth,
+          ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
                 if (actionToolbar != null) actionToolbar,
@@ -1005,7 +1005,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ],
                 ),
               ],
-            ),
           ),
         );
       } else {

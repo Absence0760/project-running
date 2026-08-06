@@ -1273,16 +1273,7 @@ class _RunsScreenState extends State<RunsScreen> {
         onTapLift: _openActivityLift,
         onRefresh: _refreshAll,
       );
-      // Single-column reading surface — cap + center it on expanded
-      // widths so timeline rows don't stretch across a whole tablet.
-      if (widthClassOf(context) == WidthClass.expanded) {
-        content = Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
-            child: content,
-          ),
-        );
-      }
+      content = contentColumn(context, content);
     } else {
       content = RefreshIndicator(
         onRefresh: _refreshAll,
