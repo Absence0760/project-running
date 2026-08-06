@@ -2,6 +2,7 @@
 library ui_kit;
 
 export 'src/widgets/activity_loader.dart';
+export 'src/widgets/app_tab_bar.dart';
 export 'src/widgets/run_map.dart';
 export 'src/widgets/stat_tile.dart';
 export 'src/widgets/stat_grid.dart';

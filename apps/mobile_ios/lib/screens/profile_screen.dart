@@ -663,10 +663,9 @@ class _ProfileScreenState extends State<ProfileScreen>
               onPressed: _blockBusy ? null : _toggleBlock,
             ),
         ],
-        bottom: TabBar(
+        bottom: AppTabBar(
           controller: _tabs,
-          isScrollable: true,
-          tabs: [for (final tab in order) Tab(text: _tabLabel(l10n, tab))],
+          labels: [for (final tab in order) _tabLabel(l10n, tab)],
         ),
       ),
       body: _loading

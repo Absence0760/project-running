@@ -102,17 +102,13 @@ void main() {
         findsNothing);
   });
 
-  testWidgets(
-      'the TabBar is scrollable so all 5 labels render untruncated (#498)',
-      (tester) async {
-    // Five icon+text tabs (Feed/People/Clubs/Discover/Challenges) squeezed
-    // into equal fixed-width slots ellipsized "Challenges"/"Discover" on
-    // typical phone widths. isScrollable sizes each tab to its content.
+  testWidgets('all 5 labels render untruncated (#498)', (tester) async {
+    // Five tabs (Feed/People/Clubs/Discover/Challenges) squeezed into equal
+    // fixed-width slots ellipsized "Challenges"/"Discover" on typical phone
+    // widths. `AppTabBar` scrolls the strip when the labels stop fitting, so
+    // #498's outcome is now derived rather than asserted as a flag (#666 C6).
     await tester.pumpWidget(_wrap(await _socialScreen()));
     await tester.pump();
-
-    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.isScrollable, isTrue);
 
     for (final label in ['Feed', 'People', 'Clubs', 'Discover', 'Challenges']) {
       final text = tester.widget<Text>(
@@ -123,6 +119,21 @@ void main() {
       expect(text.overflow, isNot(TextOverflow.ellipsis),
           reason: '$label must not be ellipsized');
     }
+  });
+
+  testWidgets('the strip scrolls once the labels stop fitting (#666 C6)',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(_wrap(await _socialScreen()));
+    await tester.pump();
+
+    final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+    expect(tabBar.isScrollable, isTrue);
+    // Flush, not Material's 52dp startOffset — the fitness hub's filled strip
+    // puts its first tab at x=0 and switching destinations must not slide it.
+    expect(tabBar.tabAlignment, TabAlignment.start);
   });
 
   testWidgets('initialTab=3 selects the Discover tab on first frame',
