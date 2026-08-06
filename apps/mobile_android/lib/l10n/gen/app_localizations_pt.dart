@@ -2487,6 +2487,14 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint =>
+      'Toca e mantém numa corrida para selecionar várias';
+
+  @override
+  String get routesSelectionHint =>
+      'Toca e mantém numa rota para selecionar várias';
+
+  @override
   String get routesEmptyTitle => 'Nenhuma rota ainda';
 
   @override
@@ -15039,6 +15047,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String routesSaved(String name) {
     return '\"$name\" salva';
   }
+
+  @override
+  String get historySelectionHint =>
+      'Toque e segure em uma corrida para selecionar várias';
+
+  @override
+  String get routesSelectionHint =>
+      'Toque e segure em uma rota para selecionar várias';
 
   @override
   String get routesEmptyTitle => 'Nenhuma rota ainda';

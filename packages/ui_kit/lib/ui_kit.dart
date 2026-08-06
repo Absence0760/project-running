@@ -11,5 +11,6 @@ export 'src/widgets/identity_avatar.dart';
 export 'src/widgets/list_skeleton.dart';
 export 'src/widgets/text_lane.dart';
 export 'src/widgets/section_header.dart';
+export 'src/widgets/selection_hint.dart';
 export 'src/theme/app_theme.dart';
 export 'src/theme/chart_palette.dart';

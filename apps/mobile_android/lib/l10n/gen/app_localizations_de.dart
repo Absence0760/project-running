@@ -2497,6 +2497,14 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint =>
+      'Halte einen Lauf gedrückt, um mehrere auszuwählen';
+
+  @override
+  String get routesSelectionHint =>
+      'Halte eine Route gedrückt, um mehrere auszuwählen';
+
+  @override
   String get routesEmptyTitle => 'Noch keine Routen';
 
   @override

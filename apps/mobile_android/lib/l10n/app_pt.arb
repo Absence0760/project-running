@@ -690,6 +690,8 @@
   "routesImportFailed": "Falha na importação: {error}",
   "routesImportSharedFailed": "Não foi possível importar o arquivo: não é uma rota GPX ou KML válida.",
   "routesSaved": "\"{name}\" salva",
+  "historySelectionHint": "Toca e mantém numa corrida para selecionar várias",
+  "routesSelectionHint": "Toca e mantém numa rota para selecionar várias",
   "routesEmptyTitle": "Nenhuma rota ainda",
   "routesEmptyBody": "Toque em Criar para desenhar uma rota no mapa ou importe um arquivo GPX, KML ou TCX.",
   "routesBuild": "Criar",

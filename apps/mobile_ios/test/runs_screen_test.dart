@@ -778,6 +778,29 @@ void main() {
       expect(find.text('Load 20 more'), findsNothing);
     });
 
+    testWidgets('the long-press hint rides the shared header, so both the '
+        'list and the grid carry it', (tester) async {
+      final runStore = await seedThirty();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      // Default 800dp surface — the single-column list path.
+      await pumpSized(tester, runStore);
+      expect(find.text(l10n.historySelectionHint), findsOneWidget);
+
+      // ≥840dp — the grid path, which builds its header through the same
+      // `_filterHeader`, so the hint cannot be present on one and not the
+      // other.
+      tester.view.physicalSize = const Size(2560, 1440);
+      tester.view.devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+      await pumpSized(tester, runStore);
+      expect(find.text(l10n.historySelectionHint), findsOneWidget);
+
+      await tester.longPress(find.byType(ListTile).first);
+      await tester.pump();
+      expect(find.text(l10n.historySelectionHint), findsNothing);
+    });
+
     testWidgets('long-press on a grid tile still enters selection mode',
         (tester) async {
       tester.view.physicalSize = const Size(2560, 1440);

@@ -4253,6 +4253,18 @@ abstract class AppLocalizations {
   /// **'Saved \"{name}\"'**
   String routesSaved(String name);
 
+  /// Caption under the History filters telling the reader a long press opens multi-select
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a run to select several'**
+  String get historySelectionHint;
+
+  /// Caption under the Routes filters telling the reader a long press opens multi-select
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a route to select several'**
+  String get routesSelectionHint;
+
   /// Empty-state title shown when the route library is empty
   ///
   /// In en, this message translates to:

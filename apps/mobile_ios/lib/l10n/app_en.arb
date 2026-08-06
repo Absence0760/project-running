@@ -3288,6 +3288,14 @@
       }
     }
   },
+  "historySelectionHint": "Long-press a run to select several",
+  "@historySelectionHint": {
+    "description": "Caption under the History filters telling the reader a long press opens multi-select"
+  },
+  "routesSelectionHint": "Long-press a route to select several",
+  "@routesSelectionHint": {
+    "description": "Caption under the Routes filters telling the reader a long press opens multi-select"
+  },
   "routesEmptyTitle": "No routes yet",
   "@routesEmptyTitle": {
     "description": "Empty-state title shown when the route library is empty"

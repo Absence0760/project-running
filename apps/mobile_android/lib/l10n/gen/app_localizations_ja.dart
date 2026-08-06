@@ -2372,6 +2372,12 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint => 'ランを長押しすると複数選択できます';
+
+  @override
+  String get routesSelectionHint => 'ルートを長押しすると複数選択できます';
+
+  @override
   String get routesEmptyTitle => 'まだルートがありません';
 
   @override
