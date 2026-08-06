@@ -244,15 +244,23 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                     style: TextButton.styleFrom(
                         foregroundColor: AppSemanticColors.of(context).danger),
                   ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _saving ? null : () => Navigator.maybePop(context),
-                  child: Text(l10n.goalEditorCancel),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: Text(l10n.goalEditorSave),
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      TextButton(
+                        onPressed:
+                            _saving ? null : () => Navigator.maybePop(context),
+                        child: Text(l10n.goalEditorCancel),
+                      ),
+                      FilledButton(
+                        onPressed: _saving ? null : _save,
+                        child: Text(l10n.goalEditorSave),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

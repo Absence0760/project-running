@@ -2469,6 +2469,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint => 'Long-press a run to select several';
+
+  @override
+  String get routesSelectionHint => 'Long-press a route to select several';
+
+  @override
   String get routesEmptyTitle => 'No routes yet';
 
   @override
@@ -3875,7 +3881,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileNotifSomeone => 'Someone';
 
   @override
-  String get profileNotifYourRun => 'your run';
+  String get profileNotifYourRun => 'run';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {

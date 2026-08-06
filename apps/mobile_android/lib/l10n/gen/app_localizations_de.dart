@@ -2497,6 +2497,14 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint =>
+      'Halte einen Lauf gedrückt, um mehrere auszuwählen';
+
+  @override
+  String get routesSelectionHint =>
+      'Halte eine Route gedrückt, um mehrere auszuwählen';
+
+  @override
   String get routesEmptyTitle => 'Noch keine Routen';
 
   @override
@@ -3918,7 +3926,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileNotifSomeone => 'Jemand';
 
   @override
-  String get profileNotifYourRun => 'deinen Lauf';
+  String get profileNotifYourRun => 'Lauf';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {

@@ -12,18 +12,22 @@ enum ActivityLoaderKind { run, train, fuel }
 /// [size] is the figure WIDTH; the height is `size * 170 / 120`. [color]
 /// defaults to the theme's primary. Honours `disableAnimations` (reduced
 /// motion) by painting the static rest pose.
+///
+/// [label] is required and carries the screen-reader announcement. ui_kit has
+/// no localization catalogue, so a default here could only ever be an English
+/// literal shipped to every locale.
 class ActivityLoader extends StatefulWidget {
   final ActivityLoaderKind kind;
   final double size;
   final Color? color;
-  final String? label;
+  final String label;
 
   const ActivityLoader({
     super.key,
     required this.kind,
     this.size = 48,
     this.color,
-    this.label,
+    required this.label,
   });
 
   @override
@@ -68,7 +72,7 @@ class _ActivityLoaderState extends State<ActivityLoader>
     final width = widget.size;
     final height = widget.size * 170 / 120;
     return Semantics(
-      label: widget.label ?? 'Loading',
+      label: widget.label,
       liveRegion: true,
       container: true,
       child: SizedBox(

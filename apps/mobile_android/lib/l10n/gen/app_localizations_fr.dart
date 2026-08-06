@@ -2499,6 +2499,14 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get historySelectionHint =>
+      'Appuyez longuement sur une course pour en sélectionner plusieurs';
+
+  @override
+  String get routesSelectionHint =>
+      'Appuyez longuement sur un itinéraire pour en sélectionner plusieurs';
+
+  @override
   String get routesEmptyTitle => 'Aucun itinéraire pour l\'instant';
 
   @override
@@ -3919,7 +3927,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get profileNotifSomeone => 'Quelqu\'un';
 
   @override
-  String get profileNotifYourRun => 'votre course';
+  String get profileNotifYourRun => 'course';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {

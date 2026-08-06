@@ -4253,6 +4253,18 @@ abstract class AppLocalizations {
   /// **'Saved \"{name}\"'**
   String routesSaved(String name);
 
+  /// Caption under the History filters telling the reader a long press opens multi-select
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a run to select several'**
+  String get historySelectionHint;
+
+  /// Caption under the Routes filters telling the reader a long press opens multi-select
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a route to select several'**
+  String get routesSelectionHint;
+
   /// Empty-state title shown when the route library is empty
   ///
   /// In en, this message translates to:
@@ -6490,10 +6502,10 @@ abstract class AppLocalizations {
   /// **'Someone'**
   String get profileNotifSomeone;
 
-  /// Fallback for a run reference in notification text when distance is unknown
+  /// Fallback noun for a run reference in notification text when the distance is unknown. Carries NO possessive: every consuming template already supplies one ("your {dist}")
   ///
   /// In en, this message translates to:
-  /// **'your run'**
+  /// **'run'**
   String get profileNotifYourRun;
 
   /// Actor name for a collapsed notification group (Alice and 4 others)

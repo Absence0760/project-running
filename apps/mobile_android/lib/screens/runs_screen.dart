@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, SelectionHint;
 
 import '../adaptive_width.dart';
 import '../auth_error.dart';
@@ -1537,6 +1537,21 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   Widget _filterHeader(AppLocalizations l10n, DistanceUnit unit) {
+    // Both the list and the grid path render the header through here, so the
+    // long-press hint rides it rather than being inserted twice. Long-press is
+    // the only way into multi-select; suppressed once selecting (the app bar
+    // has taken over the surface) and when there is nothing to select.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _runsFilterHeader(l10n, unit),
+        if (!_selecting && _visible.isNotEmpty)
+          SelectionHint(label: l10n.historySelectionHint),
+      ],
+    );
+  }
+
+  Widget _runsFilterHeader(AppLocalizations l10n, DistanceUnit unit) {
     return _RunsFilterHeader(
       l10n: l10n,
       rangeLabel: _activeRangeLabel(l10n),
