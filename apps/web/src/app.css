@@ -356,6 +356,19 @@
 	--z-cookie: 400;
 }
 
+/* Narrow viewports: the same breakpoint at which the sidebar locks to
+   its 4.5rem rail. A 3rem gutter each side then costs 96px of a 320px
+   screen on top of the 72px rail, leaving 152px of canvas — which is
+   what made pages overflow the viewport instead of reflowing into it
+   (WCAG 1.4.10). Every top-level page wrapper reads these two tokens,
+   so this is the one place the gutter narrows. */
+@media (max-width: 40rem) {
+	:root {
+		--page-padding-y: var(--space-lg);
+		--page-padding-x: var(--space-md);
+	}
+}
+
 /* Dark theme — applied three ways, listed in increasing specificity so
    the explicit toggle below always wins:
      1. `@media (prefers-color-scheme: dark)` when no explicit theme set
@@ -785,6 +798,21 @@ img {
 	transition: all var(--transition-fast);
 	white-space: nowrap;
 }
+/* A 320px screen leaves ~166px of canvas beside the 4.5rem rail and the
+   gutter. Labels like "Download my data (JSON)" measure past 200px at
+   0.875rem, so nowrap there can only widen the document (WCAG 1.4.10).
+   Above this breakpoint the canvas is wide enough and buttons keep
+   their single line. Must stay after the base rule — same specificity,
+   so source order decides. */
+@media (max-width: 40rem) {
+	.btn,
+	.btn-primary,
+	.btn-secondary,
+	.btn-outline,
+	.btn-danger {
+		white-space: normal;
+	}
+}
 .btn:disabled,
 .btn-primary:disabled,
 .btn-secondary:disabled,
@@ -845,6 +873,16 @@ img {
  * would regress every flat-card page). Compose with a page-scoped modifier
  * for layout: `class="card-elevated rings-card"`.
  */
+/* A data table's columns are its own axis — dropping one to fit a 320px
+   screen loses information, so the table scrolls inside this wrapper
+   rather than widening the page. WCAG 1.4.10 exempts content requiring
+   a two-dimensional layout on exactly these terms. `tabindex="0"` on
+   the wrapper keeps the scroll region reachable without a mouse. */
+.table-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
 .card-elevated {
 	background: var(--color-surface);
 	border: 1px solid var(--color-border);
