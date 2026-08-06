@@ -167,14 +167,23 @@
 
 	function verbFor(item: NotificationView, nameOverride?: string): string {
 		const name = nameOverride ?? nameFor(item);
-		const dist = item.run_distance_m
-			? fmtKm(item.run_distance_m)
-			: m('notificationsList.yourRun');
+		// The no-distance branch is a whole sentence per locale, never this
+		// template with a "your run" fragment substituted in: the template
+		// already carries the possessive, so a possessive fragment doubled it
+		// ("gave kudos to your your run") in all six locales. Nor can one
+		// fragment serve both verbs — German wants dative for kudos and
+		// accusative for comment, and French "course" is feminine where the
+		// interpolated distance is masculine.
+		const dist = item.run_distance_m ? fmtKm(item.run_distance_m) : null;
 		switch (item.row.kind) {
 			case 'kudos':
-				return m('notificationsList.verbKudos', { name, dist });
+				return dist
+					? m('notificationsList.verbKudos', { name, dist })
+					: m('notificationsList.verbKudosNoDistance', { name });
 			case 'comment':
-				return m('notificationsList.verbComment', { name, dist });
+				return dist
+					? m('notificationsList.verbComment', { name, dist })
+					: m('notificationsList.verbCommentNoDistance', { name });
 			case 'comment_reply':
 				return m('notificationsList.verbCommentReply', { name });
 			case 'follow':
