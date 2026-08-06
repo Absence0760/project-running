@@ -10,6 +10,7 @@
 	import SharePageShell from '$lib/components/SharePageShell.svelte';
 	import {
 		buildRouteJsonLd,
+		buildRouteOgImageUrl,
 		buildRouteShareCanonical,
 		buildRouteShareDescription,
 		buildRouteShareTitle,
@@ -49,6 +50,10 @@
 	// Absolute canonical so search engines fold the in-app /routes/[id]
 	// surface (which canonicals here) onto this single public page.
 	let canonicalUrl = $derived(buildRouteShareCanonical(data.siteUrl, data.id));
+	// Absolute, from the same builder the JSON-LD below and the Lambda-injected
+	// head both use. A root-relative og:image is read by a REMOTE crawler and
+	// disagreed with the absolute URL inside the JSON-LD (§ 546).
+	let ogImageUrl = $derived(buildRouteOgImageUrl(data.siteUrl, data.id));
 	// JSON-LD WebPage + breadcrumb. Injected via {@html} because a
 	// literal <script> in Svelte markup would be hoisted/compiled; the
 	// builder pre-escapes < / > / & so a malicious route name can't
@@ -65,13 +70,13 @@
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content={canonicalUrl} />
 	<meta property="og:site_name" content="Threkir" />
-	<meta property="og:image" content="/og/route/{data.id}.png" />
+	<meta property="og:image" content={ogImageUrl} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDesc} />
-	<meta name="twitter:image" content="/og/route/{data.id}.png" />
+	<meta name="twitter:image" content={ogImageUrl} />
 	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 

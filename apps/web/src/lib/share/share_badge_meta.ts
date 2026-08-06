@@ -20,6 +20,15 @@ export function buildBadgeShareCanonical(
 	return `${normaliseSiteUrl(base)}/share/badge/${id}`;
 }
 
+/// Absolute URL of the per-badge `og:image` PNG. Sibling of the canonical
+/// above; see `buildRunOgImageUrl` for why an og:image path owes a builder.
+export function buildBadgeOgImageUrl(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/og/badge/${id}.png`;
+}
+
 export interface ShareBadgeMetaInput {
 	id: string;
 	badge: SharedBadge | null;
@@ -42,6 +51,6 @@ export function buildShareBadgeMeta(input: ShareBadgeMetaInput): ShareRunMeta {
 		title,
 		description,
 		canonical: buildBadgeShareCanonical(base, id),
-		ogImageUrl: `${base}/og/badge/${id}.png`,
+		ogImageUrl: buildBadgeOgImageUrl(base, id),
 	};
 }

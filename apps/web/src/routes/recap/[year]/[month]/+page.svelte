@@ -6,6 +6,7 @@
 	import { fetchRuns, fetchRecapExtras, publishRecap } from '$lib/core/data';
 	import { buildMonthInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
 	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
+	import { buildRecapShareCanonical } from '$lib/share/share_recap_meta';
 	import { svgToPngBlob } from '$lib/share/svg_to_png';
 	import RecapView from '$lib/components/RecapView.svelte';
 	import { fmtKm, getUnit } from '$lib/format/units.svelte';
@@ -113,7 +114,7 @@
 				showToast(t('recap.publishFailed'), 'error');
 				return;
 			}
-			const url = `${location.origin}/recap/share/${id}`;
+			const url = buildRecapShareCanonical(location.origin, id);
 			if (navigator.share) {
 				try {
 					await navigator.share({ title: t('recap.monthShareTitle', { period: periodLabel }), url });

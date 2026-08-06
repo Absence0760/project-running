@@ -12,6 +12,7 @@ import {
 	buildRunShareDescription,
 	buildRunShareCanonical,
 	buildRunJsonLd,
+	buildRunOgImageUrl,
 	normaliseSiteUrl,
 } from './share_meta';
 import type { SharedRun } from './share_run_lookup';
@@ -59,7 +60,7 @@ export function buildShareRunMeta(input: ShareRunMetaInput): ShareRunMeta {
 		title,
 		description,
 		canonical: buildRunShareCanonical(siteUrl, id),
-		ogImageUrl: `${base}/og/run/${id}.png`,
+		ogImageUrl: buildRunOgImageUrl(base, id),
 		jsonLd: buildRunJsonLd(runMeta, { id, base: siteUrl, displayName }),
 	};
 }
