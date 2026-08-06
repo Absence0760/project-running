@@ -4218,6 +4218,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubDetailTabPhotos => 'Fotos';
 
   @override
+  String get clubDetailReadMore => 'Mehr lesen';
+
+  @override
   String get clubDetailReportClub => 'Club melden';
 
   @override

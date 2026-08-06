@@ -4219,6 +4219,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubDetailTabPhotos => 'Photos';
 
   @override
+  String get clubDetailReadMore => 'Lire la suite';
+
+  @override
   String get clubDetailReportClub => 'Signaler le club';
 
   @override

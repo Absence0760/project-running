@@ -3962,6 +3962,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubDetailTabPhotos => '写真';
 
   @override
+  String get clubDetailReadMore => '続きを読む';
+
+  @override
   String get clubDetailReportClub => 'クラブを報告';
 
   @override

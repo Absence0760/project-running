@@ -4206,6 +4206,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clubDetailTabPhotos => 'Fotos';
 
   @override
+  String get clubDetailReadMore => 'Ler mais';
+
+  @override
   String get clubDetailReportClub => 'Denunciar clube';
 
   @override
@@ -16766,6 +16769,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clubDetailTabPhotos => 'Fotos';
+
+  @override
+  String get clubDetailReadMore => 'Ler mais';
 
   @override
   String get clubDetailReportClub => 'Denunciar clube';
