@@ -52,6 +52,15 @@
 		display: flex;
 		justify-content: space-between;
 		gap: var(--space-sm);
+		/* A donor name is user-supplied and an amount must stay whole, so at a
+		 * narrow width the pair cannot share one line — without the wrap the row
+		 * sits at its min-content width and pushes the document open (§ 535). */
+		flex-wrap: wrap;
+	}
+
+	.name {
+		min-width: 0;
+		overflow-wrap: break-word;
 	}
 	.name {
 		font-weight: 600;
