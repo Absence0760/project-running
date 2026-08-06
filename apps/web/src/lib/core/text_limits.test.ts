@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { TEXT_LIMITS, TEXT_LIMIT_CONSTRAINTS } from './text_limits.js';
 
+// Relative to this file's own directory (`apps/web/src/lib/core/`), so it
+// resolves the same however the suite is invoked: core → lib → src → web → apps.
 const MIGRATION =
 	'../../../../backend/supabase/migrations/20270502_001_club_and_profile_text_caps.sql';
 
