@@ -429,7 +429,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           _buildMembersTab(theme, c),
           _buildRoutesTab(theme, c),
           _buildTemplatesTab(theme, c),
-          _buildPhotosTab(theme, c),
+          _buildPhotosTab(c),
         ],
       ),
     );
@@ -1618,7 +1618,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     );
   }
 
-  Widget _buildPhotosTab(ThemeData theme, ClubView c) {
+  Widget _buildPhotosTab(ClubView c) {
     // The ClubInviteScreen redemption path omits apiClient; the gallery
     // needs a client to fetch / upload, so fall back to a quiet message.
     final api = widget.apiClient;
