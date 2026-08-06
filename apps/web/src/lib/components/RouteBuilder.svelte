@@ -2479,7 +2479,7 @@
 		padding: 6px 12px;
 		background: rgba(0, 0, 0, 0.6);
 		border-radius: 6px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: rgba(255, 255, 255, 0.8);
 	}
 

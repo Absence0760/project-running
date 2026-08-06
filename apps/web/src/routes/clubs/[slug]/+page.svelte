@@ -1850,7 +1850,7 @@
 	}
 
 	.badge {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--color-text-tertiary);
@@ -2332,7 +2332,7 @@
 
 	.role-badge {
 		display: inline-block;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		text-transform: capitalize;
 		letter-spacing: 0.02em;

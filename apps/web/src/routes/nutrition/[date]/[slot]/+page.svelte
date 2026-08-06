@@ -293,7 +293,7 @@
 		opacity: 1;
 	}
 	.trend-cal {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-secondary);
 	}
 	.trend-day {

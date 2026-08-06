@@ -1370,7 +1370,7 @@
 		padding: 0 0.4rem;
 		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
 		color: var(--color-primary);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		border-radius: 9999px;
 		font-variant-numeric: tabular-nums;
@@ -1464,7 +1464,7 @@
 	}
 
 	.run-stat-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;

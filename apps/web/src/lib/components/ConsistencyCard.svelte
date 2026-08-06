@@ -87,7 +87,7 @@
 	.steadiness-chip {
 		padding: 0.1rem 0.55rem;
 		border-radius: 999px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;

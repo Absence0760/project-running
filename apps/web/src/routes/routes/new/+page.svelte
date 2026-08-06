@@ -1239,7 +1239,7 @@
 			font-size: 0.8rem;
 		}
 		.style-btn {
-			font-size: 0.7rem;
+			font-size: var(--font-size-section-label);
 			padding: var(--space-2xs) var(--space-xs);
 		}
 		/* Stats row: distance / elevation / waypoints. At narrow
@@ -1545,7 +1545,7 @@
 	.ai-request-applied-list {
 		margin: 0;
 		padding-inline-start: 1rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-secondary);
 		line-height: 1.5;
 	}
@@ -1623,7 +1623,7 @@
 	.label-hint {
 		font-weight: 400;
 		color: var(--color-text-tertiary);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		text-transform: none;
 		letter-spacing: 0;
 	}
@@ -1734,7 +1734,7 @@
 		font-size: 0.85rem;
 	}
 	.target-btn-sub {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		opacity: 0.7;
 	}
 
@@ -1810,7 +1810,7 @@
 		background: var(--color-primary);
 		color: white;
 		border-radius: 50%;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 	}
 	.waypoint-coords {
@@ -1852,7 +1852,7 @@
 	}
 	.waypoint-list-hint {
 		margin: 0;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-secondary);
 	}
 
@@ -1968,7 +1968,7 @@
 		border-radius: var(--radius-sm);
 		background: var(--color-surface);
 		font-family: inherit;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text);
 	}
@@ -2064,7 +2064,7 @@
 		font-weight: 700;
 	}
 	.save-summary-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;

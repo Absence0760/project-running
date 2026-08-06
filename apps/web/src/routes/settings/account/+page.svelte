@@ -1405,7 +1405,7 @@
 	.kicker {
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		color: var(--color-text-tertiary);
 		margin: 0 0 var(--space-2xs);

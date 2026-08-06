@@ -458,7 +458,7 @@
 
 	.dow-row span {
 		text-align: center;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-secondary);
 	}

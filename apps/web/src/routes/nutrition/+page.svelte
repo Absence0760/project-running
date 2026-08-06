@@ -1245,7 +1245,7 @@
 	.item-name { font-size: 0.95rem; color: var(--color-text); }
 	.item-macros { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 	.macro-chip {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		padding: 1px var(--space-sm);
 		border-radius: var(--radius-sm);
@@ -1445,7 +1445,7 @@
 	.trend-day {
 		flex: 1;
 		text-align: center;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-secondary);
 	}
 	.trend-today-day { color: var(--color-text); font-weight: 700; }

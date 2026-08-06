@@ -456,7 +456,7 @@
 		padding: 0.1rem 0.4rem;
 		border-radius: var(--radius-sm);
 		color: white;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		align-self: center;
 		text-align: center;

@@ -3098,7 +3098,7 @@
 	}
 
 	.attendance-badge {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		padding: 0.1rem 0.45rem;
 		border-radius: var(--radius-sm);
@@ -3372,7 +3372,7 @@
 	.dnf-tag {
 		background: var(--color-danger-light);
 		color: var(--color-danger-text);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.1rem 0.35rem;
 		border-radius: var(--radius-sm);
@@ -3526,7 +3526,7 @@
 	.pending-tag {
 		background: var(--color-warning-light);
 		color: var(--color-warning-text);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		padding: 0.1rem 0.35rem;
 		border-radius: var(--radius-sm);

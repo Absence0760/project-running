@@ -2793,7 +2793,7 @@
 	}
 
 	.workout-adherence {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -2833,7 +2833,7 @@
 
 	.workout-table th {
 		text-align: start;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 500;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;
@@ -2950,7 +2950,7 @@
 	}
 
 	.hr-stat-label {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: var(--color-text-secondary);

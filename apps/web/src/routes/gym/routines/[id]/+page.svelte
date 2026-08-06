@@ -392,7 +392,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 700;
 		letter-spacing: 0.03em;
 		padding: var(--space-2xs) var(--space-sm);

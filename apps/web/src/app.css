@@ -131,6 +131,17 @@
 	--color-accent-pink: #E8B89A;
 	--color-accent-cyan: #7FB3C2;
 
+	/* A route the runner has kept pinned on the map. Theme-keyed because it
+	   marks the route on a THEME surface (the discover list's left rail and
+	   filled pin glyph) as well as on the basemap, and one violet cannot clear
+	   both grounds — the single #8b5cf6 it replaced read 4.234:1 as label text
+	   on the light surface and 3.817:1 on the dark, under AA on both. The two
+	   rungs are the same ones `mapPinnedLine` paints the map line with, so the
+	   list and the line cannot drift; `basemap_contrast.ts` stays the one place
+	   that spells them and status_color_literal_guard.test.ts pins this pair
+	   equal to it. */
+	--color-route-pinned: #6D28D9;
+
 	/* Seven per-section identity accents — the sidebar nav's per-section hue,
 	   and the same hue wherever a content surface marks the modality (the
 	   dashboard's gym card, the history timeline's lift / meal chips). Each
@@ -338,7 +349,7 @@
 	   clears mobile's 11 px labelSmall floor (§ 482) by 0.2 px rather than meeting
 	   it exactly, so it survives a small later adjustment where a value ON a floor
 	   would not (§ 522). Never override it per theme or per breakpoint — a media
-	   query that shrank it would put 80 declarations under the floor at once.
+	   query that shrank it would put 132 declarations under the floor at once.
 	   font_size_floor_guard.test.ts pins the floor and this token's single
 	   declaration. */
 	--font-size-section-label: 0.7rem;
@@ -397,6 +408,8 @@
 		--color-accent-orange: #F2A07B;
 		--color-accent-pink: #B9A7E8;
 		--color-accent-cyan: #8FB8C7;
+
+		--color-route-pinned: #A78BFA;
 
 		/* Section inks on the dark sidebar / card: the pastel accent already
 		   clears its own disc for gym and nutrition, so those revert to it; the
@@ -507,6 +520,8 @@
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #B9A7E8;
 	--color-accent-cyan: #8FB8C7;
+
+	--color-route-pinned: #A78BFA;
 
 	/* Section inks on the dark sidebar / card — see the prefers-color-scheme
 	   block above for why gym and nutrition revert to their accent. */

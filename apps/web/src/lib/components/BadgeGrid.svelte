@@ -117,7 +117,7 @@
 		color: var(--color-text-secondary);
 	}
 	.badge-tier {
-		font-size: 0.6875rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		font-weight: 700;

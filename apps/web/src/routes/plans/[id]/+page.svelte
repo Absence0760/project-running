@@ -1803,7 +1803,7 @@
 		line-height: 1;
 	}
 	.done {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;
 		margin-top: 0.15rem;
@@ -2290,7 +2290,7 @@
 		color: var(--color-text-tertiary);
 	}
 	.day .dow {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		letter-spacing: 0.05em;
 		text-transform: uppercase;

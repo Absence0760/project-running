@@ -311,7 +311,7 @@
 		background: var(--color-primary);
 		color: var(--color-bg);
 		border-radius: 999px;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		padding: 0.05rem 0.4rem;
 		font-weight: 700;
 	}

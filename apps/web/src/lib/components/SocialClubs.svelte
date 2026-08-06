@@ -428,7 +428,7 @@
 	}
 	.location .material-symbols { font-size: 0.95rem; }
 	.badge {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--color-text-tertiary);

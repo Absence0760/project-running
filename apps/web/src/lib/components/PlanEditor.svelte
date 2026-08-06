@@ -971,7 +971,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.15rem;
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		color: var(--color-text-tertiary);
 		text-transform: uppercase;

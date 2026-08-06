@@ -21,15 +21,23 @@
 // The floor is read out of `app_theme.dart` rather than written here, so the two
 // platforms cannot drift the way the line token did before § 518 pinned it.
 //
-// When this test fails: raise the declaration to at least the floor. Prefer
-// `var(--font-size-section-label)` (0.7rem = 11.2 px), the micro-label token —
-// and prefer the token over its value, which is a distinction § 525 ran
-// together when it called this "the micro-label token 80 declarations already
-// use". Recomputed: 81 declarations spelled the literal `0.7rem`, and 21 used
-// the token. Both land on 11.2 px today, but only the token moves if the floor
-// does, and per § 522 a hand-spelled value sitting exactly ON a floor is the
-// fragile kind. The 81 literals are out of this guard's reach by construction —
-// they are at the floor, not under it — and are recorded as remaining work.
+// A pure floor, though, is blind to the population it created. § 525 counted the
+// hand-spelled `0.7rem` micro-labels as "the micro-label token 80 declarations
+// already use", then recomputed them as 81 literals against 21 token uses. § 536
+// re-measured on the current tree: 80 spelled the literal and 49 used the token,
+// so neither figure was right. Every one of those 80 sat 0.2 px CLEAR of the
+// floor, so no floor could ever see them — and § 522 is the standing warning that
+// a value sitting on a floor is where the next regression starts. § 536 routed all
+// 80 onto the token and closed the blind spot with a second predicate: the scan
+// now fails at or UNDER the token's own value, not merely under the floor. Three
+// sites landing on exactly 11.00 px — `BadgeGrid`'s `.badge-tier` and
+// `RoutePreviewScrubber`'s `.title` / `.ends`, all real uppercase micro-labels on
+// a theme surface — were invisible to the old strict `<` and are now on the token
+// too.
+//
+// When this test fails: reach for `var(--font-size-section-label)` (0.7rem =
+// 11.2 px), the micro-label token. Prefer the token over its value — both land on
+// 11.2 px today, but only the token moves if the step does.
 //
 // If a narrow viewport no longer fits the text, tighten the box or let the text
 // reflow — SC 1.4.4 and 1.4.10 both ask for reflow rather than a smaller size.
@@ -81,6 +89,25 @@ function mobileMicroLabelFloorPx(): number {
 
 const FLOOR_PX = mobileMicroLabelFloorPx();
 
+// The one declaration of the micro-label token, read rather than restated so the
+// at-or-under predicate below tracks the token if the step ever moves. The
+// single-declaration half is asserted here on load, because the predicate is only
+// a rule if there is exactly one number to compare against.
+function sectionLabelTokenPx(): number {
+	const css = readFileSync(resolve(__dirname, '../app.css'), 'utf-8');
+	const declarations = [...css.matchAll(/--font-size-section-label:\s*([\d.]+)(rem|px)\s*;/g)];
+	assert.equal(
+		declarations.length,
+		1,
+		`--font-size-section-label is declared ${declarations.length} times; one declaration is what ` +
+			`makes it a floor rather than a suggestion.`,
+	);
+	const [, value, unit] = declarations[0];
+	return unit === 'rem' ? parseFloat(value) * ROOT_FONT_PX : parseFloat(value);
+}
+
+const TOKEN_PX = sectionLabelTokenPx();
+
 type Declaration = { file: string; line: number; raw: string; px: number };
 
 function scanFontSizes(): { sized: Declaration[]; relative: string[] } {
@@ -117,11 +144,17 @@ function scanFontSizes(): { sized: Declaration[]; relative: string[] } {
 	return { sized, relative: relativeUnits };
 }
 
-// file -> exact number of `font-size` declarations below the floor.
+// file -> exact number of numeric `font-size` declarations at or under the
+// micro-label token's value.
+//
+// § 525's version of this list keyed on the floor alone, so it stopped at 11.00 px
+// exclusive and could not name the three declarations sitting exactly there.
+// Widening the predicate to the token pulls those in: the list below is the
+// at-or-under-token population, and the sub-floor subset is pinned separately.
 //
 // Two groups, and the split is what the entry means rather than how it is
-// checked. The equality pin is the same either way: a NEW sub-floor declaration
-// in a listed file still fails, and a file that gets fixed forces its entry out.
+// checked. The equality pin is the same either way: a NEW small declaration in a
+// listed file still fails, and a file that gets fixed forces its entry out.
 //
 // Every entry below is a named, justified exemption rather than an unexamined
 // literal — which is the state § 525 asked for and did not yet have. What it
@@ -129,19 +162,22 @@ function scanFontSizes(): { sized: Declaration[]; relative: string[] } {
 // "text inside a graphic" entries were files that also held a plain-debt
 // declaration, and `PersonalHeatmap`'s was not a graphic at all (see below). The
 // list can only shrink from here.
-const BELOW_FLOOR = <Record<string, number>>{
+const AT_OR_UNDER_TOKEN = <Record<string, number>>{
 	// --- Text inside a graphic, which is the class mobile's guard exempts too:
 	// drawn over basemap tiles or inside an SVG plot, not on a theme surface, so
 	// the size is a dimension of the drawing rather than a step on a type scale.
 	//
-	// `.extreme-text` is SVG text — it paints `fill:` — inside the elevation
-	// plot, which scales with its own fixed viewBox.
-	'lib/components/ElevationProfile.svelte': 1,
-	// Two, and only one is a graphic: `.km-marker` is the 8 px numeral inside a
-	// 20 px km pin drawn over basemap tiles (mobile exempts
+	// Three, all SVG text — they paint `fill:` — inside the elevation plot, which
+	// scales with its own fixed viewBox: `.extreme-text` at 10 px plus the
+	// `.y-label` / `.x-label` axis ticks at 11 px that only the widened predicate
+	// reaches.
+	'lib/components/ElevationProfile.svelte': 3,
+	// Three, and two are graphics: `.km-marker` is the 8 px numeral inside a
+	// 20 px km pin and `.waypoint-marker-label` the 11 px one inside a 26 px
+	// waypoint pin, both drawn over basemap tiles (mobile exempts
 	// `route_builder_screen.dart` for exactly this). `.shortcuts-hint kbd` is a
 	// keyboard-shortcut hint in flowing layout and is plain debt.
-	'lib/components/RouteBuilder.svelte': 2,
+	'lib/components/RouteBuilder.svelte': 3,
 
 	// --- Micro-labels that are simply under the floor. Every one of these is
 	// owed a fix; they are pinned so the count can only shrink, not so they are
@@ -150,7 +186,7 @@ const BELOW_FLOOR = <Record<string, number>>{
 	// `.bar-label` (base + a 0.6rem narrow-viewport shrink, the same pattern the
 	// two week ribbons and `PlanCalendar` have now lost) and `.source-badge` —
 	// the last member of its family still under the floor, the other three being
-	// `PeriodSummary` at 0.7rem, `RunShareView` and `/runs`.
+	// `PeriodSummary`, `RunShareView` and `/runs`, all now on the token.
 	'routes/dashboard/+page.svelte': 3,
 	// `.collapse-toggle-label`, the sidebar section-label toggle.
 	'routes/+layout.svelte': 1,
@@ -158,32 +194,66 @@ const BELOW_FLOOR = <Record<string, number>>{
 	'routes/runs/[id]/+page.svelte': 2,
 };
 
-test(`no font-size declaration falls below the ${FLOOR_PX} px micro-label floor`, () => {
+test(`no font-size declaration lands at or under the ${TOKEN_PX} px micro-label token`, () => {
 	const { sized } = scanFontSizes();
-	const under = sized.filter((d) => d.px < FLOOR_PX);
+	const under = sized.filter((d) => d.px <= TOKEN_PX);
 	const byFile = new Map<string, Declaration[]>();
 	for (const d of under) byFile.set(d.file, [...(byFile.get(d.file) ?? []), d]);
 
-	const unlisted = [...byFile.entries()].filter(([file]) => !(file in BELOW_FLOOR));
+	const unlisted = [...byFile.entries()].filter(([file]) => !(file in AT_OR_UNDER_TOKEN));
 	assert.equal(
 		unlisted.length,
 		0,
-		`Type below the ${FLOOR_PX} px floor § 482 pins on mobile, in files with no entry:\n` +
+		`Type at or under the ${TOKEN_PX} px micro-label token, in files with no entry. At this size a ` +
+			`declaration IS a micro-label, so spell the token — \`var(--font-size-section-label)\` — ` +
+			`never a literal that happens to equal it today:\n` +
 			unlisted
 				.flatMap(([, ds]) => ds.map((d) => `  ${d.px.toFixed(2)}px  ${d.file}:${d.line}  ${d.raw}`))
 				.join('\n'),
 	);
-	for (const [file, expected] of Object.entries(BELOW_FLOOR)) {
+	for (const [file, expected] of Object.entries(AT_OR_UNDER_TOKEN)) {
 		const found = byFile.get(file) ?? [];
 		assert.equal(
 			found.length,
 			expected,
-			`${file} carries ${found.length} sub-floor font-size declaration(s), expected ${expected}. ` +
-				`If a size was raised, drop the entry (or lower the count); if one was ADDED, raise it ` +
-				`to at least ${FLOOR_PX} px instead:\n` +
+			`${file} carries ${found.length} font-size declaration(s) at or under ${TOKEN_PX} px, ` +
+				`expected ${expected}. If a size was raised, drop the entry (or lower the count); if one ` +
+				`was ADDED, use \`var(--font-size-section-label)\` instead:\n` +
 				found.map((d) => `  ${d.px.toFixed(2)}px  ${d.file}:${d.line}  ${d.raw}`).join('\n'),
 		);
 	}
+});
+
+// The half of the rule that takes no exemption at all. A graphic can justify text
+// smaller than a type step; nothing justifies hand-spelling the step's own value,
+// because the two are indistinguishable until the step moves and then only one of
+// them follows. This is what the old strict `<` could not express, and it is
+// asserted globally rather than per file so a new `0.7rem` anywhere in the tree
+// fails on the line that added it.
+test(`no font-size literal spells the ${TOKEN_PX} px token's own value`, () => {
+	const spelled = scanFontSizes().sized.filter((d) => d.px === TOKEN_PX);
+	assert.deepEqual(
+		spelled.map((d) => `${d.file}:${d.line}  ${d.raw}`),
+		[],
+		`These hand-spell the micro-label token's value instead of using it. Both resolve to ` +
+			`${TOKEN_PX} px today; only \`var(--font-size-section-label)\` still will if the step moves.`,
+	);
+});
+
+// The legibility claim, which the token-width predicate above states too loosely:
+// 11.2 px passing says nothing about § 482's 11 px conformance minimum. Pinned as
+// a population so the assertion cannot pass over an empty set, and separately from
+// the per-file list because the two counts differ per file (`ElevationProfile`
+// carries three at or under the token but only one under the floor).
+test(`exactly nine font-size declarations sit below the ${FLOOR_PX} px floor § 482 pins`, () => {
+	const under = scanFontSizes().sized.filter((d) => d.px < FLOOR_PX);
+	assert.equal(
+		under.length,
+		9,
+		`${under.length} declarations sit under the ${FLOOR_PX} px floor, expected 9. Each is listed ` +
+			`in AT_OR_UNDER_TOKEN with a reason; raising one means lowering this number too:\n` +
+			under.map((d) => `  ${d.px.toFixed(2)}px  ${d.file}:${d.line}  ${d.raw}`).join('\n'),
+	);
 });
 
 // An `em` font-size compounds with whatever the ancestor resolved to, so no
@@ -224,23 +294,14 @@ test('exactly six font-size declarations use the unresolvable em unit', () => {
 // The token every micro-label should reach for. It clears the floor by 0.2 px,
 // which is headroom rather than an exact meet — so, unlike a value that lands ON
 // a floor (§ 522), it survives a small later adjustment. It is deliberately NOT
-// theme- or breakpoint-overridden: a media query that shrank it would move 80
-// declarations under the floor at once, which is the bug this round closed on
-// `.kind-pill` generalised to the whole tree.
-test('the section-label token clears the floor and is declared exactly once', () => {
-	const css = readFileSync(resolve(__dirname, '../app.css'), 'utf-8');
-	const declarations = [...css.matchAll(/--font-size-section-label:\s*([\d.]+)(rem|px)\s*;/g)];
-	assert.equal(
-		declarations.length,
-		1,
-		`--font-size-section-label is declared ${declarations.length} times; one declaration is what ` +
-			`makes it a floor rather than a suggestion.`,
-	);
-	const [, value, unit] = declarations[0];
-	const px = unit === 'rem' ? parseFloat(value) * ROOT_FONT_PX : parseFloat(value);
+// theme- or breakpoint-overridden: a media query that shrank it would move 132
+// declarations under the floor at once, which is the bug § 525 closed on
+// `.kind-pill` generalised to the whole tree. `sectionLabelTokenPx` pins the
+// single-declaration half on load.
+test('the section-label token clears the floor', () => {
 	assert.ok(
-		px >= FLOOR_PX,
-		`--font-size-section-label is ${px.toFixed(2)}px, under the ${FLOOR_PX}px floor.`,
+		TOKEN_PX >= FLOOR_PX,
+		`--font-size-section-label is ${TOKEN_PX.toFixed(2)}px, under the ${FLOOR_PX}px floor.`,
 	);
 });
 
@@ -269,19 +330,51 @@ test('the font-size scan converts units and matches only real declarations', () 
 	}
 });
 
-// A planted violation in a file with no entry, so the walker is proved to reach a
+// Planted violations in a file with no entry, so the walker is proved to reach a
 // new file rather than only to re-count the ones already listed. The allowlist's
 // equality pin covers the other direction on every run.
-test('the floor scan fires on a planted violation in an unlisted file', () => {
+//
+// Must-flag / must-spare, because the widened predicate turns on a single
+// character (`<` -> `<=`) and one boundary value: 11.20 px must now fail where it
+// used to pass, 11.00 px must fail the token predicate while NOT counting as
+// sub-floor, and 11.52 px — the next step up, which 70 declarations use — must
+// still pass, or the round would have moved the rule instead of tightening it.
+const PROBES: Array<{ css: string; px: number; underToken: boolean; underFloor: boolean }> = [
+	{ css: '0.55rem', px: 8.8, underToken: true, underFloor: true },
+	{ css: '11px', px: 11, underToken: true, underFloor: false },
+	{ css: '0.7rem', px: 11.2, underToken: true, underFloor: false },
+	{ css: '11.2px', px: 11.2, underToken: true, underFloor: false },
+	{ css: '0.72rem', px: 11.52, underToken: false, underFloor: false },
+];
+
+test('the scan fires on planted violations in an unlisted file, at and under the token', () => {
 	const path = resolve(SRC_ROOT, 'lib/__font_size_floor_probe.css');
-	writeFileSync(path, '.probe { font-size: 0.55rem; }\n');
-	try {
-		const under = scanFontSizes().sized.filter((d) => d.px < FLOOR_PX);
-		const hit = under.find((d) => d.file.endsWith('__font_size_floor_probe.css'));
-		assert.ok(hit, 'the scan did not reach a newly added CSS file');
-		assert.equal(hit!.px, 8.8, 'the scan mis-converted the planted 0.55rem');
-		assert.ok(!(hit!.file in BELOW_FLOOR), 'the probe path must have no allowlist entry');
-	} finally {
-		rmSync(path);
+	for (const probe of PROBES) {
+		writeFileSync(path, `.probe { font-size: ${probe.css}; }\n`);
+		try {
+			const hit = scanFontSizes().sized.find((d) =>
+				d.file.endsWith('__font_size_floor_probe.css'),
+			);
+			assert.ok(hit, `the scan did not reach a newly added CSS file for ${probe.css}`);
+			assert.equal(hit!.px, probe.px, `the scan mis-converted the planted ${probe.css}`);
+			assert.ok(!(hit!.file in AT_OR_UNDER_TOKEN), 'the probe path must have no allowlist entry');
+			assert.equal(
+				hit!.px <= TOKEN_PX,
+				probe.underToken,
+				`${probe.css} (${probe.px}px) is on the wrong side of the ${TOKEN_PX}px token predicate`,
+			);
+			assert.equal(
+				hit!.px < FLOOR_PX,
+				probe.underFloor,
+				`${probe.css} (${probe.px}px) is on the wrong side of the ${FLOOR_PX}px floor predicate`,
+			);
+			assert.equal(
+				hit!.px === TOKEN_PX,
+				probe.px === TOKEN_PX,
+				`${probe.css} is misjudged by the spells-the-token's-value predicate`,
+			);
+		} finally {
+			rmSync(path);
+		}
 	}
 });
