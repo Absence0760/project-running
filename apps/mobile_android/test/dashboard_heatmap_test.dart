@@ -104,7 +104,7 @@ void main() {
     await _pump(tester, AppTheme.light);
     expect(
       find.ancestor(
-        of: find.text('ACTIVITY'),
+        of: find.text('Activity'),
         matching: find.byType(ChartCardHeader),
       ),
       findsOneWidget,

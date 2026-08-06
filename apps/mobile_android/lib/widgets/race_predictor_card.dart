@@ -1,6 +1,6 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChartCardHeader;
 
 import '../fitness.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -39,65 +39,59 @@ class RacePredictorCard extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(l10n.racePredictorTitle, style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ChartCardHeader(title: l10n.racePredictorTitle),
+            const SizedBox(height: 10),
+            Text(
+              l10n.racePredictorAnchoredOn(
+                formatDistanceForPref(prediction.anchor.distanceM),
+                _clock(prediction.anchor.durationS.toDouble()),
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
               children: [
-                Text(
-                  l10n.racePredictorAnchoredOn(
-                    formatDistanceForPref(prediction.anchor.distanceM),
-                    _clock(prediction.anchor.durationS.toDouble()),
-                  ),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                Expanded(
+                  flex: 3,
+                  child: _HeadCell(l10n.racePredictorColDistance),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: _HeadCell(l10n.racePredictorColDistance),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: _HeadCell(l10n.racePredictorColTime),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: _HeadCell(l10n.racePredictorColPace),
-                    ),
-                    Expanded(
-                      flex: 4,
-                      child: _HeadCell(
-                        l10n.racePredictorColConfidence,
-                        upper: false,
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  flex: 3,
+                  child: _HeadCell(l10n.racePredictorColTime),
                 ),
-                for (final rung in prediction.rungs)
-                  _LadderRow(rung: rung, l10n: l10n),
-                const SizedBox(height: 12),
-                Text(
-                  l10n.racePredictorFootnote,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                Expanded(
+                  flex: 3,
+                  child: _HeadCell(l10n.racePredictorColPace),
+                ),
+                Expanded(
+                  flex: 4,
+                  child: _HeadCell(
+                    l10n.racePredictorColConfidence,
+                    upper: false,
                   ),
                 ),
               ],
             ),
-          ),
+            for (final rung in prediction.rungs)
+              _LadderRow(rung: rung, l10n: l10n),
+            const SizedBox(height: 12),
+            Text(
+              l10n.racePredictorFootnote,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
-      ],
+      ),
     );
   }
 }

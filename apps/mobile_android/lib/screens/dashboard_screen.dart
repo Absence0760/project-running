@@ -834,10 +834,17 @@ class _DashboardScreenState extends State<DashboardScreen>
       final streakCard = Card(
         child: Padding(
           padding: _kCardPadding,
-          child: _StreakRow(
-            key: const Key('dashboardStreakRow'),
-            runs: runs,
-            allTime: _allTimeStreaks,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ChartCardHeader(title: l10n.dashboardSectionStreak),
+              const SizedBox(height: 10),
+              _StreakRow(
+                key: const Key('dashboardStreakRow'),
+                runs: runs,
+                allTime: _allTimeStreaks,
+              ),
+            ],
           ),
         ),
       );
@@ -859,6 +866,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                 padding: _kCardPadding,
                 child: Column(
                   children: [
+                    ChartCardHeader(
+                        title: l10n.dashboardSectionPersonalBests),
+                    const SizedBox(height: 10),
                     if (longest != null)
                       _PbRow(
                         icon: Icons.straighten,
@@ -926,27 +936,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           slot++;
         }
 
-        addBlock(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [_SectionHeader(l10n.dashboardSectionStreak), streakCard],
-          ),
-          gapAfter: true,
-        );
-        addBlock(mileageCard, gapAfter: true);
-        addBlock(heatmapCard, gapAfter: true);
-        if (pbCard != null) {
-          addBlock(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _SectionHeader(l10n.dashboardSectionPersonalBests),
-                pbCard,
-              ],
-            ),
-            gapAfter: true,
-          );
-        }
+        addBlock(streakCard);
+        addBlock(mileageCard);
+        addBlock(heatmapCard);
+        if (pbCard != null) addBlock(pbCard);
         addBlock(fitnessCard);
         addBlock(predictorCard);
         addBlock(readinessCard);
@@ -1031,27 +1024,22 @@ class _DashboardScreenState extends State<DashboardScreen>
             _kSectionGap,
             periodRow,
             _kSectionGap,
+            // Every card below names itself with a ChartCardHeader, so the
+            // stack separates by the card grammar (§482's 4dp vertical margin
+            // on each side) and _kSectionGap marks only a real block boundary
+            // — a group of cards under one heading, or a non-card block.
             thisWeekCard,
-            _kSectionGap,
-            _SectionHeader(l10n.dashboardSectionStreak),
             streakCard,
-            _kSectionGap,
             mileageCard,
-            _kSectionGap,
             heatmapCard,
-            _kSectionGap,
-            if (pbCard != null) ...[
-              _SectionHeader(l10n.dashboardSectionPersonalBests),
-              pbCard,
-              _kSectionGap,
-            ],
+            if (pbCard != null) pbCard,
             fitnessCard,
             predictorCard,
             readinessCard,
             intensityCard,
             loadChart,
             if (gymNote != null) gymNote,
-            if (liftsCard != null) ...[_kSectionGap, liftsCard],
+            if (liftsCard != null) liftsCard,
           ],
         );
       }

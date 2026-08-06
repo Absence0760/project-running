@@ -443,7 +443,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get peopleSuggestionsLoadFailed => 'Could not load suggestions.';
 
   @override
-  String get readinessCardHeader => 'READINESS';
+  String get readinessCardHeader => 'Readiness';
 
   @override
   String get readinessBandHigh => 'high';
@@ -7383,7 +7383,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardStreakStart => 'run today to start one';
 
   @override
-  String get dashboardHeatmapTitle => 'ACTIVITY';
+  String get dashboardHeatmapTitle => 'Activity';
 
   @override
   String get dashboardHeatmapLess => 'Less';
@@ -7532,7 +7532,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get mileageTitle => 'MILEAGE';
+  String get mileageTitle => 'Mileage';
 
   @override
   String get mileageWeek => 'Week';

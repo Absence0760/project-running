@@ -63,7 +63,7 @@ void main() {
       // even when the data set is empty. Pre-fix this collapsed
       // to SizedBox.shrink and the dashboard had a "missing tile"
       // gap until the user logged their first run.
-      expect(find.text('MILEAGE'), findsOneWidget);
+      expect(find.text('Mileage'), findsOneWidget);
       expect(find.text('Week'), findsOneWidget);
       expect(find.text('Month'), findsOneWidget);
       expect(find.text('Year'), findsOneWidget);
@@ -78,7 +78,7 @@ void main() {
         ],
         now: now,
       );
-      expect(find.text('MILEAGE'), findsOneWidget);
+      expect(find.text('Mileage'), findsOneWidget);
       expect(find.text('Week'), findsOneWidget);
       expect(find.text('Month'), findsOneWidget);
       expect(find.text('Year'), findsOneWidget);
@@ -306,7 +306,7 @@ void main() {
       await _pump(tester, runs: const [], now: now);
       expect(
         find.ancestor(
-          of: find.text('MILEAGE'),
+          of: find.text('Mileage'),
           matching: find.byType(ChartCardHeader),
         ),
         findsOneWidget,

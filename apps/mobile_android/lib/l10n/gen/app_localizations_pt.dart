@@ -446,7 +446,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível carregar as sugestões.';
 
   @override
-  String get readinessCardHeader => 'PRONTIDÃO';
+  String get readinessCardHeader => 'Prontidão';
 
   @override
   String get readinessBandHigh => 'alta';
@@ -7455,7 +7455,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get dashboardStreakStart => 'corra hoje para começar uma';
 
   @override
-  String get dashboardHeatmapTitle => 'ATIVIDADE';
+  String get dashboardHeatmapTitle => 'Atividade';
 
   @override
   String get dashboardHeatmapLess => 'Menos';
@@ -7605,7 +7605,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get mileageTitle => 'QUILOMETRAGEM';
+  String get mileageTitle => 'Quilometragem';
 
   @override
   String get mileageWeek => 'Semana';
@@ -13001,7 +13001,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Não foi possível carregar as sugestões.';
 
   @override
-  String get readinessCardHeader => 'PRONTIDÃO';
+  String get readinessCardHeader => 'Prontidão';
 
   @override
   String get readinessBandHigh => 'alta';
@@ -20008,7 +20008,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get dashboardStreakStart => 'corra hoje para começar uma';
 
   @override
-  String get dashboardHeatmapTitle => 'ATIVIDADE';
+  String get dashboardHeatmapTitle => 'Atividade';
 
   @override
   String get dashboardHeatmapLess => 'Menos';
@@ -20158,7 +20158,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get mileageTitle => 'QUILOMETRAGEM';
+  String get mileageTitle => 'Quilometragem';
 
   @override
   String get mileageWeek => 'Semana';

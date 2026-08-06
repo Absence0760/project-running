@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show ChartCardHeader;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -40,20 +41,12 @@ class RecentLiftsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(l10n.dashboardSectionRecentLifts,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium),
-                ),
-                TextButton(
-                  onPressed: onViewAll,
-                  child: Text(l10n.dashboardViewAllGym),
-                ),
-              ],
+            ChartCardHeader(
+              title: l10n.dashboardSectionRecentLifts,
+              action: TextButton(
+                onPressed: onViewAll,
+                child: Text(l10n.dashboardViewAllGym),
+              ),
             ),
             for (final w in recent) _liftRow(context, theme, l10n, tag, w),
           ],

@@ -610,7 +610,7 @@
   "@peopleSuggestionsLoadFailed": {
     "description": "Error-state message when the suggested-people list fails to load"
   },
-  "readinessCardHeader": "READINESS",
+  "readinessCardHeader": "Readiness",
   "@readinessCardHeader": {
     "description": "Header label on the dashboard readiness-to-run card"
   },
@@ -9935,7 +9935,7 @@
   "@dashboardStreakStart": {
     "description": "Encouraging run-streak readout when the user has never had a streak"
   },
-  "dashboardHeatmapTitle": "ACTIVITY",
+  "dashboardHeatmapTitle": "Activity",
   "@dashboardHeatmapTitle": {
     "description": "Card header over the calendar activity heatmap on the dashboard"
   },
@@ -10130,7 +10130,7 @@
       }
     }
   },
-  "mileageTitle": "MILEAGE",
+  "mileageTitle": "Mileage",
   "@mileageTitle": {
     "description": "Title of the dashboard mileage card"
   },
