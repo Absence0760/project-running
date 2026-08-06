@@ -8,6 +8,8 @@
 		ClubWithMeta
 	} from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
+	import { ACTIVITY_TYPES } from '$lib/runs/activity_type';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { untrack } from 'svelte';
 	import { trackDirty } from '$lib/core/form_dirty';
@@ -33,7 +35,6 @@
 		{ id: 'club_vs_club', labelKey: 'challenges.scopeClubVsClub' },
 		{ id: 'group_goal', labelKey: 'challenges.scopeGroupGoal' }
 	];
-	const ACTIVITY_TYPES: ActivityType[] = ['run', 'walk', 'hike', 'cycle', 'stroller'];
 
 	function toLocalInput(iso: string | undefined, fallbackDaysFromNow: number): string {
 		const d = iso ? new Date(iso) : new Date(Date.now() + fallbackDaysFromNow * 86400000);
@@ -177,7 +178,7 @@
 			<select bind:value={activityType}>
 				<option value="">{m('challenges.activityAny')}</option>
 				{#each ACTIVITY_TYPES as t}
-					<option value={t}>{t}</option>
+					<option value={t}>{activityTypeLabel(t)}</option>
 				{/each}
 			</select>
 		</label>

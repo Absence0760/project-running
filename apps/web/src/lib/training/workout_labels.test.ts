@@ -115,14 +115,6 @@ const HAND_CAPITALISED_ALLOWED: Record<string, number> = {
 	// not an enum this app owns, so there is no vocabulary to route it onto and
 	// inventing one would mean translating values we do not control.
 	'routes/runs/[id]/+page.svelte': 1,
-	// STILL A DEFECT, recorded rather than quietly dropped: `activityLabel`
-	// capitalises `activity_type` ('run' | 'walk' | 'hike' | 'cycle' |
-	// 'stroller'), so a localized page prints five English words. Unlike the
-	// workout kind beside it this had no existing catalogue vocabulary to route
-	// onto — closing it means minting five keys in all six catalogues AND
-	// sweeping every other activity_type render site so they cannot disagree,
-	// which is a wider piece than the kind label was.
-	'routes/coaching/athletes/[id]/+page.svelte': 1,
 };
 
 test('every hand-capitalisation site is named, and no workout kind is among them', () => {

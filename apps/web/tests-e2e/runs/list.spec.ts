@@ -330,7 +330,7 @@ test.describe('/runs', () => {
 
 			// Hike → full-fetch mode (any activity filter flips fetchMode). All
 			// 55+ planted hikes are in memory but only PAGE_SIZE render.
-			await page.getByRole('button', { name: 'Hike', exact: true }).click();
+			await page.getByRole('button', { name: 'Trail run', exact: true }).click();
 			const cards = page.locator('.run-card');
 			await expect.poll(() => cards.count(), { timeout: 10_000 }).toBe(PAGE_SIZE);
 

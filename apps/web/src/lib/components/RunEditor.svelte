@@ -7,8 +7,9 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
-	import type { MessageKey } from '$lib/i18n/messages';
-	import type { Route } from '$lib/types';
+	import { ACTIVITY_TYPES } from '$lib/runs/activity_type';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
+	import type { ActivityType, Route } from '$lib/types';
 	import { trackDirty } from '$lib/core/form_dirty';
 	import UnsavedChangesGuard from './UnsavedChangesGuard.svelte';
 
@@ -31,7 +32,7 @@
 	let durationMin = $state(30);
 	let durationSec = $state(0);
 	let distance = $state(5);
-	let activityType = $state<'run' | 'walk' | 'hike' | 'cycle' | 'stroller'>('run');
+	let activityType = $state<ActivityType>('run');
 	let notes = $state('');
 	let routeId = $state('');
 	let routes = $state<Route[]>([]);
@@ -130,16 +131,16 @@
 	<fieldset class="field activity-field">
 		<legend class="field-label">{m('runEditor.activity')}</legend>
 		<div class="chip-row" role="radiogroup" aria-label={m('runEditor.activity')}>
-			{#each ['run', 'walk', 'hike', 'cycle', 'stroller'] as a}
+			{#each ACTIVITY_TYPES as a}
 				<button
 					type="button"
 					role="radio"
 					aria-checked={activityType === a}
 					class="chip"
 					class:active={activityType === a}
-					onclick={() => (activityType = a as typeof activityType)}
+					onclick={() => (activityType = a)}
 				>
-					{m(`runEditor.activity_${a}` as MessageKey)}
+					{activityTypeLabel(a)}
 				</button>
 			{/each}
 		</div>

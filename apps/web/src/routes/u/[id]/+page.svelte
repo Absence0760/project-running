@@ -4,6 +4,8 @@
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime, activeFormatLocale } from '$lib/format/time';
 	import { currentLocale, m } from '$lib/i18n/store.svelte';
+	import { ACTIVITY_TYPE_ICONS } from '$lib/runs/activity_type';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
 	import {
@@ -156,10 +158,11 @@
 	let activityFilter = $state<string>('all');
 	const FEED_ACTIVITIES: { value: string; label: () => string; icon: string }[] = [
 		{ value: 'all', label: () => m('profile.activityAll'), icon: 'apps' },
-		{ value: 'run', label: () => m('profile.activityRun'), icon: 'directions_run' },
-		{ value: 'walk', label: () => m('profile.activityWalk'), icon: 'directions_walk' },
-		{ value: 'cycle', label: () => m('profile.activityCycle'), icon: 'directions_bike' },
-		{ value: 'hike', label: () => m('profile.activityHike'), icon: 'terrain' },
+		...(['run', 'walk', 'cycle', 'hike'] as const).map((v) => ({
+			value: v as string,
+			label: () => activityTypeLabel(v),
+			icon: ACTIVITY_TYPE_ICONS[v],
+		})),
 	];
 	let followsAnyone = $derived(following.length > 0);
 

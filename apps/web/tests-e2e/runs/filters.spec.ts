@@ -173,8 +173,8 @@ test.describe('/runs — filters', () => {
 			});
 		});
 
-		test('Hike narrows to the single seeded hike', async ({ page }) => {
-			await page.getByRole('button', { name: 'Hike', exact: true }).click();
+		test('Trail run narrows to the single seeded hike', async ({ page }) => {
+			await page.getByRole('button', { name: 'Trail run', exact: true }).click();
 			await expect(page.locator('.run-card')).toHaveCount(1, {
 				timeout: 10_000
 			});

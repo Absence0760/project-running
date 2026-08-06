@@ -12,6 +12,8 @@
 	} from '$lib/settings/settings';
 	import { applyTheme, loadTheme, type Theme } from '$lib/settings/theme';
 	import { m, currentLocale, setLocale } from '$lib/i18n/store.svelte';
+	import { ACTIVITY_TYPES } from '$lib/runs/activity_type';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import { SUPPORTED_LOCALES, LOCALE_LABELS, type Locale } from '$lib/i18n/locale';
 	import { setUnit, setWeightUnit } from '$lib/format/units.svelte';
 	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
@@ -793,10 +795,9 @@
 				<label>
 					<span class="label-text">{m('prefs.defaultActivity')}</span>
 					<select bind:value={defaultActivity} onchange={() => autoSave({ default_activity_type: defaultActivity })}>
-						<option value="run">{m('prefs.activityRun')}</option>
-						<option value="walk">{m('prefs.activityWalk')}</option>
-						<option value="hike">{m('prefs.activityHike')}</option>
-						<option value="cycle">{m('prefs.activityCycle')}</option>
+						{#each ACTIVITY_TYPES as a}
+							<option value={a}>{activityTypeLabel(a)}</option>
+						{/each}
 					</select>
 				</label>
 				<label class="checkbox-label">
