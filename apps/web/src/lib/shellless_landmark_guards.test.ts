@@ -51,9 +51,34 @@ function prefixes(): string[] {
  * layout landmark in a comment that necessarily contains the literal text
  * `<main>`, and a commented-out landmark is not a landmark either way — so
  * every count below has to run over the real markup.
+ *
+ * Scanned by index rather than by regex replacement, because **HTML comments do
+ * not nest**: the first `-->` closes the comment, so in
+ * `<!-- a <!-- b --> <main> -->` the `<main>` is real markup that a browser
+ * renders, and anything that kept stripping past that point would hide a
+ * landmark this guard is meant to see. CodeQL reads the equivalent one-pass
+ * regex as `js/incomplete-multi-character-sanitization` and prescribes
+ * replacing to a fixpoint; that advice is for removing dangerous sequences from
+ * untrusted input, and applying it here would have introduced the bug it warns
+ * about, in the opposite direction. Nothing user-supplied reaches this — it
+ * reads the repo's own source.
  */
+export function stripHtmlComments(source: string): string {
+	let out = '';
+	let i = 0;
+	for (;;) {
+		const open = source.indexOf('<!--', i);
+		if (open === -1) return out + source.slice(i);
+		out += source.slice(i, open);
+		const close = source.indexOf('-->', open + 4);
+		// An unterminated comment runs to end-of-file, as a parser would treat it.
+		if (close === -1) return out;
+		i = close + 3;
+	}
+}
+
 function markup(file: string): string {
-	return readFileSync(file, 'utf-8').replace(/<!--[\s\S]*?-->/g, '');
+	return stripHtmlComments(readFileSync(file, 'utf-8'));
 }
 
 /**
@@ -157,7 +182,7 @@ test('the layout gives the shell-less branch no landmark of its own', () => {
 	const branch = /\{#if isShellless\(\$page\.url\.pathname\)\}([\s\S]*?)\{:else if/.exec(layout);
 	assert.ok(branch, 'could not find the shell-less branch in +layout.svelte');
 	assert.ok(
-		!branch[1].replace(/<!--[\s\S]*?-->/g, '').includes('<main'),
+		!stripHtmlComments(branch[1]).includes('<main'),
 		'the shell-less branch now renders its own <main> — the per-page landmarks ' +
 			'this guard requires would nest inside it. Strip them before doing that.',
 	);
@@ -218,4 +243,18 @@ test('every <main> on a shell-less page is the skip-link target', () => {
 		'every <main> on a shell-less page must carry id="main-content" (count shown ' +
 			'as tagged/total)',
 	);
+});
+
+test('comment stripping follows HTML comment semantics', () => {
+	// HTML comments do not nest: the first `-->` closes, so this <main> is a real
+	// element and must survive stripping. A fixpoint-replacing stripper — what
+	// CodeQL's advice for this rule prescribes — deletes it, which would make the
+	// guard blind to a landmark that is genuinely there.
+	assert.equal(stripHtmlComments('<!-- a <!-- b --> <main> -->'), ' <main> -->');
+	// Both directions, so a stripper that returned its input unchanged, or one
+	// that deleted everything, fails.
+	assert.equal(stripHtmlComments('<!-- <main> -->').includes('<main'), false);
+	assert.equal(stripHtmlComments('<main id="main-content">'), '<main id="main-content">');
+	// Unterminated: a parser swallows the rest of the file, so neither may count.
+	assert.equal(stripHtmlComments('<main> <!-- trailing <main>'), '<main> ');
 });
