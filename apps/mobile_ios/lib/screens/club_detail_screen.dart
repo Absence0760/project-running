@@ -1391,13 +1391,13 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       );
     }
     return RefreshIndicator(
-            onRefresh: _loadRoutes,
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              itemCount: _routes.length + (canBuild ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, index) {
+      onRefresh: _loadRoutes,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _routes.length + (canBuild ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, index) {
           if (canBuild && index == 0) {
             return SizedBox(
               width: double.infinity,
@@ -1454,8 +1454,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             ),
           );
         },
-            ),
-          );
+      ),
+    );
   }
 
   Widget _buildTemplatesTab(ThemeData theme, ClubView c) {
