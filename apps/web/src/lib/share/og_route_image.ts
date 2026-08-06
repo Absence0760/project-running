@@ -9,18 +9,21 @@
 
 import type { TrackPoint } from '../types';
 import { projectTrack } from '../routes/track_projection';
+import { OG_CARD_LIGHT } from './og_card_palette';
 
 const W = 1200;
 const H = 630;
 const PAD = 40; // inset margin so the track doesn't hug the edges
 
-const BG = '#ffffff';
-const FG = '#3b82f6'; // brand blue
+const BG = OG_CARD_LIGHT.bg;
+const FG = OG_CARD_LIGHT.brand;
 const FG_WIDTH = 8;
-const START_FILL = '#16a34a'; // green
-const END_FILL = '#dc2626'; // red
-const TEXT_FILL = '#0f172a'; // slate-900
-const TEXT_MUTED = '#64748b'; // slate-500
+// The caps are this card's own hues, not the shared palette's: 3.296:1 and
+// 4.829:1 against the white ground, both clearing 1.4.11's 3:1 for a graphic.
+const START_FILL = '#16a34a';
+const END_FILL = '#dc2626';
+const TEXT_FILL = OG_CARD_LIGHT.ink;
+const TEXT_MUTED = OG_CARD_LIGHT.muted;
 
 export type RouteImageInput = {
 	name?: string | null;

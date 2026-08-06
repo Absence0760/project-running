@@ -49,17 +49,30 @@
 //     message, not its reach.
 // None of the three polices 3-digit shorthands or rgb()/hsl() spellings.
 //
-// Nor do they reach outside `.svelte` / `.css`. § 536 measured that gap rather
-// than leaving it implied: 199 six-digit literals live in `.ts` under
-// apps/web/src, and the largest single holder is `routes/basemap_contrast.ts`,
-// the canonical home of every map-overlay hue. Those are not unexamined — every
-// one is graded against real basemap samples by `basemap_contrast.test.ts`,
-// which is a stricter bar than a register entry — but "COMPLETE" below means
-// complete over the two style extensions, not over the tree. § 536 also
-// re-measured the register's own size: 98 painted literals across 19 files, not
-// the 308 the round-14 index reported. That figure counted every six-digit hex
-// in `.svelte` / `.css` including COMMENT prose and app.css's own token
-// declarations; the decomposition is 183 declarations + 27 in comments + 98 real.
+// Rules (1) and (2) stop at `.svelte` / `.css`, and that is now a decision
+// rather than an omission: their remedy is "route it onto the token", and in a
+// `.ts` module that remedy is often impossible — `basemap_contrast.ts` exists
+// precisely because MapLibre parses paint values itself and throws on a `var()`
+// (§ 528), and the OG cards rasterise outside the DOM. A guard whose failure
+// message names a fix the caller cannot perform is the failure mode § 515
+// records. Rule (3) has no such remedy baked in — it asks for a ROLE — so it is
+// the one that reaches `.ts`, as of § 546.
+//
+// § 536 had declared the gap with a figure: "199 six-digit literals live in
+// `.ts` under apps/web/src". Re-derived with the register's own matcher, that
+// number decomposes the same way § 536's own 308 did — it counted comment prose
+// and `.test.ts` fixtures. On `a63bfae5` the split was 87 painted in 11
+// PRODUCTION `.ts` files, 72 inside `.test.ts` files, and 40 in comment bodies.
+// The `.test.ts` exclusion is kept (a hex in an assertion is an input, not
+// paint) and asserted non-empty below.
+//
+// § 536 also re-measured the style half: 95 painted literals across 19 files,
+// not the 308 the round-14 index reported, which counted comment prose and
+// app.css's own token declarations (183 declarations + 27 in comments + 95
+// painted). Both halves shrank this round — the style side to 92 in 18 files
+// when the privacy-zone picker's three reds moved onto `mapZoneBoundary`, and
+// the `.ts` side to 76 in 9 files when five card builders stopped spelling the
+// same two palettes (22 literals for 9 values) and took `og_card_palette.ts`.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -146,14 +159,25 @@ const DATA_PALETTES: Record<string, Record<string, number>> = {
 	'routes/routes/+page.svelte': { FBBF24: 1 },
 };
 
-function walkFiles(dir: string, out: string[] = []): string[] {
+/// Files the STYLE rules below read: `.svelte` + `.css`, where a token is
+/// always available and "route it onto the token" is always the answer.
+const STYLE_FILE = /\.(svelte|css)$/;
+
+/// Files the COMPLETE REGISTER at the foot reads: the style extensions plus
+/// `.ts`. Test files are excluded — a hex in a `.test.ts` is an input to an
+/// assertion, not paint — and the exclusion is asserted non-empty below rather
+/// than trusted (§ 534).
+const REGISTERED_FILE = /\.(svelte|css|ts)$/;
+const TEST_FILE = /\.test\.ts$/;
+
+function walkFiles(dir: string, match = STYLE_FILE, out: string[] = []): string[] {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
 		const path = join(dir, entry.name);
 		if (entry.isDirectory()) {
-			if (!SKIP_DIRS.has(entry.name)) walkFiles(path, out);
+			if (!SKIP_DIRS.has(entry.name)) walkFiles(path, match, out);
 			continue;
 		}
-		if (/\.(svelte|css)$/.test(entry.name)) out.push(path);
+		if (match.test(entry.name) && !TEST_FILE.test(entry.name)) out.push(path);
 	}
 	return out;
 }
@@ -585,6 +609,97 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 		'047857': [2, 'fixed-canvas'], '8A4A00': [2, 'fixed-canvas'],
 		'991B1B': [2, 'fixed-canvas'], '8F2F24': [1, 'fixed-canvas'],
 	},
+
+	// --- the `.ts` half, in scope since § 546 ------------------------------
+	//
+	// The map-overlay palette. Every rung is a basemap-keyed PAIR and each side
+	// is graded against the real basemap samples at 1.4.11's 3:1 by
+	// basemap_contrast.test.ts — a stricter bar than a register entry, which is
+	// why § 536 recorded these as "not unexamined" while declaring them out of
+	// scope. They are in scope now, and the register's job here is completeness
+	// rather than grading: a NEW hue in this file must still be a deliberate
+	// edit. A literal is structural because MapLibre parses paint values itself
+	// and throws on a var() (§ 528).
+	'lib/routes/basemap_contrast.ts': {
+		F2EFE9: [1, 'cartographic'], '1A1B20': [1, 'cartographic'],
+		AAD3DF: [1, 'cartographic'], DCDCDC: [1, 'cartographic'],
+		FFFFFF: [2, 'cartographic'], '1E1B4B': [1, 'cartographic'],
+		'818CF8': [1, 'cartographic'], '4F46E5': [1, 'cartographic'],
+		F59E0B: [1, 'cartographic'], B45309: [1, 'cartographic'],
+		'22C55E': [1, 'cartographic'], '15803D': [1, 'cartographic'],
+		EF4444: [2, 'cartographic'], B91C1C: [1, 'cartographic'],
+		'991B1B': [1, 'cartographic'],
+		'22D3EE': [1, 'cartographic'], '0E7490': [1, 'cartographic'],
+		A78BFA: [1, 'cartographic'], '6D28D9': [1, 'cartographic'],
+		'60A5FA': [1, 'cartographic'], '1D4ED8': [1, 'cartographic'],
+		C084FC: [1, 'cartographic'], '7E22CE': [1, 'cartographic'],
+		'7FB3C2': [1, 'cartographic'], '2C5F6E': [1, 'cartographic'],
+		'94A3B8': [1, 'cartographic'], '475569': [1, 'cartographic'],
+		FACC15: [1, 'cartographic'], '7A5C10': [1, 'cartographic'],
+		F1F5F9: [1, 'cartographic'], '1E293B': [1, 'cartographic'],
+		'0F172A': [1, 'cartographic'],
+	},
+	// Course-marker kind hues: the pin FILL per kind, which is identity data
+	// behind the basemap-keyed ring that carries the boundary's 3:1. TS↔Dart
+	// parity pair — the values are a lockstep contract with route_markers.dart,
+	// so a change here is a change on two platforms.
+	'lib/routes/route_markers.ts': {
+		'0E9F6E': [1, 'data'], E02424: [1, 'data'], '3F83F8': [1, 'data'],
+		FF5A1F: [1, 'data'], '9061F9': [1, 'data'], C27803: [1, 'data'],
+		'6B7280': [1, 'data'],
+	},
+	// The six-bucket pace ramp: the colour IS the datum (§ 480's line), and
+	// another TS↔Dart lockstep pair (pace_segments.dart).
+	'lib/segments/pace_segments.ts': {
+		EF4444: [1, 'data'], F97316: [1, 'data'], FBBF24: [1, 'data'],
+		A3E635: [1, 'data'], '10B981': [1, 'data'], '22D3EE': [1, 'data'],
+	},
+	// Per-source badge hues. `brand-hue` and not `brand-mark`: nothing about
+	// Strava's orange requires it to be OUR badge fill, so these owe their bar
+	// like any other paint — and they are carrying an OPEN DEBT below.
+	'lib/core/mock-data.ts': {
+		'1E88E5': [1, 'brand-hue'], '0EA5E9': [1, 'brand-hue'],
+		E91E63: [1, 'brand-hue'], '4CAF50': [1, 'brand-hue'],
+		FC4C02: [1, 'brand-hue'], '007CC3': [1, 'brand-hue'],
+		D6255B: [1, 'brand-hue'], '9C27B0': [1, 'brand-hue'],
+	},
+	// The two rasterised-share-card palettes, with every ink's measured ratio
+	// and its ground recorded in the module itself. Five card builders used to
+	// spell these independently — 22 literals for 9 values, the two recap cards
+	// byte-identical.
+	'lib/share/og_card_palette.ts': {
+		FFFFFF: [2, 'fixed-canvas'], '3B82F6': [1, 'fixed-canvas'],
+		'0F172A': [2, 'fixed-canvas'], '64748B': [1, 'fixed-canvas'],
+		'60A5FA': [1, 'fixed-canvas'], '94A3B8': [1, 'fixed-canvas'],
+		E2E8F0: [1, 'fixed-canvas'],
+	},
+	// The badge card's tier metals — the same four-rung ladder BadgeGrid and
+	// the badge share page carry, on a rasterised canvas.
+	'lib/share/og_badge_image.ts': {
+		B08D57: [1, 'data'], '9AA3AD': [1, 'data'], D4AF37: [1, 'data'], '7FD3E0': [1, 'data'],
+	},
+	// The route card's own start / finish caps, which are not the shared
+	// palette's: 3.296:1 and 4.829:1 against its white ground, both clearing
+	// 1.4.11's 3:1 for a graphic.
+	'lib/share/og_route_image.ts': { '16A34A': [1, 'cartographic'], DC2626: [1, 'cartographic'] },
+	// The downloadable finisher certificate: an SVG rasterised to a PNG, so no
+	// device theme reaches it. Measured against the #FFFDF7 paper: ink
+	// 14.431:1, muted 4.753:1, amber accent 4.937:1 — the accent carries real
+	// text (a 30 px/800 wordmark and a 46 px/700 event title, both WCAG large
+	// text at 3:1) so it clears with room either way. Its two decorative frame
+	// rules at opacity 0.5 read 2.087:1 and are deliberately not held to a
+	// floor: a frame carries no information required to identify anything,
+	// which is § 526's reasoning about the ground-coloured label halo.
+	'lib/runs/finisher_certificate.ts': {
+		B45309: [1, 'fixed-canvas'], '1F2937': [1, 'fixed-canvas'],
+		'6B7280': [1, 'fixed-canvas'], FFFDF7: [1, 'fixed-canvas'],
+	},
+	// The identity-avatar contrast clamp's two candidate foregrounds, ported
+	// from mobile's identity_avatar.dart (§ 481). The seed FILL is generated
+	// from a hue hash, so the pair cannot be theme tokens: the clamp picks
+	// whichever of the two clears 4.5:1 on the generated fill and nudges the
+	// lightness until one does.
+	'lib/format/avatar.ts': { '1B1628': [1, 'data'], FFFFFF: [1, 'data'] },
 };
 
 // Every literal the register knows is still a measured FAILURE, with the
@@ -609,7 +724,33 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 // never failing at 3.127. Two failures § 526 missed showed up instead: the
 // dashboard's `.gym-footer-cta` is real TEXT in #4E7C5E and owed 4.5:1 at
 // 4.346 light / 3.949 dark, and ultrasignup + chronotrack fail in DARK.
-const OPEN_DEBTS: Record<string, string> = {};
+//
+// NOT empty as of § 546. Widening the register to `.ts` put `sourceColor`'s
+// eight per-source hues in scope, and measuring where they actually land found
+// a live failure: each is an OPAQUE `.source-badge` fill with real text on it
+// (`color: white` on /share/run + PeriodSummary, `var(--color-surface)` on
+// /dashboard + /runs) at 0.65-0.7 rem weight 600 — 10.4-11.2 px, which is not
+// WCAG large text, so AA's 4.5:1 applies. On the fills themselves, SIX of the
+// eight fail with white ink (watch 2.771, healthconnect 2.780, strava 3.402,
+// app 3.679, healthkit 4.347, garmin 4.496); and against
+// `var(--color-surface)` there is no theme where all eight pass — light fails
+// the same six, dark fails race 2.564, parkrun 3.290, garmin 3.595, healthkit
+// 3.718. /runs is worse again because its badge carries `opacity: 0.92`, which
+// § 522 warned about exactly: race drops to 2.353 on dark, healthconnect to
+// 2.559 on light.
+//
+// This is § 529's defect one surface over — an identity hue asked to be both
+// the fill and the ground for its own ink — and § 541's conclusion applies: a
+// mark owing 4.5:1 in two themes on a fixed mid-tone fill cannot be paid by one
+// ink, so the fix is the shape (hue as a tint, `-ink` rung as the text) and not
+// a value. It is recorded rather than half-fixed because the five call sites are
+// /dashboard, /runs, /runs/[id], PeriodSummary and RunShareView, all held by
+// other agents this round — the same reason § 531 gave for leaving its two recap
+// copy-links standing, and the same register that made them get closed.
+const OPEN_DEBTS: Record<string, string> = {
+	'lib/core/mock-data.ts':
+		'2.353:1 (#241B3D ink on #9C27B0 fill, both under the badge\'s own opacity 0.92 over #241B3D, .source-badge on /runs in dark)',
+};
 
 // The figure format the entries above must carry, pinned in both directions so
 // the rule survives the set being empty — § 511's point about a floor read out
@@ -635,7 +776,7 @@ export function literalsOn(line: string, isAppCss = false): string[] {
 test('every six-digit literal is in the register at its exact count', () => {
 	const violations: string[] = [];
 	const seen = new Set<string>();
-	for (const path of walkFiles(SRC_ROOT).sort()) {
+	for (const path of walkFiles(SRC_ROOT, REGISTERED_FILE).sort()) {
 		const rel = relative(SRC_ROOT, path).split(sep).join('/');
 		seen.add(rel);
 		const allowed = REGISTER[rel] ?? {};
@@ -671,6 +812,19 @@ test('every six-digit literal is in the register at its exact count', () => {
 	for (const rel of Object.keys(REGISTER)) {
 		assert.ok(seen.has(rel), `${rel} is registered but was not scanned`);
 	}
+	// § 534: the widened scope has to be proved, not assumed. A `REGISTERED_FILE`
+	// regex that stopped matching `.ts` would leave every assertion above
+	// vacuously true for the whole `.ts` half.
+	const tsScanned = [...seen].filter((f) => f.endsWith('.ts'));
+	assert.ok(
+		tsScanned.length > 100,
+		`only ${tsScanned.length} .ts files were scanned — the register covers .ts since § 546`,
+	);
+	const tsRegistered = Object.keys(REGISTER).filter((f) => f.endsWith('.ts'));
+	assert.ok(
+		tsRegistered.length >= 9,
+		`only ${tsRegistered.length} .ts files are registered; § 546 measured 9 painting literals`,
+	);
 	assert.equal(
 		violations.length,
 		0,
@@ -691,9 +845,10 @@ test('the open-debt set is exactly what is recorded', () => {
 		);
 	}
 	// Frozen so closing one is a deliberate edit here, and so a future round
-	// cannot quietly reclassify a new failure as an old one. Empty since § 529
-	// closed all five; the fixtures below keep the format rule alive regardless.
-	assert.deepEqual(Object.keys(OPEN_DEBTS).sort(), []);
+	// cannot quietly reclassify a new failure as an old one. § 529 emptied it;
+	// § 546 opened one entry when widening the register to `.ts` brought the
+	// per-source badge fills into scope.
+	assert.deepEqual(Object.keys(OPEN_DEBTS).sort(), ['lib/core/mock-data.ts']);
 	const FIGURE = /^\d+\.\d{3}:1 \(.+\)$/;
 	for (const [rel, figure] of Object.entries(OPEN_DEBTS)) {
 		assert.match(
@@ -777,6 +932,42 @@ test('the register is keyed on the hue, never on the CSS property', () => {
 	// And the matcher itself has no property in it.
 	assert.deepEqual(literalsOn('\tborder: 1px solid #B5ADC3;'), ['B5ADC3']);
 	assert.deepEqual(literalsOn('\tcolor: #B5ADC3;'), ['B5ADC3']);
+});
+
+test('the .test.ts exclusion is real, and excludes something', () => {
+	// The exclusion is load-bearing (a fixture hex is an assertion input, not
+	// paint) and would be invisible if it ever stopped excluding anything —
+	// which is how a scope limit turns into an accidental blind spot. So the
+	// set it drops is measured rather than trusted: § 546 counted 72 six-digit
+	// literals inside `.test.ts` files, all of them fixtures.
+	const all = walkFiles(SRC_ROOT, REGISTERED_FILE).map((p) =>
+		relative(SRC_ROOT, p).split(sep).join('/'),
+	);
+	assert.equal(
+		all.filter((f) => f.endsWith('.test.ts')).length,
+		0,
+		'walkFiles must not hand a .test.ts to the register scan',
+	);
+	let inTests = 0;
+	const walkTests = (dir: string): void => {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const path = join(dir, entry.name);
+			if (entry.isDirectory()) {
+				if (!SKIP_DIRS.has(entry.name)) walkTests(path);
+				continue;
+			}
+			if (!/\.test\.ts$/.test(entry.name)) continue;
+			inTests += maskComments(readFileSync(path, 'utf-8'))
+				.split('\n')
+				.reduce((n, line) => n + literalsOn(line).length, 0);
+		}
+	};
+	walkTests(SRC_ROOT);
+	assert.ok(
+		inTests > 40,
+		`the exclusion drops ${inTests} literals — if that fell to ~0 the exclusion has ` +
+			'stopped being a scope decision and become dead machinery',
+	);
 });
 
 test('the universal matcher catches a hue the status list never named', () => {
