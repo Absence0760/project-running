@@ -35,7 +35,7 @@ test.describe('sidebar account popover — ARIA menu semantics', () => {
 		// aria-required-children checks. Fails before the fix (0 menuitems).
 		await expect(menu.getByRole('menuitem')).toHaveCount(4);
 		await expect(menu.getByRole('menuitem', { name: 'View profile' })).toBeVisible();
-		await expect(menu.getByRole('menuitem', { name: 'Coaching' })).toBeVisible();
+		await expect(menu.getByRole('menuitem', { name: 'Athletes & coaches' })).toBeVisible();
 		await expect(menu.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
 		await expect(menu.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
 	});
@@ -45,7 +45,7 @@ test.describe('sidebar account popover — ARIA menu semantics', () => {
 		await page.locator('.profile-btn').click();
 
 		const viewProfile = page.getByRole('menuitem', { name: 'View profile' });
-		const coaching = page.getByRole('menuitem', { name: 'Coaching' });
+		const coaching = page.getByRole('menuitem', { name: 'Athletes & coaches' });
 		const settings = page.getByRole('menuitem', { name: 'Settings' });
 		const signOut = page.getByRole('menuitem', { name: 'Sign out' });
 

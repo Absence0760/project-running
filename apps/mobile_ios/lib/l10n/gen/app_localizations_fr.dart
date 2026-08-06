@@ -5519,7 +5519,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Jour de repos — si vous devez bouger, marchez ou étirez-vous.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'Coach IA';
 
   @override
   String get coachNewConversation => 'Nouvelle conversation';
@@ -10514,7 +10514,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get sessionRunSwitchSides => 'Changez de côté';
 
   @override
-  String get coachingTitle => 'Coaching';
+  String get coachingTitle => 'Athlètes et coachs';
 
   @override
   String get coachingLede =>

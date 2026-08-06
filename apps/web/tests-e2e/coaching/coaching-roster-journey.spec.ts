@@ -68,7 +68,7 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 		try {
 			await test.step('coach mints an invite link and captures the token', async () => {
 				await page.goto('/coaching');
-				await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+				await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 					timeout: 10_000
 				});
 				// No pending invite or athlete yet (clean link state).
@@ -111,7 +111,7 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 				await athletePage.goto(`/coaching/accept/${inviteToken}`);
 				await athletePage.waitForURL(/\/coaching$/, { timeout: 15_000 });
 				await expect(
-					athletePage.getByRole('heading', { level: 1, name: 'Coaching' })
+					athletePage.getByRole('heading', { level: 1, name: 'Athletes & coaches' })
 				).toBeVisible({ timeout: 10_000 });
 
 				// The athlete now sees the coach under "My coaches".
@@ -136,7 +136,7 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 
 			await test.step('coach sees the new athlete on the roster', async () => {
 				await page.goto('/coaching');
-				await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+				await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 					timeout: 10_000
 				});
 				// The pending row is gone (redeemed) and the athlete row is present,
@@ -200,7 +200,7 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 				const athletePage: Page = await athleteContext!.newPage();
 				await athletePage.goto('/coaching');
 				await expect(
-					athletePage.getByRole('heading', { level: 1, name: 'Coaching' })
+					athletePage.getByRole('heading', { level: 1, name: 'Athletes & coaches' })
 				).toBeVisible({ timeout: 10_000 });
 				// The coach has dropped off "My coaches" — the link is ended on both sides.
 				await expect(athletePage.locator(`a[href="/u/${USER_B.id}"]`)).toHaveCount(0, {

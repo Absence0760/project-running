@@ -7384,7 +7384,7 @@
   "@workoutAdviceRest": {
     "description": "Advice text for rest days"
   },
-  "coachTitle": "Coach",
+  "coachTitle": "AI Coach",
   "@coachTitle": {
     "description": "Coach screen AppBar title"
   },
@@ -13616,7 +13616,7 @@
   "@sessionRunSwitchSides": {
     "description": "Spoken cue when a per-side movement switches from left to right in the session player"
   },
-  "coachingTitle": "Coaching",
+  "coachingTitle": "Athletes & coaches",
   "@coachingTitle": {
     "description": "Title of the coach-athlete roster screen"
   },

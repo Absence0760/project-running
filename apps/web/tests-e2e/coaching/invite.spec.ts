@@ -28,7 +28,7 @@ test.describe('/coaching/accept/[token] — athlete side', () => {
 	test('redeems the invite link and lands on /coaching with the coach listed', async ({ page }) => {
 		await page.goto(`/coaching/accept/${INVITE_TOKEN}`);
 		await page.waitForURL(/\/coaching$/, { timeout: 15_000 });
-		await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+		await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 			timeout: 10_000
 		});
 		await expect(page.locator(`a[href="/u/${USER_B.id}"]`)).toBeVisible({ timeout: 10_000 });
@@ -59,7 +59,7 @@ test.describe('/coaching — coach side', () => {
 		});
 
 		await page.goto('/coaching');
-		await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+		await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 			timeout: 10_000
 		});
 		// The athlete row links to the coach review surface
@@ -135,7 +135,7 @@ test.describe('/coaching — coach side', () => {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
 		await page.goto('/coaching');
-		await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
+		await expect(page.getByRole('heading', { level: 1, name: 'Athletes & coaches' })).toBeVisible({
 			timeout: 10_000
 		});
 		await expect(page.getByText('Pending invite')).toHaveCount(0);

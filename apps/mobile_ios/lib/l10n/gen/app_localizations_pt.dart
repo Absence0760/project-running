@@ -5506,7 +5506,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Dia de descanso — se precisar se mexer, caminhe ou alongue.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'Treinador IA';
 
   @override
   String get coachNewConversation => 'Nova conversa';
@@ -10486,7 +10486,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sessionRunSwitchSides => 'Troque de lado';
 
   @override
-  String get coachingTitle => 'Treinamento';
+  String get coachingTitle => 'Atletas e treinadores';
 
   @override
   String get coachingLede =>
@@ -18063,7 +18063,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Dia de descanso — se precisar se mexer, caminhe ou alongue.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'Treinador IA';
 
   @override
   String get coachNewConversation => 'Nova conversa';
@@ -23042,7 +23042,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get sessionRunSwitchSides => 'Troque de lado';
 
   @override
-  String get coachingTitle => 'Treinamento';
+  String get coachingTitle => 'Atletas e treinadores';
 
   @override
   String get coachingLede =>

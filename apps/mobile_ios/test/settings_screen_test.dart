@@ -84,7 +84,7 @@ void main() {
       for (final label in const [
         'Account',
         'Preferences',
-        'Coaching',
+        'Athletes & coaches',
         'Guided runs',
         'Integrations',
         'Signed-in devices',

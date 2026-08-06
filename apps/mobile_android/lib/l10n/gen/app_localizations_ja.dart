@@ -5189,7 +5189,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get workoutAdviceRest => '休養日です。動きたいなら、ウォーキングやストレッチを。';
 
   @override
-  String get coachTitle => 'コーチ';
+  String get coachTitle => 'AI コーチ';
 
   @override
   String get coachNewConversation => '新しい会話';
@@ -9976,7 +9976,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sessionRunSwitchSides => '反対側に切り替え';
 
   @override
-  String get coachingTitle => 'コーチング';
+  String get coachingTitle => 'アスリートとコーチ';
 
   @override
   String get coachingLede =>

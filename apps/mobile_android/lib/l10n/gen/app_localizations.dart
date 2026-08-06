@@ -9079,7 +9079,7 @@ abstract class AppLocalizations {
   /// Coach screen AppBar title
   ///
   /// In en, this message translates to:
-  /// **'Coach'**
+  /// **'AI Coach'**
   String get coachTitle;
 
   /// Default active-thread title when empty
@@ -17399,7 +17399,7 @@ abstract class AppLocalizations {
   /// Title of the coach-athlete roster screen
   ///
   /// In en, this message translates to:
-  /// **'Coaching'**
+  /// **'Athletes & coaches'**
   String get coachingTitle;
 
   /// Intro line on the coaching roster screen

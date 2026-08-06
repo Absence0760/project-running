@@ -72,6 +72,7 @@ void main() {
     List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})> lifts =
         const [],
     List<Map<String, dynamic>> meals = const [],
+    FitnessTab initialTab = FitnessTab.history,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = Preferences();
@@ -106,6 +107,7 @@ void main() {
         foodStore: foodStore,
         preferences: prefs,
         training: TrainingService(),
+        initialTab: initialTab,
       ),
     ));
     await tester.pumpAndSettle();
@@ -232,5 +234,28 @@ void main() {
     await tester.tap(find.text('Nutrition').first);
     await tester.pumpAndSettle();
     expect(find.byType(NutritionScreen), findsOneWidget);
+  });
+
+  // `initialTab` was a raw int documented in a comment. No production caller
+  // passed a non-default value, so the § 490 bug was not live here — but the
+  // seam was the same shape that produced it, where a stale literal stays in
+  // range after the tab set changes and the wrong tab opens in silence. With an
+  // enum, out of range is unrepresentable; what is worth pinning instead is the
+  // property no clamp could give.
+  testWidgets('every FitnessTab opens its own tab, and the strip is exactly as '
+      'long as the enum', (tester) async {
+    for (final tab in FitnessTab.values) {
+      // Unmount first — see the SocialTab twin: pumping another hub over the
+      // previous one reuses the element and keeps its TabController.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await pump(tester, runs: [runRow('r1')], initialTab: tab);
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar).first);
+      expect(tabBar.controller!.index, tab.index,
+          reason: '$tab did not open its own tab');
+      expect(tabBar.tabs.length, FitnessTab.values.length,
+          reason: 'the strip and the enum disagree on how many tabs exist');
+    }
+    // Assert the population: an empty enum would satisfy the loop above.
+    expect(FitnessTab.values.length, greaterThan(1));
   });
 }

@@ -5453,7 +5453,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Rest day — if you need to move, walk or stretch.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'AI Coach';
 
   @override
   String get coachNewConversation => 'New conversation';
@@ -10383,7 +10383,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sessionRunSwitchSides => 'Switch sides';
 
   @override
-  String get coachingTitle => 'Coaching';
+  String get coachingTitle => 'Athletes & coaches';
 
   @override
   String get coachingLede =>

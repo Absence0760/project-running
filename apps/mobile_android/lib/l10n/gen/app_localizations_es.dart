@@ -5504,7 +5504,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Día de descanso: si necesitas moverte, camina o estírate.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'Entrenador IA';
 
   @override
   String get coachNewConversation => 'Nueva conversación';
@@ -10490,7 +10490,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get sessionRunSwitchSides => 'Cambia de lado';
 
   @override
-  String get coachingTitle => 'Entrenamiento';
+  String get coachingTitle => 'Atletas y entrenadores';
 
   @override
   String get coachingLede =>

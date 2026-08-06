@@ -5517,7 +5517,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ruhetag — wenn du dich bewegen musst, geh spazieren oder dehne dich.';
 
   @override
-  String get coachTitle => 'Coach';
+  String get coachTitle => 'KI-Coach';
 
   @override
   String get coachNewConversation => 'Neue Unterhaltung';
@@ -6928,7 +6928,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get discardChangesDiscard => 'Verwerfen';
 
   @override
-  String get prefsTitle => 'Einstellungen';
+  String get prefsTitle => 'Voreinstellungen';
 
   @override
   String get prefsUnitMetric => 'km, m';
@@ -10500,7 +10500,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sessionRunSwitchSides => 'Seite wechseln';
 
   @override
-  String get coachingTitle => 'Coaching';
+  String get coachingTitle => 'Athleten & Trainer';
 
   @override
   String get coachingLede =>

@@ -13,6 +13,29 @@ import 'discover_screen.dart';
 import 'feed_screen.dart';
 import 'people_screen.dart';
 
+/// The Social hub's sub-tabs, in strip order.
+///
+/// A named, ordered enum rather than the raw int this was, per § 490: the same
+/// seam on `ProfileScreen` shipped a live bug where a stale `initialTab: 3`
+/// literal stayed IN RANGE after the tab set changed, so the notification bell
+/// silently opened the wrong tab. An int carries no way to notice; the label
+/// row, the view row, the FAB switch and any deep link all read this order.
+enum SocialTab {
+  feed,
+  people,
+  clubs,
+  discover,
+  challenges;
+
+  String label(AppLocalizations l10n) => switch (this) {
+        SocialTab.feed => l10n.socialTabFeed,
+        SocialTab.people => l10n.socialTabPeople,
+        SocialTab.clubs => l10n.socialTabClubs,
+        SocialTab.discover => l10n.socialTabDiscover,
+        SocialTab.challenges => l10n.challengesTitle,
+      };
+}
+
 /// The Social tab — mirrors the web `/social` hub (decisions §54). Five
 /// sub-tabs:
 ///   - Feed: 14-day activity feed of public runs from people you follow.
@@ -48,12 +71,11 @@ class SocialScreen extends StatefulWidget {
   final TrainingService training;
   /// Still required — `ClubsScreen` takes it to surface club-owned routes.
   final LocalRouteStore routeStore;
-  /// Sub-tab to open on first mount. 0 = Feed, 1 = People, 2 = Clubs,
-  /// 3 = Discover, 4 = Challenges. Defaults to Feed (0) so a tap on the
-  /// bottom-nav lands
-  /// on fresh follower activity — that's the highest-value default for
-  /// most sessions; users heading to a club still get there in one tap.
-  final int initialTab;
+  /// Sub-tab to open on first mount. Defaults to Feed so a tap on the
+  /// bottom-nav lands on fresh follower activity — that's the highest-value
+  /// default for most sessions; users heading to a club still get there in one
+  /// tap.
+  final SocialTab initialTab;
 
   const SocialScreen({
     super.key,
@@ -61,7 +83,7 @@ class SocialScreen extends StatefulWidget {
     required this.social,
     required this.training,
     required this.routeStore,
-    this.initialTab = 0,
+    this.initialTab = SocialTab.feed,
   });
 
   @override
@@ -77,9 +99,9 @@ class _SocialScreenState extends State<SocialScreen>
   void initState() {
     super.initState();
     _controller = TabController(
-      length: 5,
+      length: SocialTab.values.length,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 4),
+      initialIndex: widget.initialTab.index,
     );
     _controller.addListener(() {
       // Repaint so the FAB visibility tracks the active tab.
@@ -110,11 +132,7 @@ class _SocialScreenState extends State<SocialScreen>
         bottom: AppTabBar(
           controller: _controller,
           labels: [
-            l10n.socialTabFeed,
-            l10n.socialTabPeople,
-            l10n.socialTabClubs,
-            l10n.socialTabDiscover,
-            l10n.challengesTitle,
+            for (final t in SocialTab.values) t.label(l10n),
           ],
         ),
       ),
@@ -151,8 +169,8 @@ class _SocialScreenState extends State<SocialScreen>
   /// whichever matches the active tab — and nothing for tabs that
   /// don't have a FAB.
   Widget? _activeFab() {
-    switch (_controller.index) {
-      case 2:
+    switch (SocialTab.values[_controller.index]) {
+      case SocialTab.clubs:
         return Builder(builder: (ctx) {
           final state = _clubsKey.currentState;
           if (state == null) {
@@ -163,7 +181,10 @@ class _SocialScreenState extends State<SocialScreen>
             // stay absent forever — schedule one once the element is laid
             // out so the FAB resolves on the next frame.
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && _controller.index == 2) setState(() {});
+              if (mounted &&
+                  SocialTab.values[_controller.index] == SocialTab.clubs) {
+                setState(() {});
+              }
             });
             return const SizedBox.shrink();
           }

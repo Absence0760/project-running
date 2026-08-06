@@ -230,9 +230,32 @@
 			{m('licenseList.thisProjectBody')}
 		</p>
 	</section>
+
+	<!-- The four documents were reachable only from the PUBLIC footer, which the
+		 signed-in app shell does not render — so a signed-in reader had no path
+		 to the terms they had agreed to. Mobile put them on its About screen
+		 (issue #666 I4); this is the web half. -->
+	<section class="card">
+		<h2>{m('licenseList.legalHeading')}</h2>
+		<ul class="legal-links">
+			<li><a href="/privacy">{m('landing.footerPrivacy')}</a></li>
+			<li><a href="/terms">{m('landing.footerTerms')}</a></li>
+			<li><a href="/cookie-notice">{m('landing.footerCookies')}</a></li>
+			<li><a href="/health-data-notice">{m('landing.footerHealthData')}</a></li>
+		</ul>
+	</section>
 </div>
 
 <style>
+	.legal-links {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3) var(--space-5);
+	}
+
 	.page {
 		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 42rem;
