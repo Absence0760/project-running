@@ -9,6 +9,7 @@ export 'src/widgets/chart_card_header.dart';
 export 'src/widgets/empty_state.dart';
 export 'src/widgets/identity_avatar.dart';
 export 'src/widgets/list_skeleton.dart';
+export 'src/widgets/progress_bar.dart';
 export 'src/widgets/text_lane.dart';
 export 'src/widgets/section_header.dart';
 export 'src/widgets/selection_hint.dart';
