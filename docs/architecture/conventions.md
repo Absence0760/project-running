@@ -376,7 +376,7 @@ When you genuinely need a migration (e.g. on-disk data format changing), write t
 
 ## Web page padding
 
-Every top-level web page wraps its content in a `.page` div with `padding: var(--space-xl) var(--space-2xl)` (2rem vertical, 3rem horizontal) and is **left-aligned** — do not add `margin: 0 auto`. The constant `var(--space-2xl)` left gutter is the gap between the sidebar and the content; centering with `margin: 0 auto` makes that gap balloon on wide screens whenever the page sets a small `max-width`, and makes navigating between pages feel like the content is jumping around. List and detail pages **do not set `max-width`** — they fill the available width so card grids, week strips, and run lists use the full screen instead of stranding empty space on the right. Focused single-form pages may still cap narrow (40–48rem) and tabbed settings panes cap at 64rem so labelled rows don't stretch awkwardly; everything else stays uncapped. Keep the horizontal padding fixed and don't centre. Public layouts without the sidebar (`/`, `/login`, `/share/...`, `/clubs/join/[token]`, `/live/...`) are exempt because they don't share the chrome and centring is the right call there.
+Every top-level web page wraps its content in a `.page` div with `padding: var(--page-padding-y) var(--page-padding-x)` and is **left-aligned**. **Read the tokens, never the `--space-*` pair they resolve to** — they are 2rem / 3rem at desktop and narrow to `--space-lg` / `--space-md` below 40 rem, where a 3rem gutter each side costs 96px of a 320px screen on top of the 72px sidebar rail ([§ 535](decisions.md)) — do not add `margin: 0 auto`. The constant `var(--space-2xl)` left gutter is the gap between the sidebar and the content; centering with `margin: 0 auto` makes that gap balloon on wide screens whenever the page sets a small `max-width`, and makes navigating between pages feel like the content is jumping around. List and detail pages **do not set `max-width`** — they fill the available width so card grids, week strips, and run lists use the full screen instead of stranding empty space on the right. Focused single-form pages may still cap narrow (40–48rem) and tabbed settings panes cap at 64rem so labelled rows don't stretch awkwardly; everything else stays uncapped. Keep the horizontal padding fixed and don't centre. Public layouts without the sidebar (`/`, `/login`, `/share/...`, `/clubs/join/[token]`, `/live/...`) are exempt because they don't share the chrome and centring is the right call there.
 
 ## Web page titles and sidebar chrome
 
@@ -801,6 +801,24 @@ It is a **floor** guard, not mobile's "name the step" literal guard, and the dif
 Of the 42 declarations § 525 pinned, **9 remain across 5 files**, each a named exemption rather than an unexamined literal. Classify by reading the **site's markup, not its file**: only `ElevationProfile`'s `.extreme-text` (real SVG text) and `RouteBuilder`'s `.km-marker` (an 8 px numeral in a 20 px map pin) are text-inside-a-graphic — a label merely *near* a drawing, like a heatmap legend's HTML "Less"/"More" beside an aria-hidden gradient bar, is plain debt.
 
 An `em` is not exempt, only unresolvable *statically* — it compounds with whatever the ancestor resolved to. Count-pinned at six so a micro-label cannot evade the floor by switching unit, and each is classified: three are Material Symbols glyph sizing (an icon's `font-size` is the glyph's box, and a legibility floor on an icon asserts the wrong thing) and three are real text, measured with `getComputedStyle` in `tests-e2e/cross-cutting/type-floor-em-units.spec.ts`.
+
+## Web reflow — a page must fit 320 CSS px, and what cannot reflow scrolls inside its own box
+
+WCAG **1.4.10** asks that no page require horizontal scrolling at a 320 px viewport. The conformance test is the derivation, never a pixel: `document.documentElement.scrollWidth <= clientWidth`. That form is also the only one that tolerates the criterion's own exemption — an inner scroller — so never assert an absolute width ([decisions.md § 500](decisions.md), § 535).
+
+What breaks it is almost never a page. Five mechanisms account for every failure the round-15 sweep found across 34 of 47 static routes:
+
+- **A flex or grid item defaults to a content-derived minimum.** `min-width: auto` floors an item at its min-content width, so it refuses to shrink and the document grows instead. This is what made every page overflow at once: `.main-content` is `flex: 1` in the app shell, and `min-width: 0` on that one rule took `/dashboard` from 752 px to 472 at a 360 px viewport.
+- **A fraction track floors at min-content too.** Write `minmax(0, 1fr)`, not `1fr`. A `fieldset` needs an explicit `min-width: 0` for the same reason — the UA sheet gives it `min-width: min-content`.
+- **`minmax(FIXED, 1fr)` cannot reflow below `FIXED`.** Write `repeat(auto-fit, minmax(min(24rem, 100%), 1fr))`. The `min()` is a no-op wherever the container is wider and is the whole fix wherever it is not.
+- **Read `--page-padding-y` / `--page-padding-x` on a page wrapper**, never the `--space-*` pair they resolve to. The tokens narrow below 40 rem; a hardcoded 3 rem gutter costs 96 px of a 320 px screen on top of the 72 px rail.
+- **A row of a title plus actions wraps.** `flex-wrap: wrap` on the row, and no `flex-shrink: 0` on the actions.
+
+**Truncation is not a reflow strategy.** `white-space: nowrap` makes the whole string the element's min-content width, so a `nowrap` + `overflow: hidden` + `text-overflow: ellipsis` box grows the page rather than truncating — and `min-width: 0` on the element itself does not clamp that contribution in Chrome. Clamp the *container* (a grid item takes `min-width: 0`), or let the text wrap.
+
+**Content whose axis is its information may scroll itself.** A data table takes the `.table-scroll` wrapper (`max-width: 100%; overflow-x: auto`, plus `tabindex="0"` so the region is reachable without a mouse). A segmented control, a tab strip and a multi-column set grid scroll as one block, because splitting a continuous track across two rows destroys the control rather than reflowing it — and rows inside such a scroller need a shared explicit `min-width`, or each sizes to its own content and the columns stop lining up.
+
+`tests-e2e/cross-cutting/reflow-narrow-viewport.spec.ts` drives 15 routes at 320 and 360 px. Add a route to it when you add a surface with a grid, a toolbar or a table.
 
 ## Web CSS custom properties — a fallback is a default, never a substitute for the token
 
