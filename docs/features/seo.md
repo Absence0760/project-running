@@ -235,3 +235,18 @@ web-only, Supabase Free) — see [deployment_lean.md](../ops/deployment_lean.md)
 3. Add it to `sitemap.xml` via a `sitemap.ts` builder (unless it's a
    people-directory — don't enumerate those).
 4. Unit-test the meta builder; e2e the not-found head (deterministic).
+
+**Export a `build<X>ShareCanonical(base, id)` and never spell the path
+again.** Every consumer of a share URL passes the base its use needs and
+takes the path from that one function: the in-app canonical resolves it
+against `PUBLIC_SITE_URL`, a copy-to-clipboard link against
+`location.origin` (a preview host has to yield a preview link), the
+sitemap `<loc>` against the endpoint's site URL, and the entity's own
+JSON-LD `url` against the same. Getting the *origin* right per use was
+never the problem; three copy-links and five sitemap rows spelling the
+*path* by hand was, and a `<loc>` that disagrees with the page's own
+canonical hands the crawler a manifest pointing somewhere else.
+`share_url_source_guard.test.ts` registers every place a share path is
+assembled with an exact count, so a new hand-spelled one fails. Note the
+one path that is not under `/share/`: a recap's public page is
+`/recap/share/[id]`, from `buildRecapShareCanonical`.
