@@ -5669,6 +5669,10 @@
   "@clubDetailTabPhotos": {
     "description": "Club detail tab — photo gallery"
   },
+  "clubDetailReadMore": "Read more",
+  "@clubDetailReadMore": {
+    "description": "Expands a clamped club description into a sheet showing the whole text."
+  },
   "clubDetailReportClub": "Report club",
   "@clubDetailReportClub": {
     "description": "Tooltip on the report-club button"

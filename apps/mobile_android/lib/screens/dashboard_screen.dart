@@ -950,62 +950,61 @@ class _DashboardScreenState extends State<DashboardScreen>
         ));
         if (liftsCard != null) addBlock(liftsCard);
 
-        content = Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _kExpandedMaxWidth),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                if (actionToolbar != null) actionToolbar,
-                if (coach != null) ...[coach, _kSectionGap],
-                if (workoutCard != null || modalityBody != null)
-                  Row(
-                    key: const Key('dashboardExpandedLeadRow'),
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (workoutCard != null) workoutCard,
-                            if (workoutCard != null && modalityBody != null)
-                              _kSectionGap,
-                            if (modalityBody != null) modalityBody,
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(child: goalsSection),
-                    ],
-                  )
-                else
-                  goalsSection,
-                _kSectionGap,
-                periodRow,
-                _kSectionGap,
-                thisWeekCard,
-                _kSectionGap,
+        content = contentColumn(
+          context,
+          maxWidth: _kExpandedMaxWidth,
+          ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              if (actionToolbar != null) actionToolbar,
+              if (coach != null) ...[coach, _kSectionGap],
+              if (workoutCard != null || modalityBody != null)
                 Row(
-                  key: const Key('dashboardExpandedChartColumns'),
+                  key: const Key('dashboardExpandedLeadRow'),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: left,
+                        children: [
+                          if (workoutCard != null) workoutCard,
+                          if (workoutCard != null && modalityBody != null)
+                            _kSectionGap,
+                          if (modalityBody != null) modalityBody,
+                        ],
                       ),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: right,
-                      ),
-                    ),
+                    Expanded(child: goalsSection),
                   ],
-                ),
-              ],
-            ),
+                )
+              else
+                goalsSection,
+              _kSectionGap,
+              periodRow,
+              _kSectionGap,
+              thisWeekCard,
+              _kSectionGap,
+              Row(
+                key: const Key('dashboardExpandedChartColumns'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: left,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: right,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         );
       } else {

@@ -6982,6 +6982,12 @@ abstract class AppLocalizations {
   /// **'Photos'**
   String get clubDetailTabPhotos;
 
+  /// Expands a clamped club description into a sheet showing the whole text.
+  ///
+  /// In en, this message translates to:
+  /// **'Read more'**
+  String get clubDetailReadMore;
+
   /// Tooltip on the report-club button
   ///
   /// In en, this message translates to:

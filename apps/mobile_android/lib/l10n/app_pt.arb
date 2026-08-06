@@ -1192,6 +1192,7 @@
   "clubDetailTabRoutes": "Rotas",
   "clubDetailTabTemplates": "Modelos",
   "clubDetailTabPhotos": "Fotos",
+  "clubDetailReadMore": "Ler mais",
   "clubDetailReportClub": "Denunciar clube",
   "clubDetailReportPost": "Denunciar esta publicação",
   "clubDetailLoadFailedBody": "Não foi possível carregar este clube. Pode ter sido removido, ou sua sessão precisa ser atualizada. Puxe para tentar novamente, ou saia e entre novamente em Configurações.",

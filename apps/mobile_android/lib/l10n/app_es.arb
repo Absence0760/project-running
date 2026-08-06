@@ -1192,6 +1192,7 @@
   "clubDetailTabRoutes": "Rutas",
   "clubDetailTabTemplates": "Plantillas",
   "clubDetailTabPhotos": "Fotos",
+  "clubDetailReadMore": "Leer más",
   "clubDetailReportClub": "Reportar club",
   "clubDetailReportPost": "Denunciar esta publicación",
   "clubDetailLoadFailedBody": "No se pudo cargar este club. Puede que se haya eliminado, o que tu sesión deba actualizarse. Desliza para reintentar, o cierra sesión y vuelve a entrar desde Ajustes.",

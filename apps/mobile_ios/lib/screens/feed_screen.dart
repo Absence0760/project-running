@@ -355,13 +355,7 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ],
     );
-    if (widthClassOf(context) != WidthClass.expanded) return content;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
-        child: content,
-      ),
-    );
+    return contentColumn(context, content);
   }
 
   Widget _buildBadgeStrip(ThemeData theme) {

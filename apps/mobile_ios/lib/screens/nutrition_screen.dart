@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../exercise_calories.dart';
 import '../food_search.dart' show FoodMacros;
@@ -851,68 +852,71 @@ class _NutritionScreenState extends State<NutritionScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (!_isOnline && !_anyPending)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: theme.colorScheme.surfaceContainerHigh,
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_off_outlined, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.nutritionOfflineCached,
-                      style: theme.textTheme.bodySmall,
+      body: contentColumn(
+        context,
+        Column(
+          children: [
+            if (!_isOnline && !_anyPending)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: theme.colorScheme.surfaceContainerHigh,
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_off_outlined, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.nutritionOfflineCached,
+                        style: theme.textTheme.bodySmall,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+              ),
+            PendingSyncBanner(
+              api: widget.api,
+              isOnline: _isOnline,
+              stores: [widget.store, _templateStore, _recipeStore],
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _ringsCard(theme, l10n, sumMacros(today)),
+                    const SizedBox(height: 12),
+                    _waterCard(theme, l10n),
+                    const SizedBox(height: 12),
+                    if (_templateStore.templates.isNotEmpty) ...[
+                      _templatesCard(theme, l10n),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_recipeStore.recipes.isNotEmpty) ...[
+                      _recipesCard(theme, l10n),
+                      const SizedBox(height: 12),
+                    ],
+                    if (groups.isEmpty)
+                      EmptyState(
+                        icon: Icons.restaurant,
+                        title: l10n.nutritionEmptyTitle,
+                        body: l10n.nutritionEmptyBody,
+                        ctaLabel: l10n.nutritionLogFood,
+                        onCta: _logFood,
+                      )
+                    else
+                      ...groups.map((g) => _mealGroup(theme, l10n, g)),
+                    if (today.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _trendCard(theme, l10n),
+                    ],
+                  ],
+                ),
               ),
             ),
-          PendingSyncBanner(
-            api: widget.api,
-            isOnline: _isOnline,
-            stores: [widget.store, _templateStore, _recipeStore],
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _refresh,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _ringsCard(theme, l10n, sumMacros(today)),
-                  const SizedBox(height: 12),
-                  _waterCard(theme, l10n),
-                  const SizedBox(height: 12),
-                  if (_templateStore.templates.isNotEmpty) ...[
-                    _templatesCard(theme, l10n),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_recipeStore.recipes.isNotEmpty) ...[
-                    _recipesCard(theme, l10n),
-                    const SizedBox(height: 12),
-                  ],
-                  if (groups.isEmpty)
-                    EmptyState(
-                      icon: Icons.restaurant,
-                      title: l10n.nutritionEmptyTitle,
-                      body: l10n.nutritionEmptyBody,
-                      ctaLabel: l10n.nutritionLogFood,
-                      onCta: _logFood,
-                    )
-                  else
-                    ...groups.map((g) => _mealGroup(theme, l10n, g)),
-                  if (today.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _trendCard(theme, l10n),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

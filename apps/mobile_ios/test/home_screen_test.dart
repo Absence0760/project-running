@@ -384,6 +384,44 @@ void main() {
       expect(find.byType(NavigationRail), findsNothing);
       expect(find.byType(BottomAppBar), findsOneWidget);
     });
+
+    // The derivation, not a dp figure: whichever shell is up, a page reads the
+    // SAME bottom padding, so `SafeArea(bottom: false)` and
+    // `fabScrollClearance` mean the same thing on a tablet as on a phone
+    // (issue #666 C14, decisions § 538). Both shells are asserted in one test
+    // so the equality is the assertion, not a constant either side could
+    // drift from.
+    testWidgets('both shells hand a page the same bottom inset', (
+      tester,
+    ) async {
+      Future<double> bottomPaddingOn(Size size) async {
+        tester.view.physicalSize = size * 2;
+        tester.view.devicePixelRatio = 2.0;
+        // A phone's 3-button navigation bar. Without a real inset the two
+        // shells agree at zero and the test proves nothing (decisions § 534).
+        tester.view.padding = const FakeViewPadding(bottom: 48 * 2);
+        tester.view.viewPadding = const FakeViewPadding(bottom: 48 * 2);
+        final s = await _makeStores();
+        await _pump(tester, s);
+        return MediaQuery.of(
+          tester.element(find.byType(PageView)),
+        ).padding.bottom;
+      }
+
+      addTearDown(tester.view.reset);
+      final phone = await bottomPaddingOn(const Size(390, 844));
+      expect(find.byType(BottomAppBar), findsOneWidget);
+      final tablet = await bottomPaddingOn(const Size(1280, 800));
+      expect(find.byType(NavigationRail), findsOneWidget);
+
+      expect(phone, 0, reason: 'the BottomAppBar already spent the inset');
+      expect(
+        tablet,
+        phone,
+        reason: 'the rail shell left the system inset for the pages to '
+            'consume, and they pass bottom: false',
+      );
+    });
   });
 
   group('HomeScreen swipe lock during recording (#490)', () {

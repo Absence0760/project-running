@@ -1192,6 +1192,7 @@
   "clubDetailTabRoutes": "Itinéraires",
   "clubDetailTabTemplates": "Modèles",
   "clubDetailTabPhotos": "Photos",
+  "clubDetailReadMore": "Lire la suite",
   "clubDetailReportClub": "Signaler le club",
   "clubDetailReportPost": "Signaler cette publication",
   "clubDetailLoadFailedBody": "Impossible de charger ce club. Il a peut-être été supprimé, ou votre session doit être actualisée. Tirez pour réessayer, ou déconnectez-vous et reconnectez-vous depuis les Réglages.",

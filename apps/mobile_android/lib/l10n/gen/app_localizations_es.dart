@@ -4202,6 +4202,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get clubDetailTabPhotos => 'Fotos';
 
   @override
+  String get clubDetailReadMore => 'Leer más';
+
+  @override
   String get clubDetailReportClub => 'Reportar club';
 
   @override

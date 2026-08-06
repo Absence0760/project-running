@@ -1,6 +1,8 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
+import 'package:ui_kit/ui_kit.dart' show SectionHeader;
 
+import '../adaptive_width.dart';
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -13,6 +15,53 @@ import '../settings_sync.dart';
 import '../undo_queue.dart';
 import '../widgets/top_banner.dart';
 import 'settings_body_metrics_screen.dart';
+
+/// Inset around a pinned group eyebrow. The generous top gap is what makes a
+/// group boundary legible while scrolling past it.
+const EdgeInsets kPrefsSectionHeaderPadding = EdgeInsets.fromLTRB(
+  16,
+  20,
+  16,
+  4,
+);
+
+/// A [SectionHeader] that stays put at the top of its group's rows.
+///
+/// [extent] is derived by the caller from the current text scale rather than
+/// fixed, and [background] is the surface the list sits on so the rows pass
+/// behind the eyebrow instead of through it.
+class PinnedSectionHeader extends SliverPersistentHeaderDelegate {
+  const PinnedSectionHeader({
+    required this.label,
+    required this.extent,
+    required this.background,
+  });
+
+  final String label;
+  final double extent;
+  final Color background;
+
+  @override
+  double get minExtent => extent;
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) =>
+      Container(
+        color: background,
+        padding: kPrefsSectionHeaderPadding,
+        alignment: AlignmentDirectional.centerStart,
+        child: SectionHeader(label: label),
+      );
+
+  @override
+  bool shouldRebuild(PinnedSectionHeader old) =>
+      old.label != label ||
+      old.extent != extent ||
+      old.background != background;
+}
 
 class SettingsPreferencesScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -57,8 +106,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   String _unitSubtitle() {
     final l10n = AppLocalizations.of(context);
-    final base =
-        widget.preferences.useMiles ? l10n.prefsUnitImperial : l10n.prefsUnitMetric;
+    final base = widget.preferences.useMiles
+        ? l10n.prefsUnitImperial
+        : l10n.prefsUnitMetric;
     final sync = widget.settingsSync;
     if (sync == null || !sync.synced) return base;
     return l10n.prefsSyncedSuffix(base);
@@ -113,10 +163,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final l10n = AppLocalizations.of(context);
     final prefs = widget.preferences;
     final current = prefs.targetPaceSecPerKm;
-    final mCtl =
-        TextEditingController(text: '${current > 0 ? current ~/ 60 : 5}');
-    final sCtl =
-        TextEditingController(text: '${current > 0 ? current % 60 : 30}');
+    final mCtl = TextEditingController(
+      text: '${current > 0 ? current ~/ 60 : 5}',
+    );
+    final sCtl = TextEditingController(
+      text: '${current > 0 ? current % 60 : 30}',
+    );
 
     final result = await showDialog<int?>(
       context: context,
@@ -130,8 +182,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               child: TextField(
                 controller: mCtl,
                 keyboardType: TextInputType.number,
-                decoration:
-                    InputDecoration(labelText: l10n.prefsLivePaceAlertMin),
+                decoration: InputDecoration(
+                  labelText: l10n.prefsLivePaceAlertMin,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -147,8 +200,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               child: TextField(
                 controller: sCtl,
                 keyboardType: TextInputType.number,
-                decoration:
-                    InputDecoration(labelText: l10n.prefsLivePaceAlertSec),
+                decoration: InputDecoration(
+                  labelText: l10n.prefsLivePaceAlertSec,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -336,8 +390,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   String _weeklyGoalSummary() {
     final l10n = AppLocalizations.of(context);
-    final metres =
-        _bagValue<num>(SettingsKeys.weeklyMileageGoalMetres)?.toDouble();
+    final metres = _bagValue<num>(
+      SettingsKeys.weeklyMileageGoalMetres,
+    )?.toDouble();
     if (metres == null) return l10n.prefsNotSet;
     final useMiles = widget.preferences.useMiles;
     final display = useMiles ? metres / 1609.344 : metres / 1000;
@@ -571,7 +626,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     // locale above stays the source of truth for what THIS device shows.
     final tag = picked.isEmpty
         ? resolveActiveLocaleTag(
-            null, WidgetsBinding.instance.platformDispatcher.locales)
+            null,
+            WidgetsBinding.instance.platformDispatcher.locales,
+          )
         : picked;
     await _putUniversal(SettingsKeys.locale, tag);
     if (mounted) setState(() {});
@@ -585,11 +642,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     if (_localeBackfillDone) return;
     final sync = widget.settingsSync;
     final svc = sync?.service;
-    if (sync == null || !sync.synced || svc == null) return; // not ready; retry on next change
+    if (sync == null || !sync.synced || svc == null)
+      return; // not ready; retry on next change
     _localeBackfillDone = true;
-    if (svc.effective<String>(SettingsKeys.locale) != null) return; // already set
+    if (svc.effective<String>(SettingsKeys.locale) != null)
+      return; // already set
     final tag = resolveActiveLocaleTag(
-        widget.preferences.locale, WidgetsBinding.instance.platformDispatcher.locales);
+      widget.preferences.locale,
+      WidgetsBinding.instance.platformDispatcher.locales,
+    );
     _putUniversal(SettingsKeys.locale, tag);
   }
 
@@ -615,7 +676,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   String get _mapStylePref => normaliseMapStyle(
-      _bagValue<String>(SettingsKeys.mapStyle) ?? widget.preferences.mapStyle);
+    _bagValue<String>(SettingsKeys.mapStyle) ?? widget.preferences.mapStyle,
+  );
 
   Future<void> _editPaceFormat() async {
     final l10n = AppLocalizations.of(context);
@@ -630,8 +692,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: l10n.prefsPaceFormat,
       options: opts,
       labels: labels,
-      current:
-          _bagValue<String>(SettingsKeys.unitsPaceFormat) ?? 'min_per_km',
+      current: _bagValue<String>(SettingsKeys.unitsPaceFormat) ?? 'min_per_km',
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.unitsPaceFormat, picked);
@@ -650,8 +711,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: l10n.prefsDefaultRunVisibility,
       options: opts,
       labels: labels,
-      current:
-          _bagValue<String>(SettingsKeys.privacyDefault) ?? 'followers',
+      current: _bagValue<String>(SettingsKeys.privacyDefault) ?? 'followers',
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.privacyDefault, picked);
@@ -670,8 +730,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: l10n.prefsCoachPersonality,
       options: opts,
       labels: labels,
-      current:
-          _bagValue<String>(SettingsKeys.coachPersonality) ?? 'supportive',
+      current: _bagValue<String>(SettingsKeys.coachPersonality) ?? 'supportive',
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.coachPersonality, picked);
@@ -710,8 +769,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: l10n.prefsPushNotifications,
       options: opts,
       labels: labels,
-      current:
-          _bagValue<String>(SettingsKeys.pushNotifications) ?? 'important',
+      current: _bagValue<String>(SettingsKeys.pushNotifications) ?? 'important',
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.pushNotifications, picked);
@@ -719,8 +777,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       // flag so the worker's per-device fan-out filter matches. 'off' disables
       // this device; 'all'/'important' re-enable it (the worker still applies
       // the category gate). Best-effort — no-ops when push isn't configured.
-      await PushMessagingBridge.instance
-          ?.setNotificationsEnabled(picked != 'off');
+      await PushMessagingBridge.instance?.setNotificationsEnabled(
+        picked != 'off',
+      );
     }
   }
 
@@ -757,7 +816,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       debugPrint('clear_my_unsubscribe_suppression failed: $e');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).prefsEmailReOptInFailed);
+          context,
+          AppLocalizations.of(context).prefsEmailReOptInFailed,
+        );
       }
     }
   }
@@ -769,7 +830,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   // device locale (not Localizations.localeOf) because the app's
   // resolved locale drops the region subtag the derivation needs.
   String get _weekStartLocaleDefault => defaultWeekStartForLocale(
-      WidgetsBinding.instance.platformDispatcher.locale.toLanguageTag());
+    WidgetsBinding.instance.platformDispatcher.locale.toLanguageTag(),
+  );
 
   Future<void> _editWeekStartDay() async {
     final l10n = AppLocalizations.of(context);
@@ -779,7 +841,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       title: l10n.prefsWeekStart,
       options: opts,
       labels: labels,
-      current: _bagValue<String>(SettingsKeys.weekStartDay) ??
+      current:
+          _bagValue<String>(SettingsKeys.weekStartDay) ??
           _weekStartLocaleDefault,
     );
     if (picked != null) {
@@ -812,9 +875,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final picked = await _pickRadio<int>(
       title: l10n.prefsUndoWindow,
       options: kUndoWindowChoicesS,
-      labels: [
-        for (final s in kUndoWindowChoicesS) _undoWindowLabel(l10n, s),
-      ],
+      labels: [for (final s in kUndoWindowChoicesS) _undoWindowLabel(l10n, s)],
       current: _undoWindowS,
     );
     if (picked == null) return;
@@ -830,8 +891,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editDiscoverableInSearch() async {
-    final current =
-        _bagValue<bool>(SettingsKeys.discoverableInSearch) ?? true;
+    final current = _bagValue<bool>(SettingsKeys.discoverableInSearch) ?? true;
     await _putUniversal(SettingsKeys.discoverableInSearch, !current);
   }
 
@@ -883,17 +943,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       maxValue: 240,
     );
     if (picked == null) return;
-    await _putUniversal(
-      SettingsKeys.maxHrBpm,
-      picked == -1 ? null : picked,
-    );
+    await _putUniversal(SettingsKeys.maxHrBpm, picked == -1 ? null : picked);
   }
 
   Future<void> _editCarbsPerHour() async {
     final picked = await _pickInt(
       title: AppLocalizations.of(context).prefsCarbsPerHour,
       current:
-          (_bagValue<num>(SettingsKeys.carbsPerHour) ?? widget.preferences.carbsPerHourG)
+          (_bagValue<num>(SettingsKeys.carbsPerHour) ??
+                  widget.preferences.carbsPerHourG)
               .round(),
       suffix: 'g/h',
       minValue: 0,
@@ -909,7 +967,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final picked = await _pickInt(
       title: AppLocalizations.of(context).prefsFluidPerHour,
       current:
-          (_bagValue<num>(SettingsKeys.fluidPerHour) ?? widget.preferences.fluidPerHourMl)
+          (_bagValue<num>(SettingsKeys.fluidPerHour) ??
+                  widget.preferences.fluidPerHourMl)
               .round(),
       suffix: 'ml/h',
       minValue: 0,
@@ -946,8 +1005,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 child: TextField(
                   controller: entry.value,
                   keyboardType: TextInputType.number,
-                  decoration:
-                      InputDecoration(labelText: entry.key.toUpperCase()),
+                  decoration: InputDecoration(
+                    labelText: entry.key.toUpperCase(),
+                  ),
                 ),
               ),
           ],
@@ -955,7 +1015,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         actions: [
           TextButton(
             onPressed: () async {
-              final ok = await showDialog<bool>(
+              final ok =
+                  await showDialog<bool>(
                     context: ctx,
                     builder: (confirmCtx) => AlertDialog(
                       title: Text(l10n.prefsHrZonesClearTitle),
@@ -968,8 +1029,10 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                         TextButton(
                           onPressed: () => Navigator.pop(confirmCtx, true),
                           style: TextButton.styleFrom(
-                              foregroundColor:
-                                  Theme.of(confirmCtx).colorScheme.error),
+                            foregroundColor: Theme.of(
+                              confirmCtx,
+                            ).colorScheme.error,
+                          ),
                           child: Text(l10n.prefsHrZonesClearConfirm),
                         ),
                       ],
@@ -1000,15 +1063,13 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
     if (mounted) FocusScope.of(context).unfocus();
     if (result == null) return;
-    await _putUniversal(
-      SettingsKeys.hrZones,
-      result.isEmpty ? null : result,
-    );
+    await _putUniversal(SettingsKeys.hrZones, result.isEmpty ? null : result);
   }
 
   Future<void> _editWeeklyGoal() async {
-    final current =
-        _bagValue<num>(SettingsKeys.weeklyMileageGoalMetres)?.toDouble();
+    final current = _bagValue<num>(
+      SettingsKeys.weeklyMileageGoalMetres,
+    )?.toDouble();
     final useMiles = widget.preferences.useMiles;
     final currentDisplay = current == null
         ? null
@@ -1032,23 +1093,22 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       }
     } else {
       final metres = useMiles ? picked * 1609.344 : picked * 1000;
-      await _putUniversal(
-        SettingsKeys.weeklyMileageGoalMetres,
-        metres.round(),
-      );
+      await _putUniversal(SettingsKeys.weeklyMileageGoalMetres, metres.round());
       final existing = widget.preferences.goals.firstWhere(
         (g) => g.period == GoalPeriod.week && g.distanceMetres != null,
         orElse: () => const RunGoal(id: '', period: GoalPeriod.week),
       );
-      await widget.preferences.upsertGoal(RunGoal(
-        id: existing.id.isEmpty ? newGoalId() : existing.id,
-        period: GoalPeriod.week,
-        distanceMetres: metres,
-        title: existing.title,
-        timeSeconds: existing.timeSeconds,
-        avgPaceSecPerKm: existing.avgPaceSecPerKm,
-        runCount: existing.runCount,
-      ));
+      await widget.preferences.upsertGoal(
+        RunGoal(
+          id: existing.id.isEmpty ? newGoalId() : existing.id,
+          period: GoalPeriod.week,
+          distanceMetres: metres,
+          title: existing.title,
+          timeSeconds: existing.timeSeconds,
+          avgPaceSecPerKm: existing.avgPaceSecPerKm,
+          runCount: existing.runCount,
+        ),
+      );
     }
   }
 
@@ -1069,7 +1129,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Widget _cueSwitch(
-      String title, String subtitle, String cueId, String infoBody) {
+    String title,
+    String subtitle,
+    String cueId,
+    String infoBody,
+  ) {
     final prefs = widget.preferences;
     return SwitchListTile(
       secondary: IconButton(
@@ -1087,487 +1151,630 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
   }
 
-  Widget _sectionLabel(String text) {
+  /// One PINNED eyebrow per group over that group's rows.
+  ///
+  /// Everything else in Settings is a thin router whose sub-screen AppBar
+  /// names the page; this one page carries 46 rows under eight groups behind
+  /// a single "Preferences" title, and with the labels inline in the scroll
+  /// they have all gone by two flicks in — nothing on screen then says which
+  /// group a switch belongs to (issue #666 C13).
+  List<Widget> _prefSlivers(
+    BuildContext context,
+    List<(String, List<Widget>)> groups,
+  ) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-      child: Text(
-        text.toUpperCase(),
-        style: theme.textTheme.labelSmall?.copyWith(
-          letterSpacing: 0.8,
-          color: theme.colorScheme.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
+    // Derived, not a constant: the eyebrow is one line of `labelSmall` at
+    // whatever the OS text scale is, plus its own padding. A literal extent
+    // would clip the label the moment someone raises the scale.
+    final probe = TextPainter(
+      text: TextSpan(text: 'Hg', style: theme.textTheme.labelSmall),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final extent = probe.height + kPrefsSectionHeaderPadding.vertical;
+    probe.dispose();
+    return [
+      // SliverMainAxisGroup, not two loose slivers: a bare pinned header pins
+      // against the viewport and every group's eyebrow would stack on the one
+      // before it — eight of them by the bottom of this page. Grouped, a
+      // header pins only over its own rows and the next group pushes it out.
+      for (final (label, rows) in groups)
+        SliverMainAxisGroup(
+          slivers: [
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: PinnedSectionHeader(
+                label: label,
+                extent: extent,
+                background: theme.scaffoldBackgroundColor,
+              ),
+            ),
+            SliverList(delegate: SliverChildListDelegate(rows)),
+          ],
         ),
-      ),
-    );
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final prefs = widget.preferences;
-    final offlineNotice = widget.settingsSync?.synced == true &&
+    final offlineNotice =
+        widget.settingsSync?.synced == true &&
             widget.settingsSync?.service?.isServerHydrated == false
         ? widget.settingsSync?.lastError
         : null;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.prefsTitle)),
-      body: SafeArea(
-        child: ListView(
-          children: [
-            if (offlineNotice != null)
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.cloud_off_outlined, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(offlineNotice)),
-                  ],
-                ),
-              ),
-            _sectionLabel(AppLocalizations.of(context).prefsSectionUnitsDisplay),
-            ListTile(
-              title: Text(AppLocalizations.of(context).prefsLanguage),
-              subtitle: Text(
-                widget.preferences.locale == null
-                    ? AppLocalizations.of(context).prefsLanguageSystem
-                    : localeLabels[localeToTag(widget.preferences.locale!)] ??
-                        '—',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _editLanguage,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsUseMiles),
-              subtitle: Text(_unitSubtitle()),
-              value: prefs.useMiles,
-              onChanged: (v) async {
-                await prefs.setUseMiles(v);
-                await widget.settingsSync?.pushPreferredUnit();
-                if (mounted) setState(() {});
-              },
-            ),
-            ListTile(
-              title: Text(l10n.prefsPaceFormat),
-              subtitle: Text(_paceFormatLabel(
-                l10n,
-                _bagValue<String>(SettingsKeys.unitsPaceFormat) ?? 'min_per_km',
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editPaceFormat,
-            ),
-            ListTile(
-              title: Text(l10n.prefsWeightUnit),
-              subtitle: Text(_weightUnitLabel(
-                l10n,
-                _bagValue<String>(SettingsKeys.weightUnit) ?? 'kg',
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editWeightUnit,
-            ),
-            ListTile(
-              title: Text(l10n.prefsMapStyle),
-              subtitle: Text(_mapStyleLabel(l10n, _mapStylePref)),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editMapStyle,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsDarkMode),
-              value: _darkMode,
-              onChanged: (v) {
-                final mode = v ? ThemeMode.dark : ThemeMode.light;
-                setState(() => _darkMode = v);
-                themeModeNotifier.value = mode;
-                widget.preferences.setThemeMode(mode);
-              },
-            ),
-            ListTile(
-              title: Text(l10n.prefsUndoWindow),
-              subtitle: Text(_undoWindowLabel(l10n, _undoWindowS)),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editUndoWindow,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsShowCalories),
-              subtitle: Text(l10n.prefsShowCaloriesHint),
-              value: _bagValue<bool>(SettingsKeys.showCalories) ?? true,
-              onChanged: _bagReady
-                  ? (v) => _putUniversal(SettingsKeys.showCalories, v)
-                  : null,
-            ),
-
-            _sectionLabel(l10n.prefsSectionActivityRecording),
-            ListTile(
-              title: Text(l10n.prefsDefaultActivity),
-              subtitle: Text(_activityTypeLabel(
-                l10n,
-                _bagValue<String>(SettingsKeys.defaultActivityType) ?? 'run',
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editDefaultActivityType,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsAudioCues),
-              subtitle: Text(l10n.prefsAudioCuesSubtitle),
-              value: prefs.audioCues,
-              onChanged: (v) async {
-                await prefs.setAudioCues(v);
-                await widget.settingsSync?.pushAudioCues();
-              },
-            ),
-            if (prefs.audioCues)
-              SwitchListTile(
-                title: Text(l10n.prefsMinimalVoiceCues),
-                subtitle: Text(l10n.prefsMinimalVoiceCuesSubtitle),
-                value: prefs.voiceFeedbackVerbosity == 'minimal',
-                onChanged: (v) async {
-                  final value = v ? 'minimal' : 'full';
-                  await prefs.setVoiceFeedbackVerbosity(value);
-                  await _putUniversal(SettingsKeys.voiceFeedbackVerbosity, value);
-                },
-              ),
-            if (prefs.audioCues)
-              SwitchListTile(
-                title: Text(l10n.prefTurnByTurnCues),
-                subtitle: Text(l10n.prefTurnByTurnCuesSubtitle),
-                value: prefs.turnByTurnCues,
-                onChanged: (v) async {
-                  await prefs.setTurnByTurnCues(v);
-                },
-              ),
-            if (prefs.audioCues) ...[
-              _sectionLabel(l10n.prefsVoiceCueTypesLabel),
-              _cueSwitch(l10n.prefsCueSplits, l10n.prefsCueSplitsSubtitle,
-                  VoiceCue.splits, l10n.prefsCueSplitsInfo),
-              _cueSwitch(
-                  l10n.prefsCueStartFinish,
-                  l10n.prefsCueStartFinishSubtitle,
-                  VoiceCue.startFinish,
-                  l10n.prefsCueStartFinishInfo),
-              _cueSwitch(l10n.prefsCueOffRoute, l10n.prefsCueOffRouteSubtitle,
-                  VoiceCue.offRoute, l10n.prefsCueOffRouteInfo),
-              _cueSwitch(l10n.prefsCuePaceAlerts,
-                  l10n.prefsCuePaceAlertsSubtitle, VoiceCue.paceAlerts,
-                  l10n.prefsCuePaceAlertsInfo),
-              _cueSwitch(l10n.prefsCueWorkoutSteps,
-                  l10n.prefsCueWorkoutStepsSubtitle, VoiceCue.workoutSteps,
-                  l10n.prefsCueWorkoutStepsInfo),
-              _cueSwitch(l10n.prefsCueCutoffCatchUp,
-                  l10n.prefsCueCutoffCatchUpSubtitle, VoiceCue.cutoffCatchUp,
-                  l10n.prefsCueCutoffCatchUpInfo),
-              _cueSwitch(l10n.prefsCueMarkerTargets,
-                  l10n.prefsCueMarkerTargetsSubtitle, VoiceCue.markerTargets,
-                  l10n.prefsCueMarkerTargetsInfo),
-              _cueSwitch(
-                  l10n.prefsCuePhaseTransitions,
-                  l10n.prefsCuePhaseTransitionsSubtitle,
-                  VoiceCue.phaseTransitions,
-                  l10n.prefsCuePhaseTransitionsInfo),
-              ListTile(
-                title: Text(l10n.prefsSplitPaceMode),
-                subtitle:
-                    Text(_splitPaceModeLabel(l10n, prefs.splitPaceMode)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.info_outline),
-                      tooltip: l10n.prefsCueInfoTooltip,
-                      onPressed: () => _showCueInfo(
-                          l10n.prefsSplitPaceMode, l10n.prefsSplitPaceModeInfo),
+      body: contentColumn(
+        context,
+        SafeArea(
+          child: CustomScrollView(
+            slivers: [
+              if (offlineNotice != null)
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const Icon(Icons.chevron_right),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud_off_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(offlineNotice)),
+                      ],
+                    ),
+                  ),
+                ),
+              ..._prefSlivers(context, [
+                (
+                  AppLocalizations.of(context).prefsSectionUnitsDisplay,
+                  [
+                    ListTile(
+                      title: Text(AppLocalizations.of(context).prefsLanguage),
+                      subtitle: Text(
+                        widget.preferences.locale == null
+                            ? AppLocalizations.of(context).prefsLanguageSystem
+                            : localeLabels[localeToTag(
+                                    widget.preferences.locale!,
+                                  )] ??
+                                  '—',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _editLanguage,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsUseMiles),
+                      subtitle: Text(_unitSubtitle()),
+                      value: prefs.useMiles,
+                      onChanged: (v) async {
+                        await prefs.setUseMiles(v);
+                        await widget.settingsSync?.pushPreferredUnit();
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsPaceFormat),
+                      subtitle: Text(
+                        _paceFormatLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.unitsPaceFormat) ??
+                              'min_per_km',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editPaceFormat,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsWeightUnit),
+                      subtitle: Text(
+                        _weightUnitLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.weightUnit) ?? 'kg',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editWeightUnit,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsMapStyle),
+                      subtitle: Text(_mapStyleLabel(l10n, _mapStylePref)),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editMapStyle,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsDarkMode),
+                      value: _darkMode,
+                      onChanged: (v) {
+                        final mode = v ? ThemeMode.dark : ThemeMode.light;
+                        setState(() => _darkMode = v);
+                        themeModeNotifier.value = mode;
+                        widget.preferences.setThemeMode(mode);
+                      },
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsUndoWindow),
+                      subtitle: Text(_undoWindowLabel(l10n, _undoWindowS)),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editUndoWindow,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsShowCalories),
+                      subtitle: Text(l10n.prefsShowCaloriesHint),
+                      value: _bagValue<bool>(SettingsKeys.showCalories) ?? true,
+                      onChanged: _bagReady
+                          ? (v) => _putUniversal(SettingsKeys.showCalories, v)
+                          : null,
+                    ),
                   ],
                 ),
-                onTap: _editSplitPaceMode,
-              ),
+                (
+                  l10n.prefsSectionActivityRecording,
+                  [
+                    ListTile(
+                      title: Text(l10n.prefsDefaultActivity),
+                      subtitle: Text(
+                        _activityTypeLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.defaultActivityType) ??
+                              'run',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editDefaultActivityType,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsAudioCues),
+                      subtitle: Text(l10n.prefsAudioCuesSubtitle),
+                      value: prefs.audioCues,
+                      onChanged: (v) async {
+                        await prefs.setAudioCues(v);
+                        await widget.settingsSync?.pushAudioCues();
+                      },
+                    ),
+                    if (prefs.audioCues)
+                      SwitchListTile(
+                        title: Text(l10n.prefsMinimalVoiceCues),
+                        subtitle: Text(l10n.prefsMinimalVoiceCuesSubtitle),
+                        value: prefs.voiceFeedbackVerbosity == 'minimal',
+                        onChanged: (v) async {
+                          final value = v ? 'minimal' : 'full';
+                          await prefs.setVoiceFeedbackVerbosity(value);
+                          await _putUniversal(
+                            SettingsKeys.voiceFeedbackVerbosity,
+                            value,
+                          );
+                        },
+                      ),
+                    if (prefs.audioCues)
+                      SwitchListTile(
+                        title: Text(l10n.prefTurnByTurnCues),
+                        subtitle: Text(l10n.prefTurnByTurnCuesSubtitle),
+                        value: prefs.turnByTurnCues,
+                        onChanged: (v) async {
+                          await prefs.setTurnByTurnCues(v);
+                        },
+                      ),
+                    ListTile(
+                      title: Text(l10n.prefsSplitInterval),
+                      subtitle: Text(
+                        prefs.splitIntervalMetres > 0
+                            ? _splitIntervalLabel(
+                                prefs.splitIntervalMetres,
+                                prefs.unit,
+                              )
+                            : l10n.prefsSplitIntervalDefaultSubtitle,
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _editSplitInterval,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsTargetPace),
+                      subtitle: Text(
+                        prefs.targetPaceSecPerKm > 0
+                            ? l10n.prefsLivePaceAlertOn(
+                                UnitFormat.pace(
+                                  prefs.targetPaceSecPerKm.toDouble(),
+                                  prefs.unit,
+                                ),
+                                UnitFormat.paceLabel(prefs.unit),
+                              )
+                            : l10n.prefsLivePaceAlertOff,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.info_outline),
+                            tooltip: l10n.prefsCueInfoTooltip,
+                            onPressed: () => _showCueInfo(
+                              l10n.prefsTargetPace,
+                              l10n.prefsTargetPaceInfo,
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right),
+                        ],
+                      ),
+                      onTap: _editTargetPace,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsKeepScreenOn),
+                      subtitle: Text(l10n.prefsKeepScreenOnSubtitle),
+                      value: prefs.keepScreenOn,
+                      onChanged: (v) async {
+                        await prefs.setKeepScreenOn(v);
+                        await widget.settingsSync?.pushKeepScreenOn();
+                      },
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsDimScreenWhileRecording),
+                      subtitle: Text(l10n.prefsDimScreenWhileRecordingSubtitle),
+                      value: prefs.dimScreenWhileRecording,
+                      onChanged: prefs.keepScreenOn
+                          ? (v) async {
+                              await prefs.setDimScreenWhileRecording(v);
+                              await widget.settingsSync
+                                  ?.pushDimScreenWhileRecording();
+                            }
+                          : null,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsAdvancedGps),
+                      subtitle: Text(l10n.prefsAdvancedGpsSubtitle),
+                      value: prefs.advancedGps,
+                      onChanged: prefs.setAdvancedGps,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsShowRawTrack),
+                      subtitle: Text(l10n.prefsShowRawTrackSubtitle),
+                      value: prefs.showRawTrack,
+                      onChanged: prefs.setShowRawTrack,
+                    ),
+                    // multi_modal.md § "Protect the core runner": a pure runner can
+                    // keep the centre Log button as a one-tap run start (long-press
+                    // still opens the full capture sheet).
+                    SwitchListTile(
+                      title: Text(l10n.prefsKeepRunPrimary),
+                      subtitle: Text(l10n.prefsKeepRunPrimarySubtitle),
+                      value: prefs.keepRunPrimary,
+                      onChanged: prefs.setKeepRunPrimary,
+                    ),
+                  ],
+                ),
+                if (prefs.audioCues)
+                  (
+                    l10n.prefsVoiceCueTypesLabel,
+                    [
+                      _cueSwitch(
+                        l10n.prefsCueSplits,
+                        l10n.prefsCueSplitsSubtitle,
+                        VoiceCue.splits,
+                        l10n.prefsCueSplitsInfo,
+                      ),
+                      _cueSwitch(
+                        l10n.prefsCueStartFinish,
+                        l10n.prefsCueStartFinishSubtitle,
+                        VoiceCue.startFinish,
+                        l10n.prefsCueStartFinishInfo,
+                      ),
+                      _cueSwitch(
+                        l10n.prefsCueOffRoute,
+                        l10n.prefsCueOffRouteSubtitle,
+                        VoiceCue.offRoute,
+                        l10n.prefsCueOffRouteInfo,
+                      ),
+                      _cueSwitch(
+                        l10n.prefsCuePaceAlerts,
+                        l10n.prefsCuePaceAlertsSubtitle,
+                        VoiceCue.paceAlerts,
+                        l10n.prefsCuePaceAlertsInfo,
+                      ),
+                      _cueSwitch(
+                        l10n.prefsCueWorkoutSteps,
+                        l10n.prefsCueWorkoutStepsSubtitle,
+                        VoiceCue.workoutSteps,
+                        l10n.prefsCueWorkoutStepsInfo,
+                      ),
+                      _cueSwitch(
+                        l10n.prefsCueCutoffCatchUp,
+                        l10n.prefsCueCutoffCatchUpSubtitle,
+                        VoiceCue.cutoffCatchUp,
+                        l10n.prefsCueCutoffCatchUpInfo,
+                      ),
+                      _cueSwitch(
+                        l10n.prefsCueMarkerTargets,
+                        l10n.prefsCueMarkerTargetsSubtitle,
+                        VoiceCue.markerTargets,
+                        l10n.prefsCueMarkerTargetsInfo,
+                      ),
+                      _cueSwitch(
+                        l10n.prefsCuePhaseTransitions,
+                        l10n.prefsCuePhaseTransitionsSubtitle,
+                        VoiceCue.phaseTransitions,
+                        l10n.prefsCuePhaseTransitionsInfo,
+                      ),
+                      ListTile(
+                        title: Text(l10n.prefsSplitPaceMode),
+                        subtitle: Text(
+                          _splitPaceModeLabel(l10n, prefs.splitPaceMode),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.info_outline),
+                              tooltip: l10n.prefsCueInfoTooltip,
+                              onPressed: () => _showCueInfo(
+                                l10n.prefsSplitPaceMode,
+                                l10n.prefsSplitPaceModeInfo,
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right),
+                          ],
+                        ),
+                        onTap: _editSplitPaceMode,
+                      ),
+                    ],
+                  ),
+                (
+                  l10n.prefsSectionTrainingDemographics,
+                  [
+                    if (!_bagReady)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Text(
+                          l10n.prefsSignInToEdit,
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ListTile(
+                      title: Text(l10n.bodyMetricsTitle),
+                      subtitle: Text(l10n.bodyMetricsTileSubtitle),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => SettingsBodyMetricsScreen(
+                            api: widget.apiClient,
+                            settingsSync: widget.settingsSync,
+                            preferences: widget.preferences,
+                          ),
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsDateOfBirth),
+                      subtitle: Text(
+                        _bagValue<String>(SettingsKeys.dateOfBirth) ??
+                            l10n.prefsNotSet,
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editDateOfBirth,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsRestingHr),
+                      subtitle: Text(
+                        _bagValue<num>(SettingsKeys.restingHrBpm) != null
+                            ? l10n.prefsHrBpm(
+                                _bagValue<num>(
+                                  SettingsKeys.restingHrBpm,
+                                )!.round(),
+                              )
+                            : l10n.prefsNotSet,
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editRestingHr,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsMaxHr),
+                      subtitle: Text(
+                        _bagValue<num>(SettingsKeys.maxHrBpm) != null
+                            ? l10n.prefsHrBpm(
+                                _bagValue<num>(SettingsKeys.maxHrBpm)!.round(),
+                              )
+                            : l10n.prefsMaxHrNotSet,
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editMaxHr,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsHrZones),
+                      subtitle: Text(_hrZonesSummary()),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editHrZones,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsWeeklyGoal),
+                      subtitle: Text(_weeklyGoalSummary()),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editWeeklyGoal,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsWeekStart),
+                      subtitle: Text(
+                        _weekStartLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.weekStartDay) ??
+                              _weekStartLocaleDefault,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editWeekStartDay,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsExcludeGymFromReadiness),
+                      subtitle: Text(l10n.prefsExcludeGymFromReadinessHint),
+                      value:
+                          _bagValue<bool>(
+                            SettingsKeys.excludeGymFromReadiness,
+                          ) ??
+                          false,
+                      onChanged: _bagReady
+                          ? (_) => _editExcludeGymFromReadiness()
+                          : null,
+                    ),
+                  ],
+                ),
+                (
+                  l10n.prefsSectionFueling,
+                  [
+                    ListTile(
+                      title: Text(l10n.prefsCarbsPerHour),
+                      subtitle: Text(
+                        l10n.prefsCarbsPerHourValue(
+                          (_bagValue<num>(SettingsKeys.carbsPerHour) ??
+                                  widget.preferences.carbsPerHourG)
+                              .round(),
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editCarbsPerHour,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsFluidPerHour),
+                      subtitle: Text(
+                        l10n.prefsFluidPerHourValue(
+                          (_bagValue<num>(SettingsKeys.fluidPerHour) ??
+                                  widget.preferences.fluidPerHourMl)
+                              .round(),
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editFluidPerHour,
+                    ),
+                  ],
+                ),
+                (
+                  l10n.prefsSectionPrivacySharing,
+                  [
+                    ListTile(
+                      title: Text(l10n.prefsDefaultRunPrivacy),
+                      subtitle: Text(
+                        _privacyLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.privacyDefault) ??
+                              'followers',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editPrivacyDefault,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsStravaAutoShare),
+                      subtitle: Text(l10n.prefsStravaAutoShareSubtitle),
+                      value:
+                          _bagValue<bool>(SettingsKeys.stravaAutoShare) ??
+                          false,
+                      onChanged: _bagReady
+                          ? (_) => _editStravaAutoShare()
+                          : null,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsDiscoverable),
+                      subtitle: Text(l10n.prefsDiscoverableSubtitle),
+                      value:
+                          _bagValue<bool>(SettingsKeys.discoverableInSearch) ??
+                          true,
+                      onChanged: _bagReady
+                          ? (_) => _editDiscoverableInSearch()
+                          : null,
+                    ),
+                  ],
+                ),
+                (
+                  l10n.prefsSectionAiCoach,
+                  [
+                    ListTile(
+                      title: Text(l10n.prefsCoachPersonality),
+                      subtitle: Text(
+                        _coachLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.coachPersonality) ??
+                              'supportive',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editCoachPersonality,
+                    ),
+                  ],
+                ),
+                (
+                  l10n.prefsSectionNotifications,
+                  [
+                    ListTile(
+                      title: Text(l10n.prefsEmailNotifications),
+                      subtitle: Text(
+                        _emailNotifLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.emailNotifications) ??
+                              'important',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editEmailNotifications,
+                    ),
+                    ListTile(
+                      title: Text(l10n.prefsPushNotifications),
+                      subtitle: Text(
+                        _pushNotifLabel(
+                          l10n,
+                          _bagValue<String>(SettingsKeys.pushNotifications) ??
+                              'important',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      enabled: _bagReady,
+                      onTap: _editPushNotifications,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsEmailWeeklyDigest),
+                      subtitle: Text(l10n.prefsEmailWeeklyDigestHint),
+                      value:
+                          _bagValue<String>(SettingsKeys.emailWeeklyDigest) ==
+                          'on',
+                      onChanged: _bagReady
+                          ? (_) => _editEmailWeeklyDigest()
+                          : null,
+                    ),
+                    SwitchListTile(
+                      title: Text(l10n.prefsEmailLifecycleDrip),
+                      subtitle: Text(l10n.prefsEmailLifecycleDripHint),
+                      value:
+                          _bagValue<String>(SettingsKeys.emailLifecycleDrip) ==
+                          'on',
+                      onChanged: _bagReady
+                          ? (_) => _editEmailLifecycleDrip()
+                          : null,
+                    ),
+                  ],
+                ),
+              ]),
             ],
-            ListTile(
-              title: Text(l10n.prefsSplitInterval),
-              subtitle: Text(
-                prefs.splitIntervalMetres > 0
-                    ? _splitIntervalLabel(prefs.splitIntervalMetres, prefs.unit)
-                    : l10n.prefsSplitIntervalDefaultSubtitle,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _editSplitInterval,
-            ),
-            ListTile(
-              title: Text(l10n.prefsTargetPace),
-              subtitle: Text(
-                prefs.targetPaceSecPerKm > 0
-                    ? l10n.prefsLivePaceAlertOn(
-                        UnitFormat.pace(
-                            prefs.targetPaceSecPerKm.toDouble(), prefs.unit),
-                        UnitFormat.paceLabel(prefs.unit),
-                      )
-                    : l10n.prefsLivePaceAlertOff,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.info_outline),
-                    tooltip: l10n.prefsCueInfoTooltip,
-                    onPressed: () => _showCueInfo(
-                        l10n.prefsTargetPace, l10n.prefsTargetPaceInfo),
-                  ),
-                  const Icon(Icons.chevron_right),
-                ],
-              ),
-              onTap: _editTargetPace,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsKeepScreenOn),
-              subtitle: Text(l10n.prefsKeepScreenOnSubtitle),
-              value: prefs.keepScreenOn,
-              onChanged: (v) async {
-                await prefs.setKeepScreenOn(v);
-                await widget.settingsSync?.pushKeepScreenOn();
-              },
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsDimScreenWhileRecording),
-              subtitle: Text(l10n.prefsDimScreenWhileRecordingSubtitle),
-              value: prefs.dimScreenWhileRecording,
-              onChanged: prefs.keepScreenOn
-                  ? (v) async {
-                      await prefs.setDimScreenWhileRecording(v);
-                      await widget.settingsSync
-                          ?.pushDimScreenWhileRecording();
-                    }
-                  : null,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsAdvancedGps),
-              subtitle: Text(l10n.prefsAdvancedGpsSubtitle),
-              value: prefs.advancedGps,
-              onChanged: prefs.setAdvancedGps,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsShowRawTrack),
-              subtitle: Text(l10n.prefsShowRawTrackSubtitle),
-              value: prefs.showRawTrack,
-              onChanged: prefs.setShowRawTrack,
-            ),
-            // multi_modal.md § "Protect the core runner": a pure runner can
-            // keep the centre Log button as a one-tap run start (long-press
-            // still opens the full capture sheet).
-            SwitchListTile(
-              title: Text(l10n.prefsKeepRunPrimary),
-              subtitle: Text(l10n.prefsKeepRunPrimarySubtitle),
-              value: prefs.keepRunPrimary,
-              onChanged: prefs.setKeepRunPrimary,
-            ),
-            _sectionLabel(l10n.prefsSectionTrainingDemographics),
-            if (!_bagReady)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  l10n.prefsSignInToEdit,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ListTile(
-              title: Text(l10n.bodyMetricsTitle),
-              subtitle: Text(l10n.bodyMetricsTileSubtitle),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => SettingsBodyMetricsScreen(
-                    api: widget.apiClient,
-                    settingsSync: widget.settingsSync,
-                    preferences: widget.preferences,
-                  ),
-                ),
-              ),
-            ),
-            ListTile(
-              title: Text(l10n.prefsDateOfBirth),
-              subtitle: Text(
-                _bagValue<String>(SettingsKeys.dateOfBirth) ?? l10n.prefsNotSet,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editDateOfBirth,
-            ),
-            ListTile(
-              title: Text(l10n.prefsRestingHr),
-              subtitle: Text(
-                _bagValue<num>(SettingsKeys.restingHrBpm) != null
-                    ? l10n.prefsHrBpm(
-                        _bagValue<num>(SettingsKeys.restingHrBpm)!.round())
-                    : l10n.prefsNotSet,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editRestingHr,
-            ),
-            ListTile(
-              title: Text(l10n.prefsMaxHr),
-              subtitle: Text(
-                _bagValue<num>(SettingsKeys.maxHrBpm) != null
-                    ? l10n.prefsHrBpm(
-                        _bagValue<num>(SettingsKeys.maxHrBpm)!.round())
-                    : l10n.prefsMaxHrNotSet,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editMaxHr,
-            ),
-            ListTile(
-              title: Text(l10n.prefsHrZones),
-              subtitle: Text(_hrZonesSummary()),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editHrZones,
-            ),
-            ListTile(
-              title: Text(l10n.prefsWeeklyGoal),
-              subtitle: Text(_weeklyGoalSummary()),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editWeeklyGoal,
-            ),
-            ListTile(
-              title: Text(l10n.prefsWeekStart),
-              subtitle: Text(
-                _weekStartLabel(
-                    l10n,
-                    _bagValue<String>(SettingsKeys.weekStartDay) ??
-                        _weekStartLocaleDefault),
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editWeekStartDay,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsExcludeGymFromReadiness),
-              subtitle: Text(l10n.prefsExcludeGymFromReadinessHint),
-              value:
-                  _bagValue<bool>(SettingsKeys.excludeGymFromReadiness) ?? false,
-              onChanged: _bagReady
-                  ? (_) => _editExcludeGymFromReadiness()
-                  : null,
-            ),
-
-            _sectionLabel(l10n.prefsSectionFueling),
-            ListTile(
-              title: Text(l10n.prefsCarbsPerHour),
-              subtitle: Text(l10n.prefsCarbsPerHourValue(
-                (_bagValue<num>(SettingsKeys.carbsPerHour) ??
-                        widget.preferences.carbsPerHourG)
-                    .round(),
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editCarbsPerHour,
-            ),
-            ListTile(
-              title: Text(l10n.prefsFluidPerHour),
-              subtitle: Text(l10n.prefsFluidPerHourValue(
-                (_bagValue<num>(SettingsKeys.fluidPerHour) ??
-                        widget.preferences.fluidPerHourMl)
-                    .round(),
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editFluidPerHour,
-            ),
-
-            _sectionLabel(l10n.prefsSectionPrivacySharing),
-            ListTile(
-              title: Text(l10n.prefsDefaultRunPrivacy),
-              subtitle: Text(_privacyLabel(
-                l10n,
-                _bagValue<String>(SettingsKeys.privacyDefault) ?? 'followers',
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editPrivacyDefault,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsStravaAutoShare),
-              subtitle: Text(l10n.prefsStravaAutoShareSubtitle),
-              value: _bagValue<bool>(SettingsKeys.stravaAutoShare) ?? false,
-              onChanged: _bagReady ? (_) => _editStravaAutoShare() : null,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsDiscoverable),
-              subtitle: Text(l10n.prefsDiscoverableSubtitle),
-              value:
-                  _bagValue<bool>(SettingsKeys.discoverableInSearch) ?? true,
-              onChanged:
-                  _bagReady ? (_) => _editDiscoverableInSearch() : null,
-            ),
-
-            _sectionLabel(l10n.prefsSectionAiCoach),
-            ListTile(
-              title: Text(l10n.prefsCoachPersonality),
-              subtitle: Text(_coachLabel(
-                l10n,
-                _bagValue<String>(SettingsKeys.coachPersonality) ??
-                    'supportive',
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editCoachPersonality,
-            ),
-
-            _sectionLabel(l10n.prefsSectionNotifications),
-            ListTile(
-              title: Text(l10n.prefsEmailNotifications),
-              subtitle: Text(_emailNotifLabel(
-                l10n,
-                _bagValue<String>(SettingsKeys.emailNotifications) ??
-                    'important',
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editEmailNotifications,
-            ),
-            ListTile(
-              title: Text(l10n.prefsPushNotifications),
-              subtitle: Text(_pushNotifLabel(
-                l10n,
-                _bagValue<String>(SettingsKeys.pushNotifications) ??
-                    'important',
-              )),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editPushNotifications,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsEmailWeeklyDigest),
-              subtitle: Text(l10n.prefsEmailWeeklyDigestHint),
-              value:
-                  _bagValue<String>(SettingsKeys.emailWeeklyDigest) == 'on',
-              onChanged:
-                  _bagReady ? (_) => _editEmailWeeklyDigest() : null,
-            ),
-            SwitchListTile(
-              title: Text(l10n.prefsEmailLifecycleDrip),
-              subtitle: Text(l10n.prefsEmailLifecycleDripHint),
-              value:
-                  _bagValue<String>(SettingsKeys.emailLifecycleDrip) == 'on',
-              onChanged:
-                  _bagReady ? (_) => _editEmailLifecycleDrip() : null,
-            ),
-          ],
+          ),
         ),
       ),
     );
