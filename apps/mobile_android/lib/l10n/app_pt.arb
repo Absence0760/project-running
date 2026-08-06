@@ -1110,7 +1110,7 @@
   "profileDismiss": "Dispensar",
   "profileDismissFailed": "Não foi possível dispensar: {error}",
   "profileNotifSomeone": "Alguém",
-  "profileNotifYourRun": "sua corrida",
+  "profileNotifYourRun": "corrida",
   "profileNotifNameAndOthers": "{name} e mais {count}",
   "profileNotifAndOthers": "e mais {count}",
   "profileNotifShowLess": "Mostrar menos",

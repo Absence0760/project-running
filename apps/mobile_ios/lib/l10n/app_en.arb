@@ -5228,9 +5228,9 @@
   "@profileNotifSomeone": {
     "description": "Fallback actor name in notification text"
   },
-  "profileNotifYourRun": "your run",
+  "profileNotifYourRun": "run",
   "@profileNotifYourRun": {
-    "description": "Fallback for a run reference in notification text when distance is unknown"
+    "description": "Fallback noun for a run reference in notification text when the distance is unknown. Carries NO possessive: every consuming template already supplies one (\"your {dist}\")"
   },
   "profileNotifNameAndOthers": "{name} and {count} others",
   "@profileNotifNameAndOthers": {

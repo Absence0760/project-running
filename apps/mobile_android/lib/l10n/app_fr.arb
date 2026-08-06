@@ -1110,7 +1110,7 @@
   "profileDismiss": "Ignorer",
   "profileDismissFailed": "Échec du rejet : {error}",
   "profileNotifSomeone": "Quelqu'un",
-  "profileNotifYourRun": "votre course",
+  "profileNotifYourRun": "course",
   "profileNotifNameAndOthers": "{name} et {count} autres",
   "profileNotifAndOthers": "et {count} autres",
   "profileNotifShowLess": "Afficher moins",

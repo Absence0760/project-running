@@ -1110,7 +1110,7 @@
   "profileDismiss": "閉じる",
   "profileDismissFailed": "閉じられませんでした: {error}",
   "profileNotifSomeone": "誰か",
-  "profileNotifYourRun": "あなたのラン",
+  "profileNotifYourRun": "ラン",
   "profileNotifNameAndOthers": "{name}さん他{count}名",
   "profileNotifAndOthers": "他{count}件",
   "profileNotifShowLess": "折りたたむ",

@@ -3919,7 +3919,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get profileNotifSomeone => 'Quelqu\'un';
 
   @override
-  String get profileNotifYourRun => 'votre course';
+  String get profileNotifYourRun => 'course';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {

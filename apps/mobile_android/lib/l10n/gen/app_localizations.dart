@@ -6490,10 +6490,10 @@ abstract class AppLocalizations {
   /// **'Someone'**
   String get profileNotifSomeone;
 
-  /// Fallback for a run reference in notification text when distance is unknown
+  /// Fallback noun for a run reference in notification text when the distance is unknown. Carries NO possessive: every consuming template already supplies one ("your {dist}")
   ///
   /// In en, this message translates to:
-  /// **'your run'**
+  /// **'run'**
   String get profileNotifYourRun;
 
   /// Actor name for a collapsed notification group (Alice and 4 others)

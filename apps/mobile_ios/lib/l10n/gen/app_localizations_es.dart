@@ -3903,7 +3903,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get profileNotifSomeone => 'Alguien';
 
   @override
-  String get profileNotifYourRun => 'tu carrera';
+  String get profileNotifYourRun => 'carrera';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {

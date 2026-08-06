@@ -3906,7 +3906,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get profileNotifSomeone => 'Alguém';
 
   @override
-  String get profileNotifYourRun => 'sua corrida';
+  String get profileNotifYourRun => 'corrida';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {
@@ -16460,7 +16460,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get profileNotifSomeone => 'Alguém';
 
   @override
-  String get profileNotifYourRun => 'sua corrida';
+  String get profileNotifYourRun => 'corrida';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {

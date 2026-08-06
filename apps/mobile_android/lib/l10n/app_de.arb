@@ -1110,7 +1110,7 @@
   "profileDismiss": "Verwerfen",
   "profileDismissFailed": "Verwerfen fehlgeschlagen: {error}",
   "profileNotifSomeone": "Jemand",
-  "profileNotifYourRun": "deinen Lauf",
+  "profileNotifYourRun": "Lauf",
   "profileNotifNameAndOthers": "{name} und {count} weitere",
   "profileNotifAndOthers": "und {count} weitere",
   "profileNotifShowLess": "Weniger anzeigen",

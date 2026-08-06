@@ -3918,7 +3918,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileNotifSomeone => 'Jemand';
 
   @override
-  String get profileNotifYourRun => 'deinen Lauf';
+  String get profileNotifYourRun => 'Lauf';
 
   @override
   String profileNotifNameAndOthers(String name, int count) {
