@@ -158,13 +158,13 @@ class ClubsScreenState extends State<ClubsScreen> {
         if (inlineSegments) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-            child: SegmentedButton<int>(
-              segments: [
-                ButtonSegment(value: 0, label: Text(l10n.clubsTabBrowse)),
-                ButtonSegment(value: 1, label: Text(l10n.clubsTabMine)),
+            child: ChoiceChipRow<int>(
+              options: [
+                ChoiceChipOption(value: 0, label: l10n.clubsTabBrowse),
+                ChoiceChipOption(value: 1, label: l10n.clubsTabMine),
               ],
-              selected: {_tab},
-              onSelectionChanged: (s) => setState(() => _tab = s.first),
+              selected: _tab,
+              onChanged: (v) => setState(() => _tab = v),
             ),
           ),
           // "Have an invite code?" tile — mobile mirror of web

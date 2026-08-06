@@ -1,6 +1,12 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme, EmptyState, ProgressBar;
+import 'package:ui_kit/ui_kit.dart' show
+        AppSemanticColors,
+        AppTheme,
+        ChoiceChipOption,
+        ChoiceChipRow,
+        EmptyState,
+        ProgressBar;
 
 import '../gear_backfill.dart';
 import '../gear_wear.dart';
@@ -306,21 +312,21 @@ class _GearScreenState extends State<GearScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: SegmentedButton<String>(
-              segments: [
-                ButtonSegment(
+            child: ChoiceChipRow<String>(
+              options: [
+                ChoiceChipOption(
                   value: 'shoe',
-                  label: Text(l10n.gearShoes),
-                  icon: const Icon(Icons.directions_run),
+                  label: l10n.gearShoes,
+                  icon: Icons.directions_run,
                 ),
-                ButtonSegment(
+                ChoiceChipOption(
                   value: 'bike',
-                  label: Text(l10n.gearBikes),
-                  icon: const Icon(Icons.directions_bike),
+                  label: l10n.gearBikes,
+                  icon: Icons.directions_bike,
                 ),
               ],
-              selected: {_activeKind},
-              onSelectionChanged: (s) => setState(() => _activeKind = s.first),
+              selected: _activeKind,
+              onChanged: (v) => setState(() => _activeKind = v),
             ),
           ),
           Expanded(

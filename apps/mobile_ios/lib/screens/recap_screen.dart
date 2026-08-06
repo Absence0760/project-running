@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
 
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -233,18 +234,16 @@ class _RecapScreenState extends State<RecapScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             Center(
-              child: SegmentedButton<RecapPeriod>(
-                segments: [
-                  ButtonSegment(
-                      value: RecapPeriod.year,
-                      label: Text(l10n.recapPeriodYear)),
-                  ButtonSegment(
-                      value: RecapPeriod.month,
-                      label: Text(l10n.recapPeriodMonth)),
+              child: ChoiceChipRow<RecapPeriod>(
+                alignment: WrapAlignment.center,
+                options: [
+                  ChoiceChipOption(
+                      value: RecapPeriod.year, label: l10n.recapPeriodYear),
+                  ChoiceChipOption(
+                      value: RecapPeriod.month, label: l10n.recapPeriodMonth),
                 ],
-                selected: {_period},
-                onSelectionChanged: (s) => _selectPeriod(s.first),
-                showSelectedIcon: false,
+                selected: _period,
+                onChanged: _selectPeriod,
               ),
             ),
             const SizedBox(height: 8),

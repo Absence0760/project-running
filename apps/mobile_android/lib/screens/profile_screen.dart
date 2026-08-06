@@ -967,21 +967,14 @@ class _ProfileScreenState extends State<ProfileScreen>
             crossAxisAlignment: WrapCrossAlignment.center,
             runSpacing: 4,
             children: [
-              SegmentedButton<String>(
-                segments: [
-                  ButtonSegment(
-                    value: 'all',
-                    label: Text(l10n.profileNotifAll),
-                  ),
-                  ButtonSegment(
-                    value: 'unread',
-                    label: Text(l10n.profileNotifUnread),
-                  ),
+              ChoiceChipRow<String>(
+                options: [
+                  ChoiceChipOption(value: 'all', label: l10n.profileNotifAll),
+                  ChoiceChipOption(
+                      value: 'unread', label: l10n.profileNotifUnread),
                 ],
-                selected: {_notifFilter},
-                onSelectionChanged: (s) =>
-                    setState(() => _notifFilter = s.first),
-                showSelectedIcon: false,
+                selected: _notifFilter,
+                onChanged: (v) => setState(() => _notifFilter = v),
               ),
               if (hasUnread)
                 TextButton(

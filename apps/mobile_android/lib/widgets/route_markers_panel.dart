@@ -727,15 +727,13 @@ class _TimeModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: AlignmentDirectional.centerStart,
-      child: SegmentedButton<bool>(
-        showSelectedIcon: false,
-        style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        segments: [
-          ButtonSegment(value: false, label: Text(clockLabel)),
-          ButtonSegment(value: true, label: Text(elapsedLabel)),
+      child: ChoiceChipRow<bool>(
+        options: [
+          ChoiceChipOption(value: false, label: clockLabel),
+          ChoiceChipOption(value: true, label: elapsedLabel),
         ],
-        selected: {elapsed},
-        onSelectionChanged: (sel) => onChanged(sel.first),
+        selected: elapsed,
+        onChanged: onChanged,
       ),
     );
   }

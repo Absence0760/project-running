@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart' show ClubRow;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
 
 import '../l10n/gen/app_localizations.dart';
 import '../rate_limit_errors.dart';
@@ -249,22 +250,22 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
               const SizedBox(height: 8),
               _LinkField(controller: _facebook, label: l10n.clubEditorFacebook, hint: 'https://facebook.com/yourclub'),
               const SizedBox(height: 12),
-              SegmentedButton<bool>(
-                segments: [
-                  ButtonSegment(
+              ChoiceChipRow<bool>(
+                options: [
+                  ChoiceChipOption(
                     value: true,
-                    label: Text(l10n.clubFormPublic),
-                    icon: const Icon(Icons.public),
+                    label: l10n.clubFormPublic,
+                    icon: Icons.public,
                   ),
-                  ButtonSegment(
+                  ChoiceChipOption(
                     value: false,
-                    label: Text(l10n.clubFormPrivate),
-                    icon: const Icon(Icons.lock_outline),
+                    label: l10n.clubFormPrivate,
+                    icon: Icons.lock_outline,
                   ),
                 ],
-                selected: {_isPublic},
-                onSelectionChanged: (s) => setState(() {
-                  _isPublic = s.first;
+                selected: _isPublic,
+                onChanged: (v) => setState(() {
+                  _isPublic = v;
                   if (!_isPublic && _joinPolicy != 'invite') {
                     _joinPolicy = 'invite';
                   }

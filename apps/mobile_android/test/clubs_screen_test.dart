@@ -118,11 +118,10 @@ void main() {
       expect(find.text('Clubs'), findsOneWidget);
     });
 
-    testWidgets('renders the Browse / My clubs segmented button',
-        (tester) async {
+    testWidgets('renders the Browse / My clubs chip row', (tester) async {
       await _pump(tester, _FakeSocial());
       await tester.pump();
-      expect(find.byType(SegmentedButton<int>), findsOneWidget);
+      expect(find.byType(ChoiceChipRow<int>), findsOneWidget);
       expect(find.text('Browse'), findsOneWidget);
       expect(find.text('My clubs'), findsOneWidget);
     });
