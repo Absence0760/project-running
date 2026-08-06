@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart'
-    show ActivityLoaderKind, AppSemanticColors, FullBodyLoader;
+    show ActivityLoaderKind, AppSemanticColors, FullBodyLoader, ProgressBar;
 
 import '../l10n/gen/app_localizations.dart';
 import '../live_cutoff_eta.dart';
@@ -752,17 +752,7 @@ class _CourseProgress extends StatelessWidget {
     return Row(
       key: const Key('course-progress'),
       children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: fraction,
-              minHeight: 6,
-              backgroundColor: theme.colorScheme.outlineVariant,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-        ),
+        Expanded(child: ProgressBar(value: fraction)),
         const SizedBox(width: 12),
         Text(
           label,

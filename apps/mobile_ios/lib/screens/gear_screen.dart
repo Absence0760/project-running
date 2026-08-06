@@ -1,6 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme, EmptyState;
+import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme, EmptyState, ProgressBar;
 
 import '../gear_backfill.dart';
 import '../gear_wear.dart';
@@ -464,18 +464,18 @@ class _GearScreenState extends State<GearScreen> {
                               color: theme.colorScheme.onSurfaceVariant)),
                     const SizedBox(height: 6),
                     if (hasTarget)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: prog.pct,
-                          minHeight: 6,
-                          color: switch (wear.status) {
-                            GearWearStatus.due =>
-                              AppSemanticColors.ofTheme(theme).warning,
-                            GearWearStatus.worn => theme.colorScheme.error,
-                            _ => null,
-                          },
-                        ),
+                      ProgressBar(
+                        value: prog.pct,
+                        // Not colorScheme.error: it is 2.991:1 against the
+                        // bar's track in light. danger is the token that
+                        // clears it.
+                        fill: switch (wear.status) {
+                          GearWearStatus.due =>
+                            AppSemanticColors.ofTheme(theme).warning,
+                          GearWearStatus.worn =>
+                            AppSemanticColors.ofTheme(theme).danger,
+                          _ => null,
+                        },
                       ),
                     const SizedBox(height: 4),
                     Row(

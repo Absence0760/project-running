@@ -1,7 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
-import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton, TextLane;
+import 'package:ui_kit/ui_kit.dart' show IdentityAvatar, ListSkeleton, ProgressBar, TextLane;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -320,13 +320,7 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: (pct / 100).clamp(0.0, 1.0),
-            minHeight: 8,
-          ),
-        ),
+        ProgressBar(value: (pct / 100).clamp(0.0, 1.0)),
         const SizedBox(height: 6),
         Text.rich(
           TextSpan(children: [

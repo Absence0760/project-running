@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ui_kit/ui_kit.dart';
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -380,7 +381,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
         if (_saving)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
-            child: LinearProgressIndicator(minHeight: 2),
+            child: ProgressBar(value: null),
           ),
         if (_placing) ...[
           Padding(
