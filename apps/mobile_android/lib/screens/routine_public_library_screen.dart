@@ -165,7 +165,7 @@ class _RoutinePublicLibraryScreenState
                         : RefreshIndicator(
                             onRefresh: _load,
                             child: ListView.separated(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(16),
                               itemCount: _routines.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 8),

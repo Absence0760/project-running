@@ -125,7 +125,7 @@ class _PlanLibraryScreenState extends State<PlanLibraryScreen> {
                         : RefreshIndicator(
                             onRefresh: _load,
                             child: ListView.separated(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(16),
                               itemCount: _plans.length,
                               separatorBuilder: (_, __) => const SizedBox(height: 8),
                               itemBuilder: (_, i) => _LibraryCard(

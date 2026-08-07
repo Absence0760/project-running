@@ -1034,7 +1034,7 @@ class _CoachScreenState extends State<CoachScreen> {
       appBar: AppBar(title: Text(l10n.coachTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1114,7 +1114,7 @@ class _CoachScreenState extends State<CoachScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               child: FilledButton.icon(
                 icon: const Icon(Icons.add),
                 label: Text(l10n.coachNewChat),
@@ -1395,7 +1395,7 @@ class _CoachScreenState extends State<CoachScreen> {
     }
     return ListView.builder(
       controller: _scrollCtrl,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       itemCount: _messages.length,
       itemBuilder: (context, i) => _buildBubble(theme, l10n, _messages[i]),
     );
