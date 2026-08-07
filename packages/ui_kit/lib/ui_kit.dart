@@ -18,5 +18,6 @@ export 'src/widgets/section_header.dart';
 export 'src/widgets/selection_hint.dart';
 export 'src/theme/app_theme.dart';
 export 'src/theme/chart_palette.dart';
+export 'src/theme/corner_radii.dart';
 export 'src/theme/icon_sizes.dart';
 export 'src/theme/section_accents.dart';

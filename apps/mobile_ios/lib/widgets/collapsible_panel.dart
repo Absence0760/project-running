@@ -77,7 +77,7 @@ class _CollapsiblePanelState extends State<CollapsiblePanel> {
                         height: 4,
                         decoration: BoxDecoration(
                           color: theme.dividerColor,
-                          borderRadius: BorderRadius.circular(2),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     ),

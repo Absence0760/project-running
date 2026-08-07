@@ -5448,7 +5448,7 @@ class _LastRunCard extends StatelessWidget {
                     height: 56,
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       Icons.directions_run,
@@ -5777,7 +5777,7 @@ class _TrackSparkPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(0, 0, size.width, size.height),
-        const Radius.circular(10),
+        const Radius.circular(12),
       ),
       bg,
     );

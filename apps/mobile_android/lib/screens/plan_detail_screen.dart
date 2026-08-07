@@ -761,7 +761,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           border: Border.all(color: theme.dividerColor),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -788,7 +788,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           border: Border.all(color: theme.dividerColor),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,7 +889,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest,
             border: Border.all(color: theme.dividerColor),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1139,7 +1139,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               : theme.dividerColor,
           width: isCurrent ? 1.5 : 1,
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

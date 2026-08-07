@@ -361,14 +361,14 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
             decoration: BoxDecoration(
               border: Border.all(
                   color: cs.outlineVariant, style: BorderStyle.solid),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
               color: cs.surfaceContainerHighest,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(8),
                   child: Image.file(
                     File(_pending!.path),
                     width: 80,

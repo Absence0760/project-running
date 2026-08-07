@@ -299,7 +299,7 @@ class _PlanTile extends StatelessWidget {
                     color: plan.status == 'active'
                         ? theme.colorScheme.primaryContainer
                         : theme.colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     plan.status,

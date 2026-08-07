@@ -604,7 +604,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   Widget _buildNextEventCard(ThemeData theme, ClubView c, EventView e) {
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       onTap: () async {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -629,7 +629,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               theme.colorScheme.surfaceContainerHighest,
             ],
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: theme.dividerColor),
         ),
         child: Column(
@@ -1004,7 +1004,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                         horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         AppLocalizations.of(context).clubDetailGoing,

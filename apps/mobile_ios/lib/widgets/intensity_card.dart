@@ -163,7 +163,7 @@ class _SegmentedBar extends StatelessWidget {
         if (breakdown.zoneSeconds[i] > 0) i,
     ];
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: SizedBox(
         height: 12,
         child: Row(
@@ -211,7 +211,7 @@ class _ZoneLegend extends StatelessWidget {
                 height: 10,
                 decoration: BoxDecoration(
                   color: ChartPalette.of(context).zones[i],
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(4),
                 ),
               ),
               const SizedBox(width: 6),

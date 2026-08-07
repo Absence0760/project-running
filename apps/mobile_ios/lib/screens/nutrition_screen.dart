@@ -1456,7 +1456,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                                 margin: const EdgeInsets.symmetric(horizontal: 4),
                                 decoration: BoxDecoration(
                                   color: theme.colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(3),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
                               const SizedBox(height: 4),

@@ -253,7 +253,7 @@ class _BarColumn extends StatelessWidget {
             decoration: BoxDecoration(
               color: accent,
               borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(3)),
+                  const BorderRadius.vertical(top: Radius.circular(4)),
             ),
           ),
           const SizedBox(height: 4),

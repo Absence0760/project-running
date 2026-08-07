@@ -2101,7 +2101,7 @@ class _RunHeatmap extends StatelessWidget {
                     border: level < 0
                         ? Border.all(color: emptyStroke)
                         : null,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
                 const SizedBox(width: 3),
@@ -2175,7 +2175,7 @@ class _HeatmapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final radius = const Radius.circular(2);
+    final radius = const Radius.circular(4);
     final emptyP = Paint()..color = emptyFill;
     final framePaint = Paint()
       ..color = emptyStroke

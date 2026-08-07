@@ -400,7 +400,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           border: Border.all(color: theme.dividerColor),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Wrap(
           spacing: 8,

@@ -180,7 +180,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
@@ -223,7 +223,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,7 +301,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,7 +341,7 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
                                 ? theme.colorScheme.primary
                                 : theme.colorScheme.outline,
                             borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(3)),
+                                top: Radius.circular(4)),
                           ),
                         ),
                         const SizedBox(height: 4),

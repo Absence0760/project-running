@@ -206,14 +206,14 @@ class _PlanCalendarState extends State<PlanCalendar> {
               : (isToday ? theme.colorScheme.primary : theme.dividerColor),
           width: isToday ? 1.5 : 1,
         ),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       foregroundDecoration: hasWorkout
           ? BoxDecoration(
               border: Border(
                 left: BorderSide(color: kindMark!, width: 3),
               ),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
             )
           : null,
       constraints: const BoxConstraints(minHeight: 56),
@@ -267,7 +267,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
 
     return InkWell(
       onTap: widget.onSelect == null ? null : () => widget.onSelect!(wo),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: base,
     );
   }

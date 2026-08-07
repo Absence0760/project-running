@@ -1777,7 +1777,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       final shown =
           buckets.where((b) => (b.pct < 0 ? 0 : b.pct) > 0).toList();
       return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: SizedBox(
           height: 14,
           child: Row(
@@ -2647,7 +2647,7 @@ class _ElevationPaceLegend extends StatelessWidget {
                   height: 10,
                   decoration: BoxDecoration(
                     color: bands[i],
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
                 const SizedBox(width: 5),

@@ -68,7 +68,7 @@ class TrackPreview extends StatelessWidget {
       // cards which the user flagged as "the preview doesn't show a
       // map background."
       return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: ColoredBox(
           color: const Color(0xFF1F2937), // slate-800, subtle terrain tint
           child: CustomPaint(
@@ -234,7 +234,7 @@ class _StaticMapPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final w = constraints.maxWidth.isFinite
