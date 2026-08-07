@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -37,7 +38,7 @@
 
 	const id = $derived($page.params.id ?? '');
 	const canonicalUrl = $derived(
-		buildWorkoutShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', id)
+		buildWorkoutShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, id)
 	);
 
 	let data = $state<GymWorkoutWithSets | null>(null);

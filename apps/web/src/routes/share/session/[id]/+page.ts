@@ -2,6 +2,7 @@ import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
 import { lookupSharedSession } from '$lib/share/share_session_lookup';
+import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 
 // Per-request SSR via the production entity-SSR Lambda — CloudFront routes
 // /share/session/* to the Lambda Function URL, which bakes the per-plan
@@ -16,7 +17,6 @@ import { lookupSharedSession } from '$lib/share/share_session_lookup';
 // is_public, so anon / logged-out viewers see only public plans).
 export const prerender = false;
 
-const DEFAULT_SITE_URL = 'https://threkir.com';
 
 export const load: PageLoad = async ({ params }) => {
 	const lookup = await lookupSharedSession(

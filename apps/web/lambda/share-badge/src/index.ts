@@ -16,6 +16,7 @@ import { lookupSharedBadge } from '../../../src/lib/share/share_badge_lookup';
 import { buildShareBadgeMeta } from '../../../src/lib/share/share_badge_meta';
 import { injectShareRunMeta } from '../../../src/lib/share/share_run_spa_shell';
 import { renderBadgeOgPng } from '../../../src/lib/share/og_badge_png';
+import { DEFAULT_SITE_URL } from '../../../src/lib/core/site_url';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -30,7 +31,7 @@ export const handler = async (
 	try {
 		const supabaseUrl = process.env.PUBLIC_SUPABASE_URL ?? '';
 		const supabaseAnonKey = process.env.PUBLIC_SUPABASE_ANON_KEY ?? '';
-		const siteUrl = process.env.PUBLIC_SITE_URL ?? 'https://threkir.com';
+		const siteUrl = process.env.PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
 
 		const path = event.rawPath || '/';
 		const htmlMatch = path.match(HTML_PATH_RE);

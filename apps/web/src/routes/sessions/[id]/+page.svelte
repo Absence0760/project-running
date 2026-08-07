@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -48,7 +49,7 @@
 	const planId = $derived($page.params.id ?? '');
 	const isOwner = $derived(!!plan && !!auth.user && plan.author_id === auth.user.id);
 	const canonicalUrl = $derived(
-		buildSessionShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', planId)
+		buildSessionShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, planId)
 	);
 
 	async function load() {

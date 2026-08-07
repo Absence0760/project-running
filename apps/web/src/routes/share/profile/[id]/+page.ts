@@ -2,6 +2,7 @@ import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
 import { lookupSharedProfile } from '$lib/share/share_profile_lookup';
+import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 
 // Per-request SSR via the production entity-SSR Lambda — CloudFront
 // routes /share/profile/* to the Lambda Function URL, which fetches the
@@ -11,7 +12,6 @@ import { lookupSharedProfile } from '$lib/share/share_profile_lookup';
 // works locally without the Lambda.
 export const prerender = false;
 
-const DEFAULT_SITE_URL = 'https://threkir.com';
 
 export const load: PageLoad = async ({ params }) => {
 	const lookup = await lookupSharedProfile(

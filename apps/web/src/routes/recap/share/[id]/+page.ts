@@ -2,11 +2,11 @@ import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
 import { lookupSharedRecap, recapPeriodLabel } from '$lib/share/share_recap_lookup';
+import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 
 // Canonical host for the absolute og:image URL, same source + fallback as the
 // sibling share loaders and /sitemap.xml. An og:image is fetched by a remote
 // crawler, so it cannot be root-relative the way an in-app href can.
-const DEFAULT_SITE_URL = 'https://threkir.com';
 
 // Per-request SSR via apps/web/lambda/share-recap in production — CloudFront
 // routes /recap/share/* to the Lambda Function URL, which fetches the frozen
