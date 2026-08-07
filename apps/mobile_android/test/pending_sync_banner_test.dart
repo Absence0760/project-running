@@ -125,7 +125,7 @@ void main() {
     await tester.pumpWidget(
         _app(api: _SignedInApi(), isOnline: true, stores: [store]));
     expect(find.byIcon(Icons.sync_problem), findsNothing);
-    expect(find.byIcon(Icons.cloud_off_outlined), findsNothing);
+    expect(find.byIcon(Icons.cloud_off), findsNothing);
     expect(find.text('Retry'), findsNothing);
   });
 
@@ -140,7 +140,7 @@ void main() {
       find.text('2 changes saved on this device — will sync when online'),
       findsOneWidget,
     );
-    expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_off), findsOneWidget);
     expect(find.text('Retry'), findsNothing);
   });
 

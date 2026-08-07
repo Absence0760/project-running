@@ -157,7 +157,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.share),
+                      : const Icon(Icons.share_outlined),
                   label: Text(_capturing
                       ? l10n.shareCardRouteCapturing
                       : l10n.shareCardRouteShareImage),

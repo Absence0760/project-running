@@ -302,7 +302,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                 leading: p.featured
                     ? Icon(Icons.star,
                         color: AppSemanticColors.of(ctx).crown, size: 20)
-                    : const Icon(Icons.place_outlined, size: 20),
+                    : const Icon(Icons.place, size: 20),
                 title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                 subtitle: Row(
                   children: [
@@ -1067,7 +1067,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       selected: p.id == _selectedRouteId,
       leading: p.featured
           ? Icon(Icons.star, color: AppSemanticColors.of(sheetCtx).crown, size: 20)
-          : const Icon(Icons.place_outlined, size: 20),
+          : const Icon(Icons.place, size: 20),
       title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Row(
         children: [
@@ -1082,7 +1082,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
         icon: Icon(
           _pinnedIds.contains(p.id)
               ? Icons.push_pin
-              : Icons.push_pin_outlined,
+              : Icons.push_pin,
           size: 20,
           color: _pinnedIds.contains(p.id)
               ? Theme.of(context).colorScheme.primary
@@ -1187,7 +1187,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     icon: Icon(
                       _pinnedIds.contains(p.id)
                           ? Icons.push_pin
-                          : Icons.push_pin_outlined,
+                          : Icons.push_pin,
                       size: 18,
                     ),
                     label: Text(_pinnedIds.contains(p.id)

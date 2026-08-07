@@ -236,7 +236,7 @@ class ClubsScreenState extends State<ClubsScreen> {
                     padding: EdgeInsets.fromLTRB(
                         16, 16, 16, fabScrollClearance(context)),
                     itemCount: list.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (ctx, i) => _ClubTile(
                       view: list[i],
                       onTap: () async {
@@ -362,7 +362,7 @@ class _ClubTile extends StatelessWidget {
                   if (c.locationLabel != null && c.locationLabel!.isNotEmpty)
                     Row(
                       children: [
-                        Icon(Icons.place, size: 13,
+                        Icon(Icons.place, size: 14,
                             color: theme.colorScheme.outline),
                         const SizedBox(width: 3),
                         Expanded(
@@ -436,7 +436,7 @@ class _Empty extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              tab == 0 ? Icons.groups : Icons.person_add_alt_1,
+              tab == 0 ? Icons.groups_outlined : Icons.person_add_alt_1,
               size: 48,
               color: theme.colorScheme.outline,
             ),

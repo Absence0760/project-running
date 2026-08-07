@@ -452,7 +452,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             leading: const Icon(Icons.calendar_today),
             title: Text(l10n.planNewStartDate),
             subtitle: Text(toIsoDate(_startDate)),
-            trailing: const Icon(Icons.edit),
+            trailing: const Icon(Icons.edit_outlined),
             onTap: () async {
               final picked = await showDatePicker(
                 context: context,
@@ -617,7 +617,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withOpacity(0.4),
         border: Border.all(color: theme.colorScheme.primary),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,7 +664,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer.withOpacity(0.4),
         border: Border.all(color: theme.colorScheme.primary),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,7 +718,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         border: Border.all(color: theme.dividerColor),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -784,7 +784,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

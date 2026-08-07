@@ -825,7 +825,7 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.flag, size: 48, color: theme.colorScheme.primary),
+          Icon(Icons.flag_outlined, size: 48, color: theme.colorScheme.primary),
           const SizedBox(height: 12),
           Text(
             l10n.gymSessionSetProgress(_completedSetCount(), _steps.length),

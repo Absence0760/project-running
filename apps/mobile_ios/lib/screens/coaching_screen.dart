@@ -319,7 +319,7 @@ class _CoachingScreenState extends State<CoachingScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(label,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(

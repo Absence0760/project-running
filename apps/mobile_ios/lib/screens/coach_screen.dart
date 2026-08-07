@@ -1255,7 +1255,7 @@ class _CoachScreenState extends State<CoachScreen> {
     if (c.weeklyGoalMetres != null) {
       final km =
           formatFixed(c.weeklyGoalMetres! / 1000, 0, activeLocaleTag);
-      chips.add(_chip(cs, icon: Icons.flag, label: l10n.coachContextWeeklyGoal(km)));
+      chips.add(_chip(cs, icon: Icons.flag_outlined, label: l10n.coachContextWeeklyGoal(km)));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -1534,7 +1534,7 @@ class _CoachScreenState extends State<CoachScreen> {
         children: [
           IconButton(
             tooltip: l10n.coachActionCopy,
-            icon: Icon(Icons.copy_all_outlined, size: 16, color: iconColor),
+            icon: Icon(Icons.copy_all, size: 16, color: iconColor),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onPressed: () => _copy(m.content.value),
@@ -1565,7 +1565,7 @@ class _CoachScreenState extends State<CoachScreen> {
               icon: Icon(
                 m.reaction == 'up'
                     ? Icons.thumb_up
-                    : Icons.thumb_up_outlined,
+                    : Icons.thumb_up,
                 size: 16,
                 color: m.reaction == 'up' ? cs.primary : iconColor,
               ),
@@ -1578,7 +1578,7 @@ class _CoachScreenState extends State<CoachScreen> {
               icon: Icon(
                 m.reaction == 'down'
                     ? Icons.thumb_down
-                    : Icons.thumb_down_outlined,
+                    : Icons.thumb_down,
                 size: 16,
                 color: m.reaction == 'down' ? cs.error : iconColor,
               ),

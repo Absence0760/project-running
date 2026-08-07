@@ -116,7 +116,7 @@ Future<LiveShareAction?> showLiveShareSheet(BuildContext context) {
               onTap: () => Navigator.of(ctx).pop(LiveShareAction.reshare),
             ),
             ListTile(
-              leading: Icon(Icons.stop_circle_outlined,
+              leading: Icon(Icons.stop_circle,
                   color: theme.colorScheme.error),
               title: Text(
                 l10n.runLiveShareStop,

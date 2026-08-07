@@ -72,7 +72,7 @@ class _GymRecordsScreenState extends State<GymRecordsScreen> {
       appBar: AppBar(title: Text(l10n.gymRecordsTitle)),
       body: records.isEmpty
           ? EmptyState(
-              icon: Icons.emoji_events_outlined,
+              icon: Icons.emoji_events,
               title: l10n.gymRecordsEmpty,
               ctaLabel: l10n.gymLog,
               onCta: _log,

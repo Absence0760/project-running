@@ -297,6 +297,6 @@ class _SetPip extends StatelessWidget {
         : targetHit
             ? (semantic.success, Icons.check_circle)
             : (semantic.warning, Icons.error_outline);
-    return Icon(color: color, size: 22, icon);
+    return Icon(color: color, size: 20, icon);
   }
 }

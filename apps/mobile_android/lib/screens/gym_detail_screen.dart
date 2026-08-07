@@ -703,7 +703,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -957,12 +957,12 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: fg.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(isPublic ? Icons.public : Icons.lock, size: 13, color: fg),
+          Icon(isPublic ? Icons.public : Icons.lock, size: 14, color: fg),
           const SizedBox(width: 4),
           Text(
             isPublic ? l10n.gymPublic : l10n.gymPrivate,

@@ -1343,7 +1343,7 @@ class _WelcomeEmpty extends StatelessWidget {
                 ),
                 OutlinedButton.icon(
                   onPressed: onImport,
-                  icon: const Icon(Icons.upload_file_outlined),
+                  icon: const Icon(Icons.upload_file),
                   label: Text(l10n.dashboardImportRuns),
                 ),
               ],
@@ -1607,7 +1607,7 @@ class _TargetRow extends StatelessWidget {
           children: [
             Icon(
               t.complete ? Icons.check_circle : Icons.trending_up,
-              size: 12,
+              size: 14,
               color: accent,
             ),
             const SizedBox(width: 4),
@@ -1676,7 +1676,7 @@ class _PbRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Icon(icon, color: theme.colorScheme.primary, size: 22),
+        Icon(icon, color: theme.colorScheme.primary, size: 20),
         const SizedBox(width: 12),
         Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
         Column(
@@ -1783,7 +1783,7 @@ class _PeriodStatCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.terrain,
-                  size: 12,
+                  size: 14,
                   color: theme.colorScheme.outline,
                 ),
                 const SizedBox(width: 3),
@@ -1923,7 +1923,7 @@ class _StreakRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Icon(Icons.local_fire_department, color: color, size: 28),
+                  Icon(Icons.local_fire_department, color: color, size: 24),
                   const SizedBox(width: 6),
                   Text(
                     '${state.current}',
@@ -2101,7 +2101,7 @@ class _RunHeatmap extends StatelessWidget {
                     border: level < 0
                         ? Border.all(color: emptyStroke)
                         : null,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
                 const SizedBox(width: 3),
@@ -2175,7 +2175,7 @@ class _HeatmapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final radius = const Radius.circular(2);
+    final radius = const Radius.circular(4);
     final emptyP = Paint()..color = emptyFill;
     final framePaint = Paint()
       ..color = emptyStroke

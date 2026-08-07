@@ -47,7 +47,7 @@ class UpcomingEventCard extends StatelessWidget {
                 color: theme.colorScheme.primary,
               ),
               child: Icon(Icons.event,
-                  color: theme.colorScheme.onPrimary, size: 26),
+                  color: theme.colorScheme.onPrimary, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -74,7 +74,7 @@ class UpcomingEventCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.schedule, size: 13,
+                      Icon(Icons.schedule, size: 14,
                           color: theme.colorScheme.outline),
                       const SizedBox(width: 3),
                       Flexible(
@@ -87,7 +87,7 @@ class UpcomingEventCard extends StatelessWidget {
                       ),
                       if (event.row.meetLabel != null) ...[
                         const SizedBox(width: 10),
-                        Icon(Icons.place, size: 13,
+                        Icon(Icons.place, size: 14,
                             color: theme.colorScheme.outline),
                         const SizedBox(width: 3),
                         Expanded(

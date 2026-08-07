@@ -604,7 +604,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
 
   Widget _buildNextEventCard(ThemeData theme, ClubView c, EventView e) {
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       onTap: () async {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -629,7 +629,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               theme.colorScheme.surfaceContainerHighest,
             ],
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: theme.dividerColor),
         ),
         child: Column(
@@ -881,7 +881,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     final showCreate = c.isEventOrganiser;
     if (_upcoming.isEmpty) {
       return EmptyState(
-        icon: Icons.event_outlined,
+        icon: Icons.event,
         title: showCreate
             ? AppLocalizations.of(context).clubDetailNoEventsAdmin
             : AppLocalizations.of(context).clubDetailNoEvents,
@@ -970,7 +970,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                         Row(
                           children: [
                             if (e.row.meetLabel != null) ...[
-                              Icon(Icons.place, size: 13,
+                              Icon(Icons.place, size: 14,
                                   color: theme.colorScheme.outline),
                               const SizedBox(width: 3),
                               Expanded(
@@ -984,7 +984,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                                 ),
                               ),
                             ] else
-                              Icon(Icons.event, size: 13,
+                              Icon(Icons.event, size: 14,
                                   color: theme.colorScheme.outline),
                             Text(
                               AppLocalizations.of(context)
@@ -1004,7 +1004,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                         horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         AppLocalizations.of(context).clubDetailGoing,
@@ -1378,7 +1378,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         widget.routeStore != null;
     if (_routes.isEmpty) {
       return EmptyState(
-        icon: Icons.route_outlined,
+        icon: Icons.route,
         title: canBuild
             ? AppLocalizations.of(context).clubDetailRoutesEmptyBuild
             : c.isAdmin

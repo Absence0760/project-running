@@ -194,7 +194,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
                       ],
                       child: OutlinedButton.icon(
                         onPressed: _capturing ? null : () {},
-                        icon: const Icon(Icons.route_outlined),
+                        icon: const Icon(Icons.route),
                         label: Text(l10n.shareCardExport),
                       ),
                     ),

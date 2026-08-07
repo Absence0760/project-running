@@ -169,7 +169,7 @@ class _PlansScreenState extends State<PlansScreen> {
                     padding: EdgeInsets.fromLTRB(
                         16, 12, 16, fabScrollClearance(context)),
                     itemCount: _plans.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (ctx, i) {
                       final p = _plans[i];
                       return _PlanTile(
@@ -299,7 +299,7 @@ class _PlanTile extends StatelessWidget {
                     color: plan.status == 'active'
                         ? theme.colorScheme.primaryContainer
                         : theme.colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     plan.status,
@@ -319,7 +319,7 @@ class _PlanTile extends StatelessWidget {
               spacing: 12,
               runSpacing: 4,
               children: [
-                _meta(theme, Icons.flag, goalEventLabel(
+                _meta(theme, Icons.flag_outlined, goalEventLabel(
                     goalEventFromDb(plan.goalEvent))),
                 if (plan.goalTimeSeconds != null)
                   _meta(theme, Icons.timer, fmtHms(plan.goalTimeSeconds)),
@@ -360,7 +360,7 @@ class _PlanTile extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: theme.colorScheme.outline),
+        Icon(icon, size: 14, color: theme.colorScheme.outline),
         const SizedBox(width: 3),
         Text(text,
             style: theme.textTheme.bodySmall?.copyWith(

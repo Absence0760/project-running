@@ -575,7 +575,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                         color: _cutoffColor(AppSemanticColors.of(context),
                                 cutoff.status)
                             .withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '${l10n.routeMarkerKindCutoff} ${_marginLabel(cutoff.marginS)}',

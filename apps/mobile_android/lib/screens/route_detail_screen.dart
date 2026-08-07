@@ -784,7 +784,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                           ? Icons.star
                           : Icons.star_border,
                       color: AppSemanticColors.of(context).crown,
-                      size: 32,
+                      size: 24,
                     ),
                     onPressed: () =>
                         setDialogState(() => selectedRating = star),

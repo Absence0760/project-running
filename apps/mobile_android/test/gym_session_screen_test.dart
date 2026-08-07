@@ -363,7 +363,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
     await tester.pump();
     expect(find.text('Finish'), findsOneWidget);
-    expect(find.byIcon(Icons.flag), findsOneWidget);
+    expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
   });
 
   testWidgets('Abandon shows the leave dialog; Keep going stays in place',

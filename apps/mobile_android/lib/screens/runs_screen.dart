@@ -1121,7 +1121,7 @@ class _RunsScreenState extends State<RunsScreen> {
       actions: [
         if (!_timelineMode)
         PopupMenuButton<_RunsRange>(
-          icon: const Icon(Icons.calendar_month_outlined),
+          icon: const Icon(Icons.calendar_month),
           tooltip: l10n.historyDateRangeTooltip,
           onSelected: (v) async {
             // Custom always opens the picker, even when already selected
@@ -2349,7 +2349,7 @@ class _EndpointChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: active ? cs.primary : cs.outlineVariant,
           width: active ? 1.5 : 1,

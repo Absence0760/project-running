@@ -76,7 +76,7 @@ class _PendingSyncBannerState extends State<PendingSyncBanner> {
               Row(
                 children: [
                   Icon(
-                    canRetry ? Icons.sync_problem : Icons.cloud_off_outlined,
+                    canRetry ? Icons.sync_problem : Icons.cloud_off,
                     size: 16,
                   ),
                   const SizedBox(width: 8),

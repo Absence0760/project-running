@@ -293,7 +293,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       itemCount:
                           _entries.length + (_exhausted ? 0 : 1),
                       separatorBuilder: (_, __) =>
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                       itemBuilder: (_, i) {
                         if (i >= _entries.length) {
                           return Center(

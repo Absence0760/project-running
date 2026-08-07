@@ -863,7 +863,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 color: theme.colorScheme.surfaceContainerHigh,
                 child: Row(
                   children: [
-                    const Icon(Icons.cloud_off_outlined, size: 16),
+                    const Icon(Icons.cloud_off, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -1456,7 +1456,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                                 margin: const EdgeInsets.symmetric(horizontal: 4),
                                 decoration: BoxDecoration(
                                   color: theme.colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(3),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
                               const SizedBox(height: 4),

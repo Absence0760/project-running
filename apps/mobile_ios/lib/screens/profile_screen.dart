@@ -840,7 +840,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildRunsTab(ThemeData theme) {
     if (_runs.isEmpty) {
       return EmptyState(
-        icon: Icons.directions_run_outlined,
+        icon: Icons.directions_run,
         title: _isSelf
             ? AppLocalizations.of(context).profileRunsEmptySelf
             : AppLocalizations.of(context).profileRunsEmptyOther,

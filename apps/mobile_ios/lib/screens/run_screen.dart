@@ -4208,7 +4208,7 @@ class _RunScreenState extends State<RunScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.flag_rounded,
+                                Icons.flag_outlined,
                                 size: 16,
                                 color: Theme.of(context).colorScheme.primary,
                               ),
@@ -4449,7 +4449,7 @@ class _RunScreenState extends State<RunScreen> {
       margin: EdgeInsets.zero,
       child: SwitchListTile(
         dense: true,
-        secondary: const Icon(Icons.directions_run_outlined),
+        secondary: const Icon(Icons.directions_run),
         title: Text(l10n.runTreadmillModeLabel),
         subtitle: subtitle == null ? null : Text(subtitle),
         value: _treadmillMode,
@@ -4570,11 +4570,11 @@ class FinishedSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 if (synced) ...[
-                  Icon(Icons.cloud_done, color: semantic.success, size: 36),
+                  Icon(Icons.cloud_done, color: semantic.success, size: 24),
                   const SizedBox(height: 4),
                   Text(l10n.runSynced),
                 ] else if (syncError != null) ...[
-                  Icon(Icons.cloud_off, size: 36, color: semantic.warning),
+                  Icon(Icons.cloud_off, size: 24, color: semantic.warning),
                   const SizedBox(height: 4),
                   Text(syncError!,
                       style: TextStyle(color: semantic.warning)),
@@ -4720,7 +4720,7 @@ class _StatsOverlay extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onTogglePaceMute,
                   icon: Icon(
-                    paceCuesMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                    paceCuesMuted ? Icons.volume_off_rounded : Icons.volume_up,
                     size: 18,
                   ),
                   label: Text(
@@ -4755,7 +4755,7 @@ class _StatsOverlay extends StatelessWidget {
                         ),
                         child: Icon(
                           Icons.delete_outline,
-                          size: 26,
+                          size: 24,
                           color: theme.colorScheme.outline,
                         ),
                       ),
@@ -4784,8 +4784,8 @@ class _StatsOverlay extends StatelessWidget {
                         ),
                         child: Center(
                           child: Icon(
-                            paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                            size: 32,
+                            paused ? Icons.play_arrow : Icons.pause,
+                            size: 24,
                             color: paused
                                 ? semantic.onSuccess
                                 : semantic.onWarning,
@@ -4825,8 +4825,8 @@ class _StatsOverlay extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           Icon(
-                            Icons.flag_rounded,
-                            size: 28,
+                            Icons.flag_outlined,
+                            size: 24,
                             color: theme.colorScheme.primary,
                           ),
                           if (lapCount > 0)
@@ -5448,7 +5448,7 @@ class _LastRunCard extends StatelessWidget {
                     height: 56,
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       Icons.directions_run,
@@ -5777,7 +5777,7 @@ class _TrackSparkPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(0, 0, size.width, size.height),
-        const Radius.circular(10),
+        const Radius.circular(12),
       ),
       bg,
     );

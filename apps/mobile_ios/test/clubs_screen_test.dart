@@ -255,7 +255,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       // groups is the Browse empty glyph.
-      expect(find.byIcon(Icons.groups), findsOneWidget);
+      expect(find.byIcon(Icons.groups_outlined), findsOneWidget);
     });
   });
 

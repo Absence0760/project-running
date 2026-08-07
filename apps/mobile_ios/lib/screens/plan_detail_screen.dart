@@ -627,7 +627,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       return Scaffold(
         appBar: AppBar(),
         body: EmptyState(
-          icon: Icons.calendar_month_outlined,
+          icon: Icons.calendar_month,
           title: l10n.planDetailNotFound,
         ),
       );
@@ -761,7 +761,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           border: Border.all(color: theme.dividerColor),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -788,7 +788,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest,
           border: Border.all(color: theme.dividerColor),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,7 +889,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest,
             border: Border.all(color: theme.dividerColor),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -978,7 +978,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   spacing: 10,
                   runSpacing: 4,
                   children: [
-                    _chip(theme, Icons.flag, fmtKm(p.goalDistanceM, 1)),
+                    _chip(theme, Icons.flag_outlined, fmtKm(p.goalDistanceM, 1)),
                     if (p.goalTimeSeconds != null)
                       _chip(theme, Icons.timer, fmtHms(p.goalTimeSeconds)),
                     if (p.vdot != null)
@@ -1008,7 +1008,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: theme.colorScheme.outline),
+        Icon(icon, size: 14, color: theme.colorScheme.outline),
         const SizedBox(width: 3),
         Text(text, style: theme.textTheme.bodySmall),
       ],
@@ -1139,7 +1139,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               : theme.dividerColor,
           width: isCurrent ? 1.5 : 1,
         ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1225,6 +1225,9 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               child: isToday
                   ? Semantics(
                       label: l10n.planDetailToday,
+                      // A 6 px bullet, not an icon on the scale: it marks the
+                      // today row's tint (1.003:1 against its neighbour) and is
+                      // sized as a dot rather than as a glyph.
                       child: Icon(Icons.circle,
                           size: 6, color: theme.colorScheme.primary),
                     )

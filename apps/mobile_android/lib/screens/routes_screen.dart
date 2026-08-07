@@ -1231,7 +1231,7 @@ class RoutesScreenState extends State<RoutesScreen> {
               // "Heatmap" next to a sibling heatmap says nothing.
               OutlinedButton.icon(
                 icon: const Icon(
-                  Icons.local_fire_department_outlined,
+                  Icons.local_fire_department,
                   size: 18,
                 ),
                 label: Text(l10n.routesHeatmapTooltip),

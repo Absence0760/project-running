@@ -51,7 +51,7 @@ class TodaysWorkoutCard extends StatelessWidget {
               child: Icon(
                 done ? Icons.check_circle : _iconFor(kind),
                 color: theme.colorScheme.primary,
-                size: 28,
+                size: 24,
               ),
             ),
             const SizedBox(width: 12),
@@ -88,7 +88,7 @@ class TodaysWorkoutCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.straighten,
-                                size: 13, color: theme.colorScheme.onPrimary),
+                                size: 14, color: theme.colorScheme.onPrimary),
                             const SizedBox(width: 3),
                             Flexible(
                               child: Text(fmtKm(w.targetDistanceM),
@@ -105,7 +105,7 @@ class TodaysWorkoutCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.speed,
-                                size: 13, color: theme.colorScheme.onPrimary),
+                                size: 14, color: theme.colorScheme.onPrimary),
                             const SizedBox(width: 3),
                             Flexible(
                               child: Text('@ ${fmtPace(w.targetPaceSecPerKm)}',
@@ -134,7 +134,7 @@ class TodaysWorkoutCard extends StatelessWidget {
         WorkoutKind.tempo => Icons.speed,
         WorkoutKind.interval => Icons.timelapse,
         WorkoutKind.walkRun => Icons.directions_walk,
-        WorkoutKind.marathonPace => Icons.flag,
+        WorkoutKind.marathonPace => Icons.flag_outlined,
         WorkoutKind.race => Icons.emoji_events,
         WorkoutKind.rest => Icons.self_improvement,
       };

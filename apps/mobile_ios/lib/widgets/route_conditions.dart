@@ -250,7 +250,7 @@ class _RouteConditionsState extends State<RouteConditions> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         border: Border.all(color: cs.outlineVariant),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         color: cs.surfaceContainerHighest,
       ),
       child: Column(

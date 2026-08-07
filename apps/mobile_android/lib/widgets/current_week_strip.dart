@@ -116,12 +116,12 @@ class CurrentWeekStrip extends StatelessWidget {
           color: isToday ? theme.colorScheme.primary : theme.dividerColor,
           width: isToday ? 1.5 : 1,
         ),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
       ),
       foregroundDecoration: wo != null
           ? BoxDecoration(
               border: Border(left: BorderSide(color: kindMark!, width: 3)),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
             )
           : null,
       child: Column(
@@ -157,7 +157,7 @@ class CurrentWeekStrip extends StatelessWidget {
               Align(
                 alignment: Alignment.bottomRight,
                 child: Icon(Icons.check_circle,
-                    size: 11, color: theme.colorScheme.tertiary),
+                    size: 14, color: theme.colorScheme.tertiary),
               ),
           ],
         ],
@@ -167,7 +167,7 @@ class CurrentWeekStrip extends StatelessWidget {
     if (wo == null) return base;
     return InkWell(
       onTap: onSelect == null ? null : () => onSelect!(wo),
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(8),
       child: base,
     );
   }

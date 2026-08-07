@@ -202,7 +202,7 @@ void main() {
     // The Runs sub-tab passes showSyncActions: false — no cloud slot at all,
     // in any of its three states.
     expect(find.byIcon(Icons.cloud_off), findsNothing);
-    expect(find.byIcon(Icons.cloud_upload), findsNothing);
+    expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
     expect(find.byIcon(Icons.cloud_download), findsNothing);
   });
 

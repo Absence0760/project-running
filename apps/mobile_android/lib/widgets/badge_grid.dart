@@ -46,7 +46,7 @@ IconData badgeIconData(String name) {
     case 'military_tech':
       return Icons.military_tech;
     case 'workspace_premium':
-      return Icons.workspace_premium;
+      return Icons.workspace_premium_outlined;
     case 'route':
       return Icons.route;
     case 'public':
@@ -61,7 +61,7 @@ IconData badgeIconData(String name) {
     case 'emoji_events':
       return Icons.emoji_events;
     case 'flag':
-      return Icons.flag;
+      return Icons.flag_outlined;
     default:
       return Icons.military_tech;
   }
@@ -170,7 +170,7 @@ class BadgeGrid extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     if (badges.isEmpty) {
       return EmptyState(
-        icon: Icons.emoji_events_outlined,
+        icon: Icons.emoji_events,
         title: isOwner ? l10n.badgesEmpty : l10n.badgesEmptyOther,
       );
     }
