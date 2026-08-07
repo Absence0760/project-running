@@ -2656,8 +2656,13 @@ class _RunScreenState extends State<RunScreen> {
           ? _l10n.runNotificationPausedTitle(activityTypeLabel(_l10n, _activityType))
           : activityTypeLabel(_l10n, _activityType),
       text: '$timeStr  •  $distanceStr  •  $paceStr',
+      // The expanded lock-screen body. Its labels used to be English literals
+      // while the title and collapsed text beside them were localized, so the
+      // one surface a runner reads mid-run through a pocket read half in their
+      // language. Reuses the run screen's own stat labels rather than minting
+      // four more keys in seven catalogues.
       bigText:
-          'Time: $timeStr\nDistance: $distanceStr\n${_activityType.usesSpeed ? "Speed" : "Pace"}: $paceStr',
+          '${_l10n.runStatTime}: $timeStr\n${_l10n.runStatDistance}: $distanceStr\n${_activityType.usesSpeed ? _l10n.runStatSpeed : _l10n.runStatPace}: $paceStr',
       paused: _manualPaused,
     );
   }
