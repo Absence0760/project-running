@@ -169,7 +169,7 @@ class _PlansScreenState extends State<PlansScreen> {
                     padding: EdgeInsets.fromLTRB(
                         16, 12, 16, fabScrollClearance(context)),
                     itemCount: _plans.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (ctx, i) {
                       final p = _plans[i];
                       return _PlanTile(

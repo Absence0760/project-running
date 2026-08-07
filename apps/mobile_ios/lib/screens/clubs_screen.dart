@@ -236,7 +236,7 @@ class ClubsScreenState extends State<ClubsScreen> {
                     padding: EdgeInsets.fromLTRB(
                         16, 16, 16, fabScrollClearance(context)),
                     itemCount: list.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (ctx, i) => _ClubTile(
                       view: list[i],
                       onTap: () async {
