@@ -5614,4 +5614,35 @@ void main() {
       }
     });
   });
+
+  // Issue #666, the round-17 index's carryover: the expanded lock-screen
+  // notification body hardcoded its labels ("Time:", "Distance:", "Speed:")
+  // while the title and collapsed text beside them were localized. It is the
+  // one surface a runner reads mid-run through a pocket, and in six of the
+  // seven shipped locales half of it was English.
+  //
+  // Pinned as a source rule rather than a widget test because the body is
+  // built inside `_refreshLockScreenNotification`, which needs a live recorder
+  // to reach. The rule is narrow: whatever the body interpolates, it may not
+  // be a bare English label.
+  test('the lock-screen notification body carries no English literal', () {
+    final src = File('lib/screens/run_screen.dart').readAsStringSync();
+    final match = RegExp(r'bigText:([\s\S]{0,400}?),\n\s*paused:').firstMatch(src);
+    expect(match, isNotNull,
+        reason: 'could not find the bigText argument in run_screen.dart — if '
+            'the lock-screen body moved, move this guard with it');
+    final body = match!.group(1)!;
+    for (final label in ['Time:', 'Distance:', 'Speed:', 'Pace:']) {
+      expect(
+        body.contains(label),
+        isFalse,
+        reason: 'the lock-screen body spells "$label" as an English literal. '
+            'Resolve it through l10n — runStatTime / runStatDistance / '
+            'runStatSpeed / runStatPace already carry these exact strings in '
+            'all seven catalogues.',
+      );
+    }
+    expect(body.contains(r'$'), isTrue,
+        reason: 'the body interpolates nothing — the match is probably wrong');
+  });
 }
