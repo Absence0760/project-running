@@ -7610,3 +7610,25 @@ The general rule: **a value that resists a consistency sweep is evidence, not an
 - **C19** (event detail's 350-line section with no cards) and **M3** (two of five nav slots are review surfaces) are design and information-architecture decisions about live surfaces, not defects. **T-L3** (depth does not track frequency) is the same.
 
 Recording them measured-and-declined is the point: the ledger should distinguish "not done" from "looked at, and here is why not".
+
+## 552. Most of a carryover list was already closed, and the only way to know was to re-measure each item before fixing it
+
+**Date:** 2026-08-07
+
+Round 19 of the issue #666 audit took the "still-open findings the fix rounds surfaced" list, which had been carried forward largely unchanged since round 14. **Of the items checked, most were already closed** — by later rounds that fixed the underlying defect without striking the entry. Two were genuinely open and are fixed here.
+
+What the list claimed, against what the tree says:
+
+- **"`activity_timeline_list.dart` carries the two inks web retired, as theme-independent consts (2.875 / 2.962 on dusk)"** — it reads `section.gymInk` / `section.nutritionInk`, the split accents § 529/§ 542 established. Closed.
+- **"`colorScheme.outline` remains widely used as text (§ 505's open item)"** — `outline_text_token_guard_test.dart` bans exactly that, with the figures computed, and passes. Closed in round 12.
+- **"§ 539: `FitnessHubScreen.initialTab` / `SocialScreen.initialTab` are still raw ints"** — both carry typed enums (`FitnessTab`, `SocialTab`), as does `ProfileScreen`. Closed.
+- **"web's settings still says Licenses where mobile renamed to About & updates"** — the web nav reads `settingsLayout.tabAbout`. Closed (the *route* is still `/settings/licenses`, which is a URL, not a name).
+- **"`import_screen.dart:460`'s Strava glyph is 2.569:1 over parchment against 1.4.11's 3:1"** — the figure is right and **the obligation is not**. The glyph sits beside "Import from Strava" as title-and-subtitle text, so it is redundant decoration, and 1.4.11 applies to a graphic *required to understand the content*. This is the same ruling § 549 made for `/runs/[id]`'s source dot, applied consistently: a mark beside its own name in text owes nothing.
+- **"265 web `transition`/`animation` declarations"** — **220**.
+- **"`'https://threkir.com'` is spelled 27 times in production"** — 63 occurrences, but 23 of them are prose inside the privacy and terms pages, where the domain is the site's name rather than a constant. The extractable population is the code sites, and the finding's own figure was measuring neither set.
+
+**The two that were real** are fixed here. The run screen's expanded lock-screen notification hardcoded `Time:` / `Distance:` / `Speed:`/`Pace:` while the title and collapsed text beside them were localized — the one surface a runner reads mid-run through a pocket, half in English in six of seven locales. And mobile had no destination-name guard: round 16 hand-scanned the names across seven catalogues, fixed the one collision it found, and recorded the absence — but a hand scan does not survive the next translation, which is precisely why web's equivalent runs per locale.
+
+**The lesson is about ledgers, not about these findings.** An entry on a carryover list is a claim that was true when written, and every round that fixes something adjacent can retire one without noticing. Six rounds of carrying this list forward verbatim produced a list where the majority of entries described a tree that no longer existed — and the cost of that is not the stale text, it is that a reader budgets work against it. **Re-measure a carryover item before scheduling it, not after**; the check is minutes and it was wrong more often than it was right.
+
+One process note worth inheriting: `dart format` on `run_screen.dart` reformatted **1282 lines** of a file this change touched six of, because the committed formatting predates this SDK's formatter — and the reflow broke two source-pattern architecture guards that read the file's shape. Format the edit, not the file, on a repo whose formatter version is not pinned.
