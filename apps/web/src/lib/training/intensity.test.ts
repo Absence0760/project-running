@@ -6,8 +6,11 @@ import assert from 'node:assert/strict';
 
 import {
 	computeIntensity,
+	effortSegments,
 	kHardVelocityFraction,
 	kMinClassifiedRuns,
+	kMinSegmentMetres,
+	kMinSegmentSeconds,
 	kOnGuidelineMinEasyShare,
 } from './intensity';
 import { currentVdot, thresholdPaceSecPerKmFromVdot } from './fitness';
@@ -187,4 +190,256 @@ test('percentages are complementary and the threshold is reported', () => {
 
 test('a non-positive window is rejected', () => {
 	assert.equal(computeIntensity([hardRun(1)], 0, NOW), null);
+});
+
+// --- Per-segment classification (issue #676) ---------------------------------
+//
+// Against the `hardRun` anchor the threshold is ~256 s/km, so the hard boundary
+// (threshold / 0.88) sits at ~291 s/km. Every fixture below is built from paces
+// either side of that and the expected seconds are the fixture's own arithmetic.
+
+/// A plan-executed VO2max session: 2 km warmup @6:00/km, 6x800m @3:45/km with
+/// 400 m @7:30/km jog recoveries, 1.5 km cooldown @6:00/km. The reps run at
+/// 225 s/km (well past the 291 s/km boundary); the whole-run average is
+/// 319.6 s/km, which reads EASY — that dilution IS the bug.
+const REP_SECONDS = 6 * 180;
+const SESSION_SECONDS = 720 + REP_SECONDS + 6 * 180 + 540;
+const SESSION_METRES = 2000 + 6 * 800 + 6 * 400 + 1500;
+
+function step(kind: string, duration_s: number, actual_distance_m: number) {
+	return {
+		step_index: 0,
+		kind,
+		target_distance_m: actual_distance_m,
+		actual_distance_m,
+		target_pace_sec_per_km: Math.round(duration_s / (actual_distance_m / 1000)),
+		actual_pace_sec_per_km: Math.round(duration_s / (actual_distance_m / 1000)),
+		duration_s,
+		status: 'completed' as const,
+	};
+}
+
+function intervalSession(daysAgo: number): Run {
+	const steps = [step('warmup', 720, 2000)];
+	for (let i = 0; i < 6; i++) {
+		steps.push(step('interval', 180, 800));
+		steps.push(step('recovery', 180, 400));
+	}
+	steps.push(step('cooldown', 540, 1500));
+	return r({
+		started_at: daysAgoIso(daysAgo),
+		distance_m: SESSION_METRES,
+		duration_s: SESSION_SECONDS,
+		metadata: { workout_step_results: steps },
+	});
+}
+
+test('the whole-run average of an interval session really does read easy', () => {
+	// Guards the fixture: without this, the test below could pass for the wrong
+	// reason (a session whose mean was already hard).
+	const session = intervalSession(3);
+	const flat = r({
+		started_at: session.started_at,
+		distance_m: session.distance_m,
+		duration_s: session.duration_s,
+	});
+	const s = computeIntensity([hardRun(1), flat, easyRun(8), easyRun(15)], 56, NOW);
+	assert.ok(s);
+	assert.equal(s.hardRuns, 1); // the anchor alone
+	assert.equal(s.hardSeconds, 1200);
+});
+
+test('an interval session contributes its rep time to hard, not all of it to easy', () => {
+	const s = computeIntensity([hardRun(1), intervalSession(3), easyRun(8), easyRun(15)], 56, NOW);
+	assert.ok(s);
+	assert.equal(s.totalRuns, 4);
+	// The session joins the anchor as a hard session instead of an easy one.
+	assert.equal(s.hardRuns, 2);
+	assert.equal(s.easyRuns, 2);
+	// Its 18 minutes of reps land in hard; its warmup, recoveries and cooldown
+	// stay easy. Both halves of the same run are counted.
+	assert.equal(s.hardSeconds, 1200 + REP_SECONDS);
+	assert.equal(s.easySeconds, 2 * 3200 + (SESSION_SECONDS - REP_SECONDS));
+});
+
+test('run tallies still partition the classified runs', () => {
+	const s = computeIntensity(
+		[hardRun(1), intervalSession(3), intervalSession(6), easyRun(10), easyRun(17)],
+		56,
+		NOW,
+	);
+	assert.ok(s);
+	assert.equal(s.easyRuns + s.hardRuns, s.totalRuns);
+	assert.equal(s.totalRuns, 5);
+});
+
+test('marked laps segment a session that carries no workout steps', () => {
+	// A fartlek the runner lapped by hand: 4 x (1 km @4:00/km hard, 1 km
+	// @7:30/km easy). No plan link, so `laps` is the only breakdown there is.
+	const laps = [];
+	for (let i = 0; i < 4; i++) {
+		laps.push({ index: laps.length + 1, start_offset_s: 0, distance_m: 1000, duration_s: 240 });
+		laps.push({ index: laps.length + 1, start_offset_s: 0, distance_m: 1000, duration_s: 450 });
+	}
+	const fartlek = r({
+		started_at: daysAgoIso(4),
+		distance_m: 8000,
+		duration_s: 4 * (240 + 450),
+		metadata: { laps },
+	});
+	const s = computeIntensity([hardRun(1), fartlek, easyRun(9), easyRun(16)], 56, NOW);
+	assert.ok(s);
+	assert.equal(s.hardRuns, 2);
+	assert.equal(s.hardSeconds, 1200 + 4 * 240);
+	assert.equal(s.easySeconds, 2 * 3200 + 4 * 450);
+});
+
+test('workout steps win over laps when a run carries both', () => {
+	// Same session, plus a single whole-run lap that would read easy on its own.
+	const session = intervalSession(3);
+	const both = r({
+		started_at: session.started_at,
+		distance_m: SESSION_METRES,
+		duration_s: SESSION_SECONDS,
+		metadata: {
+			...(session.metadata as Record<string, unknown>),
+			laps: [
+				{ index: 1, start_offset_s: 0, distance_m: SESSION_METRES, duration_s: SESSION_SECONDS },
+			],
+		},
+	});
+	const s = computeIntensity([hardRun(1), both, easyRun(8), easyRun(15)], 56, NOW);
+	assert.ok(s);
+	assert.equal(s.hardSeconds, 1200 + REP_SECONDS);
+});
+
+test('time the breakdown leaves uncovered is classified at its own pace', () => {
+	// 6 km of easy laps @7:30/km, then a 2 km finish @4:10/km the runner never
+	// lapped. The residual is 500 s over 2000 m = 250 s/km — hard.
+	const laps = Array.from({ length: 6 }, (_, i) => ({
+		index: i + 1,
+		start_offset_s: i * 450,
+		distance_m: 1000,
+		duration_s: 450,
+	}));
+	const fastFinish = r({
+		started_at: daysAgoIso(4),
+		distance_m: 8000,
+		duration_s: 6 * 450 + 500,
+		metadata: { laps },
+	});
+	const s = computeIntensity([hardRun(1), fastFinish, easyRun(9), easyRun(16)], 56, NOW);
+	assert.ok(s);
+	assert.equal(s.hardSeconds, 1200 + 500);
+	assert.equal(s.easySeconds, 2 * 3200 + 6 * 450);
+});
+
+test('a sub-floor lap sliver cannot flip an easy run to hard', () => {
+	// A double-tapped lap key leaves a 2 s / 5 m lap. Read on its own that is
+	// 400 s/km... but the tap could equally land the other way, so the floor
+	// keeps such slivers out of the per-slice classification entirely: they fall
+	// into the residual, which here is the rest of a genuinely easy run.
+	const easy = r({
+		started_at: daysAgoIso(4),
+		distance_m: 8000,
+		duration_s: 3200,
+		metadata: {
+			laps: [
+				{ index: 1, start_offset_s: 0, distance_m: 4000, duration_s: 1600 },
+				{ index: 2, start_offset_s: 1600, distance_m: 5, duration_s: 2 },
+				{ index: 3, start_offset_s: 1602, distance_m: 3995, duration_s: 1598 },
+			],
+		},
+	});
+	const s = computeIntensity([hardRun(1), easy, easyRun(9), easyRun(16)], 56, NOW);
+	assert.ok(s);
+	assert.equal(s.hardRuns, 1); // the anchor alone
+	assert.equal(s.easyRuns, 3);
+	// The sliver's 2 s is unattributable and is not invented into either bucket.
+	assert.equal(s.easySeconds, 2 * 3200 + 1600 + 1598);
+});
+
+test('a steady run with laps stays one easy run', () => {
+	// The regression that matters most: segmenting must not manufacture hard
+	// time out of an ordinary lapped easy run.
+	const lapped = r({
+		started_at: daysAgoIso(4),
+		distance_m: 8000,
+		duration_s: 3200,
+		metadata: {
+			laps: Array.from({ length: 8 }, (_, i) => ({
+				index: i + 1,
+				start_offset_s: i * 400,
+				distance_m: 1000,
+				duration_s: 400,
+			})),
+		},
+	});
+	const s = computeIntensity([hardRun(1), lapped, easyRun(9), easyRun(16)], 56, NOW);
+	assert.ok(s);
+	assert.equal(s.hardRuns, 1);
+	assert.equal(s.hardSeconds, 1200);
+	assert.equal(s.easySeconds, 3 * 3200);
+});
+
+test('effortSegments falls back to the whole run without a usable breakdown', () => {
+	const plain = easyRun(2);
+	assert.deepEqual(effortSegments(plain), [{ seconds: 3200, metres: 8000 }]);
+
+	// A schemaless bag can hold anything; none of these is a breakdown.
+	for (const metadata of [
+		{},
+		{ laps: null },
+		{ laps: [] },
+		{ laps: 'nope' },
+		{ laps: [null, 7, 'x'] },
+		{ laps: [{ index: 1 }] },
+		{ laps: [{ distance_m: 1000, duration_s: '450' }] },
+		{ laps: [{ distance_m: Number.NaN, duration_s: 450 }] },
+		{ workout_step_results: [{ duration_s: 180 }] },
+	]) {
+		const run = r({ started_at: daysAgoIso(2), distance_m: 8000, duration_s: 3200, metadata });
+		assert.deepEqual(
+			effortSegments(run),
+			[{ seconds: 3200, metres: 8000 }],
+			`unusable breakdown ${JSON.stringify(metadata)} should fall back to the whole run`,
+		);
+	}
+});
+
+test('effortSegments accepts a slice exactly at the floor', () => {
+	const run = r({
+		started_at: daysAgoIso(2),
+		distance_m: 8000,
+		duration_s: 3200,
+		metadata: {
+			laps: [{ index: 1, distance_m: kMinSegmentMetres, duration_s: kMinSegmentSeconds }],
+		},
+	});
+	const segs = effortSegments(run);
+	assert.equal(segs.length, 2); // the at-floor lap + the residual
+	assert.deepEqual(segs[0], { seconds: kMinSegmentSeconds, metres: kMinSegmentMetres });
+	assert.deepEqual(segs[1], {
+		seconds: 3200 - kMinSegmentSeconds,
+		metres: 8000 - kMinSegmentMetres,
+	});
+});
+
+test('effortSegments drops a residual that would be negative', () => {
+	// Laps summing past the run row's own totals (a re-imported/edited run)
+	// must not produce a negative-duration segment.
+	const run = r({
+		started_at: daysAgoIso(2),
+		distance_m: 4000,
+		duration_s: 1600,
+		metadata: {
+			laps: [
+				{ index: 1, distance_m: 3000, duration_s: 1200 },
+				{ index: 2, distance_m: 3000, duration_s: 1200 },
+			],
+		},
+	});
+	const segs = effortSegments(run);
+	assert.equal(segs.length, 2);
+	assert.ok(segs.every((s) => s.seconds > 0 && s.metres > 0));
 });
