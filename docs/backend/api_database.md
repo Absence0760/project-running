@@ -863,20 +863,31 @@ create table user_profiles (
 -- validated any of them, so those rows are permanently unchecked) it emits the
 -- VALIDATE, pinned by `club_profile_text_caps_test.sql`.
 --
--- **Still uncapped:** re-derived across the whole schema, **51** user-writable
--- text columns carry no length CHECK and no `varchar(n)` (there is not one
--- `varchar`, `character varying` or `citext` anywhere in it) — 7 of those are
--- URLs / slugs / a `text[]`, leaving **44** free-text prose-or-name fields, of
--- which this migration caps 4 and **40** remain. Among the 40: `routes.name`/`description`,
--- `route_reviews.comment`, `events.title`/`meet_label`/`discipline`/`timezone`,
--- `event_results.note`/`bib`/`finisher_name`, the four `training_plans`/
--- `plan_weeks`/`plan_workouts` notes fields, six `session_plans*` fields,
--- `reports.notes`, `user_blocks.reason`, `coach_athletes.note`,
--- `fundraisers.charity_name`/`title`/`story`, `donations.display_name`/`message`
--- (clamped in the Edge Function at 80/280, not in the DB), `race_listings.name`/
--- `location_label` and `checkpoint_crossings.*` (the four `clubs.*_url` link
--- columns are among the 7, scheme regex only). The ladder the capped columns use is
--- 60/80/120 for a name, 280–500 for a note, 2000–4096 for prose.
+-- **Nothing is uncapped any more** (`20270503_001`, decisions §548). The "40
+-- remain" this comment used to carry was derived by reading the migration files
+-- and was low by twelve; re-derived from the CATALOGUE the real population was
+-- **52**, and that migration caps all of them. Three things defeated the static
+-- read, and they are the reason the guard is catalogue-based:
+--
+--   * the schema spells the predicate BOTH `length(...)` (the older tables —
+--     `gear`, `run_photos`, `gym_*`) and `char_length(...)` (the newer ones),
+--     so a derivation keyed on one spelling mis-sees the other in both
+--     directions;
+--   * `alter table … add column a text, add column b text;` is ONE statement
+--     with two clauses, which is why `event_results.finisher_name` never showed
+--     up in a count while its sibling `bib` did;
+--   * a column named inside any CHECK was read as bounded — true of enum
+--     membership, false of `event_results`' `user_id is not null or (bib is not
+--     null and finisher_name is not null)`, which bounds nothing.
+--
+-- `20270503_001` also emits the three VALIDATEs `20261124_001` never did
+-- (`club_posts.body`, `coach_messages.content`, `events.description`): both
+-- §545 and §546 named that defect and fixed it only for their own constraints.
+-- The one column deliberately left without a length cap is
+-- `event_checkpoints.cutoff_clock`, pinned to five characters by its own
+-- `^[0-2][0-9]:[0-5][0-9]$`. The ladder is 60/80/120 for a name, 280–600 for a
+-- note, 2000 for prose. `free_text_caps_test.sql` re-derives the population at
+-- run time rather than listing it, so a new unbounded text column fails there.
 --
 -- `coach_consent_at` and `health_data_consent_at` were added in
 -- 20260921_001_user_profiles_gdpr_consent_timestamps.sql per
