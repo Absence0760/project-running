@@ -177,6 +177,38 @@ Dev-only defines (`DEV_USER_EMAIL` / `DEV_USER_PASSWORD` auto-login, `BYPASS_PAY
 
 The `BACKGROUND_LOCATION` permission is the most scrutinized at review time. The Play Store requires a **prominent in-app disclosure** explaining why we need it before requesting; that lives on the `OnboardingScreen`. Don't remove that disclosure.
 
+### Health Connect permission changes gate the release
+
+The app requests seven `android.permission.health.*` permissions, declared in both `AndroidManifest.xml` and `res/xml/health_permissions.xml` (keep the two in lockstep — the Play Console form reads the latter). Play holds a per-package **Health apps declaration** listing the data types we're approved for. It is version-independent, so a release that doesn't change the permission set needs nothing.
+
+**A release that adds or removes one fails at the last step.** `mobile_android@1.4.0` added `READ_EXERCISE_ROUTES` (issue #664) and the Play upload died on:
+
+```
+Successfully uploaded 1 artifacts
+Committing the Edit
+##[error]You must let us know whether your app includes any health features.
+```
+
+The build, signing, and upload all succeeded — only `Edits.commit` was rejected, so the AAB was attached to the GitHub Release but never reached the internal track.
+
+**The trap: the API and the Console disagree.** `r0adkll/upload-google-play` defaults `changesNotSentForReview: false`, so committing an edit *submits it for review*, and the declaration is enforced at review submission. Uploading the same AAB by hand to Internal testing in the Console does **not** hit that gate and publishes fine. This UI-vs-API divergence is reported against fastlane too ([#22204](https://github.com/fastlane/fastlane/issues/22204), [#27960](https://github.com/fastlane/fastlane/issues/27960)), both open and unresolved — it's Play-side, not specific to our action.
+
+Two consequences worth internalising:
+
+- **A manual Console upload masks the problem, it does not fix it.** The declaration stays stale, the next CI release fails identically, and promoting that build to Production *will* hit the review gate.
+- **Do not "fix" this by setting `changesNotSentForReview: true`.** It would make CI green by skipping a real compliance check, and the debt lands on whoever next promotes to Production. Update the declaration instead.
+
+The order that works:
+
+1. Update `AndroidManifest.xml` + `res/xml/health_permissions.xml` together.
+2. Update the Play Console Health apps declaration (**Policy and programs → App content → Health apps → Manage**, direct URL `https://play.google.com/console/app/app-content/summary`) to cover the new data-type set, with a per-type justification. Location-bearing types like exercise routes need the most detail.
+3. Get CISO sign-off on the justification wording — it's a health-data compliance statement and becomes a public commitment.
+4. Then tag the release.
+
+Chicken-and-egg caveat: the declaration form appears to list only data types Play has seen in a processed bundle, so on a *new* permission the type may not be selectable until a bundle requesting it has been uploaded. Uploading the CI-built AAB by hand to Internal (it's attached to the GitHub Release) is enough to get Play to parse it — then the declaration can be completed.
+
+Note the versionCode is derived from `git rev-list --count HEAD`, so a hand-uploaded build consumes it: re-running the failed CI job afterwards fails on a duplicate versionCode, and moving it needs a new commit on `main`, not just a new tag.
+
 ### targetSdk 36 (Android 16) — what to re-verify on-device
 
 `targetSdk = 36` (Play requires it for updates from **2026-08-31**; `compileSdk` follows `flutter.compileSdkVersion`, currently 36). Android 16 behaviour changes that activate at this target and need a manual pass on an Android 16 device before release:
