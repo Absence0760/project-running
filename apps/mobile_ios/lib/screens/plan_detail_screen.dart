@@ -1225,8 +1225,11 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
               child: isToday
                   ? Semantics(
                       label: l10n.planDetailToday,
+                      // A 6 px bullet, not an icon on the scale: it marks the
+                      // today row's tint (1.003:1 against its neighbour) and is
+                      // sized as a dot rather than as a glyph.
                       child: Icon(Icons.circle,
-                          size: 14, color: theme.colorScheme.primary),
+                          size: 6, color: theme.colorScheme.primary),
                     )
                   : null,
             ),

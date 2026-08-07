@@ -248,7 +248,7 @@ void main() {
 
     // Owner gets add + per-row edit/delete affordances.
     expect(find.text('Add marker'), findsOneWidget);
-    expect(find.byIcon(Icons.edit), findsNWidgets(2));
+    expect(find.byIcon(Icons.edit_outlined), findsNWidgets(2));
     expect(find.byIcon(Icons.delete_outline), findsNWidgets(2));
   });
 
@@ -321,7 +321,7 @@ void main() {
 
     // Only the viewer's own marker carries edit/delete; the owner's is
     // read-only and badged as the route owner's.
-    expect(find.byIcon(Icons.edit), findsOneWidget);
+    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
     expect(find.text('Route owner'), findsOneWidget);
   });
@@ -340,7 +340,7 @@ void main() {
 
     expect(find.text('Aid 1'), findsOneWidget);
     expect(find.text('Add marker'), findsNothing);
-    expect(find.byIcon(Icons.edit), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
     expect(find.byIcon(Icons.delete_outline), findsNothing);
   });
 
@@ -513,7 +513,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 
     final latField =
@@ -624,7 +624,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 
     // 25:00 is not a wall-clock hour. Saved verbatim it lands in meta and
@@ -873,7 +873,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Gate 1');
     await tester.tap(find.text('Save'));
@@ -912,7 +912,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
@@ -947,7 +947,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cut-off').last);
     await tester.pumpAndSettle();
@@ -981,7 +981,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 
     // Cut-off → Elapsed, then 22:00:00.
@@ -1010,7 +1010,7 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.edit));
+    await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 
     // The target toggle is the second one on an aid station (no cut-off row).

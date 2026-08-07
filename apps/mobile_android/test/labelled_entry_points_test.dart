@@ -174,7 +174,7 @@ void main() {
       // `calendar_today_outlined` beside four other unlabelled glyphs read as
       // a date picker, and it was the recap's ONLY entry point in the app.
       expect(
-        src.contains('Icons.calendar_today_outlined'),
+        src.contains('Icons.calendar_today'),
         isFalse,
         reason: 'the dashboard toolbar must not name the recap with a '
             'date-picker glyph',

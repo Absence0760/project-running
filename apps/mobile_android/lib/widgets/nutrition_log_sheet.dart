@@ -680,7 +680,7 @@ class _PermissionDeniedBody extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.no_photography, size: 48),
+            const Icon(Icons.no_photography, size: 40),
             const SizedBox(height: 12),
             Text(
               l10n.nutritionScanPermissionDenied,

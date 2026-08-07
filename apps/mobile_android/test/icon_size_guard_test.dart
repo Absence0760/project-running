@@ -34,6 +34,13 @@ const _roots = ['lib', '../../packages/ui_kit/lib'];
 const _rasterisers = <String, int>{
   'lib/widgets/run_share_card.dart': 1,
   'lib/widgets/route_share_card.dart': 1,
+  // Not a rasteriser: a 6 px BULLET marking the today row on plan detail. A
+  // dot is a shape sized as a dot, not a glyph sized on the icon scale — the
+  // same distinction `font_size_literal_guard_test` draws for text inside a
+  // load-bearing graphic. Snapping it to the nearest rung took it to 14 and
+  // `plan_detail_screen_test` caught it, which is the pin that says it is
+  // deliberate.
+  'lib/screens/plan_detail_screen.dart': 1,
 };
 
 /// Every `size: <int>` argument, attributed to its enclosing constructor by

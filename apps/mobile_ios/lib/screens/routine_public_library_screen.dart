@@ -133,7 +133,7 @@ class _RoutinePublicLibraryScreenState
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: TextField(
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),

@@ -673,6 +673,9 @@ void main() {
 
       expect(find.text('hillsprint'), findsOneWidget);
       // The Chip's delete (×) icon — owner + not-saving renders onDeleted.
+      // Flutter's own $deleteIcon default, so it is NOT ours to normalise:
+      // the §551 icon sweep rewrote this assertion to the outlined variant and
+      // the framework kept drawing the filled one.
       await tester.runAsync(() => tester.tap(find.byIcon(Icons.cancel)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));

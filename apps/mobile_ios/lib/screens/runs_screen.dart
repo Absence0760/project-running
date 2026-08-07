@@ -1202,7 +1202,7 @@ class _RunsScreenState extends State<RunsScreen> {
             child: Badge.count(
               count: unsyncedCount,
               child: IconButton(
-                icon: const Icon(Icons.cloud_upload_outlined),
+                icon: const Icon(Icons.cloud_upload),
                 tooltip: l10n.historySyncTooltip(unsyncedCount),
                 onPressed: _syncAll,
               ),

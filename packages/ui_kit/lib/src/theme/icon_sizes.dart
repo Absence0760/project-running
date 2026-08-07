@@ -33,6 +33,12 @@ abstract final class AppIconSize {
   /// Material's own default, for anything that inherits it deliberately.
   static const double material = 24;
 
+  /// A glyph filling a BOUNDED cell — a badge tile, a media placeholder.
+  /// Distinct from `illustration`, which sizes a glyph with room around it:
+  /// the achievement grid's cell overflows by 5 px at 48, which is how this
+  /// rung got named rather than snapped away.
+  static const double cell = 40;
+
   /// The glyph in an empty / error state.
   static const double illustration = 48;
 
@@ -46,6 +52,7 @@ abstract final class AppIconSize {
     standard,
     leading,
     material,
+    cell,
     illustration,
     hero,
   ];

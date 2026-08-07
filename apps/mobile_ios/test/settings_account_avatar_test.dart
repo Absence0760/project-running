@@ -179,7 +179,7 @@ void main() {
     expect(find.text('Profile photo'), findsOneWidget);
     // A set avatar surfaces the remove (delete) affordance.
     expect(_avatarTileIcon(Icons.delete_outline), findsOneWidget);
-    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsNothing);
+    expect(_avatarTileIcon(Icons.photo_camera), findsNothing);
   });
 
   testWidgets('Remove prompts a confirm before calling removeAvatar',
@@ -207,7 +207,7 @@ void main() {
     expect(api.removeCalls, 1);
     // Once removed the tile falls back to the pick (camera) affordance.
     expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
-    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsOneWidget);
+    expect(_avatarTileIcon(Icons.photo_camera), findsOneWidget);
 
     // Drain the showTopBanner auto-dismiss timer so no pending-timer error.
     await tester.pump(const Duration(seconds: 4));
@@ -237,7 +237,7 @@ void main() {
     await _pump(tester, api);
 
     expect(find.text('Profile photo'), findsOneWidget);
-    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsOneWidget);
+    expect(_avatarTileIcon(Icons.photo_camera), findsOneWidget);
     expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
   });
 
@@ -269,7 +269,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('b@test.com'), findsOneWidget);
     expect(find.byIcon(Icons.block), findsNothing);
-    expect(_avatarTileIcon(Icons.photo_camera_outlined), findsOneWidget);
+    expect(_avatarTileIcon(Icons.photo_camera), findsOneWidget);
     expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
   });
 }

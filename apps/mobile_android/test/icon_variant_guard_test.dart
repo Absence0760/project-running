@@ -28,10 +28,21 @@ import 'source_scan.dart';
 
 const _roots = ['lib', '../../packages/ui_kit/lib'];
 
-/// Stems allowed to appear in two variants because a widget draws one for the
-/// unselected state and the other for the selected one. Empty by construction —
-/// see the header.
-const _selectionPairs = <String>{};
+/// Stems whose two variants carry MEANING rather than drift.
+///
+/// `cloud_upload` is the one that exists: filled is the sync **action** on the
+/// run list's toolbar, outlined at 16 px is the "queued to upload" **state**
+/// on an unsynced row (`routes_screen.dart` carries a comment saying so, and
+/// distinguishes it again from `cloud_off` = "couldn't be uploaded"). Both
+/// render on the run surface at once, so collapsing them made one screen show
+/// the same glyph for an action and for a status — which a `find.byIcon` in
+/// `runs_screen_test` caught, and a user would have hit as a screen that
+/// stopped distinguishing the two.
+///
+/// The M3 `NavigationDestination(icon:, selectedIcon:)` pair belongs here too
+/// when the first one lands; there are none today (zero `selectedIcon:` in
+/// `lib/`), so it is not pre-built.
+const _selectionPairs = <String>{'cloud_upload'};
 
 String _stem(String name) =>
     name.replaceAll(RegExp(r'_(outlined|rounded|sharp)$'), '');
