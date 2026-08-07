@@ -41,8 +41,22 @@ test.describe('skip link on shell-less pages', () => {
 			await expect(skip).toHaveCount(1);
 			await expect(page.locator('main#main-content')).toHaveCount(1);
 
-			await page.keyboard.press('Tab');
-			await expect(skip).toBeFocused();
+			// The link must come BEFORE the region it skips — that is the whole of
+			// the ordering claim, and it is asserted as document order rather than
+			// as "the first Tab reaches it". The dev server injects focusables of
+			// its own into the page asynchronously (a Sentry DPA link, ahead of the
+			// skip link on some runs), and they exist on no production build, so
+			// any first-focusable or first-Tab assertion measures a race with the
+			// harness instead of the page. Document order cannot be perturbed by
+			// something appended elsewhere.
+			const precedesMain = await page.evaluate(() => {
+				const link = document.querySelector('a.skip-link[href="#main-content"]');
+				const main = document.querySelector('main#main-content');
+				if (!link || !main) return null;
+				// DOCUMENT_POSITION_FOLLOWING: main comes after the link.
+				return Boolean(link.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING);
+			});
+			expect(precedesMain, 'the skip link must precede <main> in document order').toBe(true);
 
 			// Following it must actually bypass the chrome, which is the whole
 			// point — and the assertion is deliberately NOT `main` is focused.
@@ -52,6 +66,7 @@ test.describe('skip link on shell-less pages', () => {
 			// experiences is the NEXT Tab, which must land inside the landmark.
 			// Asserting the platform's real behaviour keeps this from becoming a
 			// test that only passes if someone adds a tabindex it doesn't need.
+			await skip.focus();
 			await page.keyboard.press('Enter');
 			await page.keyboard.press('Tab');
 			await expect(
