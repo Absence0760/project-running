@@ -421,6 +421,12 @@
 {#if isShellless($page.url.pathname)}
 	<!-- Landing, login, share, live, club-invite — these have their own
 	     chrome and render shell-less regardless of auth state. -->
+	<!-- WCAG 2.4.1. The other two branches have had a skip link since the
+	     2026-05-30 audit; this one did not, so all 24 shell-less routes shipped
+	     without a bypass. It targets the `main#main-content` each of these
+	     pages owns itself (§543) rather than one the layout provides, which is
+	     why the landmark work had to land first. -->
+	<a href="#main-content" class="skip-link">{m('shell.skipToMain')}</a>
 	<slot />
 {:else if !auth.loggedIn && isAnonAllowed($page.url.pathname)}
 	<!-- Anon viewer on an anon-allowed content page (/privacy, /terms,

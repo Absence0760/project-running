@@ -245,6 +245,29 @@ test('every <main> on a shell-less page is the skip-link target', () => {
 	);
 });
 
+test('the shell-less branch renders a skip link to that target', () => {
+	// The other half of WCAG 2.4.1. The landmark work above gave all 24 routes a
+	// `main#main-content`; without a link to it the bypass still does not exist,
+	// and this branch was the one the 2026-05-30 audit missed. The link has to
+	// live in the LAYOUT rather than on each page — 24 copies is 24 chances to
+	// omit one, which is exactly how the landmark defect happened.
+	const branch = /\{#if isShellless\(\$page\.url\.pathname\)\}([\s\S]*?)\{:else if/.exec(layout);
+	assert.ok(branch, 'could not find the shell-less branch in +layout.svelte');
+	const src = stripHtmlComments(branch[1]);
+	assert.match(
+		src,
+		/<a\s+href="#main-content"\s+class="skip-link">/,
+		'the shell-less branch must render a skip link to #main-content — every page ' +
+			'in it owns that id (WCAG 2.4.1)',
+	);
+	// It has to precede the slot, or Tab reaches the page content first and the
+	// bypass bypasses nothing.
+	assert.ok(
+		src.indexOf('skip-link') < src.indexOf('<slot'),
+		'the skip link must come before the <slot /> so it is first in tab order',
+	);
+});
+
 test('comment stripping follows HTML comment semantics', () => {
 	// HTML comments do not nest: the first `-->` closes, so this <main> is a real
 	// element and must survive stripping. A fixpoint-replacing stripper — what
