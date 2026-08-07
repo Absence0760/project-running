@@ -275,6 +275,16 @@ latest GitHub Release and `adb install` that.
 - The app compiles locally — don't rely on CI to catch build breakage.
 - Schema changes: if you deployed `backend@X`, apps that depend on the
   new schema should tag after (or at least not ahead of) `backend@X`.
+- **Health Connect permission changes block the Android release.** If the
+  diff since the last `mobile_android@*` tag adds or removes an
+  `android.permission.health.*` entry in `AndroidManifest.xml` /
+  `res/xml/health_permissions.xml`, update the Play Console **Health apps
+  declaration** to cover the new data-type set *before* tagging. The
+  declaration is per-package and version-independent, so an unchanged
+  permission set needs nothing — but a changed one fails the release at
+  the very last step. Details + the API-vs-Console trap in
+  [`apps/mobile_android/deployment.md` § Health Connect permission
+  changes](../../apps/mobile_android/deployment.md#health-connect-permission-changes-gate-the-release).
 - No uncommitted secrets. `grep -r SUPABASE_SERVICE_ROLE_KEY apps/` and
   friends should return only `.env.example` hits.
 - **Supabase Auth URL configuration (every release, web or mobile).**
