@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatPace, formatDistance, sourceLabel } from '$lib/core/mock-data';
+	import { sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDuration } from '$lib/format/time';
 	import { fetchRuns, fetchRunsWithError, deleteRuns } from '$lib/core/data';
 	import { loadSettings, effective } from '$lib/settings/settings';
@@ -758,7 +759,7 @@
 					<div class="run-details">
 						<div class="run-top">
 							<span class="run-date">{formatDate(run.started_at)}</span>
-							<span class="source-badge" style="background: {sourceColor(run.source)}"
+							<span class="source-badge" style="background: {sourceColor(run.source)}; color: {sourceInk(run.source)}"
 								>{sourceLabel(run.source)}</span
 							>
 						</div>
@@ -1199,13 +1200,18 @@
 	.source-badge {
 		font-size: var(--font-size-section-label);
 		font-weight: 600;
-		color: var(--color-surface);
 		padding: var(--space-2xs) var(--space-sm);
 		border-radius: 9999px;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		white-space: nowrap;
-		opacity: 0.92;
+		/* No `opacity` here. It shipped at 0.92, and because `opacity` composites
+		   the whole element — fill AND label — over the card, it washed both
+		   toward the page and cost the pair ~0.5:1. That 8% is the entire reason
+		   this badge was the register's one open debt: with it, five of the eight
+		   fills fail 4.5:1 in light even paired with their best ink; without it,
+		   the worst is 4.620:1. Decorative dimming does not go on something that
+		   carries text (§ 512's rule, one layer up). */
 	}
 
 	.run-stats {
