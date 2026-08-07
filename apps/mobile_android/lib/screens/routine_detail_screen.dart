@@ -373,7 +373,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   Widget _clubTemplateBadge(ThemeData theme, AppLocalizations l10n) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.groups, size: 18, color: theme.colorScheme.primary),
+          Icon(Icons.groups_outlined, size: 18, color: theme.colorScheme.primary),
           const SizedBox(width: 6),
           Text(
             l10n.gymRoutineClubTemplateBadge,

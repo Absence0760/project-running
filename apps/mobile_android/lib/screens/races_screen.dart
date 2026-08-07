@@ -173,7 +173,7 @@ class _RacesScreenState extends State<RacesScreen> {
                 TextField(
                   controller: _placeCtl,
                   decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.place_outlined),
+                    prefixIcon: const Icon(Icons.place),
                     hintText: l.racesNearPlace,
                     isDense: true,
                   ),

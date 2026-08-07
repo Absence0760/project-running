@@ -182,7 +182,7 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
               ? ErrorState(message: l10n.challengesLoadFailed, onRetry: _load)
               : _notFound || c == null
               ? EmptyState(
-                  icon: Icons.emoji_events_outlined,
+                  icon: Icons.emoji_events,
                   title: l10n.challengesNotFound,
                 )
               : ListView(

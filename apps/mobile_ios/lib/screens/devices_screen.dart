@@ -301,7 +301,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
         return Icons.phone_android;
       case 'wear':
       case 'watchos':
-        return Icons.watch;
+        return Icons.watch_outlined;
       case 'web':
         return Icons.public;
       default:

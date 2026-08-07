@@ -673,7 +673,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return Scaffold(
         appBar: AppBar(),
         body: EmptyState(
-          icon: Icons.event_busy_outlined,
+          icon: Icons.event_busy,
           title: l10n.eventNotFound,
         ),
       );
@@ -1200,7 +1200,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     onPressed: _raceBusy
                         ? null
                         : () => _raceMutation(_RaceAction.go),
-                    icon: const Icon(Icons.flag),
+                    icon: const Icon(Icons.flag_outlined),
                     label: Text(l10n.eventRaceFireGo),
                   ),
                   const SizedBox(width: 8),
@@ -1468,7 +1468,7 @@ class EventResultsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.emoji_events_outlined,
+            Icon(Icons.emoji_events,
                 size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 6),
             Expanded(
@@ -1485,7 +1485,7 @@ class EventResultsSection extends StatelessWidget {
             else
               FilledButton.tonalIcon(
                 onPressed: submitting ? null : onSubmit,
-                icon: const Icon(Icons.timer_outlined, size: 16),
+                icon: const Icon(Icons.timer, size: 16),
                 label: Text(submitting
                     ? l10n.eventSubmitting
                     : l10n.eventSubmitMyTime),

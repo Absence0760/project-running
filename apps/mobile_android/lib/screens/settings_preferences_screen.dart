@@ -1207,7 +1207,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.cloud_off_outlined, size: 18),
+                        const Icon(Icons.cloud_off, size: 18),
                         const SizedBox(width: 8),
                         Expanded(child: Text(offlineNotice)),
                       ],

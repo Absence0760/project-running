@@ -143,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   )),
             ),
             _tab(
-              icon: Icons.health_and_safety_outlined,
+              icon: Icons.health_and_safety,
               label: l10n.safetyTitle,
               subtitle: l10n.safetyTileSubtitle,
               onTap: () => _openAfterSignIn((_) => SettingsSafetyScreen(

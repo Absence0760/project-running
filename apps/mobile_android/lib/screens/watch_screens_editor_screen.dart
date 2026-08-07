@@ -437,7 +437,7 @@ class _WatchScreensEditorScreenState extends State<WatchScreensEditorScreen> {
         const SizedBox(height: 12),
         if (_drafts.isEmpty)
           EmptyState(
-            icon: Icons.dashboard_customize_outlined,
+            icon: Icons.dashboard_customize,
             title: l10n.watchScreensEmptyTitle,
             body: l10n.watchScreensEmptyBody,
           )

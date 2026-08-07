@@ -253,7 +253,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.calendar_today_outlined),
+                    icon: const Icon(Icons.calendar_today),
                     label: Text(formatDateMed(
                         _startedAt, localeToTag(Localizations.localeOf(context)))),
                     onPressed: _pickDate,
@@ -322,7 +322,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
               // missing.
               InputDecorator(
                 decoration: const InputDecoration(
-                  suffixIcon: Icon(Icons.route_outlined),
+                  suffixIcon: Icon(Icons.route),
                 ),
                 child: Text(
                   l10n.addRunNoRoutes,

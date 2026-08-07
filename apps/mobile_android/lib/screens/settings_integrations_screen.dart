@@ -441,7 +441,7 @@ class _SettingsIntegrationsScreenState
               ),
               ListTile(
                 isThreeLine: true,
-                leading: const Icon(Icons.timer_outlined),
+                leading: const Icon(Icons.timer),
                 title: Text(l10n.integrationsChronotrack),
                 subtitle: _integrationSubtitle(
                   _chronoTrackAvailable
@@ -480,7 +480,7 @@ class _SettingsIntegrationsScreenState
             if (Platform.isAndroid) ...[
               const Divider(),
               SwitchListTile(
-                secondary: const Icon(Icons.health_and_safety_outlined),
+                secondary: const Icon(Icons.health_and_safety),
                 title: Text(l10n.integrationsHealthConnectTitle),
                 subtitle: Text(l10n.integrationsHealthConnectSubtitle),
                 value: widget.preferences.writeToHealthConnect,
@@ -810,7 +810,7 @@ class _TreadmillTileState extends State<TreadmillTile> {
     final paired = _pairedName;
     final live = _liveSpeedKmh;
     return ListTile(
-      leading: const Icon(Icons.directions_run_outlined),
+      leading: const Icon(Icons.directions_run),
       title: Text(l10n.integrationsTreadmillTitle),
       subtitle: Text(
         _loading

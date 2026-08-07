@@ -463,7 +463,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                                   onTap: () => _confirmRemoveZone(i),
                                   child: Center(
                                     child: Icon(
-                                      Icons.cancel,
+                                      Icons.cancel_outlined,
                                       color: theme.colorScheme.primary,
                                     ),
                                   ),

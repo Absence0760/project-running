@@ -1121,7 +1121,7 @@ class _RunsScreenState extends State<RunsScreen> {
       actions: [
         if (!_timelineMode)
         PopupMenuButton<_RunsRange>(
-          icon: const Icon(Icons.calendar_month_outlined),
+          icon: const Icon(Icons.calendar_month),
           tooltip: l10n.historyDateRangeTooltip,
           onSelected: (v) async {
             // Custom always opens the picker, even when already selected
@@ -1202,7 +1202,7 @@ class _RunsScreenState extends State<RunsScreen> {
             child: Badge.count(
               count: unsyncedCount,
               child: IconButton(
-                icon: const Icon(Icons.cloud_upload),
+                icon: const Icon(Icons.cloud_upload_outlined),
                 tooltip: l10n.historySyncTooltip(unsyncedCount),
                 onPressed: _syncAll,
               ),

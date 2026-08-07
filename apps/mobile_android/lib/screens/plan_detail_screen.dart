@@ -627,7 +627,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       return Scaffold(
         appBar: AppBar(),
         body: EmptyState(
-          icon: Icons.calendar_month_outlined,
+          icon: Icons.calendar_month,
           title: l10n.planDetailNotFound,
         ),
       );
@@ -978,7 +978,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   spacing: 10,
                   runSpacing: 4,
                   children: [
-                    _chip(theme, Icons.flag, fmtKm(p.goalDistanceM, 1)),
+                    _chip(theme, Icons.flag_outlined, fmtKm(p.goalDistanceM, 1)),
                     if (p.goalTimeSeconds != null)
                       _chip(theme, Icons.timer, fmtHms(p.goalTimeSeconds)),
                     if (p.vdot != null)

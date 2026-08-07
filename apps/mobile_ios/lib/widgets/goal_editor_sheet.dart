@@ -193,7 +193,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
             const SizedBox(height: 12),
             _targetField(
               label: l10n.goalEditorTargetTime,
-              icon: Icons.timer_outlined,
+              icon: Icons.timer,
               controller: _timeCtl,
               hint: '-',
               suffix: l10n.goalEditorSuffixMin,

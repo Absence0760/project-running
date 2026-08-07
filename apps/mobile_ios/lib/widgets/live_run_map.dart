@@ -1119,7 +1119,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                       child: Transform.rotate(
                         angle: c.angleRadians,
                         child: const Icon(
-                          Icons.play_arrow_rounded,
+                          Icons.play_arrow,
                           size: 16,
                           color: Color(0xFF1D4ED8),
                           shadows: [Shadow(color: Colors.white, blurRadius: 3)],

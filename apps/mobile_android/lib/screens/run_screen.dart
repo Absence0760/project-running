@@ -4208,7 +4208,7 @@ class _RunScreenState extends State<RunScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.flag_rounded,
+                                Icons.flag_outlined,
                                 size: 16,
                                 color: Theme.of(context).colorScheme.primary,
                               ),
@@ -4449,7 +4449,7 @@ class _RunScreenState extends State<RunScreen> {
       margin: EdgeInsets.zero,
       child: SwitchListTile(
         dense: true,
-        secondary: const Icon(Icons.directions_run_outlined),
+        secondary: const Icon(Icons.directions_run),
         title: Text(l10n.runTreadmillModeLabel),
         subtitle: subtitle == null ? null : Text(subtitle),
         value: _treadmillMode,
@@ -4720,7 +4720,7 @@ class _StatsOverlay extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onTogglePaceMute,
                   icon: Icon(
-                    paceCuesMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                    paceCuesMuted ? Icons.volume_off_rounded : Icons.volume_up,
                     size: 18,
                   ),
                   label: Text(
@@ -4784,7 +4784,7 @@ class _StatsOverlay extends StatelessWidget {
                         ),
                         child: Center(
                           child: Icon(
-                            paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                            paused ? Icons.play_arrow : Icons.pause,
                             size: 32,
                             color: paused
                                 ? semantic.onSuccess
@@ -4825,7 +4825,7 @@ class _StatsOverlay extends StatelessWidget {
                         alignment: Alignment.center,
                         children: [
                           Icon(
-                            Icons.flag_rounded,
+                            Icons.flag_outlined,
                             size: 28,
                             color: theme.colorScheme.primary,
                           ),

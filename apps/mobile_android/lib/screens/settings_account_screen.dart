@@ -908,7 +908,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                             tooltip: l10n.settingsAccountAvatarRemove,
                             onPressed: _removeAvatar,
                           )
-                        : const Icon(Icons.photo_camera_outlined),
+                        : const Icon(Icons.photo_camera),
                 onTap: _avatarBusy ? null : _pickAvatar,
               ),
             if (signedIn)

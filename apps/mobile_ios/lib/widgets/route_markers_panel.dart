@@ -373,7 +373,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
             if (_canAdd && !_placing)
               TextButton.icon(
                 onPressed: _startAdd,
-                icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+                icon: const Icon(Icons.add_location_alt, size: 18),
                 label: Text(l10n.routeMarkerAdd),
               ),
           ],
@@ -499,7 +499,7 @@ class RouteMarkersPanelState extends State<RouteMarkersPanel> {
                     constraints:
                         const BoxConstraints(minWidth: 48, minHeight: 48),
                     tooltip: l10n.routeMarkerEdit,
-                    icon: const Icon(Icons.edit, size: 18),
+                    icon: const Icon(Icons.edit_outlined, size: 18),
                     onPressed: () => _openEditor(existing: m),
                   ),
                   IconButton(

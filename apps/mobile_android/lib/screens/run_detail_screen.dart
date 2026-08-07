@@ -849,7 +849,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 value: 'save_as_route',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.add_road_outlined),
+                  leading: const Icon(Icons.add_road),
                   title: Text(l10n.runDetailSaveAsRoute),
                 ),
               ),
@@ -1414,7 +1414,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       return ListTile(
         leading: CircleAvatar(
           backgroundColor: theme.colorScheme.tertiaryContainer,
-          child: Icon(Icons.flag, size: 18, color: theme.colorScheme.tertiary),
+          child: Icon(Icons.flag_outlined, size: 18, color: theme.colorScheme.tertiary),
         ),
         title: Text(l10n.runDetailLapNumber(number)),
         subtitle: Text(UnitFormat.distance(distM, unit)),

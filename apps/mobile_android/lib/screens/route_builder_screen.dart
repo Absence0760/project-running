@@ -992,7 +992,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                 IconButton(
                   tooltip: l10n.routeBuilderGenerateLoop,
                   onPressed: canGenerate ? _generateLoop : null,
-                  // Was Icons.refresh_outlined — looked like a retry
+                  // Was Icons.refresh — looked like a retry
                   // / reload button. Icons.all_inclusive reads as
                   // "build a circular route" at a glance.
                   icon: const Icon(Icons.all_inclusive),

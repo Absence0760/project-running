@@ -452,7 +452,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             leading: const Icon(Icons.calendar_today),
             title: Text(l10n.planNewStartDate),
             subtitle: Text(toIsoDate(_startDate)),
-            trailing: const Icon(Icons.edit),
+            trailing: const Icon(Icons.edit_outlined),
             onTap: () async {
               final picked = await showDatePicker(
                 context: context,

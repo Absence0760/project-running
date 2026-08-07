@@ -235,7 +235,7 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
               onTap: () => _restorePurchases(context),
             ),
             ListTile(
-              leading: const Icon(Icons.settings_outlined),
+              leading: const Icon(Icons.settings),
               title: Text(l10n.proManageSubscription),
               subtitle: Text(l10n.proManageSubscriptionSubtitle),
               trailing: const Icon(Icons.open_in_new, size: 18),

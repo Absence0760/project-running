@@ -306,7 +306,7 @@ class _GearScreenState extends State<GearScreen> {
               color: theme.colorScheme.surfaceContainerHigh,
               child: Row(
                 children: [
-                  const Icon(Icons.cloud_off_outlined, size: 16),
+                  const Icon(Icons.cloud_off, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

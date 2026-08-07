@@ -1343,7 +1343,7 @@ class _WelcomeEmpty extends StatelessWidget {
                 ),
                 OutlinedButton.icon(
                   onPressed: onImport,
-                  icon: const Icon(Icons.upload_file_outlined),
+                  icon: const Icon(Icons.upload_file),
                   label: Text(l10n.dashboardImportRuns),
                 ),
               ],

@@ -436,7 +436,7 @@ class _Empty extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              tab == 0 ? Icons.groups : Icons.person_add_alt_1,
+              tab == 0 ? Icons.groups_outlined : Icons.person_add_alt_1,
               size: 48,
               color: theme.colorScheme.outline,
             ),

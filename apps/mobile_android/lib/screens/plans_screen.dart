@@ -319,7 +319,7 @@ class _PlanTile extends StatelessWidget {
               spacing: 12,
               runSpacing: 4,
               children: [
-                _meta(theme, Icons.flag, goalEventLabel(
+                _meta(theme, Icons.flag_outlined, goalEventLabel(
                     goalEventFromDb(plan.goalEvent))),
                 if (plan.goalTimeSeconds != null)
                   _meta(theme, Icons.timer, fmtHms(plan.goalTimeSeconds)),

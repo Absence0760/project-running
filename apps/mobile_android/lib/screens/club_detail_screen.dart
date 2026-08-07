@@ -881,7 +881,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     final showCreate = c.isEventOrganiser;
     if (_upcoming.isEmpty) {
       return EmptyState(
-        icon: Icons.event_outlined,
+        icon: Icons.event,
         title: showCreate
             ? AppLocalizations.of(context).clubDetailNoEventsAdmin
             : AppLocalizations.of(context).clubDetailNoEvents,
@@ -1378,7 +1378,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         widget.routeStore != null;
     if (_routes.isEmpty) {
       return EmptyState(
-        icon: Icons.route_outlined,
+        icon: Icons.route,
         title: canBuild
             ? AppLocalizations.of(context).clubDetailRoutesEmptyBuild
             : c.isAdmin

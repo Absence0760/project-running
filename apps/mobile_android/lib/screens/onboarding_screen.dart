@@ -246,7 +246,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       (
         value: 'followers',
-        icon: Icons.group_outlined,
+        icon: Icons.group,
         title: l10n.privacyFollowersTitle,
         subtitle: l10n.privacyFollowersSubtitle,
       ),
