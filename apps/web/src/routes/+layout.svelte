@@ -668,8 +668,7 @@
 		cursor: pointer;
 		flex-shrink: 0;
 		align-self: flex-end;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			color var(--transition-fast);
 	}
 	.collapse-toggle:hover {
@@ -734,8 +733,7 @@
 		font-size: 0.9rem;
 		font-weight: 500;
 		color: var(--sidebar-text-muted);
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			color var(--transition-fast),
 			transform var(--transition-fast);
 		border: none;
@@ -755,8 +753,7 @@
 		background: color-mix(in srgb, var(--accent) 14%, transparent);
 		color: var(--accent-ink);
 		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
-		transition:
-			background var(--transition-base),
+		transition: background var(--transition-base),
 			color var(--transition-base),
 			transform var(--transition-base),
 			box-shadow var(--transition-base);
@@ -853,8 +850,7 @@
 		border-radius: var(--radius-md);
 		cursor: pointer;
 		text-align: start;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			border-color var(--transition-fast);
 	}
 	.profile-btn:hover {

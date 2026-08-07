@@ -1785,8 +1785,7 @@
 		font-variant-numeric: tabular-nums;
 		cursor: pointer;
 		text-decoration: none;
-		transition:
-			color var(--transition-fast),
+		transition: color var(--transition-fast),
 			border-color var(--transition-fast),
 			background var(--transition-fast);
 	}

@@ -364,8 +364,7 @@
 		cursor: pointer;
 		font-size: 0.9rem;
 		font-weight: 600;
-		transition:
-			color var(--transition-fast),
+		transition: color var(--transition-fast),
 			border-color var(--transition-fast),
 			background var(--transition-fast);
 	}

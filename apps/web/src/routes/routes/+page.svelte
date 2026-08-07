@@ -652,8 +652,7 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
-		transition:
-			border-color var(--transition-fast),
+		transition: border-color var(--transition-fast),
 			box-shadow var(--transition-fast);
 		text-decoration: none;
 		color: inherit;
@@ -694,8 +693,7 @@
 		border-radius: 50%;
 		color: rgba(255, 255, 255, 0.7);
 		cursor: pointer;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			color var(--transition-fast),
 			transform var(--transition-fast);
 	}

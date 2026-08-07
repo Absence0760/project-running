@@ -309,8 +309,7 @@
 		cursor: pointer;
 		flex-shrink: 0;
 		position: relative;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			color var(--transition-fast);
 	}
 	.bell-btn:focus { outline: none; }

@@ -466,8 +466,7 @@
 		font-weight: 500;
 		color: var(--color-text-secondary);
 		cursor: pointer;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			color var(--transition-fast);
 	}
 	.activity-btn .material-symbols {
@@ -578,8 +577,7 @@
 		padding: var(--space-lg);
 		color: inherit;
 		text-decoration: none;
-		transition:
-			border-color var(--transition-fast),
+		transition: border-color var(--transition-fast),
 			box-shadow var(--transition-fast),
 			transform var(--transition-fast);
 	}
@@ -728,8 +726,7 @@
 		cursor: pointer;
 		padding: var(--space-xs) var(--space-md);
 		border-radius: var(--radius-md);
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			border-color var(--transition-fast),
 			color var(--transition-fast);
 	}

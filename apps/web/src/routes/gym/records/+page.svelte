@@ -166,8 +166,7 @@
 		text-decoration: none;
 		color: inherit;
 		height: 100%;
-		transition:
-			border-color var(--transition-fast),
+		transition: border-color var(--transition-fast),
 			box-shadow var(--transition-fast);
 	}
 	.record-card:hover {

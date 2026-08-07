@@ -713,7 +713,7 @@ input[type='radio'] {
 
 /* Smooth theme transition */
 body, .sidebar, .login-card {
-	transition: background-color 0.2s ease, color 0.2s ease;
+	transition: background-color var(--transition-base), color var(--transition-base);
 }
 
 /*

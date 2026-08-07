@@ -1188,8 +1188,7 @@
 		border-radius: 50%;
 		color: var(--color-text-tertiary);
 		cursor: pointer;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			color var(--transition-fast);
 	}
 

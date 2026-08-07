@@ -484,8 +484,7 @@
 		padding: var(--space-md) var(--space-lg);
 		text-decoration: none;
 		color: inherit;
-		transition:
-			border-color var(--transition-fast),
+		transition: border-color var(--transition-fast),
 			box-shadow var(--transition-base);
 	}
 	.workout-row:hover {

@@ -2328,7 +2328,7 @@
 		border-radius: var(--radius-lg);
 		color: inherit;
 		text-decoration: none;
-		transition: border-color 0.15s ease, background 0.15s ease;
+		transition: border-color var(--transition-fast), background var(--transition-fast);
 	}
 	.coach-link:hover {
 		border-color: var(--color-primary);

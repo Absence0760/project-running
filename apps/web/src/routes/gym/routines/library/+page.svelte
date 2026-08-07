@@ -143,7 +143,7 @@
 		text-decoration: none;
 		color: inherit;
 		background: var(--color-surface);
-		transition: border-color 0.15s ease;
+		transition: border-color var(--transition-fast);
 	}
 	.routine-card:hover {
 		border-color: var(--color-primary);

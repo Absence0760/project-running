@@ -397,8 +397,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-		transition:
-			transform var(--transition-base),
+		transition: transform var(--transition-base),
 			box-shadow var(--transition-base),
 			border-color var(--transition-base);
 		color: inherit;
