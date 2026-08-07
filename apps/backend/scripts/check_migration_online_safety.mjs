@@ -44,7 +44,12 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // user_profiles.display_name. Neither table is in GUARDED_TABLES, and the
 // migration takes the NOT VALID + VALIDATE two-step anyway, so the scanner
 // passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270502';
+// 20270503: length CHECKs on the remaining 52 user-writable free-text columns,
+// plus the three VALIDATEs 20261124_001 never emitted. None of the 26 tables it
+// touches is in GUARDED_TABLES, every ADD takes the NOT VALID two-step, and a
+// bare VALIDATE takes SHARE UPDATE EXCLUSIVE (reads and writes pass), so the
+// scanner passed it with zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270503';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

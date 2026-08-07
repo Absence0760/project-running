@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatPace, formatDistance, sourceLabel } from '$lib/core/mock-data';
+	import { sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDateShort, formatDuration, activeFormatLocale } from '$lib/format/time';
 	import {
 		fetchRunsForDashboard,
@@ -1668,7 +1669,7 @@
 								</div>
 								<div class="run-meta">
 									<span class="run-pace">{formatPace(run.duration_s, run.distance_m)}</span>
-									<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
+									<span class="source-badge" style="background: {sourceColor(run.source)}; color: {sourceInk(run.source)}">{sourceLabel(run.source)}</span>
 								</div>
 							</a>
 						{/each}
@@ -3377,7 +3378,6 @@
 	.source-badge {
 		font-size: 0.65rem;
 		font-weight: 600;
-		color: var(--color-surface);
 		padding: 0.15rem 0.5rem;
 		border-radius: 9999px;
 		text-transform: uppercase;

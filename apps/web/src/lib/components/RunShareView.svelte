@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatPace, formatDistance, sourceLabel } from '$lib/core/mock-data';
+	import { sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDuration } from '$lib/format/time';
 	import { fetchPublicRun, fetchClippedTrackForRun, fetchTrackByPath } from '$lib/core/data';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -139,7 +140,7 @@
 		<span class="meta-sep">&middot;</span>
 		<span>{formatPace(run.duration_s, run.distance_m)}</span>
 		<span class="meta-sep">&middot;</span>
-		<span class="source-badge" style="background: {sourceColor(run.source)}">{sourceLabel(run.source)}</span>
+		<span class="source-badge" style="background: {sourceColor(run.source)}; color: {sourceInk(run.source)}">{sourceLabel(run.source)}</span>
 		{#if canReport}
 			<button
 				type="button"
@@ -268,7 +269,6 @@
 	.source-badge {
 		font-size: var(--font-size-section-label);
 		font-weight: 600;
-		color: white;
 		padding: 0.15rem 0.5rem;
 		border-radius: 9999px;
 		text-transform: uppercase;

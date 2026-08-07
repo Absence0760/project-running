@@ -17,6 +17,16 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(resolve(__dirname, '../app.css'), 'utf-8');
 
+import { RUN_SOURCES, sourceColor, sourceInk } from './runs/source_badge.js';
+
+/** The four surfaces that render a `.source-badge`. */
+const BADGE_SURFACES = [
+	'routes/runs/+page.svelte',
+	'routes/dashboard/+page.svelte',
+	'lib/components/PeriodSummary.svelte',
+	'lib/components/RunShareView.svelte',
+];
+
 function relativeLuminance(hex: string): number {
 	const n = parseInt(hex.slice(1), 16);
 	const channels = [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff].map((c) => {
@@ -1863,4 +1873,97 @@ test('the surfaces that mark a modality still read the section pairs', () => {
 			`the nav item for ${section} must name its --section-${section} pair, not carry a hex.`,
 		);
 	}
+});
+
+// The eight `sourceColor` run-source badge fills (§ 549).
+//
+// These are the one family of paints in the app that is deliberately
+// theme-INDEPENDENT — several are provider brand hues, and a Strava badge that
+// changed colour with the theme would stop reading as Strava's mark. That makes
+// them the one family where the foreground CANNOT come from a theme token, and
+// the four call sites had each guessed: two spelled `color: white`, two spelled
+// `var(--color-surface)`, which flips. Measured against the grounds they really
+// paint, six of eight failed 4.5:1 in light and five of eight in dark.
+//
+// `sourceInk` derives the foreground from the fill instead. This recomputes the
+// pairing rather than restating a number, per § 534 — the figures below are the
+// output of the rule, not an assertion about a value someone typed.
+test('every source badge fill carries a foreground at AA', () => {
+	const worst: Array<[string, number]> = [];
+	for (const source of RUN_SOURCES) {
+		const fill = sourceColor(source);
+		const ink = sourceInk(source);
+		const ratio = contrastRatio(fill, ink);
+		worst.push([source, ratio]);
+		assert.ok(
+			ratio >= 4.5,
+			`source badge "${source}" (${fill} on ${ink}) is ${ratio.toFixed(3)}:1, under the ` +
+				`4.5:1 its 10.4-11.2px/600 label owes. No theme token can fix this — the fill ` +
+				`does not change with the theme, so the fill itself has to move.`,
+		);
+	}
+	// Population: a typo'd RUN_SOURCES that iterated nothing would satisfy the
+	// loop above while proving nothing at all.
+	assert.equal(worst.length, 8, 'expected all eight run sources to be measured');
+});
+
+test('the badge foreground is chosen, not fixed', () => {
+	// Both inks must actually be reachable. If every fill resolved to the same
+	// foreground, `sourceInk` would be a constant with extra steps, and the next
+	// fill added would inherit a choice nobody made.
+	const inks = new Set(RUN_SOURCES.map((s) => sourceInk(s)));
+	assert.equal(
+		inks.size,
+		2,
+		`sourceInk resolves to ${inks.size} distinct value(s) across the eight fills; it is ` +
+			`supposed to pick per fill.`,
+	);
+});
+
+test('no badge fill sits near enough the floor to be rounded over it', () => {
+	// § 546: a value that clears a threshold by 0.4% has not cleared it. Garmin
+	// shipped at #007CC3, whose best possible foreground was 4.496:1 — a figure
+	// that reads as passing at one decimal place and is not.
+	for (const source of RUN_SOURCES) {
+		const ratio = contrastRatio(sourceColor(source), sourceInk(source));
+		assert.ok(
+			ratio >= 4.55,
+			`source badge "${source}" is ${ratio.toFixed(3)}:1 — over 4.5 but inside the margin ` +
+				`where a renderer's rounding decides the outcome. Move the fill, not the guard.`,
+		);
+	}
+});
+
+test('no source badge dims itself with opacity', () => {
+	// The pairing above is computed on the fill and the ink as authored. An
+	// `opacity` on the badge composites BOTH over the card, moving each toward
+	// the page and cancelling most of the margin — /runs shipped 0.92, which is
+	// where the register's 2.353:1 came from and why this looked like a colour
+	// problem for two rounds. A future editor re-adding it would undo the fix
+	// without touching a colour, so the ban is what gets pinned.
+	const root = resolve(__dirname, '..');
+	const offenders: string[] = [];
+	for (const file of BADGE_SURFACES) {
+		const src = readFileSync(join(root, file), 'utf-8');
+		const block = /\.source-badge\s*\{([\s\S]*?)\}/.exec(src);
+		assert.ok(block, `${file} no longer styles .source-badge — move this guard with it.`);
+		const decls = block[1].replace(/\/\*[\s\S]*?\*\//g, '');
+		if (/\bopacity\s*:/.test(decls)) offenders.push(file);
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		'these files dim .source-badge with opacity, which washes its label and fill ' +
+			'together and drops the pair below AA',
+	);
+});
+
+test('the opacity scan reads the badge block it claims to', () => {
+	// Population + direction, per § 534: the matcher must find all four blocks,
+	// and must actually flag a planted opacity rather than passing over prose.
+	assert.equal(BADGE_SURFACES.length, 4);
+	const planted = /\.source-badge\s*\{([\s\S]*?)\}/.exec('.source-badge { opacity: 0.92; }');
+	assert.ok(planted && /\bopacity\s*:/.test(planted[1]));
+	const commented = /\.source-badge\s*\{([\s\S]*?)\}/.exec('.source-badge { /* opacity: 1 */ }');
+	assert.ok(commented && !/\bopacity\s*:/.test(commented[1].replace(/\/\*[\s\S]*?\*\//g, '')));
 });
