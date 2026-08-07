@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { formatDistance, formatPace, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatDistance, formatPace, sourceLabel } from '$lib/core/mock-data';
+	import { sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDuration, activeFormatLocale } from '$lib/format/time';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatISO } from '$lib/training/training';
@@ -309,7 +310,7 @@
 						<span class="run-date">{formatDate(run.started_at)}</span>
 						<span
 							class="source-badge"
-							style="background: {sourceColor(run.source)}"
+							style="background: {sourceColor(run.source)}; color: {sourceInk(run.source)}"
 							>{sourceLabel(run.source)}</span
 						>
 						<span class="run-dist">{formatDistance(run.distance_m)}</span>
@@ -455,7 +456,6 @@
 		display: inline-block;
 		padding: 0.1rem 0.4rem;
 		border-radius: var(--radius-sm);
-		color: white;
 		font-size: var(--font-size-section-label);
 		font-weight: 600;
 		align-self: center;

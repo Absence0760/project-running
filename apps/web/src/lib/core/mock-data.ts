@@ -124,16 +124,3 @@ export function sourceLabel(source: RunSource): string {
 	return labels[source];
 }
 
-export function sourceColor(source: RunSource): string {
-	const colors: Record<RunSource, string> = {
-		app: '#1E88E5',
-		watch: '#0EA5E9',
-		healthkit: '#E91E63',
-		healthconnect: '#4CAF50',
-		strava: '#FC4C02',
-		garmin: '#007CC3',
-		parkrun: '#D6255B',
-		race: '#9C27B0',
-	};
-	return colors[source];
-}

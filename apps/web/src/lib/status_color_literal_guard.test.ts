@@ -657,11 +657,15 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 	// Per-source badge hues. `brand-hue` and not `brand-mark`: nothing about
 	// Strava's orange requires it to be OUR badge fill, so these owe their bar
 	// like any other paint — and they are carrying an OPEN DEBT below.
-	'lib/core/mock-data.ts': {
+	'lib/runs/source_badge.ts': {
 		'1E88E5': [1, 'brand-hue'], '0EA5E9': [1, 'brand-hue'],
-		E91E63: [1, 'brand-hue'], '4CAF50': [1, 'brand-hue'],
-		FC4C02: [1, 'brand-hue'], '007CC3': [1, 'brand-hue'],
+		E3165C: [1, 'brand-hue'], '4CAF50': [1, 'brand-hue'],
+		FC4C02: [1, 'brand-hue'], '007AC0': [1, 'brand-hue'],
 		D6255B: [1, 'brand-hue'], '9C27B0': [1, 'brand-hue'],
+		// The two foregrounds `sourceInk` picks between. Frozen literals rather
+		// than tokens BECAUSE the fills are theme-independent: a token would
+		// flip in dark and re-open the debt these entries used to carry.
+		FFFFFF: [1, 'fixed-canvas'], '1B1628': [1, 'fixed-canvas'],
 	},
 	// The two rasterised-share-card palettes, with every ink's measured ratio
 	// and its ground recorded in the module itself. Five card builders used to
@@ -725,32 +729,26 @@ const REGISTER: Record<string, Record<string, [number, LiteralRole]>> = {
 // dashboard's `.gym-footer-cta` is real TEXT in #4E7C5E and owed 4.5:1 at
 // 4.346 light / 3.949 dark, and ultrasignup + chronotrack fail in DARK.
 //
-// NOT empty as of § 546. Widening the register to `.ts` put `sourceColor`'s
-// eight per-source hues in scope, and measuring where they actually land found
-// a live failure: each is an OPAQUE `.source-badge` fill with real text on it
-// (`color: white` on /share/run + PeriodSummary, `var(--color-surface)` on
-// /dashboard + /runs) at 0.65-0.7 rem weight 600 — 10.4-11.2 px, which is not
-// WCAG large text, so AA's 4.5:1 applies. On the fills themselves, SIX of the
-// eight fail with white ink (watch 2.771, healthconnect 2.780, strava 3.402,
-// app 3.679, healthkit 4.347, garmin 4.496); and against
-// `var(--color-surface)` there is no theme where all eight pass — light fails
-// the same six, dark fails race 2.564, parkrun 3.290, garmin 3.595, healthkit
-// 3.718. /runs is worse again because its badge carries `opacity: 0.92`, which
-// § 522 warned about exactly: race drops to 2.353 on dark, healthconnect to
-// 2.559 on light.
+// EMPTY again as of § 549, which closed the one entry § 546 opened. That entry
+// read "2.353:1 (#241B3D ink on #9C27B0 fill, both under the badge's own opacity
+// 0.92 over #241B3D)" and its diagnosis — that a fixed mid-tone fill owing 4.5:1
+// in TWO themes cannot be paid by one ink — turned out to rest on a premise that
+// was itself the bug. The fills are theme-INDEPENDENT; only the INK flipped,
+// because two of the four call sites spelled `var(--color-surface)`. A paint
+// that does not follow the theme has one correct foreground, so `sourceInk`
+// derives it from the fill (§ 481's IdentityAvatar rule) and the two-theme
+// problem stops existing.
 //
-// This is § 529's defect one surface over — an identity hue asked to be both
-// the fill and the ground for its own ink — and § 541's conclusion applies: a
-// mark owing 4.5:1 in two themes on a fixed mid-tone fill cannot be paid by one
-// ink, so the fix is the shape (hue as a tint, `-ink` rung as the text) and not
-// a value. It is recorded rather than half-fixed because the five call sites are
-// /dashboard, /runs, /runs/[id], PeriodSummary and RunShareView, all held by
-// other agents this round — the same reason § 531 gave for leaving its two recap
-// copy-links standing, and the same register that made them get closed.
-const OPEN_DEBTS: Record<string, string> = {
-	'lib/core/mock-data.ts':
-		'2.353:1 (#241B3D ink on #9C27B0 fill, both under the badge\'s own opacity 0.92 over #241B3D, .source-badge on /runs in dark)',
-};
+// What remained after that was 0.176:1 of shortfall on two fills and the
+// `opacity: 0.92` on /runs. The opacity was the larger half and the reason the
+// debt read as a colour problem: it composites the label AND the fill over the
+// card together, so it cost ~0.5:1 on every badge on that page while changing
+// no value anyone could grep. Deleting it, plus a hue-preserving darkening of
+// healthkit (#E91E63 → #E3165C) and garmin (#007CC3 → #007AC0, whose best
+// possible ink reached 4.496:1 — § 546's "clears it by 0.4%" case, in the
+// original), leaves the worst pairing at 4.620:1 in both themes.
+// `contrast_guard.test.ts` recomputes that and bans the opacity's return.
+const OPEN_DEBTS: Record<string, string> = {};
 
 // The figure format the entries above must carry, pinned in both directions so
 // the rule survives the set being empty — § 511's point about a floor read out
@@ -848,7 +846,7 @@ test('the open-debt set is exactly what is recorded', () => {
 	// cannot quietly reclassify a new failure as an old one. § 529 emptied it;
 	// § 546 opened one entry when widening the register to `.ts` brought the
 	// per-source badge fills into scope.
-	assert.deepEqual(Object.keys(OPEN_DEBTS).sort(), ['lib/core/mock-data.ts']);
+	assert.deepEqual(Object.keys(OPEN_DEBTS).sort(), []);
 	const FIGURE = /^\d+\.\d{3}:1 \(.+\)$/;
 	for (const [rel, figure] of Object.entries(OPEN_DEBTS)) {
 		assert.match(
