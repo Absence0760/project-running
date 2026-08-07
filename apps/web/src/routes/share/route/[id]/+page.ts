@@ -2,12 +2,12 @@ import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
 import { lookupSharedRoute } from '$lib/share/share_route_lookup';
+import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 
 // Canonical host for the absolute <link rel="canonical"> + og:url +
 // JSON-LD URLs. Same source + fallback as /sitemap.xml so the host
 // stays consistent across the indexable surface (preview vs prod set
 // PUBLIC_SITE_URL; local falls through to the prod host).
-const DEFAULT_SITE_URL = 'https://threkir.com';
 
 // Per-request SSR via apps/web/lambda/share-route in production —
 // CloudFront routes /share/route/* to the Lambda Function URL, which

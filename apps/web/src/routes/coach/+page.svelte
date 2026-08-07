@@ -416,8 +416,7 @@
 		border-radius: var(--radius-md);
 		text-decoration: none;
 		color: inherit;
-		transition:
-			border-color var(--transition-fast),
+		transition: border-color var(--transition-fast),
 			background var(--transition-fast),
 			transform var(--transition-fast);
 	}

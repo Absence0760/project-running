@@ -299,9 +299,8 @@
 		gap: var(--space-md);
 	}
 	.list li {
-		transition:
-			transform 0.15s ease,
-			box-shadow 0.15s ease;
+		transition: transform var(--transition-fast),
+			box-shadow var(--transition-fast);
 	}
 	.list li:hover {
 		transform: translateY(-2px);

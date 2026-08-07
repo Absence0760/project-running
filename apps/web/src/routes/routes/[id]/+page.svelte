@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 	import { onMount } from 'svelte';
 	import { formatDistance } from '$lib/core/mock-data';
 	import { toGpx, toKml, downloadFile } from '$lib/routes/gpx';
@@ -41,7 +42,7 @@
 	// sitemap-listed, anon-readable copy. No own SEO meta otherwise:
 	// the app shell is behind the SPA and not meant to be indexed.
 	let canonicalUrl = $derived(
-		buildRouteShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', data.id)
+		buildRouteShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, data.id)
 	);
 
 	let route = $state<Route | null>(null);
@@ -1187,8 +1188,7 @@
 		border-radius: 50%;
 		color: var(--color-text-tertiary);
 		cursor: pointer;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			color var(--transition-fast);
 	}
 

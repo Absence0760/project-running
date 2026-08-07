@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 	import { page } from '$app/stores';
 	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -53,7 +54,7 @@
 	// crawlable /share/profile/[id] twin so search engines consolidate
 	// ranking signal there rather than splitting it across two URLs.
 	let canonicalUrl = $derived(
-		buildProfileShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', userId)
+		buildProfileShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, userId)
 	);
 	let profile = $state<ProfileSummary | null>(null);
 	let loadError = $state<string | null>(null);
@@ -1784,8 +1785,7 @@
 		font-variant-numeric: tabular-nums;
 		cursor: pointer;
 		text-decoration: none;
-		transition:
-			color var(--transition-fast),
+		transition: color var(--transition-fast),
 			border-color var(--transition-fast),
 			background var(--transition-fast);
 	}

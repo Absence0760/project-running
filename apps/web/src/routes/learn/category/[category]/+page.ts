@@ -3,10 +3,10 @@ import { error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/public';
 import { guidesByCategory } from '$lib/learn/guides';
 import { CATEGORIES, getCategory } from '$lib/learn/categories';
+import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 
 export const prerender = true;
 
-const DEFAULT_SITE_URL = 'https://threkir.com';
 
 export const entries: EntryGenerator = () => CATEGORIES.map((c) => ({ category: c.id }));
 

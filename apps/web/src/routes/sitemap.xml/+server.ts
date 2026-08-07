@@ -11,6 +11,7 @@ import {
 } from '$lib/share/sitemap';
 import { listGuides } from '$lib/learn/guides';
 import { CATEGORIES } from '$lib/learn/categories';
+import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 
 // Build-time sitemap. `adapter-static` runs this once during the
 // production build because of `prerender = true`; the resulting
@@ -26,7 +27,6 @@ import { CATEGORIES } from '$lib/learn/categories';
 // unset so the local prerender still emits sensible URLs.
 export const prerender = true;
 
-const DEFAULT_SITE_URL = 'https://threkir.com';
 
 // Sitemap spec caps at 50k URLs per file. Our public counts are
 // nowhere near that; cap each list defensively at 10k as a guard

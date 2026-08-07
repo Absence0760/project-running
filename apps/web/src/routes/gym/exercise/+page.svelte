@@ -263,8 +263,7 @@
 		background: var(--color-surface);
 		text-decoration: none;
 		color: inherit;
-		transition:
-			border-color var(--transition-fast),
+		transition: border-color var(--transition-fast),
 			box-shadow var(--transition-fast);
 	}
 	.row-link:hover {

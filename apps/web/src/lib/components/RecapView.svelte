@@ -332,9 +332,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		transition:
-			transform 0.15s ease,
-			border-color 0.15s ease;
+		transition: transform var(--transition-fast),
+			border-color var(--transition-fast);
 	}
 	.card:hover {
 		transform: translateY(-2px);
@@ -469,9 +468,8 @@
 		align-items: center;
 		text-align: center;
 		gap: 0.3rem;
-		transition:
-			transform 0.15s ease,
-			border-color 0.15s ease;
+		transition: transform var(--transition-fast),
+			border-color var(--transition-fast);
 	}
 	.badge:hover {
 		transform: translateY(-2px);

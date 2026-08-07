@@ -136,7 +136,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		transition: transform 0.15s ease;
+		transition: transform var(--transition-fast);
 	}
 	.card:hover { transform: translateY(-2px); border-color: var(--color-primary); }
 	.card header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }

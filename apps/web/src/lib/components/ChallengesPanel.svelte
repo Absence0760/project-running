@@ -179,10 +179,9 @@
 		border: 1px solid var(--color-border);
 		text-decoration: none;
 		color: inherit;
-		transition:
-			transform 0.15s ease,
-			border-color 0.15s ease,
-			box-shadow 0.15s ease;
+		transition: transform var(--transition-fast),
+			border-color var(--transition-fast),
+			box-shadow var(--transition-fast);
 	}
 	.mini:hover {
 		transform: translateY(-2px);

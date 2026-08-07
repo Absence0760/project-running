@@ -53,6 +53,7 @@ import {
 	renderShareWorkoutHeadTags,
 } from '../../../src/lib/share/share_workout_meta';
 import { injectEntityHead } from '../../../src/lib/share/entity_spa_shell';
+import { DEFAULT_SITE_URL } from '../../../src/lib/core/site_url';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -131,7 +132,7 @@ export const handler = async (
 		const config: Config = {
 			supabaseUrl: process.env.PUBLIC_SUPABASE_URL ?? '',
 			supabaseAnonKey: process.env.PUBLIC_SUPABASE_ANON_KEY ?? '',
-			siteUrl: process.env.PUBLIC_SITE_URL ?? 'https://threkir.com',
+			siteUrl: process.env.PUBLIC_SITE_URL ?? DEFAULT_SITE_URL,
 		};
 		const path = event.rawPath || '/';
 		for (const route of ROUTES) {

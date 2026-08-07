@@ -132,3 +132,45 @@ test('every var(--token) reference resolves to a defined custom property', () =>
 			offenders.join('\n'),
 	);
 });
+
+/**
+ * `--transition-fast` (150ms ease) and `--transition-base` (200ms ease) are the
+ * two motion rungs `app.css` declares. Sixteen declarations spelled a rung's
+ * value out by hand instead — an identical value, so routing them onto the
+ * token changed nothing visually and made the rung movable.
+ *
+ * The ban is narrow on purpose: only the exact `<rung duration> ease` form,
+ * because the token carries its easing. `transition: width 150ms linear` shares
+ * the duration and is NOT the same rung — swapping it would change the curve —
+ * and it is left alone. Off-rung durations (80, 100, 120, 180, 250, 400 ms) are
+ * a design call about how many rungs there should be, not drift, and this does
+ * not touch them.
+ */
+test('no transition spells out a rung the tokens already carry', () => {
+	const offenders: string[] = [];
+	let scanned = 0;
+
+	for (const path of walkFiles(resolve(__dirname, '..'))) {
+		if (path.endsWith('app.css')) continue; // declares the rungs
+		const source = readFileSync(path, 'utf-8');
+		scanned++;
+		for (const m of source.matchAll(/transition:\s*([^;]+);/g)) {
+			const body = m[1];
+			if (!/\b(0\.15s|150ms|0\.2s|200ms)\s+ease\b/.test(body)) continue;
+			const line = source.slice(0, m.index ?? 0).split('\n').length;
+			offenders.push(`${path.split('/').slice(-2).join('/')}:${line}  ${body.trim().slice(0, 60)}`);
+		}
+	}
+
+	// Population: §534 — a walker that found nothing must not pass for that.
+	assert.ok(scanned > 100, `scanned only ${scanned} style files — walker broken?`);
+
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		'these spell a motion rung by hand. Use var(--transition-fast) or ' +
+			'var(--transition-base) — the value is identical, and the token is ' +
+			'what makes the rung movable. A different easing at the same duration ' +
+			'is a different rung and is not flagged.',
+	);
+});

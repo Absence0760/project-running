@@ -2544,8 +2544,7 @@
 		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: inherit;
-		transition:
-			background var(--transition-fast),
+		transition: background var(--transition-fast),
 			border-color var(--transition-fast),
 			box-shadow var(--transition-fast);
 	}
@@ -2857,8 +2856,7 @@
 		font: inherit;
 		color: inherit;
 		box-shadow: var(--shadow-sm);
-		transition:
-			border-color var(--transition-fast),
+		transition: border-color var(--transition-fast),
 			box-shadow var(--transition-fast),
 			transform var(--transition-fast);
 	}
@@ -3015,8 +3013,7 @@
 		display: flex;
 		flex-direction: column;
 		box-shadow: var(--shadow-sm);
-		transition:
-			box-shadow var(--transition-base),
+		transition: box-shadow var(--transition-base),
 			border-color var(--transition-base),
 			transform var(--transition-base);
 	}
