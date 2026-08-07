@@ -31,10 +31,16 @@
 -- The caps are the ladder § 545 established — 60/80/120 for a name, 280–600 for
 -- a note, 2000 for prose — and where a composer already states a number, the
 -- constraint is at or above it, so nothing a user can currently type is
--- rejected. The three that are exactly a client's number are deliberate:
+-- rejected. The ones that are exactly a client's number are deliberate:
 -- `reports.notes` / `reports.resolution` at 600 (the report dialog's own
--- `maxlength`), and `donations.display_name` / `message` at 80 / 280 (the
--- Edge Function's existing clamp, which until now was the only bound on either).
+-- `maxlength`), `donations.display_name` / `message` at 80 / 280 (the Edge
+-- Function's existing clamp, which until now was the only bound on either), and
+-- `events.discipline` / `session_plans.discipline` at 60 — both composers state
+-- 60, and this file first shipped them at 40. That is the § 545 failure in the
+-- direction that hurts: a constraint BELOW the composer hands a user a 23514
+-- they cannot act on for a value the form invited them to type. It was caught
+-- by `clubs/event-discipline-overflow.spec.ts`, whose fixture is now tied to
+-- the cap for the same reason.
 --
 -- Run before applying to a populated instance — every count must be 0, or the
 -- VALIDATE below fails and the offending rows need truncating first:
@@ -49,7 +55,7 @@
 --   select 'plan_workouts.pace_zone', count(*) from plan_workouts where char_length(pace_zone) > 40;
 --   select 'events.title', count(*) from events where char_length(title) > 120;
 --   select 'events.meet_label', count(*) from events where char_length(meet_label) > 120;
---   select 'events.discipline', count(*) from events where char_length(discipline) > 40;
+--   select 'events.discipline', count(*) from events where char_length(discipline) > 60;
 --   select 'events.timezone', count(*) from events where char_length(timezone) > 64;
 --   select 'event_results.note', count(*) from event_results where char_length(note) > 500;
 --   select 'event_results.bib', count(*) from event_results where char_length(bib) > 32;
@@ -57,7 +63,7 @@
 --   select 'event_exceptions.reason', count(*) from event_exceptions where char_length(reason) > 500;
 --   select 'event_pricing.currency', count(*) from event_pricing where char_length(currency) > 8;
 --   select 'session_plans.title', count(*) from session_plans where char_length(title) > 120;
---   select 'session_plans.discipline', count(*) from session_plans where char_length(discipline) > 40;
+--   select 'session_plans.discipline', count(*) from session_plans where char_length(discipline) > 60;
 --   select 'session_plans.equipment', count(*) from session_plans where char_length(equipment) > 500;
 --   select 'session_plan_blocks.name', count(*) from session_plan_blocks where char_length(name) > 120;
 --   select 'session_plan_items.movement_name', count(*) from session_plan_items where char_length(movement_name) > 120;
@@ -139,7 +145,7 @@ alter table events
 
 alter table events
   add constraint events_discipline_len_chk
-  check (discipline is null or char_length(discipline) <= 40) not valid;
+  check (discipline is null or char_length(discipline) <= 60) not valid;
 
 alter table events
   add constraint events_timezone_len_chk
@@ -171,7 +177,7 @@ alter table session_plans
 
 alter table session_plans
   add constraint session_plans_discipline_len_chk
-  check (discipline is null or char_length(discipline) <= 40) not valid;
+  check (discipline is null or char_length(discipline) <= 60) not valid;
 
 alter table session_plans
   add constraint session_plans_equipment_len_chk

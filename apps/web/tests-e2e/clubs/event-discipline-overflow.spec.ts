@@ -29,9 +29,15 @@ test.describe('/clubs/[slug]/events/[id] — discipline overflow', () => {
 
 	test('a long unbreakable discipline wraps instead of overflowing the hero', async ({ page }) => {
 		const title = `e2e-class-overflow ${Date.now()}`;
-		// A long single token with no spaces is the worst case.
-		const discipline =
-			'ReformerPilatesWithBreathworkAndProgressiveMyofascialReleaseForDeepRecoverySessions';
+		// A long single token with no spaces is the worst case — and since
+		// § 548 the worst case is bounded: `events_discipline_len_chk` caps the
+		// column at 60, which is what both composers already stated. The fixture
+		// is exactly 60 so it stays the LONGEST value a user can actually store,
+		// rather than an arbitrary longer one the database now rejects. Keep the
+		// two in step: a cap that moves without this moving stops testing the
+		// real limit, and one that moves the other way fails the insert.
+		const discipline = 'ReformerPilatesWithBreathworkAndProgressiveMyofascial';
+		expect(discipline.length).toBeLessThanOrEqual(60);
 		eventId = await insertEvent({
 			club_id: RICHMOND_CLUB_ID,
 			author_id: USER_A.id,
