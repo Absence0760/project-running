@@ -1375,7 +1375,7 @@ class EventDisciplineLabel extends StatelessWidget {
       child: Row(
         children: [
           Icon(Icons.self_improvement,
-              size: 22, color: theme.colorScheme.onSecondaryContainer),
+              size: 20, color: theme.colorScheme.onSecondaryContainer),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

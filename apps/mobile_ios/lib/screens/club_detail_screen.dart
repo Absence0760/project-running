@@ -970,7 +970,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                         Row(
                           children: [
                             if (e.row.meetLabel != null) ...[
-                              Icon(Icons.place, size: 13,
+                              Icon(Icons.place, size: 14,
                                   color: theme.colorScheme.outline),
                               const SizedBox(width: 3),
                               Expanded(
@@ -984,7 +984,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                                 ),
                               ),
                             ] else
-                              Icon(Icons.event, size: 13,
+                              Icon(Icons.event, size: 14,
                                   color: theme.colorScheme.outline),
                             Text(
                               AppLocalizations.of(context)

@@ -962,7 +962,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(isPublic ? Icons.public : Icons.lock, size: 13, color: fg),
+          Icon(isPublic ? Icons.public : Icons.lock, size: 14, color: fg),
           const SizedBox(width: 4),
           Text(
             isPublic ? l10n.gymPublic : l10n.gymPrivate,

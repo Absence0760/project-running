@@ -157,7 +157,7 @@ class CurrentWeekStrip extends StatelessWidget {
               Align(
                 alignment: Alignment.bottomRight,
                 child: Icon(Icons.check_circle,
-                    size: 11, color: theme.colorScheme.tertiary),
+                    size: 14, color: theme.colorScheme.tertiary),
               ),
           ],
         ],

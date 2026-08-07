@@ -221,7 +221,7 @@ class _BadgeTile extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, size: 40, color: tierColor),
+                    Icon(icon, size: 48, color: tierColor),
                     const SizedBox(height: 6),
                     Text(
                       label,

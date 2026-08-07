@@ -574,7 +574,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: fg),
+            Icon(icon, size: 14, color: fg),
             const SizedBox(width: 4),
             Text(
               label,

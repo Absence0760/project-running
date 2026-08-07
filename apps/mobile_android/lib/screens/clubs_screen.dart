@@ -362,7 +362,7 @@ class _ClubTile extends StatelessWidget {
                   if (c.locationLabel != null && c.locationLabel!.isNotEmpty)
                     Row(
                       children: [
-                        Icon(Icons.place, size: 13,
+                        Icon(Icons.place, size: 14,
                             color: theme.colorScheme.outline),
                         const SizedBox(width: 3),
                         Expanded(

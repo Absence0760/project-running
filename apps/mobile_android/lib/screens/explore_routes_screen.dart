@@ -797,7 +797,7 @@ class _RouteCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: theme.colorScheme.outline),
+        Icon(icon, size: 14, color: theme.colorScheme.outline),
         const SizedBox(width: 3),
         Text(
           text,

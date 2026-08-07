@@ -167,7 +167,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     color: theme.colorScheme.primaryContainer,
                                   ),
                                   child: Icon(p.icon,
-                                      size: 60, color: theme.colorScheme.primary),
+                                      size: 64, color: theme.colorScheme.primary),
                                 ),
                                 const SizedBox(height: 32),
                                 Text(

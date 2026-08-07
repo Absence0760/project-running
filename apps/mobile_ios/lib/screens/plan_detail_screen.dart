@@ -1008,7 +1008,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 13, color: theme.colorScheme.outline),
+        Icon(icon, size: 14, color: theme.colorScheme.outline),
         const SizedBox(width: 3),
         Text(text, style: theme.textTheme.bodySmall),
       ],
@@ -1226,7 +1226,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   ? Semantics(
                       label: l10n.planDetailToday,
                       child: Icon(Icons.circle,
-                          size: 6, color: theme.colorScheme.primary),
+                          size: 14, color: theme.colorScheme.primary),
                     )
                   : null,
             ),

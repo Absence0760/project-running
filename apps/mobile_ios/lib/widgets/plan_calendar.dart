@@ -252,7 +252,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
               Align(
                 alignment: Alignment.bottomRight,
                 child: Icon(Icons.check_circle,
-                    size: 11, color: theme.colorScheme.tertiary),
+                    size: 14, color: theme.colorScheme.tertiary),
               ),
           ],
         ],

@@ -4570,11 +4570,11 @@ class FinishedSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 if (synced) ...[
-                  Icon(Icons.cloud_done, color: semantic.success, size: 36),
+                  Icon(Icons.cloud_done, color: semantic.success, size: 24),
                   const SizedBox(height: 4),
                   Text(l10n.runSynced),
                 ] else if (syncError != null) ...[
-                  Icon(Icons.cloud_off, size: 36, color: semantic.warning),
+                  Icon(Icons.cloud_off, size: 24, color: semantic.warning),
                   const SizedBox(height: 4),
                   Text(syncError!,
                       style: TextStyle(color: semantic.warning)),
@@ -4755,7 +4755,7 @@ class _StatsOverlay extends StatelessWidget {
                         ),
                         child: Icon(
                           Icons.delete_outline,
-                          size: 26,
+                          size: 24,
                           color: theme.colorScheme.outline,
                         ),
                       ),
@@ -4785,7 +4785,7 @@ class _StatsOverlay extends StatelessWidget {
                         child: Center(
                           child: Icon(
                             paused ? Icons.play_arrow : Icons.pause,
-                            size: 32,
+                            size: 24,
                             color: paused
                                 ? semantic.onSuccess
                                 : semantic.onWarning,
@@ -4826,7 +4826,7 @@ class _StatsOverlay extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.flag_outlined,
-                            size: 28,
+                            size: 24,
                             color: theme.colorScheme.primary,
                           ),
                           if (lapCount > 0)

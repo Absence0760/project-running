@@ -461,7 +461,7 @@ class _ImportScreenState extends State<ImportScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.directions_run,
-                            color: Color(0xFFFC4C02), size: 28),
+                            color: Color(0xFFFC4C02), size: 24),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -523,7 +523,7 @@ class _ImportScreenState extends State<ImportScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(Icons.favorite,
-                            color: theme.colorScheme.primary, size: 28),
+                            color: theme.colorScheme.primary, size: 24),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -604,7 +604,7 @@ class _ImportScreenState extends State<ImportScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(Icons.table_chart_outlined,
-                            color: theme.colorScheme.tertiary, size: 28),
+                            color: theme.colorScheme.tertiary, size: 24),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -665,7 +665,7 @@ class _ImportScreenState extends State<ImportScreen> {
                         ),
                         child: Icon(Icons.unarchive_outlined,
                             color: AppSemanticColors.of(context).success,
-                            size: 28),
+                            size: 24),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

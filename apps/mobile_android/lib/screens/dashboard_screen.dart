@@ -1607,7 +1607,7 @@ class _TargetRow extends StatelessWidget {
           children: [
             Icon(
               t.complete ? Icons.check_circle : Icons.trending_up,
-              size: 12,
+              size: 14,
               color: accent,
             ),
             const SizedBox(width: 4),
@@ -1676,7 +1676,7 @@ class _PbRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Icon(icon, color: theme.colorScheme.primary, size: 22),
+        Icon(icon, color: theme.colorScheme.primary, size: 20),
         const SizedBox(width: 12),
         Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
         Column(
@@ -1783,7 +1783,7 @@ class _PeriodStatCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.terrain,
-                  size: 12,
+                  size: 14,
                   color: theme.colorScheme.outline,
                 ),
                 const SizedBox(width: 3),
@@ -1923,7 +1923,7 @@ class _StreakRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Icon(Icons.local_fire_department, color: color, size: 28),
+                  Icon(Icons.local_fire_department, color: color, size: 24),
                   const SizedBox(width: 6),
                   Text(
                     '${state.current}',

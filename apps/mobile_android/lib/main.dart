@@ -104,7 +104,7 @@ void main() async {
               // No Theme above this builder; the surface is hardcoded dark,
               // so take the dark palette's token statically.
               color: AppSemanticColors.dark.warning,
-              size: 32,
+              size: 24,
             ),
             const SizedBox(height: 8),
             const Text(

@@ -205,7 +205,7 @@ class FitnessStat extends StatelessWidget {
       value: value,
       labelTrailing: hasTip
           ? Icon(Icons.info_outline,
-              size: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)
+              size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant)
           : null,
     );
     if (!hasTip) return tile;
