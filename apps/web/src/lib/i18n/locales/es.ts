@@ -4198,6 +4198,8 @@ export const messages = {
 	"safety.kicker": "Seguridad",
 	"safety.emptyHint": "Añade a alguien de confianza: tu pareja, un amigo o un familiar. Recibirá un correo después de cada carrera, para que nadie tenga que preguntarse si llegaste bien a casa.",
 	"safety.loading": "Cargando tus contactos de seguridad…",
+	"safety.loadError": "No se pudieron cargar tus contactos de seguridad.",
+	"safety.retry": "Reintentar",
 	"safety.removeFailed": "No se pudo eliminar el contacto: {error}",
 	"safety.navTab": "Seguridad",
 	"safety.title": "Contactos de seguridad",

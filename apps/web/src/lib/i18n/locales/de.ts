@@ -4198,6 +4198,8 @@ export const messages = {
 	"safety.kicker": "Sicherheit",
 	"safety.emptyHint": "Füge jemanden hinzu, dem du vertraust – Partner, Freund oder Familienmitglied. Nach jedem Lauf erhält diese Person eine kurze E-Mail, damit sich niemand fragen muss, ob du wohlbehalten zu Hause bist.",
 	"safety.loading": "Sicherheitskontakte werden geladen…",
+	"safety.loadError": "Sicherheitskontakte konnten nicht geladen werden.",
+	"safety.retry": "Erneut versuchen",
 	"safety.removeFailed": "Kontakt konnte nicht entfernt werden: {error}",
 	"safety.navTab": "Sicherheit",
 	"safety.title": "Sicherheitskontakte",

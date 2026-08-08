@@ -7306,16 +7306,18 @@ export interface PendingSafetyRequest {
 }
 
 /// The owner's own safety-contact list (RLS scopes to owner_id = me).
-export async function fetchMySafetyContacts(): Promise<SafetyContact[]> {
+/// Reports the error rather than degrading to `[]`: on a safety surface a
+/// failed read rendered as "you have no emergency contacts", which is the
+/// one wrong answer a runner might act on.
+export async function fetchMySafetyContacts(): Promise<{
+	contacts: SafetyContact[];
+	error: string | null;
+}> {
 	const { data, error } = await supabase
 		.from(TABLES.safety_contacts)
 		.select('id, contact_email, contact_phone, contact_user_id, confirmed_at, sms_opt_in_at, created_at')
 		.order('created_at', { ascending: false });
-	if (error) {
-		console.error('fetchMySafetyContacts failed', error);
-		return [];
-	}
-	return (data ?? []) as SafetyContact[];
+	return { contacts: (data ?? []) as SafetyContact[], error: error?.message ?? null };
 }
 
 /// Add a safety contact by email. The address is stored as-is; a confirm
@@ -7345,13 +7347,15 @@ export async function removeSafetyContact(id: string): Promise<void> {
 /// Pending requests where the signed-in user is the named contact (matched
 /// by their account email via a SECURITY DEFINER RPC — the pending row isn't
 /// directly readable until they link by confirming).
-export async function fetchPendingSafetyRequests(): Promise<PendingSafetyRequest[]> {
+export async function fetchPendingSafetyRequests(): Promise<{
+	requests: PendingSafetyRequest[];
+	error: string | null;
+}> {
 	const { data, error } = await supabase.rpc('my_pending_safety_requests');
-	if (error || !data) {
-		if (error) console.error('fetchPendingSafetyRequests failed', error);
-		return [];
-	}
-	return data as PendingSafetyRequest[];
+	return {
+		requests: (data ?? []) as PendingSafetyRequest[],
+		error: error?.message ?? null,
+	};
 }
 
 /// Confirm a pending request addressed to my account email (links my

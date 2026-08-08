@@ -4198,6 +4198,8 @@ export const messages = {
 	"safety.kicker": "Sécurité",
 	"safety.emptyHint": "Ajoutez une personne de confiance — partenaire, ami ou membre de la famille. Elle recevra un e-mail après chaque course, pour que personne n'ait à se demander si vous êtes bien rentré.",
 	"safety.loading": "Chargement de vos contacts de sécurité…",
+	"safety.loadError": "Impossible de charger vos contacts de sécurité.",
+	"safety.retry": "Réessayer",
 	"safety.removeFailed": "Impossible de supprimer le contact : {error}",
 	"safety.navTab": "Sécurité",
 	"safety.title": "Contacts de sécurité",

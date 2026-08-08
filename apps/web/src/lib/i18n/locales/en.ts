@@ -4212,6 +4212,8 @@ export const en = {
 	"safety.kicker": "Safety",
 	"safety.emptyHint": "Add someone you trust — a partner, friend, or family member. They'll get a heads-up email after every run, so no one has to wonder whether you made it home.",
 	"safety.loading": "Loading your safety contacts…",
+	"safety.loadError": "Couldn’t load your safety contacts.",
+	"safety.retry": "Retry",
 	"safety.removeFailed": "Could not remove contact: {error}",
 	"safety.navTab": "Safety",
 	"safety.title": "Safety contacts",
