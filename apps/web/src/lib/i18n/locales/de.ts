@@ -4407,6 +4407,8 @@ export const messages = {
 	"gym.session.leaveTitle": "Diese Einheit verlassen?",
 	"gym.session.leaveBody": "Mach weiter oder verlasse die Einheit und setze sie später fort — deine erfassten Sätze bleiben als Entwurf erhalten.",
 	"gym.session.leaveKeepGoing": "Weitermachen",
+	"gym.session.leaveSaveFailed": "Entwurf konnte nicht gespeichert werden — du bist noch hier, es ist nichts verloren. Versuche es erneut oder verwirf die Einheit bewusst.",
+	"gym.session.leaveRetry": "Erneut versuchen",
 	"gym.session.leaveKeepDraft": "Verlassen, Entwurf behalten",
 	"gym.draft.title": "Unvollendete Einheit",
 	"gym.draft.body": "{title} — bisher {sets} Sätze erfasst.",

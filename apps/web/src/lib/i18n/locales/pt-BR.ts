@@ -4406,6 +4406,8 @@ export const messages = {
 	"gym.session.leaveTitle": "Sair desta sessão?",
 	"gym.session.leaveBody": "Continue treinando ou saia e retome esta sessão depois — as séries registradas ficam como rascunho.",
 	"gym.session.leaveKeepGoing": "Continuar",
+	"gym.session.leaveSaveFailed": "Não foi possível salvar seu rascunho — você ainda está aqui, então nada foi perdido. Tente novamente ou descarte a sessão de propósito.",
+	"gym.session.leaveRetry": "Tentar novamente",
 	"gym.session.leaveKeepDraft": "Sair e manter rascunho",
 	"gym.draft.title": "Sessão inacabada",
 	"gym.draft.body": "{title} — {sets} séries registradas até agora.",

@@ -4402,6 +4402,8 @@ export const messages = {
 	"gym.session.leaveTitle": "このセッションを離れますか？",
 	"gym.session.leaveBody": "このまま続けるか、いったん離れて後で再開できます。記録済みのセットは下書きとして残ります。",
 	"gym.session.leaveKeepGoing": "続ける",
+	"gym.session.leaveSaveFailed": "下書きを保存できませんでした。まだこの画面にいるので、内容は失われていません。再試行するか、意図的にセッションを破棄してください。",
+	"gym.session.leaveRetry": "再試行",
 	"gym.session.leaveKeepDraft": "下書きを残して離れる",
 	"gym.draft.title": "未完了のセッション",
 	"gym.draft.body": "{title} — これまでに{sets}セット記録済み。",

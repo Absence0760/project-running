@@ -4421,6 +4421,8 @@ export const en = {
 	"gym.session.leaveTitle": "Leave this session?",
 	"gym.session.leaveBody": "Keep going, or leave and pick this session up later — the sets you have logged stay as a draft.",
 	"gym.session.leaveKeepGoing": "Keep going",
+	"gym.session.leaveSaveFailed": "Couldn't save your draft — you're still here, so nothing is lost. Try again, or discard the session on purpose.",
+	"gym.session.leaveRetry": "Try again",
 	"gym.session.leaveKeepDraft": "Leave, keep draft",
 	"gym.draft.title": "Unfinished session",
 	"gym.draft.body": "{title} — {sets} sets logged so far.",

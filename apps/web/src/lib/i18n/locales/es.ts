@@ -4407,6 +4407,8 @@ export const messages = {
 	"gym.session.leaveTitle": "¿Salir de esta sesión?",
 	"gym.session.leaveBody": "Sigue entrenando o sal y retoma la sesión más tarde: las series que has registrado se guardan como borrador.",
 	"gym.session.leaveKeepGoing": "Seguir",
+	"gym.session.leaveSaveFailed": "No se pudo guardar tu borrador: sigues aquí, así que no se ha perdido nada. Vuelve a intentarlo o descarta la sesión a propósito.",
+	"gym.session.leaveRetry": "Reintentar",
 	"gym.session.leaveKeepDraft": "Salir y guardar borrador",
 	"gym.draft.title": "Sesión sin terminar",
 	"gym.draft.body": "{title}: {sets} series registradas hasta ahora.",

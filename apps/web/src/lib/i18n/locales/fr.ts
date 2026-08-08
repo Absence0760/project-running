@@ -4407,6 +4407,8 @@ export const messages = {
 	"gym.session.leaveTitle": "Quitter cette séance ?",
 	"gym.session.leaveBody": "Continuez, ou quittez et reprenez cette séance plus tard — les séries déjà enregistrées restent en brouillon.",
 	"gym.session.leaveKeepGoing": "Continuer",
+	"gym.session.leaveSaveFailed": "Impossible d'enregistrer votre brouillon — vous êtes toujours ici, rien n'est perdu. Réessayez ou abandonnez la séance volontairement.",
+	"gym.session.leaveRetry": "Réessayer",
 	"gym.session.leaveKeepDraft": "Quitter, garder le brouillon",
 	"gym.draft.title": "Séance inachevée",
 	"gym.draft.body": "{title} — {sets} séries enregistrées pour l’instant.",

@@ -239,4 +239,50 @@ test.describe('/gym/session — draft and resume', () => {
 			await cleanup(r);
 		}
 	});
+
+	test('a failed keep-draft save keeps the runner put instead of losing the session', async ({
+		page
+	}) => {
+		// leaveKeepingDraft awaited a save whose failure was swallowed to
+		// console.error, then departed regardless. Offline — or before the
+		// first 10 s autosave tick has landed — the runner asked to KEEP the
+		// draft and the entire session vanished with no feedback.
+		const r = await seedRoutine(Date.now());
+		try {
+			await startSession(page, r.id);
+			await page.getByTestId('gym-step-complete').click();
+			await expect(page.getByTestId('gym-exec-band')).toContainText('Set 2/3');
+
+			// Fail every gym_workouts write so the draft cannot land.
+			await page.route('**/rest/v1/gym_workouts*', (route) =>
+				route.request().method() === 'GET'
+					? route.continue()
+					: route.fulfill({ status: 500, body: 'boom' })
+			);
+
+			await page.getByTestId('gym-session-discard').click();
+			await expect(page.getByTestId('gym-leave-dialog')).toBeVisible({ timeout: 10_000 });
+			await page.getByTestId('gym-leave-keep-draft').click();
+
+			// Still on the session, with the failure stated and the logged set
+			// intact — not navigated away with the work thrown out.
+			await expect(page.getByTestId('gym-leave-save-failed')).toBeVisible({
+				timeout: 15_000
+			});
+			await expect(page).toHaveURL(new RegExp(`/gym/session/${r.id}`));
+			await expect(page.getByTestId('gym-exec-band')).toContainText('Set 2/3');
+
+			// Recovering the connection and retrying departs as it should.
+			await page.unroute('**/rest/v1/gym_workouts*');
+			await page.getByTestId('gym-leave-keep-draft').click();
+			await page.waitForURL(new RegExp(`/gym/routines/${r.id}$`), { timeout: 15_000 });
+
+			await page.goto('/gym');
+			await expect(page.getByTestId('gym-session-draft-card')).toBeVisible({
+				timeout: 15_000
+			});
+		} finally {
+			await cleanup(r);
+		}
+	});
 });
