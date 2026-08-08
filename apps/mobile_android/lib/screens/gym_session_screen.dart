@@ -452,8 +452,18 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
       case _LeaveChoice.keep:
         return;
       case _LeaveChoice.leave:
-        await _durableSave(force: true);
-        if (mounted) navigator.pop();
+        final saved = await _durableSave(force: true);
+        if (!mounted) return;
+        // Popping on a failed write is how a whole session disappears: the
+        // runner asked to KEEP the draft, so staying put with the sets still
+        // in memory is the only answer that doesn't throw their work away.
+        // They can retry, keep going, or discard on purpose.
+        if (!saved) {
+          showTopBanner(
+              context, AppLocalizations.of(context).gymSessionLeaveSaveFailed);
+          return;
+        }
+        navigator.pop();
       case _LeaveChoice.discard:
         _runner.abandon();
         await _discardDraft();
@@ -629,10 +639,14 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   // final save. [force] lets the leave-with-draft path persist a finished-
   // but-unsaved session; the periodic tick must NOT write after finish, or
   // it could race _finishAndSave and clobber the final metadata trio.
-  Future<void> _durableSave({bool force = false}) async {
-    if (_abandoned || (_finished && !force)) return;
+  /// Returns whether the write landed. The best-effort swallow is only
+  /// correct for the periodic tick; when the runner has explicitly ASKED to
+  /// keep the draft and walk away, a swallowed failure loses the whole
+  /// session silently, so that caller checks the result.
+  Future<bool> _durableSave({bool force = false}) async {
+    if (_abandoned || (_finished && !force)) return true;
     final sets = _buildSets();
-    if (sets.isEmpty && _draftId == null) return;
+    if (sets.isEmpty && _draftId == null) return true;
     try {
       if (_draftId == null) {
         final stored = await widget.gymStore.createLocal(
@@ -651,8 +665,10 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
           metadata: _draftMetadata(),
         );
       }
+      return true;
     } catch (e) {
       debugPrint('gym session durable save failed: $e');
+      return false;
     }
   }
 

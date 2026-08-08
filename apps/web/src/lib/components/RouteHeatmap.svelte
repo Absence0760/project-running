@@ -73,14 +73,33 @@
 	let searchQuery = $state('');
 	let searchResults = $state<PlaceSearchResult[]>([]);
 	let showResults = $state(false);
+	// `unavailable` is held apart from an empty result set so the dropdown
+	// can say "the search failed" rather than "that place doesn't exist" —
+	// the two used to be one silent state.
+	let searchUnavailable = $state(false);
+	let searchWrap: HTMLDivElement | undefined = $state();
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	async function runPlaceSearch() {
+		const outcome = await searchPlaces(searchQuery);
+		// A superseded keystroke leaves the dropdown exactly as it was.
+		if (outcome.status === 'aborted') return;
+		if (outcome.status === 'unavailable') {
+			searchResults = [];
+			searchUnavailable = true;
+			showResults = true;
+			return;
+		}
+		searchResults = outcome.results;
+		searchUnavailable = false;
+		// A query too short to search stays silent; a real query that matched
+		// nothing now says so instead of showing nothing at all.
+		showResults = searchQuery.trim().length >= 2;
+	}
 
 	function onSearchInput() {
 		if (searchTimeout) clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(async () => {
-			searchResults = await searchPlaces(searchQuery);
-			showResults = searchResults.length > 0;
-		}, 300);
+		searchTimeout = setTimeout(runPlaceSearch, 300);
 	}
 
 	function selectSearchResult(r: PlaceSearchResult) {
@@ -88,6 +107,7 @@
 		map.flyTo({ center: [r.lng, r.lat], zoom: 13 });
 		searchQuery = '';
 		searchResults = [];
+		searchUnavailable = false;
 		showResults = false;
 		searchInput?.blur();
 	}
@@ -1357,15 +1377,21 @@
 
 <div class="discover" class:collapsed={!sidebarOpen}>
 	<aside class="discover-sidebar" data-testid="discover-sidebar" aria-label={m('routeHeatmap.routeDiscovery')}>
-		<div class="sidebar-search" data-testid="heatmap-search">
+		<div class="sidebar-search" data-testid="heatmap-search" bind:this={searchWrap}>
 			<div class="search-input-row">
 				<input
 					bind:this={searchInput}
 					bind:value={searchQuery}
 					oninput={onSearchInput}
-					onfocusout={() => setTimeout(() => (showResults = false), 200)}
+					onfocusout={(e) => {
+						// Tabbing into the dropdown (the retry control) must not
+						// dismiss the thing being tabbed into.
+						const next = e.relatedTarget as Node | null;
+						if (next && searchWrap?.contains(next)) return;
+						setTimeout(() => (showResults = false), 200);
+					}}
 					onfocusin={() => {
-						if (searchResults.length > 0) showResults = true;
+						if (searchResults.length > 0 || searchUnavailable) showResults = true;
 					}}
 					type="text"
 					placeholder={m('routeHeatmap.searchPlaceholder')}
@@ -1387,15 +1413,33 @@
 				</button>
 			</div>
 			{#if showResults}
-				<ul class="search-results">
-					{#each searchResults as result (result.lat + ':' + result.lng)}
-						<li>
-							<button onmousedown={() => selectSearchResult(result)}>
-								{result.name}
-							</button>
-						</li>
-					{/each}
-				</ul>
+				{#if searchUnavailable}
+					<div class="search-status" role="status" data-testid="heatmap-search-unavailable">
+						<span>{m('placeSearch.unavailable')}</span>
+						<button
+							type="button"
+							class="search-retry"
+							onmousedown={(e) => e.preventDefault()}
+							onclick={runPlaceSearch}
+						>
+							{m('placeSearch.retry')}
+						</button>
+					</div>
+				{:else if searchResults.length === 0}
+					<div class="search-status" role="status" data-testid="heatmap-search-empty">
+						{m('placeSearch.noResults')}
+					</div>
+				{:else}
+					<ul class="search-results">
+						{#each searchResults as result (result.lat + ':' + result.lng)}
+							<li>
+								<button onmousedown={() => selectSearchResult(result)}>
+									{result.name}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			{/if}
 		</div>
 
@@ -1724,6 +1768,29 @@
 		border-radius: var(--radius-md);
 		max-height: 14rem;
 		overflow-y: auto;
+	}
+	.search-status {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin: 0.5rem 0 0;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+	.search-retry {
+		flex: none;
+		padding: 0;
+		font: inherit;
+		font-weight: 600;
+		color: var(--color-primary);
+		background: transparent;
+		border: 0;
+		cursor: pointer;
 	}
 	.search-results li button {
 		width: 100%;

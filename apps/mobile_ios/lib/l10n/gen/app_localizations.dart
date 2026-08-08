@@ -665,6 +665,24 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get commonCancel;
 
+  /// Dropdown row shown when a place search succeeded but matched nothing
+  ///
+  /// In en, this message translates to:
+  /// **'No places found'**
+  String get placeSearchNoResults;
+
+  /// Dropdown row shown when the place-search provider failed, rate-limited, or timed out — deliberately distinct from a no-results answer
+  ///
+  /// In en, this message translates to:
+  /// **'Place search is unavailable right now'**
+  String get placeSearchUnavailable;
+
+  /// Action on the place-search-unavailable row that re-runs the lookup
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get placeSearchRetry;
+
   /// Generic tooltip for a dismiss / close icon button
   ///
   /// In en, this message translates to:
@@ -17131,6 +17149,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discard'**
   String get gymSessionDiscardConfirm;
+
+  /// Banner shown when the explicit leave-and-keep-draft save failed and the runner was kept on the session rather than navigated away with the work lost
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your draft — you\'re still here, so nothing is lost. Try again, or discard the session on purpose.'**
+  String get gymSessionLeaveSaveFailed;
 
   /// Title of the three-way dialog shown when backing out of a live guided session
   ///

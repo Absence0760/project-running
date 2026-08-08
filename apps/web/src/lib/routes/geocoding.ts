@@ -10,7 +10,11 @@ import {
 // counterparts so callers have one import surface. The thin wrappers
 // below inject PUBLIC_MAPTILER_KEY so production sites don't have to
 // repeat the env read.
-export type { GeocodedPlace, PlaceSearchResult } from './geocoding_math';
+export type {
+	GeocodedPlace,
+	PlaceSearchOutcome,
+	PlaceSearchResult,
+} from './geocoding_math';
 
 const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 
@@ -38,8 +42,10 @@ function warnIfFallbackInProd(): void {
 }
 
 /// Search free-text places, return up to [limit] hits suitable for a
-/// search-box dropdown. Returns an empty array — never throws — when
-/// the query is too short or all providers fail.
+/// search-box dropdown. Never throws: a provider failure comes back as
+/// a `PlaceSearchOutcome` of `unavailable`, which the dropdown must
+/// render differently from an `ok` with no results — otherwise a
+/// reachable place reads as a non-existent one.
 ///
 /// Thin env-binding wrapper around `searchPlacesWithKey`. See that
 /// helper for provider priority + trade-offs.

@@ -822,4 +822,95 @@ test.describe('/runs/[id]', () => {
 			await deleteRun(planted);
 		}
 	});
+
+	test('inline edit Save is in-flight-guarded so a slow save cannot be double-fired', async ({
+		page
+	}) => {
+		// saveEdit had no busy guard and its button no disabled state. The
+		// edit form is inline rather than modal, so nothing dismissed on the
+		// first click: on a slow connection the form just sat there and a
+		// second click issued a second write. Hold the PATCH open to widen
+		// the window and count how many leave.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+
+		let patchCount = 0;
+		await page.route('**/rest/v1/runs?id=eq.*', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				patchCount += 1;
+				await new Promise((r) => setTimeout(r, 1200));
+			}
+			await route.continue();
+		});
+
+		try {
+			await page.goto(`/runs/${planted}`);
+
+			await page.locator('button[title="Edit"]').first().click();
+			await page.locator('input.edit-input').fill(uniqueText('guarded'));
+
+			const save = page.getByTestId('run-edit-save');
+			await save.click();
+
+			// While the write is in flight the button is disabled and says so,
+			// so a second click cannot reach saveEdit at all.
+			await expect(save).toBeDisabled();
+			await expect(save).toHaveText('Saving…');
+
+			// The form closes only on success; once it has, exactly one write
+			// should have left the page.
+			await expect(page.locator('input.edit-input')).toHaveCount(0, {
+				timeout: 10_000
+			});
+			expect(patchCount).toBe(1);
+		} finally {
+			await deleteRun(planted);
+		}
+	});
+
+	test('a failed inline edit re-enables Save so the runner can retry', async ({
+		page
+	}) => {
+		// The guard must not strand the form: if the write fails, the busy
+		// flag has to clear or the only way out is a reload that loses the
+		// typed text.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+
+		await page.route('**/rest/v1/runs?id=eq.*', async (route) => {
+			if (route.request().method() === 'PATCH') {
+				return route.fulfill({ status: 500, body: 'boom' });
+			}
+			await route.continue();
+		});
+
+		try {
+			await page.goto(`/runs/${planted}`);
+
+			await page.locator('button[title="Edit"]').first().click();
+			const typed = uniqueText('retry me');
+			await page.locator('input.edit-input').fill(typed);
+
+			const save = page.getByTestId('run-edit-save');
+			await save.click();
+
+			await expect(page.locator('.toast', { hasText: /Save failed/ })).toBeVisible({
+				timeout: 10_000
+			});
+			// Form still open, text still there, button live again.
+			await expect(save).toBeEnabled();
+			await expect(save).toHaveText('Save');
+			await expect(page.locator('input.edit-input')).toHaveValue(typed);
+		} finally {
+			await deleteRun(planted);
+		}
+	});
 });

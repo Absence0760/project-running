@@ -214,6 +214,10 @@
 	let searchQuery = $state('');
 	let searchResults = $state<{ name: string; lng: number; lat: number }[]>([]);
 	let showResults = $state(false);
+	// Held apart from an empty result set so the dropdown can distinguish
+	// "no such place" from "the search itself failed".
+	let searchUnavailable = $state(false);
+	let searchWrap: HTMLDivElement | undefined = $state();
 	let searchTimeout: ReturnType<typeof setTimeout>;
 	let keyHandler: (e: KeyboardEvent) => void;
 	let geoWatchId: number | null = null;
@@ -268,6 +272,7 @@
 	async function handleSearch(query: string) {
 		if (query.length < 2) {
 			searchResults = [];
+			searchUnavailable = false;
 			showResults = false;
 			return;
 		}
@@ -277,8 +282,20 @@
 		// otherwise we fall back to Nominatim (OSM's free geocoder),
 		// which keeps the local Protomaps dev stack functional.
 		// See `decisions.md § 68` for the override design.
-		searchResults = await searchPlaces(query);
-		showResults = searchResults.length > 0;
+		const outcome = await searchPlaces(query);
+		// A superseded keystroke leaves the dropdown exactly as it was.
+		if (outcome.status === 'aborted') return;
+		if (outcome.status === 'unavailable') {
+			searchResults = [];
+			searchUnavailable = true;
+			showResults = true;
+			return;
+		}
+		searchResults = outcome.results;
+		searchUnavailable = false;
+		// Open on an empty result set too — a provider that matched nothing
+		// must say so, not leave the runner staring at an unchanged box.
+		showResults = true;
 	}
 
 	function onSearchInput() {
@@ -290,6 +307,7 @@
 		recentreMap([result.lng, result.lat], 15);
 		searchQuery = '';
 		searchResults = [];
+		searchUnavailable = false;
 		showResults = false;
 		searchInput?.blur();
 	}
@@ -2184,14 +2202,22 @@
 	style:--map-finish={mapFinishColour(darkBasemap)}
 >
 	{#if mapConsented}
-	<div class="search-box">
+	<div class="search-box" bind:this={searchWrap}>
 		<div class="search-row">
 			<input
 				bind:this={searchInput}
 				bind:value={searchQuery}
 				oninput={onSearchInput}
-				onfocusout={() => setTimeout(() => (showResults = false), 200)}
-				onfocusin={() => { if (searchResults.length > 0) showResults = true; }}
+				onfocusout={(e) => {
+					// Tabbing into the dropdown (the retry control) must not
+					// dismiss the thing being tabbed into.
+					const next = e.relatedTarget as Node | null;
+					if (next && searchWrap?.contains(next)) return;
+					setTimeout(() => (showResults = false), 200);
+				}}
+				onfocusin={() => {
+					if (searchResults.length > 0 || searchUnavailable) showResults = true;
+				}}
 				type="text"
 				placeholder={t('routeBuilder.searchPlaceholder')}
 				aria-label={t('routeBuilder.searchAriaLabel')}
@@ -2201,15 +2227,33 @@
 			</button>
 		</div>
 		{#if showResults}
-			<ul class="search-results">
-				{#each searchResults as result}
-					<li>
-						<button onmousedown={() => selectSearchResult(result)}>
-							{result.name}
-						</button>
-					</li>
-				{/each}
-			</ul>
+			{#if searchUnavailable}
+				<div class="search-status" role="status" data-testid="builder-search-unavailable">
+					<span>{t('placeSearch.unavailable')}</span>
+					<button
+						type="button"
+						class="search-retry"
+						onmousedown={(e) => e.preventDefault()}
+						onclick={() => handleSearch(searchQuery)}
+					>
+						{t('placeSearch.retry')}
+					</button>
+				</div>
+			{:else if searchResults.length === 0}
+				<div class="search-status" role="status" data-testid="builder-search-empty">
+					{t('placeSearch.noResults')}
+				</div>
+			{:else}
+				<ul class="search-results">
+					{#each searchResults as result}
+						<li>
+							<button onmousedown={() => selectSearchResult(result)}>
+								{result.name}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		{/if}
 	</div>
 
@@ -2402,6 +2446,31 @@
 		border-radius: 8px;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 		overflow: hidden;
+	}
+
+	.search-status {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		margin: 4px 0 0;
+		padding: 10px 14px;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		background: var(--color-surface);
+		border-radius: 8px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	}
+
+	.search-retry {
+		flex: none;
+		padding: 0;
+		font: inherit;
+		font-weight: 600;
+		color: var(--color-primary);
+		background: transparent;
+		border: none;
+		cursor: pointer;
 	}
 
 	.search-results li button {

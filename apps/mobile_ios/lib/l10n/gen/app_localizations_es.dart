@@ -379,6 +379,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get commonCancel => 'Cancelar';
 
   @override
+  String get placeSearchNoResults => 'No se encontraron lugares';
+
+  @override
+  String get placeSearchUnavailable =>
+      'La búsqueda de lugares no está disponible en este momento';
+
+  @override
+  String get placeSearchRetry => 'Reintentar';
+
+  @override
   String get commonDismiss => 'Descartar';
 
   @override
@@ -10334,6 +10344,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionLeaveSaveFailed =>
+      'No se pudo guardar tu borrador: sigues aquí, así que no se ha perdido nada. Vuelve a intentarlo o descarta la sesión a propósito.';
 
   @override
   String get gymSessionLeaveTitle => '¿Salir de la sesión?';

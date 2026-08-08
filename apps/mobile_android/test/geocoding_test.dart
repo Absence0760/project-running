@@ -36,13 +36,80 @@ void main() {
   });
 
   group('searchPlaces', () {
-    test('empty list when query is shorter than 2 chars', () async {
+    // Most cases below only care about the parsed hits. Unwrapping through a
+    // helper that ASSERTS ok keeps them readable while still failing loudly
+    // if a case that should have succeeded came back unavailable.
+    Future<List<PlaceResult>> results(
+      String query, {
+      required String apiKey,
+      int limit = 5,
+      GeocodingFetcher? fetcher,
+    }) async {
+      final outcome = await searchPlaces(query,
+          apiKey: apiKey, limit: limit, fetcher: fetcher);
+      expect(outcome.status, PlaceSearchStatus.ok,
+          reason: 'expected an ok outcome for "$query"');
+      return outcome.results;
+    }
+
+    test('ok-empty outcome when query is shorter than 2 chars', () async {
+      // Too short to search is an EMPTY result, not a failed one — the
+      // dropdown stays shut rather than claiming the search broke.
       final out = await searchPlaces(
         'a',
         apiKey: 'k',
         fetcher: (_) async => fail('fetcher must not be called'),
       );
-      expect(out, isEmpty);
+      expect(out.status, PlaceSearchStatus.ok);
+      expect(out.results, isEmpty);
+    });
+
+    test('reports unavailable when the provider returns a non-list body',
+        () async {
+      // A 200 whose body is not the documented shape is a malformed answer,
+      // never an answer of "no matches".
+      final out = await searchPlaces(
+        'London',
+        apiKey: '',
+        fetcher: (_) async => '{"error":"nope"}',
+      );
+      expect(out.status, PlaceSearchStatus.unavailable);
+    });
+
+    test('reports unavailable when MapTiler omits the features array',
+        () async {
+      final out = await searchPlaces(
+        'London',
+        apiKey: 'k',
+        fetcher: (_) async => '{}',
+      );
+      expect(out.status, PlaceSearchStatus.unavailable);
+    });
+
+    test('ok-empty outcome when the provider genuinely matched nothing',
+        () async {
+      // The one case the dropdown is entitled to call "no places found".
+      final out = await searchPlaces(
+        'nowhere-real',
+        apiKey: 'k',
+        fetcher: (_) async => '{"features":[]}',
+      );
+      expect(out.status, PlaceSearchStatus.ok);
+      expect(out.results, isEmpty);
+    });
+
+    test('reports unavailable on an HTTP error from the default fetcher path',
+        () async {
+      // Nominatim answers an over-rate request with 429, which the default
+      // fetcher raises as an HttpException — exactly the case that must read
+      // as "search unavailable", never as "no such place".
+      final out = await searchPlaces(
+        'London',
+        apiKey: '',
+        fetcher: (url) async =>
+            throw const HttpException('Nominatim 429: rate limited'),
+      );
+      expect(out.status, PlaceSearchStatus.unavailable);
     });
 
     test('empty apiKey routes through the Nominatim fallback', () async {
@@ -65,7 +132,7 @@ void main() {
           },
         ]);
       }
-      final out = await searchPlaces(
+      final out = await results(
         'London',
         apiKey: '',
         fetcher: stub,
@@ -92,7 +159,7 @@ void main() {
           },
         ],
       }));
-      final out = await searchPlaces(
+      final out = await results(
         'London',
         apiKey: 'k',
         fetcher: stub.call,
@@ -118,14 +185,18 @@ void main() {
       expect(stub.lastUrl!.queryParameters['limit'], '3');
     });
 
-    test('empty list when fetcher throws', () async {
+    test('reports unavailable when fetcher throws', () async {
+      // The load-bearing distinction: a transport failure must NOT come back
+      // as an empty result set, or the dropdown renders a reachable place as
+      // a non-existent one.
       Future<String> bomb(Uri _) async => throw StateError('boom');
       final out = await searchPlaces(
         'London',
         apiKey: 'k',
         fetcher: bomb,
       );
-      expect(out, isEmpty);
+      expect(out.status, PlaceSearchStatus.unavailable);
+      expect(out.results, isEmpty);
     });
 
     test('skips features with malformed center coords', () async {
@@ -145,7 +216,7 @@ void main() {
           },
         ],
       }));
-      final out = await searchPlaces(
+      final out = await results(
         'London',
         apiKey: 'k',
         fetcher: stub.call,
@@ -163,7 +234,7 @@ void main() {
           },
         ],
       }));
-      final out = await searchPlaces(
+      final out = await results(
         'London',
         apiKey: 'k',
         fetcher: stub.call,
@@ -171,10 +242,12 @@ void main() {
       expect(out.first.name, 'Just text');
     });
 
-    test('empty list when the fetcher exceeds kGeocodingTimeout', () async {
-      // Stub fetcher that never resolves — without the inner timeout
-      // the AppBar search overlay would spin forever on a flaky
-      // network. With it the catch-all returns an empty list.
+    test('reports unavailable when the fetcher exceeds kGeocodingTimeout',
+        () async {
+      // Stub fetcher that never resolves — without the inner timeout the
+      // AppBar search overlay would spin forever on a flaky network. With it
+      // the catch-all reports the search as UNAVAILABLE, so the dropdown says
+      // the lookup failed rather than that the place does not exist.
       Future<String> hangingFetcher(Uri _) async {
         await Future<void>.delayed(const Duration(seconds: 30));
         return '{}';
@@ -187,7 +260,7 @@ void main() {
         const Duration(seconds: 9),
         onTimeout: () => fail('searchPlaces did not honour kGeocodingTimeout'),
       );
-      expect(out, isEmpty);
+      expect(out.status, PlaceSearchStatus.unavailable);
     });
   });
 

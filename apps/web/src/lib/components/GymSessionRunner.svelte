@@ -50,6 +50,8 @@
 	let leavePrompt = $state(false);
 	let saving = $state(false);
 	let saveFailed = $state(false);
+	let leaveSaveFailed = $state(false);
+	let leaveSaving = $state(false);
 	let draftId: string | null = untrack(() => draft?.id ?? null);
 	let leaveTarget: string | null = null;
 	let abandoned = false;
@@ -202,14 +204,20 @@
 		return Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000));
 	}
 
-	// Persist the session so far onto one draft row. Best-effort (L4): a failed
-	// write leaves the in-memory state intact for the next tick, never
-	// interrupts the runner. The snapshot rides the row's metadata rather than
-	// a second store, so a force-kill is as resumable as a graceful leave.
-	async function durableSave(): Promise<void> {
-		if (abandoned || saving) return;
+	// Persist the session so far onto one draft row. Best-effort (L4) for the
+	// periodic tick: a failed write leaves the in-memory state intact for the
+	// next one and never interrupts the runner. The snapshot rides the row's
+	// metadata rather than a second store, so a force-kill is as resumable as
+	// a graceful leave.
+	//
+	// Returns whether the write landed, because the L4 swallow is only correct
+	// for the autosave. When the runner has explicitly ASKED to keep the draft
+	// and walk away, a swallowed failure loses the whole session silently — so
+	// that caller checks the result.
+	async function durableSave(): Promise<boolean> {
+		if (abandoned || saving) return true;
 		const sets = buildSets();
-		if (sets.length === 0 && draftId === null) return;
+		if (sets.length === 0 && draftId === null) return true;
 		const metadata = draftMetadata(routine.id, outcomes, currentIndex, new Date().toISOString());
 		try {
 			if (draftId === null) {
@@ -224,8 +232,10 @@
 			} else {
 				await updateGymWorkout(draftId, { duration_s: durationS(), metadata }, sets);
 			}
+			return true;
 		} catch (e) {
 			console.error('gym session durable save failed', e);
+			return false;
 		}
 	}
 
@@ -254,6 +264,7 @@
 	function dismissLeave() {
 		leavePrompt = false;
 		leaveTarget = null;
+		leaveSaveFailed = false;
 	}
 
 	async function departTo(href: string | null): Promise<void> {
@@ -269,7 +280,18 @@
 
 	async function leaveKeepingDraft() {
 		const target = leaveTarget;
-		await durableSave();
+		leaveSaveFailed = false;
+		leaveSaving = true;
+		const ok = await durableSave();
+		leaveSaving = false;
+		// Departing on a failed write is how a whole session disappears: the
+		// runner asked to KEEP the draft, so staying put with the sets still in
+		// memory is the only answer that doesn't throw their work away. They can
+		// retry, keep going, or discard on purpose.
+		if (!ok) {
+			leaveSaveFailed = true;
+			return;
+		}
 		await departTo(target);
 	}
 
@@ -377,22 +399,29 @@
 	bodyClass="leave-body"
 >
 	<p class="leave-message">{t('gym.session.leaveBody')}</p>
+	{#if leaveSaveFailed}
+		<p class="leave-save-failed" role="alert" data-testid="gym-leave-save-failed">
+			{t('gym.session.leaveSaveFailed')}
+		</p>
+	{/if}
 	<div class="leave-actions">
-		<button type="button" class="btn btn-primary" onclick={dismissLeave}>
+		<button type="button" class="btn btn-primary" onclick={dismissLeave} disabled={leaveSaving}>
 			{t('gym.session.leaveKeepGoing')}
 		</button>
 		<button
 			type="button"
 			class="btn btn-secondary"
 			onclick={leaveKeepingDraft}
+			disabled={leaveSaving}
 			data-testid="gym-leave-keep-draft"
 		>
-			{t('gym.session.leaveKeepDraft')}
+			{leaveSaveFailed ? t('gym.session.leaveRetry') : t('gym.session.leaveKeepDraft')}
 		</button>
 		<button
 			type="button"
 			class="btn btn-danger"
 			onclick={discardSession}
+			disabled={leaveSaving}
 			data-testid="gym-leave-discard"
 		>
 			{t('gym.session.discardConfirm')}
@@ -424,7 +453,8 @@
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 	}
-	.save-failed {
+	.save-failed,
+	.leave-save-failed {
 		margin: 0;
 		color: var(--color-danger-text);
 		font-size: 0.9rem;

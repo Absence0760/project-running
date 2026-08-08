@@ -367,6 +367,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get commonCancel => 'キャンセル';
 
   @override
+  String get placeSearchNoResults => '場所が見つかりません';
+
+  @override
+  String get placeSearchUnavailable => '現在、場所の検索を利用できません';
+
+  @override
+  String get placeSearchRetry => '再試行';
+
+  @override
   String get commonDismiss => '閉じる';
 
   @override
@@ -9822,6 +9831,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => '破棄';
+
+  @override
+  String get gymSessionLeaveSaveFailed =>
+      '下書きを保存できませんでした。まだこの画面にいるので、内容は失われていません。再試行するか、意図的にセッションを破棄してください。';
 
   @override
   String get gymSessionLeaveTitle => 'セッションを中断しますか？';

@@ -379,6 +379,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get commonCancel => 'Cancelar';
 
   @override
+  String get placeSearchNoResults => 'Nenhum lugar encontrado';
+
+  @override
+  String get placeSearchUnavailable =>
+      'A pesquisa de locais está indisponível de momento';
+
+  @override
+  String get placeSearchRetry => 'Tentar novamente';
+
+  @override
   String get commonDismiss => 'Dispensar';
 
   @override
@@ -10332,6 +10342,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Descartar';
 
   @override
+  String get gymSessionLeaveSaveFailed =>
+      'Não foi possível guardar o teu rascunho — ainda estás aqui, por isso nada se perdeu. Tenta novamente ou descarta a sessão de propósito.';
+
+  @override
   String get gymSessionLeaveTitle => 'Sair da sessão?';
 
   @override
@@ -12935,6 +12949,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get commonCancel => 'Cancelar';
+
+  @override
+  String get placeSearchNoResults => 'Nenhum lugar encontrado';
+
+  @override
+  String get placeSearchUnavailable =>
+      'A busca de lugares está indisponível no momento';
+
+  @override
+  String get placeSearchRetry => 'Tentar novamente';
 
   @override
   String get commonDismiss => 'Dispensar';
@@ -22886,6 +22910,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionLeaveSaveFailed =>
+      'Não foi possível salvar seu rascunho — você ainda está aqui, então nada foi perdido. Tente novamente ou descarte a sessão de propósito.';
 
   @override
   String get gymSessionLeaveTitle => 'Sair da sessão?';

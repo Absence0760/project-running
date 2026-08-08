@@ -39,6 +39,7 @@ import '../widgets/live_run_map.dart'
 import '../widgets/map_attribution.dart';
 import '../widgets/snap_to_start.dart';
 import '../widgets/top_banner.dart';
+import '../widgets/place_search_panel.dart';
 
 /// Full-screen in-app route builder. Phase 3 "In-app route builder
 /// (free)" — the mobile counterpart of `apps/web/src/lib/components/
@@ -197,6 +198,9 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   final TextEditingController _searchCtl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   List<PlaceResult> _searchResults = const [];
+  // Held apart from an empty result set so the dropdown can say the
+  // search FAILED rather than claim the place does not exist.
+  bool _searchUnavailable = false;
 
   /// True while the search TextField is focused — the keyboard is
   /// up. We hide the bottom mode toggle in this state so it doesn't
@@ -825,21 +829,29 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     if (query.trim().length < 2) {
       setState(() {
         _searchResults = const [];
+        _searchUnavailable = false;
         _searchOpen = false;
       });
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
-      final results = await searchPlaces(
-        query,
-        apiKey: _maptilerKey,
-        fetcher: widget.geocodingFetcher,
-      );
-      if (!mounted) return;
-      setState(() {
-        _searchResults = results;
-        _searchOpen = results.isNotEmpty;
-      });
+    _searchDebounce =
+        Timer(const Duration(milliseconds: 300), () => _runPlaceSearch(query));
+  }
+
+  Future<void> _runPlaceSearch(String query) async {
+    final outcome = await searchPlaces(
+      query,
+      apiKey: _maptilerKey,
+      fetcher: widget.geocodingFetcher,
+    );
+    if (!mounted) return;
+    setState(() {
+      _searchResults = outcome.results;
+      _searchUnavailable = outcome.isUnavailable;
+      // Open on an empty result set too: a provider that matched nothing
+      // must say so rather than leave the runner staring at a map that
+      // did not react.
+      _searchOpen = true;
     });
   }
 
@@ -849,6 +861,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     _searchCtl.clear();
     setState(() {
       _searchResults = const [];
+      _searchUnavailable = false;
       _searchOpen = false;
     });
   }
@@ -1129,29 +1142,18 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
             ),
           ),
           // Search-results dropdown (under the AppBar).
-          if (_searchOpen && _searchResults.isNotEmpty)
+          if (_searchOpen)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: Material(
                 elevation: 4,
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: EdgeInsets.zero,
-                  children: [
-                    for (final r in _searchResults)
-                      ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.place),
-                        title: Text(
-                          r.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () => _onSearchResultTap(r),
-                      ),
-                  ],
+                child: PlaceSearchPanel(
+                  results: _searchResults,
+                  unavailable: _searchUnavailable,
+                  onSelect: _onSearchResultTap,
+                  onRetry: () => _runPlaceSearch(_searchCtl.text),
                 ),
               ),
             ),

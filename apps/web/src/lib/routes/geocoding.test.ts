@@ -60,39 +60,100 @@ import { searchPlacesWithKey } from './geocoding_math';
 const searchPlaces = (q: string, limit?: number, signal?: AbortSignal) =>
 	searchPlacesWithKey('', q, limit, signal);
 
-test('searchPlaces returns [] for short queries (< 2 chars)', async () => {
-	// Short-circuit before any network call.
-	assert.deepEqual(await searchPlaces(''), []);
-	assert.deepEqual(await searchPlaces('a'), []);
-});
+// Most cases below only care about the parsed hits. Unwrapping through a
+// helper that ASSERTS `ok` keeps them readable while still failing loudly
+// if a case that should have succeeded came back `unavailable`.
+async function results(q: string, limit?: number, signal?: AbortSignal) {
+	const outcome = await searchPlaces(q, limit, signal);
+	assert.equal(outcome.status, 'ok', `expected an ok outcome for "${q}"`);
+	return outcome.status === 'ok' ? outcome.results : [];
+}
 
-test('searchPlaces returns [] when fetch throws (network down)', async () => {
-	// Patch global fetch to simulate a network error. The helper
-	// must swallow + return [] (never throw) — the search box
-	// degrades to "no results" identically to "key missing".
-	const originalFetch = globalThis.fetch;
-	globalThis.fetch = async () => {
-		throw new Error('network unreachable');
-	};
-	try {
-		const out = await searchPlaces('Richmond');
-		assert.deepEqual(out, []);
-	} finally {
-		globalThis.fetch = originalFetch;
-	}
-});
+test('searchPlaces returns an ok-empty outcome for short queries (< 2 chars)',
+	async () => {
+		// Short-circuit before any network call. Too short to search is an
+		// EMPTY result, not a failed one — the dropdown stays shut.
+		assert.deepEqual(await searchPlaces(''), { status: 'ok', results: [] });
+		assert.deepEqual(await searchPlaces('a'), { status: 'ok', results: [] });
+	});
 
-test('searchPlaces returns [] when fetch returns non-OK', async () => {
+test('searchPlaces reports `unavailable` when fetch throws (network down)',
+	async () => {
+		// The load-bearing distinction: a network failure must NOT come back
+		// as an empty result set, or the caller renders a reachable place as
+		// a non-existent one.
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = async () => {
+			throw new Error('network unreachable');
+		};
+		try {
+			assert.deepEqual(await searchPlaces('Richmond'), { status: 'unavailable' });
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+test('searchPlaces reports `unavailable` when fetch returns non-OK', async () => {
 	const originalFetch = globalThis.fetch;
 	globalThis.fetch = (async () =>
 		new Response('', { status: 503 })) as typeof fetch;
 	try {
-		const out = await searchPlaces('Richmond');
-		assert.deepEqual(out, []);
+		assert.deepEqual(await searchPlaces('Richmond'), { status: 'unavailable' });
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
 });
+
+test('searchPlaces reports `unavailable` on a 429 rate-limit, not no-results',
+	async () => {
+		// Nominatim answers an over-rate request with 429. Collapsing that
+		// into [] is exactly how a throttled search came to read as "that
+		// place does not exist".
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () =>
+			new Response('rate limited', { status: 429 })) as typeof fetch;
+		try {
+			assert.deepEqual(await searchPlaces('Richmond'), { status: 'unavailable' });
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+test('searchPlaces reports `unavailable` on a 200 with an unparseable body',
+	async () => {
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () =>
+			new Response('<html>gateway</html>', { status: 200 })) as typeof fetch;
+		try {
+			assert.deepEqual(await searchPlaces('Richmond'), { status: 'unavailable' });
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+test('searchPlaces reports `aborted` when the caller supersedes the request',
+	async () => {
+		// A debounced call site cancels its own in-flight lookup on the next
+		// keystroke. That must stay silent — reporting it as `unavailable`
+		// would flash a failure the user never caused.
+		const controller = new AbortController();
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async (_url: unknown, init?: { signal?: AbortSignal }) => {
+			controller.abort();
+			const err = new Error('The operation was aborted');
+			err.name = 'AbortError';
+			void init;
+			throw err;
+		}) as unknown as typeof fetch;
+		try {
+			assert.deepEqual(
+				await searchPlaces('Richmond', 5, controller.signal),
+				{ status: 'aborted' },
+			);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
 
 test('searchPlaces (Nominatim path) parses lat/lon strings + skips '
 	+ 'malformed rows', async () => {
@@ -113,7 +174,7 @@ test('searchPlaces (Nominatim path) parses lat/lon strings + skips '
 		globalThisAny.navigator = { language: 'en' };
 	}
 	try {
-		const out = await searchPlaces('Virginia');
+		const out = await results('Virginia');
 		assert.equal(out.length, 2,
 			'malformed rows must be dropped, not yielded as NaN coords');
 		assert.equal(out[0].name, 'Richmond, Virginia');
@@ -125,12 +186,16 @@ test('searchPlaces (Nominatim path) parses lat/lon strings + skips '
 });
 
 test('searchPlaces (Nominatim path) handles empty response array', async () => {
+	// A provider that answered with no matches is `ok` + empty — the one
+	// case the dropdown is entitled to call "no places found".
 	const originalFetch = globalThis.fetch;
 	globalThis.fetch = (async () =>
 		new Response('[]', { status: 200 })) as typeof fetch;
 	try {
-		const out = await searchPlaces('nowhere-real');
-		assert.deepEqual(out, []);
+		assert.deepEqual(await searchPlaces('nowhere-real'), {
+			status: 'ok',
+			results: [],
+		});
 	} finally {
 		globalThis.fetch = originalFetch;
 	}

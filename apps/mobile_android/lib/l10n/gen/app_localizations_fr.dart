@@ -379,6 +379,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get commonCancel => 'Annuler';
 
   @override
+  String get placeSearchNoResults => 'Aucun lieu trouvé';
+
+  @override
+  String get placeSearchUnavailable =>
+      'La recherche de lieux est indisponible pour le moment';
+
+  @override
+  String get placeSearchRetry => 'Réessayer';
+
+  @override
   String get commonDismiss => 'Fermer';
 
   @override
@@ -10357,6 +10367,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gymSessionDiscardConfirm => 'Abandonner';
+
+  @override
+  String get gymSessionLeaveSaveFailed =>
+      'Impossible d\'enregistrer votre brouillon — vous êtes toujours ici, rien n\'est perdu. Réessayez ou abandonnez la séance volontairement.';
 
   @override
   String get gymSessionLeaveTitle => 'Quitter la séance ?';

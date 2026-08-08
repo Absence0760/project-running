@@ -15,9 +15,9 @@ const _kMapTilerBase = 'https://api.maptiler.com/geocoding';
 const _kNominatimBase = 'https://nominatim.openstreetmap.org/search';
 
 /// Ceiling on each MapTiler lookup. Without it a flaky network can
-/// pin the AppBar place-search overlay indefinitely; the empty-list
-/// fallback below already returns nothing on the timeout so the
-/// search dropdown clears rather than spinning forever.
+/// pin the AppBar place-search overlay indefinitely. A timeout resolves
+/// to [PlaceSearchStatus.unavailable], so the dropdown says the search
+/// failed rather than spinning forever OR claiming no such place.
 const Duration kGeocodingTimeout = Duration(seconds: 5);
 
 class PlaceResult {
@@ -29,6 +29,30 @@ class PlaceResult {
     required this.lat,
     required this.lng,
   });
+}
+
+/// Why a search reports an outcome rather than a bare list: a provider
+/// that is down, rate-limited, or timing out used to collapse into an
+/// empty list, which every call site renders identically to "this place
+/// does not exist" — and because each dropdown only opens on a non-empty
+/// result set, a failed search produced NO feedback at all.
+///
+/// The web twin (`geocoding_math.ts`) carries a third `aborted` state
+/// because its call sites pass an AbortSignal and must stay silent when
+/// they supersede their own request. Here the debounce is a cancelled
+/// `Timer`, so a superseded keystroke never reaches this layer at all
+/// and there is nothing for a third state to describe.
+enum PlaceSearchStatus { ok, unavailable }
+
+class PlaceSearchOutcome {
+  final PlaceSearchStatus status;
+  final List<PlaceResult> results;
+  const PlaceSearchOutcome.ok(this.results) : status = PlaceSearchStatus.ok;
+  const PlaceSearchOutcome.unavailable()
+      : status = PlaceSearchStatus.unavailable,
+        results = const [];
+
+  bool get isUnavailable => status == PlaceSearchStatus.unavailable;
 }
 
 typedef GeocodingFetcher = Future<String> Function(Uri url);
@@ -58,9 +82,6 @@ Future<String> _defaultFetcher(Uri url) async {
 }
 
 /// Search for places matching [query]. Returns at most [limit] results.
-/// Returns an empty list when:
-/// - the query is shorter than 2 characters (the web matches this)
-/// - the HTTP call fails for any reason
 ///
 /// Provider precedence (mirrors `searchPlacesWithKey` on web):
 ///   1. MapTiler when [apiKey] is non-empty
@@ -68,17 +89,20 @@ Future<String> _defaultFetcher(Uri url) async {
 ///      Protomaps-only dev stack with no MAPTILER_KEY still has a
 ///      working search box. See `decisions.md § 68`.
 ///
-/// The empty-on-error contract keeps the search box graceful: if
-/// every provider fails the user sees no results rather than an
-/// error toast on every keystroke.
-Future<List<PlaceResult>> searchPlaces(
+/// Never throws. A provider failure comes back as
+/// [PlaceSearchStatus.unavailable], which the dropdown must render
+/// differently from an `ok` with no results — the point is to stay off
+/// an error toast on every keystroke WITHOUT telling the runner that a
+/// reachable place does not exist.
+Future<PlaceSearchOutcome> searchPlaces(
   String query, {
   required String apiKey,
   int limit = 5,
   GeocodingFetcher? fetcher,
 }) async {
   final trimmed = query.trim();
-  if (trimmed.length < 2) return const [];
+  // Too short to search is an EMPTY result, not a failed one.
+  if (trimmed.length < 2) return const PlaceSearchOutcome.ok([]);
   if (apiKey.isNotEmpty) {
     return _searchViaMapTiler(
       trimmed,
@@ -90,7 +114,7 @@ Future<List<PlaceResult>> searchPlaces(
   return _searchViaNominatim(trimmed, limit: limit, fetcher: fetcher);
 }
 
-Future<List<PlaceResult>> _searchViaMapTiler(
+Future<PlaceSearchOutcome> _searchViaMapTiler(
   String trimmed, {
   required String apiKey,
   required int limit,
@@ -104,8 +128,10 @@ Future<List<PlaceResult>> _searchViaMapTiler(
     final body = await (fetcher ?? _defaultFetcher)(url).timeout(kGeocodingTimeout);
     final data = jsonDecode(body) as Map<String, dynamic>;
     final features = data['features'] as List?;
-    if (features == null) return const [];
-    return [
+    // A 200 whose body carries no `features` array is a malformed
+    // answer, not an answer of "no matches".
+    if (features == null) return const PlaceSearchOutcome.unavailable();
+    return PlaceSearchOutcome.ok([
       for (final f in features)
         if (f is Map &&
             f['center'] is List &&
@@ -115,13 +141,15 @@ Future<List<PlaceResult>> _searchViaMapTiler(
             lng: ((f['center'] as List)[0] as num).toDouble(),
             lat: ((f['center'] as List)[1] as num).toDouble(),
           ),
-    ];
+    ]);
   } catch (_) {
-    return const [];
+    // Covers the transport throw, the >=400 HttpException the default
+    // fetcher raises, the timeout, and an unparseable body.
+    return const PlaceSearchOutcome.unavailable();
   }
 }
 
-Future<List<PlaceResult>> _searchViaNominatim(
+Future<PlaceSearchOutcome> _searchViaNominatim(
   String trimmed, {
   required int limit,
   GeocodingFetcher? fetcher,
@@ -139,7 +167,9 @@ Future<List<PlaceResult>> _searchViaNominatim(
   try {
     final body = await (fetcher ?? _defaultFetcher)(url).timeout(kGeocodingTimeout);
     final data = jsonDecode(body);
-    if (data is! List) return const [];
+    // Nominatim answers a search with a JSON array; anything else is a
+    // malformed answer, not an answer of "no matches".
+    if (data is! List) return const PlaceSearchOutcome.unavailable();
     final out = <PlaceResult>[];
     for (final f in data) {
       if (f is! Map) continue;
@@ -156,9 +186,13 @@ Future<List<PlaceResult>> _searchViaNominatim(
         lng: lng,
       ));
     }
-    return out;
+    return PlaceSearchOutcome.ok(out);
   } catch (_) {
-    return const [];
+    // Covers the transport throw, the >=400 HttpException the default
+    // fetcher raises (Nominatim answers an over-rate request with 429 —
+    // exactly the case that must read as "search unavailable", never as
+    // "no such place"), the timeout, and an unparseable body.
+    return const PlaceSearchOutcome.unavailable();
   }
 }
 
