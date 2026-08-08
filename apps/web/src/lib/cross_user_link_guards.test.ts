@@ -87,11 +87,18 @@ test('/runs/[id] keeps every owner-only control out of the non-owner branch', ()
 		.filter((rhs) => !rhs.startsWith('{ ...run'));
 	assert.deepEqual(
 		runSources,
-		['await fetchRunById(pageData.id)'],
+		['ownRun'],
 		'`run` drives the whole owner template (edit / delete / visibility / gear / rematch). ' +
 			'Only the owner-scoped fetchRunById may source it — assigning a public_runs row there ' +
 			'would render owner controls to a non-owner. Got: ' +
 			JSON.stringify(runSources),
+	);
+	// …and `ownRun` may only ever come from that fetch. fetchRunById reports
+	// its transport error separately (a failed read must not read as
+	// "Run not found"), so the row arrives destructured rather than assigned.
+	assert.ok(
+		src.includes('const { run: ownRun, error: runError } = await fetchRunById(pageData.id);'),
+		'`ownRun` must be destructured directly from the owner-scoped fetchRunById call.',
 	);
 });
 

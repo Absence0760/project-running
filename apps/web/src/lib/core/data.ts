@@ -435,17 +435,26 @@ export async function fetchPublicRecap(
 	};
 }
 
-export async function fetchRunById(id: string): Promise<Run | null> {
+/// Owner-scoped single-run read. Reports the transport/RLS error separately
+/// from a null row: supabase-js resolves `{data: null, error}` rather than
+/// throwing, so collapsing both into `null` made an unreachable backend
+/// indistinguishable from a deleted run and rendered "Run not found".
+export async function fetchRunById(
+	id: string
+): Promise<{ run: Run | null; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return null;
-	const { data } = await supabase
+	if (!userId) return { run: null, error: null };
+	const { data, error } = await supabase
 		.from(TABLES.runs)
 		.select('*')
 		.eq('id', id)
 		.eq('user_id', userId)
 		.single();
 
-	if (!data) return null;
+	// PGRST116 is "no rows matched" — a genuine not-found (or not-owner),
+	// not a failure to find out.
+	if (error && error.code !== 'PGRST116') return { run: null, error: error.message };
+	if (!data) return { run: null, error: null };
 
 	// Lazy-load the GPS track from Storage when the run has one.
 	let track = null;
@@ -456,7 +465,7 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 			console.warn('Failed to fetch track', e);
 		}
 	}
-	return { ...data, source: parseRunSource(data.source), track };
+	return { run: { ...data, source: parseRunSource(data.source), track }, error: null };
 }
 
 /// Fetch every run by the signed-in user against `routeId`, ordered
