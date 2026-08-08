@@ -2,8 +2,8 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { buildGuideTitle, buildLearnCanonical } from '$lib/learn/learn_meta';
 	import GuideCard from '$lib/components/GuideCard.svelte';
-	import PublicHeader from '$lib/components/PublicHeader.svelte';
-	import PublicFooter from '$lib/components/PublicFooter.svelte';
+	import LearnPage from '$lib/components/LearnPage.svelte';
+	import LearnBreadcrumb from '$lib/components/LearnBreadcrumb.svelte';
 
 	let { data } = $props();
 
@@ -33,63 +33,29 @@
 	<meta name="twitter:image" content="/og-default.png" />
 </svelte:head>
 
-<div class="learn-page">
-	<PublicHeader />
-
-	<section class="hero">
-		<nav class="breadcrumb" aria-label={m('learn.breadcrumbNav')}>
-			<a href="/">{m('learn.breadcrumbHome')}</a>
-			<span class="sep">/</span>
-			<a href="/learn">{m('learn.breadcrumbLearn')}</a>
-		</nav>
+<LearnPage>
+	<section class="hero learn-column">
+		<LearnBreadcrumb
+			crumbs={[
+				{ href: '/', label: m('learn.breadcrumbHome') },
+				{ href: '/learn', label: m('learn.breadcrumbLearn') },
+			]}
+		/>
 		<h1>{categoryLabel}</h1>
 	</section>
 
-	<main class="content" id="main-content">
+	<main class="content learn-column" id="main-content">
 		<div class="guide-grid">
 			{#each data.guides as guide (guide.slug)}
 				<GuideCard {guide} />
 			{/each}
 		</div>
 	</main>
-
-	<PublicFooter />
-</div>
+</LearnPage>
 
 <style>
-	.learn-page {
-		min-height: 100vh;
-		background: var(--color-bg);
-		display: flex;
-		flex-direction: column;
-	}
-
 	.hero {
-		max-width: 64rem;
-		margin: 0 auto;
-		width: 100%;
 		padding: var(--space-xl) var(--space-md) var(--space-sm);
-	}
-
-	.breadcrumb {
-		font-size: 0.85rem;
-		margin-bottom: var(--space-sm);
-		display: flex;
-		gap: 0.3rem;
-		align-items: center;
-	}
-
-	.breadcrumb a {
-		color: var(--color-text-secondary);
-		text-decoration: none;
-	}
-
-	.breadcrumb a:hover {
-		color: var(--color-primary);
-	}
-
-	.breadcrumb .sep {
-		color: var(--color-text-tertiary);
 	}
 
 	.hero h1 {
@@ -100,9 +66,6 @@
 	}
 
 	.content {
-		max-width: 64rem;
-		margin: 0 auto;
-		width: 100%;
 		padding: var(--space-md);
 	}
 

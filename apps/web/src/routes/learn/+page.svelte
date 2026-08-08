@@ -3,8 +3,8 @@
 	import { buildLearnCanonical } from '$lib/learn/learn_meta';
 	import { guidesByCategory } from '$lib/learn/guides';
 	import GuideCard from '$lib/components/GuideCard.svelte';
-	import PublicHeader from '$lib/components/PublicHeader.svelte';
-	import PublicFooter from '$lib/components/PublicFooter.svelte';
+	import LearnPage from '$lib/components/LearnPage.svelte';
+	import LearnBreadcrumb from '$lib/components/LearnBreadcrumb.svelte';
 
 	let { data } = $props();
 
@@ -31,16 +31,15 @@
 	<meta name="twitter:image" content="/og-default.png" />
 </svelte:head>
 
-<div class="learn-page">
-	<PublicHeader />
-
-	<section class="hero">
+<LearnPage>
+	<section class="hero learn-column">
+		<LearnBreadcrumb crumbs={[{ href: '/', label: m('learn.breadcrumbHome') }]} />
 		<p class="kicker">{m('learn.hubKicker')}</p>
 		<h1>{m('learn.hubTitle')}</h1>
 		<p class="hero-sub">{m('learn.hubSub')}</p>
 	</section>
 
-	<main class="content" id="main-content">
+	<main class="content learn-column" id="main-content">
 		{#each data.categories as category (category.id)}
 			<section class="category-section" aria-labelledby="cat-{category.id}">
 				<h2 id="cat-{category.id}">{m(category.labelKey)}</h2>
@@ -53,30 +52,17 @@
 		{/each}
 	</main>
 
-	<section class="signup-cta" aria-labelledby="learn-cta-heading">
+	<section class="signup-cta learn-column" aria-labelledby="learn-cta-heading">
 		<p class="kicker">{m('learn.ctaKicker')}</p>
 		<h2 id="learn-cta-heading">{m('learn.ctaHeading')}</h2>
 		<p class="signup-sub">{m('learn.ctaSub')}</p>
 		<a class="btn btn-primary" href="/login?signup=1">{m('learn.ctaButton')}</a>
 	</section>
-
-	<PublicFooter />
-</div>
+</LearnPage>
 
 <style>
-	.learn-page {
-		min-height: 100vh;
-		background: var(--color-bg);
-		display: flex;
-		flex-direction: column;
-	}
-
 	.hero {
-		max-width: 56rem;
-		margin: 0 auto;
-		width: 100%;
 		padding: var(--space-xl) var(--space-md) var(--space-md);
-		text-align: center;
 	}
 
 	.kicker {
@@ -100,14 +86,11 @@
 		font-size: 1rem;
 		color: var(--color-text-secondary);
 		max-width: 40rem;
-		margin: 0 auto;
+		margin: 0;
 		line-height: 1.5;
 	}
 
 	.content {
-		max-width: 64rem;
-		margin: 0 auto;
-		width: 100%;
 		padding: var(--space-md);
 		display: flex;
 		flex-direction: column;
@@ -128,9 +111,6 @@
 	}
 
 	.signup-cta {
-		max-width: 56rem;
-		margin: 0 auto;
-		width: 100%;
 		padding: var(--space-xl) var(--space-md);
 		text-align: center;
 	}
