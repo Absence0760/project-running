@@ -8631,6 +8631,10 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get runGearChipsLoadFailed =>
+      'Ausrüstung konnte nicht geladen werden.';
+
+  @override
   String get runGearChipsPickerTitle =>
       'Bei diesem Lauf verwendete Ausrüstung markieren';
 

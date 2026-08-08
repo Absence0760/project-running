@@ -2396,6 +2396,7 @@
   "planCalendarPrevMonth": "Mês anterior",
   "planCalendarNextMonth": "Próximo mês",
   "runGearChipsLoadError": "Falha ao carregar equipamento: {error}",
+  "runGearChipsLoadFailed": "Não foi possível carregar o equipamento.",
   "runGearChipsPickerTitle": "Marcar o equipamento usado nesta corrida",
   "runGearChipsEmpty": "Você ainda não registrou nenhum equipamento. Adicione em Configurações → Equipamento.",
   "runGearChipsCancel": "Cancelar",

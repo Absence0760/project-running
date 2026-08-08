@@ -8623,6 +8623,9 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get runGearChipsLoadFailed => 'No se pudo cargar el equipamiento.';
+
+  @override
   String get runGearChipsPickerTitle =>
       'Etiquetar el equipo usado en esta carrera';
 

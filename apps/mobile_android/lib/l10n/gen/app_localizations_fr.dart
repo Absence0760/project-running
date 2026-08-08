@@ -8643,6 +8643,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get runGearChipsLoadFailed => 'Impossible de charger l\'équipement.';
+
+  @override
   String get runGearChipsPickerTitle =>
       'Marquer l\'équipement utilisé sur cette course';
 

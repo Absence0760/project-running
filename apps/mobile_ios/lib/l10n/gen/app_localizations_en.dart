@@ -8532,6 +8532,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get runGearChipsLoadFailed => 'Couldn\'t load gear.';
+
+  @override
   String get runGearChipsPickerTitle => 'Tag gear used on this run';
 
   @override

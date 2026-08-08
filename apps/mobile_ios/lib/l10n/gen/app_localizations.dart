@@ -14294,6 +14294,12 @@ abstract class AppLocalizations {
   /// **'Failed to load gear: {error}'**
   String runGearChipsLoadError(String error);
 
+  /// Shown in place of the run-detail gear chips when the assigned-gear read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load gear.'**
+  String get runGearChipsLoadFailed;
+
   /// Header of the tag-gear bottom sheet
   ///
   /// In en, this message translates to:

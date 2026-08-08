@@ -2396,6 +2396,7 @@
   "planCalendarPrevMonth": "前の月",
   "planCalendarNextMonth": "次の月",
   "runGearChipsLoadError": "ギアの読み込みに失敗しました: {error}",
+  "runGearChipsLoadFailed": "ギアを読み込めませんでした。",
   "runGearChipsPickerTitle": "このランで使用したギアをタグ付け",
   "runGearChipsEmpty": "ギアがまだ登録されていません。設定 → ギア で追加してください。",
   "runGearChipsCancel": "キャンセル",

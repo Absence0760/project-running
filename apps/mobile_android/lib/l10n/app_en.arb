@@ -11519,6 +11519,10 @@
       }
     }
   },
+  "runGearChipsLoadFailed": "Couldn't load gear.",
+  "@runGearChipsLoadFailed": {
+    "description": "Shown in place of the run-detail gear chips when the assigned-gear read failed"
+  },
   "runGearChipsPickerTitle": "Tag gear used on this run",
   "@runGearChipsPickerTitle": {
     "description": "Header of the tag-gear bottom sheet"

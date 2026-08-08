@@ -2396,6 +2396,7 @@
   "planCalendarPrevMonth": "Vorheriger Monat",
   "planCalendarNextMonth": "Nächster Monat",
   "runGearChipsLoadError": "Ausrüstung konnte nicht geladen werden: {error}",
+  "runGearChipsLoadFailed": "Ausrüstung konnte nicht geladen werden.",
   "runGearChipsPickerTitle": "Bei diesem Lauf verwendete Ausrüstung markieren",
   "runGearChipsEmpty": "Du hast noch keine Ausrüstung registriert. Füge welche unter Einstellungen → Ausrüstung hinzu.",
   "runGearChipsCancel": "Abbrechen",

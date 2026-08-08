@@ -8617,6 +8617,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get runGearChipsLoadFailed =>
+      'Não foi possível carregar o equipamento.';
+
+  @override
   String get runGearChipsPickerTitle =>
       'Marcar o equipamento usado nesta corrida';
 
@@ -21204,6 +21208,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String runGearChipsLoadError(String error) {
     return 'Falha ao carregar equipamento: $error';
   }
+
+  @override
+  String get runGearChipsLoadFailed =>
+      'Não foi possível carregar o equipamento.';
 
   @override
   String get runGearChipsPickerTitle =>

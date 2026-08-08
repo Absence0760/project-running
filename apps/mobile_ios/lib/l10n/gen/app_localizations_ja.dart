@@ -8175,6 +8175,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get runGearChipsLoadFailed => 'ギアを読み込めませんでした。';
+
+  @override
   String get runGearChipsPickerTitle => 'このランで使用したギアをタグ付け';
 
   @override
