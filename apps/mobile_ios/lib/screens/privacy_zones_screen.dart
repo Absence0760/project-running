@@ -20,6 +20,7 @@ import '../widgets/live_run_map.dart'
         currentTileUrl;
 import '../widgets/map_attribution.dart';
 import '../widgets/top_banner.dart';
+import '../widgets/place_search_panel.dart';
 
 /// Settings → Privacy zones: tap-to-add geofences clipped from the
 /// start and end of any public-surface track. Mirrors the web
@@ -61,6 +62,9 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
 
   final _searchCtl = TextEditingController();
   List<PlaceResult> _searchResults = const [];
+  // Held apart from an empty result set so the dropdown can say the
+  // search FAILED rather than claim the place does not exist.
+  bool _searchUnavailable = false;
   bool _searchOpen = false;
   Timer? _searchDebounce;
 
@@ -288,21 +292,29 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
     if (query.trim().length < 2) {
       setState(() {
         _searchResults = const [];
+        _searchUnavailable = false;
         _searchOpen = false;
       });
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
-      final results = await searchPlaces(
-        query,
-        apiKey: _maptilerKey,
-        fetcher: widget.geocodingFetcher,
-      );
-      if (!mounted) return;
-      setState(() {
-        _searchResults = results;
-        _searchOpen = results.isNotEmpty;
-      });
+    _searchDebounce =
+        Timer(const Duration(milliseconds: 300), () => _runPlaceSearch(query));
+  }
+
+  Future<void> _runPlaceSearch(String query) async {
+    final outcome = await searchPlaces(
+      query,
+      apiKey: _maptilerKey,
+      fetcher: widget.geocodingFetcher,
+    );
+    if (!mounted) return;
+    setState(() {
+      _searchResults = outcome.results;
+      _searchUnavailable = outcome.isUnavailable;
+      // Open on an empty result set too: a provider that matched nothing
+      // must say so rather than leave the runner staring at a map that
+      // did not react.
+      _searchOpen = true;
     });
   }
 
@@ -313,6 +325,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
     _searchCtl.clear();
     setState(() {
       _searchResults = const [];
+      _searchUnavailable = false;
       _searchOpen = false;
     });
   }
@@ -475,29 +488,18 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                       MapAttribution(darkBasemap: darkBasemap),
                     ],
                   ),
-                  if (_searchOpen && _searchResults.isNotEmpty)
+                  if (_searchOpen)
                     Positioned(
                       top: 0,
                       left: 0,
                       right: 0,
                       child: Material(
                         elevation: 4,
-                        child: ListView(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.zero,
-                          children: [
-                            for (final r in _searchResults)
-                              ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.place),
-                                title: Text(
-                                  r.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onTap: () => _onSearchResultTap(r),
-                              ),
-                          ],
+                        child: PlaceSearchPanel(
+                          results: _searchResults,
+                          unavailable: _searchUnavailable,
+                          onSelect: _onSearchResultTap,
+                          onRetry: () => _runPlaceSearch(_searchCtl.text),
                         ),
                       ),
                     ),

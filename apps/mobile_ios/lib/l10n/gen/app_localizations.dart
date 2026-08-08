@@ -665,6 +665,24 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get commonCancel;
 
+  /// Dropdown row shown when a place search succeeded but matched nothing
+  ///
+  /// In en, this message translates to:
+  /// **'No places found'**
+  String get placeSearchNoResults;
+
+  /// Dropdown row shown when the place-search provider failed, rate-limited, or timed out — deliberately distinct from a no-results answer
+  ///
+  /// In en, this message translates to:
+  /// **'Place search is unavailable right now'**
+  String get placeSearchUnavailable;
+
+  /// Action on the place-search-unavailable row that re-runs the lookup
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get placeSearchRetry;
+
   /// Generic tooltip for a dismiss / close icon button
   ///
   /// In en, this message translates to:

@@ -535,6 +535,18 @@
   "@commonCancel": {
     "description": "Generic cancel action for a destructive-confirm dialog whose surface has no cancel label of its own"
   },
+  "placeSearchNoResults": "No places found",
+  "@placeSearchNoResults": {
+    "description": "Dropdown row shown when a place search succeeded but matched nothing"
+  },
+  "placeSearchUnavailable": "Place search is unavailable right now",
+  "@placeSearchUnavailable": {
+    "description": "Dropdown row shown when the place-search provider failed, rate-limited, or timed out — deliberately distinct from a no-results answer"
+  },
+  "placeSearchRetry": "Try again",
+  "@placeSearchRetry": {
+    "description": "Action on the place-search-unavailable row that re-runs the lookup"
+  },
   "commonDismiss": "Dismiss",
   "@commonDismiss": {
     "description": "Generic tooltip for a dismiss / close icon button"

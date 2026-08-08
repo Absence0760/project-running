@@ -367,6 +367,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get commonCancel => 'キャンセル';
 
   @override
+  String get placeSearchNoResults => '場所が見つかりません';
+
+  @override
+  String get placeSearchUnavailable => '現在、場所の検索を利用できません';
+
+  @override
+  String get placeSearchRetry => '再試行';
+
+  @override
   String get commonDismiss => '閉じる';
 
   @override

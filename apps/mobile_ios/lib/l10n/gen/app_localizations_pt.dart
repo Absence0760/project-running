@@ -379,6 +379,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get commonCancel => 'Cancelar';
 
   @override
+  String get placeSearchNoResults => 'Nenhum lugar encontrado';
+
+  @override
+  String get placeSearchUnavailable =>
+      'A pesquisa de locais está indisponível de momento';
+
+  @override
+  String get placeSearchRetry => 'Tentar novamente';
+
+  @override
   String get commonDismiss => 'Dispensar';
 
   @override
@@ -12935,6 +12945,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get commonCancel => 'Cancelar';
+
+  @override
+  String get placeSearchNoResults => 'Nenhum lugar encontrado';
+
+  @override
+  String get placeSearchUnavailable =>
+      'A busca de lugares está indisponível no momento';
+
+  @override
+  String get placeSearchRetry => 'Tentar novamente';
 
   @override
   String get commonDismiss => 'Dispensar';

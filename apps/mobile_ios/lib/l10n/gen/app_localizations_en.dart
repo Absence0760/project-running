@@ -377,6 +377,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonCancel => 'Cancel';
 
   @override
+  String get placeSearchNoResults => 'No places found';
+
+  @override
+  String get placeSearchUnavailable => 'Place search is unavailable right now';
+
+  @override
+  String get placeSearchRetry => 'Try again';
+
+  @override
   String get commonDismiss => 'Dismiss';
 
   @override

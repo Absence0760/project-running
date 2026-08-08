@@ -379,6 +379,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get commonCancel => 'Annuler';
 
   @override
+  String get placeSearchNoResults => 'Aucun lieu trouvé';
+
+  @override
+  String get placeSearchUnavailable =>
+      'La recherche de lieux est indisponible pour le moment';
+
+  @override
+  String get placeSearchRetry => 'Réessayer';
+
+  @override
   String get commonDismiss => 'Fermer';
 
   @override

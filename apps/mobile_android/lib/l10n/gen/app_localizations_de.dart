@@ -380,6 +380,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get commonCancel => 'Abbrechen';
 
   @override
+  String get placeSearchNoResults => 'Keine Orte gefunden';
+
+  @override
+  String get placeSearchUnavailable =>
+      'Die Ortssuche ist derzeit nicht verfügbar';
+
+  @override
+  String get placeSearchRetry => 'Erneut versuchen';
+
+  @override
   String get commonDismiss => 'Schließen';
 
   @override
