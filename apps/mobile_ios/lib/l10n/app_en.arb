@@ -855,6 +855,10 @@
       }
     }
   },
+  "bodyMetricsLoadError": "Couldn't load your body metrics.",
+  "@bodyMetricsLoadError": {
+    "description": "Error state shown when the body-metrics screen fails to load the saved profile"
+  },
   "safetyTitle": "Safety contacts",
   "@safetyTitle": {
     "description": "Title of the safety-contacts settings screen"
@@ -906,6 +910,24 @@
   "safetyAddFailed": "Could not add contact: {error}",
   "@safetyAddFailed": {
     "description": "Error toast when adding a safety contact fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "safetyRemoveFailed": "Could not remove contact: {error}",
+  "@safetyRemoveFailed": {
+    "description": "Error toast when removing a safety contact fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "safetySettingSaveFailed": "Could not save setting: {error}",
+  "@safetySettingSaveFailed": {
+    "description": "Error toast when a safety setting write fails and the control is reverted",
     "placeholders": {
       "error": {
         "type": "String"
@@ -2639,6 +2661,18 @@
     "description": "Section header for the distance field on the add-run form"
   },
   "addRunSectionDuration": "Duration",
+  "durationFieldHours": "Hours",
+  "@durationFieldHours": {
+    "description": "Accessible label for the hours box of an hours/minutes/seconds duration entry — its visible 'h' suffix is decorative and is not part of the field's accessible name"
+  },
+  "durationFieldMinutes": "Minutes",
+  "@durationFieldMinutes": {
+    "description": "Accessible label for the minutes box of an hours/minutes/seconds duration entry"
+  },
+  "durationFieldSeconds": "Seconds",
+  "@durationFieldSeconds": {
+    "description": "Accessible label for the seconds box of an hours/minutes/seconds duration entry"
+  },
   "@addRunSectionDuration": {
     "description": "Section header for the duration fields on the add-run form"
   },
@@ -11502,6 +11536,10 @@
         "type": "String"
       }
     }
+  },
+  "runGearChipsLoadFailed": "Couldn't load gear.",
+  "@runGearChipsLoadFailed": {
+    "description": "Shown in place of the run-detail gear chips when the assigned-gear read failed"
   },
   "runGearChipsPickerTitle": "Tag gear used on this run",
   "@runGearChipsPickerTitle": {

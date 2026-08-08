@@ -636,6 +636,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError => 'Couldn\'t load your body metrics.';
+
+  @override
   String get safetyTitle => 'Safety contacts';
 
   @override
@@ -676,6 +679,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String safetyAddFailed(String error) {
     return 'Could not add contact: $error';
+  }
+
+  @override
+  String safetyRemoveFailed(String error) {
+    return 'Could not remove contact: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Could not save setting: $error';
   }
 
   @override
@@ -2007,6 +2020,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addRunSectionDuration => 'Duration';
+
+  @override
+  String get durationFieldHours => 'Hours';
+
+  @override
+  String get durationFieldMinutes => 'Minutes';
+
+  @override
+  String get durationFieldSeconds => 'Seconds';
 
   @override
   String get addRunSectionTitle => 'Title (optional)';
@@ -8518,6 +8540,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String runGearChipsLoadError(String error) {
     return 'Failed to load gear: $error';
   }
+
+  @override
+  String get runGearChipsLoadFailed => 'Couldn\'t load gear.';
 
   @override
   String get runGearChipsPickerTitle => 'Tag gear used on this run';

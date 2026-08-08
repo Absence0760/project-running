@@ -95,6 +95,7 @@
 	/// privacy-zone-clipped track are fetched by RunShareView.
 	let otherRunOwner = $state<PublicRunAttribution | null>(null);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 
 	/// Track where the user came from so the in-page back button can
 	/// genuinely go BACK (history.back) — which pops the history entry
@@ -195,7 +196,9 @@
 		// `user` is still null (fetchUser is in flight) — gating only
 		// on auth.loading misses it.
 		await auth.ready();
-		run = await fetchRunById(pageData.id);
+		const { run: ownRun, error: runError } = await fetchRunById(pageData.id);
+		run = ownRun;
+		loadError = runError;
 		if (!run) {
 			// Not the owner (or no such run). A publicly readable run gets
 			// the non-owner branch — the share view plus signed-in kudos +
@@ -1193,6 +1196,19 @@
 				</div>
 			</div>
 			<RunShareView runId={pageData.id} />
+		</div>
+	</div>
+{:else if loadError}
+	<div class="run-detail">
+		<a href="/runs" class="back-link page-back">
+			<span class="material-symbols">arrow_back</span> {m('runDetail.allRuns')}
+		</a>
+		<div class="not-found" role="alert" data-testid="run-load-error">
+			<h1>{m('runDetail.loadErrorTitle')}</h1>
+			<p>{m('runDetail.loadErrorBody')}</p>
+			<button class="btn btn-primary" onclick={() => location.reload()}
+				>{m('runDetail.retry')}</button
+			>
 		</div>
 	</div>
 {:else if !run}

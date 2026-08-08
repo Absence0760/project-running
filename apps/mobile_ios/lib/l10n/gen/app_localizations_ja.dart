@@ -617,6 +617,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError => '身体データを読み込めませんでした。';
+
+  @override
   String get safetyTitle => '緊急連絡先';
 
   @override
@@ -656,6 +659,16 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String safetyAddFailed(String error) {
     return '連絡先を追加できませんでした：$error';
+  }
+
+  @override
+  String safetyRemoveFailed(String error) {
+    return '連絡先を削除できませんでした: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return '設定を保存できませんでした: $error';
   }
 
   @override
@@ -1918,6 +1931,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get addRunSectionDuration => '時間';
+
+  @override
+  String get durationFieldHours => '時間';
+
+  @override
+  String get durationFieldMinutes => '分';
+
+  @override
+  String get durationFieldSeconds => '秒';
 
   @override
   String get addRunSectionTitle => 'タイトル（任意）';
@@ -8161,6 +8183,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String runGearChipsLoadError(String error) {
     return 'ギアの読み込みに失敗しました: $error';
   }
+
+  @override
+  String get runGearChipsLoadFailed => 'ギアを読み込めませんでした。';
 
   @override
   String get runGearChipsPickerTitle => 'このランで使用したギアをタグ付け';

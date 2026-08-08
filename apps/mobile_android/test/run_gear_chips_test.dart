@@ -19,6 +19,27 @@ class _FakeApiClient extends ApiClient {
   Future<List<GearRow>> fetchRunGear(String runId) async => gear;
 }
 
+/// The assigned-gear read fails until [failures] is exhausted. Before the
+/// fail-closed guard the owner saw an empty "+ Tag gear" state, and saving
+/// from it deleted the run's real gear rows.
+class _FailingReadApiClient extends ApiClient {
+  _FailingReadApiClient({this.failures = 1 << 30, this.gear = const []});
+
+  final int failures;
+  final List<GearRow> gear;
+  int reads = 0;
+
+  @override
+  String? get userId => 'owner-1';
+
+  @override
+  Future<List<GearRow>> fetchRunGear(String runId) async {
+    reads++;
+    if (reads <= failures) throw Exception('offline');
+    return gear;
+  }
+}
+
 GearRow _gear(String id, String kind, String name) {
   final epoch = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   return GearRow(
@@ -128,6 +149,34 @@ void main() {
         (tester) async {
       await _pump(tester, _FakeApiClient(viewerId: 'owner-1'));
       expect(find.text('+ Tag gear'), findsOneWidget);
+    });
+  });
+
+  group('RunGearChips — failed read', () {
+    testWidgets('withholds the picker rather than showing an empty baseline',
+        (tester) async {
+      await _pump(tester, _FailingReadApiClient());
+      expect(find.textContaining("Couldn't load gear"), findsOneWidget);
+      // Opening the picker from here would seed an empty selection, and
+      // saving it would delete the run's real gear rows.
+      expect(find.text('+ Tag gear'), findsNothing);
+      expect(find.text('Edit'), findsNothing);
+    });
+
+    testWidgets('Retry re-reads and restores the chips', (tester) async {
+      final api = _FailingReadApiClient(
+        failures: 1,
+        gear: [_gear('g1', 'shoe', 'Pegasus 40')],
+      );
+      await _pump(tester, api);
+      expect(find.text('Retry'), findsOneWidget);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+
+      expect(api.reads, 2);
+      expect(find.text('Pegasus 40'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
     });
   });
 }

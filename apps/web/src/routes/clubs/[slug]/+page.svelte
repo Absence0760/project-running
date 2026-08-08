@@ -80,6 +80,7 @@
 	let membersLoadingMore = $state(false);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	type Tab = 'feed' | 'events' | 'routes' | 'templates' | 'photos' | 'members';
 	const TABS: readonly Tab[] = ['feed', 'events', 'routes', 'templates', 'photos', 'members'];
 	let tab = $state<Tab>('feed');
@@ -144,6 +145,8 @@
 	let showDeleteClubConfirm = $state(false);
 	let showDeletePostConfirm = $state<string | null>(null);
 	let showRemoveRouteId = $state<string | null>(null);
+	let confirmUnpublishId = $state<string | null>(null);
+	let unpublishBusyId = $state<string | null>(null);
 	/** When non-null, the user_id of the member the admin is about to
 	 *  remove. Drives the kick ConfirmDialog. */
 	let removingMemberId = $state<string | null>(null);
@@ -171,7 +174,16 @@
 	// canonical URL on screen with the club still null.
 	async function load(target: string = slug) {
 		loading = true;
-		club = await fetchClubBySlug(target);
+		loadError = null;
+		const clubRead = await fetchClubBySlug(target);
+		club = clubRead.club;
+		if (clubRead.error) {
+			// A failed read is not "this club does not exist" — the uuid
+			// forward below would also be pointless, since it would fail too.
+			loadError = clubRead.error;
+			loading = false;
+			return;
+		}
 		if (!club) {
 			// The notification worker addresses a club by id — its row
 			// projection has no slug to join — so a uuid can arrive in this
@@ -268,13 +280,22 @@
 		}
 	}
 
-	async function unmakeTemplate(planId: string) {
+	// Unpublishing withdraws the template from every member's Templates tab,
+	// so it is confirmed like the sibling route removal rather than firing on
+	// one click. The per-id busy flag also stops a second click re-firing it.
+	async function unmakeTemplate() {
+		const planId = confirmUnpublishId;
+		confirmUnpublishId = null;
+		if (!planId || unpublishBusyId) return;
+		unpublishBusyId = planId;
 		try {
 			await setPlanIsTemplate(planId, false, null);
-			showToast(tr('clubHome.toastTemplateRemoved'));
+			showToast(tr('clubHome.toastTemplateRemoved'), 'success');
 			await load();
 		} catch (e) {
 			showToast(tr('clubHome.toastFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			unpublishBusyId = null;
 		}
 	}
 
@@ -783,6 +804,12 @@
 		</div>
 	</div>
 	<p class="sr-only" role="status">{tr('clubHome.loadingClub')}</p>
+{:else if loadError}
+	<div class="not-found" role="alert" data-testid="club-load-error">
+		<h2>{tr('clubHome.loadErrorTitle')}</h2>
+		<p>{tr('clubHome.loadErrorBody')}</p>
+		<button class="btn-secondary" onclick={() => load()}>{tr('clubHome.retry')}</button>
+	</div>
 {:else if !club}
 	<div class="not-found">
 		<h2>{tr('clubHome.notFoundTitle')}</h2>
@@ -1450,8 +1477,10 @@
 										<button
 											class="btn btn-outline btn-sm"
 											type="button"
-											onclick={() => unmakeTemplate(t.id)}
+											onclick={() => (confirmUnpublishId = t.id)}
+											disabled={unpublishBusyId != null}
 											title={tr('clubHome.unpublishTitle')}
+											data-testid="template-unpublish"
 										>
 											{tr('clubHome.unpublish')}
 										</button>
@@ -1636,6 +1665,16 @@
 	confirmLabel={tr('clubHome.delete')}
 	onconfirm={confirmDeletePost}
 	oncancel={() => showDeletePostConfirm = null}
+	danger
+/>
+
+<ConfirmDialog
+	open={confirmUnpublishId !== null}
+	title={tr('clubHome.unpublishConfirmTitle')}
+	message={tr('clubHome.unpublishConfirmMessage')}
+	confirmLabel={tr('clubHome.unpublish')}
+	onconfirm={unmakeTemplate}
+	oncancel={() => (confirmUnpublishId = null)}
 	danger
 />
 

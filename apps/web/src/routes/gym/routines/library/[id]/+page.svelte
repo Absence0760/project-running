@@ -25,7 +25,16 @@
 		loading = true;
 		loadError = null;
 		notFound = false;
-		const res = await fetchGymRoutineDetail(routineId);
+		let res: GymRoutineDetail | null;
+		try {
+			res = await fetchGymRoutineDetail(routineId);
+		} catch (e) {
+			// The loadError banner below was previously unreachable — nothing
+			// ever assigned it, so a failed read showed "Routine not found".
+			loadError = e instanceof Error ? e.message : String(e);
+			loading = false;
+			return;
+		}
 		// fetchGymRoutineDetail honours RLS: a routine the viewer can't see
 		// returns null. Confirm it's actually a public template so a viewer's
 		// own private / club routine id can't masquerade as a library entry.
@@ -36,6 +45,9 @@
 		}
 		detail = res;
 		const lib = await fetchPublicGymRoutineLibrary('');
+		// The library read carries its own error field, which was being
+		// discarded — a failure silently rendered the author as "Anonymous".
+		loadError = lib.error ?? null;
 		authorHandle = lib.routines.find((r) => r.id === routineId)?.author_handle ?? null;
 		loading = false;
 	}

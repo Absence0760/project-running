@@ -90,40 +90,53 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
     _offRouteAlerts = offRoute == true;
   }
 
+  // A safety switch that reads on while the server still has it off is worse
+  // than one that visibly refused: nobody is being alerted, and the control
+  // says otherwise. Every setter below reverts the optimistic value when the
+  // write fails and offers a retry.
   Future<void> _setOverdueMinutes(int? minutes) async {
     final l10n = AppLocalizations.of(context);
+    final previous = _overdueMinutes;
     setState(() => _overdueMinutes = minutes);
     try {
       await widget.settingsSync
           ?.updateUniversal({SettingsKeys.safetyOverdueMinutes: minutes});
       _banner(l10n.safetyOverdueSaved);
     } catch (e) {
-      debugPrint('safety add failed: $e');
-      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
+      debugPrint('safety overdue save failed: $e');
+      if (mounted) setState(() => _overdueMinutes = previous);
+      _banner(l10n.safetySettingSaveFailed(friendlyError(l10n, e)),
+          onRetry: () => _setOverdueMinutes(minutes));
     }
   }
 
   Future<void> _setAutoLiveShare(bool value) async {
     final l10n = AppLocalizations.of(context);
+    final previous = _autoLiveShare;
     setState(() => _autoLiveShare = value);
     try {
       await widget.settingsSync
           ?.updateDevice({SettingsKeys.autoLiveShare: value});
     } catch (e) {
-      debugPrint('safety add failed: $e');
-      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
+      debugPrint('safety auto-live-share save failed: $e');
+      if (mounted) setState(() => _autoLiveShare = previous);
+      _banner(l10n.safetySettingSaveFailed(friendlyError(l10n, e)),
+          onRetry: () => _setAutoLiveShare(value));
     }
   }
 
   Future<void> _setOffRouteAlerts(bool value) async {
     final l10n = AppLocalizations.of(context);
+    final previous = _offRouteAlerts;
     setState(() => _offRouteAlerts = value);
     try {
       await widget.settingsSync
           ?.updateUniversal({SettingsKeys.safetyOffRouteAlerts: value});
     } catch (e) {
-      debugPrint('safety add failed: $e');
-      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
+      debugPrint('safety off-route save failed: $e');
+      if (mounted) setState(() => _offRouteAlerts = previous);
+      _banner(l10n.safetySettingSaveFailed(friendlyError(l10n, e)),
+          onRetry: () => _setOffRouteAlerts(value));
     }
   }
 
@@ -219,8 +232,9 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       await _reload();
       _banner(l10n.safetyRemovedToast);
     } catch (e) {
-      debugPrint('safety add failed: $e');
-      _banner(l10n.safetyAddFailed(friendlyError(l10n, e)));
+      debugPrint('safety remove failed: $e');
+      _banner(l10n.safetyRemoveFailed(friendlyError(l10n, e)),
+          onRetry: () => _remove(contact));
     }
   }
 

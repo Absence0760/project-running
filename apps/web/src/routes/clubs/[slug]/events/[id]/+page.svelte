@@ -151,6 +151,7 @@
 	let eventPosts = $state<ClubPostWithAuthor[]>([]);
 	let route = $state<Route | null>(null);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let draftPost = $state('');
@@ -320,13 +321,31 @@
 		return { title: draft.title ?? base.title, sets: draft.sets };
 	});
 
+	// L4 auxiliary read: the attached session plan is an addition to the event
+	// page, so a failed read degrades to "no plan" rather than taking the
+	// race-day surface down with it.
 	async function loadSessionPlan() {
 		const planId = event?.session_plan_id ?? null;
-		sessionPlan = planId ? await fetchSessionPlan(planId) : null;
+		if (!planId) {
+			sessionPlan = null;
+			return;
+		}
+		try {
+			sessionPlan = await fetchSessionPlan(planId);
+		} catch (e) {
+			console.warn('session plan read failed', e);
+			sessionPlan = null;
+		}
 	}
 
 	async function openAttach() {
-		myPlans = await fetchSessionPlans();
+		try {
+			myPlans = await fetchSessionPlans();
+		} catch (e) {
+			// Without this the modal simply never opened, with no message.
+			showToast(e instanceof Error ? e.message : m('session.loadFailed'), 'error');
+			return;
+		}
 		attachChoice = event?.session_plan_id ?? '';
 		showAttach = true;
 	}
@@ -434,25 +453,37 @@
 
 	async function load() {
 		loading = true;
+		loadError = null;
 		const prevInstance = activeInstance;
-		[club, event, exceptions] = await Promise.all([
-			fetchClubBySlug(slug),
-			fetchEventById(eventId),
-			fetchEventExceptions(eventId)
-		]);
-		if (!event) {
+		try {
+			const [clubRead, ev, exc] = await Promise.all([
+				fetchClubBySlug(slug),
+				fetchEventById(eventId),
+				fetchEventExceptions(eventId)
+			]);
+			club = clubRead.club;
+			event = ev;
+			exceptions = exc;
+			if (clubRead.error) {
+				loadError = clubRead.error;
+				return;
+			}
+			if (!event) return;
+			// Preserve the user's instance selection across loads — otherwise
+			// rsvp() (which calls load()) silently warps the user back to the
+			// next instance after every click on a later one.
+			activeInstance = prevInstance ?? event.next_instance_start;
+			// Members-only meetup coordinates (null for non-members / no point set).
+			meetPoint = await fetchEventMeetPoint(event.id);
+			await loadSessionPlan();
+			await reloadInstance();
+		} catch (e) {
+			// A rejection anywhere in here used to escape and leave `loading`
+			// true, so the race-day page skeletoned forever with no way out.
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
 			loading = false;
-			return;
 		}
-		// Preserve the user's instance selection across loads — otherwise
-		// rsvp() (which calls load()) silently warps the user back to the
-		// next instance after every click on a later one.
-		activeInstance = prevInstance ?? event.next_instance_start;
-		// Members-only meetup coordinates (null for non-members / no point set).
-		meetPoint = await fetchEventMeetPoint(event.id);
-		await loadSessionPlan();
-		await reloadInstance();
-		loading = false;
 	}
 
 	async function reloadInstance() {
@@ -1383,6 +1414,23 @@
 		</div>
 	</div>
 	<p class="sr-only" role="status">{m('clubEvent.loadingEventStatus')}</p>
+{:else if loadError}
+	<div class="page">
+		<a class="back" href="/clubs/{slug}">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{m('clubEvent.backToClubs')}
+		</a>
+		<div class="error-banner" role="alert" data-testid="club-event-load-error">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('clubEvent.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load} data-testid="club-event-load-retry"
+				>{m('clubEvent.retry')}</button
+			>
+		</div>
+	</div>
 {:else if !event || !club}
 	<div class="page">
 		<a class="back" href="/clubs/{slug}">
@@ -3148,6 +3196,31 @@
 	.log-workout-hint {
 		font-size: 0.85rem;
 		margin: 0;
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: var(--color-danger-text);
+		font-size: 1.4rem;
 	}
 
 	.empty-card {

@@ -30,6 +30,7 @@ class RunGearChips extends StatefulWidget {
 class _RunGearChipsState extends State<RunGearChips> {
   List<GearRow> _assigned = const [];
   bool _loading = true;
+  bool _loadFailed = false;
 
   bool get _canManage => widget.api.userId == widget.runOwnerId;
 
@@ -45,11 +46,19 @@ class _RunGearChipsState extends State<RunGearChips> {
       if (!mounted) return;
       setState(() {
         _assigned = rows;
+        _loadFailed = false;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      // setRunGear deletes every row for the run and re-inserts the picked
+      // set, so seeding the picker from an empty _assigned after a failed
+      // read would silently drop the gear actually tagged on this run.
+      debugPrint('run gear chips load error: $e');
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loadFailed = true;
+        _loading = false;
+      });
     }
   }
 
@@ -170,6 +179,30 @@ class _RunGearChipsState extends State<RunGearChips> {
     if (_assigned.isEmpty && !_canManage) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    if (_loadFailed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Wrap(
+          spacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              l10n.runGearChipsLoadFailed,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.error),
+            ),
+            OutlinedButton(
+              onPressed: _load,
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              ),
+              child: Text(l10n.errorStateRetry),
+            ),
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Wrap(

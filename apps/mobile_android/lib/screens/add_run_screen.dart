@@ -367,11 +367,17 @@ class _AddRunScreenState extends State<AddRunScreen> {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: _durationField(_hoursCtl, 'h', state)),
+                        Expanded(
+                            child: _durationField(_hoursCtl, 'h', state,
+                                l10n.durationFieldHours)),
                         const SizedBox(width: 8),
-                        Expanded(child: _durationField(_minutesCtl, 'm', state)),
+                        Expanded(
+                            child: _durationField(_minutesCtl, 'm', state,
+                                l10n.durationFieldMinutes)),
                         const SizedBox(width: 8),
-                        Expanded(child: _durationField(_secondsCtl, 's', state)),
+                        Expanded(
+                            child: _durationField(_secondsCtl, 's', state,
+                                l10n.durationFieldSeconds)),
                       ],
                     ),
                     if (state.hasError)
@@ -420,18 +426,28 @@ class _AddRunScreenState extends State<AddRunScreen> {
     return DiscardGuard(isDirty: () => _isDirty, child: scaffold);
   }
 
+  /// [suffix] is the visible 'h' / 'm' / 's' hint, which is decorative:
+  /// `suffixText` is not folded into the field's accessible name, so all
+  /// three boxes announced as a bare "text field" and a screen-reader user
+  /// had no way to tell which one they were editing. [label] names it. The
+  /// Distance field above already carries the equivalent Semantics wrapper.
   Widget _durationField(
     TextEditingController ctl,
     String suffix,
     FormFieldState<Duration> state,
+    String label,
   ) {
-    return TextField(
-      controller: ctl,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      onChanged: (_) => state.didChange(null),
-      decoration: InputDecoration(
-        suffixText: suffix,
+    return Semantics(
+      label: label,
+      textField: true,
+      child: TextField(
+        controller: ctl,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        onChanged: (_) => state.didChange(null),
+        decoration: InputDecoration(
+          suffixText: suffix,
+        ),
       ),
     );
   }

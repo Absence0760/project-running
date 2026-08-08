@@ -9,11 +9,22 @@
 
 	let plans = $state<SessionPlan[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let showCreate = $state(false);
 
+	// fetchSessionPlans rethrows the Postgres error, and `loading` used to be
+	// cleared only on the success path — so any failure left the page on its
+	// spinner forever, with nothing said and nothing to retry.
 	async function load() {
-		plans = await fetchSessionPlans();
-		loading = false;
+		loading = true;
+		loadError = null;
+		try {
+			plans = await fetchSessionPlans();
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	}
 
 	onMount(async () => {
@@ -49,6 +60,15 @@
 
 	{#if loading}
 		<p class="muted">…</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert" data-testid="sessions-load-error">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{t('session.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{t('session.run.retry')}</button>
+		</div>
 	{:else if plans.length === 0}
 		<div class="empty" data-testid="sessions-empty">
 			<p>{t('session.empty')}</p>
@@ -128,5 +148,25 @@
 	.plan-meta {
 		color: var(--color-text-tertiary);
 		font-size: 0.9rem;
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
 	}
 </style>

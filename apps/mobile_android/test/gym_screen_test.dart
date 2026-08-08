@@ -681,11 +681,10 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
       await tester.pump();
 
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Finish'));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      });
-      await tester.pump();
+      await tester.tap(find.text('Finish'));
+      // The save banner is the last thing _finishAndSave does, so waiting for
+      // it proves the store write it awaited first has landed.
+      await _pumpUntil(tester, () => tester.any(find.text('Workout saved')));
 
       final w = s.store.workouts.single;
       expect(w.sets.length, 2,
@@ -695,6 +694,9 @@ void main() {
       expect(meta.containsKey('gym_session_draft'), isFalse,
           reason: 'finishing must clear the draft marker');
       expect(meta['gym_adherence'], 'completed');
+
+      // Drain the confirmation banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('Save as is keeps the sets and clears the draft marker',

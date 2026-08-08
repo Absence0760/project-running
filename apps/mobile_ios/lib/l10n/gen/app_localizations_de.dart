@@ -643,6 +643,10 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError =>
+      'Körperdaten konnten nicht geladen werden.';
+
+  @override
   String get safetyTitle => 'Sicherheitskontakte';
 
   @override
@@ -683,6 +687,16 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String safetyAddFailed(String error) {
     return 'Kontakt konnte nicht hinzugefügt werden: $error';
+  }
+
+  @override
+  String safetyRemoveFailed(String error) {
+    return 'Kontakt konnte nicht entfernt werden: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Einstellung konnte nicht gespeichert werden: $error';
   }
 
   @override
@@ -2030,6 +2044,15 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get addRunSectionDuration => 'Dauer';
+
+  @override
+  String get durationFieldHours => 'Stunden';
+
+  @override
+  String get durationFieldMinutes => 'Minuten';
+
+  @override
+  String get durationFieldSeconds => 'Sekunden';
 
   @override
   String get addRunSectionTitle => 'Titel (optional)';
@@ -8616,6 +8639,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String runGearChipsLoadError(String error) {
     return 'Ausrüstung konnte nicht geladen werden: $error';
   }
+
+  @override
+  String get runGearChipsLoadFailed =>
+      'Ausrüstung konnte nicht geladen werden.';
 
   @override
   String get runGearChipsPickerTitle =>

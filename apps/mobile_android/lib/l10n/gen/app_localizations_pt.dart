@@ -642,6 +642,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError =>
+      'Não foi possível carregar os dados corporais.';
+
+  @override
   String get safetyTitle => 'Contatos de segurança';
 
   @override
@@ -682,6 +686,16 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String safetyAddFailed(String error) {
     return 'Não foi possível adicionar o contato: $error';
+  }
+
+  @override
+  String safetyRemoveFailed(String error) {
+    return 'Não foi possível remover o contacto: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Não foi possível guardar a definição: $error';
   }
 
   @override
@@ -2024,6 +2038,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get addRunSectionDuration => 'Duração';
+
+  @override
+  String get durationFieldHours => 'Horas';
+
+  @override
+  String get durationFieldMinutes => 'Minutos';
+
+  @override
+  String get durationFieldSeconds => 'Segundos';
 
   @override
   String get addRunSectionTitle => 'Título (opcional)';
@@ -8604,6 +8627,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get runGearChipsLoadFailed =>
+      'Não foi possível carregar o equipamento.';
+
+  @override
   String get runGearChipsPickerTitle =>
       'Marcar o equipamento usado nesta corrida';
 
@@ -13220,6 +13247,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get bodyMetricsLoadError =>
+      'Não foi possível carregar os dados corporais.';
+
+  @override
   String get safetyTitle => 'Contatos de segurança';
 
   @override
@@ -13260,6 +13291,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String safetyAddFailed(String error) {
     return 'Não foi possível adicionar o contato: $error';
+  }
+
+  @override
+  String safetyRemoveFailed(String error) {
+    return 'Não foi possível remover o contato: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Não foi possível salvar a configuração: $error';
   }
 
   @override
@@ -14601,6 +14642,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get addRunSectionDuration => 'Duração';
+
+  @override
+  String get durationFieldHours => 'Horas';
+
+  @override
+  String get durationFieldMinutes => 'Minutos';
+
+  @override
+  String get durationFieldSeconds => 'Segundos';
 
   @override
   String get addRunSectionTitle => 'Título (opcional)';
@@ -21178,6 +21228,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String runGearChipsLoadError(String error) {
     return 'Falha ao carregar equipamento: $error';
   }
+
+  @override
+  String get runGearChipsLoadFailed =>
+      'Não foi possível carregar o equipamento.';
 
   @override
   String get runGearChipsPickerTitle =>

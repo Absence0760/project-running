@@ -152,6 +152,7 @@
 	let showAgeGradeCol = $derived(Object.values(prAgeGrades).some((v) => v != null));
 	let planOverview = $state<ActivePlanOverview | null>(null);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let mileageView = $state<'weekly' | 'monthly' | 'yearly'>('weekly');
 	let sourceFilter = $state<RunSource | 'all'>('all');
 	/// User's weekly mileage goal in metres, from the universal settings
@@ -475,7 +476,8 @@
 			const wsd = effective<string>(peekCachedSettings(uidEarly), 'week_start_day');
 			if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
 		}
-		[runs, allTimeStats, weeklyMileage, personalRecords, planOverview, upcomingEvent, fitnessHistory] = await Promise.all([
+		let runsRead: { runs: Run[]; error: string | null };
+		[runsRead, allTimeStats, weeklyMileage, personalRecords, planOverview, upcomingEvent, fitnessHistory] = await Promise.all([
 			fetchRunsForDashboard(),
 			fetchRunAllTimeStats(),
 			fetchWeeklyMileage(currentLocale(), weekStartDay),
@@ -484,6 +486,11 @@
 			fetchNextRsvpedEvent(48),
 			fetchFitnessSnapshots(60),
 		]);
+		runs = runsRead.runs;
+		// Every card below derives from `runs`. If that read failed there is
+		// nothing truthful to render, so state it rather than painting an
+		// empty account over the top of it.
+		loadError = runsRead.error;
 		// Compute a fresh snapshot from today's runs and persist it so
 		// the trend chart accumulates history over time. Best-effort —
 		// an RLS blip just leaves the chart with yesterday's data.
@@ -928,6 +935,19 @@
 		</div>
 		<div class="skeleton-block skeleton-block-tall"></div>
 		<div class="skeleton-block"></div>
+	{:else if loadError}
+		<div class="dash-load-error" role="alert" data-testid="dash-load-error">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{m('dash.loadErrorTitle')}</strong>
+				<span class="dash-load-error-detail">{m('dash.loadErrorBody')}</span>
+			</div>
+			<button
+				class="btn btn-outline"
+				onclick={() => location.reload()}
+				data-testid="dash-load-retry">{m('dash.retry')}</button
+			>
+		</div>
 	{:else}
 		{#if isReturningRunner}
 			<section class="welcome-back-card">
@@ -2001,6 +2021,31 @@
 	.skeleton-hero { height: 5rem; }
 	.skeleton-filter { height: 2rem; width: 22rem; max-width: 100%; }
 	.skeleton-block { height: 12rem; }
+
+	.dash-load-error {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.dash-load-error > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.dash-load-error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.dash-load-error .material-symbols {
+		color: var(--color-danger-text);
+		font-size: 1.4rem;
+	}
 	.skeleton-block-tall { height: 18rem; }
 	.skeleton-card { height: 6.5rem; }
 	@keyframes skeleton-shimmer {

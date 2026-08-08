@@ -121,6 +121,39 @@ class _FakeSettingsSync extends SettingsSyncService {
   }
 }
 
+/// Every settings write fails. A safety control that stays flipped after a
+/// rejected write tells the runner they are covered when the server says
+/// otherwise.
+class _ThrowingSettingsSync extends SettingsSyncService {
+  _ThrowingSettingsSync(Preferences prefs) : super(preferences: prefs);
+
+  int deviceAttempts = 0;
+
+  @override
+  bool get synced => true;
+
+  @override
+  SettingsService? get service => null;
+
+  @override
+  Future<void> updateUniversal(Map<String, dynamic> changes) async {
+    throw Exception('network down');
+  }
+
+  @override
+  Future<void> updateDevice(Map<String, dynamic> changes) async {
+    deviceAttempts++;
+    throw Exception('network down');
+  }
+}
+
+Future<_ThrowingSettingsSync> _throwingSync() async {
+  SharedPreferences.setMockInitialValues({});
+  final prefs = Preferences();
+  await prefs.init();
+  return _ThrowingSettingsSync(prefs);
+}
+
 Future<_FakeSettingsSync> _fakeSync() async {
   SharedPreferences.setMockInitialValues({});
   final prefs = Preferences();
@@ -313,6 +346,65 @@ void main() {
       ]);
       expect(sync.universalWrites, isEmpty,
           reason: 'the device pref must not leak into the universal bag');
+    });
+
+    testWidgets('a rejected auto-live-share write reverts the switch',
+        (tester) async {
+      final sync = await _throwingSync();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsSafetyScreen(api: null, settingsSync: sync),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+          isFalse);
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(sync.deviceAttempts, 1);
+      // The write was refused, so the control must not keep reading "on".
+      expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+          isFalse,
+          reason: 'a safety switch may not claim a setting the server rejected');
+      expect(find.textContaining('Could not save setting'), findsOneWidget);
+
+      // Drain the showTopBanner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 7));
+    });
+
+    testWidgets('a rejected overdue-window write reverts the dropdown',
+        (tester) async {
+      final sync = await _throwingSync();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsSafetyScreen(api: null, settingsSync: sync),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+          tester.widget<DropdownButton<int?>>(find.byType(DropdownButton<int?>))
+              .value,
+          isNull);
+
+      await tester.tap(find.byType(DropdownButton<int?>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('30 min').last);
+      await tester.pumpAndSettle();
+
+      expect(
+          tester.widget<DropdownButton<int?>>(find.byType(DropdownButton<int?>))
+              .value,
+          isNull,
+          reason: 'a rejected escalation window must not read as configured');
+      expect(find.textContaining('Could not save setting'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 7));
     });
 
     testWidgets('controls are disabled without a settings service',

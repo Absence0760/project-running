@@ -643,6 +643,10 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError =>
+      'Impossible de charger les données corporelles.';
+
+  @override
   String get safetyTitle => 'Contacts de sécurité';
 
   @override
@@ -683,6 +687,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String safetyAddFailed(String error) {
     return 'Impossible d\'ajouter le contact : $error';
+  }
+
+  @override
+  String safetyRemoveFailed(String error) {
+    return 'Impossible de supprimer le contact : $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Impossible d\'enregistrer le réglage : $error';
   }
 
   @override
@@ -2033,6 +2047,15 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get addRunSectionDuration => 'Durée';
+
+  @override
+  String get durationFieldHours => 'Heures';
+
+  @override
+  String get durationFieldMinutes => 'Minutes';
+
+  @override
+  String get durationFieldSeconds => 'Secondes';
 
   @override
   String get addRunSectionTitle => 'Titre (facultatif)';
@@ -8628,6 +8651,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String runGearChipsLoadError(String error) {
     return 'Échec du chargement de l\'équipement : $error';
   }
+
+  @override
+  String get runGearChipsLoadFailed => 'Impossible de charger l\'équipement.';
 
   @override
   String get runGearChipsPickerTitle =>

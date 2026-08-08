@@ -239,9 +239,15 @@ export async function fetchRunsWithError(
 /// very high-volume runner ever hits it inside the window, drops only
 /// the oldest rows in the window — never the recent ones any consumer
 /// reads. Lifetime headline numbers come from `fetchRunAllTimeStats`.
-export async function fetchRunsForDashboard(): Promise<Run[]> {
+/// Reports the read error: almost every card on /dashboard derives from this
+/// one set, so degrading to `[]` rendered a complete, convincing brand-new
+/// account — zero runs, no PRs, an empty week — to a runner mid-outage.
+export async function fetchRunsForDashboard(): Promise<{
+	runs: Run[];
+	error: string | null;
+}> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { runs: [], error: null };
 	const windowStart = dashboardRunsWindowStart(new Date());
 	const { data, error } = await supabase
 		.from(TABLES.runs)
@@ -251,12 +257,16 @@ export async function fetchRunsForDashboard(): Promise<Run[]> {
 		.eq('user_id', userId)
 		.gte('started_at', windowStart.toISOString())
 		.order('started_at', { ascending: false });
-	if (error || !data) return [];
-	return data.map((r: any) => ({
-		...r,
-		source: parseRunSource(r.source),
-		track: null,
-	})) as Run[];
+	if (error) return { runs: [], error: error.message };
+	if (!data) return { runs: [], error: null };
+	return {
+		runs: data.map((r: any) => ({
+			...r,
+			source: parseRunSource(r.source),
+			track: null,
+		})) as Run[],
+		error: null,
+	};
 }
 
 /// Cheap all-time aggregates for the dashboard's two lifetime stat cards
@@ -435,17 +445,26 @@ export async function fetchPublicRecap(
 	};
 }
 
-export async function fetchRunById(id: string): Promise<Run | null> {
+/// Owner-scoped single-run read. Reports the transport/RLS error separately
+/// from a null row: supabase-js resolves `{data: null, error}` rather than
+/// throwing, so collapsing both into `null` made an unreachable backend
+/// indistinguishable from a deleted run and rendered "Run not found".
+export async function fetchRunById(
+	id: string
+): Promise<{ run: Run | null; error: string | null }> {
 	const userId = auth.user?.id;
-	if (!userId) return null;
-	const { data } = await supabase
+	if (!userId) return { run: null, error: null };
+	const { data, error } = await supabase
 		.from(TABLES.runs)
 		.select('*')
 		.eq('id', id)
 		.eq('user_id', userId)
 		.single();
 
-	if (!data) return null;
+	// PGRST116 is "no rows matched" — a genuine not-found (or not-owner),
+	// not a failure to find out.
+	if (error && error.code !== 'PGRST116') return { run: null, error: error.message };
+	if (!data) return { run: null, error: null };
 
 	// Lazy-load the GPS track from Storage when the run has one.
 	let track = null;
@@ -456,7 +475,7 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 			console.warn('Failed to fetch track', e);
 		}
 	}
-	return { ...data, source: parseRunSource(data.source), track };
+	return { run: { ...data, source: parseRunSource(data.source), track }, error: null };
 }
 
 /// Fetch every run by the signed-in user against `routeId`, ordered
@@ -2359,18 +2378,29 @@ export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 	return (await fetchMyClubsWithError()).clubs;
 }
 
-export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null> {
-	const { data } = await supabase.from('clubs').select(CLUB_SELECT_COLS).eq('slug', slug).maybeSingle();
-	if (!data) return null;
+/// Reports the read error separately from a null row. `.maybeSingle()` gives
+/// `{data: null, error: null}` for a genuine miss, so the two are already
+/// distinguishable at this layer — collapsing them told a member their club
+/// did not exist whenever the request merely failed.
+export async function fetchClubBySlug(
+	slug: string
+): Promise<{ club: ClubWithMeta | null; error: string | null }> {
+	const { data, error } = await supabase
+		.from('clubs')
+		.select(CLUB_SELECT_COLS)
+		.eq('slug', slug)
+		.maybeSingle();
+	if (error) return { club: null, error: error.message };
+	if (!data) return { club: null, error: null };
 	const [enriched] = await enrichClubs([data]);
-	if (!enriched) return null;
+	if (!enriched) return { club: null, error: null };
 	if (enriched.viewer_role === 'owner' || enriched.viewer_role === 'admin') {
 		const { data: token } = await supabase.rpc('get_club_invite_token', {
 			target_club: enriched.id
 		});
-		return { ...enriched, invite_token: (token as string | null) ?? null };
+		return { club: { ...enriched, invite_token: (token as string | null) ?? null }, error: null };
 	}
-	return enriched;
+	return { club: enriched, error: null };
 }
 
 /// Resolves a club id to its slug. The notification worker's row projection
@@ -4153,8 +4183,17 @@ export async function setPlanIsTemplate(
 	// If we're flagging it as a template, drop active status so it
 	// doesn't claim the per-user "one active plan" slot — the
 	// training_plans_template_status CHECK forbids active+template.
-	if (isTemplate) patch.status = 'completed';
-	if (clubId !== null) patch.club_id = clubId;
+	if (isTemplate) {
+		patch.status = 'completed';
+		if (clubId !== null) patch.club_id = clubId;
+	} else {
+		// Un-templating MUST also release the club. Both RLS WITH CHECKs on
+		// training_plans require a club-owned row to be a template
+		// ("users own their plans" allows club_id IS NULL *or* is_template),
+		// so clearing only is_template left the new row satisfying neither
+		// policy and the update 403'd — the Unpublish button never worked.
+		patch.club_id = null;
+	}
 	const { error } = await supabase.from('training_plans').update(patch).eq('id', planId);
 	if (error) throw error;
 }
@@ -7306,16 +7345,18 @@ export interface PendingSafetyRequest {
 }
 
 /// The owner's own safety-contact list (RLS scopes to owner_id = me).
-export async function fetchMySafetyContacts(): Promise<SafetyContact[]> {
+/// Reports the error rather than degrading to `[]`: on a safety surface a
+/// failed read rendered as "you have no emergency contacts", which is the
+/// one wrong answer a runner might act on.
+export async function fetchMySafetyContacts(): Promise<{
+	contacts: SafetyContact[];
+	error: string | null;
+}> {
 	const { data, error } = await supabase
 		.from(TABLES.safety_contacts)
 		.select('id, contact_email, contact_phone, contact_user_id, confirmed_at, sms_opt_in_at, created_at')
 		.order('created_at', { ascending: false });
-	if (error) {
-		console.error('fetchMySafetyContacts failed', error);
-		return [];
-	}
-	return (data ?? []) as SafetyContact[];
+	return { contacts: (data ?? []) as SafetyContact[], error: error?.message ?? null };
 }
 
 /// Add a safety contact by email. The address is stored as-is; a confirm
@@ -7345,13 +7386,15 @@ export async function removeSafetyContact(id: string): Promise<void> {
 /// Pending requests where the signed-in user is the named contact (matched
 /// by their account email via a SECURITY DEFINER RPC — the pending row isn't
 /// directly readable until they link by confirming).
-export async function fetchPendingSafetyRequests(): Promise<PendingSafetyRequest[]> {
+export async function fetchPendingSafetyRequests(): Promise<{
+	requests: PendingSafetyRequest[];
+	error: string | null;
+}> {
 	const { data, error } = await supabase.rpc('my_pending_safety_requests');
-	if (error || !data) {
-		if (error) console.error('fetchPendingSafetyRequests failed', error);
-		return [];
-	}
-	return data as PendingSafetyRequest[];
+	return {
+		requests: (data ?? []) as PendingSafetyRequest[],
+		error: error?.message ?? null,
+	};
 }
 
 /// Confirm a pending request addressed to my account email (links my
@@ -8715,10 +8758,11 @@ export async function fetchGymWorkoutWithSets(
 		.select('*')
 		.eq('workout_id', id)
 		.order('set_index', { ascending: true });
-	if (sErr) {
-		console.error('fetchGymWorkoutWithSets sets failed', sErr);
-		return { workout: workout as GymWorkout, sets: [] };
-	}
+	// A workout whose sets failed to load is not a workout with no sets:
+	// returning the populated header over an empty body presented a partial
+	// read failure as the user's session being empty. Fail the whole read so
+	// the caller can offer a retry.
+	if (sErr) throw sErr;
 	return { workout: workout as GymWorkout, sets: (sets ?? []) as GymSet[] };
 }
 
@@ -9232,10 +9276,10 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		)
 		.eq('routine_id', id)
 		.order('position', { ascending: true });
-	if (eErr) {
-		console.error('fetchGymRoutineDetail exercises failed', eErr);
-		return { routine: routine as GymRoutineSummary, exercises: [] };
-	}
+	// Same contract as fetchGymWorkoutWithSets: a routine whose exercises
+	// failed to load is not an empty routine, and rendering it as one invites
+	// the viewer to start or adopt a routine that has no content.
+	if (eErr) throw eErr;
 	const exercises = (exRows ?? []) as Array<{
 		id: string;
 		exercise_name: string;
@@ -9257,7 +9301,9 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		)
 		.in('routine_exercise_id', exercises.map((e) => e.id))
 		.order('set_index', { ascending: true });
-	if (sErr) console.error('fetchGymRoutineDetail sets failed', sErr);
+	// The planned sets ARE the prescription — dropping them silently turns a
+	// 5x5 into a bare exercise list.
+	if (sErr) throw sErr;
 	const setsByExercise = new Map<string, GymRoutineSet[]>();
 	for (const row of (setRows ?? []) as Array<{ routine_exercise_id: string } & GymRoutineSet>) {
 		const list = setsByExercise.get(row.routine_exercise_id) ?? [];

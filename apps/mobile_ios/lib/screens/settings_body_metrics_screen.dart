@@ -7,6 +7,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../nutrition_targets.dart' show activityLevels, goalKcalDelta;
 import '../preferences.dart';
 import '../settings_sync.dart';
+import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
 /// Settings → Body metrics (multi_modal.md § "Body metrics & sensitive
@@ -38,6 +39,7 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
   final _weightCtl = TextEditingController();
 
   bool _loading = true;
+  bool _loadFailed = false;
   bool _saving = false;
   bool _consent = false;
   DateTime? _consentAt;
@@ -61,6 +63,7 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
   }
 
   Future<void> _load() async {
+    _loadFailed = false;
     final settings = widget.settingsSync?.service;
     _activity =
         settings?.effective<String>(SettingsKeys.nutritionActivityLevel) ??
@@ -80,10 +83,20 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
           _weightCtl.text = WeightFormat.toDisplay(w, _unit).toStringAsFixed(1);
         }
       } catch (e) {
+        // Fail closed: a swallowed read leaves _consent false and
+        // _consentAt/_loadedWeightKg null, which makes Save read as an Art
+        // 7(3) withdrawal — skipping the confirm and erasing the height plus
+        // the whole weight series of a user who never touched the toggle.
         debugPrint('settings_body_metrics: load failed: $e');
+        _loadFailed = true;
       }
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _retryLoad() async {
+    setState(() => _loading = true);
+    await _load();
   }
 
   void _snack(String msg) {
@@ -254,6 +267,11 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
               rows: 5,
               rowHeight: 56,
               hasLeading: false,
+            )
+          : _loadFailed
+          ? ErrorState(
+              message: l10n.bodyMetricsLoadError,
+              onRetry: _retryLoad,
             )
           : ListView(
               padding: const EdgeInsets.symmetric(vertical: 8),

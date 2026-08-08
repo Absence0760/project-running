@@ -21,6 +21,7 @@
 	let contacts = $state<SafetyContact[]>([]);
 	let pending = $state<PendingSafetyRequest[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let email = $state('');
 	let phone = $state('');
 	let adding = $state(false);
@@ -39,10 +40,13 @@
 	const phoneRe = /^\+[1-9][0-9]{6,14}$/;
 
 	async function reload() {
-		[contacts, pending] = await Promise.all([
+		const [c, p] = await Promise.all([
 			fetchMySafetyContacts(),
 			fetchPendingSafetyRequests(),
 		]);
+		contacts = c.contacts;
+		pending = p.requests;
+		loadError = c.error ?? p.error;
 	}
 
 	// Overdue escalation (docs/features/safety.md): a universal pref holding
@@ -214,6 +218,19 @@
 				<span class="skel skel-row"></span>
 			</div>
 			<p class="sr-only" role="status">{m('safety.loading')}</p>
+		{:else if loadError}
+			<div class="error-banner" role="alert" data-testid="safety-load-error">
+				<span class="material-symbols" aria-hidden="true">error</span>
+				<div>
+					<strong>{m('safety.loadError')}</strong>
+					<span class="error-detail">{loadError}</span>
+				</div>
+				<button
+					class="btn btn-outline"
+					onclick={reload}
+					data-testid="safety-load-retry">{m('safety.retry')}</button
+				>
+			</div>
 		{:else}
 			<ul class="contact-list" data-testid="safety-contact-list">
 				{#each contacts as c (c.id)}
@@ -367,6 +384,31 @@
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
 		margin-bottom: var(--space-xl);
+	}
+
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner .material-symbols {
+		color: var(--color-danger-text);
+		font-size: 1.4rem;
 	}
 
 	.add-row {

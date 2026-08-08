@@ -1121,6 +1121,12 @@ abstract class AppLocalizations {
   /// **'Could not save: {error}'**
   String bodyMetricsPrefSaveFailed(String error);
 
+  /// Error state shown when the body-metrics screen fails to load the saved profile
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your body metrics.'**
+  String get bodyMetricsLoadError;
+
   /// Title of the safety-contacts settings screen
   ///
   /// In en, this message translates to:
@@ -1198,6 +1204,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not add contact: {error}'**
   String safetyAddFailed(String error);
+
+  /// Error toast when removing a safety contact fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove contact: {error}'**
+  String safetyRemoveFailed(String error);
+
+  /// Error toast when a safety setting write fails and the control is reverted
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save setting: {error}'**
+  String safetySettingSaveFailed(String error);
 
   /// Inline error when the entered email is not valid
   ///
@@ -3442,6 +3460,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Duration'**
   String get addRunSectionDuration;
+
+  /// Accessible label for the hours box of an hours/minutes/seconds duration entry — its visible 'h' suffix is decorative and is not part of the field's accessible name
+  ///
+  /// In en, this message translates to:
+  /// **'Hours'**
+  String get durationFieldHours;
+
+  /// Accessible label for the minutes box of an hours/minutes/seconds duration entry
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get durationFieldMinutes;
+
+  /// Accessible label for the seconds box of an hours/minutes/seconds duration entry
+  ///
+  /// In en, this message translates to:
+  /// **'Seconds'**
+  String get durationFieldSeconds;
 
   /// Section header for the optional title field on the add-run form
   ///
@@ -14269,6 +14305,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to load gear: {error}'**
   String runGearChipsLoadError(String error);
+
+  /// Shown in place of the run-detail gear chips when the assigned-gear read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load gear.'**
+  String get runGearChipsLoadFailed;
 
   /// Header of the tag-gear bottom sheet
   ///

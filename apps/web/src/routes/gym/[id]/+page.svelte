@@ -44,6 +44,7 @@
 	let data = $state<GymWorkoutWithSets | null>(null);
 	let history = $state<GymSetWithDate[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let notFound = $state(false);
 	let editing = $state(false);
 	let confirmingDelete = $state(false);
@@ -115,7 +116,17 @@
 
 	async function load() {
 		loading = true;
-		const w = await fetchGymWorkoutWithSets(id);
+		loadError = null;
+		let w: GymWorkoutWithSets | null;
+		try {
+			w = await fetchGymWorkoutWithSets(id);
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+			data = null;
+			notFound = false;
+			loading = false;
+			return;
+		}
 		data = w;
 		notFound = w == null;
 		// The PR badges + "vs last time" only judge THIS workout's exercises
@@ -149,7 +160,9 @@
 		const routineId = meta && typeof meta === 'object' ? meta['routine_id'] : null;
 		if (typeof routineId !== 'string' || routineId === '') return out;
 
-		const routine = await fetchGymRoutineDetail(routineId);
+		// L4 auxiliary: the progression hint is a suggestion chip, so a failed
+		// routine read degrades to "no hint" rather than failing the page.
+		const routine = await fetchGymRoutineDetail(routineId).catch(() => null);
 		if (!routine) return out;
 
 		const setsByKey = new Map<string, ProgressionSetLike[]>();
@@ -324,7 +337,7 @@
 			data = { ...data, workout: { ...data.workout, is_public: next } };
 		} catch (e) {
 			console.error('toggle gym visibility failed', e);
-			showToast(t('gym.visibilityError'));
+			showToast(t('gym.visibilityError'), 'error');
 		} finally {
 			visibilityBusy = false;
 		}
@@ -344,10 +357,10 @@
 				data = { ...data, workout: { ...data.workout, is_public: true } };
 			}
 			await navigator.clipboard.writeText(url);
-			showToast(t('gym.shareLinkCopied'));
+			showToast(t('gym.shareLinkCopied'), 'success');
 		} catch (e) {
 			console.error('copy gym share link failed', e);
-			showToast(t('gym.shareLinkError'));
+			showToast(t('gym.shareLinkError'), 'error');
 		} finally {
 			shareBusy = false;
 		}
@@ -357,11 +370,11 @@
 		confirmingDelete = false;
 		try {
 			await deleteGymWorkout(id);
-			showToast(t('gym.deleted'));
+			showToast(t('gym.deleted'), 'success');
 			goto('/gym');
 		} catch (e) {
 			console.error('delete gym workout failed', e);
-			showToast(t('gym.saveFailed'));
+			showToast(t('gym.deleteFailed'), 'error');
 		}
 	}
 </script>
@@ -389,6 +402,12 @@
 			</div>
 		{/each}
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
+	{:else if loadError}
+		<div class="card-elevated empty-card" role="alert" data-testid="gym-detail-load-error">
+			<span class="material-symbols empty-icon" aria-hidden="true">error</span>
+			<p class="empty-text">{t('gym.loadError')}</p>
+			<button class="btn btn-outline" onclick={load}>{t('gym.routine.retry')}</button>
+		</div>
 	{:else if notFound}
 		<div class="card-elevated empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">search_off</span>

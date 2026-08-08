@@ -48,22 +48,30 @@
 	async function load() {
 		loading = true;
 		loadError = null;
-		const [w, h, plans, cat] = await Promise.all([
-			fetchGymWorkoutsWithError(100),
-			fetchGymSetHistoryWithError(),
-			fetchSessionPlans(),
-			fetchExerciseCatalogue(),
-		]);
-		// Surface a real load failure as a retry banner rather than the empty
-		// "log your first workout" card — otherwise a transient fetch error reads
-		// as a brand-new lifter whose history vanished.
-		loadError = w.error ?? h.error;
-		workouts = w.workouts;
-		history = h.sets;
-		sessionPlanCount = plans.length;
-		catalogue = cat;
-		resumable = await findResumable(w.workouts).catch(() => null);
-		loading = false;
+		try {
+			const [w, h, plans, cat] = await Promise.all([
+				fetchGymWorkoutsWithError(100),
+				fetchGymSetHistoryWithError(),
+				fetchSessionPlans(),
+				fetchExerciseCatalogue(),
+			]);
+			// Surface a real load failure as a retry banner rather than the empty
+			// "log your first workout" card — otherwise a transient fetch error reads
+			// as a brand-new lifter whose history vanished.
+			loadError = w.error ?? h.error;
+			workouts = w.workouts;
+			history = h.sets;
+			sessionPlanCount = plans.length;
+			catalogue = cat;
+			resumable = await findResumable(w.workouts).catch(() => null);
+		} catch (e) {
+			// fetchSessionPlans rethrows rather than returning an error field,
+			// so a rejection used to escape the Promise.all and leave `loading`
+			// true forever — the retry banner below was unreachable.
+			loadError = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	}
 
 	// L4 auxiliary read: routines are fetched only once a draft is actually
@@ -283,7 +291,7 @@
 		</ul>
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
 	{:else if loadError}
-		<div class="error-banner" role="alert">
+		<div class="error-banner" role="alert" data-testid="gym-load-error">
 			<span class="material-symbols" aria-hidden="true">error</span>
 			<div>
 				<strong>{t('gym.loadError')}</strong>

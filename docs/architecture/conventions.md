@@ -200,6 +200,48 @@ unit-test glob) so the structure can't silently erode.
 - **TypeScript:** throw `Error` or a subclass at the boundary; return `null` / `{ ok: false, error }` shapes for expected failures within the app. Don't `catch (e) { console.log(e) }` and continue — either handle it meaningfully or let it propagate.
 - **Swift:** use `throws` + `Result` at API boundaries; `do/catch` only at the outermost view or service layer. `try?` is acceptable for best-effort reads where `nil` is a valid outcome.
 
+### A failed read is not an empty result
+
+**"We could not find out" and "there is nothing" are different answers, and a
+surface must never give the first as the second.** This is the single most
+common bug class the UX sweeps keep turning up, because the wrong version
+looks completely normal: a data helper logs the error, returns `[]` / `null`,
+and the page renders its ordinary empty or not-found state. The user is then
+told something false about their own data — "No safety contacts yet" to a
+runner who has three, "Run not found" to the owner of a run that exists, a
+brand-new-looking dashboard to someone with two years of history — with no
+error, no retry, and no way to tell it apart from real loss.
+
+Rules:
+
+- **Report the failure separately from the result.** Return `{ items, error }`
+  (or `{ item, error }`) rather than collapsing both into `[]` / `null`. The
+  established names are the `fetchXWithError` siblings and, where a helper has
+  a single caller, changing the helper itself. Alternatively `throw` and let
+  the caller catch — pick one per helper, don't do both.
+- **Keep a genuine miss distinguishable.** A read that succeeded and matched
+  nothing is still an empty result: preserve it. `supabase-js` gives
+  `PGRST116` for `.single()` no-rows and `{data: null, error: null}` for
+  `.maybeSingle()` — those are misses, not failures.
+- **A partial read failure fails the whole read.** A parent row whose children
+  failed to load is not a parent with no children. Returning
+  `{workout, sets: []}` draws a populated header over an empty body and
+  presents the failure as the user's data being empty — worse, it invites an
+  action (Start, Save, Adopt) against content that was never read.
+- **Never seed a write from a failed read.** If a save replaces a set —
+  `delete` + re-`insert`, an RPC that overwrites, a form that round-trips
+  defaults — an unknown baseline must block the write, not fill it with
+  emptiness. Fail closed and offer a retry.
+- **The page needs a third state.** Loading / error+retry / content, with the
+  error branch ordered *before* the empty and not-found branches. A page that
+  clears `loading` only on the success path skeletons forever when the read
+  rejects; put it in a `finally`.
+
+The exception is an **auxiliary** read (see below): something genuinely
+additive, like a suggestion chip or an attached-plan panel, degrades to absent
+rather than failing the page — but say so in a comment, because from the
+outside a degraded auxiliary read and a swallowed primary one look identical.
+
 ### What not to catch
 
 - `StateError` / `TypeError` / precondition failures — these are bugs. Let them crash in debug, let crash reporting catch them in release.
