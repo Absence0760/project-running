@@ -636,6 +636,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError => 'Couldn\'t load your body metrics.';
+
+  @override
   String get safetyTitle => 'Safety contacts';
 
   @override

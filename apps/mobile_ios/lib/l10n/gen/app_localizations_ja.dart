@@ -617,6 +617,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError => '身体データを読み込めませんでした。';
+
+  @override
   String get safetyTitle => '緊急連絡先';
 
   @override

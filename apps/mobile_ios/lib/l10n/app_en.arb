@@ -855,6 +855,10 @@
       }
     }
   },
+  "bodyMetricsLoadError": "Couldn't load your body metrics.",
+  "@bodyMetricsLoadError": {
+    "description": "Error state shown when the body-metrics screen fails to load the saved profile"
+  },
   "safetyTitle": "Safety contacts",
   "@safetyTitle": {
     "description": "Title of the safety-contacts settings screen"

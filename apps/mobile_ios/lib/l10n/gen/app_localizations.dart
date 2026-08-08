@@ -1121,6 +1121,12 @@ abstract class AppLocalizations {
   /// **'Could not save: {error}'**
   String bodyMetricsPrefSaveFailed(String error);
 
+  /// Error state shown when the body-metrics screen fails to load the saved profile
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your body metrics.'**
+  String get bodyMetricsLoadError;
+
   /// Title of the safety-contacts settings screen
   ///
   /// In en, this message translates to:

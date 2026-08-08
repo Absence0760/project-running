@@ -642,6 +642,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError =>
+      'Não foi possível carregar os dados corporais.';
+
+  @override
   String get safetyTitle => 'Contatos de segurança';
 
   @override
@@ -13227,6 +13231,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String bodyMetricsPrefSaveFailed(String error) {
     return 'Não foi possível salvar: $error';
   }
+
+  @override
+  String get bodyMetricsLoadError =>
+      'Não foi possível carregar os dados corporais.';
 
   @override
   String get safetyTitle => 'Contatos de segurança';

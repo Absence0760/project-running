@@ -42,6 +42,26 @@ class _ConsentedApi extends ApiClient {
   Future<void> withdrawHealthDataConsent() async => withdrawCalled = true;
 }
 
+/// The profile read fails. Before the fail-closed guard the screen fell back
+/// to consent-off with no stamp, which made Save read as a withdrawal.
+class _FailingLoadApi extends ApiClient {
+  bool withdrawCalled = false;
+  int profileCalls = 0;
+
+  @override
+  String? get userId => 'u1';
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async {
+    profileCalls++;
+    throw Exception('offline');
+  }
+
+  @override
+  Future<double?> fetchLatestBodyWeightKg() async => 70.0;
+  @override
+  Future<void> withdrawHealthDataConsent() async => withdrawCalled = true;
+}
+
 /// Never resolves the profile fetch, so the loading frame is observable.
 class _HangingApi extends ApiClient {
   @override
@@ -160,6 +180,57 @@ void main() {
 
       // Drain the showTopBanner auto-dismiss timer.
       await tester.pump(const Duration(seconds: 4));
+    });
+  });
+
+  group('SettingsBodyMetricsScreen — failed load', () {
+    testWidgets('shows an error state instead of an unconsented form',
+        (tester) async {
+      final prefs = await _prefs();
+      final api = _FailingLoadApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsBodyMetricsScreen(
+            api: api,
+            settingsSync: null,
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.textContaining("Couldn't load your body metrics"),
+          findsOneWidget);
+      // Save is what would have fired the erasure — it must be unreachable.
+      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(api.withdrawCalled, isFalse);
+    });
+
+    testWidgets('Retry re-runs the load', (tester) async {
+      final prefs = await _prefs();
+      final api = _FailingLoadApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsBodyMetricsScreen(
+            api: api,
+            settingsSync: null,
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(api.profileCalls, 1);
+
+      await tester.runAsync(() => tester.tap(find.text('Retry')));
+      await tester.pumpAndSettle();
+      expect(api.profileCalls, 2);
     });
   });
 

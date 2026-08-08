@@ -642,6 +642,10 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get bodyMetricsLoadError =>
+      'No se pudieron cargar los datos corporales.';
+
+  @override
   String get safetyTitle => 'Contactos de seguridad';
 
   @override
