@@ -139,6 +139,10 @@
 	// (migration 20261207_001) — a DNF ultra must not promote as a PR just
 	// because its truncated distance fits a shorter bracket.
 	let editIsDnf = $state(false);
+	// The edit form is inline, not a modal, so nothing dismisses on the first
+	// click — without this the Save button stays live through the whole
+	// round-trip and a second click fires a second write.
+	let savingEdit = $state(false);
 	let showDeleteConfirm = $state(false);
 	let showShareConfirm = $state(false);
 	let showMakePrivateConfirm = $state(false);
@@ -494,7 +498,8 @@
 	}
 
 	async function saveEdit() {
-		if (!run) return;
+		if (!run || savingEdit) return;
+		savingEdit = true;
 		try {
 			// title/notes go through updateRunMetadata's normalised patch.
 			// is_dnf is a real `runs.is_dnf` column (20261207_001), so when it
@@ -525,6 +530,8 @@
 			editing = false;
 		} catch (e) {
 			showToast(m('runDetail.saveFailed', { error: String(e) }), 'error');
+		} finally {
+			savingEdit = false;
 		}
 	}
 
@@ -1502,8 +1509,19 @@
 					</p>
 				{/if}
 				<div class="edit-actions">
-					<button class="btn-sm btn-outline-sm" onclick={() => editing = false}>{m('runDetail.cancel')}</button>
-					<button class="btn-sm btn-primary-sm" onclick={saveEdit}>{m('runDetail.save')}</button>
+					<button
+						class="btn-sm btn-outline-sm"
+						disabled={savingEdit}
+						onclick={() => editing = false}>{m('runDetail.cancel')}</button
+					>
+					<button
+						class="btn-sm btn-primary-sm"
+						disabled={savingEdit}
+						data-testid="run-edit-save"
+						onclick={saveEdit}
+					>
+						{savingEdit ? m('runDetail.saving') : m('runDetail.save')}
+					</button>
 				</div>
 			</div>
 		{/if}

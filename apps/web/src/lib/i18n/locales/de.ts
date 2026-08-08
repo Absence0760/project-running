@@ -1079,6 +1079,7 @@ export const messages = {
 	"runDetail.editPublicHint": "Hinweis: Dieser Lauf ist öffentlich. Dein Titel und deine Notizen sind für alle mit dem Freigabelink sichtbar.",
 	"runDetail.editPrivateHint": "Notizen bleiben privat, bis du diesen Lauf teilst. Wenn du es tust, kann jeder mit dem Link sie lesen.",
 	"runDetail.cancel": "Abbrechen",
+	"runDetail.saving": "Wird gespeichert…",
 	"runDetail.save": "Speichern",
 	"runDetail.moving": "In Bewegung",
 	"runDetail.avgPace": "Ø Tempo",

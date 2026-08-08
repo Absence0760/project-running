@@ -1074,6 +1074,7 @@ export const messages = {
 	"runDetail.editPublicHint": "ご注意: このランは公開されています。タイトルとメモは共有リンクを持つ誰もが閲覧できます。",
 	"runDetail.editPrivateHint": "メモはこのランを共有するまで非公開です。共有すると、リンクを持つ誰でも読めるようになります。",
 	"runDetail.cancel": "キャンセル",
+	"runDetail.saving": "保存中…",
 	"runDetail.save": "保存",
 	"runDetail.moving": "移動中",
 	"runDetail.avgPace": "平均ペース",

@@ -1078,6 +1078,7 @@ export const messages = {
 	"runDetail.editPublicHint": "Atenção: esta corrida é pública. Seu título e suas notas ficam visíveis para qualquer pessoa com o link de compartilhamento.",
 	"runDetail.editPrivateHint": "As notas permanecem privadas até você compartilhar esta corrida. Se compartilhar, qualquer pessoa com o link poderá lê-las.",
 	"runDetail.cancel": "Cancelar",
+	"runDetail.saving": "Salvando…",
 	"runDetail.save": "Salvar",
 	"runDetail.moving": "Em movimento",
 	"runDetail.avgPace": "Ritmo médio",

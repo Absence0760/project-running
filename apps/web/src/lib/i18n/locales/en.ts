@@ -1087,6 +1087,7 @@ export const en = {
 	"runDetail.editPublicHint": "Heads up: this run is public. Your title and notes are visible to anyone with the share link.",
 	"runDetail.editPrivateHint": "Notes stay private until you share this run. If you do, anyone with the link can read them.",
 	"runDetail.cancel": "Cancel",
+	"runDetail.saving": "Saving…",
 	"runDetail.save": "Save",
 	"runDetail.moving": "Moving",
 	"runDetail.avgPace": "Avg Pace",
