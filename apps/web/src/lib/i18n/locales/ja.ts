@@ -4357,6 +4357,7 @@ export const messages = {
 	"session.titleRequired": "タイトルを入力してください。",
 	"session.itemRequired": "動作を1つ以上追加してください。",
 	"session.notFound": "セッションプランが見つかりません。",
+	"session.loadError": "セッションプランを読み込めませんでした。",
 	"session.back": "セッション一覧へ戻る",
 	"session.steps": "シーケンス",
 	"session.stepHold": "{name}・キープ {seconds}秒",

@@ -33,6 +33,7 @@
 
 	let plan = $state<SessionPlanWithItems | null>(null);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let showEdit = $state(false);
 	let confirmDelete = $state(false);
 	let running = $state(false);
@@ -52,16 +53,35 @@
 		buildSessionShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, planId)
 	);
 
+	// fetchSessionPlan rethrows the Postgres error, and `loading` used to be
+	// cleared only on the success path — so a failure left the page spinning
+	// forever. The error is held apart from `plan === null` because the two
+	// mean different things: one is "this plan does not exist", the other is
+	// "we could not find out", and showing not-found for a failed fetch tells
+	// the owner their session was deleted.
 	async function load() {
-		plan = await fetchSessionPlan(planId);
-		loading = false;
+		loading = true;
+		loadError = null;
+		try {
+			plan = await fetchSessionPlan(planId);
+		} catch (e) {
+			loadError = e instanceof Error ? e.message : String(e);
+			return;
+		} finally {
+			loading = false;
+		}
 		// Only an owner of a personal (non-club) plan with at least one admin
-		// club sees the publish-as-template control.
+		// club sees the publish-as-template control. Auxiliary to the page, so
+		// a failure here must not blank the plan that already loaded.
 		if (plan && auth.user?.id && plan.author_id === auth.user.id && !plan.club_id) {
-			const clubs = await fetchMyClubs();
-			adminClubs = clubs.filter(
-				(c) => c.viewer_role === 'owner' || c.viewer_role === 'admin'
-			);
+			try {
+				const clubs = await fetchMyClubs();
+				adminClubs = clubs.filter(
+					(c) => c.viewer_role === 'owner' || c.viewer_role === 'admin'
+				);
+			} catch (e) {
+				console.warn('session detail: admin clubs lookup failed', e);
+			}
 		}
 	}
 
@@ -239,6 +259,15 @@
 
 	{#if loading}
 		<p class="muted">…</p>
+	{:else if loadError}
+		<div class="error-banner" role="alert" data-testid="session-load-error">
+			<span class="material-symbols" aria-hidden="true">error</span>
+			<div>
+				<strong>{t('session.loadError')}</strong>
+				<span class="error-detail">{loadError}</span>
+			</div>
+			<button class="btn btn-outline" onclick={load}>{t('session.run.retry')}</button>
+		</div>
 	{:else if !plan}
 		<p data-testid="session-not-found">{t('session.notFound')}</p>
 	{:else}
@@ -441,6 +470,26 @@
 	}
 	.publish-label {
 		font-size: 0.9rem;
+		color: var(--color-text-tertiary);
+	}
+	.error-banner {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: rgba(239, 68, 68, 0.08);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+	}
+	.error-banner > div {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+	.error-detail {
+		font-size: 0.78rem;
 		color: var(--color-text-tertiary);
 	}
 </style>

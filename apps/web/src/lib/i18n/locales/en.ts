@@ -4376,6 +4376,7 @@ export const en = {
 	"session.titleRequired": "Add a title.",
 	"session.itemRequired": "Add at least one movement.",
 	"session.notFound": "Session plan not found.",
+	"session.loadError": "Couldn't load your session plans.",
 	"session.back": "Back to sessions",
 	"session.steps": "Sequence",
 	"session.stepHold": "{name} · hold {seconds}s",

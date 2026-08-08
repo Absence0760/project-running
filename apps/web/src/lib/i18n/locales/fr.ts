@@ -4362,6 +4362,7 @@ export const messages = {
 	"session.titleRequired": "Ajoutez un titre.",
 	"session.itemRequired": "Ajoutez au moins un mouvement.",
 	"session.notFound": "Plan de séance introuvable.",
+	"session.loadError": "Impossible de charger vos plans de séance.",
 	"session.back": "Retour aux séances",
 	"session.steps": "Séquence",
 	"session.stepHold": "{name} · tenue {seconds}s",

@@ -4361,6 +4361,7 @@ export const messages = {
 	"session.titleRequired": "Adicione um título.",
 	"session.itemRequired": "Adicione ao menos um movimento.",
 	"session.notFound": "Plano de sessão não encontrado.",
+	"session.loadError": "Não foi possível carregar seus planos de sessão.",
 	"session.back": "Voltar às sessões",
 	"session.steps": "Sequência",
 	"session.stepHold": "{name} · sustentar {seconds}s",
