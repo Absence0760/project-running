@@ -80,6 +80,7 @@
 	let membersLoadingMore = $state(false);
 	let pending = $state<(ClubMember & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	type Tab = 'feed' | 'events' | 'routes' | 'templates' | 'photos' | 'members';
 	const TABS: readonly Tab[] = ['feed', 'events', 'routes', 'templates', 'photos', 'members'];
 	let tab = $state<Tab>('feed');
@@ -171,7 +172,16 @@
 	// canonical URL on screen with the club still null.
 	async function load(target: string = slug) {
 		loading = true;
-		club = await fetchClubBySlug(target);
+		loadError = null;
+		const clubRead = await fetchClubBySlug(target);
+		club = clubRead.club;
+		if (clubRead.error) {
+			// A failed read is not "this club does not exist" — the uuid
+			// forward below would also be pointless, since it would fail too.
+			loadError = clubRead.error;
+			loading = false;
+			return;
+		}
 		if (!club) {
 			// The notification worker addresses a club by id — its row
 			// projection has no slug to join — so a uuid can arrive in this
@@ -783,6 +793,12 @@
 		</div>
 	</div>
 	<p class="sr-only" role="status">{tr('clubHome.loadingClub')}</p>
+{:else if loadError}
+	<div class="not-found" role="alert" data-testid="club-load-error">
+		<h2>{tr('clubHome.loadErrorTitle')}</h2>
+		<p>{tr('clubHome.loadErrorBody')}</p>
+		<button class="btn-secondary" onclick={() => load()}>{tr('clubHome.retry')}</button>
+	</div>
 {:else if !club}
 	<div class="not-found">
 		<h2>{tr('clubHome.notFoundTitle')}</h2>

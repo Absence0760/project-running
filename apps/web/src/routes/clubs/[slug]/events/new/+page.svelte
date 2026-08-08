@@ -33,7 +33,10 @@
 		// real owner, and the admin-gate goto kicks them back to the
 		// club page.
 		await auth.ready();
-		club = await fetchClubBySlug(slug);
+		// A failed read leaves `club` null, so the role gate below bounces to
+		// /clubs/[slug] — which now states the failure rather than claiming
+		// the club is missing.
+		club = (await fetchClubBySlug(slug)).club;
 		// owner / admin / event_organiser may create events — the latter is a
 		// delegated role the DB RLS (is_event_organiser) already permits. Gating
 		// it out here was the sole blocker on the deep-linkable create route.

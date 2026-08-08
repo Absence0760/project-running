@@ -456,11 +456,18 @@
 		loadError = null;
 		const prevInstance = activeInstance;
 		try {
-			[club, event, exceptions] = await Promise.all([
+			const [clubRead, ev, exc] = await Promise.all([
 				fetchClubBySlug(slug),
 				fetchEventById(eventId),
 				fetchEventExceptions(eventId)
 			]);
+			club = clubRead.club;
+			event = ev;
+			exceptions = exc;
+			if (clubRead.error) {
+				loadError = clubRead.error;
+				return;
+			}
 			if (!event) return;
 			// Preserve the user's instance selection across loads — otherwise
 			// rsvp() (which calls load()) silently warps the user back to the

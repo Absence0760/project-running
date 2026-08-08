@@ -2368,18 +2368,29 @@ export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 	return (await fetchMyClubsWithError()).clubs;
 }
 
-export async function fetchClubBySlug(slug: string): Promise<ClubWithMeta | null> {
-	const { data } = await supabase.from('clubs').select(CLUB_SELECT_COLS).eq('slug', slug).maybeSingle();
-	if (!data) return null;
+/// Reports the read error separately from a null row. `.maybeSingle()` gives
+/// `{data: null, error: null}` for a genuine miss, so the two are already
+/// distinguishable at this layer — collapsing them told a member their club
+/// did not exist whenever the request merely failed.
+export async function fetchClubBySlug(
+	slug: string
+): Promise<{ club: ClubWithMeta | null; error: string | null }> {
+	const { data, error } = await supabase
+		.from('clubs')
+		.select(CLUB_SELECT_COLS)
+		.eq('slug', slug)
+		.maybeSingle();
+	if (error) return { club: null, error: error.message };
+	if (!data) return { club: null, error: null };
 	const [enriched] = await enrichClubs([data]);
-	if (!enriched) return null;
+	if (!enriched) return { club: null, error: null };
 	if (enriched.viewer_role === 'owner' || enriched.viewer_role === 'admin') {
 		const { data: token } = await supabase.rpc('get_club_invite_token', {
 			target_club: enriched.id
 		});
-		return { ...enriched, invite_token: (token as string | null) ?? null };
+		return { club: { ...enriched, invite_token: (token as string | null) ?? null }, error: null };
 	}
-	return enriched;
+	return { club: enriched, error: null };
 }
 
 /// Resolves a club id to its slug. The notification worker's row projection
