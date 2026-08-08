@@ -4478,6 +4478,8 @@ export const messages = {
 	"admin.reports.colReporters": "Denunciantes",
 	"admin.reports.colReasons": "Motivos",
 	"admin.reports.colLatest": "Más reciente",
+	"admin.reports.colReview": "Revisar",
+	"admin.reports.review": "Revisar",
 	"admin.reports.kind.user": "Usuario",
 	"admin.reports.kind.club": "Club",
 	"admin.reports.kind.route": "Ruta",

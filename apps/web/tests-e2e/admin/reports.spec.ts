@@ -92,6 +92,49 @@ test.describe('admin moderation — admin can triage the queue', () => {
 			expect(r.resolution).toBe('warned the user');
 		}
 	});
+
+	test('the review panel is reachable by keyboard, not only by clicking the row',
+		async ({ page }) => {
+			// The row's onclick had no keyboard equivalent, and the only
+			// focusable control in it was the target link — which navigates to
+			// the reported CONTENT, not this panel. A keyboard-only moderator
+			// could not review or resolve anything.
+			await plantPendingReports(TARGET_ID);
+
+			await page.goto('/admin/reports');
+
+			const row = page
+				.getByTestId('admin-queue-row')
+				.filter({ hasText: TARGET_ID.slice(0, 8) });
+			await expect(row).toBeVisible();
+
+			const review = row.getByTestId('admin-queue-review');
+			// Focusable, and activating it from the keyboard opens the panel.
+			await review.focus();
+			await expect(review).toBeFocused();
+			await page.keyboard.press('Enter');
+
+			await expect(page.getByTestId('admin-detail-modal')).toBeVisible();
+		});
+
+	test('the row target link still goes to the reported content, not the panel',
+		async ({ page }) => {
+			// The two destinations are different, which is exactly why the row
+			// needed its own control rather than being made one big button.
+			await plantPendingReports(TARGET_ID);
+
+			await page.goto('/admin/reports');
+
+			const row = page
+				.getByTestId('admin-queue-row')
+				.filter({ hasText: TARGET_ID.slice(0, 8) });
+			await expect(row).toBeVisible();
+
+			await expect(row.locator('a.target-link')).toHaveAttribute(
+				'href',
+				new RegExp(`/${TARGET_ID}$`)
+			);
+		});
 });
 
 test.describe('admin moderation — non-admin is locked out', () => {

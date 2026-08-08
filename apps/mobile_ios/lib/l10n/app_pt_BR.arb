@@ -3641,6 +3641,8 @@
   "pendingSyncOffline": "{count, plural, one{{count} alteração salva neste dispositivo — será sincronizada quando você estiver on-line} other{{count} alterações salvas neste dispositivo — serão sincronizadas quando você estiver on-line}}",
   "pendingSyncFailed": "{count, plural, one{{count} alteração não foi sincronizada} other{{count} alterações não foram sincronizadas}}",
   "pendingSyncRetry": "Tentar novamente",
+  "photoOpen": "Abrir foto",
+  "photoLightboxClose": "Fechar foto",
   "photoLightboxLoading": "Carregando a foto…",
   "photoLightboxError": "Não foi possível carregar esta foto.",
   "photoLightboxErrorHint": "Toque em qualquer lugar para fechar.",

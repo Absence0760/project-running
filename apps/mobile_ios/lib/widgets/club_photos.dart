@@ -448,17 +448,29 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
           children: [
             AspectRatio(
               aspectRatio: 1,
-              child: GestureDetector(
-                onTap: () => _openLightbox(p),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    _galleryUrl(p),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: cs.surfaceContainerHighest,
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.broken_image_outlined),
+              // A bare Image under a GestureDetector is, to TalkBack, an
+              // unlabelled roleless rectangle — so the gallery could not be
+              // browsed or opened without sight. Web already ships this as a
+              // <button aria-label> wrapping an <img alt>; this is mobile
+              // catching up to it.
+              child: Semantics(
+                button: true,
+                image: true,
+                label: (p.caption?.trim().isNotEmpty ?? false)
+                    ? p.caption!.trim()
+                    : l10n.photoOpen,
+                child: GestureDetector(
+                  onTap: () => _openLightbox(p),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      _galleryUrl(p),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: cs.surfaceContainerHighest,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.broken_image_outlined),
+                      ),
                     ),
                   ),
                 ),

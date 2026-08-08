@@ -12498,6 +12498,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get pendingSyncRetry => 'Tentar novamente';
 
   @override
+  String get photoOpen => 'Abrir fotografia';
+
+  @override
+  String get photoLightboxClose => 'Fechar fotografia';
+
+  @override
   String get photoLightboxLoading => 'A carregar a fotografia…';
 
   @override
@@ -25063,6 +25069,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get pendingSyncRetry => 'Tentar novamente';
+
+  @override
+  String get photoOpen => 'Abrir foto';
+
+  @override
+  String get photoLightboxClose => 'Fechar foto';
 
   @override
   String get photoLightboxLoading => 'Carregando a foto…';

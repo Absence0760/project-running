@@ -12529,6 +12529,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get pendingSyncRetry => 'Réessayer';
 
   @override
+  String get photoOpen => 'Ouvrir la photo';
+
+  @override
+  String get photoLightboxClose => 'Fermer la photo';
+
+  @override
   String get photoLightboxLoading => 'Chargement de la photo…';
 
   @override

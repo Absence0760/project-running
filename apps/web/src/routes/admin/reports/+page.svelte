@@ -155,6 +155,7 @@
 							<th>{t('admin.reports.colReporters')}</th>
 							<th>{t('admin.reports.colReasons')}</th>
 							<th>{t('admin.reports.colLatest')}</th>
+							<th>{t('admin.reports.colReview')}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -185,6 +186,24 @@
 									</span>
 								</td>
 								<td class="muted">{formatRelativeTime(target.latest_at)}</td>
+								<td>
+									<!-- The row's own onclick is a mouse convenience with no keyboard
+									     equivalent, and the only focusable control in the row is the
+									     target link — which goes somewhere else entirely (the reported
+									     content, not this review panel). Without a real button a
+									     keyboard-only moderator could not review or resolve anything. -->
+									<button
+										type="button"
+										class="btn btn-outline btn-sm"
+										data-testid="admin-queue-review"
+										onclick={(e) => {
+											e.stopPropagation();
+											openTarget(target);
+										}}
+									>
+										{t('admin.reports.review')}
+									</button>
+								</td>
 							</tr>
 						{/each}
 					</tbody>
