@@ -207,6 +207,12 @@ class _RunsScreenState extends State<RunsScreen> {
   bool _remoteHasMore = true;
 
   bool _selecting = false;
+  // Guards the bulk delete. Without it the trash action stayed live through
+  // the whole per-run loop with `_selected` still populated, so a second tap
+  // re-opened the confirm on the SAME set and a second confirm launched a
+  // concurrent pass over ids already being deleted. The sibling bulk delete
+  // on routes_screen has carried this guard since it shipped.
+  bool _deleting = false;
   final Set<String> _selected = {};
 
   /// Unified activities timeline (runs + lifts + meals), assembled from the
@@ -864,43 +870,53 @@ class _RunsScreenState extends State<RunsScreen> {
       ),
     );
     if (ok != true) return;
+    if (!mounted) return;
+    setState(() => _deleting = true);
     final ids = Set<String>.from(_selected);
     final failedIds = <String>{};
     final api = widget.apiClient;
-    if (api != null && api.userId != null) {
-      // Hydrate the selected runs (some may be outside the resident window) —
-      // deleteRun reads metadata.track_url to clean up the Storage track, so a
-      // track-less summary wouldn't remove the blob.
-      final runsToDelete = <Run>[];
-      for (final id in ids) {
-        final run = await widget.runStore.runById(id);
-        if (run != null) runsToDelete.add(run);
-      }
-      for (final run in runsToDelete) {
-        try {
-          await api.deleteRun(run);
-        } catch (e) {
-          debugPrint('deleteRun failed for ${run.id}: $e');
-          failedIds.add(run.id);
+    // The store calls below can throw (disk, corrupt sidecar). Without the
+    // finally a throw would strand `_deleting` true, permanently disabling
+    // both the delete AND the close action and trapping the user in
+    // selection mode — worse than the double-fire this guard exists to stop.
+    try {
+      if (api != null && api.userId != null) {
+        // Hydrate the selected runs (some may be outside the resident window) —
+        // deleteRun reads metadata.track_url to clean up the Storage track, so a
+        // track-less summary wouldn't remove the blob.
+        final runsToDelete = <Run>[];
+        for (final id in ids) {
+          final run = await widget.runStore.runById(id);
+          if (run != null) runsToDelete.add(run);
+        }
+        for (final run in runsToDelete) {
+          try {
+            await api.deleteRun(run);
+          } catch (e) {
+            debugPrint('deleteRun failed for ${run.id}: $e');
+            failedIds.add(run.id);
+          }
         }
       }
-    }
-    // Only delete locally the runs whose remote delete succeeded.
-    // Runs whose remote delete failed are kept locally so they don't
-    // silently resurface on the next sync, and queued for SyncService
-    // to retry on its usual triggers (foreground, connectivity-on,
-    // startup) — see data-sync audit P0-1.
-    await widget.runStore.deleteMany(ids.difference(failedIds));
-    if (failedIds.isNotEmpty) {
-      // Stamp the queued failures with the current user so a sign-out
-      // → other user sign-in cycle doesn't drain User A's pending
-      // deletes under User B's session (RLS would reject every one
-      // and the queue would get stuck). See `docs/architecture/decisions.md § 67`
-      // for the parallel run owner-tag design.
-      await widget.runStore.markManyPendingRemoteDelete(
-        failedIds,
-        ownerUserId: api?.userId,
-      );
+      // Only delete locally the runs whose remote delete succeeded.
+      // Runs whose remote delete failed are kept locally so they don't
+      // silently resurface on the next sync, and queued for SyncService
+      // to retry on its usual triggers (foreground, connectivity-on,
+      // startup) — see data-sync audit P0-1.
+      await widget.runStore.deleteMany(ids.difference(failedIds));
+      if (failedIds.isNotEmpty) {
+        // Stamp the queued failures with the current user so a sign-out
+        // → other user sign-in cycle doesn't drain User A's pending
+        // deletes under User B's session (RLS would reject every one
+        // and the queue would get stuck). See `docs/architecture/decisions.md § 67`
+        // for the parallel run owner-tag design.
+        await widget.runStore.markManyPendingRemoteDelete(
+          failedIds,
+          ownerUserId: api?.userId,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
     }
     if (!mounted) return;
     setState(() {
@@ -1231,7 +1247,7 @@ class _RunsScreenState extends State<RunsScreen> {
       leading: IconButton(
         icon: const Icon(Icons.close),
         tooltip: l10n.historyCancelTooltip,
-        onPressed: _clearSelection,
+        onPressed: _deleting ? null : _clearSelection,
       ),
       title: Text(l10n.historySelectionTitle(_selected.length)),
       actions: [
@@ -1246,7 +1262,8 @@ class _RunsScreenState extends State<RunsScreen> {
         IconButton(
           icon: const Icon(Icons.delete_outline),
           tooltip: l10n.historyDeleteTooltip,
-          onPressed: _selected.isEmpty ? null : _deleteSelected,
+          onPressed:
+              (_selected.isEmpty || _deleting) ? null : _deleteSelected,
         ),
       ],
     );

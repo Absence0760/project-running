@@ -1,4 +1,5 @@
 // ignore_for_file: avoid_relative_lib_imports
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,6 +15,7 @@ import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/runs_screen.dart';
+import '../lib/widgets/run_list_tile.dart';
 import '../lib/widgets/surface_peer_strip.dart';
 
 /// Signed-in fake with no remote runs — keeps `_fetchRemote` off the network
@@ -29,6 +31,20 @@ class _FakeApi extends ApiClient {
     DateTime? updatedSince,
   }) async =>
       const [];
+}
+
+
+/// Holds `deleteRun` open so the in-flight window of the bulk delete can be
+/// inspected. Each call parks on [gate]; completing it releases every one.
+class _SlowDeleteApi extends _FakeApi {
+  final Completer<void> gate = Completer<void>();
+  int deleteCalls = 0;
+
+  @override
+  Future<void> deleteRun(Run run) async {
+    deleteCalls++;
+    await gate.future;
+  }
 }
 
 void main() {
@@ -121,5 +137,95 @@ void main() {
     // sub-tab opts out (pinned in fitness_hub_screen_test.dart).
     await pumpRunList(tester);
     expect(find.byIcon(Icons.cloud_download), findsOneWidget);
+  });
+
+  testWidgets('bulk delete disables its own controls while in flight',
+      (tester) async {
+    // The trash action stayed live through the whole per-run loop with
+    // `_selected` still populated, so a second tap re-opened the confirm on
+    // the SAME set and a second confirm launched a concurrent delete pass.
+    final api = _SlowDeleteApi();
+    final runStore = LocalRunStore();
+    await runStore.init(overrideDirectory: tmp('runs_del_'));
+    Run mk(String id, DateTime at) => Run(
+          id: id,
+          startedAt: at,
+          duration: const Duration(seconds: 1500),
+          distanceMetres: 5000,
+          source: RunSource.app,
+        );
+    // Recent dates: the run list's default range filter windows out older
+    // runs, and a filtered-out row cannot be long-pressed into selection.
+    final now = DateTime.now().toUtc();
+    final runs = [
+      mk('r1', now.subtract(const Duration(days: 1))),
+      mk('r2', now.subtract(const Duration(days: 2))),
+    ];
+    await tester.runAsync(() async => runStore.saveManyFromRemote(runs));
+    SharedPreferences.setMockInitialValues({});
+    final prefs = Preferences();
+    await prefs.init();
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: RunsScreen(
+        apiClient: api,
+        runStore: runStore,
+        routeStore: LocalRouteStore(),
+        preferences: prefs,
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Long-press enters selection mode with that row selected.
+    await tester.longPress(find.byType(RunListTile).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 selected'), findsOneWidget,
+        reason: 'long-press enters selection mode with that row selected');
+    final deleteBtn = find.widgetWithIcon(IconButton, Icons.delete_outline);
+    expect(deleteBtn, findsOneWidget);
+    expect(tester.widget<IconButton>(deleteBtn).onPressed, isNotNull);
+
+    await tester.tap(deleteBtn);
+    await tester.pumpAndSettle();
+    // Confirm — scoped to the dialog, the row action shares its label.
+    await tester.runAsync(() async {
+      await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(FilledButton, 'Delete')));
+    });
+    await tester.pump();
+
+    // In flight: both the delete AND the close action are inert, so neither a
+    // second delete nor a mid-flight cancel can race the loop.
+    expect(api.deleteCalls, 1);
+    expect(tester.widget<IconButton>(deleteBtn).onPressed, isNull,
+        reason: 'a second tap must not be able to reach _deleteSelected');
+    expect(
+        tester
+            .widget<IconButton>(
+                find.widgetWithIcon(IconButton, Icons.close))
+            .onPressed,
+        isNull);
+
+    // Releasing the delete finishes the pass and leaves selection mode. The
+    // tail does real store file I/O, so alternate real-clock delays (which let
+    // that I/O complete) with pumps (which flush the fake-zone microtasks that
+    // resume the awaiting UI code) until it lands — a fixed delay never drains
+    // it. Same shape as gym_screen_test's `_pumpUntil`.
+    await tester.runAsync(() async => api.gate.complete());
+    for (var i = 0; i < 40 && tester.any(find.text('1 selected')); i++) {
+      await tester.runAsync(
+          () async => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    expect(api.deleteCalls, 1, reason: 'exactly one pass over the selection');
+    // Selection mode ended, so its AppBar (and with it the guarded controls)
+    // is gone. Asserted on the selection title rather than the trash glyph,
+    // which also appears outside selection mode.
+    expect(find.text('1 selected'), findsNothing);
+    await tester.pump(const Duration(seconds: 4));
   });
 }
