@@ -1259,6 +1259,8 @@ export const messages = {
 	"settingsAccount.saveProfile": "プロフィールを保存",
 	"settingsAccount.avatarChange": "写真を変更",
 	"settingsAccount.avatarRemove": "削除",
+	"settingsAccount.avatarRemoveConfirmTitle": "プロフィール写真を削除しますか？",
+	"settingsAccount.avatarRemoveConfirmMessage": "現在のプロフィール写真を削除します。新しい写真はいつでもアップロードできます。",
 	"settingsAccount.avatarUploading": "アップロード中…",
 	"settingsAccount.avatarSaved": "プロフィール写真を更新しました。",
 	"settingsAccount.avatarRemoved": "プロフィール写真を削除しました。",

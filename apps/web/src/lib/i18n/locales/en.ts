@@ -1272,6 +1272,8 @@ export const en = {
 	"settingsAccount.saveProfile": "Save Profile",
 	"settingsAccount.avatarChange": "Change photo",
 	"settingsAccount.avatarRemove": "Remove",
+	"settingsAccount.avatarRemoveConfirmTitle": "Remove profile photo?",
+	"settingsAccount.avatarRemoveConfirmMessage": "This removes your current profile photo. You can upload a new one anytime.",
 	"settingsAccount.avatarUploading": "Uploading…",
 	"settingsAccount.avatarSaved": "Profile photo updated.",
 	"settingsAccount.avatarRemoved": "Profile photo removed.",

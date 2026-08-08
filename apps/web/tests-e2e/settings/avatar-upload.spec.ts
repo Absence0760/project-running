@@ -150,10 +150,25 @@ test.describe('avatar upload', () => {
 				expect(jpgBytes.includes(Buffer.from('Exif', 'latin1'))).toBe(false);
 			});
 
-			// ── 5. Remove clears the avatar ─────────────────────────────
-			await test.step('USER_A removes the avatar', async () => {
+			// ── 5. Remove is confirmed, then clears the avatar ──────────
+			await test.step('cancelling the remove confirm keeps the avatar', async () => {
 				await page.goto('/settings/account');
 				await page.getByTestId('avatar-remove').click();
+				const dialog = page.locator('.modal', { hasText: 'Remove profile photo?' });
+				await expect(dialog).toBeVisible({ timeout: 10_000 });
+				await dialog.getByRole('button', { name: 'Cancel' }).click();
+				await expect(dialog).toHaveCount(0);
+
+				// The Storage object is untouched — the delete is not recoverable,
+				// so a cancel has to mean nothing happened.
+				expect(await avatarNames()).toContain('avatar.jpg');
+			});
+
+			await test.step('USER_A removes the avatar', async () => {
+				await page.getByTestId('avatar-remove').click();
+				const dialog = page.locator('.modal', { hasText: 'Remove profile photo?' });
+				await expect(dialog).toBeVisible({ timeout: 10_000 });
+				await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
 				await expect(page.locator('.toast-success')).toContainText(/removed/i, {
 					timeout: 10_000,
 				});

@@ -323,7 +323,13 @@
 		}
 	}
 
+	// The delete hits Storage and is not recoverable, and the button sits
+	// immediately beside "Change photo" — mobile has confirmed this since it
+	// shipped (settings_account_screen.dart).
+	let showAvatarRemoveConfirm = $state(false);
+
 	async function handleAvatarRemove() {
+		showAvatarRemoveConfirm = false;
 		avatarBusy = true;
 		try {
 			await removeAvatar();
@@ -883,7 +889,7 @@
 					<button
 						type="button"
 						class="btn btn-outline btn-sm"
-						onclick={handleAvatarRemove}
+						onclick={() => (showAvatarRemoveConfirm = true)}
 						disabled={avatarBusy}
 						data-testid="avatar-remove"
 					>
@@ -1365,6 +1371,16 @@
 		</button>
 	</section>
 </div>
+
+<ConfirmDialog
+	open={showAvatarRemoveConfirm}
+	title={m('settingsAccount.avatarRemoveConfirmTitle')}
+	message={m('settingsAccount.avatarRemoveConfirmMessage')}
+	confirmLabel={m('settingsAccount.avatarRemove')}
+	onconfirm={handleAvatarRemove}
+	oncancel={() => (showAvatarRemoveConfirm = false)}
+	danger
+/>
 
 <ConfirmDialog
 	open={showSignOutEverywhere}

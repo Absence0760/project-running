@@ -1264,6 +1264,8 @@ export const messages = {
 	"settingsAccount.saveProfile": "Profil speichern",
 	"settingsAccount.avatarChange": "Foto ändern",
 	"settingsAccount.avatarRemove": "Entfernen",
+	"settingsAccount.avatarRemoveConfirmTitle": "Profilfoto entfernen?",
+	"settingsAccount.avatarRemoveConfirmMessage": "Dein aktuelles Profilfoto wird entfernt. Du kannst jederzeit ein neues hochladen.",
 	"settingsAccount.avatarUploading": "Wird hochgeladen…",
 	"settingsAccount.avatarSaved": "Profilfoto aktualisiert.",
 	"settingsAccount.avatarRemoved": "Profilfoto entfernt.",
