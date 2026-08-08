@@ -4492,6 +4492,8 @@ export const en = {
 	"admin.reports.colReporters": "Reporters",
 	"admin.reports.colReasons": "Reasons",
 	"admin.reports.colLatest": "Latest",
+	"admin.reports.colReview": "Review",
+	"admin.reports.review": "Review",
 	"admin.reports.kind.user": "User",
 	"admin.reports.kind.club": "Club",
 	"admin.reports.kind.route": "Route",

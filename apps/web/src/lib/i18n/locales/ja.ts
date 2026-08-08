@@ -4473,6 +4473,8 @@ export const messages = {
 	"admin.reports.colReporters": "通報者数",
 	"admin.reports.colReasons": "理由",
 	"admin.reports.colLatest": "最新",
+	"admin.reports.colReview": "確認",
+	"admin.reports.review": "確認",
 	"admin.reports.kind.user": "ユーザー",
 	"admin.reports.kind.club": "クラブ",
 	"admin.reports.kind.route": "ルート",
