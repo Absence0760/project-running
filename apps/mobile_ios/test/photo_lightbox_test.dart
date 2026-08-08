@@ -66,4 +66,46 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(PhotoLightbox), findsNothing);
   });
+
+  testWidgets('carries a named close control, not only tap-anywhere',
+      (tester) async {
+    // Tap-anywhere-to-dismiss is invisible to a screen reader and to anyone
+    // who does not know the gesture, and the viewer had no other exit.
+    await tester.pumpWidget(
+      _wrap(const PhotoLightbox(url: 'https://example.test/photo.jpg')),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('Close photo'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('the image itself is labelled — by its caption when it has one',
+      (tester) async {
+    // Without a semanticLabel the viewer is one unnamed rectangle; the
+    // caption below it is a separate node and is often absent entirely.
+    await tester.pumpWidget(
+      _wrap(const PhotoLightbox(
+        url: 'https://example.test/photo.jpg',
+        caption: 'Summit at sunrise',
+      )),
+    );
+    await tester.pump();
+
+    final img = tester.widget<Image>(find.byType(Image));
+    expect(img.semanticLabel, 'Summit at sunrise');
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('an uncaptioned image falls back to a generic label',
+      (tester) async {
+    await tester.pumpWidget(
+      _wrap(const PhotoLightbox(url: 'https://example.test/photo.jpg')),
+    );
+    await tester.pump();
+
+    final img = tester.widget<Image>(find.byType(Image));
+    expect(img.semanticLabel, 'Open photo');
+    await tester.pump(const Duration(seconds: 1));
+  });
 }

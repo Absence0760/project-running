@@ -15902,6 +15902,14 @@
   "@pendingSyncRetry": {
     "description": "Retry button on the pending-sync banner"
   },
+  "photoOpen": "Open photo",
+  "@photoOpen": {
+    "description": "Semantics label for a tappable photo thumbnail that opens the full-screen viewer; used when the photo has no caption of its own"
+  },
+  "photoLightboxClose": "Close photo",
+  "@photoLightboxClose": {
+    "description": "Label for the full-screen photo viewer's close control"
+  },
   "photoLightboxLoading": "Loading photo…",
   "@photoLightboxLoading": {
     "description": "Accessible label for the spinner shown while a full-size photo loads in the lightbox"

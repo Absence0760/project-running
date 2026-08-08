@@ -11919,6 +11919,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get pendingSyncRetry => '再試行';
 
   @override
+  String get photoOpen => '写真を開く';
+
+  @override
+  String get photoLightboxClose => '写真を閉じる';
+
+  @override
   String get photoLightboxLoading => '写真を読み込んでいます…';
 
   @override

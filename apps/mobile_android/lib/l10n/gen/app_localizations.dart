@@ -20882,6 +20882,18 @@ abstract class AppLocalizations {
   /// **'Retry'**
   String get pendingSyncRetry;
 
+  /// Semantics label for a tappable photo thumbnail that opens the full-screen viewer; used when the photo has no caption of its own
+  ///
+  /// In en, this message translates to:
+  /// **'Open photo'**
+  String get photoOpen;
+
+  /// Label for the full-screen photo viewer's close control
+  ///
+  /// In en, this message translates to:
+  /// **'Close photo'**
+  String get photoLightboxClose;
+
   /// Accessible label for the spinner shown while a full-size photo loads in the lightbox
   ///
   /// In en, this message translates to:

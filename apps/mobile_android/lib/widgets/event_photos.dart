@@ -348,28 +348,40 @@ class _PhotoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
     return SizedBox(
       width: 150,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: onTap,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                width: 150,
-                height: 150,
-                color: cs.surfaceContainerHighest,
-                child: url.isEmpty
-                    ? Icon(Icons.image_outlined, color: cs.onSurfaceVariant)
-                    : Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Icon(
-                            Icons.broken_image_outlined,
-                            color: cs.onSurfaceVariant),
-                      ),
+          // A bare Image under a GestureDetector is, to TalkBack, an
+          // unlabelled roleless rectangle. The caption and uploader below are
+          // separate nodes, so without this the tappable thing itself carries
+          // no name and no role.
+          Semantics(
+            button: true,
+            image: true,
+            label: (caption?.trim().isNotEmpty ?? false)
+                ? caption!.trim()
+                : l10n.photoOpen,
+            child: GestureDetector(
+              onTap: onTap,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 150,
+                  height: 150,
+                  color: cs.surfaceContainerHighest,
+                  child: url.isEmpty
+                      ? Icon(Icons.image_outlined, color: cs.onSurfaceVariant)
+                      : Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                              Icons.broken_image_outlined,
+                              color: cs.onSurfaceVariant),
+                        ),
+                ),
               ),
             ),
           ),

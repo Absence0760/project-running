@@ -130,6 +130,27 @@ void main() {
     expect(find.text('A runner'), findsOneWidget);
   });
 
+  testWidgets('each tile carries a button+image semantics label', (tester) async {
+    // The tappable thing is a bare Image under a GestureDetector — to TalkBack
+    // an unlabelled, roleless rectangle. The caption and uploader render as
+    // SEPARATE nodes, so without this the control itself had no name at all.
+    final api = _PhotosApi(seed: [
+      _photo(id: 'a', caption: 'Great day', uploader: 'Dana'),
+      _photo(id: 'b', uploader: null),
+    ]);
+    await tester.pumpWidget(_host(_widget(api, canAdd: false)));
+    await tester.pumpAndSettle();
+
+    final semantics = tester
+        .widgetList<Semantics>(find.byType(Semantics))
+        .where((w) => w.properties.button == true && w.properties.image == true)
+        .toList();
+    expect(semantics.length, 2, reason: 'one per photo tile');
+    // A captioned photo is named by its caption; an uncaptioned one falls back.
+    final labels = semantics.map((w) => w.properties.label).toSet();
+    expect(labels, {'Great day', 'Open photo'});
+  });
+
   testWidgets('finisher add attaches to own event run', (tester) async {
     final api = _PhotosApi();
     await tester.pumpWidget(_host(_widget(api, myEventRunId: 'run-me')));

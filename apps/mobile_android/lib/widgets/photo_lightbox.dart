@@ -40,6 +40,11 @@ class PhotoLightbox extends StatelessWidget {
             child: Image.network(
               url,
               fit: BoxFit.contain,
+              // Without this the viewer is one unnamed rectangle: the caption
+              // below is a separate node and is often absent entirely.
+              semanticLabel: (caption?.trim().isNotEmpty ?? false)
+                  ? caption!.trim()
+                  : l10n.photoOpen,
               frameBuilder: (_, child, frame, wasSynchronouslyLoaded) =>
                   wasSynchronouslyLoaded || frame != null
                       ? child
@@ -94,6 +99,18 @@ class PhotoLightbox extends StatelessWidget {
                 ),
               ),
             ),
+          // Tap-anywhere-to-dismiss is invisible to a screen reader and to
+          // anyone who doesn't know the gesture. The barrier and system back
+          // still work; this makes the exit an actual named control.
+          Positioned(
+            top: 8,
+            right: 8,
+            child: IconButton(
+              tooltip: l10n.photoLightboxClose,
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
         ],
       ),
     );
