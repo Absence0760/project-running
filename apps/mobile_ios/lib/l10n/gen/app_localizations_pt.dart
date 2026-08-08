@@ -689,6 +689,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String safetyRemoveFailed(String error) {
+    return 'Não foi possível remover o contacto: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Não foi possível guardar a definição: $error';
+  }
+
+  @override
   String get safetyInvalidEmail => 'Digite um e-mail válido.';
 
   @override
@@ -13281,6 +13291,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String safetyAddFailed(String error) {
     return 'Não foi possível adicionar o contato: $error';
+  }
+
+  @override
+  String safetyRemoveFailed(String error) {
+    return 'Não foi possível remover o contato: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Não foi possível salvar a configuração: $error';
   }
 
   @override

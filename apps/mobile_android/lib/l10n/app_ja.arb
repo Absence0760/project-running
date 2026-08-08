@@ -183,6 +183,8 @@
   "safetyRemove": "削除",
   "safetyRemoveConfirm": "この緊急連絡先を削除しますか？",
   "safetyAddFailed": "連絡先を追加できませんでした：{error}",
+  "safetyRemoveFailed": "連絡先を削除できませんでした: {error}",
+  "safetySettingSaveFailed": "設定を保存できませんでした: {error}",
   "safetyInvalidEmail": "有効なメールアドレスを入力してください。",
   "safetyAddedToast": "連絡先を追加しました — 確認メールを送りました。",
   "safetyRemovedToast": "連絡先を削除しました。",

@@ -689,6 +689,16 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String safetyRemoveFailed(String error) {
+    return 'No se pudo eliminar el contacto: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'No se pudo guardar el ajuste: $error';
+  }
+
+  @override
   String get safetyInvalidEmail => 'Introduce un correo válido.';
 
   @override

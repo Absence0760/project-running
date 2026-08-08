@@ -662,6 +662,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String safetyRemoveFailed(String error) {
+    return '連絡先を削除できませんでした: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return '設定を保存できませんでした: $error';
+  }
+
+  @override
   String get safetyInvalidEmail => '有効なメールアドレスを入力してください。';
 
   @override

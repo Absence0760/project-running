@@ -1205,6 +1205,18 @@ abstract class AppLocalizations {
   /// **'Could not add contact: {error}'**
   String safetyAddFailed(String error);
 
+  /// Error toast when removing a safety contact fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove contact: {error}'**
+  String safetyRemoveFailed(String error);
+
+  /// Error toast when a safety setting write fails and the control is reverted
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save setting: {error}'**
+  String safetySettingSaveFailed(String error);
+
   /// Inline error when the entered email is not valid
   ///
   /// In en, this message translates to:

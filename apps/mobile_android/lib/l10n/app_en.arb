@@ -916,6 +916,24 @@
       }
     }
   },
+  "safetyRemoveFailed": "Could not remove contact: {error}",
+  "@safetyRemoveFailed": {
+    "description": "Error toast when removing a safety contact fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "safetySettingSaveFailed": "Could not save setting: {error}",
+  "@safetySettingSaveFailed": {
+    "description": "Error toast when a safety setting write fails and the control is reverted",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "safetyInvalidEmail": "Enter a valid email address.",
   "@safetyInvalidEmail": {
     "description": "Inline error when the entered email is not valid"

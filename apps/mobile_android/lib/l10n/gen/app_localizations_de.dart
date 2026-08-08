@@ -690,6 +690,16 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String safetyRemoveFailed(String error) {
+    return 'Kontakt konnte nicht entfernt werden: $error';
+  }
+
+  @override
+  String safetySettingSaveFailed(String error) {
+    return 'Einstellung konnte nicht gespeichert werden: $error';
+  }
+
+  @override
   String get safetyInvalidEmail => 'Gib eine gültige E-Mail-Adresse ein.';
 
   @override

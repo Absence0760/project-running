@@ -183,6 +183,8 @@
   "safetyRemove": "Remover",
   "safetyRemoveConfirm": "Remover este contato de segurança?",
   "safetyAddFailed": "Não foi possível adicionar o contato: {error}",
+  "safetyRemoveFailed": "Não foi possível remover o contato: {error}",
+  "safetySettingSaveFailed": "Não foi possível salvar a configuração: {error}",
   "safetyInvalidEmail": "Digite um e-mail válido.",
   "safetyAddedToast": "Contato adicionado — enviamos um e-mail de confirmação.",
   "safetyRemovedToast": "Contato removido.",
