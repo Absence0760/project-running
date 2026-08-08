@@ -10,8 +10,8 @@
 	import { getGuide, isEnglishFallback } from '$lib/learn/guides';
 	import { getCategory } from '$lib/learn/categories';
 	import LearnCta from '$lib/components/LearnCta.svelte';
-	import PublicHeader from '$lib/components/PublicHeader.svelte';
-	import PublicFooter from '$lib/components/PublicFooter.svelte';
+	import LearnPage from '$lib/components/LearnPage.svelte';
+	import LearnBreadcrumb from '$lib/components/LearnBreadcrumb.svelte';
 
 	let { data } = $props();
 
@@ -65,23 +65,21 @@
 	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
-<div class="learn-page">
-	<PublicHeader />
-
+<LearnPage width="prose">
 	<!-- Wraps rather than replaces the <article>: a guide is genuinely an
 	     article (its JSON-LD says so), and .learn-article centres itself inside
 	     whatever full-width flex child holds it, so the wrapper costs no layout. -->
 	<main id="main-content">
-	<article class="learn-article">
-		<nav class="breadcrumb" aria-label={m('learn.breadcrumbNav')}>
-			<a href="/">{m('learn.breadcrumbHome')}</a>
-			<span class="sep">/</span>
-			<a href="/learn">{m('learn.breadcrumbLearn')}</a>
-			{#if category}
-				<span class="sep">/</span>
-				<a href="/learn/category/{category.id}">{m(category.labelKey)}</a>
-			{/if}
-		</nav>
+	<article class="learn-article learn-column">
+		<LearnBreadcrumb
+			crumbs={[
+				{ href: '/', label: m('learn.breadcrumbHome') },
+				{ href: '/learn', label: m('learn.breadcrumbLearn') },
+				...(category
+					? [{ href: `/learn/category/${category.id}`, label: m(category.labelKey) }]
+					: []),
+			]}
+		/>
 
 		<h1>{guide.title}</h1>
 		<p class="updated">{m('learn.lastUpdated', { date: formatDate(data.guide.updated) })}</p>
@@ -97,46 +95,11 @@
 		<LearnCta feature={data.guide.cta?.feature} />
 	</article>
 	</main>
-
-	<PublicFooter />
-</div>
+</LearnPage>
 
 <style>
-	.learn-page {
-		min-height: 100vh;
-		background: var(--color-bg);
-		display: flex;
-		flex-direction: column;
-	}
-
 	.learn-article {
-		max-width: 44rem;
-		margin: 0 auto;
-		width: 100%;
 		padding: var(--space-xl) var(--space-md);
-	}
-
-	.breadcrumb {
-		font-size: 0.85rem;
-		color: var(--color-text-tertiary);
-		margin-bottom: var(--space-md);
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.3rem;
-		align-items: center;
-	}
-
-	.breadcrumb a {
-		color: var(--color-text-secondary);
-		text-decoration: none;
-	}
-
-	.breadcrumb a:hover {
-		color: var(--color-primary);
-	}
-
-	.breadcrumb .sep {
-		color: var(--color-text-tertiary);
 	}
 
 	.learn-article h1 {

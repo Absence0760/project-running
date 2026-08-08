@@ -69,4 +69,40 @@ test.describe('/learn shared public chrome', () => {
 		await page.locator('nav.landing-nav .nav-signin').click();
 		await page.waitForURL(/\/login/, { timeout: 10_000 });
 	});
+
+	/**
+	 * The landing page takes PublicHeader's `overlay` variant and /learn the
+	 * `solid` one. They may differ in ground, border, and positioning — but
+	 * NOT in box metrics: each variant used to set its own padding, and solid
+	 * came out 15px shorter, so the wordmark and the Sign In pill jumped up
+	 * 8px the moment a visitor clicked Learn. Same header, same places.
+	 */
+	for (const width of [1440, 700]) {
+		test(`the header sits identically on / and /learn at ${width}px`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 900 });
+
+			const measure = async (path: string) => {
+				await page.goto(path);
+				const box = async (sel: string) => {
+					const b = await page.locator(sel).first().boundingBox();
+					if (!b) throw new Error(`no box for ${sel} on ${path}`);
+					return { x: Math.round(b.x), y: Math.round(b.y), h: Math.round(b.height) };
+				};
+				return {
+					logo: await box('nav.landing-nav a.landing-logo'),
+					signin: await box('nav.landing-nav .nav-signin'),
+					navHeight: (await box('nav.landing-nav')).h,
+				};
+			};
+
+			const landing = await measure('/');
+			const learn = await measure('/learn');
+
+			expect(learn.logo).toEqual(landing.logo);
+			expect(learn.signin).toEqual(landing.signin);
+			// Solid carries a 1px bottom border the overlay has no need for;
+			// that single pixel is the only height difference allowed.
+			expect(learn.navHeight - landing.navHeight).toBeLessThanOrEqual(1);
+		});
+	}
 });

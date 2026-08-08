@@ -18,7 +18,9 @@ Each guide is a markdown / MDsvex file committed in the repo, loaded by a build-
 
 `/learn` is **shell-less + anon** in `routes/+layout.svelte` (a marketing surface, never wrapped in the app sidebar — the `path.startsWith('/learn')` prefix in `isShellless`, which `isAnonAllowed` is a superset of).
 
-All three learn routes render the **same public-site chrome as the landing page** via the shared `PublicHeader` / `PublicFooter` components (issue #212): wordmark logo + Apps / Features / Learn nav + a Sign In pill (which flips to "Open app" → `/dashboard` for a signed-in visitor after hydration), and the landing footer's tagline + nav/legal links. The landing page consumes the same components with `PublicHeader`'s `overlay` prop (transparent, white-on-dark, absolutely positioned over the hero); learn uses the default solid variant (themed surface + border, theme-swapped wordmark). Nav anchors are root-anchored (`/#apps`, `/#features`) so they resolve from `/learn`. Both components are prerender-safe — the static HTML bakes the signed-out state and the auth store swaps it client-side.
+All three learn routes wear one page shell, **`LearnPage.svelte`**, which owns the wrapper, the chrome, and — critically — the single definition of the column every band sits in. Add `class="learn-column"` to a band; never re-declare `max-width` on a learn page. Each route used to hand-roll its own wrapper + widths and they drifted: the hub's header ended up in a 56rem column above a 64rem card grid, so the heading and the cards it labels did not share a left edge, and the hub centred its header where both siblings left-align. `tests-e2e/learn/layout.spec.ts` asserts the geometry (breadcrumb / `h1` / first body element share a left edge, at two widths) rather than the CSS, so any rule that breaks the alignment surfaces there. A guide passes `width="prose"` for the 44rem reading measure; hub and category take the default `wide`.
+
+All three also render the **same public-site chrome as the landing page** via the shared `PublicHeader` / `PublicFooter` components (issue #212): wordmark logo + Apps / Features / Learn nav + a Sign In pill (which flips to "Open app" → `/dashboard` for a signed-in visitor after hydration), and the landing footer's tagline + nav/legal links. The landing page consumes the same components with `PublicHeader`'s `overlay` prop (transparent, white-on-dark, absolutely positioned over the hero); learn uses the default solid variant (themed surface + border, theme-swapped wordmark). Nav anchors are root-anchored (`/#apps`, `/#features`) so they resolve from `/learn`. Both components are prerender-safe — the static HTML bakes the signed-out state and the auth store swaps it client-side.
 
 ## Where the code lives
 
@@ -36,6 +38,8 @@ apps/web/src/lib/learn/
 apps/web/src/lib/components/
   GuideCard.svelte     # hub/category preview card (.card-elevated)
   LearnCta.svelte      # end-of-article CTA card (feature link + sign-up)
+  LearnPage.svelte     # the page shell all three routes wear: wrapper + PublicHeader/Footer + the ONE column definition (`width="wide"` 64rem | `"prose"` 44rem)
+  LearnBreadcrumb.svelte # ancestors-only breadcrumb trail (the h1 is the current step)
   PublicHeader.svelte  # shared public-site nav (landing overlay variant + solid learn variant)
   PublicFooter.svelte  # shared public-site footer (tagline + nav/legal links)
 apps/web/static/og-default.png   # 1200x630 branded OG fallback card
