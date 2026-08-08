@@ -3443,6 +3443,24 @@ abstract class AppLocalizations {
   /// **'Duration'**
   String get addRunSectionDuration;
 
+  /// Accessible label for the hours box of an hours/minutes/seconds duration entry — its visible 'h' suffix is decorative and is not part of the field's accessible name
+  ///
+  /// In en, this message translates to:
+  /// **'Hours'**
+  String get durationFieldHours;
+
+  /// Accessible label for the minutes box of an hours/minutes/seconds duration entry
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get durationFieldMinutes;
+
+  /// Accessible label for the seconds box of an hours/minutes/seconds duration entry
+  ///
+  /// In en, this message translates to:
+  /// **'Seconds'**
+  String get durationFieldSeconds;
+
   /// Section header for the optional title field on the add-run form
   ///
   /// In en, this message translates to:

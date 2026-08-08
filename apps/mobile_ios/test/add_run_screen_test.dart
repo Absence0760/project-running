@@ -81,6 +81,24 @@ void main() {
       expect(node.label, 'Distance');
     });
 
+    testWidgets('each duration box is named, not just suffixed', (tester) async {
+      // The visible 'h' / 'm' / 's' hints are `suffixText`, which Flutter does
+      // NOT fold into a field's accessible name — so all three announced as a
+      // bare "text field" and a screen-reader user could not tell which box
+      // they were editing.
+      final s = await _makeStores();
+      await _pump(tester, s.runs, s.routes, s.prefs);
+      await tester.pumpAndSettle();
+
+      final labels = tester
+          .widgetList<Semantics>(find.byType(Semantics))
+          .where((w) => w.properties.textField == true)
+          .map((w) => w.properties.label)
+          .toSet();
+      expect(labels.containsAll({'Hours', 'Minutes', 'Seconds'}), isTrue,
+          reason: 'got: $labels');
+    });
+
     testWidgets('Save action is present in the app bar', (tester) async {
       final s = await _makeStores();
       await _pump(tester, s.runs, s.routes, s.prefs);

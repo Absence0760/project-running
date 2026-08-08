@@ -2026,6 +2026,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get addRunSectionDuration => 'Duração';
 
   @override
+  String get durationFieldHours => 'Horas';
+
+  @override
+  String get durationFieldMinutes => 'Minutos';
+
+  @override
+  String get durationFieldSeconds => 'Segundos';
+
+  @override
   String get addRunSectionTitle => 'Título (opcional)';
 
   @override
@@ -14601,6 +14610,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get addRunSectionDuration => 'Duração';
+
+  @override
+  String get durationFieldHours => 'Horas';
+
+  @override
+  String get durationFieldMinutes => 'Minutos';
+
+  @override
+  String get durationFieldSeconds => 'Segundos';
 
   @override
   String get addRunSectionTitle => 'Título (opcional)';

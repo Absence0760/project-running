@@ -2035,6 +2035,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get addRunSectionDuration => 'Durée';
 
   @override
+  String get durationFieldHours => 'Heures';
+
+  @override
+  String get durationFieldMinutes => 'Minutes';
+
+  @override
+  String get durationFieldSeconds => 'Secondes';
+
+  @override
   String get addRunSectionTitle => 'Titre (facultatif)';
 
   @override

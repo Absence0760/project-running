@@ -2028,6 +2028,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get addRunSectionDuration => 'Duración';
 
   @override
+  String get durationFieldHours => 'Horas';
+
+  @override
+  String get durationFieldMinutes => 'Minutos';
+
+  @override
+  String get durationFieldSeconds => 'Segundos';
+
+  @override
   String get addRunSectionTitle => 'Título (opcional)';
 
   @override

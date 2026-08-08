@@ -2009,6 +2009,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addRunSectionDuration => 'Duration';
 
   @override
+  String get durationFieldHours => 'Hours';
+
+  @override
+  String get durationFieldMinutes => 'Minutes';
+
+  @override
+  String get durationFieldSeconds => 'Seconds';
+
+  @override
   String get addRunSectionTitle => 'Title (optional)';
 
   @override

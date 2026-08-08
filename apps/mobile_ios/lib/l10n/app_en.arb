@@ -2639,6 +2639,18 @@
     "description": "Section header for the distance field on the add-run form"
   },
   "addRunSectionDuration": "Duration",
+  "durationFieldHours": "Hours",
+  "@durationFieldHours": {
+    "description": "Accessible label for the hours box of an hours/minutes/seconds duration entry — its visible 'h' suffix is decorative and is not part of the field's accessible name"
+  },
+  "durationFieldMinutes": "Minutes",
+  "@durationFieldMinutes": {
+    "description": "Accessible label for the minutes box of an hours/minutes/seconds duration entry"
+  },
+  "durationFieldSeconds": "Seconds",
+  "@durationFieldSeconds": {
+    "description": "Accessible label for the seconds box of an hours/minutes/seconds duration entry"
+  },
   "@addRunSectionDuration": {
     "description": "Section header for the duration fields on the add-run form"
   },

@@ -1920,6 +1920,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get addRunSectionDuration => '時間';
 
   @override
+  String get durationFieldHours => '時間';
+
+  @override
+  String get durationFieldMinutes => '分';
+
+  @override
+  String get durationFieldSeconds => '秒';
+
+  @override
   String get addRunSectionTitle => 'タイトル（任意）';
 
   @override
