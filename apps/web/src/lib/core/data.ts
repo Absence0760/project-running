@@ -239,9 +239,15 @@ export async function fetchRunsWithError(
 /// very high-volume runner ever hits it inside the window, drops only
 /// the oldest rows in the window — never the recent ones any consumer
 /// reads. Lifetime headline numbers come from `fetchRunAllTimeStats`.
-export async function fetchRunsForDashboard(): Promise<Run[]> {
+/// Reports the read error: almost every card on /dashboard derives from this
+/// one set, so degrading to `[]` rendered a complete, convincing brand-new
+/// account — zero runs, no PRs, an empty week — to a runner mid-outage.
+export async function fetchRunsForDashboard(): Promise<{
+	runs: Run[];
+	error: string | null;
+}> {
 	const userId = auth.user?.id;
-	if (!userId) return [];
+	if (!userId) return { runs: [], error: null };
 	const windowStart = dashboardRunsWindowStart(new Date());
 	const { data, error } = await supabase
 		.from(TABLES.runs)
@@ -251,12 +257,16 @@ export async function fetchRunsForDashboard(): Promise<Run[]> {
 		.eq('user_id', userId)
 		.gte('started_at', windowStart.toISOString())
 		.order('started_at', { ascending: false });
-	if (error || !data) return [];
-	return data.map((r: any) => ({
-		...r,
-		source: parseRunSource(r.source),
-		track: null,
-	})) as Run[];
+	if (error) return { runs: [], error: error.message };
+	if (!data) return { runs: [], error: null };
+	return {
+		runs: data.map((r: any) => ({
+			...r,
+			source: parseRunSource(r.source),
+			track: null,
+		})) as Run[],
+		error: null,
+	};
 }
 
 /// Cheap all-time aggregates for the dashboard's two lifetime stat cards
