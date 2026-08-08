@@ -145,6 +145,8 @@
 	let showDeleteClubConfirm = $state(false);
 	let showDeletePostConfirm = $state<string | null>(null);
 	let showRemoveRouteId = $state<string | null>(null);
+	let confirmUnpublishId = $state<string | null>(null);
+	let unpublishBusyId = $state<string | null>(null);
 	/** When non-null, the user_id of the member the admin is about to
 	 *  remove. Drives the kick ConfirmDialog. */
 	let removingMemberId = $state<string | null>(null);
@@ -278,13 +280,22 @@
 		}
 	}
 
-	async function unmakeTemplate(planId: string) {
+	// Unpublishing withdraws the template from every member's Templates tab,
+	// so it is confirmed like the sibling route removal rather than firing on
+	// one click. The per-id busy flag also stops a second click re-firing it.
+	async function unmakeTemplate() {
+		const planId = confirmUnpublishId;
+		confirmUnpublishId = null;
+		if (!planId || unpublishBusyId) return;
+		unpublishBusyId = planId;
 		try {
 			await setPlanIsTemplate(planId, false, null);
-			showToast(tr('clubHome.toastTemplateRemoved'));
+			showToast(tr('clubHome.toastTemplateRemoved'), 'success');
 			await load();
 		} catch (e) {
 			showToast(tr('clubHome.toastFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			unpublishBusyId = null;
 		}
 	}
 
@@ -1466,8 +1477,10 @@
 										<button
 											class="btn btn-outline btn-sm"
 											type="button"
-											onclick={() => unmakeTemplate(t.id)}
+											onclick={() => (confirmUnpublishId = t.id)}
+											disabled={unpublishBusyId != null}
 											title={tr('clubHome.unpublishTitle')}
+											data-testid="template-unpublish"
 										>
 											{tr('clubHome.unpublish')}
 										</button>
@@ -1652,6 +1665,16 @@
 	confirmLabel={tr('clubHome.delete')}
 	onconfirm={confirmDeletePost}
 	oncancel={() => showDeletePostConfirm = null}
+	danger
+/>
+
+<ConfirmDialog
+	open={confirmUnpublishId !== null}
+	title={tr('clubHome.unpublishConfirmTitle')}
+	message={tr('clubHome.unpublishConfirmMessage')}
+	confirmLabel={tr('clubHome.unpublish')}
+	onconfirm={unmakeTemplate}
+	oncancel={() => (confirmUnpublishId = null)}
 	danger
 />
 

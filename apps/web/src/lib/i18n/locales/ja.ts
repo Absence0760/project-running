@@ -1847,6 +1847,8 @@ export const messages = {
 	"clubHome.routineExerciseCount": "{n} 種目",
 	"clubHome.unpublishTitle": "クラブのテンプレートから削除（プランは作成者のライブラリに残ります）",
 	"clubHome.unpublish": "公開を取り消す",
+	"clubHome.unpublishConfirmTitle": "このテンプレートを非公開にしますか？",
+	"clubHome.unpublishConfirmMessage": "メンバーはクラブのテンプレートタブでこのプランを見られなくなります。すでに取り込まれたプランは影響を受けません。",
 	"clubHome.emptyMembersTitle": "まだメンバーがいません",
 	"clubHome.emptyMembersBody": "誰かが参加すると、その役割とともにここに表示されます。",
 	"clubHome.emptyTemplatesTitle": "テンプレートはまだありません",

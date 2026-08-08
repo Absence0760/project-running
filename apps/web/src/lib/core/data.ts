@@ -4183,8 +4183,17 @@ export async function setPlanIsTemplate(
 	// If we're flagging it as a template, drop active status so it
 	// doesn't claim the per-user "one active plan" slot — the
 	// training_plans_template_status CHECK forbids active+template.
-	if (isTemplate) patch.status = 'completed';
-	if (clubId !== null) patch.club_id = clubId;
+	if (isTemplate) {
+		patch.status = 'completed';
+		if (clubId !== null) patch.club_id = clubId;
+	} else {
+		// Un-templating MUST also release the club. Both RLS WITH CHECKs on
+		// training_plans require a club-owned row to be a template
+		// ("users own their plans" allows club_id IS NULL *or* is_template),
+		// so clearing only is_template left the new row satisfying neither
+		// policy and the update 403'd — the Unpublish button never worked.
+		patch.club_id = null;
+	}
 	const { error } = await supabase.from('training_plans').update(patch).eq('id', planId);
 	if (error) throw error;
 }

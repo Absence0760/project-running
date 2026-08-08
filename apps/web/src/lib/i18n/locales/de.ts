@@ -1852,6 +1852,8 @@ export const messages = {
 	"clubHome.routineExerciseCount": "{n} Übungen",
 	"clubHome.unpublishTitle": "Aus den Club-Vorlagen entfernen (der Plan bleibt in der Bibliothek des Autors)",
 	"clubHome.unpublish": "Zurückziehen",
+	"clubHome.unpublishConfirmTitle": "Diese Vorlage zurückziehen?",
+	"clubHome.unpublishConfirmMessage": "Mitglieder sehen diesen Plan nicht mehr im Vorlagen-Tab des Clubs. Bereits übernommene Pläne bleiben unberührt.",
 	"clubHome.emptyMembersTitle": "Noch keine Mitglieder",
 	"clubHome.emptyMembersBody": "Sobald jemand beitritt, erscheint er hier mit seiner Rolle.",
 	"clubHome.emptyTemplatesTitle": "Noch keine Vorlagen",

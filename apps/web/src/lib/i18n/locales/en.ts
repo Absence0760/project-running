@@ -1860,6 +1860,8 @@ export const en = {
 	"clubHome.routineExerciseCount": "{n} exercises",
 	"clubHome.unpublishTitle": "Remove from club templates (the plan stays in the author's library)",
 	"clubHome.unpublish": "Unpublish",
+	"clubHome.unpublishConfirmTitle": "Unpublish this template?",
+	"clubHome.unpublishConfirmMessage": "Members will no longer see this plan in the club's Templates tab. Plans they've already adopted are unaffected.",
 	"clubHome.emptyMembersTitle": "No members yet",
 	"clubHome.emptyMembersBody": "As soon as someone joins, they'll appear here with their role.",
 	"clubHome.emptyTemplatesTitle": "No templates yet",

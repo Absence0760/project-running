@@ -1852,6 +1852,8 @@ export const messages = {
 	"clubHome.routineExerciseCount": "{n} exercices",
 	"clubHome.unpublishTitle": "Retirer des modèles du club (le plan reste dans la bibliothèque de l'auteur)",
 	"clubHome.unpublish": "Dépublier",
+	"clubHome.unpublishConfirmTitle": "Dépublier ce modèle ?",
+	"clubHome.unpublishConfirmMessage": "Les membres ne verront plus ce plan dans l'onglet Modèles du club. Les plans déjà adoptés ne sont pas affectés.",
 	"clubHome.emptyMembersTitle": "Aucun membre pour l'instant",
 	"clubHome.emptyMembersBody": "Dès que quelqu'un rejoint, il apparaîtra ici avec son rôle.",
 	"clubHome.emptyTemplatesTitle": "Aucun modèle pour l'instant",

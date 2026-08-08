@@ -1852,6 +1852,8 @@ export const messages = {
 	"clubHome.routineExerciseCount": "{n} ejercicios",
 	"clubHome.unpublishTitle": "Quitar de las plantillas del club (el plan permanece en la biblioteca del autor)",
 	"clubHome.unpublish": "Despublicar",
+	"clubHome.unpublishConfirmTitle": "¿Retirar esta plantilla?",
+	"clubHome.unpublishConfirmMessage": "Los miembros dejarán de ver este plan en la pestaña Plantillas del club. Los planes ya adoptados no se ven afectados.",
 	"clubHome.emptyMembersTitle": "Aún no hay miembros",
 	"clubHome.emptyMembersBody": "En cuanto alguien se una, aparecerá aquí con su rol.",
 	"clubHome.emptyTemplatesTitle": "Aún no hay plantillas",
