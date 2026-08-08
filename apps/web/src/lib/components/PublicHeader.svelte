@@ -31,14 +31,21 @@
 </nav>
 
 <style>
+	/* Both variants share their box metrics, so the wordmark, the nav
+	   links, and the Sign In pill land in exactly the same place on the
+	   landing page and on /learn. The variants used to set their own
+	   padding and disagreed — solid was 15px shorter, so every item in
+	   the header jumped up 8px when a visitor clicked Learn. Only what
+	   MUST differ between an overlay and an in-flow bar (position,
+	   ground, border) belongs in the variant blocks below. */
 	.landing-nav {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		padding: var(--space-lg) var(--space-2xl);
 	}
 
 	.landing-nav.overlay {
-		padding: var(--space-lg) var(--space-2xl);
 		position: absolute;
 		top: 0;
 		inset-inline-start: 0;
@@ -47,7 +54,6 @@
 	}
 
 	.landing-nav.solid {
-		padding: var(--space-sm) var(--space-md);
 		background: var(--color-surface);
 		border-bottom: 1px solid var(--color-border);
 	}
@@ -142,12 +148,6 @@
 	.solid .nav-signin:hover {
 		border-color: var(--color-primary);
 		color: var(--color-primary);
-	}
-
-	@media (min-width: 48rem) {
-		.landing-nav.solid {
-			padding: var(--space-md) var(--space-2xl);
-		}
 	}
 
 	@media (max-width: 768px) {
