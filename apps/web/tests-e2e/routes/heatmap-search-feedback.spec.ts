@@ -18,14 +18,30 @@ import { USER_A } from '../fixtures/users';
 // Both providers are intercepted regardless of which one the build
 // dispatches to (MapTiler when PUBLIC_MAPTILER_KEY is set, Nominatim
 // otherwise), so the spec doesn't depend on the local env's key.
-const GEOCODER_GLOB = /(nominatim\.openstreetmap\.org|api\.maptiler\.com\/geocoding)/;
+//
+// Anchored at the scheme so it can only match these two origins — an
+// unanchored host pattern also matches a URL that merely contains the
+// string. Scoped to each provider's SEARCH path for a second reason:
+// MapTiler serves map tiles from the same host, and a host-wide pattern
+// intercepts those too, so the failure this spec injects gets spent on a
+// tile fetch instead of the geocoding call under test.
+const GEOCODER_GLOB =
+	/^https:\/\/(nominatim\.openstreetmap\.org\/search|api\.maptiler\.com\/geocoding\/)/;
+
+const MAPTILER_HOST = 'api.maptiler.com';
+
+// Compares the parsed hostname rather than substring-matching the URL, for
+// the same reason.
+function isMapTiler(url: string): boolean {
+	return new URL(url).hostname === MAPTILER_HOST;
+}
 
 // The two providers disagree on response shape, and which one a build
 // dispatches to depends on whether PUBLIC_MAPTILER_KEY is set. Canning one
 // shape would make a passing spec depend on the local env's key — so pick
 // the shape off the intercepted URL instead.
 function oneHitBody(url: string): string {
-	return url.includes('maptiler.com')
+	return isMapTiler(url)
 		? JSON.stringify({
 			features: [{ place_name: 'Richmond, Virginia', center: [-77.436, 37.5407] }],
 		})
@@ -35,7 +51,7 @@ function oneHitBody(url: string): string {
 }
 
 function emptyBody(url: string): string {
-	return url.includes('maptiler.com') ? JSON.stringify({ features: [] }) : '[]';
+	return isMapTiler(url) ? JSON.stringify({ features: [] }) : '[]';
 }
 
 test.describe('heatmap place-search feedback', () => {
