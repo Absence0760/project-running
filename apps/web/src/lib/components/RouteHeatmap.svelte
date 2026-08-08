@@ -1776,8 +1776,8 @@
 		gap: 0.5rem;
 		margin: 0.5rem 0 0;
 		padding: 0.5rem 0.75rem;
-		font-size: var(--font-size-body-sm);
-		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
