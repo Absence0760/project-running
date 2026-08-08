@@ -51,6 +51,32 @@ export function bboxRadius(
 	return Math.max(...corners.map(([lng, lat]) => haversineM(center, { lng, lat })));
 }
 
+/// Why the search dispatcher reports an outcome rather than a bare
+/// list: a provider that is down, rate-limited, or unreachable used to
+/// collapse into `[]`, which every call site renders identically to
+/// "this place does not exist" — and because each dropdown only opens
+/// on a non-empty result set, a failed search actually produced NO
+/// feedback at all. A runner typing a real place name on a flaky
+/// connection was told nothing. The honest states are three, so the
+/// type carries three.
+///
+/// `aborted` exists so the fix does not trade silence for noise: the
+/// call sites debounce and supersede in-flight lookups, and a
+/// superseded keystroke must leave the dropdown exactly as it was
+/// rather than flashing an error the user never caused.
+export type PlaceSearchOutcome =
+	| { status: 'ok'; results: PlaceSearchResult[] }
+	| { status: 'unavailable' }
+	| { status: 'aborted' };
+
+/// A rejected `fetch` is either the caller superseding its own request
+/// or the network genuinely failing, and only the second is the user's
+/// problem. `signal.aborted` is checked alongside the `AbortError` name
+/// because a mocked fetch in node:test rejects with a plain Error.
+function abortedOutcome(e: unknown, signal?: AbortSignal): boolean {
+	return signal?.aborted === true || (e as { name?: string } | null)?.name === 'AbortError';
+}
+
 /// Provider-selecting search dispatcher. Pure in that it takes the
 /// MapTiler key as a parameter rather than reading from `$env`; that
 /// makes the network-mocked path testable from `node:test`.
@@ -64,9 +90,11 @@ export async function searchPlacesWithKey(
 	query: string,
 	limit = 5,
 	signal?: AbortSignal,
-): Promise<PlaceSearchResult[]> {
+): Promise<PlaceSearchOutcome> {
 	const trimmed = query.trim();
-	if (trimmed.length < 2) return [];
+	// Too short to search is not a failure — it is an empty result the
+	// caller renders as nothing at all.
+	if (trimmed.length < 2) return { status: 'ok', results: [] };
 	if (maptilerKey.length > 0) {
 		return searchViaMapTiler(maptilerKey, trimmed, limit, signal);
 	}
@@ -78,22 +106,29 @@ async function searchViaMapTiler(
 	query: string,
 	limit: number,
 	signal?: AbortSignal,
-): Promise<PlaceSearchResult[]> {
+): Promise<PlaceSearchOutcome> {
 	const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?key=${key}&limit=${limit}`;
 	let res: Response;
 	try {
 		res = await fetch(url, { signal });
-	} catch (_) {
-		return [];
+	} catch (e) {
+		return abortedOutcome(e, signal) ? { status: 'aborted' } : { status: 'unavailable' };
 	}
-	if (!res.ok) return [];
-	const body = (await res.json()) as {
+	if (!res.ok) return { status: 'unavailable' };
+	let body: {
 		features?: Array<{
 			place_name?: string;
 			text?: string;
 			center?: [number, number];
 		}>;
 	};
+	try {
+		body = await res.json();
+	} catch (e) {
+		// A 200 carrying a truncated or non-JSON body is still a failed
+		// search, not an empty one.
+		return abortedOutcome(e, signal) ? { status: 'aborted' } : { status: 'unavailable' };
+	}
 	const features = body.features ?? [];
 	const out: PlaceSearchResult[] = [];
 	for (const f of features) {
@@ -104,7 +139,7 @@ async function searchViaMapTiler(
 			lat: f.center[1],
 		});
 	}
-	return out;
+	return { status: 'ok', results: out };
 }
 
 /// Env-free counterpart to `geocodePlace` in `geocoding.ts`.
@@ -244,7 +279,7 @@ async function searchViaNominatim(
 	query: string,
 	limit: number,
 	signal?: AbortSignal,
-): Promise<PlaceSearchResult[]> {
+): Promise<PlaceSearchOutcome> {
 	const params = new URLSearchParams({
 		q: query,
 		format: 'json',
@@ -262,15 +297,22 @@ async function searchViaNominatim(
 				? { 'Accept-Language': navigator.language }
 				: undefined,
 		});
-	} catch (_) {
-		return [];
+	} catch (e) {
+		return abortedOutcome(e, signal) ? { status: 'aborted' } : { status: 'unavailable' };
 	}
-	if (!res.ok) return [];
-	const body = (await res.json()) as Array<{
+	// Nominatim answers an over-rate request with 429 — exactly the case
+	// that must read as "search unavailable", never as "no such place".
+	if (!res.ok) return { status: 'unavailable' };
+	let body: Array<{
 		display_name?: string;
 		lat?: string;
 		lon?: string;
 	}>;
+	try {
+		body = await res.json();
+	} catch (e) {
+		return abortedOutcome(e, signal) ? { status: 'aborted' } : { status: 'unavailable' };
+	}
 	const out: PlaceSearchResult[] = [];
 	for (const f of body) {
 		const lat = f.lat ? parseFloat(f.lat) : NaN;
@@ -282,5 +324,5 @@ async function searchViaNominatim(
 			lat,
 		});
 	}
-	return out;
+	return { status: 'ok', results: out };
 }
