@@ -23,9 +23,20 @@
 	let steps = $state<RoutineStep[]>([]);
 	let draft = $state<GymWorkout | null>(null);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 
 	async function load() {
-		detail = await fetchGymRoutineDetail(routineId);
+		loadError = null;
+		try {
+			detail = await fetchGymRoutineDetail(routineId);
+		} catch (e) {
+			// Starting a session against a half-read routine would log sets
+			// against a prescription that isn't the real one.
+			loadError = e instanceof Error ? e.message : String(e);
+			detail = null;
+			loading = false;
+			return;
+		}
 		if (detail) {
 			const planned: PlannedRoutine = {
 				title: detail.routine.title,
@@ -139,6 +150,11 @@
 
 	{#if loading}
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
+	{:else if loadError}
+		<div class="not-found" role="alert" data-testid="session-load-error">
+			<p>{t('gym.routine.loadError')}</p>
+			<button class="btn btn-outline" onclick={load}>{t('gym.routine.retry')}</button>
+		</div>
 	{:else if !detail}
 		<p class="not-found">{t('gym.routine.notFound')}</p>
 	{:else if steps.length === 0}

@@ -8749,10 +8749,11 @@ export async function fetchGymWorkoutWithSets(
 		.select('*')
 		.eq('workout_id', id)
 		.order('set_index', { ascending: true });
-	if (sErr) {
-		console.error('fetchGymWorkoutWithSets sets failed', sErr);
-		return { workout: workout as GymWorkout, sets: [] };
-	}
+	// A workout whose sets failed to load is not a workout with no sets:
+	// returning the populated header over an empty body presented a partial
+	// read failure as the user's session being empty. Fail the whole read so
+	// the caller can offer a retry.
+	if (sErr) throw sErr;
 	return { workout: workout as GymWorkout, sets: (sets ?? []) as GymSet[] };
 }
 
@@ -9266,10 +9267,10 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		)
 		.eq('routine_id', id)
 		.order('position', { ascending: true });
-	if (eErr) {
-		console.error('fetchGymRoutineDetail exercises failed', eErr);
-		return { routine: routine as GymRoutineSummary, exercises: [] };
-	}
+	// Same contract as fetchGymWorkoutWithSets: a routine whose exercises
+	// failed to load is not an empty routine, and rendering it as one invites
+	// the viewer to start or adopt a routine that has no content.
+	if (eErr) throw eErr;
 	const exercises = (exRows ?? []) as Array<{
 		id: string;
 		exercise_name: string;
@@ -9291,7 +9292,9 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 		)
 		.in('routine_exercise_id', exercises.map((e) => e.id))
 		.order('set_index', { ascending: true });
-	if (sErr) console.error('fetchGymRoutineDetail sets failed', sErr);
+	// The planned sets ARE the prescription — dropping them silently turns a
+	// 5x5 into a bare exercise list.
+	if (sErr) throw sErr;
 	const setsByExercise = new Map<string, GymRoutineSet[]>();
 	for (const row of (setRows ?? []) as Array<{ routine_exercise_id: string } & GymRoutineSet>) {
 		const list = setsByExercise.get(row.routine_exercise_id) ?? [];

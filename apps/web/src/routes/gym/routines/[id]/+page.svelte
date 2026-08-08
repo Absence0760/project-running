@@ -20,6 +20,7 @@
 
 	let detail = $state<GymRoutineDetail | null>(null);
 	let loading = $state(true);
+	let loadError = $state<string | null>(null);
 	let confirmingDelete = $state(false);
 	let adminClubs = $state<ClubWithMeta[]>([]);
 	let publishingTo = $state('');
@@ -31,7 +32,17 @@
 	const isOwner = $derived(!!detail && !!auth.user && detail.routine.author_id === auth.user.id);
 
 	async function load() {
-		detail = await fetchGymRoutineDetail(routineId);
+		loadError = null;
+		try {
+			detail = await fetchGymRoutineDetail(routineId);
+		} catch (e) {
+			// Not-found and could-not-load are different answers; the second
+			// must not tell an author their routine is gone.
+			loadError = e instanceof Error ? e.message : String(e);
+			detail = null;
+			loading = false;
+			return;
+		}
 		loading = false;
 		// Only the author of a personal (non-club) routine with at least one
 		// admin club sees the publish-as-template control.
@@ -84,11 +95,11 @@
 	async function doDelete() {
 		try {
 			await deleteGymRoutine(routineId);
-			showToast(t('gym.routine.deleted'));
+			showToast(t('gym.routine.deleted'), 'success');
 			goto('/gym/routines');
 		} catch (e) {
 			console.error('routine delete failed', e);
-			showToast(t('gym.routine.saveFailed'));
+			showToast(t('gym.routine.deleteFailed'), 'error');
 		}
 	}
 
@@ -135,6 +146,11 @@
 
 	{#if loading}
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
+	{:else if loadError}
+		<div class="load-error" role="alert" data-testid="routine-load-error">
+			<p>{t('gym.routine.loadError')}</p>
+			<button class="btn btn-outline" onclick={load}>{t('gym.routine.retry')}</button>
+		</div>
 	{:else if !detail}
 		<p class="not-found">{t('gym.routine.notFound')}</p>
 	{:else}
@@ -423,5 +439,12 @@
 	}
 	.not-found {
 		color: var(--color-text-tertiary);
+	}
+	.load-error {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-sm);
+		color: var(--color-text);
 	}
 </style>
