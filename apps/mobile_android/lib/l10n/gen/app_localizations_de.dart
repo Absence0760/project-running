@@ -10356,6 +10356,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Verwerfen';
 
   @override
+  String get gymSessionLeaveSaveFailed =>
+      'Entwurf konnte nicht gespeichert werden — du bist noch hier, es ist nichts verloren. Versuche es erneut oder verwirf die Einheit bewusst.';
+
+  @override
   String get gymSessionLeaveTitle => 'Einheit verlassen?';
 
   @override

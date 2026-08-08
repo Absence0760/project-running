@@ -9833,6 +9833,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymSessionDiscardConfirm => '破棄';
 
   @override
+  String get gymSessionLeaveSaveFailed =>
+      '下書きを保存できませんでした。まだこの画面にいるので、内容は失われていません。再試行するか、意図的にセッションを破棄してください。';
+
+  @override
   String get gymSessionLeaveTitle => 'セッションを中断しますか？';
 
   @override

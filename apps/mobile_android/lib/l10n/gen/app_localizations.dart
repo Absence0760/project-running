@@ -17150,6 +17150,12 @@ abstract class AppLocalizations {
   /// **'Discard'**
   String get gymSessionDiscardConfirm;
 
+  /// Banner shown when the explicit leave-and-keep-draft save failed and the runner was kept on the session rather than navigated away with the work lost
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your draft — you\'re still here, so nothing is lost. Try again, or discard the session on purpose.'**
+  String get gymSessionLeaveSaveFailed;
+
   /// Title of the three-way dialog shown when backing out of a live guided session
   ///
   /// In en, this message translates to:

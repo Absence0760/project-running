@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interface.dart';
@@ -101,6 +102,39 @@ StoredRoutine _tripleRoutine() => StoredRoutine(
       ],
       syncState: RoutineSyncState.synced,
     );
+
+/// A store whose draft write always fails, so the explicit
+/// leave-and-keep-draft path can be driven down its failure branch. Only
+/// `createLocal` throws: the session has never landed a draft when the
+/// runner leaves early, which is exactly the case where a swallowed failure
+/// used to lose the whole thing.
+class _ThrowingGymStore extends LocalGymStore {
+  @override
+  Future<StoredGymWorkout> createLocal({
+    String? title,
+    required DateTime startedAt,
+    int? durationS,
+    String? notes,
+    bool isPublic = false,
+    Map<String, dynamic>? metadata,
+    List<GymSetInput> sets = const [],
+  }) async {
+    throw StateError('disk full');
+  }
+}
+
+Future<({_ThrowingGymStore store, Directory dir})> _throwingGymStore(
+    WidgetTester tester) async {
+  late _ThrowingGymStore store;
+  late Directory dir;
+  await tester.runAsync(() async {
+    dir = Directory.systemTemp.createTempSync('gym_session_fail_');
+    final s = _ThrowingGymStore();
+    await s.init(overrideDirectory: dir);
+    store = s;
+  });
+  return (store: store, dir: dir);
+}
 
 Future<({LocalGymStore store, Directory dir})> _gymStore(
     WidgetTester tester) async {
@@ -451,6 +485,38 @@ void main() {
     final snap = meta['gym_session_draft'] as Map;
     final results = snap['results'] as List;
     expect((results.single as Map)['status'], 'completed');
+  });
+
+  testWidgets('back → Leave keeps the runner put when the draft save fails',
+      (tester) async {
+    // _applyLeaveChoice popped regardless of whether _durableSave landed, and
+    // the failure was swallowed to debugPrint. The runner asked to KEEP the
+    // draft, so a failed write used to lose the whole session silently.
+    final g = await _throwingGymStore(tester);
+    addTearDown(() => g.dir.deleteSync(recursive: true));
+
+    await tester.pumpWidget(_launcher(g.store, _routine()));
+    await tester.tap(find.text('open session'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
+    await tester.pump();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(_inDialog('Leave — keep draft'));
+    await _pumpUntil(
+        tester, () => tester.any(find.textContaining("Couldn't save your draft")));
+
+    // Still on the session with the logged set intact — not popped back to the
+    // launcher with the work thrown away.
+    expect(find.text('open session'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Complete set'), findsOneWidget);
+    expect(g.store.workouts, isEmpty);
+
+    // showTopBanner leaves an auto-dismiss timer pending.
+    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('back → Discard pops and deletes the draft', (tester) async {

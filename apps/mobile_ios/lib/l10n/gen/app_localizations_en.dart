@@ -10238,6 +10238,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Discard';
 
   @override
+  String get gymSessionLeaveSaveFailed =>
+      'Couldn\'t save your draft — you\'re still here, so nothing is lost. Try again, or discard the session on purpose.';
+
+  @override
   String get gymSessionLeaveTitle => 'Leave workout?';
 
   @override

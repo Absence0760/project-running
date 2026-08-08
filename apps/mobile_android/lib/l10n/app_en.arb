@@ -13411,6 +13411,10 @@
   "@gymSessionDiscardConfirm": {
     "description": "Confirm button to discard the guided session"
   },
+  "gymSessionLeaveSaveFailed": "Couldn't save your draft — you're still here, so nothing is lost. Try again, or discard the session on purpose.",
+  "@gymSessionLeaveSaveFailed": {
+    "description": "Banner shown when the explicit leave-and-keep-draft save failed and the runner was kept on the session rather than navigated away with the work lost"
+  },
   "gymSessionLeaveTitle": "Leave workout?",
   "@gymSessionLeaveTitle": {
     "description": "Title of the three-way dialog shown when backing out of a live guided session"

@@ -10369,6 +10369,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Abandonner';
 
   @override
+  String get gymSessionLeaveSaveFailed =>
+      'Impossible d\'enregistrer votre brouillon — vous êtes toujours ici, rien n\'est perdu. Réessayez ou abandonnez la séance volontairement.';
+
+  @override
   String get gymSessionLeaveTitle => 'Quitter la séance ?';
 
   @override

@@ -2982,6 +2982,7 @@
   "gymSessionDiscardTitle": "Descartar a sessão?",
   "gymSessionDiscardBody": "Seu progresso nesta sessão não será salvo.",
   "gymSessionDiscardConfirm": "Descartar",
+  "gymSessionLeaveSaveFailed": "Não foi possível salvar seu rascunho — você ainda está aqui, então nada foi perdido. Tente novamente ou descarte a sessão de propósito.",
   "gymSessionLeaveTitle": "Sair da sessão?",
   "gymSessionLeaveBody": "Suas séries registradas ficam salvas como rascunho — você pode retomar a sessão na aba Academia ou descartá-la.",
   "gymSessionLeaveDraft": "Sair e manter o rascunho",

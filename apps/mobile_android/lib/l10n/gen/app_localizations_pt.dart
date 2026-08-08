@@ -10342,6 +10342,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymSessionDiscardConfirm => 'Descartar';
 
   @override
+  String get gymSessionLeaveSaveFailed =>
+      'Não foi possível guardar o teu rascunho — ainda estás aqui, por isso nada se perdeu. Tenta novamente ou descarta a sessão de propósito.';
+
+  @override
   String get gymSessionLeaveTitle => 'Sair da sessão?';
 
   @override
@@ -22906,6 +22910,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymSessionDiscardConfirm => 'Descartar';
+
+  @override
+  String get gymSessionLeaveSaveFailed =>
+      'Não foi possível salvar seu rascunho — você ainda está aqui, então nada foi perdido. Tente novamente ou descarte a sessão de propósito.';
 
   @override
   String get gymSessionLeaveTitle => 'Sair da sessão?';

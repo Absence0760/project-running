@@ -2982,6 +2982,7 @@
   "gymSessionDiscardTitle": "セッションを破棄しますか？",
   "gymSessionDiscardBody": "このセッションの進捗は保存されません。",
   "gymSessionDiscardConfirm": "破棄",
+  "gymSessionLeaveSaveFailed": "下書きを保存できませんでした。まだこの画面にいるので、内容は失われていません。再試行するか、意図的にセッションを破棄してください。",
   "gymSessionLeaveTitle": "セッションを中断しますか？",
   "gymSessionLeaveBody": "記録済みのセットは下書きとして保存されます。ジムタブからセッションを再開するか、破棄できます。",
   "gymSessionLeaveDraft": "中断して下書きを保存",
