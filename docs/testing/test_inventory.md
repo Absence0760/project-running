@@ -412,10 +412,6 @@ Dart mirror of `apps/web/src/lib/segments.test.ts`. Pure tests for the segment-e
 
 Dart mirror of `apps/web/src/lib/privacy.test.ts`. Pure tests for `lib/privacy.dart`. Covers `isInAnyZone` (empty zones, centre, far point) and `clipPointsToZones` (empty zones returns input, drops leading + trailing in-zone, keeps interior, every-point-in-zone returns empty, multi-zone union).
 
-### `apps/mobile_android/test/run_photos_helpers_test.dart` — 9 tests
-
-Pure-function tests for two top-level helpers in `lib/widgets/run_photos.dart` extracted so the Storage-extension and content-type logic could be exercised without a `WidgetTester`. `extensionForFilename` covers the normal lowercase return, the `jpeg → jpg` and `heif → heic` collapses, the no-extension default, the leading-dot dotfile case, and the multi-dot trailing-extension case. `contentTypeForExtension` covers the explicit `image/png|webp|heic` branches and the `image/jpeg` fallback (jpg + unknown).
-
 ### `apps/mobile_android/test/coach_screen_helpers_test.dart` — 19 tests
 
 Pure-function tests for the three top-level helpers in `lib/screens/coach_screen.dart`: `coachTitleFromMessage` (verbatim under 48 chars, whitespace collapse, leading/trailing trim, ellipsis past the cap, exact-48 vs 49 boundary), `coachArchiveLabel` ("Today" same day, "Yesterday" 1 day, "N days ago" 2..6, `YYYY-MM-DD` past a week, zero-padded month and day), and `parseCoachSseEvent` (event + data block parsing for `meta` / `token` / `done`, null when the block has no data line, null on invalid JSON, null on non-Map JSON, default `event: 'message'` when no event line, multi-line `data:` concatenation, `done` block with `cache` usage stats).

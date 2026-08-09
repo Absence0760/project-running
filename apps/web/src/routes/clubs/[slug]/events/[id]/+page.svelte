@@ -2176,7 +2176,7 @@
 			<input
 				bind:this={photoFileInput}
 				type="file"
-				accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+				accept="image/jpeg,image/png,image/webp"
 				onchange={handleAddEventPhoto}
 				disabled={photoUploading}
 				hidden

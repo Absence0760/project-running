@@ -11,7 +11,6 @@ import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart' show RecentRunRow;
 import 'photo_lightbox.dart';
-import 'run_photos.dart' show extensionForFilename, contentTypeForExtension;
 import 'top_banner.dart';
 
 /// Mirrors the web event-detail Photos section (persona #49): the
@@ -232,9 +231,14 @@ class _EventPhotosState extends State<EventPhotos> {
     setState(() => _uploading = true);
     try {
       final bytes = await file.readAsBytes();
-      final ext = extensionForFilename(file.name);
-      final contentType = contentTypeForExtension(ext);
-      final clean = stripImageExif(Uint8List.fromList(bytes), contentType);
+      // Sniff the bytes rather than trusting the picked filename, and
+      // refuse anything we cannot clean — nothing downstream strips a
+      // non-JPEG, so an unstripped upload ships the capture GPS.
+      final raw = Uint8List.fromList(bytes);
+      final contentType = detectImageMime(raw);
+      if (contentType == null) throw const UnstrippableImageException('');
+      final clean = stripImageExif(raw, contentType);
+      final ext = imageExtensionForMime(contentType);
       await widget.api.addRunPhoto(
         runId: runId,
         bytes: clean,

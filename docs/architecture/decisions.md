@@ -3874,7 +3874,9 @@ Two integration lessons, both consequences of the stale-fork + concurrent-sessio
 
 ## 260. generate-route + osrm-proxy enforce a DB-backed per-user rate limit, not just the per-IP WAF
 
-**Decided (2026-07-18, issue #339).** `handleGenerate` and `handleOsrmProxy` (the two web handlers fronting billed/self-hosted route engines) previously relied solely on per-IP AWS WAF rules (`waf_generate_route_rate_limit` 100/5min, `waf_osrm_proxy_rate_limit` 600/5min). A single authenticated JWT distributing requests across a small IP pool (CGNAT rotation, residential-proxy pool, a few home/VPN IPs) stays under the per-IP cap while each `generate` call fans out up to `REQUEST_MULTIPLIERS × MAX_SEEDS = 32` upstream round_trip fetches — a free cost-abuse vector. Both handlers now also call the SECURITY DEFINER `check_rate_limit` RPC (migration `20260604_001`) with the caller's own id on the SAME JWT-bound anon client they already use for `auth.getUser` (so the `20260616_001` user-context guard `auth.uid() = p_user_id` is satisfied with no service-role key — the web handlers only carry the anon key), via the shared `apps/web/src/lib/routes/rate_limit.ts` helper (the web sibling of the EF `_shared/rate_limit.ts`). Ceilings: `generate-route` 60/hour (heaviest paid path, Pro-only so no free/pro split — caps a scripted caller at ~1920 upstream fetches/h instead of unbounded, generous for interactive building), `osrm-proxy` 1200/hour (one call per waypoint segment, so the ceiling must absorb a heavy builder session while bounding a single JWT). **Fail-closed**, matching `export-data` / `clip-public-track`: an RPC error or malformed row DENIES (→ 500) rather than letting the paid fan-out through on a transient DB blip; a tripped ceiling → 429. The RPC takes an arbitrary `p_bucket` text key so the two new buckets need no migration. `osrm-proxy` stays **signed-in-only** (its header rationale: an anonymous proxy in front of the self-hosted engine would be a free relay) — so it gets a per-user gate, NOT the anon+IP split `clip-public-track` uses; the transport-agnostic handler signature carries no client IP to key an anon bucket on, and opening an anon path would regress the relay protection this endpoint was built for.
+**Decided (2026-07-18, issue #339).** `handleGenerate` and `handleOsrmProxy` (the two web handlers fronting billed/self-hosted route engines) previously relied solely on per-IP AWS WAF rules (`waf_generate_route_rate_limit` 100/5min, `waf_osrm_proxy_rate_limit` 600/5min). A single authenticated JWT distributing requests across a small IP pool (CGNAT rotation, residential-proxy pool, a few home/VPN IPs) stays under the per-IP cap while each `generate` call fans out up to `REQUEST_MULTIPLIERS × MAX_SEEDS = 32` upstream round_trip fetches — a free cost-abuse vector. Both handlers now also call the SECURITY DEFINER `check_rate_limit` RPC (migration `20260604_001`) with the caller's own id on the SAME JWT-bound anon client they already use for `auth.getUser` (so the `20260616_001` user-context guard `auth.uid() = p_user_id` is satisfied with no service-role key — the web handlers only carry the anon key), via the shared `apps/web/src/lib/routes/rate_limit.ts` helper (the web sibling of the EF `_shared/rate_limit.ts`). Ceilings: `generate-route` 60/hour (heaviest paid path, Pro-only so no free/pro split — caps a scripted caller at ~1920 upstream fetches/h instead of unbounded, generous for interactive building), `osrm-proxy` 1200/hour (one call per waypoint segment, so the ceiling must absorb a heavy builder session while bounding a single JWT). **Fail-closed**, matching `export-data` / `clip-public-track`: an RPC error or malformed row DENIES (→ 500) rather than letting the paid fan-out through on a transient DB blip; a tripped ceiling → 429. The RPC takes an arbitrary `p_bucket` text key so the two new buckets need no migration.
+
+**Extended to the two Anthropic route handlers (2026-08-09).** `handleRouteDescribe` and `handleRouteRequest` shipped with a Pro gate and no ceiling at all, which made them the only LLM-spending endpoints in the app with no per-user cap — `/api/coach` has `increment_coach_usage`, the two engine handlers have the buckets above. Pro is priced per month, so one subscription (or one leaked Pro JWT) bought unbounded `claude-opus-4-8` calls on the operator's key, and the per-IP WAF rule is exactly the thing this ADR already established cannot see a JWT spread over an IP pool. Both now take a 60/hour bucket (`route-describe`, `route-request`) on the same JWT-bound client, after the Pro gate so a free caller is never charged a slot. The denial shapes differ because the fallbacks differ: `route-request` returns 429 (the manual form is the fallback), while `route-describe` returns its templated description with `source: 'template'` — the same degrade it already performs for a missing API key or a provider error, so the L1 baseline is untouched and the throttle simply stops the L4 enhancement. `osrm-proxy` stays **signed-in-only** (its header rationale: an anonymous proxy in front of the self-hosted engine would be a free relay) — so it gets a per-user gate, NOT the anon+IP split `clip-public-track` uses; the transport-agnostic handler signature carries no client IP to key an anon bucket on, and opening an anon path would regress the relay protection this endpoint was built for.
 
 ## 261. A coach mid-stream failure persists the partial reply — a consumed daily-cap slot always keeps its content
 
@@ -7676,3 +7678,67 @@ One honesty cost is accepted: `easySeconds + hardSeconds` is now *classified* ti
 The fix is the shape run detail already had, not a new mechanism: the button calls a **gate** (`startShare`) that opens the confirm for a private row and copies straight away for one that is already public, and the write lives behind the dialog's `onconfirm` (`proceedShare`). Splitting gate from writer is what makes the invariant checkable, which is the point — `share_publish_consent_guard.test.ts` reads all three pages and asserts the button is wired to the gate, the gate does not call the `setPublic` helper itself, and the publish sits under a `ConfirmDialog`. It also pins run detail, so the reference implementation the other two were modelled on cannot quietly lose its dialog and restart the drift.
 
 The *explicit* "Make public" buttons on the same pages keep no confirm, deliberately: their label already states the outcome, so a dialog there would be a second dismissal for one unambiguous intent. The rule is narrower than "confirm before publishing" — it is that an action whose **label does not name the consequence** may not carry it out unasked.
+
+## 556. A densified polyline is still the polyline — the heatmap reader clips to privacy zones like every other non-owner read
+
+`heatmap_points_in_bbox` was made `SECURITY DEFINER` in `20260910_001` to fix a
+"returns zero rows" regression, on the stated reasoning that there was no leak
+because "waypoints / user_id / club_id never escape the function body … only
+the densified output points (one per ~50 m)". That reasoning was wrong in a way
+worth recording, because it is easy to make again: `ST_LineInterpolatePoints`
+does not summarise a line, it *resamples* it. Fifty-metre spacing on a suburban
+street is finer than the street. The output points were the waypoints.
+
+So the one reader in the codebase that skipped `clip_route_for_viewer` was also
+the only one reachable by an anonymous caller, and it undid `20260925_001` as
+well: that migration NULLs `routes.start_point` for a route that never leaves
+its owner's zone so the route drops out of proximity search, but this reader
+filtered only on `geom is not null` and rendered those routes in full. The
+attack needed two requests — read a clipped route's visible end off a public
+share page, then post a bbox around it — and returned the stretch from the clip
+boundary to the front door.
+
+`20270504_001` clips inside the function. Two details are load-bearing. The
+zones are read with definer rights, because owner-only RLS on `user_settings`
+would otherwise hide them from the caller and silently clip nothing; and the
+join is a LEFT join, so an owner with no settings row yields NULL zones and
+keeps every point rather than vanishing from the layer — a fail-closed inner
+join here would have quietly blanked the heatmap for most of the user base.
+
+The residue is recorded rather than fixed: `routes_within_box` still evaluates
+its `ST_Intersects` predicate against the same unclipped `geom` and returns the
+route id, which makes it a slow membership oracle — grid-sweep small boxes and
+the ids that come back trace the in-zone tail. Closing that properly wants a
+zone-aware `geom_public` column maintained by the same trigger pair
+`20260925_001` uses for `start_point`, so that no spatial predicate anywhere
+can see the unclipped geometry.
+
+## 557. An image we cannot strip is an image we do not accept — the EXIF path fails closed on the format, sniffed from the bytes
+
+`stripImageExif` returned any unrecognised format unchanged, and every photo
+picker on web and mobile advertised `image/heic,image/heif` — the default
+camera format on every modern iPhone. Nothing downstream covered the gap: the
+Go worker's `handler_photo_process` returns early on any non-JPEG, and the
+mobile widgets called the JPEG-only `stripJpegExif` directly, so PNG and WebP
+uploads were never stripped either. The bucket then served the original back
+through a signed URL to everyone who could see the gallery, GPS EXIF intact.
+That is precisely the home coordinate the privacy-zone system (§ 33) exists to
+withhold, handed over by a different door.
+
+Two choices were available: implement HEIC/HEIF stripping (an ISO-BMFF box
+walk that has to rewrite `iloc` offsets — a large, easy-to-get-subtly-wrong
+change on a path where "subtly wrong" means a silent leak), or refuse the
+formats we cannot clean. We refuse. The accepted set is now defined *as* the
+strippable set — JPEG, PNG, WebP — with a guard test asserting the two can't
+drift apart, and the pickers no longer advertise anything else. Practically the
+cost is small: iOS Safari and `image_picker` both transcode to JPEG on the
+common paths, so the refusal bites only a deliberate Files-app pick of a raw
+`.heic`.
+
+The second half is that the format is now decided by the **bytes**, not by the
+filename. `File.type` in a browser and `XFile.name` from the gallery picker are
+both just the extension, so a `.heic` renamed `.jpg` used to be handed to the
+JPEG walker, fail its SOI check, and be returned — and uploaded — whole. A
+magic-number sniff (`detectImageMime`) now drives both the strip dispatch and
+the stored Content-Type, so the extension we write and the bytes we wrote can
+no longer disagree.

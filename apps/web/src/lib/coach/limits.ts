@@ -155,6 +155,14 @@ export function validateCoachMessages(
 		const content = (m as { content?: unknown } | null | undefined)?.content;
 		if (typeof content !== 'string') return { ok: false, reason: 'content-not-string' };
 		const role = (m as { role?: unknown }).role;
+		// The `CoachMessage['role']` union is a compile-time claim about a
+		// value that arrives over the wire, so it has to be re-established
+		// here. An unchecked role reaches the provider verbatim: the upstream
+		// rejects it by index, which turns the error response into a free,
+		// slot-refunded oracle for how many turns we inject ahead of the
+		// caller's — and it lets a client claim the assistant byte cap for
+		// its own input.
+		if (role !== 'user' && role !== 'assistant') return { ok: false, reason: 'bad-role' };
 		const cap =
 			role === 'assistant'
 				? MAX_COACH_ASSISTANT_CONTENT_BYTES

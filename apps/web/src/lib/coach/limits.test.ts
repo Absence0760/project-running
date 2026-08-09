@@ -212,6 +212,30 @@ test('validateCoachMessages — rejects a non-string message.content', () => {
 	);
 });
 
+test('validateCoachMessages — rejects a role outside user/assistant', () => {
+	// The declared union is a compile-time claim about wire data. Unchecked,
+	// `role: "system"` reached the Anthropic messages array verbatim; the
+	// upstream rejection named the offending index, which counts the turns
+	// the server injects ahead of the caller's, and the slot was refunded so
+	// the probe was free. `role: "assistant"` on the caller's own input also
+	// claimed the 64 KB assistant cap instead of the 8 KB user one.
+	for (const role of ['system', 'developer', 'tool', '', 'USER', 'user ']) {
+		assert.deepEqual(
+			validateCoachMessages([{ role, content: 'x' }]),
+			{ ok: false, reason: 'bad-role' },
+			`role ${JSON.stringify(role)} must be rejected`,
+		);
+	}
+	assert.deepEqual(validateCoachMessages([{ content: 'x' }]), {
+		ok: false,
+		reason: 'bad-role',
+	});
+	assert.deepEqual(validateCoachMessages([{ role: null, content: 'x' }]), {
+		ok: false,
+		reason: 'bad-role',
+	});
+});
+
 test('validateCoachMessages — long assistant message OK (the pass-3 regression fix)', () => {
 	// 32 KB is well above the 8 KB user cap but under the 64 KB
 	// assistant cap. Pre-fix, this would have been rejected uniformly.

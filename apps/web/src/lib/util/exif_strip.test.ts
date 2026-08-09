@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stripJpegExif, stripPngMetadata, stripWebpMetadata, stripImageExif } from './exif_strip';
+import {
+	stripJpegExif,
+	stripPngMetadata,
+	stripWebpMetadata,
+	stripImageExif,
+	canStripImageExif,
+	detectImageMime,
+	UnstrippableImageError,
+	STRIPPABLE_IMAGE_MIME_TYPES,
+} from './exif_strip';
 
 /// Helper: assemble a minimal JPEG byte stream from a list of segments.
 const jpeg = (segments: number[][]): Uint8Array =>
@@ -150,9 +159,55 @@ test('stripWebpMetadata — removes EXIF, clears the VP8X flag, fixes the RIFF s
 	assert.equal(declared, out.length - 8);
 });
 
-test('stripImageExif — dispatches by MIME and no-ops on an unknown type', () => {
+test('stripImageExif — dispatches by MIME', () => {
 	const exifJpeg = Uint8Array.from([...soi, ...seg(0xe1, [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]), ...sos, ...scan, ...eoi]);
 	assert.equal(hasChunk(stripImageExif(exifJpeg, 'image/jpeg'), 'Exif'), false);
-	const gif = Uint8Array.from([0x47, 0x49, 0x46, 0x38]);
-	assert.equal(stripImageExif(gif, 'image/gif'), gif, 'unknown type is a no-op');
+});
+
+test('stripImageExif — throws on a format it cannot clean, never passes it through', () => {
+	// A HEIC straight off an iPhone carries GPS in an ISO-BMFF `Exif` item
+	// that none of the three walkers understand, and the Go worker's
+	// StripJPEG can't clean it either. Returning the input here uploaded the
+	// geotagged original verbatim into a gallery other people can read.
+	const heic = Uint8Array.from([
+		0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63,
+	]);
+	assert.throws(() => stripImageExif(heic, 'image/heic'), UnstrippableImageError);
+	assert.throws(() => stripImageExif(heic, 'image/heif'), UnstrippableImageError);
+	assert.throws(() => stripImageExif(heic, 'image/gif'), UnstrippableImageError);
+	assert.throws(() => stripImageExif(heic, ''), UnstrippableImageError);
+});
+
+test('detectImageMime sniffs the bytes and refuses anything else', () => {
+	assert.equal(detectImageMime(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0])), 'image/jpeg');
+	assert.equal(
+		detectImageMime(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+		'image/png',
+	);
+	assert.equal(
+		detectImageMime(
+			Uint8Array.from([
+				0x52, 0x49, 0x46, 0x46, 0x10, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+			]),
+		),
+		'image/webp',
+	);
+	// `ftypheic` — an iPhone HEIC. Named `.jpg` it still must not be accepted.
+	const heic = Uint8Array.from([
+		0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63,
+	]);
+	assert.equal(detectImageMime(heic), null);
+	assert.equal(detectImageMime(Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])), null);
+	assert.equal(detectImageMime(Uint8Array.from([])), null);
+});
+
+test('canStripImageExif agrees with what stripImageExif actually handles', () => {
+	for (const mime of STRIPPABLE_IMAGE_MIME_TYPES) {
+		assert.equal(canStripImageExif(mime), true, mime);
+		// Each strippable type must survive a buffer it does not recognise
+		// rather than throwing — only the dispatcher's default arm throws.
+		assert.doesNotThrow(() => stripImageExif(Uint8Array.from([0x00, 0x01]), mime), mime);
+	}
+	assert.equal(canStripImageExif('image/heic'), false);
+	assert.equal(canStripImageExif('image/heif'), false);
 });

@@ -173,9 +173,78 @@ Uint8List stripWebpMetadata(Uint8List input) {
   return Uint8List.fromList(out);
 }
 
+/// The image formats this module can actually clean. An upload surface must
+/// accept nothing outside this set — see [stripImageExif].
+const List<String> kStrippableImageMimeTypes = <String>[
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
+
+bool canStripImageExif(String mime) => kStrippableImageMimeTypes.contains(mime);
+
+/// Storage extension for a sniffed image MIME. Derived from the bytes, never
+/// from the picked filename, so the stored object's extension and its
+/// Content-Type can't disagree.
+String imageExtensionForMime(String mime) {
+  switch (mime) {
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    default:
+      return 'jpg';
+  }
+}
+
+/// Identify an image buffer from its magic bytes, returning null for anything
+/// outside [kStrippableImageMimeTypes].
+///
+/// The dispatch must not trust a filename-derived MIME: the picker reports
+/// whatever the camera roll named the file, so `IMG_0001.HEIC` and a `.jpg`
+/// holding HEIC bytes both mislead it, and a buffer handed to the wrong walker
+/// fails its signature check and is returned — and uploaded — unstripped.
+String? detectImageMime(Uint8List input) {
+  if (input.length >= 3 &&
+      input[0] == 0xFF &&
+      input[1] == 0xD8 &&
+      input[2] == 0xFF) {
+    return 'image/jpeg';
+  }
+  if (input.length >= 8) {
+    const png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    var isPng = true;
+    for (var i = 0; i < png.length; i++) {
+      if (input[i] != png[i]) {
+        isPng = false;
+        break;
+      }
+    }
+    if (isPng) return 'image/png';
+  }
+  if (input.length >= 12 &&
+      String.fromCharCodes(input.sublist(0, 4)) == 'RIFF' &&
+      String.fromCharCodes(input.sublist(8, 12)) == 'WEBP') {
+    return 'image/webp';
+  }
+  return null;
+}
+
+class UnstrippableImageException implements Exception {
+  const UnstrippableImageException(this.mime);
+  final String mime;
+  @override
+  String toString() =>
+      'Cannot strip metadata from ${mime.isEmpty ? 'unknown image type' : mime}';
+}
+
 /// Strip location-bearing metadata from an image buffer, dispatched by MIME.
 /// JPEG → APP1 marker-walk, PNG → metadata-chunk walk, WebP → RIFF-chunk walk.
-/// Any other type is returned unchanged.
+///
+/// Anything else throws. Returning the input unchanged would upload a
+/// geotagged original verbatim, which is the exact leak this module exists to
+/// prevent — and no later layer catches it: the Go worker's `StripJPEG`
+/// returns early on any non-JPEG too.
 Uint8List stripImageExif(Uint8List input, String mime) {
   switch (mime) {
     case 'image/jpeg':
@@ -185,6 +254,6 @@ Uint8List stripImageExif(Uint8List input, String mime) {
     case 'image/webp':
       return stripWebpMetadata(input);
     default:
-      return input;
+      throw UnstrippableImageException(mime);
   }
 }

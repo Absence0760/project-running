@@ -1,6 +1,8 @@
-// Per-user rate-limit gate for the paid route-engine handlers
-// (generate-route + osrm-proxy). Web-side sibling of the Edge Function
-// helper `apps/backend/supabase/functions/_shared/rate_limit.ts`.
+// Per-user rate-limit gate for the web handlers that reach a billed
+// upstream: the route engines (generate-route, osrm-proxy) and the two
+// Anthropic route handlers (route-describe, route-request). Web-side
+// sibling of the Edge Function helper
+// `apps/backend/supabase/functions/_shared/rate_limit.ts`.
 //
 // Both handlers already resolve the caller on a JWT-bound anon client
 // via `auth.getUser`; this helper reuses that same client to call the
@@ -10,11 +12,12 @@
 // service-role key. The RPC takes an arbitrary `p_bucket` text key, so
 // no migration is needed to register a new bucket.
 //
-// These two handlers rely solely on per-IP AWS WAF rules today; a
-// single JWT spread across a small IP pool stays under the per-IP cap
-// while fanning out up to 32 billed upstream fetches per generate call
-// (issue #339). The per-user ceiling here is the durable guard the WAF
-// can't provide.
+// Per-IP AWS WAF rules are the only other backstop, and a single JWT
+// spread across a small IP pool stays under the per-IP cap while
+// fanning out up to 32 billed upstream fetches per generate call
+// (issue #339) — or one Opus request per route-describe / route-request
+// call, on a subscription priced per month rather than per call. The
+// per-user ceiling here is the durable guard the WAF can't provide.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
