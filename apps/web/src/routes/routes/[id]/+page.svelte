@@ -31,6 +31,7 @@
 	const coachOn = coachEnabled();
 	import { env } from '$env/dynamic/public';
 	import { m } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import type { Route } from '$lib/types';
 
@@ -587,7 +588,7 @@
 								<span class="material-symbols">
 									{route.surface === 'trail' ? 'terrain' : route.surface === 'mixed' ? 'alt_route' : 'add_road'}
 								</span>
-								{route.surface}
+								{routeSurfaceLabel(route.surface)}
 							</span>
 							<span class="key-stat-label">{m('routeDetail.statSurface')}</span>
 						</div>

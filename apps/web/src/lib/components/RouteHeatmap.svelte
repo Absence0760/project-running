@@ -33,6 +33,7 @@
 		type DistanceBandKey,
 	} from '$lib/routes/distance_bands';
 	import { m } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { escapeHtml, safeHref } from '$lib/util/html_escape';
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
@@ -1561,7 +1562,7 @@
 						<span class="result-meta">
 							{#if band}<span class="result-band">{band.label}</span>{/if}
 							<span>{formatDistance(r.distance_m)}</span>
-							{#if r.surface}<span>· {r.surface}</span>{/if}
+							{#if r.surface}<span>· {routeSurfaceLabel(r.surface)}</span>{/if}
 							{#if r.run_count > 0}<span>· {r.run_count === 1 ? m('routeHeatmap.runCountOne', { n: r.run_count }) : m('routeHeatmap.runCountMany', { n: r.run_count })}</span>{/if}
 						</span>
 					</button>

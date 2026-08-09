@@ -3,6 +3,7 @@
 	import { geocodePlace } from '$lib/routes/geocoding';
 	import type { Club, JoinPolicy } from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
+	import { joinPolicyLabel } from '$lib/i18n/enum_labels.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { untrack } from 'svelte';
 	import { trackDirty } from '$lib/core/form_dirty';
@@ -205,7 +206,7 @@
 					onchange={() => (joinPolicy = 'open')}
 				/>
 				<span>
-					<strong>{m('clubEditor.anyone')}</strong>
+					<strong>{joinPolicyLabel('open')}</strong>
 					<span class="hint">{m('clubEditor.anyoneHint')}</span>
 				</span>
 			</label>
@@ -217,7 +218,7 @@
 					onchange={() => (joinPolicy = 'request')}
 				/>
 				<span>
-					<strong>{m('clubEditor.approvalRequired')}</strong>
+					<strong>{joinPolicyLabel('request')}</strong>
 					<span class="hint">
 						{m('clubEditor.approvalRequiredHint')}
 					</span>

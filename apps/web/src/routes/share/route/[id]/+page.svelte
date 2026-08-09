@@ -16,6 +16,7 @@
 		buildRouteShareTitle,
 	} from '$lib/share/share_meta';
 	import { m } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import type { Route, TrackPoint } from '$lib/types';
 
 	let { data } = $props();
@@ -131,8 +132,10 @@
 					<span class="meta-sep">&middot;</span>
 					<span>{m('shareRoute.elevationValue', { n: route.elevation_m })}</span>
 				{/if}
-				<span class="meta-sep">&middot;</span>
-				<span class="surface-tag">{route.surface}</span>
+				{#if route.surface}
+					<span class="meta-sep">&middot;</span>
+					<span class="surface-tag">{routeSurfaceLabel(route.surface)}</span>
+				{/if}
 			</p>
 		</section>
 

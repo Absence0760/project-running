@@ -199,9 +199,11 @@ test.describe('Routes — create → list → detail → publish → anon share 
 					anonPage.getByRole('heading', { name: routeName, level: 1 })
 				).toBeVisible({ timeout: 10_000 });
 
-				// The body-level .route-meta strip carries surface + distance.
-				await expect(anonPage.locator('.route-meta .surface-tag')).toContainText(
-					'road'
+				// The body-level .route-meta strip carries surface + distance. The
+				// tag renders the localized NAME of the `routes.surface` value, never
+				// the stored token (decisions § 566).
+				await expect(anonPage.locator('.route-meta .surface-tag')).toHaveText(
+					'Road'
 				);
 				await expect(anonPage.locator('.route-meta')).toContainText('8');
 			} finally {

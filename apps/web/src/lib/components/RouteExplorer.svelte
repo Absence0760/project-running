@@ -14,6 +14,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import RouteTrackPreview from './RouteTrackPreview.svelte';
 
 	let routes = $state<Route[]>([]);
@@ -62,9 +63,9 @@
 
 	const surfaceOptions = $derived<Record<string, string>>({
 		any: t('routeExplorer.surfaceAny'),
-		road: t('routeExplorer.surfaceRoad'),
-		trail: t('routeExplorer.surfaceTrail'),
-		mixed: t('routeExplorer.surfaceMixed'),
+		road: routeSurfaceLabel('road'),
+		trail: routeSurfaceLabel('trail'),
+		mixed: routeSurfaceLabel('mixed'),
 	});
 
 	function searchOptions(offset: number) {
@@ -370,10 +371,12 @@
 										{route.elevation_m}m
 									</span>
 								{/if}
-								<span class="meta-item">
-									<span class="material-symbols meta-icon">{route.surface === 'trail' ? 'terrain' : 'add_road'}</span>
-									<span class="surface-tag">{route.surface}</span>
-								</span>
+								{#if route.surface}
+									<span class="meta-item">
+										<span class="material-symbols meta-icon">{route.surface === 'trail' ? 'terrain' : 'add_road'}</span>
+										<span class="surface-tag">{routeSurfaceLabel(route.surface)}</span>
+									</span>
+								{/if}
 								{#if route.run_count > 0}
 									<span class="meta-item">
 										<span class="material-symbols meta-icon">directions_run</span>
