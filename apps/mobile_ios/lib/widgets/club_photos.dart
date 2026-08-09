@@ -195,12 +195,13 @@ class _ClubPhotosState extends State<ClubPhotos> with WidgetsBindingObserver {
       // Strip EXIF/XMP (incl. GPS) before the bytes leave the device — the
       // server worker strips too, but only after upload, leaving a
       // geotagged-original window in the bucket.
-      final clean = stripJpegExif(Uint8List.fromList(bytes));
       final ext = clubPhotoExtensionForFilename(f.name);
+      final contentType = clubPhotoContentTypeForExtension(ext);
+      final clean = stripImageExif(Uint8List.fromList(bytes), contentType);
       final added = await widget.api.addClubPhoto(
         clubId: widget.clubId,
         bytes: clean,
-        contentType: clubPhotoContentTypeForExtension(ext),
+        contentType: contentType,
         extension: ext,
         caption: _pendingCaptionCtrl.text.trim().isEmpty
             ? null

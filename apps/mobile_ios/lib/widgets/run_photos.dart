@@ -238,12 +238,13 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
       // Strip EXIF/XMP (incl. GPS) before the bytes leave the device —
       // the server worker strips too, but only after upload, leaving a
       // geotagged-original window in the bucket. Persona family-club #52.
-      final clean = stripJpegExif(Uint8List.fromList(bytes));
       final ext = extensionForFilename(f.name);
+      final contentType = contentTypeForExtension(ext);
+      final clean = stripImageExif(Uint8List.fromList(bytes), contentType);
       final added = await widget.api.addRunPhoto(
         runId: widget.runId,
         bytes: clean,
-        contentType: contentTypeForExtension(ext),
+        contentType: contentType,
         extension: ext,
         caption: _pendingCaptionCtrl.text.trim().isEmpty
             ? null

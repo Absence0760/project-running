@@ -214,12 +214,13 @@ class _RoutePhotosState extends State<RoutePhotos> with WidgetsBindingObserver {
       // Strip EXIF/XMP (incl. GPS) before the bytes leave the device —
       // the server worker strips too, but only after upload, leaving a
       // geotagged-original window in the bucket.
-      final clean = stripJpegExif(Uint8List.fromList(bytes));
       final ext = routePhotoExtensionForFilename(f.name);
+      final contentType = routePhotoContentTypeForExtension(ext);
+      final clean = stripImageExif(Uint8List.fromList(bytes), contentType);
       final added = await widget.api.addRoutePhoto(
         routeId: widget.routeId,
         bytes: clean,
-        contentType: routePhotoContentTypeForExtension(ext),
+        contentType: contentType,
         extension: ext,
         caption: _pendingCaptionCtrl.text.trim().isEmpty
             ? null
