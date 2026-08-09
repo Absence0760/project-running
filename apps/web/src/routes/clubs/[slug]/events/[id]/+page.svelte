@@ -2122,16 +2122,20 @@
 						(<code>status</code> {m('clubEvent.importHelpStatus')} <code>dnf</code> / <code>dns</code>).
 						{m('clubEvent.importHelpSuffix')}
 					</p>
-					<label class="btn-link import-file">
+					<button
+						type="button"
+						class="btn-link import-file"
+						onclick={() => importInput?.click()}
+					>
 						{importFileName ? m('clubEvent.importFileName', { name: importFileName }) : m('clubEvent.chooseCsvFile')}
-						<input
-							bind:this={importInput}
-							type="file"
-							accept=".csv,text/csv"
-							onchange={onImportFile}
-							hidden
-						/>
-					</label>
+					</button>
+					<input
+						bind:this={importInput}
+						type="file"
+						accept=".csv,text/csv"
+						onchange={onImportFile}
+						style="display: none"
+					/>
 					{#if importErrors.length > 0}
 						<ul class="import-errors">
 							{#each importErrors.slice(0, 8) as err}

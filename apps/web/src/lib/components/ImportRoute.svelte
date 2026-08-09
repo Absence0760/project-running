@@ -16,6 +16,7 @@
 	} = $props();
 
 	let dragging = $state(false);
+	let browseInput: HTMLInputElement | undefined = $state();
 	let parsing = $state(false);
 	let saving = $state(false);
 	let error = $state('');
@@ -145,10 +146,16 @@
 					<p>{m('importRoute.dragDropPrompt')}</p>
 					<p class="drop-hint">{m('importRoute.supportedFormats')}</p>
 					<p class="drop-hint">{m('importRoute.worksWith')}</p>
-					<label class="browse-btn">
+					<button type="button" class="browse-btn" onclick={() => browseInput?.click()}>
 						{m('importRoute.browseFiles')}
-						<input type="file" accept=".gpx,.kml,.kmz,.geojson,.json,.tcx" onchange={handleFileSelect} hidden />
-					</label>
+					</button>
+					<input
+						bind:this={browseInput}
+						type="file"
+						accept=".gpx,.kml,.kmz,.geojson,.json,.tcx"
+						onchange={handleFileSelect}
+						style="display: none"
+					/>
 				{/if}
 			</div>
 		{:else if parsed.length === 1}
@@ -276,7 +283,9 @@
 		padding: var(--space-sm) var(--space-lg);
 		background: var(--color-primary);
 		color: white;
+		border: none;
 		border-radius: var(--radius-md);
+		font-family: inherit;
 		font-weight: 600;
 		font-size: 0.85rem;
 		cursor: pointer;
