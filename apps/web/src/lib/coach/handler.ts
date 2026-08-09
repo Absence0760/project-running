@@ -17,6 +17,7 @@
 // off `content-type`.
 
 import { createClient } from '@supabase/supabase-js';
+import { supabaseErrorFields } from '../core/supabase_error';
 import { buildContext, type CoachProfileRow } from './context';
 import {
 	clampRunsLimit,
@@ -538,17 +539,4 @@ function jsonError(
 	extra: Record<string, unknown> = {},
 ): CoachResult {
 	return buildJsonError(status, error, extra) as CoachResult;
-}
-
-/// Extract only the log-safe fields from a Supabase/PostgREST error.
-/// `.code` + `.message` are safe to log; `.details` and `.hint` can
-/// echo row fragments — the caller's chat content is Art 9 health/injury
-/// data on this path — and the raw object must never reach CloudWatch.
-/// Mirrors the `.code`/`.message` pattern used in rate_limit_errors.ts +
-/// the Edge Functions, and the security_guards.test.ts raw-object ban.
-/// /audit/pii-in-logs.
-export function supabaseErrorFields(
-	err: { code?: string; message?: string } | null | undefined,
-): { code: string | undefined; message: string | undefined } {
-	return { code: err?.code, message: err?.message };
 }

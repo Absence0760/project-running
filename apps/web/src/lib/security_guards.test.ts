@@ -682,7 +682,7 @@ test('Edge Functions do not log raw PostgrestError objects', () => {
       // are rare in console.error calls and over-counting just makes
       // the assertion stricter (false-positive direction is safe).
       const lastArg = lastTopLevelArg(argText).trim();
-      if (looksLikeBareErrorIdentifier(lastArg)) {
+      if (looksLikeRawErrorArg(lastArg)) {
         const lineNo = source.slice(0, m.index).split('\n').length;
         offenders.push({ path, line: lineNo, call: lastArg });
       }
@@ -695,6 +695,80 @@ test('Edge Functions do not log raw PostgrestError objects', () => {
     'Edge Functions must not log raw error objects as the last arg ' +
       'of console.error — wrap with `.message`, `String(...)`, or ' +
       'the `e instanceof Error ? e.message : String(e)` pattern.\n' +
+      `Offenders:\n${offenders.map((o) => `  ${o.path}:${o.line} → console.error(…, ${o.call})`).join('\n')}`,
+  );
+});
+
+test('web server handlers do not log raw PostgrestError objects', () => {
+  // Same leak, second tier. The Edge Function guard above globbed only
+  // `supabase/functions/*/index.ts`, so the SvelteKit server surface —
+  // which runs the same PostgREST calls against the same rows and logs
+  // into the same CloudWatch group — was never covered. Three
+  // `/api/routes` handlers were logging `proRes.error` whole while
+  // `supabaseErrorFields` sat one import away (issue #734).
+  //
+  // Roots are the server handlers, not the whole app: the `+server.ts`
+  // route entry points plus the `lib/` modules they delegate to. Client
+  // components are out of scope — their console lands in the visitor's
+  // own devtools, not a shared aggregator.
+  const roots = [
+    resolve(__dirname, '..', 'routes', 'api'),
+    resolve(__dirname, 'routes'),
+    resolve(__dirname, 'coach'),
+  ];
+
+  const tsFiles: string[] = [];
+  const collectTs = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      if (name.startsWith('.')) continue;
+      const full = resolve(dir, name);
+      try {
+        readdirSync(full);
+        collectTs(full);
+      } catch {
+        if (full.endsWith('.ts') && !full.endsWith('.test.ts')) tsFiles.push(full);
+      }
+    }
+  };
+  for (const root of roots) collectTs(root);
+  assert.ok(
+    tsFiles.length >= 10,
+    `Expected ≥10 server .ts files across ${roots.join(', ')}, found ${tsFiles.length}. ` +
+      'Has the directory layout moved?',
+  );
+
+  const offenders: Array<{ path: string; line: number; call: string }> = [];
+  const callRe = /console\.error\s*\(/g;
+  for (const path of tsFiles) {
+    const source = readFileSync(path, 'utf-8');
+    let m: RegExpExecArray | null;
+    while ((m = callRe.exec(source)) !== null) {
+      const start = m.index + m[0].length;
+      let depth = 1;
+      let i = start;
+      while (depth > 0 && i < source.length) {
+        const c = source[i];
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        i++;
+      }
+      const lastArg = lastTopLevelArg(source.slice(start, i - 1)).trim();
+      if (looksLikeRawErrorArg(lastArg)) {
+        offenders.push({
+          path,
+          line: source.slice(0, m.index).split('\n').length,
+          call: lastArg,
+        });
+      }
+    }
+  }
+
+  assert.strictEqual(
+    offenders.length,
+    0,
+    'Web server handlers must not log a raw Supabase/PostgREST error as the ' +
+      'last arg of console.error — `.details` / `.hint` echo row fragments. ' +
+      'Route it through `supabaseErrorFields()` from lib/core/supabase_error.\n' +
       `Offenders:\n${offenders.map((o) => `  ${o.path}:${o.line} → console.error(…, ${o.call})`).join('\n')}`,
   );
 });
@@ -741,10 +815,13 @@ function lastTopLevelArg(argText: string): string {
   return lastCommaIdx === -1 ? argText : argText.slice(lastCommaIdx + 1);
 }
 
-function looksLikeBareErrorIdentifier(arg: string): boolean {
+function looksLikeRawErrorArg(arg: string): boolean {
   // Strip a leading line comment / trailing line comment, then ask:
-  // is this a bare identifier whose name signals an error object,
-  // with no method access / wrapper?
+  // is this an error object reaching the log whole, with no method
+  // access / wrapper? Two shapes count — a bare identifier whose name
+  // signals an error (`err`, `insertErr`), and a member access landing
+  // on `.error` (`proRes.error`, `lookup?.error`), which is how every
+  // PostgREST result destructures.
   const stripped = arg.replace(/\/\/.*$/gm, '').trim();
   if (stripped.length === 0) return false;
   // Accept: anything containing `.message` / `?.message` / `String(` /
@@ -767,8 +844,14 @@ function looksLikeBareErrorIdentifier(arg: string): boolean {
   }
   // What's left is a bare identifier (or expression without any of the
   // accepted scrubbers). Flag it if the name suggests an error value.
-  return /^[a-zA-Z_$][\w$]*$/.test(stripped) &&
-    /(err|Err|error|Error)$/.test(stripped);
+  if (/^[a-zA-Z_$][\w$]*$/.test(stripped) && /(err|Err|error|Error)$/.test(stripped)) {
+    return true;
+  }
+  // A member access landing on `.error` / `.err`, optional-chained or
+  // not. `const proRes = await supabase.rpc(...)` then
+  // `console.error('…', proRes.error)` is the exact shape three
+  // `/api/routes` handlers shipped.
+  return /^[a-zA-Z_$][\w$]*(\??\.[a-zA-Z_$][\w$]*)*\??\.(error|err)$/.test(stripped);
 }
 
 // ─── audit:deps May 2026 closeouts ───────────────────────────────────

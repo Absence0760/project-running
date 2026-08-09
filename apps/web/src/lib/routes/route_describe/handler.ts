@@ -27,6 +27,7 @@ import {
 } from '../route_description';
 import { parseAuthHeader } from '../../coach/limits';
 import { checkRouteRateLimit } from '../rate_limit';
+import { supabaseErrorFields } from '../../core/supabase_error';
 
 /// Per-user ceiling on the billed Anthropic call. Sized like the sibling
 /// `generate-route` bucket: 60/hour is far past any interactive use (one
@@ -177,7 +178,7 @@ export async function handleRouteDescribe(
 	} else {
 		const proRes = await supabase.rpc('is_pro');
 		if (proRes.error) {
-			console.error('[route-describe] is_pro lookup failed', proRes.error);
+			console.error('[route-describe] is_pro lookup failed', supabaseErrorFields(proRes.error));
 			return json(500, { error: 'tier check failed', description: templated, source: 'template' });
 		}
 		isPro = proRes.data === true;
