@@ -172,3 +172,31 @@ test('/gym/routines/[id] re-enters the loading state when Retry runs', () => {
 		'the failure branch must be tested before the not-found branch',
 	);
 });
+
+test('/clubs/[slug] surfaces a failed post reply instead of swallowing it', () => {
+	// Reason: sendReply had try/finally and no catch. A rejected insert
+	// left no reply, no message, and a re-enabled button — which reads as
+	// an invitation to click again, and that is how one reply becomes two
+	// the moment the write starts landing.
+	const source = read('src/routes/clubs/[slug]/+page.svelte');
+	const send = source.match(/async function sendReply[\s\S]*?\n\t\}/);
+	assert.ok(send, 'sendReply body missing — rename?');
+	assert.match(
+		send![0],
+		/catch \(e\) \{[\s\S]*?clubHome\.replyFailed/,
+		'a rejected reply must be surfaced the way the rest of the page surfaces failures',
+	);
+	const toggle = source.match(/async function toggleReplies[\s\S]*?\n\t\}/);
+	assert.ok(toggle, 'toggleReplies body missing — rename?');
+	assert.match(
+		toggle![0],
+		/clubHome\.repliesLoadFailed/,
+		'opening a thread that fails to load must say so, not stay silently collapsed',
+	);
+	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+		const catalogue = read(`src/lib/i18n/locales/${locale}.ts`);
+		for (const key of ['clubHome.replyFailed', 'clubHome.repliesLoadFailed']) {
+			assert.ok(catalogue.includes(`"${key}":`), `${key} missing from ${locale}.ts`);
+		}
+	}
+});

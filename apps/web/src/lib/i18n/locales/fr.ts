@@ -1746,6 +1746,8 @@ export const messages = {
 	"clubHome.toastRemoveMemberFailed": "Impossible de retirer le membre : {error}",
 	"clubHome.inviteCopied": "Lien d'invitation copié dans le presse-papiers.",
 	"clubHome.failedToPost": "Échec de la publication",
+	"clubHome.replyFailed": "Impossible de publier ta réponse : {error}",
+	"clubHome.repliesLoadFailed": "Impossible de charger les réponses : {error}",
 	"clubHome.deleteClubFailed": "Impossible de supprimer le club : {error}",
 	"clubHome.deletePostFailed": "Impossible de supprimer la publication : {error}",
 	"clubHome.deleteEventFailed": "Impossible de supprimer l'événement : {error}",

@@ -1741,6 +1741,8 @@ export const messages = {
 	"clubHome.toastRemoveMemberFailed": "メンバーを削除できませんでした: {error}",
 	"clubHome.inviteCopied": "招待リンクをクリップボードにコピーしました。",
 	"clubHome.failedToPost": "投稿できませんでした",
+	"clubHome.replyFailed": "返信を投稿できませんでした: {error}",
+	"clubHome.repliesLoadFailed": "返信を読み込めませんでした: {error}",
 	"clubHome.deleteClubFailed": "クラブを削除できませんでした: {error}",
 	"clubHome.deletePostFailed": "投稿を削除できませんでした: {error}",
 	"clubHome.deleteEventFailed": "イベントを削除できませんでした: {error}",

@@ -1754,6 +1754,8 @@ export const en = {
 	"clubHome.toastRemoveMemberFailed": "Failed to remove member: {error}",
 	"clubHome.inviteCopied": "Invite link copied to clipboard.",
 	"clubHome.failedToPost": "Failed to post",
+	"clubHome.replyFailed": "Couldn’t post your reply: {error}",
+	"clubHome.repliesLoadFailed": "Couldn’t load the replies: {error}",
 	"clubHome.deleteClubFailed": "Couldn't delete the club: {error}",
 	"clubHome.deletePostFailed": "Couldn't delete the post: {error}",
 	"clubHome.deleteEventFailed": "Couldn't delete the event: {error}",

@@ -1745,6 +1745,8 @@ export const messages = {
 	"clubHome.toastRemoveMemberFailed": "Não foi possível remover o membro: {error}",
 	"clubHome.inviteCopied": "Link de convite copiado para a área de transferência.",
 	"clubHome.failedToPost": "Falha ao publicar",
+	"clubHome.replyFailed": "Não foi possível publicar sua resposta: {error}",
+	"clubHome.repliesLoadFailed": "Não foi possível carregar as respostas: {error}",
 	"clubHome.deleteClubFailed": "Não foi possível excluir o clube: {error}",
 	"clubHome.deletePostFailed": "Não foi possível excluir a publicação: {error}",
 	"clubHome.deleteEventFailed": "Não foi possível excluir o evento: {error}",
