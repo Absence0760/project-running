@@ -146,3 +146,29 @@ test('the auxiliary route-line overlay swallows the new throw itself', () => {
 	const matches = source.match(/fetchRouteById\(id\)\.catch\(/g) ?? [];
 	assert.equal(matches.length, 2, 'both overlay call sites must handle a rejected read');
 });
+
+test('/gym/routines/[id] re-enters the loading state when Retry runs', () => {
+	// Reason: the retry cleared `loadError` without setting `loading` back
+	// to true, so the re-read rendered through the `!detail` branch —
+	// "Routine not found" — for the whole round trip. Pressing Retry on a
+	// page whose entire point is not to claim the routine is gone said
+	// exactly that.
+	const source = read('src/routes/gym/routines/[id]/+page.svelte');
+	const loader = source.match(/async function load\(\)[\s\S]*?\n\t\}/);
+	assert.ok(loader, 'load body missing — rename?');
+	assert.match(
+		loader![0],
+		/loading = true;\s*\n\s*loadError = null;/,
+		'load must raise `loading` before it clears the error',
+	);
+	assert.match(
+		loader![0],
+		/finally \{\s*loading = false;/,
+		'loading must clear on both paths, from one place',
+	);
+	assert.match(
+		source,
+		/\{:else if loadError\}[\s\S]*?\{:else if !detail\}/,
+		'the failure branch must be tested before the not-found branch',
+	);
+});
