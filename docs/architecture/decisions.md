@@ -7698,3 +7698,37 @@ JPEG walker, fail its SOI check, and be returned — and uploaded — whole. A
 magic-number sniff (`detectImageMime`) now drives both the strip dispatch and
 the stored Content-Type, so the extension we write and the bytes we wrote can
 no longer disagree.
+
+## 556. A densified polyline is still the polyline — the heatmap reader clips to privacy zones like every other non-owner read
+
+`heatmap_points_in_bbox` was made `SECURITY DEFINER` in `20260910_001` to fix a
+"returns zero rows" regression, on the stated reasoning that there was no leak
+because "waypoints / user_id / club_id never escape the function body … only
+the densified output points (one per ~50 m)". That reasoning was wrong in a way
+worth recording, because it is easy to make again: `ST_LineInterpolatePoints`
+does not summarise a line, it *resamples* it. Fifty-metre spacing on a suburban
+street is finer than the street. The output points were the waypoints.
+
+So the one reader in the codebase that skipped `clip_route_for_viewer` was also
+the only one reachable by an anonymous caller, and it undid `20260925_001` as
+well: that migration NULLs `routes.start_point` for a route that never leaves
+its owner's zone so the route drops out of proximity search, but this reader
+filtered only on `geom is not null` and rendered those routes in full. The
+attack needed two requests — read a clipped route's visible end off a public
+share page, then post a bbox around it — and returned the stretch from the clip
+boundary to the front door.
+
+`20270504_001` clips inside the function. Two details are load-bearing. The
+zones are read with definer rights, because owner-only RLS on `user_settings`
+would otherwise hide them from the caller and silently clip nothing; and the
+join is a LEFT join, so an owner with no settings row yields NULL zones and
+keeps every point rather than vanishing from the layer — a fail-closed inner
+join here would have quietly blanked the heatmap for most of the user base.
+
+The residue is recorded rather than fixed: `routes_within_box` still evaluates
+its `ST_Intersects` predicate against the same unclipped `geom` and returns the
+route id, which makes it a slow membership oracle — grid-sweep small boxes and
+the ids that come back trace the in-zone tail. Closing that properly wants a
+zone-aware `geom_public` column maintained by the same trigger pair
+`20260925_001` uses for `start_point`, so that no spatial predicate anywhere
+can see the unclipped geometry.
