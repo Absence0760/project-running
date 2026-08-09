@@ -45,16 +45,15 @@ test.describe('/runs — load failure', () => {
 
 	// The Load-more affordance only exists past the first page, and the
 	// seed does not give USER_A 50 runs. Plant enough to force page two,
-	// tagged so the cleanup cannot touch anything else.
+	// deleting them by the ids we planted so cleanup cannot touch anything
+	// else. `runs` has no title column — id tracking is the whole handle.
 	const PAGE_SIZE = 50;
-	const marker = `e2e-loadmore-${Date.now()}`;
 	const plantedIds: string[] = [];
 
 	test.beforeAll(async () => {
 		const admin = getAdminClient();
 		const rows = Array.from({ length: PAGE_SIZE + 5 }, (_, i) => ({
 			user_id: USER_A.id,
-			title: `${marker}-${i}`,
 			started_at: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
 			distance_m: 5000,
 			duration_s: 1800,
