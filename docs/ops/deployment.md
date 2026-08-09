@@ -218,6 +218,22 @@ The matrix of "what lives where":
 
 **Rotation rule**: if a secret is suspected leaked, the rotation is in three steps: (1) issue a new key in the provider, (2) update everywhere it's stored, (3) revoke the old key. Step 3 is what "the old one is dead" really means — without it the leaked key still works.
 
+### Owed: move `STRAVA_WEBHOOK_SECRET` off the query string, then rotate it
+
+**Status: open. Do this before the Strava webhook path is considered production-hardened.**
+
+The Strava callback is registered as `https://<host>/…?secret=<STRAVA_WEBHOOK_SECRET>`, because Strava's subscription API accepts a callback **URL** and nothing else — there is no place to configure a header. A query-string secret is written verbatim into the receiver's request log on **every** delivery (Supabase function logs for the Edge Function, the worker's HTTP log for the Go endpoint), so anyone with log read access recovers it and can forge activity ingests into any user's `runs` by enumerable Strava athlete id.
+
+Both receivers now also accept the secret from an `X-Webhook-Secret` header, preferred over the query param and compared in constant time on both paths (`apps/backend/supabase/functions/strava-webhook/index.ts`, `apps/job_worker/internal/stravahook/server.go`). That is the half that is code. The rest is operator work and must run **in this order**:
+
+1. Confirm both receivers are deployed with header support (the Go worker is the production path; the Edge Function is the rollback path — **both**, or a rollback re-opens the hole).
+2. Mint a new `STRAVA_WEBHOOK_SECRET` (≥ 32 chars — both receivers refuse below that floor).
+3. Set the new value on the worker (Fly.io secret) and the Edge Function env, and **re-register the Strava subscription** with a callback URL that still carries `?secret=` set to the new value. Strava cannot send the header, so the query path stays live for Strava itself; the point of the rotation is that the value in the logs is no longer the one anything else trusts.
+4. Revoke the old value — it is in every historical log line and must be treated as public from here on.
+5. Any non-Strava caller of these endpoints (replay tooling, smoke tests, the manual recipes in [manual_testing.md](../testing/manual_testing.md)) switches to the header.
+
+Until step 4 lands, treat the secret as compromised-if-logs-are: the channel is authenticated but not confidential. Recorded in [decisions.md § 566](../architecture/decisions.md).
+
 **Operator scripts.** The AWS-side rotation flows are wrapped in [`bin/`](../../bin/README.md): `secret-set.sh <env> <KEY>` (rewrite a single sops-encrypted Lambda secret without opening an editor), `key-rotate.sh <env>` (re-encrypt under a new KMS key when the key itself is replaced), and `onboard-operator.sh <arn>` (grant a second human/role decrypt access on the env's KMS key). All take input via stdin / file / prompt — nothing routes secrets through argv or shell history.
 
 **Lambda env rotations need an alias repoint.** An env-only `terraform apply` publishes a new Lambda version but the eight web Lambdas' `live` aliases are CI-owned and stay behind, still serving the previous version's frozen env — the rotated secret isn't live until the alias moves (issue #590 defect 2). Finish every web-Lambda env rotation with `bin/lambda-alias-sync.sh <env>` (or cut a `web@*` release, whose deploy repoints the aliases anyway).
