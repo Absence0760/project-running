@@ -442,6 +442,20 @@ On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical tr
 
 If the notification has an action (e.g. "Settings" on the GPS-unavailable banner), pass `actionLabel:` + `onAction:`. Tapping the action runs the callback and dismisses the banner.
 
+## Mobile async gaps — the `mounted` check goes BEFORE the `setState`, not after
+
+On the Flutter apps, every `setState` reached after an `await` needs `if (!mounted) return;` between the two. During the gap the runner can pop the route, sign out, or be navigated away by a deep link; `setState` on a defunct `State` throws, and the throw only ever happens to someone who left mid-request.
+
+Write the guard **immediately after the await that opened the gap** — not after the `setState`, and not only on the failure arm. Both were real: `runs_screen.dart` set `_syncing = false` and asked about `mounted` on the next line, and the route-detail tag row checked only inside its `catch` while the success arm wrote straight through (issue #734, 34 sites).
+
+`apps/mobile_android/test/post_await_setstate_guard_test.dart` (mirrored on iOS) scans `lib/` and fails on the next one. It is deliberately precision-tuned — a guard that lives in a helper the method calls is not seen — so a hit is a real finding, and the allowlist is empty on purpose. A dialog `await` counts: `showDatePicker`, `confirmDestructive` and `Navigator.push` all open the same gap as a network call.
+
+## Mobile distances and paces render through the unit pref, never a hand-rolled divide
+
+A user-facing distance, pace, speed or elevation on the Flutter apps is formatted by `UnitFormat` (with an explicit `DistanceUnit`) or, on a surface that carries no `Preferences` dep, by the top-level `formatDistanceForPref` / `formatPaceForPref` / `formatElevationForPref` in `lib/preferences.dart`. **Never `'${(metres / 1000).toStringAsFixed(2)} km'`** — that is the shape that leaves a mile-unit runner reading kilometres, and it has been swept out of the browse surfaces twice now (#733 target pace, #734 race calendar / event photos / event results / last-run card).
+
+Two corollaries. **Don't add a second formatter beside the shared one** — `social_service.dart` grew its own km-only `fmtPace`, so the event target-pace metric disagreed with the unit-aware distance printed next to it. And **an i18n key names the concept, not the unit**: the message takes an already-formatted `{distance}`, so `racesKmAway` was renamed to `racesDistanceAway`; a key that claims kilometres is how the next edit reintroduces them.
+
 ## Mobile create/edit-entity forms — `showFullScreenForm`
 
 On the Flutter apps, every "add / edit X" form presents as a full-screen dialog built through `showFullScreenForm<T>(context, title:, builder:)` in `lib/widgets/full_screen_form.dart` (see [decisions.md § 129](decisions.md)). It pushes a `MaterialPageRoute(fullscreenDialog: true)` wrapping the body in `Scaffold` + `AppBar(title)` + `SafeArea`; lay the body out with `FullScreenFormBody(children: [...])` and label field groups with `FormSectionLabel`.
