@@ -7755,6 +7755,7 @@ The shape of the fix is the point. **Nothing here is cacheable at the call site*
 
 **The regression guard is a work count, not a timing.** The test track is an array whose points count every read of a coordinate, so a test can assert the sweep read the track a bounded number of times *in total* rather than once per item — 9,606,400 reads before the catalogue fix, 1,599,600 before the slice fix, both now inside `8 × points`. That pins the complexity itself rather than a machine-dependent duration, which a flaky test would have been. Soundness gets its own guard: the pre-prefilter matcher is kept in the test file as an oracle, and a sweep of tracks (polar, antimeridian, mid-latitude) against segments nudged to either side of the tolerance in both axes asserts the fast path never rejects what the oracle matches. Dropping the `cos φ` scaling or the longitude unwrapping each fail it. Both functions are on the enforced web↔Dart parity list, so the batch shape, the extent test, and the binary search are mirrored in `segments.dart`; mobile's `autoComputeEffortsForRun` had the identical per-segment loop and batches too.
 
+<<<<<<< HEAD
 ## 559. A queue for offline writes must only ever hold writes the server has not yet seen — a refusal is not a network failure
 
 **Date:** 2026-08-09
@@ -7815,3 +7816,64 @@ exists for exactly this controller.
 The general rule: an outbound write either performs, durably queues, or throws.
 Returning normally is a claim that the user's data is safe, and a method that
 cannot keep that claim must not make it.
+=======
+## 561. A meter the metered party can rewrite is not a cap — `user_coach_usage` is server-owned on every verb, not just DELETE
+
+**Date:** 2026-08-09
+
+`user_coach_usage` is the row that decides whether the next AI-coach message is
+allowed to reach Anthropic. Its RPCs were hardened repeatedly — an `auth.uid()`
+guard so you cannot burn someone else's quota (`20260503_001`), a rolling 24 h
+sum so a UTC+14 user cannot double-dip across midnight (`20261002_001`), an
+explicit DELETE deny whose own comment says "the daily cap cannot be reset by
+deleting the counter row" (`20260722_001`). All of that hardened the *front
+door*. The table kept the self-INSERT and self-UPDATE policies it shipped with
+in `20260430_001`, and `20270408_001`'s grant matrix handed table-level
+INSERT/UPDATE to `authenticated`, so the back door was a one-line PATCH:
+`message_count = 0` after every burst, or an INSERT of a future-dated bucket
+holding a large negative count, which the rolling sum's
+`usage_date >= (now() - interval '24 hours')::date` predicate obediently adds
+in and never recovers from.
+
+The rule this settles: **a table that exists to constrain the user is not user
+data, and no client verb belongs on it.** The three-verb sweep is the fix — deny
+policies so the intent is readable on disk, plus revoked grants so the deny does
+not rest on RLS alone — and the shape generalises to `rate_limits` and
+`app_quota`, which already have it (RLS on, no policies, no grants). The tell
+for the next one is a table whose only legitimate writer is a SECURITY DEFINER
+function: if the definer is the writer, the client is not.
+
+The pgtap now also asserts the definer RPC still meters after the lockdown.
+That direction matters as much as the denials — the cheapest way to "fix" a
+client-writable counter is to break the counter.
+
+## 562. Row ownership is not column ownership — the badge toggle is granted on the column, not the table
+
+**Date:** 2026-08-09
+
+`achievements_owner_update` (`20270208_001`) is written as
+`using (user_id = auth.uid()) with check (user_id = auth.uid())` and captioned
+"Owner-only UPDATE for the is_public toggle". The policy is a correct *row*
+gate and says nothing at all about columns, so with `20270408_001`'s table-wide
+UPDATE grant the owner of any award — every account earns a bronze one from its
+first run — could PATCH `badge_key`, `tier`, `value_num` and `earned_at` on a row
+they own, and the forged badge then renders on their profile, in every
+follower's badge feed, and on the logged-out `/share/badge` page.
+`achievements_user_badge_uk` does not catch it: the row is being renamed, not
+duplicated.
+
+Postgres RLS has no column dimension, so the column gate has to be a column
+grant, and the repo already had the idiom in three places (`coach_messages`
+`update (archived_at, reaction)`, `challenge_participants`
+`update (team_club_id)`, `event_attendees` `update (event_id, instance_start,
+status, user_id)`). `achievements` now carries `grant update (is_public)` and
+nothing else.
+
+Worth recording because the existing catch-all cannot see this class.
+`rls_grant_without_policy_test.sql` flags a granted table whose policy is
+literally `true`, and explicitly reasons that `achievements` is "inert today
+because every one of those tables also enables RLS with only `auth.uid()`-scoped
+permissive policies". An `auth.uid()`-scoped policy proves the *right person* is
+writing; it proves nothing about *what* they may write. When a policy comment
+names one column, that is the signal to check whether the grant agrees.
+>>>>>>> fix/sweep-r2-sec2

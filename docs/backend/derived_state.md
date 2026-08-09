@@ -112,8 +112,14 @@ retention cron referenced in a comment that was never created.
   (F9). Without it the table grows one row per user per day forever.
 - **Manual rebuild:** none — it is the source of truth, not a derived copy. The
   retention purge is the only maintenance.
+- **Writers:** the three definer RPCs and the retention cron, nothing else. No
+  client verb reaches the table (migration `20270505_001` revoked
+  INSERT/UPDATE/DELETE from `anon` + `authenticated` and replaced the self-write
+  policies with explicit denies) — a meter the metered party can rewrite is not a
+  cap.
 - **Pinned by:** `user_coach_usage_retention_test.sql` (stale bucket purged, fresh
-  bucket + cap read survive).
+  bucket + cap read survive) + `rls_user_coach_usage_test.sql` (every client verb
+  rejected, the definer RPC still meters).
 
 ## `fitness_snapshots`
 
