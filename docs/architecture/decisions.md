@@ -7754,3 +7754,33 @@ The shape of the fix is the point. **Nothing here is cacheable at the call site*
 **The extent test is deliberately conservative and that is load-bearing.** It exists to reject without measuring, so it must never reject a segment the full scan would have matched. Latitude is exact: spherical distance is never less than the meridian separation. Longitude is not — a naive `|Δλ| · cos(φ)` bound is *wrong* (two points 10° apart at 60° N are 4.986° of great circle, not the 5° that bound predicts), so the window comes from the tangent-meridian result, everything within angular distance `s` of a point at latitude `φ` lying within `asin(sin s / cos φ)` of its meridian. That is taken as the linear `s / cos φ`, which under-states the window only as the ratio approaches 1 — impossible while the window is still under a degree, which is why *a degree* is where the test gives up and admits rather than the half-turn that first suggested itself. Every window is divided by 110,574 m/degree where the sphere the haversine uses gives 111,195, so each one comes out slightly wider than the true one. And because the extent is a planar frame, it goes through `geo.ts`'s longitude unwrapping (§ 463): read naively, a run straddling the antimeridian appears to span the globe.
 
 **The regression guard is a work count, not a timing.** The test track is an array whose points count every read of a coordinate, so a test can assert the sweep read the track a bounded number of times *in total* rather than once per item — 9,606,400 reads before the catalogue fix, 1,599,600 before the slice fix, both now inside `8 × points`. That pins the complexity itself rather than a machine-dependent duration, which a flaky test would have been. Soundness gets its own guard: the pre-prefilter matcher is kept in the test file as an oracle, and a sweep of tracks (polar, antimeridian, mid-latitude) against segments nudged to either side of the tolerance in both axes asserts the fast path never rejects what the oracle matches. Dropping the `cos φ` scaling or the longitude unwrapping each fail it. Both functions are on the enforced web↔Dart parity list, so the batch shape, the extent test, and the binary search are mirrored in `segments.dart`; mobile's `autoComputeEffortsForRun` had the identical per-segment loop and batches too.
+
+## 561. A meter the metered party can rewrite is not a cap — `user_coach_usage` is server-owned on every verb, not just DELETE
+
+**Date:** 2026-08-09
+
+`user_coach_usage` is the row that decides whether the next AI-coach message is
+allowed to reach Anthropic. Its RPCs were hardened repeatedly — an `auth.uid()`
+guard so you cannot burn someone else's quota (`20260503_001`), a rolling 24 h
+sum so a UTC+14 user cannot double-dip across midnight (`20261002_001`), an
+explicit DELETE deny whose own comment says "the daily cap cannot be reset by
+deleting the counter row" (`20260722_001`). All of that hardened the *front
+door*. The table kept the self-INSERT and self-UPDATE policies it shipped with
+in `20260430_001`, and `20270408_001`'s grant matrix handed table-level
+INSERT/UPDATE to `authenticated`, so the back door was a one-line PATCH:
+`message_count = 0` after every burst, or an INSERT of a future-dated bucket
+holding a large negative count, which the rolling sum's
+`usage_date >= (now() - interval '24 hours')::date` predicate obediently adds
+in and never recovers from.
+
+The rule this settles: **a table that exists to constrain the user is not user
+data, and no client verb belongs on it.** The three-verb sweep is the fix — deny
+policies so the intent is readable on disk, plus revoked grants so the deny does
+not rest on RLS alone — and the shape generalises to `rate_limits` and
+`app_quota`, which already have it (RLS on, no policies, no grants). The tell
+for the next one is a table whose only legitimate writer is a SECURITY DEFINER
+function: if the definer is the writer, the client is not.
+
+The pgtap now also asserts the definer RPC still meters after the lockdown.
+That direction matters as much as the denials — the cheapest way to "fix" a
+client-writable counter is to break the counter.

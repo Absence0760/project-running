@@ -774,6 +774,8 @@ create table user_coach_usage (
 - `increment_coach_usage(p_user_id uuid) → integer` — upserts today's row and returns the new count. `security definer` so the coach endpoint can call it in one round trip. Guarded: `auth.uid() != p_user_id` raises `not authorized`, so a malicious caller can't exhaust another user's quota.
 - `get_coach_usage(p_user_id uuid) → integer` — read-only; returns today's count without incrementing. Used by `CoachChat.svelte` to show "N of M remaining" before the user types. Same `auth.uid()` guard as `increment_coach_usage`.
 
+**RLS:** owner SELECT only. The self-INSERT / self-UPDATE policies this table shipped with were removed in migration `20270505_001` (`user_coach_usage_no_insert` / `no_update` / `no_delete`, with INSERT/UPDATE/DELETE revoked from `anon` + `authenticated`): the table is a meter, and a signed-in caller who can `PATCH message_count = 0` — or `INSERT` a future-dated bucket with a negative count, which the rolling-24h sum adds in — re-rolls their whole allowance and uncaps the Anthropic spend the cap exists to bound. Pinned by `rls_user_coach_usage_test.sql`.
+
 ---
 
 #### `coach_messages`
@@ -1487,7 +1489,7 @@ House patterns:
   - `user_profiles`: per-command owner policies (the INSERT gate also blocks self-granting a paid `subscription_tier`; UPDATE columns are locked by `lock_subscription_columns()`), and SELECT for authenticated readers excludes shadow-hidden profiles. Anonymous readers use `public_profiles`.
   - `route_reviews`: own-row per-command writes + `reviews on visible routes are readable` (visibility follows the route, including the club branches).
   - `integrations`: owner ALL (tokens themselves live in Vault, not in the row).
-  - `user_coach_usage`: own-row select/insert/update, no delete.
+  - `user_coach_usage`: own-row SELECT only. INSERT/UPDATE/DELETE are denied to anon + authenticated (explicit deny policies **and** revoked grants, migration `20270505_001`) — it is a server-maintained meter whose only writers are the `auth.uid()`-guarded definer RPCs and the retention cron. A client-writable counter is a client-resettable spend cap.
   - `monthly_funding`: public SELECT, service-role writes.
 - **Clubs & the social graph**: public clubs readable by anyone, private clubs by members + owner; `events`, `event_attendees`, `club_posts` inherit the parent club's visibility PLUS an event-level gate (`20270113_001`, §148) so a public club can hide an individual event; admin-gated writes via `private.is_club_admin`. Social reads additionally carry the `is_blocked_either_way` / `private.viewer_blocks` predicate (§228) so a block hides each party from the other everywhere, including shared-club surfaces.
 - **Service-role-only tables** (`app_quota`, `deletion_audit_log`, ledgers like `webhook_events`) have RLS enabled with no anon/authenticated policies at all — fail closed.
