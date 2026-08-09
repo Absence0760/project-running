@@ -17,16 +17,13 @@
 // off `content-type`.
 
 import { createClient } from '@supabase/supabase-js';
-<<<<<<< HEAD
-import { supabaseErrorFields } from '../core/supabase_error';
-=======
 import {
 	AI_DISCLOSURE_VERSION_COACH,
 	aiDisclosureDenialBody,
 	aiDisclosureFromProfileRow,
 	checkAiDisclosure,
 } from '../core/ai_disclosure';
->>>>>>> fix/734-consent
+import { supabaseErrorFields } from '../core/supabase_error';
 import { buildContext, type CoachProfileRow } from './context';
 import {
 	clampRunsLimit,
