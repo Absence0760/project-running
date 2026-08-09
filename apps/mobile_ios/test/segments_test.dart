@@ -352,4 +352,101 @@ void main() {
           reason: '500 m at 5 m/s from $start should be ~100 s');
     }
   });
+
+  // ─── extent-test soundness ───
+
+  /// The pre-prefilter matcher, kept here as the oracle: nearest track point
+  /// to the segment start, then the nearest AFTER it to the segment end, both
+  /// within tolerance. The extent test is only allowed to skip work — never to
+  /// change this answer.
+  bool scanMatches(List<Waypoint> track, GlobalSegmentGeometry seg,
+      {double toleranceM = 35}) {
+    if (track.length < 2 || seg.points.length < 2 || seg.distanceM <= 0) {
+      return false;
+    }
+    double haversine(double aLat, double aLng, double bLat, double bLng) {
+      const r = 6371000.0;
+      final dLat = (bLat - aLat) * math.pi / 180;
+      final dLng = (bLng - aLng) * math.pi / 180;
+      final sLat = math.sin(dLat / 2);
+      final sLng = math.sin(dLng / 2);
+      final h = sLat * sLat +
+          math.cos(aLat * math.pi / 180) *
+              math.cos(bLat * math.pi / 180) *
+              sLng *
+              sLng;
+      return 2 * r * math.asin(math.min(1.0, math.sqrt(h)));
+    }
+
+    (int, double) nearest(Waypoint p, int from) {
+      var idx = -1;
+      var best = double.infinity;
+      for (var i = from; i < track.length; i++) {
+        final d = haversine(track[i].lat, track[i].lng, p.lat, p.lng);
+        if (d < best) {
+          best = d;
+          idx = i;
+        }
+      }
+      return (idx, best);
+    }
+
+    final (startIdx, startBest) = nearest(seg.points.first, 0);
+    if (startIdx < 0 || startBest > toleranceM) return false;
+    final (endIdx, endBest) = nearest(seg.points.last, startIdx + 1);
+    return endIdx >= 0 && endBest <= toleranceM;
+  }
+
+  test('global sweep: the extent test never rejects a segment the full scan matches',
+      () {
+    // The prefilter is only sound if it is conservative. Sweep a range of
+    // track latitudes (including polar, where a degree of longitude collapses)
+    // and antimeridian crossings, against segments nudged out to and past the
+    // tolerance in both axes.
+    const degPerM = 1 / 111320;
+    final t0 = DateTime.utc(2026, 1, 1).millisecondsSinceEpoch;
+    List<Waypoint> makeTrack(double lat0, double lng0, double lngDrift) => [
+          for (var i = 0; i < 120; i++)
+            Waypoint(
+              lat: lat0 + i * 5 * degPerM,
+              lng: lng0 + i * lngDrift,
+              timestamp:
+                  DateTime.fromMillisecondsSinceEpoch(t0 + i * 1000, isUtc: true),
+            ),
+        ];
+
+    var matched = 0;
+    for (final (lat0, lng0, drift) in <(double, double, double)>[
+      (37, -122, 0),
+      (0.5, 179.99, 0.00002),
+      (60, 11, 0.00001),
+      (89.9, 10, 0.0001),
+      (-33.9, 151.2, 0),
+    ]) {
+      final track = makeTrack(lat0, lng0, drift);
+      double metresEast(double lat, double m) =>
+          m * degPerM / math.cos(lat * math.pi / 180);
+      for (final offsetM in <double>[0, 10, 34, 36, 200, 5000]) {
+        for (final axis in <String>['lat', 'lng']) {
+          Waypoint shift(int i) => Waypoint(
+                lat: track[i].lat + (axis == 'lat' ? offsetM * degPerM : 0),
+                lng: track[i].lng +
+                    (axis == 'lng' ? metresEast(track[i].lat, offsetM) : 0),
+              );
+          final seg = GlobalSegmentGeometry(
+            points: [shift(20), shift(100)],
+            distanceM: 400,
+          );
+          final swept = computeGlobalSegmentEfforts(track, [seg]).first;
+          if (!scanMatches(track, seg)) continue;
+          matched++;
+          expect(swept, isNotNull,
+              reason: 'extent test rejected a real match: '
+                  'lat0=$lat0 offset=${offsetM}m axis=$axis');
+        }
+      }
+    }
+    expect(matched >= 10, isTrue,
+        reason: 'oracle produced too few matches to be meaningful ($matched)');
+  });
 }

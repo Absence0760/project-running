@@ -561,3 +561,93 @@ test('slice sweep: the binary-searched crossing matches a linear scan', () => {
 		);
 	}
 });
+
+/**
+ * The pre-prefilter matcher, kept here as the oracle: nearest track point to
+ * the segment start, then the nearest AFTER it to the segment end, both within
+ * tolerance. The extent test is only allowed to skip work — never to change
+ * this answer — so anything it rejects must be something this also rejects.
+ */
+function scanMatches(track: TrackPoint[], seg: GlobalSegmentGeometry, toleranceM = 35): boolean {
+	if (track.length < 2 || seg.points.length < 2 || seg.distance_m <= 0) return false;
+	const haversine = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+		const r = 6371000;
+		const dLat = ((bLat - aLat) * Math.PI) / 180;
+		const dLng = ((bLng - aLng) * Math.PI) / 180;
+		const sLat = Math.sin(dLat / 2);
+		const sLng = Math.sin(dLng / 2);
+		const h =
+			sLat * sLat +
+			Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * sLng * sLng;
+		return 2 * r * Math.asin(Math.min(1, Math.sqrt(h)));
+	};
+	const nearest = (p: { lat: number; lng: number }, from: number) => {
+		let idx = -1;
+		let best = Infinity;
+		for (let i = from; i < track.length; i++) {
+			const d = haversine(track[i].lat, track[i].lng, p.lat, p.lng);
+			if (d < best) {
+				best = d;
+				idx = i;
+			}
+		}
+		return { idx, best };
+	};
+	const start = nearest(seg.points[0], 0);
+	if (start.idx < 0 || start.best > toleranceM) return false;
+	const end = nearest(seg.points[seg.points.length - 1], start.idx + 1);
+	return end.idx >= 0 && end.best <= toleranceM;
+}
+
+test('global sweep: the extent test never rejects a segment the full scan matches', () => {
+	// The prefilter is only sound if it is conservative. Sweep a range of
+	// track latitudes (including polar, where a degree of longitude collapses)
+	// and antimeridian crossings, against segments nudged out to and past the
+	// tolerance in both axes.
+	const degPerM = 1 / 111_320;
+	const t0 = Date.parse('2026-01-01T00:00:00Z');
+	const makeTrack = (lat0: number, lng0: number, lngDrift: number) => {
+		const out: TrackPoint[] = [];
+		for (let i = 0; i < 120; i++) {
+			out.push({
+				lat: lat0 + i * 5 * degPerM,
+				lng: lng0 + i * lngDrift,
+				ts: new Date(t0 + i * 1000).toISOString(),
+			});
+		}
+		return out;
+	};
+
+	let matched = 0;
+	for (const [lat0, lng0, drift] of [
+		[37, -122, 0],
+		[0.5, 179.99, 0.00002],
+		[60, 11, 0.00001],
+		[89.9, 10, 0.0001],
+		[-33.9, 151.2, 0],
+	] as const) {
+		const track = makeTrack(lat0, lng0, drift);
+		const metresEast = (lat: number, m: number) => m * degPerM / Math.cos((lat * Math.PI) / 180);
+		for (const offsetM of [0, 10, 34, 36, 200, 5000]) {
+			for (const axis of ['lat', 'lng'] as const) {
+				const shift = (i: number) => ({
+					lat: track[i].lat + (axis === 'lat' ? offsetM * degPerM : 0),
+					lng: track[i].lng + (axis === 'lng' ? metresEast(track[i].lat, offsetM) : 0),
+				});
+				const seg: GlobalSegmentGeometry = {
+					points: [shift(20), shift(100)],
+					distance_m: 400,
+				};
+				const swept = computeGlobalSegmentEfforts(track, [seg])[0];
+				if (!scanMatches(track, seg)) continue;
+				matched++;
+				assert.notEqual(
+					swept,
+					null,
+					`extent test rejected a real match: lat0=${lat0} offset=${offsetM}m axis=${axis}`,
+				);
+			}
+		}
+	}
+	assert.ok(matched >= 10, `oracle produced too few matches to be meaningful (${matched})`);
+});

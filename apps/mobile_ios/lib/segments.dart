@@ -237,10 +237,10 @@ _TrackBounds _trackBounds(List<Waypoint> track) {
 /// Latitude is exact — spherical distance is never less than the meridian
 /// separation. Longitude uses the tangent-meridian bound: everything within
 /// an angular distance s of a point at latitude phi lies within
-/// asin(sin s / cos phi) of its meridian, which for a 35 m tolerance is the
-/// linear s / cos phi to well inside the margin the constant above carries.
-/// Approaching the poles that window swells past a half-turn and the test
-/// stops discriminating, so it admits rather than pretending to.
+/// asin(sin s / cos phi) of its meridian, taken here as the linear s / cos phi.
+/// That linearisation only under-states the window as the ratio approaches 1,
+/// which cannot happen while the window is still under a degree — so past a
+/// degree, where the test has stopped discriminating anyway, it admits.
 bool _boundsAdmit(_TrackBounds bounds, Waypoint point, double toleranceM) {
   final padLat = toleranceM / _conservativeMetresPerDeg;
   if (point.lat < bounds.minLat - padLat || point.lat > bounds.maxLat + padLat) {
@@ -250,7 +250,7 @@ bool _boundsAdmit(_TrackBounds bounds, Waypoint point, double toleranceM) {
   final cosLat = math.cos(point.lat * math.pi / 180);
   if (cosLat <= 0) return true;
   final padLon = padLat / cosLat;
-  if (padLon >= 180) return true;
+  if (padLon >= 1) return true;
 
   final lon = unwrapLonDeg(bounds.refLon, point.lng);
   return lon >= bounds.minLon - padLon && lon <= bounds.maxLon + padLon;
