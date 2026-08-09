@@ -11,15 +11,15 @@
 --   2. ai_disclosure_current_version() is the version the clients target.
 --   3. An unauthenticated caller is refused.
 --   4. An unknown version is refused rather than stored.
---   5. record_coach_consent() records v1 and leaves a v1 holder at v1.
+--   5. record_ai_disclosure_consent(1) leaves a v1 holder at v1.
 --   6/7. record_ai_disclosure_consent(2) upgrades and persists v2.
---   8. Monotone: a later v1 acceptance cannot downgrade a v2 holder.
---   9. A fresh user accepting v2 gets both halves of the record.
---  10. The pairing CHECK rejects a half-written record even from the owner.
+--   8/9. Monotone: a later v1 acceptance cannot downgrade a v2 holder.
+--  10. A fresh user accepting v2 gets both halves of the record.
+--  11. The pairing CHECK rejects a half-written record even from the owner.
 
 begin;
 
-select plan(10);
+select plan(11);
 
 -- U1: no consent on record.
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
