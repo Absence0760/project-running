@@ -164,7 +164,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   Future<void> _editTargetPace() async {
     final l10n = AppLocalizations.of(context);
     final prefs = widget.preferences;
-    final current = prefs.targetPaceSecPerKm;
+    final unit = prefs.unit;
+    // The row reads this pace back in the runner's unit, so the editor has to
+    // collect it in that unit too — otherwise a miles runner types 9:00 and
+    // stores a 9:00/km target the alert then holds them to.
+    final current = prefs.targetPaceSecPerKm > 0
+        ? UnitFormat.paceSecPerUnit(prefs.targetPaceSecPerKm.toDouble(), unit)
+            .round()
+        : 0;
     final mCtl = TextEditingController(
       text: '${current > 0 ? current ~/ 60 : 5}',
     );
@@ -204,6 +211,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                   labelText: l10n.prefsLivePaceAlertSec,
+                  suffixText: UnitFormat.paceLabel(unit),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -223,7 +231,13 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
             onPressed: () {
               final m = int.tryParse(mCtl.text) ?? 0;
               final s = int.tryParse(sCtl.text) ?? 0;
-              Navigator.pop(ctx, m * 60 + s);
+              final perUnit = m * 60 + s;
+              Navigator.pop(
+                ctx,
+                perUnit <= 0
+                    ? 0
+                    : UnitFormat.paceSecPerKm(perUnit.toDouble(), unit).round(),
+              );
             },
             child: Text(l10n.prefsSave),
           ),
