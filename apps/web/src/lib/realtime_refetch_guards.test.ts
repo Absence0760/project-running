@@ -20,6 +20,11 @@ const LIVE_EVENT = readFileSync(
 	'utf-8',
 );
 
+const NOTIFICATION_STORE = readFileSync(
+	resolve('src/lib/stores/notifications.svelte.ts'),
+	'utf-8',
+);
+
 /** The single `.on('postgres_changes', ...)` block naming `table`. */
 function handlerFor(source: string, table: string): string {
 	const start = source.indexOf('function subscribe()');
@@ -67,4 +72,53 @@ test('live/event: both refetchers are disposed on destroy', () => {
 	const teardown = LIVE_EVENT.slice(at, at + 400);
 	assert.match(teardown, /pingRefetcher\?\.dispose\(\)/);
 	assert.match(teardown, /resultsRefetcher\?\.dispose\(\)/);
+});
+
+/** The single `.on('postgres_changes', ...)` block for `event` in the store. */
+function storeHandlerFor(event: 'INSERT' | 'UPDATE' | 'DELETE'): string {
+	const start = NOTIFICATION_STORE.indexOf('subscribe(userId: string)');
+	assert.notEqual(start, -1, 'the store must build its subscription in subscribe()');
+	const end = NOTIFICATION_STORE.indexOf('.subscribe();', start);
+	const blocks = NOTIFICATION_STORE.slice(start, end)
+		.split('.on(')
+		.filter((b) => b.includes(`event: '${event}'`));
+	assert.equal(blocks.length, 1, `expected exactly one ${event} subscription`);
+	return blocks[0];
+}
+
+test('notifications: read and dismiss events coalesce into one count query', () => {
+	// "Mark all read" updates every unread row in one statement, and dismiss
+	// deletes a whole page — so these two handlers are called once per ROW
+	// cleared. Each used to run its own exact-count query.
+	for (const event of ['UPDATE', 'DELETE'] as const) {
+		const handler = storeHandlerFor(event);
+		assert.match(
+			handler,
+			/#refetcher\.trigger\(\)/,
+			`the ${event} handler must trigger the coalescing refetcher`,
+		);
+		assert.doesNotMatch(
+			handler,
+			/this\.refresh\(\)/,
+			`the ${event} handler must not run a count query per changed row`,
+		);
+	}
+});
+
+test('notifications: an arriving notification still bumps the badge locally', () => {
+	// The INSERT handler is per-notification by nature, and costs nothing —
+	// coalescing it would only delay the badge.
+	const handler = storeHandlerFor('INSERT');
+	assert.match(handler, /this\.unreadCount \+= 1/);
+	assert.doesNotMatch(handler, /#refetcher/);
+});
+
+test('notifications: tearing the channel down cancels any scheduled refetch', () => {
+	const at = NOTIFICATION_STORE.indexOf('unsubscribe() {');
+	assert.notEqual(at, -1);
+	assert.match(
+		NOTIFICATION_STORE.slice(at, at + 300),
+		/#refetcher\.dispose\(\)/,
+		'unsubscribe must dispose the refetcher so a pending timer cannot outlive the channel',
+	);
 });
