@@ -490,6 +490,12 @@ class _RunScreenState extends State<RunScreen> {
   // stop path uses it to resolve the saved run's visibility — the live
   // window's public opt-in must not silently outlive the run (issue #664).
   bool _liveBroadcastBegun = false;
+  // The `runs.concluded_at` stamp is owed for this run id and hasn't landed.
+  // Tracked separately from the broadcaster's attached state: an explicit
+  // stop-share detaches the pump whether or not its conclude call succeeded,
+  // so keying the stop path's retry off the broadcaster left a spectator on a
+  // frozen live feed for good when that call failed.
+  bool _liveConcludeOwed = false;
   // Drives the persistent live-share indicator on the recording chrome
   // (issue #613). Flipped true once the broadcaster is attached and false
   // only when the broadcast is torn down (run finish, or an explicit
@@ -1334,6 +1340,7 @@ class _RunScreenState extends State<RunScreen> {
         lb != null && lb.isActive) {
       try {
         await api.concludeLiveBroadcast(id).timeout(kBackendLoadTimeout);
+        _liveConcludeOwed = false;
       } catch (e) {
         debugPrint('concludeLiveBroadcast (stop-share) failed: $e');
       }
@@ -1385,6 +1392,7 @@ class _RunScreenState extends State<RunScreen> {
           .timeout(kBackendLoadTimeout);
       _liveBroadcaster!.attach(_runId!);
       _liveBroadcastBegun = true;
+      _liveConcludeOwed = true;
       _liveShareActive.value = true;
       return true;
     } catch (e) {
@@ -3118,7 +3126,9 @@ class _RunScreenState extends State<RunScreen> {
     //   1. Stamp runs.concluded_at so the spectator page shows a real
     //      conclusion instead of inferring "finished" from ping absence.
     //      Stamped while the stub is still readable so an open
-    //      spectator's ~15s poll can flip to the conclusion card.
+    //      spectator's ~15s poll can flip to the conclusion card. Driven by
+    //      [_liveConcludeOwed], so a mid-run stop-share whose stamp failed
+    //      gets its retry here.
     //   2. Detach the broadcaster so a stray late-arriving snapshot
     //      doesn't try to ping a concluded run id.
     // This is the ONLY teardown of the broadcast — navigating away or
@@ -3129,15 +3139,18 @@ class _RunScreenState extends State<RunScreen> {
     // must not silently outlive the run (issue #664).
     final lb = _liveBroadcaster;
     final broadcasterActiveAtStop = lb != null && lb.isActive;
-    if (broadcasterActiveAtStop) {
+    if (_liveConcludeOwed) {
       final api2 = widget.apiClient;
       if (api2 != null && api2.userId != null) {
         try {
           await api2.concludeLiveBroadcast(run.id).timeout(kBackendLoadTimeout);
+          _liveConcludeOwed = false;
         } catch (e) {
           debugPrint('concludeLiveBroadcast failed: $e');
         }
       }
+    }
+    if (broadcasterActiveAtStop) {
       lb.detach();
       _liveShareActive.value = false;
     }
@@ -3282,6 +3295,7 @@ class _RunScreenState extends State<RunScreen> {
     // never chose to share.
     _liveShareRequested = false;
     _liveBroadcastBegun = false;
+    _liveConcludeOwed = false;
     _liveShareActive.value = false;
     _pedometerRetries = 0;
     _gpsLost = false;

@@ -232,12 +232,13 @@ class _EventPhotosState extends State<EventPhotos> {
     setState(() => _uploading = true);
     try {
       final bytes = await file.readAsBytes();
-      final clean = stripJpegExif(Uint8List.fromList(bytes));
       final ext = extensionForFilename(file.name);
+      final contentType = contentTypeForExtension(ext);
+      final clean = stripImageExif(Uint8List.fromList(bytes), contentType);
       await widget.api.addRunPhoto(
         runId: runId,
         bytes: clean,
-        contentType: contentTypeForExtension(ext),
+        contentType: contentType,
         extension: ext,
         positionIdx: 0,
         eventId: widget.eventId,

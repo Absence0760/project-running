@@ -5469,6 +5469,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get coachReactionFailed => 'リアクションを保存できませんでした。もう一度お試しください。';
+
+  @override
   String get coachCopied => 'クリップボードにコピーしました';
 
   @override

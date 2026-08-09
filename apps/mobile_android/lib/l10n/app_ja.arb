@@ -1620,6 +1620,7 @@
   "coachNewConversationFailed": "新しい会話を開始できませんでした。",
   "coachOpenArchiveFailed": "アーカイブを開けませんでした。",
   "coachArchiveDeleteFailed": "アーカイブを削除できませんでした：{error}",
+  "coachReactionFailed": "リアクションを保存できませんでした。もう一度お試しください。",
   "coachCopied": "クリップボードにコピーしました",
   "settingsAccountTitle": "アカウント",
   "settingsAccountBackendNotConfigured": "バックエンドが設定されていません",

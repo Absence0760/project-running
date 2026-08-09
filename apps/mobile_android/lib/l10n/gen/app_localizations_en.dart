@@ -5748,6 +5748,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get coachReactionFailed => 'Couldn\'t save your reaction. Try again.';
+
+  @override
   String get coachCopied => 'Copied to clipboard';
 
   @override

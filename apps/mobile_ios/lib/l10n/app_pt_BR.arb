@@ -1620,6 +1620,7 @@
   "coachNewConversationFailed": "Não foi possível iniciar uma nova conversa.",
   "coachOpenArchiveFailed": "Não foi possível abrir o arquivo.",
   "coachArchiveDeleteFailed": "Não foi possível excluir o arquivo: {error}",
+  "coachReactionFailed": "Não foi possível salvar sua reação. Tente novamente.",
   "coachCopied": "Copiado para a área de transferência",
   "settingsAccountTitle": "Conta",
   "settingsAccountBackendNotConfigured": "Backend não configurado",
