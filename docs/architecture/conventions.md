@@ -703,6 +703,32 @@ Canonical button styles live in `apps/web/src/app.css` under the comma-separated
 
 The `/settings/upgrade`, `/login`, and `/` (landing) surfaces deliberately ship larger marketing-CTA buttons; those override the canonical sizes via Svelte-scoped local rules and are documented exceptions, not the pattern.
 
+## Web file pickers — a button drives the input, never a `<label>` wrapping it
+
+A native `<input type="file">` cannot be styled, so every picker hides it. The
+tempting shorthand — a `<label>` wrapping a `hidden` input — leaves the control
+with **no focusable element at all**: the input is out of the tab order and a
+label is not a control, so clicking the label is the only way to open the
+chooser. Four shipped that way (`/settings/integrations` twice,
+`/clubs/[slug]/events/[id]`'s results CSV import, and `ImportRoute`'s drop
+zone — whose own comment claimed keyboard users had a Browse button).
+
+The idiom is a real `<button type="button">` whose `onclick` forwards to a
+bound, off-screen input:
+
+```svelte
+<button type="button" class="my-btn" onclick={() => picker?.click()}>Choose file</button>
+<input bind:this={picker} type="file" accept=".csv" onchange={onPick} style="display: none" />
+```
+
+**Not extracted into a shared component**, deliberately: the button carries each
+surface's own component-scoped class (`.browse-btn`, `.import-file`, `.zip-btn`),
+and Svelte's scoped styles do not reach into a child component's markup, so a
+wrapper would force every caller to restyle or to leak its rules through
+`:global()`. What generalises is the guard —
+`a11y_picker_guards.test.ts` sweeps every template, bounding each `<label>` at
+its own closing tag before looking inside it.
+
 ## Svelte 5 `$effect` — never read state you write in the same effect
 
 A `$effect` that both reads AND writes the same `$state` rune builds a self-trigger loop: the write changes the value, the effect's dep set marks it dirty, the effect re-runs, the write resets it. When the effect is a "reset on prop change" body (`if (open) { foo = parseInitial(); ...; const anchor = foo ?? today; ... }`), the read inside `?? today` adds `foo` to the dep set; any later code path that writes `foo` (e.g. a click handler) re-triggers the reset, silently erasing the user's input.
@@ -1088,13 +1114,17 @@ Pairs with the "Test hygiene" section below — tests for a piece go in the **sa
 ## A value domain gets ONE vocabulary, and a destination gets a name of its own
 
 Two rules from the same failure — a user-facing name that more than one place
-was allowed to decide (decisions § 547).
+was allowed to decide (decisions § 547, generalised in § 566).
 
 **A closed value domain has exactly one catalogue namespace and one resolver.**
 When a column's value set is fixed by a CHECK constraint (`activity_type`,
-`workout_kind`, …), every surface that names a value resolves through the one
-helper — web `runs/activity_type.svelte.ts#activityTypeLabel`, mobile
-`activity_type_labels.dart#activityTypeLabel`. Do NOT mint
+`workout_kind`, `surface`, `join_policy`, `role`, an RSVP `status`, …), every
+surface that names a value resolves through the one helper — web
+`runs/activity_type.svelte.ts#activityTypeLabel` and
+`i18n/enum_labels.svelte.ts` (`routeSurfaceLabel` / `joinPolicyLabel` /
+`clubRoleLabel` / `rsvpStatusLabel`), mobile
+`activity_type_labels.dart#activityTypeLabel`. Register a new union in
+`i18n/enum_labels.ts` and the guard picks it up. Do NOT mint
 `<surface>.activity<Value>` keys for a picker, a filter chip and a detail
 header: seven such namespaces existed for five values and they disagreed
 *inside* a locale (German `hike` was both "Wandern" and "Wanderung"), and four
@@ -1110,9 +1140,21 @@ token "stroller" in every language. Corollaries:
   — so a new one fails wherever it lands, and an entry must say why the value
   cannot be resolved (an open vendor string like a FIT `sub_sport` can; a closed
   domain cannot).
+- **Never interpolate the stored token into the DOM.** `{route.surface}`,
+  `{club.join_policy}`, `{club.viewer_role}`, `{run.activity_type}` — nine such
+  renders shipped, and they read as English in all six locales while the page
+  around them was translated. `i18n/enum_vocabulary.test.ts` scans every
+  template for the shape in **text position only**: picking an icon, a class or
+  a prop off the value (`title={seg.role}`, `class="tl-{seg.role}"`) is
+  legitimate and never shown.
 - **Derive the value set, don't restate it.** The guards parse the CHECK out of
-  the migration, so widening the domain fails the build until every catalogue
-  carries the new key.
+  the migration or the union out of `types.ts`, so widening the domain fails the
+  build until every catalogue carries the new key.
+- **The key-shape sweep does not see abbreviations.** `clubHome.roleOptionDirector`
+  named `race_director` and no matcher keyed on the value can catch it; widening
+  the tail to any word swallows `plansPage.statusActive`. The blind spot is
+  pinned as a must-spare fixture rather than papered over — when you add a
+  vocabulary, hand-sweep for abbreviated duplicates once.
 - **An unrecognised value renders VERBATIM, never title-cased.** A title-cased
   token is indistinguishable from a real translation and hides the drift on
   exactly the surface where it would be noticed.
