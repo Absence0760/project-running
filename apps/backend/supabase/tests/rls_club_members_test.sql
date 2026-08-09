@@ -13,9 +13,12 @@
 --     race_director.
 --   - INSERT "self-request join request-policy clubs" — same shape
 --     with status='pending' and `join_policy = 'request'`.
---   - UPDATE "admins can change roles" — `is_club_admin`.
+--   - UPDATE "admins can change roles" — `is_club_admin`, and (20270507_001)
+--     the target row must not be the club owner's, nor may the new role be
+--     'owner'.
 --   - DELETE "users can leave clubs" — own row.
---   - DELETE "admins can manage members" — `is_club_admin`.
+--   - DELETE "admins can manage members" — `is_club_admin`, and the target row
+--     must not be the club owner's (20270507_001).
 --
 -- Invite-policy clubs are deliberately uncovered by the INSERT
 -- policies — admission only via the `join_club_by_token` SECURITY
@@ -27,7 +30,7 @@
 
 begin;
 
-select plan(10);
+select plan(14);
 
 -- ── Fixture ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -199,6 +202,61 @@ select is_empty(
      where club_id = '77777777-7777-7777-7777-777777770002'
        and user_id = '00000000-0000-0000-0000-000000dd0003' $$,
   'user can DELETE their own membership row (leave club)'
+);
+
+-- ── 20270507_001: an admin cannot turn on the club OWNER ──
+-- `is_club_admin` treats 'owner' and 'admin' identically, and the two admin
+-- policies never inspected the target row — so a delegated admin could demote
+-- or evict the real owner, stripping them of every admin-gated surface while
+-- keeping control themselves. The web Members tab already hid the controls for
+-- the owner row; the rule now lives in RLS.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000dd0002"}';
+
+-- 11. Demoting the owner is outside the policy's USING → silent no-op.
+update club_members
+  set role = 'member'
+  where club_id = '77777777-7777-7777-7777-777777770002'
+    and user_id = '00000000-0000-0000-0000-000000dd0001';
+select results_eq(
+  $$ select role from club_members
+     where club_id = '77777777-7777-7777-7777-777777770002'
+       and user_id = '00000000-0000-0000-0000-000000dd0001' $$,
+  $$ values ('owner'::text) $$,
+  'admin UPDATE on the club owner''s row is a no-op (owner keeps is_club_admin)'
+);
+
+-- 12. Evicting the owner is likewise outside USING.
+delete from club_members
+  where club_id = '77777777-7777-7777-7777-777777770002'
+    and user_id = '00000000-0000-0000-0000-000000dd0001';
+select results_eq(
+  $$ select count(*)::int from club_members
+     where club_id = '77777777-7777-7777-7777-777777770002'
+       and user_id = '00000000-0000-0000-0000-000000dd0001' $$,
+  $$ values (1) $$,
+  'admin DELETE of the club owner''s membership row removes nothing'
+);
+
+-- 13. The admin's own row IS within USING, so a self-promotion to 'owner'
+--     is caught by the WITH CHECK instead — a hard reject, not a no-op.
+select throws_ok(
+  $$ update club_members set role = 'owner'
+      where club_id = '77777777-7777-7777-7777-777777770002'
+        and user_id = '00000000-0000-0000-0000-000000dd0002' $$,
+  '42501',
+  null,
+  'admin cannot relabel themselves ''owner'' (no spoofed owner badge)'
+);
+
+-- 14. Positive control: ordinary moderation still works.
+delete from club_members
+  where club_id = '77777777-7777-7777-7777-777777770002'
+    and user_id = '00000000-0000-0000-0000-000000dd0004';
+select is_empty(
+  $$ select user_id from club_members
+     where club_id = '77777777-7777-7777-7777-777777770002'
+       and user_id = '00000000-0000-0000-0000-000000dd0004' $$,
+  'admin can still remove a non-owner member'
 );
 
 select * from finish();
