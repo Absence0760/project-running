@@ -2752,3 +2752,54 @@ test('every LLM-spending endpoint carries a per-user rate-limit bucket', () => {
 		);
 	}
 });
+
+test('plan publishers never copy the publisher private fields onto a template', () => {
+	// Reason: RLS has no column dimension, so the two template SELECT
+	// branches ("anyone reads public plan templates", "club members read
+	// club templates") expose every column of a published row. vdot and
+	// current_5k_seconds are the publisher's fitness proxies; plan-level
+	// notes is their own free text (injury history). Both publishers used
+	// to copy `notes` straight off the source plan, so the sanctioned
+	// button leaked it — not merely a crafted REST call. Migration
+	// 20270508_001 strips all three in a trigger, which is what actually
+	// holds; this guard keeps the clients honest so the row never carries
+	// the value in the first place.
+	const source = read(__dirname, 'core/data.ts');
+	const publishers = ['publishPlanToLibrary', 'publishPlanAsTemplate'];
+	for (const fn of publishers) {
+		const start = source.indexOf(`export async function ${fn}(`);
+		assert.ok(start > 0, `${fn} not found — rename it here too.`);
+		// The insert body ends at the first `.select(` chained after it.
+		const body = source.slice(start, source.indexOf('.select(', start));
+		for (const col of ['vdot', 'current_5k_seconds', 'notes']) {
+			assert.match(
+				body,
+				new RegExp(`${col}:\\s*null`),
+				`${fn} must set ${col} to null on the template row it inserts.`,
+			);
+			assert.doesNotMatch(
+				body,
+				new RegExp(`${col}:\\s*src\\.`),
+				`${fn} must not copy ${col} from the source plan onto a template.`,
+			);
+		}
+	}
+});
+
+test('the public plan library reader does not select the private template columns', () => {
+	// Reason: fetchPublicPlanLibrary does select('*'), which is only safe
+	// because 20270508_001 guarantees a template row holds nulls in those
+	// columns. If a future edit names them explicitly it is reintroducing
+	// the read side of the leak.
+	const source = read(__dirname, 'core/data.ts');
+	const start = source.indexOf('export async function fetchPublicPlanLibrary(');
+	assert.ok(start > 0, 'fetchPublicPlanLibrary not found — rename it here too.');
+	const body = source.slice(start, source.indexOf('\n}', start));
+	for (const col of ['vdot', 'current_5k_seconds']) {
+		assert.doesNotMatch(
+			body,
+			new RegExp(`['"\`][^'"\`]*\\b${col}\\b`),
+			`fetchPublicPlanLibrary must not name ${col} in its projection.`,
+		);
+	}
+});

@@ -4292,7 +4292,7 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 			vdot: null,
 			current_5k_seconds: null,
 			status: 'completed',
-			notes: src.notes,
+			notes: null,
 			is_template: true,
 			is_public_template: true,
 			club_id: null,
@@ -4404,12 +4404,13 @@ export async function publishPlanAsTemplate(
 	}
 	const src = source.plan;
 
-	// vdot + current_5k_seconds are the publisher's private fitness
-	// measurements — derived proxies for age, fitness, and recent 5 km
-	// performance. They aren't template-design values; copying them
-	// into a row that every club member can SELECT leaks personal
-	// fitness data. Strip on publish; the cloning RPC also strips on
-	// the read side as defence-in-depth (migration 20260721_001).
+	// vdot, current_5k_seconds and notes are the publisher's private
+	// fields — fitness proxies and their own free text (training
+	// constraints, injury history). They aren't template-design values;
+	// copying them into a row every club member can SELECT leaks
+	// personal data. Stripped here and enforced by the trigger in
+	// migration 20270508_001, which is what actually holds — this
+	// insert is reachable by REST without it.
 	const { data: tmpl, error: planErr } = await supabase
 		.from('training_plans')
 		.insert({
@@ -4425,7 +4426,7 @@ export async function publishPlanAsTemplate(
 			current_5k_seconds: null,
 			status: 'completed',
 			source: src.source ?? 'manual',
-			notes: src.notes,
+			notes: null,
 			rules: src.rules,
 			is_template: true,
 			club_id: clubId,
