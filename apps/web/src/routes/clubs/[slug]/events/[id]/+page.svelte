@@ -152,6 +152,10 @@
 	let route = $state<Route | null>(null);
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
+	// A failed instance read leaves every panel below holding the previous
+	// instance's rows. Registration in particular must not fall back to
+	// "not registered" — that is a paid slot being offered for sale twice.
+	let instanceError = $state<string | null>(null);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 	let draftPost = $state('');
@@ -423,6 +427,10 @@
 	// Registration state for a priced event (free events keep the RSVP tri).
 	let regState = $derived.by(() => {
 		if (!pricing || !event || !activeInstance) return null;
+		// With the RSVP read failed, `viewerHasPaidSlot` is false because we
+		// could not find out, not because the viewer has no slot — offering
+		// the sale again here would take a second payment for the same place.
+		if (instanceError) return 'unknown';
 		return registrationOpen(
 			new Date(nowTick),
 			activeInstance,
@@ -486,7 +494,20 @@
 		}
 	}
 
+	// Never rethrows: most callers already wrap their own action in a
+	// try/catch whose message names that action ("Couldn't submit claim"),
+	// and a refresh failure reported under one of those would be wrong.
 	async function reloadInstance() {
+		if (!event || !club || !activeInstance) return;
+		try {
+			await readInstance();
+			instanceError = null;
+		} catch (e) {
+			instanceError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	async function readInstance() {
 		if (!event || !club || !activeInstance) return;
 		const res = await Promise.all([
 			fetchEventAttendees(event.id, activeInstance, { limit: ROSTER_PAGE_SIZE }),
@@ -1578,6 +1599,20 @@
 				{/if}
 			</div>
 			<div class="hero-side">
+				{#if instanceError}
+					<div class="error-banner instance-error" role="alert" data-testid="club-event-instance-error">
+						<span class="material-symbols" aria-hidden="true">error</span>
+						<div>
+							<strong>{m('clubEvent.instanceLoadError')}</strong>
+							<span class="error-detail">{instanceError}</span>
+						</div>
+						<button
+							class="btn btn-outline"
+							onclick={reloadInstance}
+							data-testid="club-event-instance-retry">{m('clubEvent.retry')}</button
+						>
+					</div>
+				{/if}
 				{#if activeException}
 					<div class="cancelled-banner" role="status">
 						<span class="material-symbols" aria-hidden="true">event_busy</span>
@@ -1627,6 +1662,19 @@
 							<a class="btn btn-primary register-cta" href={`/login?next=${encodeURIComponent($page.url.pathname)}`}>
 								{m('clubEvent.registerSignInFirst')}
 							</a>
+						{:else if regState === 'unknown'}
+							<div class="register-status closed" role="alert" data-testid="register-unknown">
+								<span class="material-symbols" aria-hidden="true">error</span>
+								{m('clubEvent.registrationUnknown')}
+							</div>
+							<button
+								type="button"
+								class="btn btn-outline register-cta"
+								onclick={reloadInstance}
+								data-testid="register-unknown-retry"
+							>
+								{m('clubEvent.retry')}
+							</button>
 						{:else if regState === 'already_registered'}
 							<div class="register-status registered" role="status">
 								<span class="material-symbols" aria-hidden="true">check_circle</span>
@@ -3221,6 +3269,9 @@
 	.error-banner .material-symbols {
 		color: var(--color-danger-text);
 		font-size: 1.4rem;
+	}
+	.instance-error {
+		margin-block-end: var(--space-md);
 	}
 
 	.empty-card {

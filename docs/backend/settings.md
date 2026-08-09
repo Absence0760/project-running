@@ -184,7 +184,13 @@ Some per-device prefs are **never** synced to `user_settings` / `user_device_set
   visit still loads. Writes apply to the cache first; on push failure
   the change is queued under
   `settings_cache_pending_<userId>_<deviceId>` and replayed against a
-  fresh server bag on the next successful refresh. Cache keys are
+  fresh server bag on the next successful refresh. **Only a transport
+  failure queues** ([`settings_write.ts`](../../apps/web/src/lib/settings/settings_write.ts),
+  decisions §559): a write PostgREST *refused* — an RLS denial, a CHECK
+  violation, an expired JWT — rolls the optimistic cache entry back,
+  rejects out of `updateUniversal` / `updateDevice`, and never enters the
+  queue, so the page shows the failure instead of "Saved" and the drain
+  can't retry a doomed write forever. Cache keys are
   user- + device-scoped, and the auth store's `logout()` calls
   `dropUserCache(userId)` so a subsequent sign-in as a different user
   on the same browser can't read or replay against another account.

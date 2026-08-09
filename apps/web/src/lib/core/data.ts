@@ -3427,11 +3427,15 @@ export async function fetchEventRsvpSummary(
 	instanceStart: string
 ): Promise<EventRsvpSummary> {
 	const viewerId = auth.user?.id ?? null;
-	const { data } = await supabase
+	const { data, error } = await supabase
 		.from(TABLES.event_attendees)
 		.select('user_id, status')
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart);
+	// A failed read must not come back as a zeroed summary: `viewerStatus`
+	// null is what tells the page the viewer has no slot, so a swallowed
+	// error re-shows "Register for £X" to someone who has already paid.
+	if (error) throw error;
 	const summary: EventRsvpSummary = {
 		going: 0,
 		maybe: 0,
