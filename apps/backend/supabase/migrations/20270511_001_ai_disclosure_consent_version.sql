@@ -64,8 +64,8 @@ as $$ select 2::smallint $$;
 
 comment on function ai_disclosure_current_version() is
   'Highest known AI-disclosure version. The TS mirror is '
-  'AI_DISCLOSURE_CURRENT_VERSION in apps/web/src/lib/coach/ai_disclosure.ts; '
-  'ai_disclosure_version_parity.test.ts fails the build if they drift.';
+  'AI_DISCLOSURE_CURRENT_VERSION in apps/web/src/lib/core/ai_disclosure.ts; '
+  'its ai_disclosure.test.ts fails the build if the two drift.';
 
 revoke all on function ai_disclosure_current_version() from public, anon;
 grant execute on function ai_disclosure_current_version() to authenticated, service_role;
