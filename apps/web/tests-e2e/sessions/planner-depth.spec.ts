@@ -313,7 +313,7 @@ test.describe('/sessions — planner depth', () => {
 		expect(new Set(results.map((r) => r.item_id)).size).toBe(1);
 	});
 
-	test('copy-share-link flips a private plan public before copying', async ({ page, context }) => {
+	test('copy-share-link asks before it flips a private plan public', async ({ page, context }) => {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
 		const admin = getAdminClient();
@@ -341,6 +341,14 @@ test.describe('/sessions — planner depth', () => {
 		await expect(page.locator('.visibility-chip')).toHaveText(/Private/i);
 
 		await page.getByTestId('session-copy-share-link').click();
+
+		// Copying a link on a PRIVATE plan publishes it, so it is gated by a
+		// consent dialog (decisions §555). Confirm it explicitly.
+		const shareDialog = page.getByTestId('session-share-confirm-dialog');
+		await expect(shareDialog).toBeVisible({ timeout: 5_000 });
+		await expect(shareDialog).toContainText('Make this session plan public?');
+		await shareDialog.locator('button', { hasText: /Make public & copy link/ }).click();
+
 		await expect(page.getByText('Share link copied.')).toBeVisible({ timeout: 10_000 });
 
 		// The chip flips to Public in place (the affordance auto-publishes a

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -40,6 +41,33 @@ test.describe('/runs — load failure', () => {
 		// list resolves and the error card clears.
 		await page.getByTestId('runs-load-error-retry').click();
 		await expect(page.getByTestId('runs-load-error')).toHaveCount(0, { timeout: 15_000 });
+	});
+
+	// The Load-more affordance only exists past the first page, and the
+	// seed does not give USER_A 50 runs. Plant enough to force page two,
+	// tagged so the cleanup cannot touch anything else.
+	const PAGE_SIZE = 50;
+	const marker = `e2e-loadmore-${Date.now()}`;
+	const plantedIds: string[] = [];
+
+	test.beforeAll(async () => {
+		const admin = getAdminClient();
+		const rows = Array.from({ length: PAGE_SIZE + 5 }, (_, i) => ({
+			user_id: USER_A.id,
+			title: `${marker}-${i}`,
+			started_at: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+			distance_m: 5000,
+			duration_s: 1800,
+			source: 'manual'
+		}));
+		const { data, error } = await admin.from('runs').insert(rows).select('id');
+		if (error) throw error;
+		for (const r of data as { id: string }[]) plantedIds.push(r.id);
+	});
+
+	test.afterAll(async () => {
+		if (!plantedIds.length) return;
+		await getAdminClient().from('runs').delete().in('id', plantedIds);
 	});
 
 	test('a failed Load more keeps the button and says so, instead of ending the list', async ({
