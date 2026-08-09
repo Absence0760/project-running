@@ -6,7 +6,14 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
+	import AiDisclosureNotice from '$lib/components/AiDisclosureNotice.svelte';
 	import { supabase } from '$lib/core/supabase';
+	import {
+		AI_DISCLOSURE_CURRENT_VERSION,
+		aiDisclosureFromProfileRow,
+		checkAiDisclosure,
+		type AiDisclosureRecord,
+	} from '$lib/core/ai_disclosure';
 	import { changePassword, type PasswordChangeReason } from '$lib/core/password_change';
 	import { PASSWORD_MIN_LENGTH } from '$lib/core/auth_rules';
 	import { TEXT_LIMITS } from '$lib/core/text_limits';
@@ -69,8 +76,18 @@
 	// (the DB lock trigger only protects user_profiles.health_data_consent_at).
 	let healthDataConsent = $state(false);
 	let healthDataConsentAt = $state<string | null>(null);
-	let coachConsentAt = $state<string | null>(null);
+	// The versioned AI-processing consent record (decisions.md § 568). This
+	// is the surface where a user who accepted an older disclosure reads the
+	// widened one and accepts it — the AI route assistant refuses until they
+	// do, and a stale acceptance is not something the Coach surface should
+	// nag about (it covers the Coach fine).
+	let aiDisclosure = $state<AiDisclosureRecord>({ version: null, acceptedAt: null });
+	let aiConsentGranted = $derived(checkAiDisclosure(aiDisclosure, 1).ok);
+	let aiConsentStale = $derived(
+		aiConsentGranted && !checkAiDisclosure(aiDisclosure, AI_DISCLOSURE_CURRENT_VERSION).ok,
+	);
 	let coachConsentWithdrawing = $state(false);
+	let aiConsentAccepting = $state(false);
 	let saving = $state(false);
 	let saved = $state(false);
 	let exporting = $state(false);
@@ -228,7 +245,7 @@
 		handleInitial = (prof?.handle as string | null) ?? '';
 		handle = handleInitial;
 		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
-		coachConsentAt = (prof?.coach_consent_at as string | null) ?? null;
+		aiDisclosure = aiDisclosureFromProfileRow(prof);
 		// Pre-tick the box if consent is already on record so a user can
 		// edit DOB / HR without re-consenting on every visit.
 		healthDataConsent = healthDataConsentAt != null;
@@ -240,17 +257,39 @@
 		if (coachConsentWithdrawing) return;
 		coachConsentWithdrawing = true;
 		try {
-			// Sanctioned inverse of record_coach_consent(): clears the
-			// server-held stamp. The coach handler's 403 gate then re-blocks
-			// the Coach until the user re-consents on the Coach surface.
-			const { error } = await supabase.rpc('withdraw_coach_consent');
+			// Sanctioned inverse of record_ai_disclosure_consent(): clears the
+			// whole server-held record. Art 7(3) — there is one acceptance of
+			// one disclosure, so withdrawal is all of it, and every AI
+			// endpoint's 403 gate re-engages until the user consents again.
+			const { error } = await supabase.rpc('withdraw_ai_disclosure_consent');
 			if (error) throw new Error(error.message);
-			coachConsentAt = null;
+			aiDisclosure = { version: null, acceptedAt: null };
 			showToast(m('settingsAccount.coachConsentWithdrawn'), 'success');
 		} catch (e) {
 			showToast(m('settingsAccount.saveFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			coachConsentWithdrawing = false;
+		}
+	}
+
+	async function acceptUpdatedAiDisclosure() {
+		if (aiConsentAccepting) return;
+		aiConsentAccepting = true;
+		try {
+			const { data, error } = await supabase
+				.rpc('record_ai_disclosure_consent', { p_version: AI_DISCLOSURE_CURRENT_VERSION })
+				.maybeSingle();
+			if (error) throw new Error(error.message);
+			const row = data as { version: number | null; accepted_at: string | null } | null;
+			aiDisclosure = {
+				version: row?.version ?? AI_DISCLOSURE_CURRENT_VERSION,
+				acceptedAt: row?.accepted_at ?? new Date().toISOString(),
+			};
+			showToast(m('settingsAccount.aiConsentUpdatedToast'), 'success');
+		} catch (e) {
+			showToast(m('settingsAccount.saveFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			aiConsentAccepting = false;
 		}
 	}
 
@@ -1324,9 +1363,25 @@
 
 	<section class="card">
 		<h2>{m('settingsAccount.coachConsentHeading')}</h2>
-		{#if coachConsentAt}
+		{#if aiConsentGranted}
 			<p class="section-desc">{m('settingsAccount.coachConsentActive')}</p>
+			{#if aiConsentStale}
+				<p class="section-desc" role="status">{m('settingsAccount.aiConsentUpdatedNotice')}</p>
+				<AiDisclosureNotice />
+			{/if}
 			<div class="btn-row">
+				{#if aiConsentStale}
+					<button
+						class="btn btn-primary"
+						onclick={acceptUpdatedAiDisclosure}
+						disabled={aiConsentAccepting}
+					>
+						<span class="material-symbols">verified_user</span>
+						{aiConsentAccepting
+							? m('settingsAccount.aiConsentAccepting')
+							: m('settingsAccount.aiConsentAcceptUpdate')}
+					</button>
+				{/if}
 				<button
 					class="btn btn-outline"
 					onclick={withdrawCoachConsent}

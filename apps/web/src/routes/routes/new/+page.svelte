@@ -451,11 +451,13 @@
 				nlError =
 					err.kind === 'upgrade'
 						? m('routeNew.aiRequestProOnly')
-						: err.kind === 'not_understood'
-							? m('routeNew.aiRequestNotUnderstood')
-							: err.kind === 'not_authenticated'
-								? m('routeNew.aiRequestSignedOut')
-								: m('routeNew.aiRequestUnavailable');
+						: err.kind === 'consent'
+							? m('routeNew.aiRequestConsentRequired')
+							: err.kind === 'not_understood'
+								? m('routeNew.aiRequestNotUnderstood')
+								: err.kind === 'not_authenticated'
+									? m('routeNew.aiRequestSignedOut')
+									: m('routeNew.aiRequestUnavailable');
 			} else {
 				nlError = m('routeNew.aiRequestUnavailable');
 			}

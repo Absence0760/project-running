@@ -2512,6 +2512,37 @@ test('the AI route endpoints gate on the widened disclosure, above the Coach ver
 	}
 });
 
+test('the AI route clients tell a consent gap apart from the Pro paywall', () => {
+	// Reason: issue #734. Both gates answer 403 on these endpoints. A client
+	// that reads the status alone shows the Pro upsell to someone whose
+	// actual problem is a missing consent record — selling them something
+	// that would not unlock the feature. The body's `code` is the
+	// discriminator, so each client must read it.
+	for (const file of [
+		'src/lib/routes/route_request_client.ts',
+		'src/lib/routes/route_describe_client.ts',
+	]) {
+		const source = read(file);
+		assert.match(
+			source,
+			/AI_DISCLOSURE_ERROR/,
+			`${file} must branch on the AI-disclosure code, not on the 403 status alone.`,
+		);
+	}
+	// The pages must then render the consent-specific copy rather than the
+	// generic failure banner.
+	assert.match(
+		read('src/routes/routes/new/+page.svelte'),
+		/kind === 'consent'[\s\S]{0,120}aiRequestConsentRequired/,
+		'/routes/new must render the consent copy for a consent denial.',
+	);
+	assert.match(
+		read('src/routes/routes/[id]/+page.svelte'),
+		/AI_DISCLOSURE_ERROR[\s\S]{0,160}describeConsentRequired/,
+		'/routes/[id] must render the consent copy for a consent denial.',
+	);
+});
+
 test('Nominatim fallback uses a reachable contact email (no protomaps placeholder)', () => {
 	// Reason: audit/third-party-data-flows (2026-05-25). The
 	// Nominatim `email=` parameter is the usage-policy contact path

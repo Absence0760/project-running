@@ -8,6 +8,14 @@
 	import { supabase } from '$lib/core/supabase';
 	import { guidedRunLibrary, type GuidedRun } from '$lib/training/guided_runs';
 	import { coachEnabled } from '$lib/coach/coach_flag';
+	import AiDisclosureNotice from '$lib/components/AiDisclosureNotice.svelte';
+	import {
+		AI_DISCLOSURE_CURRENT_VERSION,
+		AI_DISCLOSURE_VERSION_COACH,
+		aiDisclosureFromProfileRow,
+		checkAiDisclosure,
+		type AiDisclosureRecord,
+	} from '$lib/core/ai_disclosure';
 
 	// When the Coach is off (rock-bottom deploy, ANTHROPIC_API_KEY unset → the
 	// chat would 503) the chat surface is replaced by a "coming soon" notice.
@@ -28,13 +36,21 @@
 	// HR zones, recent runs) to Anthropic, a US-based sub-processor.
 	// Opening the page is not an affirmative consent act — gate the
 	// chat behind a first-use disclosure until the user clicks accept,
-	// at which point we stamp `coach_consent_at` on user_profiles.
-	// See audit/gdpr (2026-05-25).
-	let coachConsentAt = $state<string | null>(null);
+	// at which point we record the versioned consent on user_profiles.
+	// See audit/gdpr (2026-05-25) and decisions.md § 568.
+	//
+	// The chat is gated at the COACH minimum, not the current version: a
+	// user who accepted the older Coach-only disclosure consented to
+	// exactly this, and re-prompting them here to unlock a different
+	// feature would be bundling. The widened acceptance is offered where
+	// the wider feature is (Settings → Account).
+	let aiDisclosure = $state<AiDisclosureRecord>({ version: null, acceptedAt: null });
 	let coachConsentChecked = $state(false);
 	let coachConsentSaving = $state(false);
 	let coachConsentError = $state('');
-	let coachConsentDecided = $derived(coachConsentChecked && coachConsentAt != null);
+	let coachConsentDecided = $derived(
+		coachConsentChecked && checkAiDisclosure(aiDisclosure, AI_DISCLOSURE_VERSION_COACH).ok,
+	);
 
 	// Read `?plan=<id>` from the URL on first load and whenever the param
 	// changes (e.g. via the deep link from /plans/[id]). When absent, we
@@ -65,25 +81,20 @@
 		// `coachConsentDecided`, so a missing row keeps the disclosure
 		// modal in front of the user until they accept.
 		try {
-			// user_profiles.coach_consent_at is not in the public-
-			// safe column grant list (migration 20260707_001), so a
-			// direct `.select('coach_consent_at')` returns null for
-			// authenticated callers. Go through the SECURITY DEFINER
-			// `get_my_profile()` RPC instead — same pattern as the
-			// other self-row reads.
-			// `.maybeSingle()` on a SetofOptions RPC return narrows to
-			// `{}` in supabase-js v2.106's generated types — cast to
-			// the shape we know `get_my_profile` produces.
+			// The consent columns are not in the public-safe column
+			// grant list (migration 20260707_001), so a direct
+			// `.select()` returns null for authenticated callers. Go
+			// through the SECURITY DEFINER `get_my_profile()` RPC
+			// instead — same pattern as the other self-row reads.
 			const { data: prof } = await supabase
 				.rpc('get_my_profile')
 				.maybeSingle();
-			const row = prof as { coach_consent_at: string | null } | null;
-			coachConsentAt = row?.coach_consent_at ?? null;
+			aiDisclosure = aiDisclosureFromProfileRow(prof);
 		} catch (_) {
 			// Failed to read consent state — fail closed so we
 			// never accidentally render the chat without an
 			// affirmative grant.
-			coachConsentAt = null;
+			aiDisclosure = { version: null, acceptedAt: null };
 		}
 		coachConsentChecked = true;
 		try {
@@ -100,12 +111,21 @@
 		coachConsentSaving = true;
 		coachConsentError = '';
 		try {
-			// Server-stamped, first-stamp-wins: record_coach_consent() sets
-			// now() on the server (not a client-chosen, backdatable value)
-			// and direct writes to coach_consent_at are blocked at the DB.
-			const { data, error } = await supabase.rpc('record_coach_consent');
+			// Server-stamped and monotone: record_ai_disclosure_consent()
+			// sets now() on the server (not a client-chosen, backdatable
+			// value) and direct writes to the consent columns are blocked
+			// at the DB. The version recorded is the one this build just
+			// rendered — the user is shown the current disclosure here, so
+			// accepting it grants the current scope, not a narrower one.
+			const { data, error } = await supabase
+				.rpc('record_ai_disclosure_consent', { p_version: AI_DISCLOSURE_CURRENT_VERSION })
+				.maybeSingle();
 			if (error) throw new Error(error.message);
-			coachConsentAt = (data as string | null) ?? new Date().toISOString();
+			const row = data as { version: number | null; accepted_at: string | null } | null;
+			aiDisclosure = {
+				version: row?.version ?? AI_DISCLOSURE_CURRENT_VERSION,
+				acceptedAt: row?.accepted_at ?? new Date().toISOString(),
+			};
 		} catch (e) {
 			coachConsentError = m('coachPage.consentRecordError', { error: e instanceof Error ? e.message : String(e) });
 		} finally {
@@ -208,18 +228,7 @@
 			-->
 			<div class="coach-consent" role="dialog" tabindex="-1" aria-labelledby="coach-consent-heading">
 				<h2 id="coach-consent-heading">{m('coachPage.consentHeading')}</h2>
-				<p>
-					{m('coachPage.consentIntroPrefix')}<strong>Anthropic</strong>{m('coachPage.consentIntroSuffix')}
-				</p>
-				<ul>
-					<li>{m('coachPage.consentBulletProfile')}</li>
-					<li>{m('coachPage.consentBulletRuns')}</li>
-					<li>{m('coachPage.consentBulletPlan')}</li>
-					<li>{m('coachPage.consentBulletMessages')}</li>
-				</ul>
-				<p>
-					{m('coachPage.consentTermsPrefix')}<a href="/privacy">{m('coachPage.consentPrivacyLink')}</a>{m('coachPage.consentTermsSuffix')}
-				</p>
+				<AiDisclosureNotice />
 				<p>
 					{m('coachPage.consentActionPrefix')}<strong>{m('coachPage.consentActionEmphasis')}</strong>{m('coachPage.consentActionSuffix')}
 				</p>
