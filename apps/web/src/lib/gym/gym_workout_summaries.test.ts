@@ -7,7 +7,7 @@ import { RunningPrTracker, normaliseExerciseName, type GymSetLike } from './gym_
  *
  * /gym used to derive its PR badges and row stats in the browser from every
  * gym_sets row the account held — an unbounded read PostgREST truncates at
- * 1000 rows. Migration 20270515_001 moved the aggregation into SQL. The PR
+ * 1000 rows. Migration 20270510_001 moved the aggregation into SQL. The PR
  * definition still lives in `gym_prs.ts` (mirrored in `gym_prs.dart`), so the
  * SQL is a mirror and can drift from it silently.
  *

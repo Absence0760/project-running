@@ -8832,7 +8832,7 @@ export interface GymWorkoutSummary {
 }
 
 /// Per-workout PR flags + exercise counts for the /gym list, aggregated by the
-/// `gym_workout_summaries` RPC (migration 20270515_001).
+/// `gym_workout_summaries` RPC (migration 20270510_001).
 ///
 /// /gym used to answer both questions in the browser from every gym_sets row
 /// the account held — an unbounded read PostgREST truncates at 1000 rows, so

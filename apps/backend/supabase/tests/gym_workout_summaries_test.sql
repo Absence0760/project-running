@@ -1,5 +1,5 @@
 -- pgtap suite for `gym_workout_summaries` + `gym_has_weighted_sets`
--- (migration 20270515_001).
+-- (migration 20270510_001).
 --
 -- The SQL half of the drift pin. `apps/web/src/lib/gym/gym_workout_summaries.
 -- test.ts` builds the SAME fixture and asserts the SAME expected answer by
