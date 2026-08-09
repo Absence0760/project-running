@@ -127,6 +127,25 @@ test.describe('/routes — Import route modal', () => {
 		}
 	});
 
+	test('the Browse-files picker opens the file chooser from the keyboard', async ({ page }) => {
+		// It was a <label> wrapping a `hidden` input: no focusable element in
+		// the drop zone at all, so the picker was mouse-only — while the drop
+		// zone's own comment claimed keyboard users had a Browse button.
+		await page.goto('/routes');
+		await page.getByRole('button', { name: /Import/ }).first().click();
+		await expect(page.locator('[aria-label="Route file drop zone"]')).toBeVisible({
+			timeout: 5_000
+		});
+
+		const browse = page.getByRole('button', { name: 'Browse files' });
+		await browse.focus();
+		await expect(browse).toBeFocused();
+
+		const chooser = page.waitForEvent('filechooser', { timeout: 10_000 });
+		await page.keyboard.press('Enter');
+		expect(await chooser).toBeTruthy();
+	});
+
 	test('GPX import: drop a file → preview → Save → land on /routes/[new-id]', async ({
 		page
 	}) => {
@@ -139,9 +158,9 @@ test.describe('/routes — Import route modal', () => {
 		const dropZone = page.locator('[aria-label="Route file drop zone"]');
 		await expect(dropZone).toBeVisible({ timeout: 5_000 });
 
-		// The hidden <input type="file"> inside the Browse-button
-		// label is what setInputFiles drives. Use buffer-based upload
-		// so we don't need an actual fixture file on disk.
+		// The off-screen <input type="file"> the Browse button drives is
+		// what setInputFiles targets. Use buffer-based upload so we don't
+		// need an actual fixture file on disk.
 		await page.locator('input[type="file"]').setInputFiles({
 			name: 'e2e-import-route.gpx',
 			mimeType: 'application/gpx+xml',

@@ -9,6 +9,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
@@ -399,9 +400,9 @@
 				<div class="select-group">
 					<select bind:value={surfaceFilter} class="toolbar-select" aria-label={m('routesPage.surfaceLabel')}>
 						<option value="any">{m('routesPage.surfaceAny')}</option>
-						<option value="road">{m('routesPage.surfaceRoad')}</option>
-						<option value="trail">{m('routesPage.surfaceTrail')}</option>
-						<option value="mixed">{m('routesPage.surfaceMixed')}</option>
+						<option value="road">{routeSurfaceLabel('road')}</option>
+						<option value="trail">{routeSurfaceLabel('trail')}</option>
+						<option value="mixed">{routeSurfaceLabel('mixed')}</option>
 					</select>
 					<select bind:value={distanceFilter} class="toolbar-select" aria-label={m('routesPage.distanceLabel')}>
 						<option value="any">{m('routesPage.distanceAny')}</option>
@@ -507,8 +508,10 @@
 										<span class="meta-sep">&middot;</span>
 										<span>{m('routesPage.elevation', { m: route.elevation_m })}</span>
 									{/if}
-									<span class="meta-sep">&middot;</span>
-									<span class="surface-tag">{route.surface}</span>
+									{#if route.surface}
+										<span class="meta-sep">&middot;</span>
+										<span class="surface-tag">{routeSurfaceLabel(route.surface)}</span>
+									{/if}
 								</div>
 							</div>
 						</a>

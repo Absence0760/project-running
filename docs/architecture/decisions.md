@@ -7984,3 +7984,76 @@ A second column (`route_ai_consent_at`) was the obvious next answer and is also 
 Three smaller calls fall out of it. **Unknown versions deny.** A stored version above what the build knows is treated as no consent at all, not as "more than enough" — we cannot render a disclosure we do not have, so we cannot assert it was made; the denial is logged with its reason so version skew is distinguishable from a genuine refusal rather than looking like a user problem. **`BYPASS_PAYWALL` does not reach this gate.** It exists so a developer can skip a billing check locally; a lawful basis for sending a real person's data to a real sub-processor is not a billing check, and the two route handlers honour the bypass for the tier check on the line above while ignoring it here. **The Coach surface is gated at v1, not at the current version.** A user who accepted the Coach disclosure consented to precisely what the Coach does; re-prompting them there to unlock a feature they were not asking for is bundling. The widened acceptance is offered where the wider feature lives — Settings → Account — and the route endpoints' 403 carries `code: "ai_disclosure_required"` so the client points there instead of showing the Pro upsell that a bare 403 would have implied.
 
 The disclosure text itself now lives in one component rendered by both hosts, because two surfaces writing the same consent record while describing different processing is the same defect one layer up. Counsel / CISO sign-off on the v2 copy is a pre-deploy checklist item, not a reason to leave the gate unwritten (§ 150).
+
+## 572. § 547's one-vocabulary rule, generalised off the `types.ts` unions — and the render nobody had thought to guard
+
+**Date:** 2026-08-09
+
+§ 547 gave `runs.activity_type` one namespace and one resolver after seven had
+drifted apart. Issue #734's carryover found the same failure four more times,
+plus a mode of it the § 547 guard was not built to see.
+
+**The unguarded mode: the raw token, straight into the DOM.** Nine templates
+interpolated a stored value with no resolver anywhere in the path —
+`{route.surface}` on `/routes`, `/routes/[id]`, `/segments/[id]`,
+`/share/route/[id]`, the club route list, the explorer and the heatmap;
+`{club.join_policy}` and `{club.viewer_role}`; `{run.activity_type}` twice on a
+club event, at a call site where the canonical `activityTypeLabel()` already
+existed and simply was not imported; and `{a.status}` on its attendee list. A
+German or Japanese reader got "road", "invite", "race_director", "stroller",
+"waitlisted" inside otherwise translated pages. § 547's guard scans catalogue
+*key names*, so a surface that never asked the catalogue anything was invisible
+to it. `/clubs/[slug]` was worse than invisible: it hand-formatted a role with
+`m.role.replace('_', ' ')`, which is § 547's hand-capitalisation defect wearing
+a different function.
+
+**Where a vocabulary did exist it existed more than once**, and the six
+measured within-locale disagreements read exactly like § 547's: Spanish `road`
+was "Asfalto" on the route builder and "Carretera" in the routes filter,
+Brazilian `road` "Asfalto" and "Estrada"; French `going` "J'y vais" on an event
+and "Participe" on the club home, German "Zugesagt" and "Nimmt teil", Japanese
+"参加する" and "参加". Eleven duplicate keys across four unions, deleted.
+
+**The registry, and why it is one file rather than four.** § 547's shape —
+a pure `<name>.ts` beside a rune-carrying `<name>.svelte.ts` — is right for
+`activity_type`, which also owns icons and a value order every picker follows.
+Repeating it for `RouteSurface`, `JoinPolicy`, `ClubRole` and `RsvpStatus`
+would be eight files whose only content is a list. Instead `i18n/enum_labels.ts`
+registers the unions and `enum_labels.svelte.ts` exposes one resolver each, and
+the guard iterates the registry: adding a union is one line plus its keys, and
+it is guarded from that moment. `activity_type` deliberately stays where it is —
+moving it would churn thirty call sites to no benefit, and its resolver's
+contract is identical.
+
+**The value domain is derived from `types.ts`, not the migration.** § 547
+parsed the CHECK because `activity_type`'s union and its CHECK are one column.
+Two of the four here are not: `segments.surface` shares `RouteSurface` with
+`routes.surface`, and `event_attendees.status` has no CHECK at all —
+`waitlisted` is written by a trigger. The union declaration is what every one
+of them actually mirrors, and `check_constraint_unions.mjs` already pins the
+unions that do have a CHECK back to it, so deriving from `types.ts` keeps the
+chain complete without inventing a second parser.
+
+**The render sweep matches text position only.** `title={seg.role}` and
+`class="tl-{seg.role}"` pick an attribute or a colour off the value and never
+show it; flagging those would have meant an allowlist, and an allowlist is how
+a guard becomes noise (§ 565). The scan's own honesty check is that it convicts
+exactly the eleven sites this round removed when run against the previous
+commit, and nothing else in 203 templates. `status` is deliberately not among
+the scanned columns — it names an RSVP on one table and a plan, a report, an
+order, a projection and an HTTP response elsewhere.
+
+**One blind spot is recorded rather than closed.** A duplicate key whose tail
+*abbreviates* the value — `clubHome.roleOptionDirector` for `race_director` —
+is invisible to a matcher keyed on the value, and widening the tail to any word
+swallows `plansPage.statusActive`. It is pinned as a must-spare fixture with the
+reason, so the next reader knows the hand sweep is load-bearing there and does
+not mistake silence for coverage.
+
+**Two sentence forms were rewritten rather than resolved through the
+vocabulary.** `clubHome.roleOwnerPrefix` + `clubHome.roleOwner` composed
+"You're the" + "owner" — a second role vocabulary *and* a grammatical
+concatenation that only works in English by accident ("You're a" + "owner" is
+what the same pattern produces one value over). Eight keys became four whole
+sentences. A whole sentence is not a vocabulary: nothing can resolve a value
+through it, so it cannot drift from the canonical name the way a bare noun does.

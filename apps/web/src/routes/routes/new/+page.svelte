@@ -17,6 +17,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { distanceInPreferred, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import { env } from '$env/dynamic/public';
 	import { routeGenEnabled } from '$lib/routes/route_gen_flag';
 	import {
@@ -686,7 +687,7 @@
 						onclick={() => (mode = 'road')}
 					>
 						<span class="material-symbols" aria-hidden="true">directions_car</span>
-						{m('routeNew.road')}
+						{routeSurfaceLabel('road')}
 					</button>
 					<button
 						class="mode-btn"
@@ -694,7 +695,7 @@
 						onclick={() => (mode = 'trail')}
 					>
 						<span class="material-symbols" aria-hidden="true">forest</span>
-						{m('routeNew.trail')}
+						{routeSurfaceLabel('trail')}
 					</button>
 				</div>
 			</fieldset>
@@ -1146,7 +1147,7 @@
 				<span class="save-summary-label">{m('routeNew.elevation')}</span>
 			</div>
 			<div>
-				<span class="save-summary-value">{mode === 'trail' ? m('routeNew.trail') : m('routeNew.road')}</span>
+				<span class="save-summary-value">{routeSurfaceLabel(mode)}</span>
 				<span class="save-summary-label">{m('routeNew.surface')}</span>
 			</div>
 		</div>

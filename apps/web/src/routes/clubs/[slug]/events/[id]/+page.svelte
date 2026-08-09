@@ -83,6 +83,8 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { consent } from '$lib/settings/consent.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { rsvpStatusLabel } from '$lib/i18n/enum_labels.svelte';
+	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import type {
 		EventWithMeta,
 		ClubWithMeta,
@@ -1539,7 +1541,7 @@
 						</div>
 					{/if}
 					<div class="metric">
-						<span class="label">{m('clubEvent.goingLabel')}</span>
+						<span class="label">{rsvpStatusLabel('going')}</span>
 						<span class="value">
 							{event.attendee_count}{event.capacity ? ` / ${event.capacity}` : ''}
 						</span>
@@ -1732,9 +1734,9 @@
 							class:active={viewerRsvpForActive === 'going' || viewerRsvpForActive === 'waitlisted'}
 							aria-pressed={viewerRsvpForActive === 'going' || viewerRsvpForActive === 'waitlisted'}
 							aria-label={viewerRsvpForActive === 'going'
-								? m('clubEvent.going')
+								? rsvpStatusLabel('going')
 								: viewerRsvpForActive === 'waitlisted'
-									? m('clubEvent.waitlisted')
+									? rsvpStatusLabel('waitlisted')
 									: m('clubEvent.imIn')}
 							onclick={() => rsvp('going')}
 							disabled={busy}
@@ -1748,9 +1750,9 @@
 							</span>
 							<span class="rsvp-label">
 								{viewerRsvpForActive === 'going'
-									? m('clubEvent.going')
+									? rsvpStatusLabel('going')
 									: viewerRsvpForActive === 'waitlisted'
-										? m('clubEvent.waitlisted')
+										? rsvpStatusLabel('waitlisted')
 										: m('clubEvent.imIn')}
 							</span>
 							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.going}</span>
@@ -1760,12 +1762,12 @@
 							class="rsvp-opt rsvp-maybe"
 							class:active={viewerRsvpForActive === 'maybe'}
 							aria-pressed={viewerRsvpForActive === 'maybe'}
-							aria-label={m('clubEvent.maybe')}
+							aria-label={rsvpStatusLabel('maybe')}
 							onclick={() => rsvp('maybe')}
 							disabled={busy}
 						>
 							<span class="material-symbols" aria-hidden="true">help_outline</span>
-							<span class="rsvp-label">{m('clubEvent.maybe')}</span>
+							<span class="rsvp-label">{rsvpStatusLabel('maybe')}</span>
 							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.maybe}</span>
 						</button>
 						<button
@@ -2098,7 +2100,7 @@
 										<span class="run-date">{formatRunDate(run.started_at)}</span>
 										<span class="run-dist">{formatDistance(run.distance_m)}</span>
 										<span class="run-time">{formatDuration(run.duration_s)}</span>
-										<span class="run-kind muted">{run.activity_type}</span>
+										<span class="run-kind muted">{activityTypeLabel(run.activity_type)}</span>
 									</button>
 								</li>
 							{/each}
@@ -2120,16 +2122,20 @@
 						(<code>status</code> {m('clubEvent.importHelpStatus')} <code>dnf</code> / <code>dns</code>).
 						{m('clubEvent.importHelpSuffix')}
 					</p>
-					<label class="btn-link import-file">
+					<button
+						type="button"
+						class="btn-link import-file"
+						onclick={() => importInput?.click()}
+					>
 						{importFileName ? m('clubEvent.importFileName', { name: importFileName }) : m('clubEvent.chooseCsvFile')}
-						<input
-							bind:this={importInput}
-							type="file"
-							accept=".csv,text/csv"
-							onchange={onImportFile}
-							hidden
-						/>
-					</label>
+					</button>
+					<input
+						bind:this={importInput}
+						type="file"
+						accept=".csv,text/csv"
+						onchange={onImportFile}
+						style="display: none"
+					/>
 					{#if importErrors.length > 0}
 						<ul class="import-errors">
 							{#each importErrors.slice(0, 8) as err}
@@ -2246,7 +2252,7 @@
 										<span class="run-date">{formatRunDate(run.started_at)}</span>
 										<span class="run-dist">{formatDistance(run.distance_m)}</span>
 										<span class="run-time">{formatDuration(run.duration_s)}</span>
-										<span class="run-kind muted">{run.activity_type}</span>
+										<span class="run-kind muted">{activityTypeLabel(run.activity_type)}</span>
 									</button>
 								</li>
 							{/each}
@@ -2303,7 +2309,7 @@
 							<Avatar name={a.display_name} size="2rem" font="0.85rem" bg="seed" seedHue={hashHue(a.user_id)} />
 							<div class="att-info">
 								<strong>{a.display_name ?? m('clubEvent.memberFallback')}</strong>
-								<span class="status">{a.status}</span>
+								<span class="status">{rsvpStatusLabel(a.status)}</span>
 							</div>
 							{#if canMarkAttendance}
 								<div class="attendance-controls" role="group" aria-label={m('clubEvent.attendanceLabel')}>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { formatDuration } from '$lib/format/time';
 	import { distanceInPreferred } from '$lib/format/units.svelte';
@@ -152,7 +153,7 @@
 				<div class="key-stat key-stat-surface">
 					<span class="key-stat-value">
 						<span class="material-symbols">{surfaceIcon}</span>
-						{segment.surface}
+						{routeSurfaceLabel(segment.surface)}
 					</span>
 					<span class="key-stat-label">{m('segmentDetail.statSurface')}</span>
 				</div>
