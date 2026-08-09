@@ -108,3 +108,38 @@ test('dashboard reads gym history with a bounded window, not the whole history',
 		'the dashboard must not call fetchGymSetHistory() unbounded',
 	);
 });
+
+test('the fitness card\'s next-hard line is localized, not an English literal', () => {
+	// Reason: this sentence sat between two m() lines as raw English —
+	// with English pluralization baked into the markup — on the app's
+	// highest-traffic page, so five of six locales read one stray
+	// English sentence inside an otherwise translated card.
+	assert.match(
+		SOURCE,
+		/m\('dash\.nextHardOne'\)/,
+		'the singular next-hard line must resolve through m()',
+	);
+	assert.match(
+		SOURCE,
+		/m\('dash\.nextHardOther', \{ days: daysToHard \}\)/,
+		'the plural next-hard line must resolve through m() with the day count',
+	);
+	assert.doesNotMatch(
+		SOURCE,
+		/Next hard session in ~/,
+		'no English copy for this line may remain in the template',
+	);
+
+	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+		const catalogue = readFileSync(
+			resolve(`src/lib/i18n/locales/${locale}.ts`),
+			'utf-8',
+		);
+		assert.match(catalogue, /"dash\.nextHardOne":/, `dash.nextHardOne missing from ${locale}`);
+		assert.match(
+			catalogue,
+			/"dash\.nextHardOther": "[^"]*\{days\}[^"]*"/,
+			`dash.nextHardOther must keep the {days} slot in ${locale}`,
+		);
+	}
+});

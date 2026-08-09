@@ -219,6 +219,41 @@ test.describe('/settings/account — data export', () => {
 		});
 	});
 
+	test('Export All Runs (CSV) surfaces a failed read instead of downloading an empty file', async ({
+		page
+	}) => {
+		// `fetchRuns` returns [] on a read failure, so the CSV path used to
+		// hand the user a header-only runs_export.csv and no error at all —
+		// a failed export looked exactly like an empty history, on the
+		// surface whose whole job is getting your data out.
+		await page.route('**/rest/v1/runs*', async (route) => {
+			if (route.request().method() === 'GET') {
+				await route.fulfill({
+					status: 500,
+					contentType: 'application/json',
+					body: JSON.stringify({ message: 'simulated runs read failure' })
+				});
+				return;
+			}
+			await route.fallback();
+		});
+
+		await page.goto('/settings/account');
+
+		let downloaded = false;
+		page.on('download', () => {
+			downloaded = true;
+		});
+		await page
+			.getByRole('button', { name: /Export All Runs \(CSV\)/ })
+			.click();
+
+		await expect(page.locator('.toast-error')).toContainText(/Export failed:/, {
+			timeout: 5_000
+		});
+		expect(downloaded).toBe(false);
+	});
+
 	test('Cloud export (GPX zip) surfaces a server-side failure as a toast', async ({
 		page
 	}) => {

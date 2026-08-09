@@ -276,7 +276,14 @@ test.describe('/settings/devices', () => {
 		const plantedRow = rowByLabel(page, 'Deletable fixture');
 		await expect(plantedRow).toBeVisible({ timeout: 10_000 });
 
-		await plantedRow.locator('button.remove-btn').click();
+		// By ROLE + NAME, not by class: the button is icon-only, so its
+		// accessible name used to compute from the ligature text and every
+		// row's destructive control announced as "close". Naming the device
+		// is what makes the right row reachable without sight.
+		await expect(plantedRow.locator('button.remove-btn')).toHaveCount(1);
+		await plantedRow
+			.getByRole('button', { name: 'Remove Deletable fixture' })
+			.click();
 
 		const dialog = page.getByRole('dialog', { name: /Remove device/ });
 		await expect(dialog).toBeVisible();

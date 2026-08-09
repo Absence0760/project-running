@@ -3,7 +3,7 @@
 	import { formatPace, formatDistance, sourceLabel } from '$lib/core/mock-data';
 	import { sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDuration } from '$lib/format/time';
-	import { fetchRuns, fetchRunsWithError, deleteRuns } from '$lib/core/data';
+	import { fetchRunsWithError, deleteRuns } from '$lib/core/data';
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import { periodStart } from '$lib/training/goals';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -55,6 +55,7 @@
 
 	const PAGE_SIZE = 50;
 	let loadingMore = $state(false);
+	let moreError = $state<string | null>(null);
 	let hasMore = $state(false);
 	/// Tracks the last fetch mode so we only refetch on `paginated` ↔
 	/// `full` transitions, not on every filter twiddle.
@@ -358,12 +359,24 @@
 		loading = false;
 	}
 
+	/// Same error-carrying read as loadInitial. The plain `fetchRuns`
+	/// returns `[]` on a failed read, which set `hasMore = false` and
+	/// unmounted the Load-more button — a transient blip presented as
+	/// "that's your whole history", with the rest of the runner's runs
+	/// simply gone. On failure `hasMore` is left alone so the button
+	/// survives as the retry.
 	async function loadMore() {
 		if (loadingMore || !hasMore) return;
 		loadingMore = true;
-		const more = await fetchRuns({ limit: PAGE_SIZE, offset: runs.length });
-		runs = [...runs, ...more];
-		hasMore = more.length === PAGE_SIZE;
+		moreError = null;
+		const res = await fetchRunsWithError({ limit: PAGE_SIZE, offset: runs.length });
+		if (res.error) {
+			moreError = res.error;
+			loadingMore = false;
+			return;
+		}
+		runs = [...runs, ...res.runs];
+		hasMore = res.runs.length === PAGE_SIZE;
 		loadingMore = false;
 	}
 
@@ -833,13 +846,22 @@
 
 		{#if hasMore && fetchMode === 'paginated'}
 			<div class="load-more-row">
+				{#if moreError}
+					<p class="load-more-error" role="alert" data-testid="runs-load-more-error">
+						{m('runs.loadMoreFailed')}
+					</p>
+				{/if}
 				<button
 					type="button"
 					class="btn btn-outline"
 					disabled={loadingMore}
 					onclick={loadMore}
 				>
-					{loadingMore ? m('shell.loading') : m('runs.loadMore', { count: PAGE_SIZE })}
+					{loadingMore
+						? m('shell.loading')
+						: moreError
+							? m('runs.retry')
+							: m('runs.loadMore', { count: PAGE_SIZE })}
 				</button>
 			</div>
 		{:else if fetchMode === 'full' && renderLimit < filteredRuns.length}
@@ -1317,8 +1339,16 @@
 
 	.load-more-row {
 		display: flex;
-		justify-content: center;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
 		padding: var(--space-md) 0 var(--space-xl);
+	}
+
+	.load-more-error {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-danger-text);
 	}
 
 	.material-symbols {
