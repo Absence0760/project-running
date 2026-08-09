@@ -1407,6 +1407,8 @@ export const messages = {
 	"settingsDevices.addOverride": "Überschreibung hinzufügen",
 	"settingsDevices.resetDeviceTitle": "Dieses Gerät zurücksetzen (löscht den lokalen Cache und registriert neu)",
 	"settingsDevices.removeDeviceTitle": "Gerät entfernen",
+	"settingsDevices.resetDeviceAria": "{device} zurücksetzen",
+	"settingsDevices.removeDeviceAria": "{device} entfernen",
 	"settingsDevices.resetConfirmTitle": "Dieses Gerät zurücksetzen?",
 	"settingsDevices.removeConfirmTitle": "Gerät entfernen",
 	"settingsDevices.resetConfirmMessage": "Löscht die gerätespezifischen Einstellungen für diesen Browser, entfernt die lokale Geräte-ID und lädt neu. Universelle Einstellungen bleiben erhalten.",

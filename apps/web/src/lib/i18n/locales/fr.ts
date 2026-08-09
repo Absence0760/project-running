@@ -1407,6 +1407,8 @@ export const messages = {
 	"settingsDevices.addOverride": "Ajouter un remplacement",
 	"settingsDevices.resetDeviceTitle": "Réinitialiser cet appareil (efface le cache local et réenregistre)",
 	"settingsDevices.removeDeviceTitle": "Supprimer l'appareil",
+	"settingsDevices.resetDeviceAria": "Réinitialiser {device}",
+	"settingsDevices.removeDeviceAria": "Supprimer {device}",
 	"settingsDevices.resetConfirmTitle": "Réinitialiser cet appareil ?",
 	"settingsDevices.removeConfirmTitle": "Supprimer l'appareil",
 	"settingsDevices.resetConfirmMessage": "Efface les préférences propres à cet appareil pour ce navigateur, supprime l'identifiant d'appareil local et recharge. Les préférences universelles sont conservées.",

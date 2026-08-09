@@ -1406,6 +1406,8 @@ export const messages = {
 	"settingsDevices.addOverride": "Adicionar substituição",
 	"settingsDevices.resetDeviceTitle": "Redefinir este dispositivo (apaga o cache local e registra novamente)",
 	"settingsDevices.removeDeviceTitle": "Remover dispositivo",
+	"settingsDevices.resetDeviceAria": "Redefinir {device}",
+	"settingsDevices.removeDeviceAria": "Remover {device}",
 	"settingsDevices.resetConfirmTitle": "Redefinir este dispositivo?",
 	"settingsDevices.removeConfirmTitle": "Remover dispositivo",
 	"settingsDevices.resetConfirmMessage": "Apaga as preferências por dispositivo deste navegador, limpa o ID de dispositivo local e recarrega. As preferências universais permanecem.",

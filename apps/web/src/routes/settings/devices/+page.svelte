@@ -173,6 +173,14 @@
 		return 'devices_other';
 	}
 
+	/// What a row calls itself — the same string the label input shows, so a
+	/// per-row control's accessible name matches what the user sees. Without
+	/// it every remove button announced as its glyph ("close"), identical on
+	/// every row, on a destructive control.
+	function deviceName(d: { label: string | null; platform: string }): string {
+		return d.label?.trim() || platformLabel(d.platform);
+	}
+
 	function platformLabel(p: string): string {
 		const m: Record<string, string> = {
 			android: 'Android',
@@ -419,7 +427,7 @@
 					data-device-id={d.device_id}
 					data-device-label={d.label ?? ''}
 				>
-					<span class="material-symbols device-icon">{platformIcon(d.platform)}</span>
+					<span class="material-symbols device-icon" aria-hidden="true">{platformIcon(d.platform)}</span>
 					<div class="device-info">
 						<div class="device-name">
 							<input
@@ -450,14 +458,14 @@
 								{overrideCount(d.prefs) === 1
 									? m('settingsDevices.overrideCountOne', { count: overrideCount(d.prefs) })
 									: m('settingsDevices.overrideCountOther', { count: overrideCount(d.prefs) })}
-								<span class="material-symbols chev">
+								<span class="material-symbols chev" aria-hidden="true">
 									{expanded === d.device_id ? 'expand_less' : 'expand_more'}
 								</span>
 							</button>
 							{#if d.device_id !== currentDeviceId && hasPushSubscription(d.prefs)}
 								<span class="sep">&middot;</span>
 								<span class="push-state" title={m('settingsDevices.pushOnTitle')}>
-									<span class="material-symbols">notifications_active</span>
+									<span class="material-symbols" aria-hidden="true">notifications_active</span>
 									{m('settingsDevices.pushOn')}
 								</span>
 							{/if}
@@ -475,7 +483,7 @@
 										onclick={handleDisablePush}
 										disabled={pushBusy}
 									>
-										<span class="material-symbols">notifications_off</span>
+										<span class="material-symbols" aria-hidden="true">notifications_off</span>
 										{pushBusy ? m('settingsDevices.pushUpdating') : m('settingsDevices.disablePush')}
 									</button>
 								{:else}
@@ -485,7 +493,7 @@
 										onclick={handleEnablePush}
 										disabled={pushBusy}
 									>
-										<span class="material-symbols">notifications_active</span>
+										<span class="material-symbols" aria-hidden="true">notifications_active</span>
 										{pushBusy ? m('settingsDevices.pushEnabling') : m('settingsDevices.enablePush')}
 									</button>
 								{/if}
@@ -520,13 +528,17 @@
 						{/if}
 					</div>
 					<button
+						type="button"
 						class="remove-btn"
 						onclick={() => (confirmingRemove = d.device_id)}
 						title={d.device_id === currentDeviceId
 							? m('settingsDevices.resetDeviceTitle')
 							: m('settingsDevices.removeDeviceTitle')}
+						aria-label={d.device_id === currentDeviceId
+							? m('settingsDevices.resetDeviceAria', { device: deviceName(d) })
+							: m('settingsDevices.removeDeviceAria', { device: deviceName(d) })}
 					>
-						<span class="material-symbols">
+						<span class="material-symbols" aria-hidden="true">
 							{d.device_id === currentDeviceId ? 'refresh' : 'close'}
 						</span>
 					</button>

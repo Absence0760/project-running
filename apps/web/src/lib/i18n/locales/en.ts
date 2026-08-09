@@ -1415,6 +1415,8 @@ export const en = {
 	"settingsDevices.addOverride": "Add override",
 	"settingsDevices.resetDeviceTitle": "Reset this device (wipes local cache and re-registers)",
 	"settingsDevices.removeDeviceTitle": "Remove device",
+	"settingsDevices.resetDeviceAria": "Reset {device}",
+	"settingsDevices.removeDeviceAria": "Remove {device}",
 	"settingsDevices.resetConfirmTitle": "Reset this device?",
 	"settingsDevices.removeConfirmTitle": "Remove device",
 	"settingsDevices.resetConfirmMessage": "Wipes the per-device preferences for this browser, clears the local device id, and reloads. Universal preferences stay put.",

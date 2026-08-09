@@ -1402,6 +1402,8 @@ export const messages = {
 	"settingsDevices.addOverride": "上書きを追加",
 	"settingsDevices.resetDeviceTitle": "このデバイスをリセット（ローカルキャッシュを消去して再登録）",
 	"settingsDevices.removeDeviceTitle": "デバイスを削除",
+	"settingsDevices.resetDeviceAria": "{device} をリセット",
+	"settingsDevices.removeDeviceAria": "{device} を削除",
 	"settingsDevices.resetConfirmTitle": "このデバイスをリセットしますか？",
 	"settingsDevices.removeConfirmTitle": "デバイスを削除",
 	"settingsDevices.resetConfirmMessage": "このブラウザのデバイスごとの設定を消去し、ローカルのデバイスIDをクリアして再読み込みします。共通設定はそのまま残ります。",
