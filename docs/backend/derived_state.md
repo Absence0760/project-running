@@ -82,7 +82,9 @@ retention cron referenced in a comment that was never created.
 
 - **What it caches:** the number of sets in a workout and its total
   `sum(reps * weight_kg)`. Lets the `activities` view's lift branch read flat
-  columns instead of two correlated subqueries per workout row (F7).
+  columns instead of two correlated subqueries per workout row (F7), and the
+  `/gym` list render its per-row stats without fetching a single set
+  (decisions §567 — it used to re-derive both from raw `gym_sets`).
 - **Authoritative recompute:** for a workout `w`,
   `count(*)` and `sum(coalesce(reps,0) * coalesce(weight_kg,0))` over
   `gym_sets where workout_id = w.id` (0 when there are no sets).
