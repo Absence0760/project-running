@@ -204,6 +204,10 @@ $$;
 --    Scoped to rows that have a `geom` at all — a route with fewer than
 --    two valid waypoints has no public line either, and rewriting it
 --    would be a wasted row version.
+--
+--    The batch bound is read off the tail of the ordered window rather
+--    than with `max(id)`: postgres has no `max(uuid)` aggregate before
+--    18, and this database is 17.
 -- ─────────────────────────────────────────────────────────────────────
 do $$
 declare
@@ -211,10 +215,12 @@ declare
   batch_max uuid;
 begin
   loop
-    select max(id) into batch_max
+    select s.id into batch_max
       from (
         select id from routes where id > last_id order by id limit 500
-      ) s;
+      ) s
+     order by s.id desc
+     limit 1;
     exit when batch_max is null;
 
     update routes r
