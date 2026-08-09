@@ -1,6 +1,5 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/widgets/route_photos.dart';
 
 void main() {
   group('normaliseRoutePhotoCaption', () {
