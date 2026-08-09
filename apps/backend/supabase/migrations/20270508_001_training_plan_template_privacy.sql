@@ -50,7 +50,9 @@
 -- Per-workout `plan_workouts.notes` is untouched -- that is plan design
 -- ("8x400m at 5K pace"), which is the thing being published.
 
-set search_path = public;
+-- Keep `extensions` on the path: a bare `set search_path = public` here would
+-- outlive this file and strip PostGIS from the seed step that follows.
+set search_path = public, extensions;
 
 create or replace function private.strip_template_private_fields()
 returns trigger
