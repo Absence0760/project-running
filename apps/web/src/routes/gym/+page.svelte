@@ -3,14 +3,16 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fetchGymWorkoutsWithError,
-		fetchGymSetHistoryWithError,
+		fetchGymWorkoutSummariesWithError,
+		fetchGymExerciseNames,
+		fetchGymHasWeightedSets,
 		fetchSessionPlans,
 		fetchExerciseCatalogue,
 		fetchGymRoutines,
 		updateGymWorkout,
 		deleteGymWorkout,
 		type GymWorkout,
-		type GymSetWithDate,
+		type GymWorkoutSummary,
 	} from '$lib/core/data';
 	import {
 		draftLoggedCount,
@@ -19,7 +21,6 @@
 		stripSessionDraft,
 	} from '$lib/gym/gym_session_draft';
 	import type { Exercise } from '$lib/types';
-	import { RunningPrTracker, type GymSetLike } from '$lib/gym/gym_prs';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -29,7 +30,9 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 
 	let workouts = $state<GymWorkout[]>([]);
-	let history = $state<GymSetWithDate[]>([]);
+	let summaries = $state<GymWorkoutSummary[]>([]);
+	let suggestions = $state<string[]>([]);
+	let hasWeightedRecords = $state(false);
 	let catalogue = $state<Exercise[]>([]);
 	// Session-plan count gates the Sessions link. Session plans are authored
 	// independently of gym workouts (a yoga user may have plans but no logged
@@ -49,18 +52,22 @@
 		loading = true;
 		loadError = null;
 		try {
-			const [w, h, plans, cat] = await Promise.all([
+			const [w, s, names, weighted, plans, cat] = await Promise.all([
 				fetchGymWorkoutsWithError(100),
-				fetchGymSetHistoryWithError(),
+				fetchGymWorkoutSummariesWithError(100),
+				fetchGymExerciseNames(),
+				fetchGymHasWeightedSets(),
 				fetchSessionPlans(),
 				fetchExerciseCatalogue(),
 			]);
 			// Surface a real load failure as a retry banner rather than the empty
 			// "log your first workout" card — otherwise a transient fetch error reads
 			// as a brand-new lifter whose history vanished.
-			loadError = w.error ?? h.error;
+			loadError = w.error ?? s.error;
 			workouts = w.workouts;
-			history = h.sets;
+			summaries = s.summaries;
+			suggestions = names;
+			hasWeightedRecords = weighted;
 			sessionPlanCount = plans.length;
 			catalogue = cat;
 			resumable = await findResumable(w.workouts).catch(() => null);
@@ -130,68 +137,12 @@
 		await load();
 	});
 
-	// Sets grouped by workout id.
-	const setsByWorkout = $derived.by(() => {
-		const map = new Map<string, GymSetWithDate[]>();
-		for (const s of history) {
-			const arr = map.get(s.workout_id) ?? [];
-			arr.push(s);
-			map.set(s.workout_id, arr);
-		}
-		return map;
-	});
-
-	// Total working volume (Σ reps·weight) per workout, for the row stat.
-	function volumeOf(id: string): number {
-		let v = 0;
-		for (const s of setsByWorkout.get(id) ?? []) {
-			if (s.reps != null && s.weight_kg != null) v += s.reps * s.weight_kg;
-		}
-		return Math.round(v);
-	}
-	function exerciseCountOf(id: string): number {
-		const names = new Set<string>();
-		for (const s of setsByWorkout.get(id) ?? []) names.add(s.exercise_name.trim().toLowerCase());
-		return names.size;
-	}
-	function setCountOf(id: string): number {
-		return (setsByWorkout.get(id) ?? []).length;
-	}
-
-	// Which workouts set at least one PR. Walk oldest→newest with a running PR
-	// tracker so each workout is judged against everything before it in a single
-	// O(total sets) pass — the previous loop re-derived the full prior-set PR map
-	// (with a per-set regex) for every workout, O(workouts × prior sets).
-	const prWorkoutIds = $derived.by(() => {
-		const ids = new Set<string>();
-		const ordered = [...workouts].sort((a, b) => a.started_at.localeCompare(b.started_at));
-		const tracker = new RunningPrTracker();
-		for (const w of ordered) {
-			const mine = (setsByWorkout.get(w.id) ?? []).map(
-				(s): GymSetLike => ({ exercise_name: s.exercise_name, reps: s.reps, weight_kg: s.weight_kg }),
-			);
-			if (tracker.judge(mine).length > 0) ids.add(w.id);
-		}
-		return ids;
-	});
-
-	// Whether any logged set carries a positive weight — gates the Records
-	// link, since /gym/records only surfaces weighted exercises.
-	const hasWeightedRecords = $derived(
-		history.some((s) => s.weight_kg != null && s.weight_kg > 0),
+	// PR flag + exercise count per workout, keyed by id. The page no longer
+	// derives either from raw set rows: the badge is an all-time question and
+	// the unbounded read that fed it was truncated at PostgREST's 1000-row cap.
+	const summaryById = $derived.by(
+		() => new Map(summaries.map((s) => [s.workoutId, s] as const)),
 	);
-
-	// Distinct exercise names from history, most-used first — the composer
-	// autocomplete source.
-	const suggestions = $derived.by(() => {
-		const counts = new Map<string, number>();
-		for (const s of history) {
-			const name = s.exercise_name.trim();
-			if (name === '') continue;
-			counts.set(name, (counts.get(name) ?? 0) + 1);
-		}
-		return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
-	});
 
 	function onCreated() {
 		showCreate = false;
@@ -319,23 +270,23 @@
 							<span class="row-date">{formatDate(w.started_at)}</span>
 						</div>
 						<div class="row-stats">
-							{#if prWorkoutIds.has(w.id)}
+							{#if summaryById.get(w.id)?.isPr}
 								<span class="pr-badge" aria-label={t('gym.pr.title')}>
 									<span class="material-symbols" aria-hidden="true">trophy</span>
 									{t('gym.pr.badge')}
 								</span>
 							{/if}
 							<span class="stat">
-								<span class="stat-value">{exerciseCountOf(w.id)}</span>
+								<span class="stat-value">{summaryById.get(w.id)?.exerciseCount ?? 0}</span>
 								<span class="stat-label section-label">{t('gym.exercisesLabel')}</span>
 							</span>
 							<span class="stat">
-								<span class="stat-value">{setCountOf(w.id)}</span>
+								<span class="stat-value">{w.set_count}</span>
 								<span class="stat-label section-label">{t('gym.setsLabel')}</span>
 							</span>
-							{#if volumeOf(w.id) > 0}
+							{#if Math.round(w.volume_kg) > 0}
 								<span class="stat stat-volume">
-									<span class="stat-value">{formatWeight(volumeOf(w.id))}</span>
+									<span class="stat-value">{formatWeight(Math.round(w.volume_kg))}</span>
 									<span class="stat-label section-label">{t('gym.volumeLabel')}</span>
 								</span>
 							{/if}

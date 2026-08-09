@@ -8725,6 +8725,11 @@ export interface GymWorkout {
 	/// execution trio and, while a session is in flight, the
 	/// `gym_session_draft` snapshot. Registered in docs/backend/metadata.md.
 	metadata: Record<string, unknown> | null;
+	/// Trigger-maintained totals over the workout's sets (migration
+	/// 20261214_001, contract in docs/backend/derived_state.md) — the list row
+	/// reads them off the row rather than summing raw sets client-side.
+	set_count: number;
+	volume_kg: number;
 }
 
 export interface GymSet {
@@ -8785,6 +8790,13 @@ export interface GymSetWithDate {
 /// the empty "log your first workout" card (a real failure otherwise reads as a
 /// brand-new lifter whose history vanished). Mirrors the
 /// `fetchExerciseRecordsWithError` convention.
+/// PostgREST renders a `numeric` column as a JSON number or a string depending
+/// on its magnitude, so every numeric the gym reads is coerced on the way in.
+function numericOrZero(v: unknown): number {
+	const n = typeof v === 'string' ? Number(v) : v;
+	return typeof n === 'number' && Number.isFinite(n) ? n : 0;
+}
+
 export async function fetchGymWorkoutsWithError(
 	limit = 50,
 ): Promise<{ workouts: GymWorkout[]; error: string | null }> {
@@ -8797,12 +8809,76 @@ export async function fetchGymWorkoutsWithError(
 		.order('started_at', { ascending: false })
 		.limit(limit);
 	if (error) return { workouts: [], error: error.message };
-	return { workouts: (data ?? []) as GymWorkout[], error: null };
+	const workouts = ((data ?? []) as GymWorkout[]).map((w) => ({
+		...w,
+		set_count: numericOrZero(w.set_count),
+		volume_kg: numericOrZero(w.volume_kg),
+	}));
+	return { workouts, error: null };
 }
 
 /// Recent gym workouts for the signed-in user, newest first.
 export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
 	return (await fetchGymWorkoutsWithError(limit)).workouts;
+}
+
+/// The two per-workout values the /gym list needs that no column carries:
+/// whether the workout set a personal record, and how many distinct exercises
+/// it contained.
+export interface GymWorkoutSummary {
+	workoutId: string;
+	exerciseCount: number;
+	isPr: boolean;
+}
+
+/// Per-workout PR flags + exercise counts for the /gym list, aggregated by the
+/// `gym_workout_summaries` RPC (migration 20270515_001).
+///
+/// /gym used to answer both questions in the browser from every gym_sets row
+/// the account held — an unbounded read PostgREST truncates at 1000 rows, so
+/// past ~40 sessions the badges and counts were quietly computed from a
+/// partial, unordered history. A PR badge is an all-time question, so no
+/// client-side window could fix it; the aggregation had to move to SQL, the
+/// way gym_exercise_records + gym_exercise_names already did for /gym/records
+/// and the composer autocomplete. `gym_prs.ts` remains the definition of a PR
+/// — the RPC mirrors it, and the two are pinned against one fixture by
+/// gym_workout_summaries.test.ts + gym_workout_summaries_test.sql.
+///
+/// Surfaces the error like `fetchGymWorkoutsWithError`: an empty result on a
+/// failed read would silently strip every badge and show 0 exercises a row.
+export async function fetchGymWorkoutSummariesWithError(
+	limit = 100,
+): Promise<{ summaries: GymWorkoutSummary[]; error: string | null }> {
+	if (!auth.user?.id) return { summaries: [], error: null };
+	const { data, error } = await supabase.rpc('gym_workout_summaries', { p_limit: limit });
+	if (error) return { summaries: [], error: error.message };
+	const rows = (data ?? []) as Array<{
+		workout_id: string;
+		exercise_count: number | string | null;
+		is_pr: boolean | null;
+	}>;
+	return {
+		summaries: rows.map((r) => ({
+			workoutId: r.workout_id,
+			exerciseCount: numericOrZero(r.exercise_count),
+			isPr: r.is_pr === true,
+		})),
+		error: null,
+	};
+}
+
+/// Has the user ever logged a set carrying a positive weight? Gates the
+/// /gym/records link, which only surfaces weighted exercises. All-time, so a
+/// lifter whose last weighted session predates the list page still gets the
+/// link. Degrades to false (link hidden) on a failed read.
+export async function fetchGymHasWeightedSets(): Promise<boolean> {
+	if (!auth.user?.id) return false;
+	const { data, error } = await supabase.rpc('gym_has_weighted_sets');
+	if (error) {
+		console.error('fetchGymHasWeightedSets failed', error);
+		return false;
+	}
+	return data === true;
 }
 
 /// A single workout plus its sets in set_index order. Returns null when the
@@ -8857,10 +8933,15 @@ export async function fetchGymSessionDraft(routineId: string): Promise<GymWorkou
 /// pass it on surfaces that only reason about recent training (e.g. the
 /// dashboard's 90-day training-load curve + its 5 most-recent-lift cards) so a
 /// multi-year lifter's whole gym_sets history (~15k rows) isn't shipped to the
-/// browser on every load. Surfaces that need all-time data (the per-workout PR
-/// badges on /gym + /gym/[id]) pass nothing and read the full set; all-time
-/// per-exercise bests go through fetchExerciseRecords (server-aggregated)
-/// instead. perf-hunt follow-up 2026-06-10.
+/// browser on every load. perf-hunt follow-up 2026-06-10.
+///
+/// Nothing reads this unwindowed any more. An all-time question is a server
+/// question: PostgREST caps an unbounded SELECT at 1000 rows, so the /gym PR
+/// badges that used to pass no window were computed from a truncated,
+/// unordered history past ~40 sessions. Those go through
+/// `fetchGymWorkoutSummariesWithError`; per-exercise bests through
+/// `fetchExerciseRecords`; per-workout prior sets on /gym/[id] through
+/// `fetchExerciseSetHistoryBatch`. All three aggregate or scope in SQL.
 export async function fetchGymSetHistoryWithError(opts?: {
 	sinceDays?: number;
 }): Promise<{ sets: GymSetWithDate[]; error: string | null }> {
