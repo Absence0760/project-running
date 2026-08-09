@@ -2694,3 +2694,43 @@ test('every image type an upload surface accepts is one the EXIF stripper can cl
 			offenders.join('\n  '),
 	);
 });
+
+test('every LLM-spending endpoint carries a per-user rate-limit bucket', () => {
+	// Reason: Pro is a monthly price, not a per-call one. `/api/coach` is
+	// capped by increment_coach_usage and the two route-engine handlers by
+	// checkRouteRateLimit, but route-describe and route-request shipped with
+	// neither — a single subscription (or one leaked Pro JWT) bought unbounded
+	// claude-opus-4-8 calls on the operator's key. The only backstop was the
+	// per-IP WAF rule in infra/modules/web-stack/waf.tf, which by construction
+	// cannot see one JWT spread across an IP pool — the exact hole
+	// $lib/routes/rate_limit.ts was written for. Every handler that reaches a
+	// billed provider must hold a durable per-user ceiling, and it must be
+	// taken BEFORE the provider call.
+	for (const [file, marker] of [
+		['src/lib/routes/route_describe/handler.ts', 'anthropic.messages.create'],
+		['src/lib/routes/route_request/handler.ts', 'anthropic.messages.create'],
+		['src/lib/routes/generate/handler.ts', 'const fetcher: Fetcher'],
+		['src/lib/routes/osrm_proxy/handler.ts', 'const fetcher: Fetcher'],
+	] as const) {
+		const source = read(file);
+		assert.match(
+			source,
+			/checkRouteRateLimit\(/,
+			`${file} calls a billed provider and must take a per-user rate-limit slot ` +
+				'via checkRouteRateLimit — the per-IP WAF rule is not a per-user ceiling.',
+		);
+		const gateIdx = source.indexOf('checkRouteRateLimit(');
+		const spendIdx = source.indexOf(marker);
+		assert.ok(
+			gateIdx > 0 && spendIdx > 0 && gateIdx < spendIdx,
+			`${file}: the rate-limit check must precede the billed call (${marker}).`,
+		);
+		// The verdict is a three-value union; anything other than 'ok' has to
+		// deny, or a fail-closed 'error' silently grants the spend.
+		assert.match(
+			source,
+			/rl !== 'ok'|verdict === 'limited'/,
+			`${file} must deny on a non-'ok' rate-limit verdict (fail closed on 'error').`,
+		);
+	}
+});
