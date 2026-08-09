@@ -34,7 +34,7 @@ insert into training_plans
 values
   ('aaaaaaaa-0000-0000-0000-0000000000f1',
    '00000000-0000-0000-0000-00000000ff01',
-   'Public build', 'marathon', 42195, '2026-01-01', '2026-04-01',
+   'Public build', 'distance_full', 42195, '2026-01-01', '2026-04-01',
    4, 55.3, 1080, 'injury history: stress fracture', 'completed',
    true, true, null);
 
@@ -74,7 +74,7 @@ insert into training_plans
 values
   ('aaaaaaaa-0000-0000-0000-0000000000f2',
    '00000000-0000-0000-0000-00000000ff01',
-   'Club build', 'marathon', 42195, '2026-01-01', '2026-04-01',
+   'Club build', 'distance_full', 42195, '2026-01-01', '2026-04-01',
    4, 51.1, 1140, 'my knee', 'completed',
    true, false, '77777777-0000-0000-0000-00000000ff01');
 
@@ -95,7 +95,7 @@ insert into training_plans
 values
   ('aaaaaaaa-0000-0000-0000-0000000000f3',
    '00000000-0000-0000-0000-00000000ff01',
-   'My plan', 'marathon', 42195, '2026-01-01', '2026-04-01',
+   'My plan', 'distance_full', 42195, '2026-01-01', '2026-04-01',
    4, 48.2, 1200, 'private note', 'active',
    false, false, null);
 
