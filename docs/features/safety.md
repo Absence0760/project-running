@@ -112,7 +112,11 @@ active — auto or manually shared — the recording chrome carries the persiste
 top-left, driven by the `_liveShareActive` `ValueNotifier`. Tapping it opens
 `showLiveShareSheet` with "Share link again" and "Stop sharing" — stop
 concludes the broadcast mid-run (`concludeLiveBroadcast`) without ending the
-run, so the share persists until the run finishes. **On finish** the stop
+run, so the share persists until the run finishes. The `concluded_at` stamp is
+*owed* until it lands (`_liveConcludeOwed`), not until the broadcaster is torn
+down: stopping the share while out of signal detaches the pump anyway, so the
+finish path retries the stamp rather than leaving spectators on a frozen live
+trace with no conclusion. **On finish** the stop
 path resolves the saved run's visibility (`_resolvePostLiveVisibility`,
 issue #664): with a not-public default it asks — an `AlertDialog` where
 "Keep public" is the explicit act and decline/dismiss fails closed to
