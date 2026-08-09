@@ -44,6 +44,14 @@ export async function hmacHex(
     .join('');
 }
 
+/// Header a sender may carry a shared webhook secret in, instead of the
+/// URL query string. A query-string secret is recorded verbatim in the
+/// platform's request log on every delivery; a header is not, so this is
+/// the path to prefer wherever the sender can be configured to use it.
+/// Kept here (rather than per-function) so the Edge Function and the Go
+/// worker's twin endpoint cannot drift on the name.
+export const WEBHOOK_SECRET_HEADER = 'x-webhook-secret';
+
 /// Constant-time string compare. Returns false on length mismatch
 /// without short-circuiting on content. The length check itself is
 /// observable, but the digest length is fixed (sha256 hex = 64 chars,

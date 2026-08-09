@@ -7,11 +7,24 @@
 ///   - POST (activity event): Strava does NOT sign payloads — their
 ///     security model is "the callback URL is secret." That is not
 ///     enough on its own (a leak of the function URL is permanent
-///     and unrotatable), so we require a shared secret in the query
-///     string of the URL configured in Strava:
-///         https://<host>/strava-webhook?secret=<STRAVA_WEBHOOK_SECRET>
-///     Strava preserves the configured URL's query string on both
-///     GET and POST, so the same secret guards both methods.
+///     and unrotatable), so we require a shared secret. It is accepted
+///     two ways:
+///       * `X-Webhook-Secret: <STRAVA_WEBHOOK_SECRET>` — preferred.
+///       * `?secret=<STRAVA_WEBHOOK_SECRET>` in the URL Strava is
+///         registered with. Strava preserves the configured URL's
+///         query string on both GET and POST, so the same secret
+///         guards both methods.
+///     The query path exists because Strava's subscription API only
+///     accepts a callback URL, so today it is the ONLY path Strava
+///     itself can use — and a query-string secret is written verbatim
+///     into Supabase's function request logs on every delivery, where
+///     anyone with log read access recovers it. Retiring it needs a
+///     Strava re-registration plus a rotation; that is a pre-deploy ops
+///     item, tracked in docs/ops/deployment.md. Until it lands the
+///     residual exposure stands (decisions §566). Both paths compare
+///     in constant time, and the header WINS when present — a request
+///     that supplies a wrong header does not get a second try at the
+///     query param.
 ///
 /// Without STRAVA_WEBHOOK_SECRET set, the function refuses all POSTs
 /// (and all GETs that don't supply the secret) — the only correct
@@ -38,12 +51,16 @@ import {
 	isStravaRunFamily,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
-import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { discardBody, readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import * as Sentry from 'https://deno.land/x/sentry@8.40.0/index.mjs';
 import { sanitizeErrorForCapture } from '../_shared/sentry_scrub.ts';
-import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
+import {
+	WEBHOOK_SECRET_HEADER,
+	timingSafeEqual,
+	validateFreshness,
+} from '../_shared/webhook_security.ts';
 import { secretKey } from '../_shared/api_keys.ts';
 
 Deno.serve(withSentry('strava-webhook', async (req: Request) => {
@@ -51,15 +68,27 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 	// — closes the chunked-transfer-encoding bypass that the bare header
 	// check left open. GET has no body.
 
+	// Every exit before the body is read goes through here. Deno holds
+	// the connection open for an unread request stream, so a caller that
+	// POST-streams a chunked body into a branch we refuse keeps a slot
+	// until the runtime timeout — a slow-loris against the function
+	// host, on the one function an unauthenticated caller can reach by
+	// URL alone. `wiring.test.ts` pins that no pre-body return bypasses
+	// it.
+	const refuseUnread = (res: Response): Response => {
+		discardBody(req);
+		return res;
+	};
+
 	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
 	if (!webhookSecret) {
-		return Response.json({ error: 'webhook_not_configured' }, { status: 503 });
+		return refuseUnread(Response.json({ error: 'webhook_not_configured' }, { status: 503 }));
 	}
 	// audit/strava May 2026 Low #2 — short secret refuses to operate.
 	// Matches the Go variant's 32-char floor. Defends against a
 	// misconfigured deploy (e.g. `STRAVA_WEBHOOK_SECRET=test`).
 	if (webhookSecret.length < 32) {
-		return Response.json({ error: 'webhook_not_configured' }, { status: 503 });
+		return refuseUnread(Response.json({ error: 'webhook_not_configured' }, { status: 503 }));
 	}
 
 	// IP-keyed rate limit BEFORE the secret check — closes the
@@ -87,13 +116,17 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 			3600,
 			{ failClosed: true },
 		);
-		if (denied) return denied;
+		if (denied) return refuseUnread(denied);
 	}
 
 	const url = new URL(req.url);
-	const suppliedSecret = url.searchParams.get('secret');
+	// Header first, and NOT as a preference among equals: if a caller
+	// supplies the header it is the value we judge, so a wrong header
+	// can't fall through to a second attempt at the query param.
+	const headerSecret = req.headers.get(WEBHOOK_SECRET_HEADER);
+	const suppliedSecret = headerSecret ?? url.searchParams.get('secret');
 	if (!suppliedSecret || !timingSafeEqual(suppliedSecret, webhookSecret)) {
-		return Response.json({ error: 'forbidden' }, { status: 403 });
+		return refuseUnread(Response.json({ error: 'forbidden' }, { status: 403 }));
 	}
 
 	// GET: Strava webhook subscription handshake.
@@ -107,14 +140,14 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 		// response-latency differences. The two secrets are independent;
 		// hardening this one closes the side-channel.
 		if (!expectedToken || !timingSafeEqual(verifyToken, expectedToken)) {
-			return Response.json({ error: 'forbidden' }, { status: 403 });
+			return refuseUnread(Response.json({ error: 'forbidden' }, { status: 403 }));
 		}
 
-		return Response.json({ 'hub.challenge': challenge });
+		return refuseUnread(Response.json({ 'hub.challenge': challenge }));
 	}
 
 	if (req.method !== 'POST') {
-		return Response.json({ error: 'method_not_allowed' }, { status: 405 });
+		return refuseUnread(Response.json({ error: 'method_not_allowed' }, { status: 405 }));
 	}
 
 	// POST: Activity event from Strava. Payload shape:
