@@ -36,6 +36,7 @@
 	let loadError = $state<string | null>(null);
 	let showEdit = $state(false);
 	let confirmDelete = $state(false);
+	let confirmShare = $state(false);
 	let running = $state(false);
 	let visibilityBusy = $state(false);
 	let shareBusy = $state(false);
@@ -225,15 +226,26 @@
 		}
 	}
 
-	async function copyShareLink() {
+	/// "Copy share link" publishes a private plan, which the label does not
+	/// say — so ask first, the same way the gym-workout and run-detail share
+	/// flows do. An already-public plan has nothing to consent to.
+	function startShare() {
+		if (!plan || shareBusy) return;
+		if (!plan.is_public) {
+			confirmShare = true;
+			return;
+		}
+		void proceedShare();
+	}
+
+	async function proceedShare() {
 		if (!plan || shareBusy) return;
 		shareBusy = true;
+		confirmShare = false;
 		// Same builder as the canonical, but based on the CURRENT origin: a
 		// preview-host user must get a preview link, not a prod one.
 		const url = buildSessionShareCanonical(location.origin, plan.id);
 		try {
-			// A non-public plan's share link 404s for everyone else, so make it
-			// public first — mirrors the gym-workout share flow.
 			if (!plan.is_public) {
 				await setSessionPlanPublic(plan.id, true);
 				plan = { ...plan, is_public: true };
@@ -317,7 +329,7 @@
 					<button
 						type="button"
 						class="btn btn-secondary"
-						onclick={copyShareLink}
+						onclick={startShare}
 						disabled={shareBusy}
 						data-testid="session-copy-share-link"
 					>
@@ -382,6 +394,16 @@
 		<SessionPlanEditor existing={plan} onupdated={onUpdated} oncancel={() => (showEdit = false)} />
 	</Modal>
 {/if}
+
+<ConfirmDialog
+	open={confirmShare}
+	title={t('session.shareConfirm.title')}
+	message={t('session.shareConfirm.body')}
+	confirmLabel={t('session.shareConfirm.action')}
+	onconfirm={proceedShare}
+	oncancel={() => (confirmShare = false)}
+	data-testid="session-share-confirm-dialog"
+/>
 
 <ConfirmDialog
 	open={confirmDelete}

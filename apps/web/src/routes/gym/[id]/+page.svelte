@@ -48,6 +48,7 @@
 	let notFound = $state(false);
 	let editing = $state(false);
 	let confirmingDelete = $state(false);
+	let confirmingShare = $state(false);
 	let savingAsRoutine = $state(false);
 	let repeating = $state(false);
 	let routineSeed = $state<PrefillExercise[] | null>(null);
@@ -343,15 +344,29 @@
 		}
 	}
 
-	async function copyShareLink() {
+	/// A non-public workout's share link 404s for everyone else, so copying
+	/// one has to publish the workout. "Copy share link" does not say that,
+	/// and the only feedback was a green "Link copied" — the owner's private
+	/// training log went world-readable on a click they read as a clipboard
+	/// action. Ask first, exactly as run detail does; an already-public
+	/// workout has nothing to consent to and copies straight away.
+	function startShare() {
+		if (shareBusy) return;
+		if (data && !data.workout.is_public) {
+			confirmingShare = true;
+			return;
+		}
+		void proceedShare();
+	}
+
+	async function proceedShare() {
 		if (shareBusy) return;
 		shareBusy = true;
+		confirmingShare = false;
 		// Same builder as the canonical, but based on the CURRENT origin: a
 		// preview-host user must get a preview link, not a prod one.
 		const url = buildWorkoutShareCanonical(location.origin, id);
 		try {
-			// A non-public workout's share link 404s for everyone else, so make
-			// it public first — mirrors the run-detail share flow.
 			if (data && !data.workout.is_public) {
 				await setGymWorkoutPublic(id, true);
 				data = { ...data, workout: { ...data.workout, is_public: true } };
@@ -443,7 +458,7 @@
 					</button>
 					<button
 						class="btn btn-secondary btn-sm"
-						onclick={copyShareLink}
+						onclick={startShare}
 						disabled={shareBusy}
 						data-testid="gym-copy-share-link"
 					>
@@ -588,6 +603,16 @@
 <Modal open={repeating} title={t('gym.routine.repeatLast')} onclose={() => (repeating = false)}>
 	<GymEditor seed={repeatSeed} oncreated={onRepeated} oncancel={() => (repeating = false)} />
 </Modal>
+
+<ConfirmDialog
+	open={confirmingShare}
+	title={t('gym.shareConfirm.title')}
+	message={t('gym.shareConfirm.body')}
+	confirmLabel={t('gym.shareConfirm.action')}
+	onconfirm={proceedShare}
+	oncancel={() => (confirmingShare = false)}
+	data-testid="gym-share-confirm-dialog"
+/>
 
 <ConfirmDialog
 	open={confirmingDelete}
