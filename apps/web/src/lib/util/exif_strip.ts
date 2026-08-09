@@ -170,9 +170,57 @@ export function stripWebpMetadata(input: Uint8Array): Uint8Array {
 	return Uint8Array.from(out);
 }
 
+/// The image formats this module can actually clean. An upload surface must
+/// accept nothing outside this set — see `stripImageExif`.
+export const STRIPPABLE_IMAGE_MIME_TYPES: readonly string[] = [
+	'image/jpeg',
+	'image/png',
+	'image/webp',
+];
+
+export function canStripImageExif(mime: string): boolean {
+	return STRIPPABLE_IMAGE_MIME_TYPES.includes(mime);
+}
+
+/// Identify an image buffer from its magic bytes, returning null for anything
+/// outside `STRIPPABLE_IMAGE_MIME_TYPES`.
+///
+/// The dispatch must not trust a caller-supplied MIME: on web `File.type` is
+/// derived from the filename, and a `.heic` renamed to `.jpg` would otherwise
+/// be handed to the JPEG walker, fail its SOI check, and be returned — and
+/// uploaded — with its GPS intact.
+export function detectImageMime(input: Uint8Array): string | null {
+	if (input.length >= 3 && input[0] === 0xff && input[1] === 0xd8 && input[2] === 0xff) {
+		return 'image/jpeg';
+	}
+	if (input.length >= 8 && PNG_SIG.every((b, k) => input[k] === b)) {
+		return 'image/png';
+	}
+	if (
+		input.length >= 12 &&
+		String.fromCharCode(input[0], input[1], input[2], input[3]) === 'RIFF' &&
+		String.fromCharCode(input[8], input[9], input[10], input[11]) === 'WEBP'
+	) {
+		return 'image/webp';
+	}
+	return null;
+}
+
+export class UnstrippableImageError extends Error {
+	constructor(readonly mime: string) {
+		super(`Cannot strip metadata from ${mime || 'unknown image type'}`);
+		this.name = 'UnstrippableImageError';
+	}
+}
+
 /// Strip location-bearing metadata from an image buffer, dispatched by MIME.
 /// JPEG → APP1 marker-walk, PNG → metadata-chunk walk, WebP → RIFF-chunk walk.
-/// Any other type is returned unchanged.
+///
+/// Anything else throws. Returning the input unchanged would upload a
+/// geotagged original verbatim, which is the exact leak this module exists to
+/// prevent — HEIC is the case that bit us: the pickers accepted it, no layer
+/// (client, or the Go worker's JPEG-only `StripJPEG`) could clean it, and the
+/// original is what the gallery serves back.
 export function stripImageExif(input: Uint8Array, mime: string): Uint8Array {
 	switch (mime) {
 		case 'image/jpeg':
@@ -182,21 +230,25 @@ export function stripImageExif(input: Uint8Array, mime: string): Uint8Array {
 		case 'image/webp':
 			return stripWebpMetadata(input);
 		default:
-			return input;
+			throw new UnstrippableImageError(mime);
 	}
 }
 
 /// Run a picked image `File` through the format-appropriate metadata stripper
-/// before it's uploaded. Returns the original `File` untouched when the strip
-/// is a no-op (unhandled type, or no metadata present), so a clean image pays
-/// only one buffer read. The returned `File` keeps the original name + MIME
-/// type (the strippers are lossless + format-preserving) so the caller's
-/// extension / content-type logic is intact.
-export async function stripExifFromFile(file: File): Promise<File> {
+/// before it's uploaded. Returns **null** when the bytes are not a format we
+/// can clean — the caller must abandon the upload, never fall through to it.
+///
+/// The returned `File` keeps the original name and carries the *sniffed* MIME
+/// type (the strippers are lossless + format-preserving), so a caller that
+/// derives its Storage content-type from `.type` records what the bytes
+/// actually are rather than what the filename claimed.
+export async function stripExifFromFile(file: File): Promise<File | null> {
 	const original = new Uint8Array(await file.arrayBuffer());
-	const stripped = stripImageExif(original, file.type);
-	if (stripped === original) return file;
+	const mime = detectImageMime(original);
+	if (!mime) return null;
+	const stripped = stripImageExif(original, mime);
+	if (stripped === original && mime === file.type) return file;
 	const buf = new ArrayBuffer(stripped.byteLength);
 	new Uint8Array(buf).set(stripped);
-	return new File([buf], file.name, { type: file.type, lastModified: file.lastModified });
+	return new File([buf], file.name, { type: mime, lastModified: file.lastModified });
 }

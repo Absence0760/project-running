@@ -504,10 +504,18 @@
 		loading = false;
 	}
 
+	// A refused zone write must never look like a saved one: the whole point
+	// of the zone is that the area is clipped out of every public share, and
+	// a runner who believes their home is hidden when it isn't is the worst
+	// outcome on this page.
 	async function persistZones(next: PrivacyZone[]) {
 		if (!auth.user) return;
-		await updateUniversal(auth.user.id, { [PRIVACY_ZONES_KEY]: next });
-		privacyZones = next;
+		try {
+			await updateUniversal(auth.user.id, { [PRIVACY_ZONES_KEY]: next });
+			privacyZones = next;
+		} catch (e) {
+			showToast(m('prefs.zoneSaveFailed', { error: (e as Error).message }), 'error');
+		}
 	}
 
 	async function addZone(zone: PrivacyZone) {

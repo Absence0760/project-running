@@ -182,22 +182,6 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     }
   }
 
-  String? _avatarContentType(String filename) {
-    final dot = filename.lastIndexOf('.');
-    final ext = dot >= 0 ? filename.substring(dot + 1).toLowerCase() : '';
-    switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return null;
-    }
-  }
-
   Future<void> _pickAvatar() async {
     final api = widget.apiClient;
     final l10n = AppLocalizations.of(context);
@@ -220,7 +204,21 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       return;
     }
     if (f == null) return;
-    final contentType = _avatarContentType(f.name);
+    final Uint8List picked;
+    try {
+      picked = Uint8List.fromList(await f.readAsBytes());
+    } catch (e) {
+      debugPrint('settings account avatar read failed: $e');
+      if (!mounted) return;
+      showTopBanner(context, l10n.settingsAccountAvatarFailed(friendlyError(l10n, e)));
+      return;
+    }
+    // Strip EXIF/GPS before the bytes leave the device — the avatars bucket is
+    // public with no server-side strip worker, so this is the ONLY strip. The
+    // format comes from the bytes, not the picked filename: a HEIC named
+    // `.jpg` would otherwise reach the JPEG walker, fail its SOI check, and be
+    // uploaded whole with the home coordinate still in it.
+    final contentType = detectImageMime(picked);
     if (contentType == null) {
       if (!mounted) return;
       showTopBanner(context, l10n.settingsAccountAvatarUnsupported);
@@ -228,13 +226,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     }
     setState(() => _avatarBusy = true);
     try {
-      final raw = await f.readAsBytes();
-      // Strip EXIF/GPS before the bytes leave the device — the avatars bucket
-      // is public with no server-side strip worker, so this is the ONLY strip.
-      // Dispatch by content type so a PNG/WebP avatar is stripped too, not
-      // just JPEG (an unstripped PNG/WebP would ship a home coordinate to the
-      // logged-out public profile).
-      final clean = stripImageExif(Uint8List.fromList(raw), contentType);
+      final clean = stripImageExif(picked, contentType);
       final url = await api.uploadAvatar(bytes: clean, contentType: contentType);
       if (!mounted) return;
       setState(() {

@@ -1064,6 +1064,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'Tu cuenta está configurada, pero tus preferencias no se guardaron: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'No se puede conectar con el servidor ahora mismo. Puedes terminar la configuración más tarde — todo esto se puede editar en Ajustes.';
 
@@ -5804,6 +5809,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String coachArchiveDeleteFailed(String error) {
     return 'No se pudo eliminar el archivo: $error';
   }
+
+  @override
+  String get coachReactionFailed =>
+      'No se pudo guardar tu reacción. Inténtalo de nuevo.';
 
   @override
   String get coachCopied => 'Copiado al portapapeles';

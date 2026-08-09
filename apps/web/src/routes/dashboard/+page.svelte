@@ -71,6 +71,7 @@
 	import { paceMinutesSeconds } from '$lib/format/pace_format';
 	import { currentLocale, m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import {
 		loadGoals,
 		saveGoals,
@@ -639,13 +640,15 @@
 	}
 
 	async function setHiddenPrs(next: string[]) {
+		const previous = hiddenPrs;
 		hiddenPrs = next;
 		const uid = auth.user?.id;
 		if (!uid) return;
 		try {
 			await updateUniversal(uid, { hidden_prs: next });
 		} catch (e) {
-			console.warn('hidden_prs save failed', e);
+			hiddenPrs = previous;
+			showToast(m('dash.hidePrFailed', { error: (e as Error).message }), 'error');
 		}
 	}
 	const hidePr = (key: string) => setHiddenPrs([...new Set([...hiddenPrs, key])]);
@@ -1439,7 +1442,9 @@
 				</p>
 				{#if daysToHard != null}
 					<p class="fitness-next-hard">
-						Next hard session in ~{daysToHard} day{daysToHard === 1 ? '' : 's'} of easy running.
+						{daysToHard === 1
+							? m('dash.nextHardOne')
+							: m('dash.nextHardOther', { days: daysToHard })}
 					</p>
 				{/if}
 				{#if excludeGymFromReadiness && hasRecentLift}

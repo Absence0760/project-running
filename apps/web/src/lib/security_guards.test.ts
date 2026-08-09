@@ -1670,6 +1670,22 @@ test('Coach 401 / 503 error responses don\'t leak provider / GoTrue internals', 
 		/jsonError\(401,\s*['"]not authenticated['"]\s*\)/,
 		'401 must return the static "not authenticated" — pass-2 commit a2ea656 closed the GoTrue oracle.',
 	);
+	// 502 + the mid-stream SSE error: neither may put the caught provider
+	// error's `.message` on the wire. On the Anthropic path that string is
+	// the upstream status envelope (model id, error taxonomy, and the
+	// `messages.N` index that counts the turns we inject ahead of the
+	// caller's); on the OpenAI-compatible path `humaniseUpstreamError` falls
+	// back to the raw upstream response body.
+	assert.doesNotMatch(
+		handler,
+		/jsonError\(502,\s*msg\s*\)/,
+		'the 502 must not echo the provider error message — log it, return a static string.',
+	);
+	assert.doesNotMatch(
+		handler,
+		/sendEvent\('error',\s*\{\s*message/,
+		'the mid-stream SSE error event must not carry the provider error message.',
+	);
 });
 
 test('Coach pre-handshake daily-limit placeholder matches the server free cap', () => {
@@ -1765,9 +1781,11 @@ test('export-data validates track_url against the canonical Storage path', () =>
 		/expectedTrackUrl\s*=\s*`\$\{[^}]*user_id[^}]*\}\/\$\{[^}]*\.id[^}]*\}\.json\.gz`/,
 		'export-data must build expectedTrackUrl as `${user_id}/${run_id}.json.gz` — pass-2 commit 978b4c9.',
 	);
+	// Either polarity of the same comparison — the gate is a predicate the
+	// download sweeps filter on, so it reads as `=== expected`.
 	assert.match(
 		ef,
-		/track_url\s*!==\s*expectedTrackUrl/,
+		/track_url\s*[!=]==\s*expectedTrackUrl/,
 		'export-data must skip rows whose track_url does not match the canonical pattern.',
 	);
 });
@@ -2628,4 +2646,160 @@ test('client user_profiles selects only touch public-safe columns', () => {
 			'403 at runtime — route owner self-reads through get_my_profile()):\n  ' +
 			offenders.join('\n  '),
 	);
+});
+
+test('every image type an upload surface accepts is one the EXIF stripper can clean', () => {
+	// Reason: `stripImageExif` used to return an unrecognised format
+	// unchanged, and every photo picker advertised `image/heic,image/heif`.
+	// Nothing downstream covers the gap — the Go worker's photo handler
+	// returns early on any non-JPEG (`exif.IsJPEG` in
+	// apps/job_worker/internal/handler_photo_process.go) — so an iPhone HEIC
+	// landed in the bucket with its GPS EXIF intact and the gallery served
+	// that original back to every viewer. The accepted set must therefore be
+	// a subset of the strippable set, on both the MIME→extension maps and
+	// the `accept` attribute of every file input. See decisions §33.
+	const strippable = new Set(
+		[...read('src/lib/util/exif_strip.ts').matchAll(
+			/STRIPPABLE_IMAGE_MIME_TYPES:\s*readonly string\[\]\s*=\s*\[([\s\S]*?)\]/g,
+		)]
+			.flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])),
+	);
+	assert.ok(
+		strippable.size >= 3,
+		'Could not parse STRIPPABLE_IMAGE_MIME_TYPES out of util/exif_strip.ts — renamed?',
+	);
+
+	const data = read('src/lib/core/data.ts');
+	for (const mapName of ['PHOTO_MIME_TO_EXT', 'AVATAR_MIME_TO_EXT']) {
+		const body = data.match(
+			new RegExp(`const ${mapName}: Record<string, string> = \\{([\\s\\S]*?)\\}`),
+		);
+		assert.ok(body, `Could not locate ${mapName} in core/data.ts — renamed?`);
+		const accepted = [...body![1].matchAll(/'([^']+)':/g)].map((m) => m[1]);
+		assert.ok(accepted.length > 0, `${mapName} parsed empty`);
+		for (const mime of accepted) {
+			assert.ok(
+				strippable.has(mime),
+				`${mapName} accepts "${mime}", which stripImageExif cannot clean — ` +
+					'the upload would carry its GPS metadata into the bucket.',
+			);
+		}
+	}
+
+	const root = resolve(__dirname, '..');
+	const walk = (dir: string, out: string[] = []): string[] => {
+		for (const ent of readdirSync(dir, { withFileTypes: true })) {
+			const full = `${dir}/${ent.name}`;
+			if (ent.isDirectory()) walk(full, out);
+			else if (ent.name.endsWith('.svelte')) out.push(full);
+		}
+		return out;
+	};
+	const offenders: string[] = [];
+	for (const f of walk(root)) {
+		for (const m of readFileSync(f, 'utf-8').matchAll(/accept="(image\/[^"]*)"/g)) {
+			for (const mime of m[1].split(',').map((s) => s.trim())) {
+				if (!strippable.has(mime)) {
+					offenders.push(`${f.replace(resolve(__dirname, '..', '..') + '/', '')} — accept="${mime}"`);
+				}
+			}
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		'File inputs must not advertise an image type the EXIF stripper cannot clean:\n  ' +
+			offenders.join('\n  '),
+	);
+});
+
+test('every LLM-spending endpoint carries a per-user rate-limit bucket', () => {
+	// Reason: Pro is a monthly price, not a per-call one. `/api/coach` is
+	// capped by increment_coach_usage and the two route-engine handlers by
+	// checkRouteRateLimit, but route-describe and route-request shipped with
+	// neither — a single subscription (or one leaked Pro JWT) bought unbounded
+	// claude-opus-4-8 calls on the operator's key. The only backstop was the
+	// per-IP WAF rule in infra/modules/web-stack/waf.tf, which by construction
+	// cannot see one JWT spread across an IP pool — the exact hole
+	// $lib/routes/rate_limit.ts was written for. Every handler that reaches a
+	// billed provider must hold a durable per-user ceiling, and it must be
+	// taken BEFORE the provider call.
+	for (const [file, marker] of [
+		['src/lib/routes/route_describe/handler.ts', 'anthropic.messages.create'],
+		['src/lib/routes/route_request/handler.ts', 'anthropic.messages.create'],
+		['src/lib/routes/generate/handler.ts', 'const fetcher: Fetcher'],
+		['src/lib/routes/osrm_proxy/handler.ts', 'const fetcher: Fetcher'],
+	] as const) {
+		const source = read(file);
+		assert.match(
+			source,
+			/checkRouteRateLimit\(/,
+			`${file} calls a billed provider and must take a per-user rate-limit slot ` +
+				'via checkRouteRateLimit — the per-IP WAF rule is not a per-user ceiling.',
+		);
+		const gateIdx = source.indexOf('checkRouteRateLimit(');
+		const spendIdx = source.indexOf(marker);
+		assert.ok(
+			gateIdx > 0 && spendIdx > 0 && gateIdx < spendIdx,
+			`${file}: the rate-limit check must precede the billed call (${marker}).`,
+		);
+		// The verdict is a three-value union; anything other than 'ok' has to
+		// deny, or a fail-closed 'error' silently grants the spend.
+		assert.match(
+			source,
+			/rl !== 'ok'|verdict === 'limited'/,
+			`${file} must deny on a non-'ok' rate-limit verdict (fail closed on 'error').`,
+		);
+	}
+});
+
+test('plan publishers never copy the publisher private fields onto a template', () => {
+	// Reason: RLS has no column dimension, so the two template SELECT
+	// branches ("anyone reads public plan templates", "club members read
+	// club templates") expose every column of a published row. vdot and
+	// current_5k_seconds are the publisher's fitness proxies; plan-level
+	// notes is their own free text (injury history). Both publishers used
+	// to copy `notes` straight off the source plan, so the sanctioned
+	// button leaked it — not merely a crafted REST call. Migration
+	// 20270508_001 strips all three in a trigger, which is what actually
+	// holds; this guard keeps the clients honest so the row never carries
+	// the value in the first place.
+	const source = read(__dirname, 'core/data.ts');
+	const publishers = ['publishPlanToLibrary', 'publishPlanAsTemplate'];
+	for (const fn of publishers) {
+		const start = source.indexOf(`export async function ${fn}(`);
+		assert.ok(start > 0, `${fn} not found — rename it here too.`);
+		// The insert body ends at the first `.select(` chained after it.
+		const body = source.slice(start, source.indexOf('.select(', start));
+		for (const col of ['vdot', 'current_5k_seconds', 'notes']) {
+			assert.match(
+				body,
+				new RegExp(`${col}:\\s*null`),
+				`${fn} must set ${col} to null on the template row it inserts.`,
+			);
+			assert.doesNotMatch(
+				body,
+				new RegExp(`${col}:\\s*src\\.`),
+				`${fn} must not copy ${col} from the source plan onto a template.`,
+			);
+		}
+	}
+});
+
+test('the public plan library reader does not select the private template columns', () => {
+	// Reason: fetchPublicPlanLibrary does select('*'), which is only safe
+	// because 20270508_001 guarantees a template row holds nulls in those
+	// columns. If a future edit names them explicitly it is reintroducing
+	// the read side of the leak.
+	const source = read(__dirname, 'core/data.ts');
+	const start = source.indexOf('export async function fetchPublicPlanLibrary(');
+	assert.ok(start > 0, 'fetchPublicPlanLibrary not found — rename it here too.');
+	const body = source.slice(start, source.indexOf('\n}', start));
+	for (const col of ['vdot', 'current_5k_seconds']) {
+		assert.doesNotMatch(
+			body,
+			new RegExp(`['"\`][^'"\`]*\\b${col}\\b`),
+			`fetchPublicPlanLibrary must not name ${col} in its projection.`,
+		);
+	}
 });

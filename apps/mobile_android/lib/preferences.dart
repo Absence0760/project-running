@@ -1036,12 +1036,24 @@ class UnitFormat {
   static String distanceLabel(DistanceUnit unit) =>
       unit == DistanceUnit.mi ? 'mi' : 'km';
 
+  /// Pace stored per km → pace in the unit the runner reads and types.
+  static double paceSecPerUnit(double secondsPerKm, DistanceUnit unit) =>
+      unit == DistanceUnit.mi
+          ? secondsPerKm * (kMetresPerMile / 1000)
+          : secondsPerKm;
+
+  /// The inverse of [paceSecPerUnit]. An editor that collects a pace in the
+  /// runner's unit must come back through here before the value is stored —
+  /// every consumer of a stored pace treats it as seconds per km.
+  static double paceSecPerKm(double secondsPerUnit, DistanceUnit unit) =>
+      unit == DistanceUnit.mi
+          ? secondsPerUnit / (kMetresPerMile / 1000)
+          : secondsPerUnit;
+
   /// Format pace: "5:30" (per km/mi based on unit).
   static String pace(double? secondsPerKm, DistanceUnit unit) {
     if (secondsPerKm == null || secondsPerKm <= 0) return '--:--';
-    final secondsPerUnit = unit == DistanceUnit.mi
-        ? secondsPerKm * (kMetresPerMile / 1000)
-        : secondsPerKm;
+    final secondsPerUnit = paceSecPerUnit(secondsPerKm, unit);
     // Round to whole seconds first, then split. Truncating the seconds field
     // in isolation diverged from web's formatPace (which rounds) on a
     // fractional pace; rounding first keeps both platforms on the same value

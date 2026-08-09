@@ -1,5 +1,5 @@
 import type { TrackPoint } from '../types';
-import { computeEffortFromTrack } from './segments';
+import { computeEffortsFromTrack } from './segments';
 
 /// Pick the saved route an imported (route-less) run clearly *followed*, so
 /// its segment efforts can be auto-computed (strava persona #21).
@@ -61,14 +61,18 @@ export function buildSegmentEffortRows(
 	ids: { run_id: string; user_id: string },
 ): SegmentEffortInsert[] {
 	const rows: SegmentEffortInsert[] = [];
-	for (const seg of segments) {
-		const eff = computeEffortFromTrack(track, {
+	const efforts = computeEffortsFromTrack(
+		track,
+		segments.map((seg) => ({
 			start_distance_m: Number(seg.start_distance_m),
 			end_distance_m: Number(seg.end_distance_m),
-		});
+		})),
+	);
+	for (let i = 0; i < segments.length; i++) {
+		const eff = efforts[i];
 		if (!eff) continue;
 		rows.push({
-			segment_id: seg.id,
+			segment_id: segments[i].id,
 			run_id: ids.run_id,
 			user_id: ids.user_id,
 			time_seconds: eff.time_seconds,

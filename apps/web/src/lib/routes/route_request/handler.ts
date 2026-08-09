@@ -30,6 +30,15 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 
 import { parseAuthHeader } from '../../coach/limits';
+import { checkRouteRateLimit } from '../rate_limit';
+
+/// Per-user ceiling on the billed Anthropic call. Same shape and size as
+/// the sibling `generate-route` / `route-describe` buckets: 60/hour is far
+/// past interactive use of the natural-language box while capping a
+/// scripted Pro caller at 60 Opus requests an hour instead of unbounded.
+export const ROUTE_REQUEST_RATE_BUCKET = 'route-request';
+export const ROUTE_REQUEST_RATE_MAX = 60;
+export const ROUTE_REQUEST_RATE_WINDOW_S = 3600;
 import { validateConstraints, type RouteConstraints } from './constraints';
 
 /// Matches the model used by route-describe + the coach (decisions.md;
@@ -196,6 +205,23 @@ export async function handleRouteRequest(
 		// 403 + upgrade:true lets the UI surface a "Pro" upsell on the NL
 		// box without implying the manual form failed.
 		return json(403, { error: 'pro required', upgrade: true });
+	}
+
+	// Per-user ceiling on the billed fan-out. Pro is a monthly price, not a
+	// per-call one, so without this a single subscription (or one leaked Pro
+	// JWT) buys unbounded Opus calls on the operator's key — the per-IP WAF
+	// rule can't see a JWT spread over an IP pool. Only Pro callers reach
+	// here, so a free caller is never charged a slot. Fail-closed: a throttle
+	// error denies, and the manual form still works.
+	if (!config.bypassPaywallEnabled) {
+		const rl = await checkRouteRateLimit(
+			supabase,
+			userRes.data.user.id,
+			ROUTE_REQUEST_RATE_BUCKET,
+			ROUTE_REQUEST_RATE_MAX,
+			ROUTE_REQUEST_RATE_WINDOW_S,
+		);
+		if (rl !== 'ok') return json(429, { error: 'rate_limited' });
 	}
 
 	// Pro path. Missing key → 503 (operator config). The client keeps the

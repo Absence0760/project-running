@@ -1859,6 +1859,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save your setup: {message}'**
   String setupSaveError(String message);
 
+  /// Toast shown when the setup wizard saved the profile but the preferences bag write failed
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is set up, but your preferences didn\'t save: {message}'**
+  String setupPrefsSaveError(String message);
+
   /// Hint shown next to the setup wizard's offline fail-safe exit after a save failed
   ///
   /// In en, this message translates to:
@@ -9567,6 +9573,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t delete archive: {error}'**
   String coachArchiveDeleteFailed(String error);
+
+  /// Banner shown when writing a thumbs up/down on a coach message fails; the thumb reverts
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your reaction. Try again.'**
+  String get coachReactionFailed;
 
   /// Top-banner shown after copying a message
   ///

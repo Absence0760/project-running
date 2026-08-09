@@ -76,14 +76,19 @@ insert into plan_workouts (
   'easy', '2026-06-01', 8000, 360
 );
 
--- 1. Sanity: the template row carries the leaked-shape values we
---    just inserted — confirms the clone-side test below is
---    actually exercising the strip.
+-- 1. The template row does NOT carry the publisher fitness values the
+--    fixture above tried to insert: migration 20270508_001 strips them
+--    in a BEFORE INSERT trigger, so a template can no longer hold them
+--    at all. This assertion used to expect the values through, as proof
+--    that the clone-side strip below had something to strip. The strip
+--    has moved earlier, and the clone RPC's own nulling is now redundant
+--    defence rather than the only control — the clone test below still
+--    runs, it just can no longer fail for the original reason.
 select results_eq(
   $$ select vdot::float, current_5k_seconds from training_plans
      where id = '77777777-7777-7777-7777-777777777701' $$,
-  $$ values (52.5::float, 1320) $$,
-  'template row carries publisher fitness data (pre-clone state)'
+  $$ values (null::float, null::int) $$,
+  'template row cannot carry publisher fitness data (trigger strips on insert)'
 );
 
 -- ── Member clones the template ──

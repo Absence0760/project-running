@@ -1064,6 +1064,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'A tua conta ficou configurada, mas as tuas preferências não foram guardadas: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
 
@@ -5805,6 +5810,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String coachArchiveDeleteFailed(String error) {
     return 'Não foi possível excluir o arquivo: $error';
   }
+
+  @override
+  String get coachReactionFailed =>
+      'Não foi possível guardar a tua reação. Tenta novamente.';
 
   @override
   String get coachCopied => 'Copiado para a área de transferência';
@@ -13669,6 +13678,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'Sua conta foi configurada, mas suas preferências não foram salvas: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
 
@@ -18408,6 +18422,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String coachArchiveDeleteFailed(String error) {
     return 'Não foi possível excluir o arquivo: $error';
   }
+
+  @override
+  String get coachReactionFailed =>
+      'Não foi possível salvar sua reação. Tente novamente.';
 
   @override
   String get coachCopied => 'Copiado para a área de transferência';

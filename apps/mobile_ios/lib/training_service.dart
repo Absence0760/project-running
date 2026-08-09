@@ -159,10 +159,11 @@ class TrainingService extends ChangeNotifier {
   /// `publish_plan_as_template` function server-side; only
   /// `clone_plan_template` exists, for the adopt direction).
   ///
-  /// `vdot` + `current_5k_seconds` are intentionally nulled on the
-  /// template row — they're the publisher's personal fitness numbers
-  /// and would otherwise leak to every club member via
-  /// `fetchClubTemplates` (see migration 20260721_001_plan_templates_strip_fitness).
+  /// `vdot`, `current_5k_seconds` and `notes` are nulled on the template
+  /// row — the publisher's fitness numbers and their own free text, which
+  /// would otherwise leak to every club member via `fetchClubTemplates`.
+  /// The trigger in migration 20270508_001 is what actually enforces this;
+  /// this insert is reachable by REST without it.
   Future<String> publishPlanAsTemplate({
     required String planId,
     required String clubId,
@@ -192,7 +193,7 @@ class TrainingService extends ChangeNotifier {
       'current_5k_seconds': null,
       'status': 'completed',
       'source': source.source,
-      'notes': source.notes,
+      'notes': null,
       'rules': source.rules,
       'is_template': true,
       'club_id': clubId,
@@ -354,7 +355,7 @@ class TrainingService extends ChangeNotifier {
       'vdot': null,
       'current_5k_seconds': null,
       'status': 'completed',
-      'notes': source.notes,
+      'notes': null,
       'is_template': true,
       'is_public_template': true,
       'club_id': null,

@@ -3427,11 +3427,15 @@ export async function fetchEventRsvpSummary(
 	instanceStart: string
 ): Promise<EventRsvpSummary> {
 	const viewerId = auth.user?.id ?? null;
-	const { data } = await supabase
+	const { data, error } = await supabase
 		.from(TABLES.event_attendees)
 		.select('user_id, status')
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart);
+	// A failed read must not come back as a zeroed summary: `viewerStatus`
+	// null is what tells the page the viewer has no slot, so a swallowed
+	// error re-shows "Register for £X" to someone who has already paid.
+	if (error) throw error;
 	const summary: EventRsvpSummary = {
 		going: 0,
 		maybe: 0,
@@ -4288,7 +4292,7 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 			vdot: null,
 			current_5k_seconds: null,
 			status: 'completed',
-			notes: src.notes,
+			notes: null,
 			is_template: true,
 			is_public_template: true,
 			club_id: null,
@@ -4400,12 +4404,13 @@ export async function publishPlanAsTemplate(
 	}
 	const src = source.plan;
 
-	// vdot + current_5k_seconds are the publisher's private fitness
-	// measurements — derived proxies for age, fitness, and recent 5 km
-	// performance. They aren't template-design values; copying them
-	// into a row that every club member can SELECT leaks personal
-	// fitness data. Strip on publish; the cloning RPC also strips on
-	// the read side as defence-in-depth (migration 20260721_001).
+	// vdot, current_5k_seconds and notes are the publisher's private
+	// fields — fitness proxies and their own free text (training
+	// constraints, injury history). They aren't template-design values;
+	// copying them into a row every club member can SELECT leaks
+	// personal data. Stripped here and enforced by the trigger in
+	// migration 20270508_001, which is what actually holds — this
+	// insert is reachable by REST without it.
 	const { data: tmpl, error: planErr } = await supabase
 		.from('training_plans')
 		.insert({
@@ -4421,7 +4426,7 @@ export async function publishPlanAsTemplate(
 			current_5k_seconds: null,
 			status: 'completed',
 			source: src.source ?? 'manual',
-			notes: src.notes,
+			notes: null,
 			rules: src.rules,
 			is_template: true,
 			club_id: clubId,
@@ -6067,12 +6072,12 @@ export interface EventPhoto extends Omit<RunPhoto, 'run_id'> {
 	uploader_name: string | null;
 }
 
+// Every key must be a format `stripImageExif` can clean — an accepted-but-
+// unstrippable type uploads a geotagged original verbatim.
 const PHOTO_MIME_TO_EXT: Record<string, string> = {
 	'image/jpeg': 'jpg',
 	'image/png': 'png',
 	'image/webp': 'webp',
-	'image/heic': 'heic',
-	'image/heif': 'heif',
 };
 
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -6206,14 +6211,17 @@ export async function addRunPhoto(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 
-	const ext = PHOTO_MIME_TO_EXT[input.file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
 	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
 
 	// Strip EXIF/XMP (incl. GPS) client-side before upload so a geotagged
 	// original never sits readable in the bucket ahead of the server worker's
 	// async strip. Mirrors mobile's pre-upload strip (persona woman/family #52).
+	// The strip sniffs the bytes and refuses a format it cannot clean, so the
+	// accepted set is decided here, not by the browser-supplied File.type.
 	const file = await stripExifFromFile(input.file);
+	if (!file) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = PHOTO_MIME_TO_EXT[file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 
 	const photoId = crypto.randomUUID();
 	const storagePath = `${userId}/${photoId}.${ext}`;
@@ -6319,11 +6327,12 @@ const avatarPathsFor = (userId: string): string[] =>
 export async function uploadAvatar(file: File): Promise<string> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
-	const ext = AVATAR_MIME_TO_EXT[file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 	if (file.size > AVATAR_MAX_BYTES) throw new Error('Image too large (2 MB max)');
 
 	const clean = await stripExifFromFile(file);
+	if (!clean) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = AVATAR_MIME_TO_EXT[clean.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 	const storagePath = `${userId}/avatar.${ext}`;
 
 	// Clear any existing avatar (this ext and the others) so the upload is a
@@ -6462,11 +6471,12 @@ export async function addRoutePhoto(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 
-	const ext = PHOTO_MIME_TO_EXT[input.file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
 	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
 
 	const file = await stripExifFromFile(input.file);
+	if (!file) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = PHOTO_MIME_TO_EXT[file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 
 	const photoId = crypto.randomUUID();
 	const storagePath = `${userId}/${photoId}.${ext}`;
@@ -6626,11 +6636,12 @@ export async function addClubPhoto(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 
-	const ext = PHOTO_MIME_TO_EXT[input.file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
 	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
 
 	const file = await stripExifFromFile(input.file);
+	if (!file) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = PHOTO_MIME_TO_EXT[file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 
 	const photoId = crypto.randomUUID();
 	const storagePath = `${userId}/${photoId}.${ext}`;
@@ -7886,7 +7897,7 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 	const { segments } = await fetchGlobalSegmentsWithError(GLOBAL_SEGMENT_SCORING_LIMIT);
 	if (segments.length === 0) return 0;
 
-	const { computeGlobalSegmentEffort } = await import('../segments/segments');
+	const { computeGlobalSegmentEfforts } = await import('../segments/segments');
 	const rows: {
 		global_segment_id: string;
 		run_id: string;
@@ -7894,15 +7905,21 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 		time_seconds: number;
 		started_at: string;
 	}[] = [];
-	for (const seg of segments) {
-		const pts = (seg.waypoints ?? []).map((w) => ({ lat: Number(w.lat), lng: Number(w.lng) }));
-		const eff = computeGlobalSegmentEffort(input.track as import('$lib/types').TrackPoint[], {
-			points: pts,
+	// One sweep over the catalogue rather than a call per segment: the track's
+	// extent is then measured once and the (overwhelming) majority of segments,
+	// which are nowhere near this run, are rejected without walking it.
+	const efforts = computeGlobalSegmentEfforts(
+		input.track as import('$lib/types').TrackPoint[],
+		segments.map((seg) => ({
+			points: (seg.waypoints ?? []).map((w) => ({ lat: Number(w.lat), lng: Number(w.lng) })),
 			distance_m: Number(seg.distance_m),
-		});
+		})),
+	);
+	for (let i = 0; i < segments.length; i++) {
+		const eff = efforts[i];
 		if (!eff) continue;
 		rows.push({
-			global_segment_id: seg.id,
+			global_segment_id: segments[i].id,
 			run_id: input.run_id,
 			user_id: userId,
 			time_seconds: eff.time_seconds,

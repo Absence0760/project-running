@@ -1020,6 +1020,11 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'アカウントの設定は完了しましたが、環境設定を保存できませんでした: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       '現在サーバーに接続できません。セットアップは後で完了できます — ここの内容はすべて設定で変更できます。';
 
@@ -5467,6 +5472,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String coachArchiveDeleteFailed(String error) {
     return 'アーカイブを削除できませんでした：$error';
   }
+
+  @override
+  String get coachReactionFailed => 'リアクションを保存できませんでした。もう一度お試しください。';
 
   @override
   String get coachCopied => 'クリップボードにコピーしました';

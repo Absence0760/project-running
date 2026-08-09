@@ -10,7 +10,8 @@ import { USER_A } from '../fixtures/users';
  *
  * RunPhotos mounts on every run-detail page; canManage is true when
  * `auth.user.id === runOwnerId`. The owner can attach jpeg / png /
- * webp / heic / heif images. Each upload calls addRunPhoto in
+ * webp images — the formats the EXIF stripper can clean. Each upload
+ * calls addRunPhoto in
  * data.ts which uploads to the `run-photos` Storage bucket at
  * `{user_id}/<photo_id>.<ext>` and inserts a `run_photos` row
  * keyed by owner_id.

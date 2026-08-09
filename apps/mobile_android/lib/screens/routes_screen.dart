@@ -99,6 +99,11 @@ class RoutesScreen extends StatefulWidget {
 
 class RoutesScreenState extends State<RoutesScreen> {
   bool _syncing = false;
+  /// Set while one of the two FABs has its one-shot surface open — the builder
+  /// route or the file picker. Both disable: a second tap during the push
+  /// transition stacked a duplicate builder, so saving in the top one popped
+  /// onto an empty second one and read as a discarded save.
+  bool _fabBusy = false;
   // Set when the initial remote fetch fails or times out. Only surfaced as a
   // full ErrorState when there are no cached routes to fall back on — a stale
   // cache still renders, with the failure shown as a banner instead.
@@ -661,6 +666,16 @@ class RoutesScreenState extends State<RoutesScreen> {
   }
 
   Future<void> _importFile() async {
+    if (_fabBusy) return;
+    setState(() => _fabBusy = true);
+    try {
+      await _pickAndImport();
+    } finally {
+      if (mounted) setState(() => _fabBusy = false);
+    }
+  }
+
+  Future<void> _pickAndImport() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['gpx', 'kml'],
@@ -720,19 +735,24 @@ class RoutesScreenState extends State<RoutesScreen> {
 
   Future<void> _openBuilder() async {
     final api = widget.apiClient;
-    if (api == null) return;
-    final created = await Navigator.of(context).push<cm.Route>(
-      MaterialPageRoute(
-        builder: (_) => RouteBuilderScreen(
-          apiClient: api,
-          routeStore: widget.routeStore,
-          social: widget.social,
+    if (api == null || _fabBusy) return;
+    setState(() => _fabBusy = true);
+    try {
+      final created = await Navigator.of(context).push<cm.Route>(
+        MaterialPageRoute(
+          builder: (_) => RouteBuilderScreen(
+            apiClient: api,
+            routeStore: widget.routeStore,
+            social: widget.social,
+          ),
         ),
-      ),
-    );
-    if (created != null && mounted) {
-      showTopBanner(
-          context, AppLocalizations.of(context).routesSaved(created.name));
+      );
+      if (created != null && mounted) {
+        showTopBanner(
+            context, AppLocalizations.of(context).routesSaved(created.name));
+      }
+    } finally {
+      if (mounted) setState(() => _fabBusy = false);
     }
   }
 
@@ -1275,14 +1295,14 @@ class RoutesScreenState extends State<RoutesScreen> {
         if (widget.apiClient != null)
           FloatingActionButton.extended(
             heroTag: 'routes_build_fab',
-            onPressed: _openBuilder,
+            onPressed: _fabBusy ? null : _openBuilder,
             icon: const Icon(Icons.add_location_alt),
             label: Text(l10n.routesBuild),
           ),
         const SizedBox(height: 12),
         FloatingActionButton.extended(
           heroTag: 'routes_import_fab',
-          onPressed: _importFile,
+          onPressed: _fabBusy ? null : _importFile,
           icon: const Icon(Icons.upload_file),
           label: Text(l10n.routesImport),
         ),

@@ -1550,12 +1550,12 @@ void main() {
       final src = File('lib/screens/routes_screen.dart').readAsStringSync();
       final body = _extractMethodBody(
         src,
-        r'Future<void> _importFile\(\)\s*async\s*\{',
+        r'Future<void> _pickAndImport\(\)\s*async\s*\{',
       );
       expect(
         body,
         contains('compute('),
-        reason: '_importFile must run RouteParser.fromGpx / fromKml inside '
+        reason: '_pickAndImport must run RouteParser.fromGpx / fromKml inside '
             'compute() so a large file does not freeze the routes screen.',
       );
     });

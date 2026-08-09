@@ -11,6 +11,7 @@
  */
 
 import type { TrackPoint } from '../types';
+import { unwrapLonDeg } from '../routes/geo';
 
 export interface SegmentSlice {
 	start_distance_m: number;
@@ -33,12 +34,45 @@ export function computeEffortFromTrack(
 	track: TrackPoint[],
 	segment: SegmentSlice,
 ): EffortResult | null {
-	if (track.length < 2) return null;
-	const segLen = segment.end_distance_m - segment.start_distance_m;
-	if (segLen <= 0) return null;
+	return computeEffortsFromTrack(track, [segment])[0];
+}
 
-	// First pass: cumulative distance per index, plus collect sample
-	// step lengths for the sparsity heuristic.
+/**
+ * Times a run track over many segment slices at once, returning one result
+ * per input slice. Identical per-slice semantics to `computeEffortFromTrack`,
+ * which delegates here.
+ *
+ * Everything expensive here is a property of the TRACK, not of the slice —
+ * the cumulative-distance array and the median sample step the sparsity guard
+ * compares against. Calling the single-slice form in a loop rebuilt and
+ * re-sorted both per slice, so a run over a segmented route cost
+ * O(segments x points log points): a 100k-point ultra over a 50-segment route
+ * spent ~600 ms of blocked main thread on run-detail. Measured once here, the
+ * per-slice work is two binary searches.
+ *
+ * Mirrors `computeEffortsFromTrack` in
+ * `apps/mobile_android/lib/segments.dart`.
+ */
+export function computeEffortsFromTrack(
+	track: TrackPoint[],
+	segments: readonly SegmentSlice[],
+): (EffortResult | null)[] {
+	const out: (EffortResult | null)[] = new Array(segments.length).fill(null);
+	if (track.length < 2 || segments.length === 0) return out;
+	const index = distanceIndex(track);
+	for (let i = 0; i < segments.length; i++) {
+		out[i] = effortFromIndex(track, index, segments[i]);
+	}
+	return out;
+}
+
+interface TrackDistanceIndex {
+	cum: Float64Array;
+	/** Median non-zero sample step; null when the track never moved. */
+	medianStep: number | null;
+}
+
+function distanceIndex(track: TrackPoint[]): TrackDistanceIndex {
 	const cum = new Float64Array(track.length);
 	const steps: number[] = [];
 	for (let i = 1; i < track.length; i++) {
@@ -48,14 +82,26 @@ export function computeEffortFromTrack(
 		cum[i] = cum[i - 1] + d;
 		if (d > 0) steps.push(d);
 	}
+	if (steps.length === 0) return { cum, medianStep: null };
+	steps.sort((a, b) => a - b);
+	return { cum, medianStep: steps[Math.floor(steps.length / 2)] };
+}
+
+function effortFromIndex(
+	track: TrackPoint[],
+	index: TrackDistanceIndex,
+	segment: SegmentSlice,
+): EffortResult | null {
+	const segLen = segment.end_distance_m - segment.start_distance_m;
+	if (segLen <= 0) return null;
+
+	const { cum, medianStep } = index;
 	if (cum[cum.length - 1] < segment.end_distance_m) return null;
-	if (steps.length === 0) return null;
+	if (medianStep == null) return null;
 
 	// Sparsity guard: median sample step must be at least 5× smaller
 	// than the segment so the start / end crossings are well-resolved.
-	steps.sort((a, b) => a - b);
-	const median = steps[Math.floor(steps.length / 2)];
-	if (median > segLen / 5) return null;
+	if (medianStep > segLen / 5) return null;
 
 	const startTs = timestampAtDistance(track, cum, segment.start_distance_m);
 	const endTs = timestampAtDistance(track, cum, segment.end_distance_m);
@@ -91,8 +137,8 @@ export interface GlobalSegmentGeometry {
  * `toleranceM` LATER in the track (a segment is directional), having
  * covered a distance within 25% of the segment's own length between the
  * two crossings — otherwise null, mirroring `pickAutoEffortRoute`'s
- * "better no effort than a wrong one" stance. The actual timing then
- * reuses `computeEffortFromTrack` over that distance window, so the
+ * "better no effort than a wrong one" stance. The actual timing then runs
+ * `computeEffortFromTrack`'s own logic over that distance window, so the
  * sparsity + timestamp-interpolation guards are shared, not re-derived.
  *
  * Mirrors `computeGlobalSegmentEffort` in
@@ -103,19 +149,65 @@ export function computeGlobalSegmentEffort(
 	segment: GlobalSegmentGeometry,
 	toleranceM = 35,
 ): EffortResult | null {
-	if (track.length < 2) return null;
+	return computeGlobalSegmentEfforts(track, [segment], toleranceM)[0];
+}
+
+/**
+ * Scores a run track against a whole catalogue of segment geometries in one
+ * sweep, returning one result per input segment (null where the run didn't
+ * run it). Identical per-segment semantics to `computeGlobalSegmentEffort`,
+ * which delegates here.
+ *
+ * The batch shape is what makes catalogue scoring affordable. Scored
+ * one-at-a-time, every segment paid two full-track haversine passes before
+ * the check that rejects it, so the run-detail sweep over the 500-segment
+ * catalogue (`GLOBAL_SEGMENT_SCORING_LIMIT`) was O(segments x trackPoints) —
+ * seconds of blocked main thread on a long track, essentially all of it spent
+ * measuring distances to segments on other continents. Here the track's
+ * extent is measured once and each segment is rejected against it in constant
+ * time, so only the handful of geometries that could plausibly match walk the
+ * track at all.
+ *
+ * Mirrors `computeGlobalSegmentEfforts` in
+ * `apps/mobile_android/lib/segments.dart`.
+ */
+export function computeGlobalSegmentEfforts(
+	track: TrackPoint[],
+	segments: readonly GlobalSegmentGeometry[],
+	toleranceM = 35,
+): (EffortResult | null)[] {
+	const out: (EffortResult | null)[] = new Array(segments.length).fill(null);
+	if (track.length < 2 || segments.length === 0) return out;
+
+	const bounds = trackBounds(track);
+	// Only built once a segment survives the extent test — a sweep that
+	// rejects every segment must not pay a haversine pass at all.
+	let index: TrackDistanceIndex | null = null;
+
+	for (let i = 0; i < segments.length; i++) {
+		const segment = segments[i];
+		const pts = segment.points;
+		if (pts.length < 2 || segment.distance_m <= 0) continue;
+		const start = pts[0];
+		const end = pts[pts.length - 1];
+		if (!boundsAdmit(bounds, start, toleranceM)) continue;
+		if (!boundsAdmit(bounds, end, toleranceM)) continue;
+		if (index === null) index = distanceIndex(track);
+		out[i] = scoreAgainstTrack(track, index, segment, toleranceM);
+	}
+	return out;
+}
+
+function scoreAgainstTrack(
+	track: TrackPoint[],
+	index: TrackDistanceIndex,
+	segment: GlobalSegmentGeometry,
+	toleranceM: number,
+): EffortResult | null {
+	const cum = index.cum;
 	const pts = segment.points;
-	if (pts.length < 2 || segment.distance_m <= 0) return null;
 	const start = pts[0];
 	const end = pts[pts.length - 1];
-
-	// Cumulative distance along the run track.
-	const cum = new Float64Array(track.length);
-	for (let i = 1; i < track.length; i++) {
-		cum[i] =
-			cum[i - 1] +
-			haversineMetres(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
-	}
 
 	// Nearest run-track index to the segment start.
 	let startIdx = -1;
@@ -150,10 +242,79 @@ export function computeGlobalSegmentEffort(
 	// mistaken for running the segment.
 	if (Math.abs(dEnd - dStart - segment.distance_m) / segment.distance_m > 0.25) return null;
 
-	return computeEffortFromTrack(track, {
+	return effortFromIndex(track, index, {
 		start_distance_m: dStart,
 		end_distance_m: dEnd,
 	});
+}
+
+/**
+ * Latitude / longitude extent of a run track. Longitudes are unwrapped
+ * around the first point (`geo.ts`), so a track straddling the antimeridian
+ * stays one narrow interval instead of appearing to span the globe.
+ */
+interface TrackBounds {
+	minLat: number;
+	maxLat: number;
+	refLon: number;
+	minLon: number;
+	maxLon: number;
+}
+
+/**
+ * Metres per degree of latitude on the 6371 km sphere `haversineMetres`
+ * uses is 111_195; the smaller figure here is deliberate, so every degree
+ * window derived from a tolerance comes out slightly WIDER than the true
+ * one. The extent test must never reject a segment the full scan would
+ * have matched.
+ */
+const CONSERVATIVE_METRES_PER_DEG = 110_574;
+
+function trackBounds(track: TrackPoint[]): TrackBounds {
+	const refLon = track[0].lng;
+	let minLat = track[0].lat;
+	let maxLat = minLat;
+	let minLon = refLon;
+	let maxLon = refLon;
+	for (let i = 1; i < track.length; i++) {
+		const lat = track[i].lat;
+		if (lat < minLat) minLat = lat;
+		else if (lat > maxLat) maxLat = lat;
+		const lon = unwrapLonDeg(refLon, track[i].lng);
+		if (lon < minLon) minLon = lon;
+		else if (lon > maxLon) maxLon = lon;
+	}
+	return { minLat, maxLat, refLon, minLon, maxLon };
+}
+
+/**
+ * Whether any point of the track could lie within `toleranceM` of `point`.
+ * Conservative by construction: `false` means every track point is provably
+ * further away, `true` means "maybe, go and measure".
+ *
+ * Latitude is exact — spherical distance is never less than the meridian
+ * separation. Longitude uses the tangent-meridian bound: everything within
+ * an angular distance s of a point at latitude phi lies within
+ * asin(sin s / cos phi) of its meridian, taken here as the linear s / cos phi.
+ * That linearisation only under-states the window as the ratio approaches 1,
+ * which cannot happen while the window is still under a degree — so past a
+ * degree, where the test has stopped discriminating anyway, it admits.
+ */
+function boundsAdmit(
+	bounds: TrackBounds,
+	point: { lat: number; lng: number },
+	toleranceM: number,
+): boolean {
+	const padLat = toleranceM / CONSERVATIVE_METRES_PER_DEG;
+	if (point.lat < bounds.minLat - padLat || point.lat > bounds.maxLat + padLat) return false;
+
+	const cosLat = Math.cos((point.lat * Math.PI) / 180);
+	if (cosLat <= 0) return true;
+	const padLon = padLat / cosLat;
+	if (padLon >= 1) return true;
+
+	const lon = unwrapLonDeg(bounds.refLon, point.lng);
+	return lon >= bounds.minLon - padLon && lon <= bounds.maxLon + padLon;
 }
 
 /**
@@ -166,8 +327,22 @@ function timestampAtDistance(
 	cum: Float64Array,
 	target: number,
 ): number | null {
-	for (let i = 1; i < track.length; i++) {
-		if (cum[i] < target) continue;
+	// `cum` is non-decreasing, so the first index reaching `target` is a
+	// binary search rather than a walk from the start of the track.
+	let lo = 1;
+	let hi = track.length - 1;
+	let found = -1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		if (cum[mid] < target) {
+			lo = mid + 1;
+		} else {
+			found = mid;
+			hi = mid - 1;
+		}
+	}
+	if (found > 0) {
+		const i = found;
 		const prev = cum[i - 1];
 		const here = cum[i];
 		const a = track[i - 1];

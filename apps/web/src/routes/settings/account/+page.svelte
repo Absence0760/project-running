@@ -13,7 +13,7 @@
 	import { TABLES } from '$lib/core/schema';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 	import { downloadFile } from '$lib/routes/gpx';
-	import { fetchRuns, uploadAvatar, removeAvatar } from '$lib/core/data';
+	import { fetchRunsWithError, uploadAvatar, removeAvatar } from '$lib/core/data';
 	import {
 		createBackup,
 		restoreBackup,
@@ -560,16 +560,24 @@
 		else passwordStatus = m('settingsAccount.resetLinkSent');
 	}
 
+	/// Reads through `fetchRunsWithError`, not the plain `fetchRuns`: the
+	/// latter returns `[]` on a read failure, which handed the user a
+	/// header-only `runs_export.csv` and no hint that anything went
+	/// wrong — a failed export is indistinguishable from an empty
+	/// history. The sibling exports all surface the failure; so does this.
 	async function handleExportCsv() {
 		exporting = true;
 		try {
-			const runs = await fetchRuns();
+			const { runs, error } = await fetchRunsWithError();
+			if (error) throw new Error(error);
 			const header = 'date,distance_m,duration_s,pace_s_per_km,source\n';
 			const rows = runs.map((r) => {
 				const pace = r.distance_m > 0 ? Math.round(r.duration_s / (r.distance_m / 1000)) : 0;
 				return `${r.started_at},${r.distance_m},${r.duration_s},${pace},${r.source}`;
 			}).join('\n');
 			downloadFile(header + rows, 'runs_export.csv', 'text/csv');
+		} catch (e) {
+			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
 		} finally { exporting = false; }
 	}
 

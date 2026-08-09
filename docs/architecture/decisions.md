@@ -733,7 +733,7 @@ A run is more than the GPX — Strava's "attach a photo" is core to how runners 
 **Trade-offs:**
 
 1. **No automatic thumbnail generation.** Clients render the original. We size the upload to 4 MB max and document that as the price of skipping a thumbnail pipeline. Storage egress is the only meaningful cost; on a public bucket through Supabase's CDN it's negligible at our scale.
-2. **EXIF stripping (shipped, two layers).** Phones embed GPS in EXIF. The `job_worker` `photo_process` handler re-encodes uploads server-side to drop metadata; the mobile clients additionally strip the EXIF/XMP APP1 segment client-side *before* upload (`apps/mobile_android/lib/exif_strip.dart` — a lossless marker-walk that keeps the ICC profile + pixels, persona family-club #52) so a geotagged original never lands in the bucket during the async-worker window. Web currently relies on the server worker alone (its pre-upload strip would need a canvas re-encode — deferred).
+2. **EXIF stripping (shipped, two layers).** Phones embed GPS in EXIF. The `job_worker` `photo_process` handler re-encodes uploads server-side to drop metadata; the mobile clients additionally strip location-bearing metadata client-side *before* upload (`apps/mobile_android/lib/exif_strip.dart#stripImageExif`, dispatched on the upload's Content-Type — a lossless JPEG marker-walk that keeps the ICC profile + pixels, plus the PNG / WebP chunk walks, persona family-club #52) so a geotagged original never lands in the bucket during the async-worker window. Web currently relies on the server worker alone (its pre-upload strip would need a canvas re-encode — deferred).
 3. **`owner_id` always equals `runs.user_id`** in v1. The schema separates them so a future "anyone in the club can attach a photo to a club event's race run" feature is forward-compatible without a migration.
 
 **Don't re-litigate unless:** photo bandwidth becomes the dominant Storage cost (then add server-side thumbnail generation), users ask for video clips (different bucket, different MIME policy, probably a separate `run_videos` table), or the web client needs the same pre-upload strip the mobile clients now do (then add a canvas re-encode).
@@ -3475,7 +3475,7 @@ The roadmap's gear §7 listed two "Future" gaps; per-shoe wear logging shipped a
 
 - **`club_photos` table + a PRIVATE `club-photos` Storage bucket**, mirroring `route_photos` (20270114_001): `{owner_id}/{photo_id}.{ext}` paths, owner-prefix shape CHECKs, the no-blank-clear + service-role-only-`thumb_512_path` UPDATE triggers, clients read via `createSignedUrl`. The bucket is private from the start (the run-photos public-CDN-bypass lesson).
 - **The permission gates differ from route_photos by design.** SELECT is gated on club *visibility* (`clubs.is_public OR owner OR private.is_club_member`), not route visibility — a public club's gallery is readable by anyone (incl. anon), a private club's only by active members / the owner. INSERT requires `owner_id = auth.uid() AND private.is_club_member(club_id)` — *any active member* contributes, not just the club owner (the whole point of a club gallery). DELETE is photo-owner OR `private.is_club_admin(club_id)` — a member removes their own, an owner/admin moderates anyone's. Caption UPDATE stays photo-owner-only. `private.is_club_member`/`is_club_admin` are the `active`-only SECURITY DEFINER oracles (20261120_001), so a pending join request grants neither read nor write — fail-closed, like every other club surface.
-- **A `club_photo_process` worker** (`apps/job_worker` `handleClubPhotoProcess`) is the `photo_process` sibling against the club bucket/table: download → re-strip JPEG EXIF (defence in depth over the client-side `stripExifFromFile`/`stripJpegExif`) → 512w thumbnail → service-role PATCH of `thumb_512_path`. Enqueued by an AFTER INSERT trigger plus an AFTER UPDATE OF `storage_path` trigger that catches the mobile insert-then-PATCH placeholder path. Three-file rule honoured: the `jobs.kind` CHECK widen + the Go dispatch case + the pgtap kind-acceptance assertion land together. `club_photos` is wired into the GDPR Art 20 export spec (owner_id-keyed, like route_photos).
+- **A `club_photo_process` worker** (`apps/job_worker` `handleClubPhotoProcess`) is the `photo_process` sibling against the club bucket/table: download → re-strip JPEG EXIF (defence in depth over the client-side `stripExifFromFile`/`stripImageExif`) → 512w thumbnail → service-role PATCH of `thumb_512_path`. Enqueued by an AFTER INSERT trigger plus an AFTER UPDATE OF `storage_path` trigger that catches the mobile insert-then-PATCH placeholder path. Three-file rule honoured: the `jobs.kind` CHECK widen + the Go dispatch case + the pgtap kind-acceptance assertion land together. `club_photos` is wired into the GDPR Art 20 export spec (owner_id-keyed, like route_photos).
 - **Surfaces**: a Photos tab on the web club detail page (`ClubPhotos.svelte`) + the mobile club detail screen (`club_photos.dart`, byte-identical twin); upload gated on membership, delete on owner-or-admin, non-members of a public club see it read-only.
 - **Prod gate**: this is a privacy-boundary surface (user uploads + club visibility). The RLS is fail-closed and pgtap-pinned, but a privacy audit (`/audit/privacy-zones` reasoning + `/audit/storage`) is a pre-prod deploy gate, recorded as a checklist item per `CLAUDE.md` "compliance gates prod, not code" — the code ships behind no flag because the gate is the RLS itself.
 - **ADR number**: §184, assigned at merge time (the round-2 club-photos branch authored this as a deliberately-high placeholder to avoid collision with sibling workers).
@@ -3874,7 +3874,9 @@ Two integration lessons, both consequences of the stale-fork + concurrent-sessio
 
 ## 260. generate-route + osrm-proxy enforce a DB-backed per-user rate limit, not just the per-IP WAF
 
-**Decided (2026-07-18, issue #339).** `handleGenerate` and `handleOsrmProxy` (the two web handlers fronting billed/self-hosted route engines) previously relied solely on per-IP AWS WAF rules (`waf_generate_route_rate_limit` 100/5min, `waf_osrm_proxy_rate_limit` 600/5min). A single authenticated JWT distributing requests across a small IP pool (CGNAT rotation, residential-proxy pool, a few home/VPN IPs) stays under the per-IP cap while each `generate` call fans out up to `REQUEST_MULTIPLIERS × MAX_SEEDS = 32` upstream round_trip fetches — a free cost-abuse vector. Both handlers now also call the SECURITY DEFINER `check_rate_limit` RPC (migration `20260604_001`) with the caller's own id on the SAME JWT-bound anon client they already use for `auth.getUser` (so the `20260616_001` user-context guard `auth.uid() = p_user_id` is satisfied with no service-role key — the web handlers only carry the anon key), via the shared `apps/web/src/lib/routes/rate_limit.ts` helper (the web sibling of the EF `_shared/rate_limit.ts`). Ceilings: `generate-route` 60/hour (heaviest paid path, Pro-only so no free/pro split — caps a scripted caller at ~1920 upstream fetches/h instead of unbounded, generous for interactive building), `osrm-proxy` 1200/hour (one call per waypoint segment, so the ceiling must absorb a heavy builder session while bounding a single JWT). **Fail-closed**, matching `export-data` / `clip-public-track`: an RPC error or malformed row DENIES (→ 500) rather than letting the paid fan-out through on a transient DB blip; a tripped ceiling → 429. The RPC takes an arbitrary `p_bucket` text key so the two new buckets need no migration. `osrm-proxy` stays **signed-in-only** (its header rationale: an anonymous proxy in front of the self-hosted engine would be a free relay) — so it gets a per-user gate, NOT the anon+IP split `clip-public-track` uses; the transport-agnostic handler signature carries no client IP to key an anon bucket on, and opening an anon path would regress the relay protection this endpoint was built for.
+**Decided (2026-07-18, issue #339).** `handleGenerate` and `handleOsrmProxy` (the two web handlers fronting billed/self-hosted route engines) previously relied solely on per-IP AWS WAF rules (`waf_generate_route_rate_limit` 100/5min, `waf_osrm_proxy_rate_limit` 600/5min). A single authenticated JWT distributing requests across a small IP pool (CGNAT rotation, residential-proxy pool, a few home/VPN IPs) stays under the per-IP cap while each `generate` call fans out up to `REQUEST_MULTIPLIERS × MAX_SEEDS = 32` upstream round_trip fetches — a free cost-abuse vector. Both handlers now also call the SECURITY DEFINER `check_rate_limit` RPC (migration `20260604_001`) with the caller's own id on the SAME JWT-bound anon client they already use for `auth.getUser` (so the `20260616_001` user-context guard `auth.uid() = p_user_id` is satisfied with no service-role key — the web handlers only carry the anon key), via the shared `apps/web/src/lib/routes/rate_limit.ts` helper (the web sibling of the EF `_shared/rate_limit.ts`). Ceilings: `generate-route` 60/hour (heaviest paid path, Pro-only so no free/pro split — caps a scripted caller at ~1920 upstream fetches/h instead of unbounded, generous for interactive building), `osrm-proxy` 1200/hour (one call per waypoint segment, so the ceiling must absorb a heavy builder session while bounding a single JWT). **Fail-closed**, matching `export-data` / `clip-public-track`: an RPC error or malformed row DENIES (→ 500) rather than letting the paid fan-out through on a transient DB blip; a tripped ceiling → 429. The RPC takes an arbitrary `p_bucket` text key so the two new buckets need no migration.
+
+**Extended to the two Anthropic route handlers (2026-08-09).** `handleRouteDescribe` and `handleRouteRequest` shipped with a Pro gate and no ceiling at all, which made them the only LLM-spending endpoints in the app with no per-user cap — `/api/coach` has `increment_coach_usage`, the two engine handlers have the buckets above. Pro is priced per month, so one subscription (or one leaked Pro JWT) bought unbounded `claude-opus-4-8` calls on the operator's key, and the per-IP WAF rule is exactly the thing this ADR already established cannot see a JWT spread over an IP pool. Both now take a 60/hour bucket (`route-describe`, `route-request`) on the same JWT-bound client, after the Pro gate so a free caller is never charged a slot. The denial shapes differ because the fallbacks differ: `route-request` returns 429 (the manual form is the fallback), while `route-describe` returns its templated description with `source: 'template'` — the same degrade it already performs for a missing API key or a provider error, so the L1 baseline is untouched and the throttle simply stops the L4 enhancement. `osrm-proxy` stays **signed-in-only** (its header rationale: an anonymous proxy in front of the self-hosted engine would be a free relay) — so it gets a per-user gate, NOT the anon+IP split `clip-public-track` uses; the transport-agnostic handler signature carries no client IP to key an anon bucket on, and opening an anon path would regress the relay protection this endpoint was built for.
 
 ## 261. A coach mid-stream failure persists the partial reply — a consumed daily-cap slot always keeps its content
 
@@ -7668,3 +7670,230 @@ Worked against the real Daniels/VDOT derivation the card already uses: for a run
 One honesty cost is accepted: `easySeconds + hardSeconds` is now *classified* time and can fall a sliver short of the summed `duration_s`. The card reports shares, so a dropped sliver moves nothing — attributing it by assumption would.
 
 `intensity.ts` stays **web-only** (no Dart twin, deliberately off the enforced parity list), so this is a one-platform change. The regression that mattered most in test was the inverse of the bug: segmenting must not manufacture hard time out of an ordinary lapped easy run, and that case is pinned alongside the interval one. The interval fixture carries a companion test asserting its *whole-run* mean really does read easy, so the fix's test cannot start passing for the wrong reason.
+
+## 555. A "Copy share link" that publishes the row is a consent surface, and two of the three had lost the dialog
+
+`/runs/[id]`, `/gym/[id]` and `/sessions/[id]` all mint a public share link, and on all three the link only resolves once the row is public — so copying one has to flip `is_public`. Run detail asked first, behind a `ConfirmDialog` that also warns about start/end points. The other two copied the flow and dropped the dialog, and each left a comment citing the other as its precedent: the gym file said it "mirrors the run-detail share flow" (it no longer did), the session file said it mirrors the gym one. A button labelled *Copy share link* therefore published a private training log — exercises, sets and loads, or a whole session plan — world-readable, with a green "Link copied" toast as its only feedback and no way to know it had happened short of noticing the visibility chip change.
+
+The fix is the shape run detail already had, not a new mechanism: the button calls a **gate** (`startShare`) that opens the confirm for a private row and copies straight away for one that is already public, and the write lives behind the dialog's `onconfirm` (`proceedShare`). Splitting gate from writer is what makes the invariant checkable, which is the point — `share_publish_consent_guard.test.ts` reads all three pages and asserts the button is wired to the gate, the gate does not call the `setPublic` helper itself, and the publish sits under a `ConfirmDialog`. It also pins run detail, so the reference implementation the other two were modelled on cannot quietly lose its dialog and restart the drift.
+
+The *explicit* "Make public" buttons on the same pages keep no confirm, deliberately: their label already states the outcome, so a dialog there would be a second dismissal for one unambiguous intent. The rule is narrower than "confirm before publishing" — it is that an action whose **label does not name the consequence** may not carry it out unasked.
+
+## 556. A densified polyline is still the polyline — the heatmap reader clips to privacy zones like every other non-owner read
+
+`heatmap_points_in_bbox` was made `SECURITY DEFINER` in `20260910_001` to fix a
+"returns zero rows" regression, on the stated reasoning that there was no leak
+because "waypoints / user_id / club_id never escape the function body … only
+the densified output points (one per ~50 m)". That reasoning was wrong in a way
+worth recording, because it is easy to make again: `ST_LineInterpolatePoints`
+does not summarise a line, it *resamples* it. Fifty-metre spacing on a suburban
+street is finer than the street. The output points were the waypoints.
+
+So the one reader in the codebase that skipped `clip_route_for_viewer` was also
+the only one reachable by an anonymous caller, and it undid `20260925_001` as
+well: that migration NULLs `routes.start_point` for a route that never leaves
+its owner's zone so the route drops out of proximity search, but this reader
+filtered only on `geom is not null` and rendered those routes in full. The
+attack needed two requests — read a clipped route's visible end off a public
+share page, then post a bbox around it — and returned the stretch from the clip
+boundary to the front door.
+
+`20270504_001` clips inside the function. Two details are load-bearing. The
+zones are read with definer rights, because owner-only RLS on `user_settings`
+would otherwise hide them from the caller and silently clip nothing; and the
+join is a LEFT join, so an owner with no settings row yields NULL zones and
+keeps every point rather than vanishing from the layer — a fail-closed inner
+join here would have quietly blanked the heatmap for most of the user base.
+
+The residue is recorded rather than fixed: `routes_within_box` still evaluates
+its `ST_Intersects` predicate against the same unclipped `geom` and returns the
+route id, which makes it a slow membership oracle — grid-sweep small boxes and
+the ids that come back trace the in-zone tail. Closing that properly wants a
+zone-aware `geom_public` column maintained by the same trigger pair
+`20260925_001` uses for `start_point`, so that no spatial predicate anywhere
+can see the unclipped geometry.
+
+## 557. An image we cannot strip is an image we do not accept — the EXIF path fails closed on the format, sniffed from the bytes
+
+`stripImageExif` returned any unrecognised format unchanged, and every photo
+picker on web and mobile advertised `image/heic,image/heif` — the default
+camera format on every modern iPhone. Nothing downstream covered the gap: the
+Go worker's `handler_photo_process` returns early on any non-JPEG, and the
+mobile widgets called the JPEG-only `stripJpegExif` directly, so PNG and WebP
+uploads were never stripped either. The bucket then served the original back
+through a signed URL to everyone who could see the gallery, GPS EXIF intact.
+That is precisely the home coordinate the privacy-zone system (§ 33) exists to
+withhold, handed over by a different door.
+
+Two choices were available: implement HEIC/HEIF stripping (an ISO-BMFF box
+walk that has to rewrite `iloc` offsets — a large, easy-to-get-subtly-wrong
+change on a path where "subtly wrong" means a silent leak), or refuse the
+formats we cannot clean. We refuse. The accepted set is now defined *as* the
+strippable set — JPEG, PNG, WebP — with a guard test asserting the two can't
+drift apart, and the pickers no longer advertise anything else. Practically the
+cost is small: iOS Safari and `image_picker` both transcode to JPEG on the
+common paths, so the refusal bites only a deliberate Files-app pick of a raw
+`.heic`.
+
+The second half is that the format is now decided by the **bytes**, not by the
+filename. `File.type` in a browser and `XFile.name` from the gallery picker are
+both just the extension, so a `.heic` renamed `.jpg` used to be handed to the
+JPEG walker, fail its SOI check, and be returned — and uploaded — whole. A
+magic-number sniff (`detectImageMime`) now drives both the strip dispatch and
+the stored Content-Type, so the extension we write and the bytes we wrote can
+no longer disagree.
+
+## 558. A per-item helper called in a loop over one big input gets a batch entry point, not a memo — the segment engine as the worked case
+
+**Date:** 2026-08-09
+
+`segments.ts` exported two per-item functions and both were called in a loop, which is what made them expensive. `computeGlobalSegmentEffort` walked the whole run track twice with haversine — once to accumulate distance, once to find the nearest point to the segment's start — *before* the check that rejects a segment the run never went near, and the run-detail sweep runs it against the whole catalogue (`GLOBAL_SEGMENT_SCORING_LIMIT`, 500). `computeEffortFromTrack` rebuilt the same cumulative-distance array and re-sorted every sample step to find the sparsity guard's median, once per route segment. Measured: a 10k-point run blocked the main thread 399 ms on the catalogue sweep and a 100k-point ultra 4,059 ms; the route-slice walk cost a further 200 ms at 30 segments over 50k points and 615 ms at 50 over 100k. Both surfaces run on the same run-detail mount, so an ultra owner opening their own run paid all of it.
+
+The shape of the fix is the point. **Nothing here is cacheable at the call site** — each sweep is against a different track, so a memo would only ever hit within one sweep, which is to say it would be a batch entry point with extra bookkeeping. So the module now exports `computeGlobalSegmentEfforts` and `computeEffortsFromTrack` taking the whole collection, with the per-item functions kept as one-element delegates, and every input-derived quantity is computed once: the cumulative-distance array, the median sample step, and the track's lat/lng extent. Per-item work drops to a constant-time reject or two binary searches over the (monotonic) cumulative distances. 399 → 1.0 ms, 4,059 → 2.2 ms, 615 → 14 ms.
+
+**The extent test is deliberately conservative and that is load-bearing.** It exists to reject without measuring, so it must never reject a segment the full scan would have matched. Latitude is exact: spherical distance is never less than the meridian separation. Longitude is not — a naive `|Δλ| · cos(φ)` bound is *wrong* (two points 10° apart at 60° N are 4.986° of great circle, not the 5° that bound predicts), so the window comes from the tangent-meridian result, everything within angular distance `s` of a point at latitude `φ` lying within `asin(sin s / cos φ)` of its meridian. That is taken as the linear `s / cos φ`, which under-states the window only as the ratio approaches 1 — impossible while the window is still under a degree, which is why *a degree* is where the test gives up and admits rather than the half-turn that first suggested itself. Every window is divided by 110,574 m/degree where the sphere the haversine uses gives 111,195, so each one comes out slightly wider than the true one. And because the extent is a planar frame, it goes through `geo.ts`'s longitude unwrapping (§ 463): read naively, a run straddling the antimeridian appears to span the globe.
+
+**The regression guard is a work count, not a timing.** The test track is an array whose points count every read of a coordinate, so a test can assert the sweep read the track a bounded number of times *in total* rather than once per item — 9,606,400 reads before the catalogue fix, 1,599,600 before the slice fix, both now inside `8 × points`. That pins the complexity itself rather than a machine-dependent duration, which a flaky test would have been. Soundness gets its own guard: the pre-prefilter matcher is kept in the test file as an oracle, and a sweep of tracks (polar, antimeridian, mid-latitude) against segments nudged to either side of the tolerance in both axes asserts the fast path never rejects what the oracle matches. Dropping the `cos φ` scaling or the longitude unwrapping each fail it. Both functions are on the enforced web↔Dart parity list, so the batch shape, the extent test, and the binary search are mirrored in `segments.dart`; mobile's `autoComputeEffortsForRun` had the identical per-segment loop and batches too.
+
+## 559. A queue for offline writes must only ever hold writes the server has not yet seen — a refusal is not a network failure
+
+**Date:** 2026-08-09
+
+`updateUniversal` / `updateDevice` wrapped their push in a bare `catch` and treated everything it caught as "server unreachable": append the change to the pending queue and return normally. That is right for the case the offline-first design was built for (§ 79) and wrong for every other one. An RLS denial, a CHECK violation, an expired JWT, a column PostgREST doesn't know — all of them landed in the same branch, so the function resolved, `/settings/preferences` flashed **Saved**, `/settings/safety`'s overdue-alert toggle confirmed, and the change sat at the head of the queue being re-sent and re-refused on every page load for the rest of the session. `prefs.saveFailed` had been in all six catalogues the whole time and was unreachable: nothing could reject. These bags carry `privacy_zones` and `safety_overdue_minutes`, so the lie is that a runner is told the area around their home is clipped out of public shares when it is not.
+
+The distinguishing signal is already on the wire and costs nothing to read. PostgREST answers a refusal with structured JSON carrying a code — a Postgres SQLSTATE (`42501`, `23514`, `23502`) or a `PGRST*` — and every failure that never reached PostgREST arrives with no code at all: postgrest-js's own fetch catch synthesises `{code: '', status: 0}`, and a proxy's unparseable HTML body comes back as a bare `{message}`. So the classification is "did a structured refusal come back", with HTTP status as the fallback for the second case, and the default for anything unclassifiable is **rejected** — an unexpected throw is a bug in our own code, and surfacing a bug beats silently queueing it forever.
+
+Three consequences follow and all three are the point. A refusal **rolls back the optimistic cache write**: the local bag must not keep a value the server refused, or the next offline read serves it as truth. A refusal **rethrows**, which is what makes the existing `catch` blocks on the preferences, safety, nutrition-targets and onboarding pages live rather than decorative — the two callers that had no handler (privacy zones, hidden PRs) got one, and the hidden-PR write also reverts its optimistic list. And the **drain drops** a rejected entry rather than stopping on it: a doomed change at the head of the queue used to block every later change behind it on every refresh, forever. A transport failure still stops the drain and keeps the remainder in order, which is the behaviour the queue exists for.
+
+The policy lives in `settings_write.ts` rather than inline in the two update functions, because the interesting part is the decision, not the plumbing, and a decision that can't be unit-tested doesn't get tested — `settings.ts` imports `$env/static/public` transitively and can only be reached by source-level guards. `pushOrQueue` and `drainQueue` take the effects as callbacks and are exercised directly.
+
+## 560. A write that cannot be performed must not return as though it had — the mobile settings bags and the race result
+
+**Date:** 2026-08-09
+
+Two mobile paths shared one shape: an outbound write whose precondition was
+missing, and a method that answered the caller as if it had succeeded anyway.
+
+`SettingsSyncService`'s ten write methods each opened with `final s =
+_settings; if (s == null) return;`. That reads as a guard, but `_settings` is
+null in states a user reaches routinely — `onSignedIn` is fired and forgotten
+from the auth-change handler and nulls the field on any throw, so a transient
+load failure at sign-in disarmed every settings write for the rest of the
+session. The worst caller is the post-signup setup wizard, which hands over its
+whole answer bag in one `updateUniversal`: units, privacy default, primary
+goal, push-notification choice, body weight, the consent-gated DOB mirror.
+Nothing was thrown for its `catch` to see and nothing reached the offline
+pending queue, so the answers were simply gone, under a "Welcome to Threkir"
+toast. `primary_goal` and `push_notifications` have no local `Preferences`
+mirror at all — the bag was the only copy. The settings-safety screen was
+lied to the same way: it reverts its optimistic toggle and offers a retry when
+a write throws, and it never got the chance.
+
+The guard was also unnecessary. `SettingsService.load()` degrades to the
+on-disk cache plus the pending queue rather than failing, so "no service" only
+ever meant "not loaded yet", never "this write is impossible". Writes now go
+through `_ensureService()`, which loads on demand and adopts the result; the
+one genuinely unwritable state — no session — throws, so a caller can report
+or re-queue. The freshly-loaded bags are deliberately *not* overlaid onto local
+`Preferences` on that path: the recovery is triggered by a user-initiated
+write, so the local mirrors hold the newer intent and applying the server copy
+would revert the choice being saved. Callers split on whether the key has a
+local mirror: the `push*` roams are L4 (the pref is already saved locally, so
+the settings screen logs and moves on), while `updateUniversal` / `updateDevice`
+propagate.
+
+`RaceController.submitResult` was the same failure with a shorter fuse: a
+failed `submitEventResult` was logged, then `detachRecorder()` cleared
+`_hostingEventId` unconditionally, discarding the only record that this run
+belonged to a race. A runner who crossed the line in a dead spot lost their
+official time with no retry path and no indication anything had gone wrong.
+`submitEventResult` upserts on `(event_id, instance_start, user_id)`, so
+replay is safe — the result is now persisted to disk on failure and drained
+from the existing 60-second session poll, which is the cadence that already
+exists for exactly this controller.
+
+The general rule: an outbound write either performs, durably queues, or throws.
+Returning normally is a claim that the user's data is safe, and a method that
+cannot keep that claim must not make it.
+
+## 561. A meter the metered party can rewrite is not a cap — `user_coach_usage` is server-owned on every verb, not just DELETE
+
+**Date:** 2026-08-09
+
+`user_coach_usage` is the row that decides whether the next AI-coach message is
+allowed to reach Anthropic. Its RPCs were hardened repeatedly — an `auth.uid()`
+guard so you cannot burn someone else's quota (`20260503_001`), a rolling 24 h
+sum so a UTC+14 user cannot double-dip across midnight (`20261002_001`), an
+explicit DELETE deny whose own comment says "the daily cap cannot be reset by
+deleting the counter row" (`20260722_001`). All of that hardened the *front
+door*. The table kept the self-INSERT and self-UPDATE policies it shipped with
+in `20260430_001`, and `20270408_001`'s grant matrix handed table-level
+INSERT/UPDATE to `authenticated`, so the back door was a one-line PATCH:
+`message_count = 0` after every burst, or an INSERT of a future-dated bucket
+holding a large negative count, which the rolling sum's
+`usage_date >= (now() - interval '24 hours')::date` predicate obediently adds
+in and never recovers from.
+
+The rule this settles: **a table that exists to constrain the user is not user
+data, and no client verb belongs on it.** The three-verb sweep is the fix — deny
+policies so the intent is readable on disk, plus revoked grants so the deny does
+not rest on RLS alone — and the shape generalises to `rate_limits` and
+`app_quota`, which already have it (RLS on, no policies, no grants). The tell
+for the next one is a table whose only legitimate writer is a SECURITY DEFINER
+function: if the definer is the writer, the client is not.
+
+The pgtap now also asserts the definer RPC still meters after the lockdown.
+That direction matters as much as the denials — the cheapest way to "fix" a
+client-writable counter is to break the counter.
+
+## 562. Row ownership is not column ownership — the badge toggle is granted on the column, not the table
+
+**Date:** 2026-08-09
+
+`achievements_owner_update` (`20270208_001`) is written as
+`using (user_id = auth.uid()) with check (user_id = auth.uid())` and captioned
+"Owner-only UPDATE for the is_public toggle". The policy is a correct *row*
+gate and says nothing at all about columns, so with `20270408_001`'s table-wide
+UPDATE grant the owner of any award — every account earns a bronze one from its
+first run — could PATCH `badge_key`, `tier`, `value_num` and `earned_at` on a row
+they own, and the forged badge then renders on their profile, in every
+follower's badge feed, and on the logged-out `/share/badge` page.
+`achievements_user_badge_uk` does not catch it: the row is being renamed, not
+duplicated.
+
+Postgres RLS has no column dimension, so the column gate has to be a column
+grant, and the repo already had the idiom in three places (`coach_messages`
+`update (archived_at, reaction)`, `challenge_participants`
+`update (team_club_id)`, `event_attendees` `update (event_id, instance_start,
+status, user_id)`). `achievements` now carries `grant update (is_public)` and
+nothing else.
+
+Worth recording because the existing catch-all cannot see this class.
+`rls_grant_without_policy_test.sql` flags a granted table whose policy is
+literally `true`, and explicitly reasons that `achievements` is "inert today
+because every one of those tables also enables RLS with only `auth.uid()`-scoped
+permissive policies". An `auth.uid()`-scoped policy proves the *right person* is
+writing; it proves nothing about *what* they may write. When a policy comment
+names one column, that is the signal to check whether the grant agrees.
+
+## 563. A data-portability path that cannot finish is a compliance failure, so the export's fetch sweeps run bounded-wide — and the bound is memory, not the wire
+
+**Date:** 2026-08-09
+
+`export-data`'s `backup` format issued 61 sequential PostgREST calls (one per personal-data table) and then, one after another, a Storage download per run track, per HR sidecar, per run photo, per orphaned object, and per avatar candidate — plus a folder listing paged 100 objects at a time. Against the documented 5,000-run cap that is over 5,000 sequential round trips; measured against a 25 ms round trip, 3,000 downloads take 78.5 s serially, and the whole sweep overruns the 150 s function budget before the zip is even closed. The file's own header claimed "~30 s — well inside the budget", which was wrong. The failure mode matters more than the number: a runner with a long history cannot obtain the copy of their data Art 20 entitles them to, and the surface reports a timeout, not a partial export.
+
+The sweeps now run through `pooledPipeline` at `EXPORT_FETCH_CONCURRENCY` (6): 78.5 s → 12.9 s measured on the same shape. **The width is chosen against memory, not against the wire.** The archive is accumulated in memory by the zip writer, so the only headroom the pool may spend is what a handful of in-flight payloads cost: 6 × the `run-photos` 10 MB object cap (`20260620_001`) is ~60 MB of transient buffers. That bound only holds because `consume` is serialized — a worker holds its bytes solely while it waits its turn — which is also what keeps zip entry order deterministic with a single writer, so the ordering and the memory bound are the same property. For the same reason the GPX sweep passes the *gzipped blob* through the pool and decodes on the consume side: six 5 MB tracks is 30 MB, six decoded point arrays is not.
+
+The folder walk was widened from 100 to 1,000 per page, which is only safe alongside the second half of that change: the loop now advances its offset by the number of rows it actually received and stops on an *empty* page rather than a short one. Striding by the requested limit against a server that silently caps lower would skip whole blocks of objects straight out of the export — a completeness bug wearing a performance change's clothes. The primary export path is the Go worker's `/v1/export`; this Edge Function is the documented rollback and the client's fallback when `PUBLIC_DATA_EXPORT_URL` is unset, so it is a live path, not dead code.
+
+## 564. A comment claiming a field is stripped is not a strip — the plan-template private columns move into a trigger
+
+Two migration headers described the publisher's `vdot` and `current_5k_seconds` as "stripped on publish", and `20270126_001` went further: "No runs, PII, or notes-with-PII leak." Nothing enforced any of it. The strip lived in the JS and Dart publishers only, so a single `POST /rest/v1/training_plans` with `is_public_template: true` and real values set them, and `GET ...?is_public_template=eq.true&select=*` read them back — RLS is row-level, so the template SELECT branches expose every column of a published row to every authenticated reader. `api_database.md` had even written the convention down as though it were a control, and deferred tightening `notes` "until a template author writes a private note in production".
+
+That premise was already false. Both publishers insert `notes: src.notes`, and plan-level `notes` is the runner's own free text — training constraints, injury history. Publishing a plan mailed it to the library through the sanctioned button, no crafted request required. The audit found the crafted-request path; the copy was the worse half.
+
+The obvious fix was the redacted-view pattern `public_runs` and `public_gym_workouts` use — base table owner-only, non-owner reads through a projection. It does not fit here. Those tables are read directly, but a template's weeks and workouts are reached through `plan_weeks` / `plan_workouts` policies that sub-select `training_plans`, and a policy sub-select is itself RLS-gated. Dropping the two template SELECT branches would blank the library preview and every club template's contents, and restoring them means a SECURITY DEFINER visibility helper plus a rewrite of eight dependent policies — a far wider blast radius than the leak.
+
+So the invariant moved to write time instead: a BEFORE INSERT OR UPDATE trigger nulls all three on any `is_template` row. That is narrower and truer to the data. A template row is a *copy* made for publishing — both publishers insert a sibling and leave the source plan untouched — so these columns have no reason to hold a value on it at all. It also fixes the stored rows rather than hiding them at read time, which a view would not have done for anything already published; the migration backfills those in the same statement. A runner's own plan keeps its `vdot`, which pace derivation reads, and the pgtap suite pins that non-template case alongside the template ones so the rule cannot widen into a blanket null.
+
+The classification this settles: plan-level `notes` is owner-only, the same call migration `20270313_001` made for `gym_workouts.notes`. Per-workout `plan_workouts.notes` stays — that is plan design, and design is the thing being published. An author-written blurb describing a template is a separate feature wanting its own column, not the runner's private field.

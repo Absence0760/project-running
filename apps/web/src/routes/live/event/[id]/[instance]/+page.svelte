@@ -67,7 +67,18 @@
 		profiles: Map<string, { display_name: string | null }>;
 	}> | null = null;
 
-	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+	// Coalesces the results refetch, for the same reason and with the same
+	// guards. Postgres replication emits one change event per ROW, so the
+	// organiser's one-statement results import (a mass-participation field is
+	// thousands of rows) arrives here as thousands of separate triggers — each
+	// of which re-read the whole unbounded results set and rebuilt every
+	// profile. Built in subscribe(), disposed on destroy.
+	let resultsRefetcher: CoalescingRefetcher<{
+		rows: EventResultWithUser[];
+		profiles: Map<string, { display_name: string | null }>;
+	}> | null = null;
+
+	const prefersDark =typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 	// The ground the runner dots land on, not the OS theme — see
 	// `basemap_contrast.ts`.
@@ -258,6 +269,20 @@
 			}
 		});
 
+		resultsRefetcher = new CoalescingRefetcher({
+			fetch: async () => {
+				const rows = await fetchEventResults(eventId, instance);
+				return { rows, profiles: await buildProfiles(leaderPings, rows) };
+			},
+			apply: (v) => {
+				results = v.rows;
+				profiles = v.profiles;
+			},
+			onError: (err) => {
+				console.warn('live/event: results refetch failed', err);
+			}
+		});
+
 		// Privacy-zone trust contract: pings are rendered verbatim. The
 		// broadcaster's privacy zones are NOT fetched here. The single
 		// line of defence is the `race_pings_drop_in_zone` BEFORE-INSERT
@@ -297,10 +322,7 @@
 					table: 'event_results',
 					filter: `event_id=eq.${eventId}`
 				},
-				async () => {
-					results = await fetchEventResults(eventId, instance);
-					profiles = await buildProfiles(leaderPings, results);
-				}
+				() => resultsRefetcher?.trigger()
 			)
 			.subscribe();
 	}
@@ -322,6 +344,7 @@
 	onDestroy(() => {
 		if (channel) supabase.removeChannel(channel);
 		pingRefetcher?.dispose();
+		resultsRefetcher?.dispose();
 		stopResizeWatch?.();
 		map?.remove();
 	});

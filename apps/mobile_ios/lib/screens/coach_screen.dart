@@ -830,13 +830,21 @@ class _CoachScreenState extends State<CoachScreen> {
   Future<void> _react(String messageId, String reaction) async {
     final idx = _messages.indexWhere((m) => m.id == messageId);
     if (idx == -1) return;
-    final cur = _messages[idx];
-    final next = cur.reaction == reaction ? null : reaction;
-    setState(() => cur.reaction = next);
+    final previous = _messages[idx].reaction;
+    final next = previous == reaction ? null : reaction;
+    setState(() => _messages[idx].reaction = next);
     try {
       await widget.api.setCoachReaction(messageId: messageId, reaction: next);
-    } catch (_) {
-      setState(() => cur.reaction = cur.reaction == next ? reaction : null);
+    } catch (e) {
+      debugPrint('coach reaction write failed: $e');
+      if (!mounted) return;
+      // The list may have been rebuilt by a reload or a realtime insert while
+      // the write was in flight, so re-resolve rather than reverting the
+      // instance captured above.
+      final at = _messages.indexWhere((m) => m.id == messageId);
+      if (at != -1) setState(() => _messages[at].reaction = previous);
+      showTopBanner(
+          context, AppLocalizations.of(context).coachReactionFailed);
     }
   }
 

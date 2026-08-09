@@ -26,6 +26,15 @@ import {
 	type RouteDescriptionInput,
 } from '../route_description';
 import { parseAuthHeader } from '../../coach/limits';
+import { checkRouteRateLimit } from '../rate_limit';
+
+/// Per-user ceiling on the billed Anthropic call. Sized like the sibling
+/// `generate-route` bucket: 60/hour is far past any interactive use (one
+/// tap per route on the route-detail page) while capping a scripted Pro
+/// caller at 60 Opus requests an hour instead of unbounded.
+export const ROUTE_DESCRIBE_RATE_BUCKET = 'route-describe';
+export const ROUTE_DESCRIBE_RATE_MAX = 60;
+export const ROUTE_DESCRIBE_RATE_WINDOW_S = 3600;
 
 /**
  * Model + budget for the enhancement. The visible output is one short
@@ -182,6 +191,25 @@ export async function handleRouteDescribe(
 			source: 'template',
 			upgrade: true,
 		});
+	}
+
+	// Per-user ceiling on the billed fan-out. Pro is a monthly price, not a
+	// per-call one, so without this a single subscription (or one leaked Pro
+	// JWT) buys unbounded Opus calls on the operator's key — the per-IP WAF
+	// rule can't see a JWT spread over an IP pool. Only Pro callers reach
+	// here, so a free caller is never charged a slot. Fail-closed: a throttle
+	// error serves the templated description rather than the model.
+	if (!config.bypassPaywallEnabled) {
+		const rl = await checkRouteRateLimit(
+			supabase,
+			userRes.data.user.id,
+			ROUTE_DESCRIBE_RATE_BUCKET,
+			ROUTE_DESCRIBE_RATE_MAX,
+			ROUTE_DESCRIBE_RATE_WINDOW_S,
+		);
+		if (rl !== 'ok') {
+			return json(200, { description: templated, source: 'template' });
+		}
 	}
 
 	// Pro path. Missing key → degrade to templated rather than 503 — the

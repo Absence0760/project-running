@@ -1065,6 +1065,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'Dein Konto ist eingerichtet, aber deine Einstellungen wurden nicht gespeichert: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'Der Server ist gerade nicht erreichbar. Du kannst die Einrichtung später abschließen — alles hier lässt sich in den Einstellungen ändern.';
 
@@ -5816,6 +5821,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String coachArchiveDeleteFailed(String error) {
     return 'Archiv konnte nicht gelöscht werden: $error';
   }
+
+  @override
+  String get coachReactionFailed =>
+      'Deine Reaktion konnte nicht gespeichert werden. Bitte erneut versuchen.';
 
   @override
   String get coachCopied => 'In die Zwischenablage kopiert';

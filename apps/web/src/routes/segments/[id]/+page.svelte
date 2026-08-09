@@ -22,7 +22,9 @@
 
 	let segment = $state<GlobalSegment | null>(null);
 	let loading = $state(true);
+	let loadFailed = $state(false);
 	let board = $state<GlobalSegmentLeaderboardEntry[] | null>(null);
+	let boardFailed = $state(false);
 	let genderFilter = $state<SegmentGenderFilter | null>(null);
 	let ageFilter = $state<SegmentAgeBand | null>(null);
 
@@ -33,12 +35,21 @@
 		(segment?.waypoints ?? []).map((w) => ({ lat: Number(w.lat), lng: Number(w.lng), ele: w.ele })),
 	);
 
+	// A null board is the loading state, so a rejected fetch that leaves it
+	// null reads as "still loading" forever. Both fetches on this page keep
+	// their own failed flag and a retry, mirroring SegmentsPanel.
 	async function refreshBoard(segmentId: string) {
 		board = null;
-		board = await fetchGlobalSegmentLeaderboard(segmentId, {
-			gender: genderFilter,
-			ageBand: ageFilter,
-		});
+		boardFailed = false;
+		try {
+			board = await fetchGlobalSegmentLeaderboard(segmentId, {
+				gender: genderFilter,
+				ageBand: ageFilter,
+			});
+		} catch (e) {
+			console.error('fetchGlobalSegmentLeaderboard failed', e);
+			boardFailed = true;
+		}
 	}
 
 	// Re-fetch when a filter changes. Read both signals up front so the
@@ -51,10 +62,22 @@
 		if (segment) refreshBoard(segment.id);
 	});
 
+	async function loadSegment() {
+		loading = true;
+		loadFailed = false;
+		try {
+			segment = await fetchGlobalSegment(data.id);
+		} catch (e) {
+			console.error('fetchGlobalSegment failed', e);
+			loadFailed = true;
+		} finally {
+			loading = false;
+		}
+	}
+
 	onMount(async () => {
 		await auth.ready();
-		segment = await fetchGlobalSegment(data.id);
-		loading = false;
+		await loadSegment();
 	});
 
 	function fmtDist(metres: number): string {
@@ -76,6 +99,20 @@
 
 {#if loading}
 	<div class="segment-detail"><p class="loading">&nbsp;</p></div>
+{:else if loadFailed}
+	<div class="segment-detail">
+		<a href="/dashboard" class="back-link">
+			<span class="material-symbols">arrow_back</span>
+			{m('segmentDetail.back')}
+		</a>
+		<div class="not-found" role="alert" data-testid="segment-load-error">
+			<h1>{m('segmentDetail.loadFailedTitle')}</h1>
+			<p>{m('segmentDetail.loadFailedBody')}</p>
+			<button type="button" class="btn btn-outline" onclick={() => void loadSegment()}>
+				{m('segmentDetail.retry')}
+			</button>
+		</div>
+	</div>
 {:else if !segment}
 	<div class="segment-detail">
 		<a href="/dashboard" class="back-link">
@@ -167,7 +204,18 @@
 				{/if}
 			</div>
 
-			{#if board == null}
+			{#if boardFailed}
+				<p class="muted small board-error" role="alert" data-testid="segment-board-error">
+					{m('segments.leaderboardFailed')}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm"
+						onclick={() => segment && void refreshBoard(segment.id)}
+					>
+						{m('segmentDetail.retry')}
+					</button>
+				</p>
+			{:else if board == null}
 				<p class="muted small">{m('segments.loading')}</p>
 			{:else if board.length === 0}
 				<p class="muted small">
@@ -244,6 +292,15 @@
 	.not-found {
 		text-align: center;
 		padding: var(--space-xl) 0;
+	}
+	.not-found .btn {
+		margin-block-start: var(--space-md);
+	}
+	.board-error {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-sm);
 	}
 	.detail-header h1 {
 		margin: 0 0 0.3rem;
