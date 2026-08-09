@@ -164,6 +164,72 @@ test('SegmentsPanel.svelte announces a self-held crown above the list', () => {
 	);
 });
 
+test('/segments/[id] cannot strand the page on a failed segment fetch', () => {
+	// Reason: `loading` starts true and the only thing that clears it used
+	// to be the line after an unguarded `await fetchGlobalSegment`. A
+	// rejected fetch (offline, RPC 5xx) therefore left the page rendering
+	// its blank `<p class="loading">&nbsp;</p>` forever, with no message
+	// and no way back. SegmentsPanel already learned this; the standalone
+	// page is the same fetch and owes the same error state.
+	const source = read('src/routes/segments/[id]/+page.svelte');
+	const loader = source.match(/async function loadSegment[\s\S]*?\n\t\}/);
+	assert.ok(loader, 'loadSegment body missing');
+	assert.match(loader![0], /try \{/, 'the segment fetch must be guarded');
+	assert.match(loader![0], /loadFailed = true/, 'a failed fetch must set loadFailed');
+	assert.match(
+		loader![0],
+		/finally \{\s*loading = false;/,
+		'loading must clear on the failure path too, not only on success',
+	);
+	assert.match(
+		source,
+		/\{:else if loadFailed\}/,
+		'the page needs a failure branch between loading and not-found',
+	);
+	assert.match(
+		source,
+		/onclick=\{\(\) => void loadSegment\(\)\}/,
+		'the failure branch must offer a retry',
+	);
+});
+
+test('/segments/[id] cannot strand the leaderboard on a failed board fetch', () => {
+	// Reason: `board == null` IS the loading state, so a rejected
+	// leaderboard fetch renders "Loading…" indefinitely — and the filter
+	// dropdowns re-null it, so one failed filter change wedges the board.
+	const source = read('src/routes/segments/[id]/+page.svelte');
+	const refresh = source.match(/async function refreshBoard[\s\S]*?\n\t\}/);
+	assert.ok(refresh, 'refreshBoard body missing');
+	assert.match(refresh![0], /boardFailed = true/, 'a failed board fetch must set boardFailed');
+	assert.match(
+		source,
+		/\{#if boardFailed\}[\s\S]*?\{:else if board == null\}/,
+		'boardFailed must be tested before the null-is-loading branch',
+	);
+});
+
+test('the segment-detail error copy is localized in all six catalogues', () => {
+	// Reason: an error state added in English only is the same bug in five
+	// locales. `satisfies Messages` catches an omission at build time, but
+	// only once the key exists in en — assert every catalogue carries it.
+	const keys = [
+		'segments.leaderboardFailed',
+		'segmentDetail.loadFailedTitle',
+		'segmentDetail.loadFailedBody',
+		'segmentDetail.retry',
+	];
+	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+		const source = read(`src/lib/i18n/locales/${locale}.ts`);
+		for (const key of keys) {
+			assert.match(
+				source,
+				new RegExp(`"${key.replace('.', '\\.')}":`),
+				`${key} missing from ${locale}.ts`,
+			);
+		}
+	}
+});
+
 test('data.ts re-exports the moved constants from segments.ts', () => {
 	// Reason: SEGMENT_AGE_BANDS / SegmentAgeBand / SegmentGenderFilter
 	// moved out of data.ts into the pure segments module so unit tests
