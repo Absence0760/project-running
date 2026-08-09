@@ -7784,3 +7784,33 @@ function: if the definer is the writer, the client is not.
 The pgtap now also asserts the definer RPC still meters after the lockdown.
 That direction matters as much as the denials — the cheapest way to "fix" a
 client-writable counter is to break the counter.
+
+## 562. Row ownership is not column ownership — the badge toggle is granted on the column, not the table
+
+**Date:** 2026-08-09
+
+`achievements_owner_update` (`20270208_001`) is written as
+`using (user_id = auth.uid()) with check (user_id = auth.uid())` and captioned
+"Owner-only UPDATE for the is_public toggle". The policy is a correct *row*
+gate and says nothing at all about columns, so with `20270408_001`'s table-wide
+UPDATE grant the owner of any award — every account earns a bronze one from its
+first run — could PATCH `badge_key`, `tier`, `value_num` and `earned_at` on a row
+they own, and the forged badge then renders on their profile, in every
+follower's badge feed, and on the logged-out `/share/badge` page.
+`achievements_user_badge_uk` does not catch it: the row is being renamed, not
+duplicated.
+
+Postgres RLS has no column dimension, so the column gate has to be a column
+grant, and the repo already had the idiom in three places (`coach_messages`
+`update (archived_at, reaction)`, `challenge_participants`
+`update (team_club_id)`, `event_attendees` `update (event_id, instance_start,
+status, user_id)`). `achievements` now carries `grant update (is_public)` and
+nothing else.
+
+Worth recording because the existing catch-all cannot see this class.
+`rls_grant_without_policy_test.sql` flags a granted table whose policy is
+literally `true`, and explicitly reasons that `achievements` is "inert today
+because every one of those tables also enables RLS with only `auth.uid()`-scoped
+permissive policies". An `auth.uid()`-scoped policy proves the *right person* is
+writing; it proves nothing about *what* they may write. When a policy comment
+names one column, that is the signal to check whether the grant agrees.

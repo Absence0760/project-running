@@ -1137,6 +1137,13 @@ feed/profile read public badges of others; fail-closed, no public policy = no
 leak) + owner-only `achievements_owner_update` (the `is_public` toggle). **No
 client INSERT/DELETE** — awards are written only by the award function below
 (mirrors `personal_records`). `grant ... to postgres` for the definer-owner.
+The toggle is scoped at the **column** layer, not just the row layer: migration
+`20270506_001` revokes table-wide UPDATE from `anon` + `authenticated` and grants
+only `update (is_public)`, because the ownership policy alone let the owner of a
+bronze award rewrite its `badge_key` / `tier` / `value_num` / `earned_at` and
+publish a badge they never earned (the `(user_id, badge_key, tier)` unique
+constraint does not stop a rename). Same idiom as `coach_messages`,
+`challenge_participants`, `event_attendees`.
 
 **Award function:** `award_achievements_for_user(p_user)` — SECURITY DEFINER,
 recomputes the full earned set (longest-run + lifetime distance off `runs`,
