@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	computeEffortFromTrack,
+	computeEffortsFromTrack,
 	computeGlobalSegmentEffort,
 	computeGlobalSegmentEfforts,
 	type GlobalSegmentGeometry,
@@ -498,4 +499,65 @@ test('global sweep: a run straddling the antimeridian still matches', () => {
 		{ points: [at(20), at(120)], distance_m: 500 },
 	])[0];
 	assert.notEqual(eff, null);
+});
+
+// ─── computeEffortsFromTrack (route-slice sweep) ───
+
+test('slice sweep: times many slices without re-walking the track for each', () => {
+	// A run over a segmented route is timed slice by slice on run-detail.
+	// The cumulative-distance array and the sparsity guard's median sample
+	// step are properties of the TRACK, so rebuilding and re-sorting them per
+	// slice made the walk cost slices x points log points — ~600 ms on a
+	// 100k-point ultra over a 50-segment route.
+	const { track, reads } = countingTrack(4000);
+	const slices = Array.from({ length: 100 }, (_, i) => ({
+		start_distance_m: i * 20,
+		end_distance_m: i * 20 + 800,
+	}));
+
+	const efforts = computeEffortsFromTrack(track, slices);
+
+	assert.equal(efforts.length, 100);
+	assert.ok(
+		efforts.every((e) => e !== null),
+		'every slice fits inside the track and should be timed',
+	);
+	assert.ok(
+		reads() <= track.length * 8,
+		`slice sweep read the track ${reads()} times over ${track.length} points`,
+	);
+});
+
+test('slice sweep: each entry equals the single-slice result', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	const slices = [
+		{ start_distance_m: 100, end_distance_m: 600 }, // clean
+		{ start_distance_m: 100, end_distance_m: 100 }, // zero length
+		{ start_distance_m: 200, end_distance_m: 100 }, // reversed
+		{ start_distance_m: 0, end_distance_m: 100_000 }, // past the track
+		{ start_distance_m: 0, end_distance_m: 20 }, // too sparse for the guard
+	];
+
+	assert.deepEqual(
+		computeEffortsFromTrack(track, slices),
+		slices.map((s) => computeEffortFromTrack(track, s)),
+	);
+});
+
+test('slice sweep: the binary-searched crossing matches a linear scan', () => {
+	// timestampAtDistance takes the FIRST index whose cumulative distance
+	// reaches the target; the search must land on exactly that bracket,
+	// including when the target sits on a sample boundary.
+	const track = straightTrack({ points: 300, stepM: 10, stepS: 2 }); // 5 m/s
+	for (const start of [0, 5, 10, 15, 1000, 1005, 2480]) {
+		const eff = computeEffortFromTrack(track, {
+			start_distance_m: start,
+			end_distance_m: start + 500,
+		});
+		assert.notEqual(eff, null, `no effort at start ${start}`);
+		assert.ok(
+			Math.abs(eff!.time_seconds - 100) < 1,
+			`500 m at 5 m/s from ${start} should be ~100 s, got ${eff!.time_seconds}`,
+		);
+	}
 });

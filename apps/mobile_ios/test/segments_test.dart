@@ -311,4 +311,45 @@ void main() {
     ]).first;
     expect(eff, isNotNull);
   });
+
+  // ─── computeEffortsFromTrack (route-slice sweep) ───
+
+  test('slice sweep: each entry equals the single-slice result', () {
+    final track = _straightTrack(points: 200, stepM: 5, stepS: 1);
+    final slices = <SegmentSlice>[
+      const SegmentSlice(startDistanceM: 100, endDistanceM: 600), // clean
+      const SegmentSlice(startDistanceM: 100, endDistanceM: 100), // zero length
+      const SegmentSlice(startDistanceM: 200, endDistanceM: 100), // reversed
+      const SegmentSlice(startDistanceM: 0, endDistanceM: 100000), // past track
+      const SegmentSlice(startDistanceM: 0, endDistanceM: 20), // too sparse
+    ];
+
+    final swept = computeEffortsFromTrack(track, slices);
+    final oneByOne =
+        slices.map((s) => computeEffortFromTrack(track, s)).toList();
+
+    expect(swept.length, slices.length);
+    for (var i = 0; i < slices.length; i++) {
+      expect(swept[i]?.timeSeconds, oneByOne[i]?.timeSeconds);
+      expect(swept[i]?.startedAt, oneByOne[i]?.startedAt);
+    }
+    expect(swept[0], isNotNull);
+    expect(swept.sublist(1).every((e) => e == null), isTrue);
+  });
+
+  test('slice sweep: the binary-searched crossing matches a linear scan', () {
+    // _msAtDistance takes the FIRST index whose cumulative distance reaches
+    // the target; the search must land on exactly that bracket, including
+    // when the target sits on a sample boundary.
+    final track = _straightTrack(points: 300, stepM: 10, stepS: 2); // 5 m/s
+    for (final start in [0.0, 5.0, 10.0, 15.0, 1000.0, 1005.0, 2480.0]) {
+      final eff = computeEffortFromTrack(
+        track,
+        SegmentSlice(startDistanceM: start, endDistanceM: start + 500),
+      );
+      expect(eff, isNotNull, reason: 'no effort at start $start');
+      expect((eff!.timeSeconds - 100).abs() < 1, isTrue,
+          reason: '500 m at 5 m/s from $start should be ~100 s');
+    }
+  });
 }

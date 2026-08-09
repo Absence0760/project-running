@@ -27,11 +27,44 @@ class EffortResult {
 EffortResult? computeEffortFromTrack(
   List<Waypoint> track,
   SegmentSlice segment,
-) {
-  if (track.length < 2) return null;
-  final segLen = segment.endDistanceM - segment.startDistanceM;
-  if (segLen <= 0) return null;
+) =>
+    computeEffortsFromTrack(track, [segment]).first;
 
+/// Times a run track over many segment slices at once, returning one result
+/// per input slice. Identical per-slice semantics to [computeEffortFromTrack],
+/// which delegates here.
+///
+/// Everything expensive here is a property of the TRACK, not of the slice —
+/// the cumulative-distance array and the median sample step the sparsity
+/// guard compares against. Calling the single-slice form in a loop rebuilt
+/// and re-sorted both per slice, so a run over a segmented route cost
+/// O(segments x points log points). Measured once here, the per-slice work is
+/// two binary searches.
+///
+/// Mirrors `computeEffortsFromTrack` in
+/// `apps/web/src/lib/segments/segments.ts`.
+List<EffortResult?> computeEffortsFromTrack(
+  List<Waypoint> track,
+  List<SegmentSlice> segments,
+) {
+  final out = List<EffortResult?>.filled(segments.length, null);
+  if (track.length < 2 || segments.isEmpty) return out;
+  final index = _distanceIndex(track);
+  for (var i = 0; i < segments.length; i++) {
+    out[i] = _effortFromIndex(track, index, segments[i]);
+  }
+  return out;
+}
+
+class _TrackDistanceIndex {
+  final List<double> cum;
+
+  /// Median non-zero sample step; null when the track never moved.
+  final double? medianStep;
+  const _TrackDistanceIndex(this.cum, this.medianStep);
+}
+
+_TrackDistanceIndex _distanceIndex(List<Waypoint> track) {
   final cum = List<double>.filled(track.length, 0);
   final steps = <double>[];
   for (var i = 1; i < track.length; i++) {
@@ -41,12 +74,25 @@ EffortResult? computeEffortFromTrack(
     cum[i] = cum[i - 1] + d;
     if (d > 0) steps.add(d);
   }
+  if (steps.isEmpty) return _TrackDistanceIndex(cum, null);
+  steps.sort();
+  return _TrackDistanceIndex(cum, steps[steps.length ~/ 2]);
+}
+
+EffortResult? _effortFromIndex(
+  List<Waypoint> track,
+  _TrackDistanceIndex index,
+  SegmentSlice segment,
+) {
+  final segLen = segment.endDistanceM - segment.startDistanceM;
+  if (segLen <= 0) return null;
+
+  final cum = index.cum;
   if (cum.last < segment.endDistanceM) return null;
-  if (steps.isEmpty) return null;
+  final median = index.medianStep;
+  if (median == null) return null;
 
   // Sparsity guard mirroring segments.ts.
-  steps.sort();
-  final median = steps[steps.length ~/ 2];
   if (median > segLen / 5) return null;
 
   final startMs = _msAtDistance(track, cum, segment.startDistanceM);
@@ -80,8 +126,8 @@ class GlobalSegmentGeometry {
 /// [toleranceM], then reach its END within [toleranceM] LATER in the track
 /// (a segment is directional), having covered a distance within 25% of the
 /// segment's own length between the two crossings — otherwise null. The
-/// timing reuses [computeEffortFromTrack] over that window so the sparsity
-/// + timestamp-interpolation guards are shared. Mirrors
+/// timing runs [computeEffortFromTrack]'s own logic over that window so the
+/// sparsity + timestamp-interpolation guards are shared. Mirrors
 /// `computeGlobalSegmentEffort` in `apps/web/src/lib/segments/segments.ts`.
 EffortResult? computeGlobalSegmentEffort(
   List<Waypoint> track,
@@ -116,7 +162,7 @@ List<EffortResult?> computeGlobalSegmentEfforts(
   final bounds = _trackBounds(track);
   // Only built once a segment survives the extent test — a sweep that
   // rejects every segment must not pay a haversine pass at all.
-  List<double>? cum;
+  _TrackDistanceIndex? index;
 
   for (var i = 0; i < segments.length; i++) {
     final segment = segments[i];
@@ -124,19 +170,10 @@ List<EffortResult?> computeGlobalSegmentEfforts(
     if (pts.length < 2 || segment.distanceM <= 0) continue;
     if (!_boundsAdmit(bounds, pts.first, toleranceM)) continue;
     if (!_boundsAdmit(bounds, pts.last, toleranceM)) continue;
-    cum ??= _cumulativeDistances(track);
-    out[i] = _scoreAgainstTrack(track, cum, segment, toleranceM);
+    index ??= _distanceIndex(track);
+    out[i] = _scoreAgainstTrack(track, index, segment, toleranceM);
   }
   return out;
-}
-
-List<double> _cumulativeDistances(List<Waypoint> track) {
-  final cum = List<double>.filled(track.length, 0);
-  for (var i = 1; i < track.length; i++) {
-    cum[i] = cum[i - 1] +
-        _haversine(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
-  }
-  return cum;
 }
 
 /// Latitude / longitude extent of a run track. Longitudes are unwrapped
@@ -221,10 +258,11 @@ bool _boundsAdmit(_TrackBounds bounds, Waypoint point, double toleranceM) {
 
 EffortResult? _scoreAgainstTrack(
   List<Waypoint> track,
-  List<double> cum,
+  _TrackDistanceIndex index,
   GlobalSegmentGeometry segment,
   double toleranceM,
 ) {
+  final cum = index.cum;
   final pts = segment.points;
   final start = pts.first;
   final end = pts.last;
@@ -262,8 +300,9 @@ EffortResult? _scoreAgainstTrack(
     return null;
   }
 
-  return computeEffortFromTrack(
+  return _effortFromIndex(
     track,
+    index,
     SegmentSlice(startDistanceM: dStart, endDistanceM: dEnd),
   );
 }
@@ -287,14 +326,19 @@ Future<int> autoComputeEffortsForRun({
   if (segments.isEmpty) return 0;
 
   var written = 0;
-  for (final seg in segments) {
-    final eff = computeEffortFromTrack(
-      track,
-      SegmentSlice(
-        startDistanceM: seg.startDistanceM,
-        endDistanceM: seg.endDistanceM,
-      ),
-    );
+  final efforts = computeEffortsFromTrack(
+    track,
+    [
+      for (final seg in segments)
+        SegmentSlice(
+          startDistanceM: seg.startDistanceM,
+          endDistanceM: seg.endDistanceM,
+        ),
+    ],
+  );
+  for (var i = 0; i < segments.length; i++) {
+    final seg = segments[i];
+    final eff = efforts[i];
     if (eff == null) continue;
     try {
       await api.recordSegmentEffort(
@@ -317,12 +361,25 @@ double? _msAtDistance(
   List<double> cum,
   double target,
 ) {
-  for (var i = 1; i < track.length; i++) {
-    if (cum[i] < target) continue;
-    final prev = cum[i - 1];
-    final here = cum[i];
-    final a = track[i - 1];
-    final b = track[i];
+  // [cum] is non-decreasing, so the first index reaching [target] is a binary
+  // search rather than a walk from the start of the track.
+  var lo = 1;
+  var hi = track.length - 1;
+  var found = -1;
+  while (lo <= hi) {
+    final mid = (lo + hi) >> 1;
+    if (cum[mid] < target) {
+      lo = mid + 1;
+    } else {
+      found = mid;
+      hi = mid - 1;
+    }
+  }
+  if (found > 0) {
+    final prev = cum[found - 1];
+    final here = cum[found];
+    final a = track[found - 1];
+    final b = track[found];
     if (a.timestamp == null || b.timestamp == null) return null;
     final tA = a.timestamp!.millisecondsSinceEpoch.toDouble();
     final tB = b.timestamp!.millisecondsSinceEpoch.toDouble();

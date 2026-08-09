@@ -34,12 +34,45 @@ export function computeEffortFromTrack(
 	track: TrackPoint[],
 	segment: SegmentSlice,
 ): EffortResult | null {
-	if (track.length < 2) return null;
-	const segLen = segment.end_distance_m - segment.start_distance_m;
-	if (segLen <= 0) return null;
+	return computeEffortsFromTrack(track, [segment])[0];
+}
 
-	// First pass: cumulative distance per index, plus collect sample
-	// step lengths for the sparsity heuristic.
+/**
+ * Times a run track over many segment slices at once, returning one result
+ * per input slice. Identical per-slice semantics to `computeEffortFromTrack`,
+ * which delegates here.
+ *
+ * Everything expensive here is a property of the TRACK, not of the slice —
+ * the cumulative-distance array and the median sample step the sparsity guard
+ * compares against. Calling the single-slice form in a loop rebuilt and
+ * re-sorted both per slice, so a run over a segmented route cost
+ * O(segments x points log points): a 100k-point ultra over a 50-segment route
+ * spent ~600 ms of blocked main thread on run-detail. Measured once here, the
+ * per-slice work is two binary searches.
+ *
+ * Mirrors `computeEffortsFromTrack` in
+ * `apps/mobile_android/lib/segments.dart`.
+ */
+export function computeEffortsFromTrack(
+	track: TrackPoint[],
+	segments: readonly SegmentSlice[],
+): (EffortResult | null)[] {
+	const out: (EffortResult | null)[] = new Array(segments.length).fill(null);
+	if (track.length < 2 || segments.length === 0) return out;
+	const index = distanceIndex(track);
+	for (let i = 0; i < segments.length; i++) {
+		out[i] = effortFromIndex(track, index, segments[i]);
+	}
+	return out;
+}
+
+interface TrackDistanceIndex {
+	cum: Float64Array;
+	/** Median non-zero sample step; null when the track never moved. */
+	medianStep: number | null;
+}
+
+function distanceIndex(track: TrackPoint[]): TrackDistanceIndex {
 	const cum = new Float64Array(track.length);
 	const steps: number[] = [];
 	for (let i = 1; i < track.length; i++) {
@@ -49,14 +82,26 @@ export function computeEffortFromTrack(
 		cum[i] = cum[i - 1] + d;
 		if (d > 0) steps.push(d);
 	}
+	if (steps.length === 0) return { cum, medianStep: null };
+	steps.sort((a, b) => a - b);
+	return { cum, medianStep: steps[Math.floor(steps.length / 2)] };
+}
+
+function effortFromIndex(
+	track: TrackPoint[],
+	index: TrackDistanceIndex,
+	segment: SegmentSlice,
+): EffortResult | null {
+	const segLen = segment.end_distance_m - segment.start_distance_m;
+	if (segLen <= 0) return null;
+
+	const { cum, medianStep } = index;
 	if (cum[cum.length - 1] < segment.end_distance_m) return null;
-	if (steps.length === 0) return null;
+	if (medianStep == null) return null;
 
 	// Sparsity guard: median sample step must be at least 5× smaller
 	// than the segment so the start / end crossings are well-resolved.
-	steps.sort((a, b) => a - b);
-	const median = steps[Math.floor(steps.length / 2)];
-	if (median > segLen / 5) return null;
+	if (medianStep > segLen / 5) return null;
 
 	const startTs = timestampAtDistance(track, cum, segment.start_distance_m);
 	const endTs = timestampAtDistance(track, cum, segment.end_distance_m);
@@ -92,8 +137,8 @@ export interface GlobalSegmentGeometry {
  * `toleranceM` LATER in the track (a segment is directional), having
  * covered a distance within 25% of the segment's own length between the
  * two crossings — otherwise null, mirroring `pickAutoEffortRoute`'s
- * "better no effort than a wrong one" stance. The actual timing then
- * reuses `computeEffortFromTrack` over that distance window, so the
+ * "better no effort than a wrong one" stance. The actual timing then runs
+ * `computeEffortFromTrack`'s own logic over that distance window, so the
  * sparsity + timestamp-interpolation guards are shared, not re-derived.
  *
  * Mirrors `computeGlobalSegmentEffort` in
@@ -137,7 +182,7 @@ export function computeGlobalSegmentEfforts(
 	const bounds = trackBounds(track);
 	// Only built once a segment survives the extent test — a sweep that
 	// rejects every segment must not pay a haversine pass at all.
-	let cum: Float64Array | null = null;
+	let index: TrackDistanceIndex | null = null;
 
 	for (let i = 0; i < segments.length; i++) {
 		const segment = segments[i];
@@ -147,28 +192,19 @@ export function computeGlobalSegmentEfforts(
 		const end = pts[pts.length - 1];
 		if (!boundsAdmit(bounds, start, toleranceM)) continue;
 		if (!boundsAdmit(bounds, end, toleranceM)) continue;
-		if (cum === null) cum = cumulativeDistances(track);
-		out[i] = scoreAgainstTrack(track, cum, segment, toleranceM);
+		if (index === null) index = distanceIndex(track);
+		out[i] = scoreAgainstTrack(track, index, segment, toleranceM);
 	}
 	return out;
 }
 
-function cumulativeDistances(track: TrackPoint[]): Float64Array {
-	const cum = new Float64Array(track.length);
-	for (let i = 1; i < track.length; i++) {
-		cum[i] =
-			cum[i - 1] +
-			haversineMetres(track[i - 1].lat, track[i - 1].lng, track[i].lat, track[i].lng);
-	}
-	return cum;
-}
-
 function scoreAgainstTrack(
 	track: TrackPoint[],
-	cum: Float64Array,
+	index: TrackDistanceIndex,
 	segment: GlobalSegmentGeometry,
 	toleranceM: number,
 ): EffortResult | null {
+	const cum = index.cum;
 	const pts = segment.points;
 	const start = pts[0];
 	const end = pts[pts.length - 1];
@@ -206,7 +242,7 @@ function scoreAgainstTrack(
 	// mistaken for running the segment.
 	if (Math.abs(dEnd - dStart - segment.distance_m) / segment.distance_m > 0.25) return null;
 
-	return computeEffortFromTrack(track, {
+	return effortFromIndex(track, index, {
 		start_distance_m: dStart,
 		end_distance_m: dEnd,
 	});
@@ -291,8 +327,22 @@ function timestampAtDistance(
 	cum: Float64Array,
 	target: number,
 ): number | null {
-	for (let i = 1; i < track.length; i++) {
-		if (cum[i] < target) continue;
+	// `cum` is non-decreasing, so the first index reaching `target` is a
+	// binary search rather than a walk from the start of the track.
+	let lo = 1;
+	let hi = track.length - 1;
+	let found = -1;
+	while (lo <= hi) {
+		const mid = (lo + hi) >> 1;
+		if (cum[mid] < target) {
+			lo = mid + 1;
+		} else {
+			found = mid;
+			hi = mid - 1;
+		}
+	}
+	if (found > 0) {
+		const i = found;
 		const prev = cum[i - 1];
 		const here = cum[i];
 		const a = track[i - 1];
