@@ -1591,6 +1591,8 @@ export const messages = {
 	"clubEvent.loadingEventStatus": "Carregando evento…",
 	"clubEvent.loadError": "Não foi possível carregar este evento.",
 	"clubEvent.retry": "Tentar novamente",
+	"clubEvent.registrationUnknown": "Não conseguimos verificar se você já está inscrito, então não estamos oferecendo a vaga novamente. Tente de novo antes de pagar.",
+	"clubEvent.instanceLoadError": "Não foi possível carregar esta data. O que você vê abaixo pode estar desatualizado.",
 	"clubEvent.backToClubs": "Voltar aos clubes",
 	"clubEvent.notFoundTitle": "Evento não encontrado",
 	"clubEvent.notFoundBody": "Este evento pode ter sido cancelado, ou o clube é privado e você não tem acesso.",

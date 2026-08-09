@@ -1600,6 +1600,8 @@ export const en = {
 	"clubEvent.loadingEventStatus": "Loading event…",
 	"clubEvent.loadError": "Couldn’t load this event.",
 	"clubEvent.retry": "Retry",
+	"clubEvent.registrationUnknown": "We couldn’t check whether you’re already registered, so we’re not offering the place again. Retry before paying.",
+	"clubEvent.instanceLoadError": "Couldn’t load this date. What you see below may be out of date.",
 	"clubEvent.backToClubs": "Back to clubs",
 	"clubEvent.notFoundTitle": "Event not found",
 	"clubEvent.notFoundBody": "This event may have been cancelled, or the club is private and you don't have access.",

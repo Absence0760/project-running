@@ -1587,6 +1587,8 @@ export const messages = {
 	"clubEvent.loadingEventStatus": "イベントを読み込み中…",
 	"clubEvent.loadError": "このイベントを読み込めませんでした。",
 	"clubEvent.retry": "再試行",
+	"clubEvent.registrationUnknown": "すでに登録済みかどうかを確認できなかったため、この枠を再度販売していません。支払う前に再試行してください。",
+	"clubEvent.instanceLoadError": "この日付を読み込めませんでした。以下の内容は最新ではない可能性があります。",
 	"clubEvent.backToClubs": "クラブ一覧に戻る",
 	"clubEvent.notFoundTitle": "イベントが見つかりません",
 	"clubEvent.notFoundBody": "このイベントはキャンセルされたか、クラブが非公開でアクセス権がない可能性があります。",

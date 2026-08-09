@@ -1592,6 +1592,8 @@ export const messages = {
 	"clubEvent.loadingEventStatus": "Veranstaltung wird geladen …",
 	"clubEvent.loadError": "Diese Veranstaltung konnte nicht geladen werden.",
 	"clubEvent.retry": "Erneut versuchen",
+	"clubEvent.registrationUnknown": "Wir konnten nicht prüfen, ob du bereits angemeldet bist, deshalb bieten wir den Platz nicht erneut an. Versuche es erneut, bevor du bezahlst.",
+	"clubEvent.instanceLoadError": "Dieses Datum konnte nicht geladen werden. Die Angaben unten sind möglicherweise veraltet.",
 	"clubEvent.backToClubs": "Zurück zu den Clubs",
 	"clubEvent.notFoundTitle": "Veranstaltung nicht gefunden",
 	"clubEvent.notFoundBody": "Diese Veranstaltung wurde möglicherweise abgesagt, oder der Club ist privat und du hast keinen Zugriff.",
