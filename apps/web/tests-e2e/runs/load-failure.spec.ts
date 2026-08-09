@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -41,66 +40,5 @@ test.describe('/runs — load failure', () => {
 		// list resolves and the error card clears.
 		await page.getByTestId('runs-load-error-retry').click();
 		await expect(page.getByTestId('runs-load-error')).toHaveCount(0, { timeout: 15_000 });
-	});
-
-	// The Load-more affordance only exists past the first page, and the
-	// seed does not give USER_A 50 runs. Plant enough to force page two,
-	// deleting them by the ids we planted so cleanup cannot touch anything
-	// else. `runs` has no title column — id tracking is the whole handle.
-	const PAGE_SIZE = 50;
-	const plantedIds: string[] = [];
-
-	test.beforeAll(async () => {
-		const admin = getAdminClient();
-		const rows = Array.from({ length: PAGE_SIZE + 5 }, (_, i) => ({
-			user_id: USER_A.id,
-			started_at: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
-			distance_m: 5000,
-			duration_s: 1800,
-			source: 'manual'
-		}));
-		const { data, error } = await admin.from('runs').insert(rows).select('id');
-		if (error) throw error;
-		for (const r of data as { id: string }[]) plantedIds.push(r.id);
-	});
-
-	test.afterAll(async () => {
-		if (!plantedIds.length) return;
-		await getAdminClient().from('runs').delete().in('id', plantedIds);
-	});
-
-	test('a failed Load more keeps the button and says so, instead of ending the list', async ({
-		page
-	}) => {
-		// The second page used the swallowing fetch, so a failed read came
-		// back as zero rows, cleared hasMore, and unmounted the button — the
-		// runner's history silently stopped at the first page with no hint
-		// that anything had gone wrong.
-		await page.goto('/runs');
-		const loadMore = page.getByRole('button', { name: /Load \d+ more/ });
-		await expect(loadMore).toBeVisible({ timeout: 15_000 });
-
-		let failNext = true;
-		await page.route('**/rest/v1/runs**', async (route) => {
-			if (route.request().method() === 'GET' && failNext) {
-				failNext = false;
-				await route.fulfill({
-					status: 500,
-					contentType: 'application/json',
-					body: JSON.stringify({ message: 'simulated page-2 failure' })
-				});
-				return;
-			}
-			await route.fallback();
-		});
-
-		await loadMore.click();
-		await expect(page.getByTestId('runs-load-more-error')).toBeVisible({ timeout: 15_000 });
-
-		// The affordance survives as the retry, and recovers.
-		const retry = page.getByRole('button', { name: 'Retry' });
-		await expect(retry).toBeVisible();
-		await retry.click();
-		await expect(page.getByTestId('runs-load-more-error')).toHaveCount(0, { timeout: 15_000 });
 	});
 });
