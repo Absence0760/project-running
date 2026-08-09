@@ -40,7 +40,11 @@ export const AI_DISCLOSURE_VERSION_ROUTE_AI = 2;
  */
 export const AI_DISCLOSURE_CURRENT_VERSION = AI_DISCLOSURE_VERSION_ROUTE_AI;
 
-/** Machine-readable `error` code every AI endpoint uses on a consent denial. */
+/**
+ * Machine-readable marker on every AI-consent denial. It rides a `code`
+ * field rather than `error` because the three endpoints already use `error`
+ * for their own (differently-shaped) strings — clients branch on `code`.
+ */
 export const AI_DISCLOSURE_ERROR = 'ai_disclosure_required';
 
 /**
@@ -87,12 +91,14 @@ export function checkAiDisclosure(
 	return { ok: true, version };
 }
 
-/** Body every AI endpoint returns with its 403 so clients can prompt, not just fail. */
+/** Fields every AI endpoint merges into its 403 so clients can prompt, not just fail. */
 export function aiDisclosureDenialBody(requiredVersion: number): Record<string, unknown> {
-	return { error: AI_DISCLOSURE_ERROR, required_version: requiredVersion };
+	return { code: AI_DISCLOSURE_ERROR, required_version: requiredVersion };
 }
 
-type ProfileLookup = () => Promise<{
+/// `PromiseLike`, not `Promise`: PostgREST's `.maybeSingle()` returns a
+/// thenable builder, and a handler should be able to hand it over as-is.
+type ProfileLookup = () => PromiseLike<{
 	data: unknown;
 	error: { code?: string; message?: string } | null;
 }>;

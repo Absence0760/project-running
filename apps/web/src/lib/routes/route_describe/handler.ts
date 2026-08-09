@@ -26,6 +26,12 @@ import {
 	type RouteDescriptionInput,
 } from '../route_description';
 import { parseAuthHeader } from '../../coach/limits';
+import type { SupabaseClientFactory } from '../../coach/types';
+import {
+	AI_DISCLOSURE_VERSION_ROUTE_AI,
+	aiDisclosureDenialBody,
+	gateAiDisclosure,
+} from '../../core/ai_disclosure';
 import { checkRouteRateLimit } from '../rate_limit';
 
 /// Per-user ceiling on the billed Anthropic call. Sized like the sibling
@@ -66,6 +72,13 @@ export interface RouteDescribeConfig {
 	publicSupabaseAnonKey: string;
 	/** Dev-only escape hatch — see the +server.ts / Lambda gates. */
 	bypassPaywallEnabled: boolean;
+	/**
+	 * Both wrappers leave this unset and the handler falls back to the real
+	 * `createClient`; unit tests inject a fake so the post-auth gates
+	 * (consent, tier) are exercisable without a live Supabase. Same hook
+	 * `CoachConfig` carries.
+	 */
+	createClient?: SupabaseClientFactory;
 }
 
 export interface RouteDescribeResult {
@@ -152,7 +165,8 @@ export async function handleRouteDescribe(
 	const accessToken = parseAuthHeader(authHeader);
 	if (!accessToken) return json(401, { error: 'not authenticated' });
 
-	const supabase = createClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
+	const makeClient = config.createClient ?? createClient;
+	const supabase = makeClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
 		global: { headers: { Authorization: `Bearer ${accessToken}` } },
 	});
 	const userRes = await supabase.auth.getUser(accessToken);
@@ -164,6 +178,33 @@ export async function handleRouteDescribe(
 			error: userRes.error?.message ?? 'no user returned',
 		});
 		return json(401, { error: 'not authenticated' });
+	}
+
+	// GDPR Art 6(1)(a) — issue #734. This endpoint ships the route's name
+	// and stats to Anthropic, which the Coach-scoped disclosure never
+	// described, so it requires the widened version of the record. A user
+	// who only ever accepted the Coach disclosure is refused here until
+	// they accept the wider one. The bypass flag is deliberately NOT
+	// honoured: it exists to skip the paywall in dev, not the lawful basis
+	// for sending a real person's data to a real sub-processor.
+	//
+	// Sits before the tier check so the order matches the coach handler and
+	// there is exactly one place the fan-out can be reasoned about. The
+	// templated description still rides along on the 403, so the L1
+	// baseline survives a refusal (layered resilience).
+	const disclosure = await gateAiDisclosure(
+		() => supabase.rpc('get_my_profile').maybeSingle(),
+		AI_DISCLOSURE_VERSION_ROUTE_AI,
+		'route-describe',
+	);
+	if (!disclosure.ok) {
+		return json(disclosure.status, {
+			error:
+				disclosure.reason === 'lookup_failed' ? 'consent check failed' : 'ai disclosure required',
+			...(disclosure.status === 403 ? aiDisclosureDenialBody(AI_DISCLOSURE_VERSION_ROUTE_AI) : {}),
+			description: templated,
+			source: 'template',
+		});
 	}
 
 	// Paywall gate — the AI enhancement is a Pro perk. Fail-closed: an

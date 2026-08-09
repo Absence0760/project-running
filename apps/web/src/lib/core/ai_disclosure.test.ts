@@ -219,8 +219,10 @@ test('gateAiDisclosure never logs the raw Supabase error object', async () => {
 // ─────────────── wire shape + SQL parity ───────────────
 
 test('the denial body carries the machine-readable code and the required version', () => {
+	// `code`, not `error`: each endpoint keeps its own `error` string, so a
+	// client that wants to prompt for consent has one field to branch on.
 	assert.deepEqual(aiDisclosureDenialBody(AI_DISCLOSURE_VERSION_ROUTE_AI), {
-		error: AI_DISCLOSURE_ERROR,
+		code: AI_DISCLOSURE_ERROR,
 		required_version: 2,
 	});
 });
