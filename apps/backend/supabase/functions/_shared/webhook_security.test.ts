@@ -8,7 +8,6 @@ import {
 import {
   hmacHex,
   isAnonymousAppUserId,
-  isValidUuid,
   timingSafeEqual,
   validateFreshness,
 } from './webhook_security.ts';
@@ -139,27 +138,6 @@ Deno.test('validateFreshness — custom windowMs / clockSkewMs are honoured', ()
   assertEquals(validateFreshness(now - 90 * 60 * 1000, now, 60 * 60 * 1000), 'too_old');
   // Tighter clock skew: 1 ms.
   assertEquals(validateFreshness(now + 100, now, 7 * 24 * 60 * 60 * 1000, 1), 'too_future');
-});
-
-Deno.test('isValidUuid — accepts standard 8-4-4-4-12 hex shape', () => {
-  assertStrictEquals(isValidUuid('00000000-0000-0000-0000-000000000000'), true);
-  assertStrictEquals(isValidUuid('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'), true);
-  assertStrictEquals(isValidUuid('AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA'), true);
-  // Real-shape user-id from the seed.
-  assertStrictEquals(isValidUuid('12345678-1234-1234-1234-123456789abc'), true);
-});
-
-Deno.test('isValidUuid — rejects malformed shapes', () => {
-  // Wrong segment lengths.
-  assertStrictEquals(isValidUuid('0000-0000-0000-0000-000000000000'), false);
-  assertStrictEquals(isValidUuid('00000000-0000-0000-0000-00000000000'), false);
-  assertStrictEquals(isValidUuid('00000000-0000-0000-0000-0000000000000'), false);
-  // Non-hex characters.
-  assertStrictEquals(isValidUuid('zzzzzzzz-0000-0000-0000-000000000000'), false);
-  // Empty / wrong type.
-  assertStrictEquals(isValidUuid(''), false);
-  // RevenueCat anonymous prefix shape.
-  assertStrictEquals(isValidUuid('$RCAnonymousID:abcdef'), false);
 });
 
 Deno.test('isAnonymousAppUserId — RC anonymous prefix detected', () => {

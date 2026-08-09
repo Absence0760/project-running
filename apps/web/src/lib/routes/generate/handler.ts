@@ -42,6 +42,7 @@ import { fetchGraphCycle } from './graph_cycle';
 import { pickBestLoop } from './select';
 import { isValidTargetDistance } from '../route_loop';
 import { checkRouteRateLimit } from '../rate_limit';
+import { supabaseErrorFields } from '../../core/supabase_error';
 
 export interface GenerateRequest {
 	start: { lat: number; lng: number };
@@ -122,7 +123,7 @@ function supabaseProChecker(config: GenerateConfig) {
 		}
 		const proRes = await supabase.rpc('is_pro');
 		if (proRes.error) {
-			console.error('[generate] is_pro lookup failed', proRes.error);
+			console.error('[generate] is_pro lookup failed', supabaseErrorFields(proRes.error));
 			return 'error';
 		}
 		if (proRes.data !== true) return 'free';

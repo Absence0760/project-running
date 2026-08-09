@@ -5,17 +5,17 @@
 /// `checkRateLimit` / `checkRateLimitTiered`. The actual SECURITY
 /// DEFINER `check_rate_limit` RPC is covered by `pgtap` tests in
 /// `supabase/tests/`; what's pinned here is the EF helper's behaviour
-/// on top of it — header precedence, UUIDv8 shape, 429 response shape,
-/// fail-open vs fail-closed posture.
+/// on top of it — which header is trusted, UUIDv8 shape, 429 response
+/// shape, fail-open vs fail-closed posture.
 ///
 /// ### Why ipBucketKey is high-value to pin
 ///
 /// `ipBucketKey` is the keying function for IP-based rate-limiting on
 /// EFs that accept anon callers (`clip-public-track` is the headline
 /// caller today). A regression in:
-/// - Header precedence (e.g. picking x-forwarded-for over
-///   cf-connecting-ip) would let any anonymous user spoof their
-///   "IP" by setting x-forwarded-for, bypassing the rate limit.
+/// - Which header is trusted (e.g. reinstating x-real-ip or
+///   x-forwarded-for as fallbacks) would let any anonymous user mint
+///   a fresh window per request by rotating a header they control.
 /// - The UUIDv8 nibble (literal '8' at position 14 of the final
 ///   UUID) means the synthetic key could collide with a real
 ///   auth.users row — the SECURITY DEFINER guard added in
@@ -32,7 +32,12 @@ import {
   assertExists,
   assertMatch,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { checkRateLimit, checkRateLimitTiered, ipBucketKey } from './rate_limit.ts';
+import {
+  checkRateLimit,
+  checkRateLimitTiered,
+  ipBucketKey,
+  trustedIpHeaderName,
+} from './rate_limit.ts';
 
 // ───────────────────── ipBucketKey ─────────────────────
 
@@ -40,12 +45,14 @@ function reqWithHeaders(headers: Record<string, string>): Request {
   return new Request('http://x.test/', { method: 'POST', headers });
 }
 
-Deno.test('ipBucketKey: cf-connecting-ip wins over x-real-ip and x-forwarded-for', async () => {
-  // Header precedence is the security-critical part. cf-connecting-ip
-  // is set by Cloudflare and can't be spoofed; x-forwarded-for can.
-  // A regression that flipped the order would let any caller spoof
-  // their bucket by injecting x-forwarded-for: 1.2.3.4 on the request.
-  const a = await ipBucketKey(
+Deno.test('ipBucketKey: only the trusted header names the client', async () => {
+  // The whole point of the hardening. cf-connecting-ip is overwritten
+  // by Cloudflare on every request, so a client cannot forge it;
+  // x-real-ip and x-forwarded-for are attacker-supplied on any path
+  // that isn't fronted by Cloudflare. A regression that reinstated
+  // them as fallbacks would hand an anon caller a fresh rate-limit
+  // window per header value.
+  const withNoise = await ipBucketKey(
     reqWithHeaders({
       'cf-connecting-ip': '1.1.1.1',
       'x-real-ip': '2.2.2.2',
@@ -53,42 +60,79 @@ Deno.test('ipBucketKey: cf-connecting-ip wins over x-real-ip and x-forwarded-for
     }),
   );
   const justCf = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '1.1.1.1' }));
-  assertEquals(a, justCf, 'cf-connecting-ip must dominate when present');
+  assertEquals(withNoise, justCf, 'untrusted headers must not shift the bucket');
 });
 
-Deno.test('ipBucketKey: x-real-ip used when cf-connecting-ip is absent', async () => {
-  const a = await ipBucketKey(
-    reqWithHeaders({
-      'x-real-ip': '2.2.2.2',
-      'x-forwarded-for': '3.3.3.3',
-    }),
+Deno.test('ipBucketKey: spoofable headers alone all collapse to one bucket', async () => {
+  // Every one of these is a value the caller chose. If any of them
+  // reached the hash input, rotating it would mint a new window on
+  // every request — the escape this fix closes. They must be
+  // indistinguishable from sending no headers at all.
+  const none = await ipBucketKey(reqWithHeaders({}));
+  const realIp = await ipBucketKey(reqWithHeaders({ 'x-real-ip': '2.2.2.2' }));
+  const otherRealIp = await ipBucketKey(reqWithHeaders({ 'x-real-ip': '9.9.9.9' }));
+  const forwarded = await ipBucketKey(
+    reqWithHeaders({ 'x-forwarded-for': '4.4.4.4, 10.0.0.1, 192.168.1.1' }),
   );
-  const justReal = await ipBucketKey(reqWithHeaders({ 'x-real-ip': '2.2.2.2' }));
-  assertEquals(a, justReal, 'x-real-ip must dominate over x-forwarded-for');
+  assertEquals(realIp, none, 'x-real-ip must not establish a bucket');
+  assertEquals(otherRealIp, none, 'rotating x-real-ip must not mint a new bucket');
+  assertEquals(forwarded, none, 'x-forwarded-for must not establish a bucket');
 });
 
-Deno.test('ipBucketKey: x-forwarded-for picks the FIRST hop and trims whitespace', async () => {
-  // x-forwarded-for is comma-separated; the leftmost value is the
-  // original client (the rest are intermediate proxies). A regression
-  // that picked the rightmost would group every request through a
-  // shared proxy into the same bucket. Trimming matters because RFC
-  // 7239 explicitly allows surrounding whitespace in comma lists.
-  const a = await ipBucketKey(
-    reqWithHeaders({ 'x-forwarded-for': '  4.4.4.4 , 10.0.0.1, 192.168.1.1' }),
+Deno.test('ipBucketKey: a trusted header carrying a forwarded chain is discarded', async () => {
+  // The trusted header always carries exactly one address. A comma
+  // means someone stuffed a chain in; taking its leftmost element is
+  // the classic spoof, so the whole value fails closed to the shared
+  // unknown bucket rather than keying off the attacker's prefix.
+  const chain = await ipBucketKey(
+    reqWithHeaders({ 'cf-connecting-ip': '4.4.4.4, 10.0.0.1' }),
   );
-  const justFirst = await ipBucketKey(reqWithHeaders({ 'x-forwarded-for': '4.4.4.4' }));
-  assertEquals(a, justFirst, 'must pick the leftmost x-forwarded-for entry');
+  const none = await ipBucketKey(reqWithHeaders({}));
+  const leftmost = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '4.4.4.4' }));
+  assertEquals(chain, none, 'a chained value must fall through to the unknown bucket');
+  assert(chain !== leftmost, 'a chained value must not key off its leftmost element');
 });
 
-Deno.test('ipBucketKey: falls back to 0.0.0.0 when no headers are set', async () => {
-  // Header-less callers are rare in practice (Supabase always sets
-  // x-forwarded-for at the platform gateway), but local-dev requests
-  // and tests can hit this branch. Bucket them ALL together so a
-  // header-less attacker can't fan out infinite buckets — strict but
-  // correct.
-  const a = await ipBucketKey(reqWithHeaders({}));
-  const b = await ipBucketKey(reqWithHeaders({}));
-  assertEquals(a, b, 'header-less requests must collapse to the same bucket');
+Deno.test('ipBucketKey: a non-IP trusted header value fails closed', async () => {
+  const junk = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': 'not-an-ip' }));
+  const blank = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '   ' }));
+  const none = await ipBucketKey(reqWithHeaders({}));
+  assertEquals(junk, none, 'a non-IP value must not establish a bucket');
+  assertEquals(blank, none, 'a whitespace-only value must not establish a bucket');
+});
+
+Deno.test('ipBucketKey: IPv6 is accepted and case-normalised', async () => {
+  const upper = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '2001:DB8::1' }));
+  const lower = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '2001:db8::1' }));
+  const none = await ipBucketKey(reqWithHeaders({}));
+  assertEquals(upper, lower, 'IPv6 case must not fan out buckets');
+  assert(upper !== none, 'a valid IPv6 address must establish its own bucket');
+});
+
+Deno.test('trustedIpHeaderName: defaults to cf-connecting-ip, overridable for self-hosting', () => {
+  // Self-hosted / non-Cloudflare deployments name the header their own
+  // reverse proxy overwrites. Without the override, every caller on
+  // those topologies shares the unknown bucket.
+  assertEquals(trustedIpHeaderName(), 'cf-connecting-ip');
+  Deno.env.set('TRUSTED_CLIENT_IP_HEADER', 'X-Real-IP');
+  try {
+    assertEquals(trustedIpHeaderName(), 'x-real-ip', 'the override is lower-cased');
+  } finally {
+    Deno.env.delete('TRUSTED_CLIENT_IP_HEADER');
+  }
+});
+
+Deno.test('ipBucketKey: honours the configured trusted header', async () => {
+  Deno.env.set('TRUSTED_CLIENT_IP_HEADER', 'x-real-ip');
+  try {
+    const viaReal = await ipBucketKey(reqWithHeaders({ 'x-real-ip': '2.2.2.2' }));
+    const none = await ipBucketKey(reqWithHeaders({}));
+    const viaCf = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '2.2.2.2' }));
+    assert(viaReal !== none, 'the configured header must establish a bucket');
+    assertEquals(viaCf, none, 'the default header is no longer trusted once overridden');
+  } finally {
+    Deno.env.delete('TRUSTED_CLIENT_IP_HEADER');
+  }
 });
 
 Deno.test('ipBucketKey: matches the UUID format', async () => {

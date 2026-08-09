@@ -44,6 +44,14 @@ export async function hmacHex(
     .join('');
 }
 
+/// Header a sender may carry a shared webhook secret in, instead of the
+/// URL query string. A query-string secret is recorded verbatim in the
+/// platform's request log on every delivery; a header is not, so this is
+/// the path to prefer wherever the sender can be configured to use it.
+/// Kept here (rather than per-function) so the Edge Function and the Go
+/// worker's twin endpoint cannot drift on the name.
+export const WEBHOOK_SECRET_HEADER = 'x-webhook-secret';
+
 /// Constant-time string compare. Returns false on length mismatch
 /// without short-circuiting on content. The length check itself is
 /// observable, but the digest length is fixed (sha256 hex = 64 chars,
@@ -83,17 +91,6 @@ export function validateFreshness(
   if (ageMs > windowMs) return 'too_old';
   if (ageMs < -clockSkewMs) return 'too_future';
   return 'ok';
-}
-
-/// RFC 4122 v1-v5 UUID shape (8-4-4-4-12 hex). RevenueCat's app_user_id
-/// should be the Supabase user id, but a misconfiguration could ship
-/// their internal Customer-ID format here. Without this guard the
-/// downstream `.eq('id', userId)` lookup raises Postgres
-/// `22P02 invalid_input_syntax`, which bubbles as a 500 and sends RC
-/// into retry storms.
-export function isValidUuid(s: string): boolean {
-  if (typeof s !== 'string') return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 }
 
 /// RevenueCat assigns `$RCAnonymousID:<random>` to users who haven't

@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { isValidUuid } from '../_shared/input_validation.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
   chronoTrackConfigured,
@@ -67,6 +68,12 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
 
   const listingId = typeof body.listingId === 'string' ? body.listingId : '';
   if (!listingId) return Response.json({ error: 'listingId required' }, { status: 400 });
+  // Without this the listing lookup below raises 22P02, which the
+  // `listingErr || !listing` collapse reports as a 404 "not found" — a
+  // malformed id looks to the caller like a missing race.
+  if (!isValidUuid(listingId)) {
+    return Response.json({ error: 'listingId must be a UUID' }, { status: 400 });
+  }
 
   // The calendar is public-read through the redacted public_race_listings
   // view (20270320_001 — the base table is submitter-own-rows only), so the
@@ -243,6 +250,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   // The match writes onto the runner's OWN run row (RLS-scoped) — a single
   // result is expected in this mode.
   const matchRunId = typeof body.matchRunId === 'string' ? body.matchRunId : '';
+  if (matchRunId && !isValidUuid(matchRunId)) {
+    return Response.json({ error: 'matchRunId must be a UUID' }, { status: 400 });
+  }
   if (matchRunId) {
     // Enrich merges ONE result onto the caller's own run. More than one mapped
     // result is ambiguous — reject rather than stamp a stranger's mapped[0]

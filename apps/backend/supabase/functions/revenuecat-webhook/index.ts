@@ -12,10 +12,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
+import { isValidUuid } from '../_shared/input_validation.ts';
 import {
   hmacHex,
   isAnonymousAppUserId,
-  isValidUuid,
   timingSafeEqual,
   validateFreshness,
 } from '../_shared/webhook_security.ts';

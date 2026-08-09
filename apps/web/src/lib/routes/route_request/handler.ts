@@ -31,6 +31,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { parseAuthHeader } from '../../coach/limits';
 import { checkRouteRateLimit } from '../rate_limit';
+import { supabaseErrorFields } from '../../core/supabase_error';
 
 /// Per-user ceiling on the billed Anthropic call. Same shape and size as
 /// the sibling `generate-route` / `route-describe` buckets: 60/hour is far
@@ -196,7 +197,7 @@ export async function handleRouteRequest(
 	} else {
 		const proRes = await supabase.rpc('is_pro');
 		if (proRes.error) {
-			console.error('[route-request] is_pro lookup failed', proRes.error);
+			console.error('[route-request] is_pro lookup failed', supabaseErrorFields(proRes.error));
 			return json(503, { error: 'route assistant unavailable' });
 		}
 		isPro = proRes.data === true;
