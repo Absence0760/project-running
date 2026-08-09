@@ -1065,6 +1065,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'Dein Konto ist eingerichtet, aber deine Einstellungen wurden nicht gespeichert: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'Der Server ist gerade nicht erreichbar. Du kannst die Einrichtung später abschließen — alles hier lässt sich in den Einstellungen ändern.';
 

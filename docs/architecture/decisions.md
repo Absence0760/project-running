@@ -7754,3 +7754,52 @@ The shape of the fix is the point. **Nothing here is cacheable at the call site*
 **The extent test is deliberately conservative and that is load-bearing.** It exists to reject without measuring, so it must never reject a segment the full scan would have matched. Latitude is exact: spherical distance is never less than the meridian separation. Longitude is not — a naive `|Δλ| · cos(φ)` bound is *wrong* (two points 10° apart at 60° N are 4.986° of great circle, not the 5° that bound predicts), so the window comes from the tangent-meridian result, everything within angular distance `s` of a point at latitude `φ` lying within `asin(sin s / cos φ)` of its meridian. That is taken as the linear `s / cos φ`, which under-states the window only as the ratio approaches 1 — impossible while the window is still under a degree, which is why *a degree* is where the test gives up and admits rather than the half-turn that first suggested itself. Every window is divided by 110,574 m/degree where the sphere the haversine uses gives 111,195, so each one comes out slightly wider than the true one. And because the extent is a planar frame, it goes through `geo.ts`'s longitude unwrapping (§ 463): read naively, a run straddling the antimeridian appears to span the globe.
 
 **The regression guard is a work count, not a timing.** The test track is an array whose points count every read of a coordinate, so a test can assert the sweep read the track a bounded number of times *in total* rather than once per item — 9,606,400 reads before the catalogue fix, 1,599,600 before the slice fix, both now inside `8 × points`. That pins the complexity itself rather than a machine-dependent duration, which a flaky test would have been. Soundness gets its own guard: the pre-prefilter matcher is kept in the test file as an oracle, and a sweep of tracks (polar, antimeridian, mid-latitude) against segments nudged to either side of the tolerance in both axes asserts the fast path never rejects what the oracle matches. Dropping the `cos φ` scaling or the longitude unwrapping each fail it. Both functions are on the enforced web↔Dart parity list, so the batch shape, the extent test, and the binary search are mirrored in `segments.dart`; mobile's `autoComputeEffortsForRun` had the identical per-segment loop and batches too.
+
+## 560. A write that cannot be performed must not return as though it had — the mobile settings bags and the race result
+
+**Date:** 2026-08-09
+
+Two mobile paths shared one shape: an outbound write whose precondition was
+missing, and a method that answered the caller as if it had succeeded anyway.
+
+`SettingsSyncService`'s ten write methods each opened with `final s =
+_settings; if (s == null) return;`. That reads as a guard, but `_settings` is
+null in states a user reaches routinely — `onSignedIn` is fired and forgotten
+from the auth-change handler and nulls the field on any throw, so a transient
+load failure at sign-in disarmed every settings write for the rest of the
+session. The worst caller is the post-signup setup wizard, which hands over its
+whole answer bag in one `updateUniversal`: units, privacy default, primary
+goal, push-notification choice, body weight, the consent-gated DOB mirror.
+Nothing was thrown for its `catch` to see and nothing reached the offline
+pending queue, so the answers were simply gone, under a "Welcome to Threkir"
+toast. `primary_goal` and `push_notifications` have no local `Preferences`
+mirror at all — the bag was the only copy. The settings-safety screen was
+lied to the same way: it reverts its optimistic toggle and offers a retry when
+a write throws, and it never got the chance.
+
+The guard was also unnecessary. `SettingsService.load()` degrades to the
+on-disk cache plus the pending queue rather than failing, so "no service" only
+ever meant "not loaded yet", never "this write is impossible". Writes now go
+through `_ensureService()`, which loads on demand and adopts the result; the
+one genuinely unwritable state — no session — throws, so a caller can report
+or re-queue. The freshly-loaded bags are deliberately *not* overlaid onto local
+`Preferences` on that path: the recovery is triggered by a user-initiated
+write, so the local mirrors hold the newer intent and applying the server copy
+would revert the choice being saved. Callers split on whether the key has a
+local mirror: the `push*` roams are L4 (the pref is already saved locally, so
+the settings screen logs and moves on), while `updateUniversal` / `updateDevice`
+propagate.
+
+`RaceController.submitResult` was the same failure with a shorter fuse: a
+failed `submitEventResult` was logged, then `detachRecorder()` cleared
+`_hostingEventId` unconditionally, discarding the only record that this run
+belonged to a race. A runner who crossed the line in a dead spot lost their
+official time with no retry path and no indication anything had gone wrong.
+`submitEventResult` upserts on `(event_id, instance_start, user_id)`, so
+replay is safe — the result is now persisted to disk on failure and drained
+from the existing 60-second session poll, which is the cadence that already
+exists for exactly this controller.
+
+The general rule: an outbound write either performs, durably queues, or throws.
+Returning normally is a claim that the user's data is safe, and a method that
+cannot keep that claim must not make it.

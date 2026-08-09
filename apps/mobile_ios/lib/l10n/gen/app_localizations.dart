@@ -1859,6 +1859,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save your setup: {message}'**
   String setupSaveError(String message);
 
+  /// Toast shown when the setup wizard saved the profile but the preferences bag write failed
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is set up, but your preferences didn\'t save: {message}'**
+  String setupPrefsSaveError(String message);
+
   /// Hint shown next to the setup wizard's offline fail-safe exit after a save failed
   ///
   /// In en, this message translates to:

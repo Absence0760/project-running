@@ -1397,6 +1397,15 @@
       }
     }
   },
+  "setupPrefsSaveError": "Your account is set up, but your preferences didn't save: {message}",
+  "@setupPrefsSaveError": {
+    "description": "Toast shown when the setup wizard saved the profile but the preferences bag write failed",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
   "setupOfflineHint": "Can't reach the server right now. You can finish setup later — everything here is editable in Settings.",
   "@setupOfflineHint": {
     "description": "Hint shown next to the setup wizard's offline fail-safe exit after a save failed"

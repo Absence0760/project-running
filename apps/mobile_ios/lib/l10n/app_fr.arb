@@ -292,6 +292,7 @@
   "setupCreatePlanCta": "Créer mon plan d'entraînement",
   "setupWelcomeToast": "Bienvenue sur Threkir !",
   "setupSaveError": "Impossible d'enregistrer votre configuration : {message}",
+  "setupPrefsSaveError": "Votre compte est configuré, mais vos préférences n'ont pas été enregistrées : {message}",
   "setupOfflineHint": "Impossible de joindre le serveur pour le moment. Vous pouvez terminer la configuration plus tard — tout est modifiable dans les Réglages.",
   "setupFinishLater": "Terminer plus tard",
   "setupNameTitle": "Comment doit-on vous appeler ?",

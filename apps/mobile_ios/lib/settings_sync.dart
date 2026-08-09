@@ -21,7 +21,8 @@ class SettingsSyncService extends ChangeNotifier {
   SettingsSyncService({
     required this.preferences,
     this.cache,
-  });
+    @visibleForTesting Future<SettingsService> Function()? serviceLoader,
+  }) : _serviceLoader = serviceLoader;
 
   final Preferences preferences;
 
@@ -29,6 +30,8 @@ class SettingsSyncService extends ChangeNotifier {
   /// while offline, render immediately on resume before the server fetch,
   /// and accept writes that queue + drain on next sign-in.
   final SettingsCache? cache;
+
+  final Future<SettingsService> Function()? _serviceLoader;
 
   SettingsService? _settings;
 
@@ -84,25 +87,12 @@ class SettingsSyncService extends ChangeNotifier {
   /// user isn't authenticated.
   Future<void> onSignedIn() async {
     try {
-      _settings = await (cache == null
-              ? SettingsService(
-                  deviceId: preferences.deviceId,
-                  platform: _platformTag(),
-                  label: _deviceLabel(),
-                )
-              : SettingsService(
-                  deviceId: preferences.deviceId,
-                  platform: _platformTag(),
-                  label: _deviceLabel(),
-                  cache: cache!,
-                ))
-          .load();
-      _applyUniversal(_settings!.universal);
-      _applyDevice(_settings!.device);
+      final loaded = await _loadService();
+      _settings = loaded;
+      _applyUniversal(loaded.universal);
+      _applyDevice(loaded.device);
       _synced = true;
-      _lastError = _settings!.isServerHydrated
-          ? null
-          : 'Offline — edits stay on this device and sync when you reconnect.';
+      _lastError = loaded.isServerHydrated ? null : _offlineNotice;
     } catch (e) {
       _settings = null;
       _synced = false;
@@ -111,12 +101,60 @@ class SettingsSyncService extends ChangeNotifier {
     notifyListeners();
   }
 
+  static const _offlineNotice =
+      'Offline — edits stay on this device and sync when you reconnect.';
+
+  Future<SettingsService> _loadService() {
+    final loader = _serviceLoader;
+    if (loader != null) return loader();
+    final c = cache;
+    return (c == null
+            ? SettingsService(
+                deviceId: preferences.deviceId,
+                platform: _platformTag(),
+                label: _deviceLabel(),
+              )
+            : SettingsService(
+                deviceId: preferences.deviceId,
+                platform: _platformTag(),
+                label: _deviceLabel(),
+                cache: c,
+              ))
+        .load();
+  }
+
+  /// The live [SettingsService], loaded on demand when [onSignedIn] never
+  /// ran or failed.
+  ///
+  /// A null `_settings` used to turn every write into a silent no-op, which
+  /// discarded whole answer bags — the setup wizard's units, primary goal
+  /// and notification choices among them — with nothing thrown for the
+  /// caller to catch and nothing left in the offline queue. It never meant
+  /// "this write is impossible": [SettingsService.load] degrades to the
+  /// on-disk cache plus the pending queue instead of failing, so the only
+  /// state that genuinely can't accept a write is having no session at all,
+  /// and that throws here so the caller can report it.
+  ///
+  /// The freshly-loaded bags are deliberately NOT overlaid onto local
+  /// [Preferences]: this runs from a user-initiated write, so the local
+  /// mirrors already hold the newer intent and applying the server copy
+  /// would revert the very choice being saved.
+  Future<SettingsService> _ensureService() async {
+    final existing = _settings;
+    if (existing != null) return existing;
+    final loaded = await _loadService();
+    _settings = loaded;
+    _synced = true;
+    _lastError = loaded.isServerHydrated ? null : _offlineNotice;
+    return loaded;
+  }
+
   /// Push the user's current distance-unit choice to the universal bag.
-  /// Call from the settings-screen toggle handler; noop when we haven't
-  /// synced yet (e.g. user is offline / not signed in).
+  /// Call from the settings-screen toggle handler. Throws when there is no
+  /// session to write against — the local pref has already been saved by
+  /// then, so callers treat the roam as L4 and disclose rather than block.
   Future<void> pushPreferredUnit() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateUniversal(<String, dynamic>{
       SettingsKeys.preferredUnit: preferences.useMiles ? 'mi' : 'km',
     });
@@ -125,8 +163,7 @@ class SettingsSyncService extends ChangeNotifier {
 
   /// Push the user's spoken-split-announcements toggle to the device bag.
   Future<void> pushAudioCues() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateDevice(<String, dynamic>{
       SettingsKeys.voiceFeedbackEnabled: preferences.audioCues,
     });
@@ -136,8 +173,7 @@ class SettingsSyncService extends ChangeNotifier {
   /// Push the per-cue voice toggle map to the device bag. Only explicitly
   /// toggled ids are present — absent means on (see [VoiceCue]).
   Future<void> pushVoiceCueTypes() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateDevice(<String, dynamic>{
       SettingsKeys.voiceCueTypes: preferences.voiceCueTypes,
     });
@@ -149,8 +185,7 @@ class SettingsSyncService extends ChangeNotifier {
   /// activity-type default") clears the key so the default logic still
   /// runs.
   Future<void> pushSplitInterval() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     final metres = preferences.splitIntervalMetres;
     await s.updateDevice(<String, dynamic>{
       SettingsKeys.voiceFeedbackIntervalKm:
@@ -162,17 +197,18 @@ class SettingsSyncService extends ChangeNotifier {
   /// Merge [changes] into the universal bag. Thin passthrough used by the
   /// settings screen for keys that don't have a local [Preferences]
   /// mirror — the screen reads from and writes to the bag directly.
+  ///
+  /// These keys have no local fallback, so a failure here loses the value
+  /// outright: it throws rather than reporting success (see [_ensureService]).
   Future<void> updateUniversal(Map<String, dynamic> changes) async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateUniversal(changes);
     notifyListeners();
   }
 
   /// Merge [changes] into the device bag. See [updateUniversal].
   Future<void> updateDevice(Map<String, dynamic> changes) async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateDevice(changes);
     notifyListeners();
   }
@@ -273,8 +309,7 @@ class SettingsSyncService extends ChangeNotifier {
   /// bag, or clear the bag when it's removed. Multi-target / monthly /
   /// pace goals stay client-only — the bag scalar can't represent them.
   Future<void> pushWeeklyDistanceGoal() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     final weekly = preferences.goals.firstWhere(
       (g) => g.period == GoalPeriod.week && g.distanceMetres != null,
       orElse: () => const RunGoal(id: '', period: GoalPeriod.week),
@@ -339,8 +374,7 @@ class SettingsSyncService extends ChangeNotifier {
   /// Push the user's race-fueling intake rates to the universal bag so they
   /// roam across devices. Reads the current local [Preferences] values.
   Future<void> pushFuelingPrefs() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateUniversal(<String, dynamic>{
       SettingsKeys.carbsPerHour: preferences.carbsPerHourG,
       SettingsKeys.fluidPerHour: preferences.fluidPerHourMl,
@@ -350,8 +384,7 @@ class SettingsSyncService extends ChangeNotifier {
 
   /// Push the user's keep-screen-on toggle to the device bag.
   Future<void> pushKeepScreenOn() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateDevice(<String, dynamic>{
       SettingsKeys.keepScreenOn: preferences.keepScreenOn,
     });
@@ -360,8 +393,7 @@ class SettingsSyncService extends ChangeNotifier {
 
   /// Push the user's dim-screen-while-recording toggle to the device bag.
   Future<void> pushDimScreenWhileRecording() async {
-    final s = _settings;
-    if (s == null) return;
+    final s = await _ensureService();
     await s.updateDevice(<String, dynamic>{
       SettingsKeys.dimScreenWhileRecording: preferences.dimScreenWhileRecording,
     });

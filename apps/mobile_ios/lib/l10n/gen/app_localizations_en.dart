@@ -1054,6 +1054,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'Your account is set up, but your preferences didn\'t save: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'Can\'t reach the server right now. You can finish setup later — everything here is editable in Settings.';
 

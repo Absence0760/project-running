@@ -292,6 +292,7 @@
   "setupCreatePlanCta": "Crear mi plan de entrenamiento",
   "setupWelcomeToast": "¡Bienvenido a Threkir!",
   "setupSaveError": "No se pudo guardar tu configuración: {message}",
+  "setupPrefsSaveError": "Tu cuenta está configurada, pero tus preferencias no se guardaron: {message}",
   "setupOfflineHint": "No se puede conectar con el servidor ahora mismo. Puedes terminar la configuración más tarde — todo esto se puede editar en Ajustes.",
   "setupFinishLater": "Terminar más tarde",
   "setupNameTitle": "¿Cómo te llamamos?",
