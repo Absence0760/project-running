@@ -4847,6 +4847,8 @@ export const en = {
 	"fundraiser.notFound": "This fundraiser isn't available.",
 	"fundraiser.loadFailed": "Couldn’t load this fundraiser. Check your connection and try again.",
 	"fundraiser.retry": "Retry",
+	"fundraiser.totalsFailed": "Couldn’t load the amount raised. This isn’t the campaign’s total.",
+	"fundraiser.feedFailed": "Couldn’t load the supporters list.",
 	"fundraiser.loading": "Loading fundraiser…",
 	"fundraiser.donateOnWeb": "Donate on web",
 	"dashConsistency.title": "Training consistency",

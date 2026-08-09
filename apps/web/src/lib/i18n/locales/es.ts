@@ -4827,6 +4827,8 @@ export const messages = {
 	"fundraiser.notFound": "Esta campaña no está disponible.",
 	"fundraiser.loadFailed": "No se pudo cargar esta recaudación. Revisa tu conexión e inténtalo de nuevo.",
 	"fundraiser.retry": "Reintentar",
+	"fundraiser.totalsFailed": "No se pudo cargar lo recaudado. Este no es el total de la campaña.",
+	"fundraiser.feedFailed": "No se pudo cargar la lista de colaboradores.",
 	"fundraiser.loading": "Cargando campaña…",
 	"fundraiser.donateOnWeb": "Donar en la web",
 	"dashConsistency.title": "Constancia de entrenamiento",

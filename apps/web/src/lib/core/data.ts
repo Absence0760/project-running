@@ -11006,10 +11006,15 @@ export async function fetchChallengeById(id: string): Promise<ChallengeWithMeta 
 	if (error) throw error;
 	if (!data) return null;
 	const challenge = challengeFromRow(data);
-	const { data: parts } = await supabase
+	// A dropped error here reported `participant_count: 0` and `joined: false`
+	// on a challenge the caller may well have joined — so the page offered
+	// "Join" to someone already in, against a board it claimed was empty. A
+	// partial read failure fails the whole read.
+	const { data: parts, error: partsError } = await supabase
 		.from(TABLES.challenge_participants)
 		.select('user_id, completed_at')
 		.eq('challenge_id', id);
+	if (partsError) throw partsError;
 	const joinedRow = userId ? (parts ?? []).find((p) => p.user_id === userId) : undefined;
 	return {
 		...challenge,
@@ -11273,9 +11278,15 @@ export async function closeFundraiser(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// Throws on a failed read. A campaign whose totals could not be fetched must
+/// not render "0 raised · 0 supporters" — that tells a donor the fundraiser
+/// they were sent to has raised nothing, which is a claim about someone else's
+/// campaign we have no basis for. `null` stays the genuine miss: the RPC
+/// answered with no rows because nothing has been donated yet.
 export async function fetchFundraiserTotals(id: string): Promise<FundraiserTotals | null> {
 	const { data, error } = await supabase.rpc('fundraiser_totals', { p_fundraiser_id: id });
-	if (error || !data || (data as unknown[]).length === 0) return null;
+	if (error) throw error;
+	if (!data || (data as unknown[]).length === 0) return null;
 	const row = (data as FundraiserTotals[])[0];
 	return {
 		raised_cents: Number(row.raised_cents) || 0,
@@ -11285,6 +11296,8 @@ export async function fetchFundraiserTotals(id: string): Promise<FundraiserTotal
 	};
 }
 
+/// Throws on a failed read — an empty list renders "Be the first to donate",
+/// which is the same false claim in the supporters panel.
 export async function fetchFundraiserFeed(
 	id: string,
 	limit = 50
@@ -11293,8 +11306,8 @@ export async function fetchFundraiserFeed(
 		p_fundraiser_id: id,
 		p_limit: limit
 	});
-	if (error || !data) return [];
-	return data as FundraiserFeedEntry[];
+	if (error) throw error;
+	return (data ?? []) as FundraiserFeedEntry[];
 }
 
 /// Begin a Stripe Checkout for a donation. The donations-checkout Edge Function

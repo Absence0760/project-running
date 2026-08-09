@@ -4827,6 +4827,8 @@ export const messages = {
 	"fundraiser.notFound": "Cette collecte n'est pas disponible.",
 	"fundraiser.loadFailed": "Impossible de charger cette collecte. Vérifie ta connexion et réessaie.",
 	"fundraiser.retry": "Réessayer",
+	"fundraiser.totalsFailed": "Impossible de charger le montant collecté. Ce n’est pas le total de la collecte.",
+	"fundraiser.feedFailed": "Impossible de charger la liste des soutiens.",
 	"fundraiser.loading": "Chargement de la collecte…",
 	"fundraiser.donateOnWeb": "Faire un don sur le web",
 	"dashConsistency.title": "Régularité d'entraînement",

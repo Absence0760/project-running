@@ -25,6 +25,13 @@
 	let fundraiser = $state<Fundraiser | null>(null);
 	let totals = $state<FundraiserTotals | null>(null);
 	let feed = $state<FundraiserFeedEntry[]>([]);
+	// The campaign row and its two panels are three separate reads. A panel
+	// that could not be read reports itself and offers a retry; it must not
+	// blank the page (the story and the donate button are still good), and it
+	// must not render its own empty state, which would tell a donor this
+	// campaign has raised nothing.
+	let totalsFailed = $state(false);
+	let feedFailed = $state(false);
 
 	let donateOpen = $state(false);
 	let editOpen = $state(false);
@@ -41,13 +48,30 @@
 	const closed = $derived(fundraiser?.status === 'closed');
 	const justDonated = $derived(data.donated === '1');
 
+	async function refreshTotals() {
+		totalsFailed = false;
+		try {
+			totals = await fetchFundraiserTotals(data.id);
+		} catch (e) {
+			console.error('fundraiser totals load failed', e);
+			totals = null;
+			totalsFailed = true;
+		}
+	}
+
+	async function refreshFeed() {
+		feedFailed = false;
+		try {
+			feed = await fetchFundraiserFeed(data.id, 50);
+		} catch (e) {
+			console.error('fundraiser feed load failed', e);
+			feed = [];
+			feedFailed = true;
+		}
+	}
+
 	async function refreshTotalsFeed() {
-		const [t, f] = await Promise.all([
-			fetchFundraiserTotals(data.id),
-			fetchFundraiserFeed(data.id, 50)
-		]);
-		totals = t;
-		feed = f;
+		await Promise.all([refreshTotals(), refreshFeed()]);
 	}
 
 	async function load() {
@@ -200,12 +224,21 @@
 		</header>
 
 		<section class="card thermometer-card">
-			<GoalThermometer
-				raisedCents={totals?.raised_cents ?? 0}
-				goalCents={totals?.goal_cents ?? fundraiser.goal_cents}
-				donorCount={totals?.donor_count ?? 0}
-				currency={fundraiser.currency}
-			/>
+			{#if totalsFailed}
+				<p class="panel-error" role="alert" data-testid="fundraiser-totals-error">
+					{m('fundraiser.totalsFailed')}
+					<button type="button" class="btn btn-secondary" onclick={() => void refreshTotals()}>
+						{m('fundraiser.retry')}
+					</button>
+				</p>
+			{:else}
+				<GoalThermometer
+					raisedCents={totals?.raised_cents ?? 0}
+					goalCents={totals?.goal_cents ?? fundraiser.goal_cents}
+					donorCount={totals?.donor_count ?? 0}
+					currency={fundraiser.currency}
+				/>
+			{/if}
 			{#if closed}
 				<p class="closed">{m('fundraiser.closed')}</p>
 			{:else}
@@ -228,7 +261,16 @@
 
 		<section class="card feed-card">
 			<h2>{m('fundraiser.feedTitle')}</h2>
-			<DonationFeed entries={feed} />
+			{#if feedFailed}
+				<p class="panel-error" role="alert" data-testid="fundraiser-feed-error">
+					{m('fundraiser.feedFailed')}
+					<button type="button" class="btn btn-secondary" onclick={() => void refreshFeed()}>
+						{m('fundraiser.retry')}
+					</button>
+				</p>
+			{:else}
+				<DonationFeed entries={feed} />
+			{/if}
 		</section>
 
 		<Modal open={donateOpen} onclose={() => (donateOpen = false)} title={m('fundraiser.donate')} narrow>
@@ -313,11 +355,16 @@
 	.state {
 		color: var(--color-text-secondary);
 	}
-	.load-error {
+	.load-error,
+	.panel-error {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: var(--space-sm);
+	}
+	.panel-error {
+		margin: 0;
+		color: var(--color-text-secondary);
 	}
 	.hero-head {
 		display: flex;

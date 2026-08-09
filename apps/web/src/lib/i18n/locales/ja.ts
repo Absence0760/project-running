@@ -4822,6 +4822,8 @@ export const messages = {
 	"fundraiser.notFound": "この募金ページは利用できません。",
 	"fundraiser.loadFailed": "この募金を読み込めませんでした。接続を確認してもう一度お試しください。",
 	"fundraiser.retry": "再試行",
+	"fundraiser.totalsFailed": "集まった金額を読み込めませんでした。これはこの募金の合計ではありません。",
+	"fundraiser.feedFailed": "支援者の一覧を読み込めませんでした。",
 	"fundraiser.loading": "募金ページを読み込んでいます…",
 	"fundraiser.donateOnWeb": "ウェブで寄付する",
 	"dashConsistency.title": "トレーニングの一貫性",

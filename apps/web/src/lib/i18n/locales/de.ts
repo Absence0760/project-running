@@ -4827,6 +4827,8 @@ export const messages = {
 	"fundraiser.notFound": "Diese Spendenaktion ist nicht verfügbar.",
 	"fundraiser.loadFailed": "Diese Spendenaktion konnte nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.",
 	"fundraiser.retry": "Erneut versuchen",
+	"fundraiser.totalsFailed": "Der gesammelte Betrag konnte nicht geladen werden. Das ist nicht die Summe der Aktion.",
+	"fundraiser.feedFailed": "Die Liste der Unterstützer konnte nicht geladen werden.",
 	"fundraiser.loading": "Spendenaktion wird geladen…",
 	"fundraiser.donateOnWeb": "Im Web spenden",
 	"dashConsistency.title": "Trainingskonstanz",

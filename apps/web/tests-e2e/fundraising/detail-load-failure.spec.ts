@@ -91,6 +91,56 @@ test.describe('/fundraisers/[id] — a failed read is not a missing campaign', (
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
 	});
 
+	test('a failed totals or feed read reports that panel without blanking the page', async ({
+		page,
+	}) => {
+		// Both RPCs did `if (error || !data) return null/[]`, so a failure drew
+		// a thermometer at "0 raised · 0 supporters" over "Be the first to
+		// donate" — an anonymous donor was told this campaign has raised
+		// nothing. The campaign row itself still reads fine, so the page must
+		// stay up and each panel must own its failure.
+		let failPanels = true;
+		for (const rpc of ['fundraiser_totals', 'fundraiser_feed']) {
+			await page.route(`**/rest/v1/rpc/${rpc}*`, async (route) => {
+				if (failPanels) {
+					await route.fulfill({
+						status: 500,
+						contentType: 'application/json',
+						body: JSON.stringify({ message: `simulated ${rpc} failure` }),
+					});
+					return;
+				}
+				await route.fallback();
+			});
+		}
+
+		await page.goto(`/fundraisers/${fundraiserId}`);
+
+		// The page is up: the campaign heading and the donate CTA both render.
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('donate-cta')).toBeVisible();
+		await expect(page.getByTestId('fundraiser-load-error')).toHaveCount(0);
+
+		const totalsError = page.getByTestId('fundraiser-totals-error');
+		await expect(totalsError).toBeVisible({ timeout: 15_000 });
+		await expect(totalsError).toHaveAttribute('role', 'alert');
+		const feedError = page.getByTestId('fundraiser-feed-error');
+		await expect(feedError).toBeVisible();
+		await expect(feedError).toHaveAttribute('role', 'alert');
+
+		// Neither panel may show its empty state while the read is unknown.
+		await expect(page.getByText('Be the first to donate.')).toHaveCount(0);
+		await expect(page.getByText('0 supporters')).toHaveCount(0);
+
+		// Each retry re-reads only its own panel.
+		failPanels = false;
+		await totalsError.getByRole('button', { name: 'Retry' }).click();
+		await expect(page.getByTestId('fundraiser-totals-error')).toHaveCount(0, { timeout: 15_000 });
+		await expect(page.getByTestId('fundraiser-feed-error')).toBeVisible();
+		await feedError.getByRole('button', { name: 'Retry' }).click();
+		await expect(page.getByTestId('fundraiser-feed-error')).toHaveCount(0, { timeout: 15_000 });
+	});
+
 	test('a genuinely absent fundraiser still gets the not-found line', async ({ page }) => {
 		await page.goto('/fundraisers/00000000-0000-4000-8000-000000000000');
 
