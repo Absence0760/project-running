@@ -3075,6 +3075,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t generate a description. Please try again.';
 
   @override
+  String get routeDetailDescribeConsentRequired =>
+      'AI descriptions need your consent to the updated AI disclosure.';
+
+  @override
+  String get routeDetailReviewDisclosure => 'Review disclosure';
+
+  @override
   String get routeDetailEnhanceUpgradeHint =>
       'AI descriptions are a Pro feature. Upgrade to enhance.';
 
@@ -5495,11 +5502,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coachNewConversation => 'New conversation';
 
   @override
-  String get coachConsentHeadline => 'Before you chat with Coach';
+  String get coachConsentHeadline => 'Before you use Threkir\'s AI features';
 
   @override
   String get coachConsentIntro =>
-      'To give you grounded advice, Coach forwards a slice of your training data to Anthropic, our AI model provider in the United States. That slice includes:';
+      'Threkir\'s AI features — the Coach and the AI route assistant — forward a slice of your data to Anthropic, our AI model provider in the United States. Depending on which feature you use, that slice includes:';
 
   @override
   String get coachConsentBulletProfile =>
@@ -5517,6 +5524,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The chat messages you type in the screen below.';
 
   @override
+  String get coachConsentBulletRoutes =>
+      'For the AI route assistant: the route\'s name and stats, the request you type, and a coarse place label — never your precise coordinates.';
+
+  @override
   String get coachConsentProcessing =>
       'Anthropic processes the data on Threkir\'s behalf under their data-processing terms; they do not train their models on Threkir customer data by default. Full details — including transfer mechanism, retention, and your withdrawal rights — are in our privacy policy.';
 
@@ -5528,7 +5539,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coachConsentCancel => 'Cancel';
 
   @override
-  String get coachConsentAccept => 'I consent — start Coach';
+  String get coachConsentAccept => 'I consent — enable AI features';
 
   @override
   String get coachConsentSaving => 'Recording consent…';
@@ -5865,19 +5876,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAccountDeleted => 'Account deleted';
 
   @override
-  String get settingsAccountCoachConsentWithdraw => 'Withdraw AI Coach consent';
+  String get settingsAccountCoachConsentWithdraw =>
+      'Withdraw AI features consent';
 
   @override
   String get settingsAccountCoachConsentActive =>
-      'Stop the Coach from using your training data. You can grant consent again any time.';
+      'Stop Threkir\'s AI features from using your data. You can consent again any time.';
 
   @override
   String get settingsAccountCoachConsentWithdrawn =>
-      'AI Coach consent withdrawn.';
+      'AI features consent withdrawn.';
 
   @override
   String settingsAccountCoachConsentWithdrawFailed(Object error) {
     return 'Couldn\'t withdraw consent: $error';
+  }
+
+  @override
+  String get settingsAccountAiConsentUpdateTitle =>
+      'Accept the updated AI disclosure';
+
+  @override
+  String get settingsAccountAiConsentUpdateSubtitle =>
+      'The disclosure now covers more features. Review and accept it to use the AI route assistant.';
+
+  @override
+  String get settingsAccountAiConsentGrantTitle => 'Review the AI disclosure';
+
+  @override
+  String get settingsAccountAiConsentGrantSubtitle =>
+      'Threkir\'s AI features ask for your consent before using your data. Read the disclosure and accept it here.';
+
+  @override
+  String get settingsAccountAiConsentAccepted => 'AI disclosure accepted.';
+
+  @override
+  String settingsAccountAiConsentFailed(Object error) {
+    return 'Couldn\'t record consent: $error';
   }
 
   @override

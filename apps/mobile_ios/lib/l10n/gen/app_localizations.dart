@@ -5185,6 +5185,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t generate a description. Please try again.'**
   String get routeDetailDescribeFailed;
 
+  /// Shown when an AI description is refused because the AI disclosure has not been accepted
+  ///
+  /// In en, this message translates to:
+  /// **'AI descriptions need your consent to the updated AI disclosure.'**
+  String get routeDetailDescribeConsentRequired;
+
+  /// Button that opens the AI disclosure from the route-description fallback notice
+  ///
+  /// In en, this message translates to:
+  /// **'Review disclosure'**
+  String get routeDetailReviewDisclosure;
+
   /// Upsell shown to free users; the templated description still shows
   ///
   /// In en, this message translates to:
@@ -9151,13 +9163,13 @@ abstract class AppLocalizations {
   /// Consent gate headline
   ///
   /// In en, this message translates to:
-  /// **'Before you chat with Coach'**
+  /// **'Before you use Threkir\'s AI features'**
   String get coachConsentHeadline;
 
   /// Consent gate intro paragraph
   ///
   /// In en, this message translates to:
-  /// **'To give you grounded advice, Coach forwards a slice of your training data to Anthropic, our AI model provider in the United States. That slice includes:'**
+  /// **'Threkir\'s AI features — the Coach and the AI route assistant — forward a slice of your data to Anthropic, our AI model provider in the United States. Depending on which feature you use, that slice includes:'**
   String get coachConsentIntro;
 
   /// Consent gate bullet: profile data
@@ -9184,6 +9196,12 @@ abstract class AppLocalizations {
   /// **'The chat messages you type in the screen below.'**
   String get coachConsentBulletMessages;
 
+  /// Consent gate bullet: AI route assistant
+  ///
+  /// In en, this message translates to:
+  /// **'For the AI route assistant: the route\'s name and stats, the request you type, and a coarse place label — never your precise coordinates.'**
+  String get coachConsentBulletRoutes;
+
   /// Consent gate data-processing paragraph
   ///
   /// In en, this message translates to:
@@ -9205,7 +9223,7 @@ abstract class AppLocalizations {
   /// Consent gate accept button
   ///
   /// In en, this message translates to:
-  /// **'I consent — start Coach'**
+  /// **'I consent — enable AI features'**
   String get coachConsentAccept;
 
   /// Consent gate accept button while saving
@@ -9766,29 +9784,65 @@ abstract class AppLocalizations {
   /// **'Account deleted'**
   String get settingsAccountDeleted;
 
-  /// Settings > Account tile title to withdraw AI-coach consent (GDPR Art 7(3))
+  /// Settings > Account tile title to withdraw AI-features consent (GDPR Art 7(3))
   ///
   /// In en, this message translates to:
-  /// **'Withdraw AI Coach consent'**
+  /// **'Withdraw AI features consent'**
   String get settingsAccountCoachConsentWithdraw;
 
-  /// Subtitle under the withdraw-coach-consent tile
+  /// Subtitle under the withdraw-AI-consent tile
   ///
   /// In en, this message translates to:
-  /// **'Stop the Coach from using your training data. You can grant consent again any time.'**
+  /// **'Stop Threkir\'s AI features from using your data. You can consent again any time.'**
   String get settingsAccountCoachConsentActive;
 
-  /// Banner shown after AI-coach consent is withdrawn
+  /// Banner shown after AI-features consent is withdrawn
   ///
   /// In en, this message translates to:
-  /// **'AI Coach consent withdrawn.'**
+  /// **'AI features consent withdrawn.'**
   String get settingsAccountCoachConsentWithdrawn;
 
-  /// Banner shown when withdrawing AI-coach consent fails
+  /// Banner shown when withdrawing AI-features consent fails
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t withdraw consent: {error}'**
   String settingsAccountCoachConsentWithdrawFailed(Object error);
+
+  /// Settings > Account tile title to accept a widened AI disclosure
+  ///
+  /// In en, this message translates to:
+  /// **'Accept the updated AI disclosure'**
+  String get settingsAccountAiConsentUpdateTitle;
+
+  /// Subtitle under the accept-updated-AI-disclosure tile
+  ///
+  /// In en, this message translates to:
+  /// **'The disclosure now covers more features. Review and accept it to use the AI route assistant.'**
+  String get settingsAccountAiConsentUpdateSubtitle;
+
+  /// Settings > Account tile title to read and accept the AI disclosure for the first time
+  ///
+  /// In en, this message translates to:
+  /// **'Review the AI disclosure'**
+  String get settingsAccountAiConsentGrantTitle;
+
+  /// Subtitle under the review-AI-disclosure tile
+  ///
+  /// In en, this message translates to:
+  /// **'Threkir\'s AI features ask for your consent before using your data. Read the disclosure and accept it here.'**
+  String get settingsAccountAiConsentGrantSubtitle;
+
+  /// Banner shown after the widened AI disclosure is accepted
+  ///
+  /// In en, this message translates to:
+  /// **'AI disclosure accepted.'**
+  String get settingsAccountAiConsentAccepted;
+
+  /// Banner shown when recording AI-disclosure consent fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t record consent: {error}'**
+  String settingsAccountAiConsentFailed(Object error);
 
   /// Banner shown when account deletion fails
   ///

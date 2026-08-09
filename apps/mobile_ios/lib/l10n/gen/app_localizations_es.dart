@@ -3102,6 +3102,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo generar una descripción. Inténtalo de nuevo.';
 
   @override
+  String get routeDetailDescribeConsentRequired =>
+      'Las descripciones con IA necesitan tu consentimiento a la información de IA actualizada.';
+
+  @override
+  String get routeDetailReviewDisclosure => 'Ver la información';
+
+  @override
   String get routeDetailEnhanceUpgradeHint =>
       'Las descripciones con IA son una función Pro. Mejora tu plan para usarla.';
 
@@ -5548,11 +5555,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get coachNewConversation => 'Nueva conversación';
 
   @override
-  String get coachConsentHeadline => 'Antes de chatear con Coach';
+  String get coachConsentHeadline => 'Antes de usar las funciones de IA';
 
   @override
   String get coachConsentIntro =>
-      'Para darte consejos fundamentados, Coach envía una parte de tus datos de entrenamiento a Anthropic, nuestro proveedor de modelos de IA en EE. UU. Esa parte incluye:';
+      'Las funciones de IA de Threkir — el Coach y el asistente de rutas con IA — envían una parte de tus datos a Anthropic, nuestro proveedor de modelos de IA en EE. UU. Según la función que uses, esa parte incluye:';
 
   @override
   String get coachConsentBulletProfile =>
@@ -5571,6 +5578,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Los mensajes de chat que escribes en la pantalla de abajo.';
 
   @override
+  String get coachConsentBulletRoutes =>
+      'Para el asistente de rutas con IA: el nombre y los datos de la ruta, la petición que escribes y una referencia aproximada del lugar; nunca tus coordenadas exactas.';
+
+  @override
   String get coachConsentProcessing =>
       'Anthropic procesa los datos en nombre de Threkir según sus términos de tratamiento de datos; por defecto, no entrenan sus modelos con los datos de clientes de Threkir. Todos los detalles —incluido el mecanismo de transferencia, la retención y tus derechos de retirada— están en nuestra política de privacidad.';
 
@@ -5582,7 +5593,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get coachConsentCancel => 'Cancelar';
 
   @override
-  String get coachConsentAccept => 'Doy mi consentimiento — iniciar Coach';
+  String get coachConsentAccept =>
+      'Doy mi consentimiento — activar las funciones de IA';
 
   @override
   String get coachConsentSaving => 'Registrando consentimiento…';
@@ -5927,19 +5939,43 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsAccountCoachConsentWithdraw =>
-      'Retirar consentimiento del Coach';
+      'Retirar el consentimiento para las funciones de IA';
 
   @override
   String get settingsAccountCoachConsentActive =>
-      'Impide que el Coach use tus datos de entrenamiento. Puedes volver a dar tu consentimiento cuando quieras.';
+      'Impide que las funciones de IA de Threkir usen tus datos. Puedes volver a dar tu consentimiento cuando quieras.';
 
   @override
   String get settingsAccountCoachConsentWithdrawn =>
-      'Consentimiento del Coach retirado.';
+      'Consentimiento para las funciones de IA retirado.';
 
   @override
   String settingsAccountCoachConsentWithdrawFailed(Object error) {
     return 'Error al retirar el consentimiento: $error';
+  }
+
+  @override
+  String get settingsAccountAiConsentUpdateTitle =>
+      'Aceptar la información de IA actualizada';
+
+  @override
+  String get settingsAccountAiConsentUpdateSubtitle =>
+      'La información ahora cubre más funciones. Léela y acéptala para usar el asistente de rutas con IA.';
+
+  @override
+  String get settingsAccountAiConsentGrantTitle =>
+      'Revisar la información de IA';
+
+  @override
+  String get settingsAccountAiConsentGrantSubtitle =>
+      'Las funciones de IA de Threkir piden tu consentimiento antes de usar tus datos. Lee la información y acéptala aquí.';
+
+  @override
+  String get settingsAccountAiConsentAccepted => 'Información de IA aceptada.';
+
+  @override
+  String settingsAccountAiConsentFailed(Object error) {
+    return 'No se pudo registrar el consentimiento: $error';
   }
 
   @override
