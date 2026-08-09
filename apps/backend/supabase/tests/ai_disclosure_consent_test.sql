@@ -16,10 +16,13 @@
 --   8/9. Monotone: a later v1 acceptance cannot downgrade a v2 holder.
 --  10. A fresh user accepting v2 gets both halves of the record.
 --  11. The pairing CHECK rejects a half-written record even from the owner.
+--  12. A caller whose user_profiles row has not been provisioned yet still
+--      gets a record — rows are client-provisioned with no signup trigger,
+--      so an update-only write would no-op and report success (issue #233).
 
 begin;
 
-select plan(11);
+select plan(12);
 
 -- U1: no consent on record.
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -125,6 +128,19 @@ select throws_ok(
   '23514',
   null,
   'clearing the timestamp without the version violates the pairing CHECK'
+);
+
+-- ── 12. No profile row yet — the record still lands ──────────────
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
+values ('00000000-0000-0000-0000-0000000ccf03', 'authenticated', 'authenticated',
+        'aidisc-c@test.local', '', now(), now());
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ccf03","role":"authenticated"}';
+select is(
+  (select version from record_ai_disclosure_consent(2::smallint)),
+  2::smallint,
+  'a caller with no provisioned profile row still gets a consent record'
 );
 
 select * from finish();

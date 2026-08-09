@@ -280,11 +280,14 @@
 				.rpc('record_ai_disclosure_consent', { p_version: AI_DISCLOSURE_CURRENT_VERSION })
 				.maybeSingle();
 			if (error) throw new Error(error.message);
+			// Take the server's word for what was recorded — a locally
+			// synthesised version/timestamp would clear the "update
+			// available" notice off a write that never landed (§ 560).
 			const row = data as { version: number | null; accepted_at: string | null } | null;
-			aiDisclosure = {
-				version: row?.version ?? AI_DISCLOSURE_CURRENT_VERSION,
-				acceptedAt: row?.accepted_at ?? new Date().toISOString(),
-			};
+			if (row?.version == null || !row.accepted_at) {
+				throw new Error('consent not recorded');
+			}
+			aiDisclosure = { version: row.version, acceptedAt: row.accepted_at };
 			showToast(m('settingsAccount.aiConsentUpdatedToast'), 'success');
 		} catch (e) {
 			showToast(m('settingsAccount.saveFailed', { error: (e as Error).message }), 'error');

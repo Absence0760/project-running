@@ -118,11 +118,20 @@ begin
   -- (is_local = true): a client can't prepend a set_config to a single
   -- PostgREST UPDATE, so only this function can raise the flag.
   perform set_config('app.consent_write', 'on', true);
-  update user_profiles
-     set ai_disclosure_version = p_version,
-         coach_consent_at = now()
-   where id = v_uid
-     and (ai_disclosure_version is null or ai_disclosure_version < p_version);
+  -- Insert-or-update for the same reason grant_health_data_consent() is
+  -- (issue #233): user_profiles rows are client-provisioned with no
+  -- signup trigger, so a plain `update ... where id = auth.uid()` matches
+  -- zero rows for a user whose bootstrap has not run and reports success
+  -- while recording nothing. The DO UPDATE arm's WHERE is what keeps the
+  -- ladder monotone — an acceptance at or below the version on record
+  -- leaves the row untouched, so first-stamp-wins survives.
+  insert into user_profiles (id, ai_disclosure_version, coach_consent_at)
+  values (v_uid, p_version, now())
+  on conflict (id) do update
+    set ai_disclosure_version = excluded.ai_disclosure_version,
+        coach_consent_at = excluded.coach_consent_at
+    where user_profiles.ai_disclosure_version is null
+       or user_profiles.ai_disclosure_version < excluded.ai_disclosure_version;
   return query
     select up.ai_disclosure_version, up.coach_consent_at
       from user_profiles up
