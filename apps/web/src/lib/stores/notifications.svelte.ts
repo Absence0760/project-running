@@ -19,6 +19,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { fetchUnreadNotificationCount } from '$lib/core/data';
 import { supabase } from '$lib/core/supabase';
+import { CoalescingRefetcher } from '$lib/runs/live_refetch';
 import { auth } from './auth.svelte';
 
 class NotificationStore {
@@ -26,19 +27,31 @@ class NotificationStore {
 	loading = $state(false);
 	#channel: RealtimeChannel | null = null;
 
+	/// Every count read goes through one coalescing refetcher. A single write
+	/// can move an unbounded number of rows — "mark all read" updates every
+	/// unread row the user has, "dismiss selected" deletes a whole page — and
+	/// Postgres replication delivers one change event per ROW, so the
+	/// subscription below fired one COUNT query per row cleared. It also gives
+	/// the explicit `refresh()` path the same sequence guard, so a slower
+	/// earlier read can't apply its count over a newer one.
+	#refetcher = new CoalescingRefetcher<number>({
+		fetch: async () => {
+			if (!auth.user?.id) return 0;
+			this.loading = true;
+			try {
+				return await fetchUnreadNotificationCount();
+			} finally {
+				this.loading = false;
+			}
+		},
+		apply: (count) => {
+			this.unreadCount = count;
+		},
+		onError: (e) => console.warn('notification refresh failed', e),
+	});
+
 	async refresh() {
-		if (!auth.user?.id) {
-			this.unreadCount = 0;
-			return;
-		}
-		this.loading = true;
-		try {
-			this.unreadCount = await fetchUnreadNotificationCount();
-		} catch (e) {
-			console.warn('notification refresh failed', e);
-		} finally {
-			this.loading = false;
-		}
+		await this.#refetcher.runNow();
 	}
 
 	/// Optimistic decrement when the UI marks one read. Bounded at 0
@@ -75,21 +88,18 @@ class NotificationStore {
 			.on(
 				'postgres_changes',
 				{ event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-				() => {
-					void this.refresh();
-				},
+				() => this.#refetcher.trigger(),
 			)
 			.on(
 				'postgres_changes',
 				{ event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-				() => {
-					void this.refresh();
-				},
+				() => this.#refetcher.trigger(),
 			)
 			.subscribe();
 	}
 
 	unsubscribe() {
+		this.#refetcher.dispose();
 		if (this.#channel) {
 			void supabase.removeChannel(this.#channel);
 			this.#channel = null;

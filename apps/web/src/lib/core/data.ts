@@ -7892,7 +7892,7 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 	const { segments } = await fetchGlobalSegmentsWithError(GLOBAL_SEGMENT_SCORING_LIMIT);
 	if (segments.length === 0) return 0;
 
-	const { computeGlobalSegmentEffort } = await import('../segments/segments');
+	const { computeGlobalSegmentEfforts } = await import('../segments/segments');
 	const rows: {
 		global_segment_id: string;
 		run_id: string;
@@ -7900,15 +7900,21 @@ export async function computeGlobalSegmentEffortsForRun(input: {
 		time_seconds: number;
 		started_at: string;
 	}[] = [];
-	for (const seg of segments) {
-		const pts = (seg.waypoints ?? []).map((w) => ({ lat: Number(w.lat), lng: Number(w.lng) }));
-		const eff = computeGlobalSegmentEffort(input.track as import('$lib/types').TrackPoint[], {
-			points: pts,
+	// One sweep over the catalogue rather than a call per segment: the track's
+	// extent is then measured once and the (overwhelming) majority of segments,
+	// which are nowhere near this run, are rejected without walking it.
+	const efforts = computeGlobalSegmentEfforts(
+		input.track as import('$lib/types').TrackPoint[],
+		segments.map((seg) => ({
+			points: (seg.waypoints ?? []).map((w) => ({ lat: Number(w.lat), lng: Number(w.lng) })),
 			distance_m: Number(seg.distance_m),
-		});
+		})),
+	);
+	for (let i = 0; i < segments.length; i++) {
+		const eff = efforts[i];
 		if (!eff) continue;
 		rows.push({
-			global_segment_id: seg.id,
+			global_segment_id: segments[i].id,
 			run_id: input.run_id,
 			user_id: userId,
 			time_seconds: eff.time_seconds,

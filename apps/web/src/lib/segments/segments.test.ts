@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	computeEffortFromTrack,
+	computeEffortsFromTrack,
 	computeGlobalSegmentEffort,
+	computeGlobalSegmentEfforts,
+	type GlobalSegmentGeometry,
 	assignCompetitionRanks,
 	crownLabel,
 	SEGMENT_AGE_BANDS,
@@ -383,4 +386,268 @@ test('global: tolerates start/end falling between run samples', () => {
 	});
 	assert.notEqual(eff, null);
 	assert.ok(Math.abs(eff!.time_seconds - 100) < 2);
+});
+
+// ─── computeGlobalSegmentEfforts (catalogue sweep) ───
+
+/**
+ * A `straightTrack` whose points count every read of a coordinate, so a test
+ * can assert how much of the track an algorithm actually walked rather than
+ * timing it.
+ */
+function countingTrack(points: number): { track: TrackPoint[]; reads: () => number } {
+	let reads = 0;
+	const plain = straightTrack({ points, stepM: 5, stepS: 1 });
+	const track = plain.map((p) => ({
+		get lat() {
+			reads++;
+			return p.lat;
+		},
+		get lng() {
+			reads++;
+			return p.lng;
+		},
+		ts: p.ts,
+	})) as TrackPoint[];
+	return { track, reads: () => reads };
+}
+
+/** `n` catalogue geometries spread around the world, none near `coordAt`. */
+function distantCatalogue(n: number): GlobalSegmentGeometry[] {
+	const out: GlobalSegmentGeometry[] = [];
+	for (let i = 0; i < n; i++) {
+		const lat = -60 + ((i * 13) % 120);
+		const lng = -180 + ((i * 29) % 360);
+		out.push({ points: [{ lat, lng }, { lat: lat + 0.004, lng }], distance_m: 450 });
+	}
+	return out;
+}
+
+test('global sweep: rejects distant segments without walking the track for each', () => {
+	// The run-detail sweep scores one run against the whole catalogue
+	// (GLOBAL_SEGMENT_SCORING_LIMIT = 500). Scoring each segment in isolation
+	// walked every track point twice per segment before the check that
+	// rejected it, so the sweep cost segments x points — seconds of blocked
+	// main thread on a long track. The track may be walked a bounded number
+	// of times TOTAL, never once per segment.
+	const { track, reads } = countingTrack(4000);
+	const catalogue = distantCatalogue(400);
+
+	const efforts = computeGlobalSegmentEfforts(track, catalogue);
+
+	assert.equal(efforts.length, 400);
+	assert.ok(
+		efforts.every((e) => e === null),
+		'no distant segment should match',
+	);
+	// Measuring the extent reads both coordinates of every point once. Allow
+	// generous headroom for that and a little more; the pre-fix implementation
+	// read ~2 coordinates x 2 passes x 400 segments = 6.4M.
+	assert.ok(
+		reads() <= track.length * 8,
+		`swept catalogue read the track ${reads()} times over ${track.length} points`,
+	);
+});
+
+test('global sweep: each entry equals the single-segment result', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	const catalogue: GlobalSegmentGeometry[] = [
+		{ points: [coordAt(100), coordAt(600)], distance_m: 500 }, // matches
+		{ points: [coordAt(600), coordAt(100)], distance_m: 500 }, // wrong way
+		{ points: [coordAt(100), coordAt(600)], distance_m: 200 }, // length guard
+		...distantCatalogue(3),
+	];
+
+	const swept = computeGlobalSegmentEfforts(track, catalogue);
+	const oneByOne = catalogue.map((s) => computeGlobalSegmentEffort(track, s));
+
+	assert.deepEqual(swept, oneByOne);
+	assert.notEqual(swept[0], null);
+	assert.equal(swept[1], null);
+	assert.equal(swept[2], null);
+});
+
+test('global sweep: a segment just inside the tolerance is still matched', () => {
+	// The extent test must be conservative — a segment offset laterally by
+	// less than the tolerance is a real match and must survive the reject.
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	const offsetDeg = 30 / (111_320 * Math.cos((37 * Math.PI) / 180)); // ~30 m east
+	const nudge = (d: number) => ({ lat: coordAt(d).lat, lng: coordAt(d).lng + offsetDeg });
+	const eff = computeGlobalSegmentEfforts(track, [
+		{ points: [nudge(100), nudge(600)], distance_m: 500 },
+	])[0];
+	assert.notEqual(eff, null);
+	assert.ok(Math.abs(eff!.time_seconds - 100) < 2);
+});
+
+test('global sweep: a run straddling the antimeridian still matches', () => {
+	// The extent is a planar frame, so it goes through geo.ts's unwrapping —
+	// a naive min/max would read this track as spanning the globe and admit
+	// everything, or read the segment as 40,000 km away and reject it.
+	const degPerM = 1 / 111_320;
+	const t0 = Date.parse('2026-01-01T00:00:00Z');
+	const track: TrackPoint[] = [];
+	for (let i = 0; i < 200; i++) {
+		track.push({
+			lat: 0.5 + i * 5 * degPerM,
+			lng: i < 100 ? 179.9999 : -179.9999,
+			ts: new Date(t0 + i * 1000).toISOString(),
+		});
+	}
+	const at = (i: number) => ({ lat: track[i].lat, lng: track[i].lng });
+	const eff = computeGlobalSegmentEfforts(track, [
+		{ points: [at(20), at(120)], distance_m: 500 },
+	])[0];
+	assert.notEqual(eff, null);
+});
+
+// ─── computeEffortsFromTrack (route-slice sweep) ───
+
+test('slice sweep: times many slices without re-walking the track for each', () => {
+	// A run over a segmented route is timed slice by slice on run-detail.
+	// The cumulative-distance array and the sparsity guard's median sample
+	// step are properties of the TRACK, so rebuilding and re-sorting them per
+	// slice made the walk cost slices x points log points — ~600 ms on a
+	// 100k-point ultra over a 50-segment route.
+	const { track, reads } = countingTrack(4000);
+	const slices = Array.from({ length: 100 }, (_, i) => ({
+		start_distance_m: i * 20,
+		end_distance_m: i * 20 + 800,
+	}));
+
+	const efforts = computeEffortsFromTrack(track, slices);
+
+	assert.equal(efforts.length, 100);
+	assert.ok(
+		efforts.every((e) => e !== null),
+		'every slice fits inside the track and should be timed',
+	);
+	assert.ok(
+		reads() <= track.length * 8,
+		`slice sweep read the track ${reads()} times over ${track.length} points`,
+	);
+});
+
+test('slice sweep: each entry equals the single-slice result', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	const slices = [
+		{ start_distance_m: 100, end_distance_m: 600 }, // clean
+		{ start_distance_m: 100, end_distance_m: 100 }, // zero length
+		{ start_distance_m: 200, end_distance_m: 100 }, // reversed
+		{ start_distance_m: 0, end_distance_m: 100_000 }, // past the track
+		{ start_distance_m: 0, end_distance_m: 20 }, // too sparse for the guard
+	];
+
+	assert.deepEqual(
+		computeEffortsFromTrack(track, slices),
+		slices.map((s) => computeEffortFromTrack(track, s)),
+	);
+});
+
+test('slice sweep: the binary-searched crossing matches a linear scan', () => {
+	// timestampAtDistance takes the FIRST index whose cumulative distance
+	// reaches the target; the search must land on exactly that bracket,
+	// including when the target sits on a sample boundary.
+	const track = straightTrack({ points: 300, stepM: 10, stepS: 2 }); // 5 m/s
+	for (const start of [0, 5, 10, 15, 1000, 1005, 2480]) {
+		const eff = computeEffortFromTrack(track, {
+			start_distance_m: start,
+			end_distance_m: start + 500,
+		});
+		assert.notEqual(eff, null, `no effort at start ${start}`);
+		assert.ok(
+			Math.abs(eff!.time_seconds - 100) < 1,
+			`500 m at 5 m/s from ${start} should be ~100 s, got ${eff!.time_seconds}`,
+		);
+	}
+});
+
+/**
+ * The pre-prefilter matcher, kept here as the oracle: nearest track point to
+ * the segment start, then the nearest AFTER it to the segment end, both within
+ * tolerance. The extent test is only allowed to skip work — never to change
+ * this answer — so anything it rejects must be something this also rejects.
+ */
+function scanMatches(track: TrackPoint[], seg: GlobalSegmentGeometry, toleranceM = 35): boolean {
+	if (track.length < 2 || seg.points.length < 2 || seg.distance_m <= 0) return false;
+	const haversine = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+		const r = 6371000;
+		const dLat = ((bLat - aLat) * Math.PI) / 180;
+		const dLng = ((bLng - aLng) * Math.PI) / 180;
+		const sLat = Math.sin(dLat / 2);
+		const sLng = Math.sin(dLng / 2);
+		const h =
+			sLat * sLat +
+			Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * sLng * sLng;
+		return 2 * r * Math.asin(Math.min(1, Math.sqrt(h)));
+	};
+	const nearest = (p: { lat: number; lng: number }, from: number) => {
+		let idx = -1;
+		let best = Infinity;
+		for (let i = from; i < track.length; i++) {
+			const d = haversine(track[i].lat, track[i].lng, p.lat, p.lng);
+			if (d < best) {
+				best = d;
+				idx = i;
+			}
+		}
+		return { idx, best };
+	};
+	const start = nearest(seg.points[0], 0);
+	if (start.idx < 0 || start.best > toleranceM) return false;
+	const end = nearest(seg.points[seg.points.length - 1], start.idx + 1);
+	return end.idx >= 0 && end.best <= toleranceM;
+}
+
+test('global sweep: the extent test never rejects a segment the full scan matches', () => {
+	// The prefilter is only sound if it is conservative. Sweep a range of
+	// track latitudes (including polar, where a degree of longitude collapses)
+	// and antimeridian crossings, against segments nudged out to and past the
+	// tolerance in both axes.
+	const degPerM = 1 / 111_320;
+	const t0 = Date.parse('2026-01-01T00:00:00Z');
+	const makeTrack = (lat0: number, lng0: number, lngDrift: number) => {
+		const out: TrackPoint[] = [];
+		for (let i = 0; i < 120; i++) {
+			out.push({
+				lat: lat0 + i * 5 * degPerM,
+				lng: lng0 + i * lngDrift,
+				ts: new Date(t0 + i * 1000).toISOString(),
+			});
+		}
+		return out;
+	};
+
+	let matched = 0;
+	for (const [lat0, lng0, drift] of [
+		[37, -122, 0],
+		[0.5, 179.99, 0.00002],
+		[60, 11, 0.00001],
+		[89.9, 10, 0.0001],
+		[-33.9, 151.2, 0],
+	] as const) {
+		const track = makeTrack(lat0, lng0, drift);
+		const metresEast = (lat: number, m: number) => m * degPerM / Math.cos((lat * Math.PI) / 180);
+		for (const offsetM of [0, 10, 34, 36, 200, 5000]) {
+			for (const axis of ['lat', 'lng'] as const) {
+				const shift = (i: number) => ({
+					lat: track[i].lat + (axis === 'lat' ? offsetM * degPerM : 0),
+					lng: track[i].lng + (axis === 'lng' ? metresEast(track[i].lat, offsetM) : 0),
+				});
+				const seg: GlobalSegmentGeometry = {
+					points: [shift(20), shift(100)],
+					distance_m: 400,
+				};
+				const swept = computeGlobalSegmentEfforts(track, [seg])[0];
+				if (!scanMatches(track, seg)) continue;
+				matched++;
+				assert.notEqual(
+					swept,
+					null,
+					`extent test rejected a real match: lat0=${lat0} offset=${offsetM}m axis=${axis}`,
+				);
+			}
+		}
+	}
+	assert.ok(matched >= 10, `oracle produced too few matches to be meaningful (${matched})`);
 });
