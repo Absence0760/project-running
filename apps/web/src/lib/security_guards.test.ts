@@ -1781,9 +1781,11 @@ test('export-data validates track_url against the canonical Storage path', () =>
 		/expectedTrackUrl\s*=\s*`\$\{[^}]*user_id[^}]*\}\/\$\{[^}]*\.id[^}]*\}\.json\.gz`/,
 		'export-data must build expectedTrackUrl as `${user_id}/${run_id}.json.gz` — pass-2 commit 978b4c9.',
 	);
+	// Either polarity of the same comparison — the gate is a predicate the
+	// download sweeps filter on, so it reads as `=== expected`.
 	assert.match(
 		ef,
-		/track_url\s*!==\s*expectedTrackUrl/,
+		/track_url\s*[!=]==\s*expectedTrackUrl/,
 		'export-data must skip rows whose track_url does not match the canonical pattern.',
 	);
 });

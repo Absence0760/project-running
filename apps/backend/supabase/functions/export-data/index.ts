@@ -22,9 +22,11 @@
 ///   - 5000 runs per export. A serious power-user would still see
 ///     every run; a runaway loop on a corrupt account doesn't run
 ///     forever.
-///   - 150s function timeout (Supabase platform default). For GPX,
-///     the per-run track fetch is the dominant cost. With 5000 runs
-///     and ~10 KB tracks the EF needs ~30 s — well inside the budget.
+///   - 150s function timeout (Supabase platform default). For GPX and
+///     backup, the per-run Storage fetch is the dominant cost, so the
+///     download sweeps run `EXPORT_FETCH_CONCURRENCY`-wide through
+///     `pooledPipeline` — serially, 5000 tracks alone overran the
+///     budget and the runner could never complete an Art 20 export.
 ///
 /// Rate limit: free 2/h, pro 8/h via `check_rate_limit_tiered`. Heavy
 /// op (zip-and-ship of every run + track) so even Pro doesn't get
@@ -43,6 +45,7 @@ import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { publishableKey, secretKey, secretKeyHeaders } from '../_shared/api_keys.ts';
+import { EXPORT_FETCH_CONCURRENCY, pooledPipeline } from './pooled.ts';
 
 const MAX_RUNS = 5000;
 const SIGNED_URL_TTL_S = 600; // 10 minutes
@@ -271,6 +274,24 @@ function stringy(v: unknown): string {
 	return JSON.stringify(v);
 }
 
+// Path-shape assertion mirroring the one in clip-public-track. RLS
+// guarantees the user owns these rows, but a corrupt or legacy row with
+// a malformed track_url would otherwise feed an unconstrained string
+// into the service-role downloader. The CHECK constraint in
+// 20260621_001 means new writes always match this shape; these are the
+// runtime backstop.
+function hasCanonicalTrackUrl(r: RunRow): boolean {
+	if (!r.track_url) return false;
+	const expectedTrackUrl = `${r.user_id}/${r.id}.json.gz`;
+	return r.track_url === expectedTrackUrl;
+}
+
+function hasCanonicalHrUrl(r: RunRow): boolean {
+	if (!r.hr_series_url) return false;
+	const expectedHrUrl = `${r.user_id}/${r.id}.hr.json.gz`;
+	return r.hr_series_url === expectedHrUrl;
+}
+
 async function buildGpxZip(
 	supabase: ReturnType<typeof createClient>,
 	runs: RunRow[],
@@ -303,38 +324,60 @@ async function buildGpxZip(
 		),
 	);
 
-	for (const r of runs) {
-		// Skip tracks for runs that don't have one; they still appear in
-		// the manifest, just without a per-run GPX. Saves the round-trip.
-		if (!r.track_url) continue;
-
-		// Path-shape assertion mirrors the one in clip-public-track. RLS
-		// guarantees the user owns these rows, but a corrupt or legacy
-		// row with a malformed track_url would otherwise feed an
-		// unconstrained string into the service-role downloader. The
-		// CHECK constraint in 20260621_001 means new writes always match
-		// this shape; the assertion is the runtime backstop.
-		const expectedTrackUrl = `${r.user_id}/${r.id}.json.gz`;
-		if (r.track_url !== expectedTrackUrl) continue;
-
-		let track: TrackPoint[] | null = null;
-		try {
-			const { data: blob } = await supabase.storage.from('runs').download(r.track_url);
-			if (!blob) continue;
-			track = await decodeTrack(blob);
-		} catch (_) {
-			continue;
-		}
-		if (!track || track.length < 2) continue;
-
-		const gpx = buildGpx(r, track);
-		await zip.add(`runs/${r.id}.gpx`, new TextReader(gpx));
-	}
+	// Runs without a track still appear in the manifest, just without a
+	// per-run GPX — filtering them out first saves the round trip.
+	await pooledPipeline(
+		runs.filter(hasCanonicalTrackUrl),
+		EXPORT_FETCH_CONCURRENCY,
+		// The gzipped blob is what travels through the pool, not the
+		// decoded points: a 5 MB track inflates to tens of MB of point
+		// objects, and only one of those is alive at a time if the
+		// decode happens on the single-threaded consume side.
+		(r) => downloadBlob(supabase, 'runs', r.track_url!),
+		async (r, blob) => {
+			let track: TrackPoint[];
+			try {
+				track = await decodeTrack(blob);
+			} catch (_) {
+				return;
+			}
+			if (!track || track.length < 2) return;
+			await zip.add(`runs/${r.id}.gpx`, new TextReader(buildGpx(r, track)));
+		},
+	);
 
 	await zip.close();
 	const blob = await blobWriter.getData();
 	const buf = await blob.arrayBuffer();
 	return new Uint8Array(buf);
+}
+
+async function downloadBlob(
+	supabase: ReturnType<typeof createClient>,
+	bucket: string,
+	key: string,
+): Promise<Blob | null> {
+	try {
+		const { data: blob } = await supabase.storage.from(bucket).download(key);
+		return blob ?? null;
+	} catch (_) {
+		return null;
+	}
+}
+
+async function downloadBytes(
+	supabase: ReturnType<typeof createClient>,
+	bucket: string,
+	key: string,
+): Promise<Uint8Array | null> {
+	const blob = await downloadBlob(supabase, bucket, key);
+	if (!blob) return null;
+	try {
+		const bytes = new Uint8Array(await blob.arrayBuffer());
+		return bytes.length === 0 ? null : bytes;
+	} catch (_) {
+		return null;
+	}
 }
 
 // decodeTrack now lives in ./decode_track.ts so it can be unit-tested
@@ -422,25 +465,29 @@ async function buildBackupZip(
 	const counts: Record<string, number> = {};
 	const fetchedRows: Record<string, Record<string, unknown>[]> = {};
 
-	for (const spec of specs) {
-		try {
-			const rows = await fetchBackupTable(supabase, spec);
-			if (!rows || rows.length === 0) continue;
-			const projected = spec.redact ? rows.map(spec.redact) : rows;
+	await pooledPipeline(
+		specs,
+		EXPORT_FETCH_CONCURRENCY,
+		async (spec) => {
+			try {
+				const rows = await fetchBackupTable(supabase, spec);
+				if (!rows || rows.length === 0) return null;
+				return spec.redact ? rows.map(spec.redact) : rows;
+			} catch (e) {
+				console.error(
+					`export-data backup: ${spec.entry} fetch failed:`,
+					e instanceof Error ? e.message : String(e),
+				);
+				// Per-table tolerance — the rest of the export still ships.
+				return null;
+			}
+		},
+		async (spec, projected) => {
 			fetchedRows[spec.entry] = projected;
-			await zip.add(
-				spec.entry,
-				new TextReader(JSON.stringify(projected, null, 2)),
-			);
+			await zip.add(spec.entry, new TextReader(JSON.stringify(projected, null, 2)));
 			counts[spec.entry.replace(/\.json$/, '')] = projected.length;
-		} catch (e) {
-			console.error(
-				`export-data backup: ${spec.entry} fetch failed:`,
-				e instanceof Error ? e.message : String(e),
-			);
-			// Per-table tolerance — the rest of the export still ships.
-		}
-	}
+		},
+	);
 
 	// run_gear — two-step fetch mirroring the Go worker: PostgREST's
 	// `in.()` takes a literal value list, not a subselect, so pull the
@@ -583,82 +630,63 @@ async function buildBackupZip(
 	const archivedRunObjects = new Set<string>();
 	const archivedPhotoObjects = new Set<string>();
 	let tracksAdded = 0;
-	for (const r of runs) {
-		if (!r.track_url) continue;
-		const expectedTrackUrl = `${r.user_id}/${r.id}.json.gz`;
-		if (r.track_url !== expectedTrackUrl) continue;
-		try {
-			const { data: blob } = await supabase.storage.from('runs').download(r.track_url);
-			if (!blob) continue;
-			const bytes = new Uint8Array(await blob.arrayBuffer());
-			if (bytes.length === 0) continue;
+	await pooledPipeline(
+		runs.filter(hasCanonicalTrackUrl),
+		EXPORT_FETCH_CONCURRENCY,
+		(r) => downloadBytes(supabase, 'runs', r.track_url!),
+		async (r, bytes) => {
 			await zip.add(`tracks/${r.id}.json.gz`, new Uint8ArrayReader(bytes), { level: 0 });
-			archivedRunObjects.add(r.track_url);
+			archivedRunObjects.add(r.track_url!);
 			tracksAdded++;
-		} catch (_) {
-			/* skip the run; runs.json still lists it */
-		}
-	}
+		},
+	);
 
 	// HR sidecars (indoor/treadmill runs, decisions §116) — same
 	// verbatim-bytes + path-shape-assertion shape as the tracks loop.
 	let hrAdded = 0;
-	for (const r of runs) {
-		if (!r.hr_series_url) continue;
-		const expectedHrUrl = `${r.user_id}/${r.id}.hr.json.gz`;
-		if (r.hr_series_url !== expectedHrUrl) continue;
-		try {
-			const { data: blob } = await supabase.storage.from('runs').download(r.hr_series_url);
-			if (!blob) continue;
-			const bytes = new Uint8Array(await blob.arrayBuffer());
-			if (bytes.length === 0) continue;
+	await pooledPipeline(
+		runs.filter(hasCanonicalHrUrl),
+		EXPORT_FETCH_CONCURRENCY,
+		(r) => downloadBytes(supabase, 'runs', r.hr_series_url!),
+		async (r, bytes) => {
 			await zip.add(`hr/${r.id}.hr.json.gz`, new Uint8ArrayReader(bytes), { level: 0 });
-			archivedRunObjects.add(r.hr_series_url);
+			archivedRunObjects.add(r.hr_series_url!);
 			hrAdded++;
-		} catch (_) {
-			/* skip; the run row still ships */
-		}
-	}
+		},
+	);
 
 	// Photos — the image bytes themselves under `photos/`, so the
 	// Art 20 export carries the subject's run photos and not just the
 	// run_photos.json metadata. Keyed off each fetched row's
 	// storage_path; per-photo failures are tolerated.
 	let photosAdded = 0;
-	for (const row of fetchedRows['run_photos.json'] ?? []) {
-		const sp = row.storage_path;
-		if (typeof sp !== 'string' || !isSafeStoragePath(sp)) continue;
-		try {
-			const { data: blob } = await supabase.storage.from('run-photos').download(sp);
-			if (!blob) continue;
-			const bytes = new Uint8Array(await blob.arrayBuffer());
-			if (bytes.length === 0) continue;
-			const basename = sp.split('/').pop()!;
-			await zip.add(`photos/${basename}`, new Uint8ArrayReader(bytes), { level: 0 });
+	await pooledPipeline(
+		(fetchedRows['run_photos.json'] ?? [])
+			.map((row) => row.storage_path)
+			.filter((sp): sp is string => typeof sp === 'string' && isSafeStoragePath(sp)),
+		EXPORT_FETCH_CONCURRENCY,
+		(sp) => downloadBytes(supabase, 'run-photos', sp),
+		async (sp, bytes) => {
+			await zip.add(`photos/${sp.split('/').pop()!}`, new Uint8ArrayReader(bytes), { level: 0 });
 			archivedPhotoObjects.add(sp);
 			photosAdded++;
-		} catch (_) {
-			/* skip; the metadata row already shipped */
-		}
-	}
+		},
+	);
 
 	// Avatar — the profile-picture bytes from the public `avatars`
 	// bucket, so the Art 20 export carries the image itself and not
 	// just the avatar_url on the profile row. Probes the enumerable
 	// candidate paths; a miss on every path just means no avatar.
 	let avatarsAdded = 0;
-	for (const p of avatarCandidatePaths(userId)) {
-		try {
-			const { data: blob } = await supabase.storage.from('avatars').download(p);
-			if (!blob) continue;
-			const bytes = new Uint8Array(await blob.arrayBuffer());
-			if (bytes.length === 0) continue;
+	await pooledPipeline(
+		avatarCandidatePaths(userId),
+		EXPORT_FETCH_CONCURRENCY,
+		(p) => downloadBytes(supabase, 'avatars', p),
+		async (p, bytes) => {
 			await zip.add(`avatar.${p.split('.').pop()}`, new Uint8ArrayReader(bytes), { level: 0 });
 			avatarsAdded++;
-		} catch (_) {
-			/* no avatar stored at this candidate path */
-		}
-	}
+		},
+	);
 
 	// Prefix-walk the user's folders in the runs + run-photos buckets so
 	// every object under {userId}/ lands in the zip even without a DB
@@ -674,18 +702,15 @@ async function buildBackupZip(
 	]) {
 		try {
 			const keys = await listAllObjects(supabase, bucket, userId);
-			for (const { key, entry } of orphanStorageEntries({ bucket, keys, userId, archived })) {
-				try {
-					const { data: blob } = await supabase.storage.from(bucket).download(key);
-					if (!blob) continue;
-					const bytes = new Uint8Array(await blob.arrayBuffer());
-					if (bytes.length === 0) continue;
+			await pooledPipeline(
+				orphanStorageEntries({ bucket, keys, userId, archived }),
+				EXPORT_FETCH_CONCURRENCY,
+				({ key }) => downloadBytes(supabase, bucket, key),
+				async ({ entry }, bytes) => {
 					await zip.add(entry, new Uint8ArrayReader(bytes), { level: 0 });
 					orphansAdded++;
-				} catch (_) {
-					/* skip the object; the sweep is best-effort per entry */
-				}
-			}
+				},
+			);
 		} catch (e) {
 			console.error(
 				`export-data backup: ${bucket} orphan sweep failed:`,
@@ -717,14 +742,19 @@ async function buildBackupZip(
 // full object keys. The list API pages at `limit` and marks folders
 // with a null id, so each folder is paged and null-id entries are
 // descended into.
+//
+// The offset advances by the number of rows actually returned and the
+// walk ends on an empty page, never on a short one: a server-side row
+// cap below `pageSize` would otherwise make a stride-by-pageSize loop
+// skip whole blocks of objects straight out of the export.
 async function listAllObjects(
 	supabase: ReturnType<typeof createClient>,
 	bucket: string,
 	folder: string,
 ): Promise<string[]> {
-	const pageSize = 100;
+	const pageSize = 1000;
 	const out: string[] = [];
-	for (let offset = 0; ; offset += pageSize) {
+	for (let offset = 0;;) {
 		const { data, error } = await supabase.storage.from(bucket).list(folder, {
 			limit: pageSize,
 			offset,
@@ -732,6 +762,7 @@ async function listAllObjects(
 		});
 		if (error) throw new Error(error.message);
 		const entries = (data ?? []) as Array<{ name: string; id: string | null }>;
+		if (entries.length === 0) return out;
 		for (const e of entries) {
 			if (!e.name) continue;
 			const full = `${folder}/${e.name}`;
@@ -741,7 +772,7 @@ async function listAllObjects(
 				out.push(full);
 			}
 		}
-		if (entries.length < pageSize) return out;
+		offset += entries.length;
 	}
 }
 
