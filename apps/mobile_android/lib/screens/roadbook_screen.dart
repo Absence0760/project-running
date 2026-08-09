@@ -359,6 +359,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
           ? const TimeOfDay(hour: 6, minute: 0)
           : TimeOfDay(hour: _startClockMin! ~/ 60, minute: _startClockMin! % 60),
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() => _startClockMin = picked.hour * 60 + picked.minute);
       _persistPlan();

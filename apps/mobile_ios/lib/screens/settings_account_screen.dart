@@ -224,6 +224,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       showTopBanner(context, l10n.settingsAccountAvatarUnsupported);
       return;
     }
+    if (!mounted) return;
     setState(() => _avatarBusy = true);
     try {
       final clean = stripImageExif(picked, contentType);

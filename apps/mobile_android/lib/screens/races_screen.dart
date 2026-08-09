@@ -372,6 +372,7 @@ class _RaceListingFormState extends State<_RaceListingForm> {
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
     );
+    if (!mounted) return;
     if (picked != null) {
       setState(() => _date.text =
           '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');

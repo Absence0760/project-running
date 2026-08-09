@@ -337,6 +337,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
       ),
     );
     if (picked == null) return;
+    if (!mounted) return;
     setState(() {
       ex.name.text = picked.name;
       _needExercise = false;

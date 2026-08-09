@@ -475,6 +475,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
       lastDate: now,
       initialDatePickerMode: DatePickerMode.year,
     );
+    if (!mounted) return;
     if (picked != null) setState(() => _dateOfBirth = picked);
   }
 

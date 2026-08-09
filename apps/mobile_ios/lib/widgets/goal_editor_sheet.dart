@@ -451,6 +451,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
         ) ??
         false;
     if (!ok || _saving) return;
+    if (!mounted) return;
     setState(() => _saving = true);
     try {
       await widget.preferences.removeGoal(id);

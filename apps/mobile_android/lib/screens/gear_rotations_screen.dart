@@ -65,6 +65,7 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
     final l10n = AppLocalizations.of(context);
     final name = await _promptName(title: l10n.gearRotationNew, initial: '');
     if (name == null || name.isEmpty) return;
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       await widget.api.createGearRotation(name);

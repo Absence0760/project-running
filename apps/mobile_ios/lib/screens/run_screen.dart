@@ -2082,6 +2082,13 @@ class _RunScreenState extends State<RunScreen> {
             debugPrint('treadmill sample stream error: $e');
           },
         );
+        if (!mounted) {
+          // The listen above outlives dispose() — the subscription it stored
+          // was never in _treadmillSub when dispose() cancelled.
+          await _treadmillSub?.cancel();
+          _treadmillSub = null;
+          return;
+        }
         setState(() {
           _treadmillMode = true;
           _treadmillSpeedKmh = null;

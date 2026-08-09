@@ -504,6 +504,7 @@ class RoutesScreenState extends State<RoutesScreen> {
       ),
     );
     if (ok != true) return;
+    if (!mounted) return;
     setState(() => _deleting = true);
     final ids = Set<String>.from(_selected);
     final failedIds = <String>{};

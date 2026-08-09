@@ -93,6 +93,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
       lastDate: DateTime.now(),
     );
     if (picked == null) return;
+    if (!mounted) return;
     setState(() {
       _startedAt = DateTime(
         picked.year,
@@ -110,6 +111,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
       initialTime: TimeOfDay.fromDateTime(_startedAt),
     );
     if (picked == null) return;
+    if (!mounted) return;
     setState(() {
       _startedAt = DateTime(
         _startedAt.year,

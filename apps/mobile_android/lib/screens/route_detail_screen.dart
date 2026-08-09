@@ -2290,15 +2290,15 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
     setState(() { _saving = true; });
     try {
       await api.updateRouteTags(widget.route.id, next);
+      if (!mounted) return;
       setState(() { _tags = next; _saving = false; _controller.clear(); });
       widget.onChange(next);
     } catch (e) {
       debugPrint('route detail tag save failed: $e');
+      if (!mounted) return;
       setState(() => _saving = false);
-      if (mounted) {
-        showTopBanner(
-            context, AppLocalizations.of(context).routeDetailTagSaveFailed(friendlyError(AppLocalizations.of(context), e)));
-      }
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailTagSaveFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -2309,15 +2309,15 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
     setState(() { _saving = true; });
     try {
       await api.updateRouteTags(widget.route.id, next);
+      if (!mounted) return;
       setState(() { _tags = next; _saving = false; });
       widget.onChange(next);
     } catch (e) {
       debugPrint('updateRouteTags (remove) failed for ${widget.route.id}: $e');
+      if (!mounted) return;
       setState(() => _saving = false);
-      if (mounted) {
-        showTopBanner(
-            context, AppLocalizations.of(context).routeDetailTagRemoveFailed(friendlyError(AppLocalizations.of(context), e)));
-      }
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailTagRemoveFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

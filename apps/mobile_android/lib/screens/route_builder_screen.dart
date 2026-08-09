@@ -715,6 +715,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       );
       if (!ok) return;
     }
+    if (!mounted) return;
     _segmentCache.clear();
     setState(() {
       _waypoints.clear();

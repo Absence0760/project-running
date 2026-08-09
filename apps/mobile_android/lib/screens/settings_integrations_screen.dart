@@ -229,6 +229,7 @@ class _SettingsIntegrationsScreenState
         ) ??
         false;
     if (!ok) return;
+    if (!mounted) return;
     setState(() => _stravaBusy = true);
     try {
       await api.disconnectIntegration('strava');

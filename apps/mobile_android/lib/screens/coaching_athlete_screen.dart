@@ -139,6 +139,7 @@ class _CoachingAthleteScreenState extends State<CoachingAthleteScreen> {
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 2),
     );
+    if (!mounted) return;
     if (picked != null) setState(() => _startDate = picked);
   }
 
