@@ -79,7 +79,7 @@ class _AvatarApi extends ApiClient {
   @override
   String? get userEmail => 'runner@test.com';
   @override
-  Future<DateTime?> fetchCoachConsentAt() async => null;
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => null;
   @override
   Future<UserProfileRow?> fetchMyProfile() async =>
       UserProfileRow(shadowHidden: false, id: 'u1', displayName: 'Runner', avatarUrl: avatar);
@@ -107,8 +107,12 @@ class _AuthSwitchApi extends ApiClient {
   Stream<String?> get authUserChanges => _controller.stream;
 
   @override
-  Future<DateTime?> fetchCoachConsentAt() async =>
-      uid == 'a' ? DateTime.utc(2026, 1, 1) : null;
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => uid == 'a'
+      ? const {
+          'ai_disclosure_version': 2,
+          'coach_consent_at': '2026-01-01T00:00:00Z',
+        }
+      : null;
 
   @override
   Future<UserProfileRow?> fetchMyProfile() async => uid == null

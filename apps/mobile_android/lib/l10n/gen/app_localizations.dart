@@ -9232,6 +9232,12 @@ abstract class AppLocalizations {
   /// **'Recording consent…'**
   String get coachConsentSaving;
 
+  /// Banner shown when recording AI-disclosure consent fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t record consent: {error}'**
+  String aiDisclosureRecordFailed(Object error);
+
   /// Plan-switcher dropdown: no plan option
   ///
   /// In en, this message translates to:
@@ -9837,12 +9843,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'AI disclosure accepted.'**
   String get settingsAccountAiConsentAccepted;
-
-  /// Banner shown when recording AI-disclosure consent fails
-  ///
-  /// In en, this message translates to:
-  /// **'Couldn\'t record consent: {error}'**
-  String settingsAccountAiConsentFailed(Object error);
 
   /// Banner shown when account deletion fails
   ///

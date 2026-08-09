@@ -5611,6 +5611,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get coachConsentSaving => 'Einwilligung wird gespeichert…';
 
   @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Einwilligung konnte nicht gespeichert werden: $error';
+  }
+
+  @override
   String get coachNoPlanOption => 'Kein Plan (nur letzte Läufe)';
 
   @override
@@ -5983,11 +5988,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsAccountAiConsentAccepted => 'KI-Hinweise akzeptiert.';
-
-  @override
-  String settingsAccountAiConsentFailed(Object error) {
-    return 'Einwilligung konnte nicht gespeichert werden: $error';
-  }
 
   @override
   String settingsAccountDeleteFailed(Object error) {

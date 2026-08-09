@@ -5545,6 +5545,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coachConsentSaving => 'Recording consent…';
 
   @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Couldn\'t record consent: $error';
+  }
+
+  @override
   String get coachNoPlanOption => 'No plan (recent runs only)';
 
   @override
@@ -5909,11 +5914,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAccountAiConsentAccepted => 'AI disclosure accepted.';
-
-  @override
-  String settingsAccountAiConsentFailed(Object error) {
-    return 'Couldn\'t record consent: $error';
-  }
 
   @override
   String settingsAccountDeleteFailed(Object error) {

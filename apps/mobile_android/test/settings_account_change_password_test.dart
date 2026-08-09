@@ -22,7 +22,7 @@ class _PasswordApi extends ApiClient {
   @override
   String? get userEmail => 'runner@test.com';
   @override
-  Future<DateTime?> fetchCoachConsentAt() async => null;
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => null;
   @override
   Future<UserProfileRow?> fetchMyProfile() async => UserProfileRow(
         shadowHidden: false,

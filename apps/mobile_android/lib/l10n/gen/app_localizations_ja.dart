@@ -5278,6 +5278,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coachConsentSaving => '同意を記録中…';
 
   @override
+  String aiDisclosureRecordFailed(Object error) {
+    return '同意を記録できませんでした：$error';
+  }
+
+  @override
   String get coachNoPlanOption => 'プランなし（最近のランのみ）';
 
   @override
@@ -5625,11 +5630,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsAccountAiConsentAccepted => 'AIの説明に同意しました。';
-
-  @override
-  String settingsAccountAiConsentFailed(Object error) {
-    return '同意を記録できませんでした：$error';
-  }
 
   @override
   String settingsAccountDeleteFailed(Object error) {

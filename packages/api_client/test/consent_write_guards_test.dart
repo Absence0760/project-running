@@ -30,9 +30,14 @@ void main() {
       expect(api.withdrawHealthDataConsent(), throwsStateError);
     });
 
-    test('withdrawCoachConsent', () {
+    test('withdrawAiDisclosureConsent', () {
       final api = ApiClient.withClient(signedOut);
-      expect(api.withdrawCoachConsent(), throwsStateError);
+      expect(api.withdrawAiDisclosureConsent(), throwsStateError);
+    });
+
+    test('recordAiDisclosureConsent', () {
+      final api = ApiClient.withClient(signedOut);
+      expect(api.recordAiDisclosureConsent(2), throwsStateError);
     });
 
     test('setMyHeightCm', () {

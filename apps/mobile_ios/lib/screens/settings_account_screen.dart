@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, IdentityAvatar;
 
+import '../ai_disclosure.dart';
 import '../auth_change_aware.dart';
 import '../auth_error.dart';
 import '../auth_validation.dart';
@@ -24,6 +25,7 @@ import '../password_change.dart';
 import '../preferences.dart';
 import '../text_limits.dart';
 import '../settings_sync.dart';
+import '../widgets/ai_disclosure_notice.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/password_field.dart';
 import '../widgets/top_banner.dart';
@@ -52,8 +54,24 @@ class SettingsAccountScreen extends StatefulWidget {
 
 class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     with AuthChangeAware<SettingsAccountScreen> {
-  DateTime? _coachConsentAt;
+  /// The versioned AI-processing consent record (decisions.md § 571). This
+  /// is the surface where a runner who accepted an older disclosure — or
+  /// none at all — reads the current one and accepts it; the AI route
+  /// assistant refuses until they do, and the Coach surface must not nag
+  /// about it because the older acceptance covers the Coach fine.
+  AiDisclosureRecord _disclosure = const AiDisclosureRecord();
   bool _coachConsentWithdrawing = false;
+
+  /// Something is on record — a withdrawal is meaningful.
+  bool get _aiConsentGranted =>
+      checkAiDisclosure(_disclosure, kAiDisclosureVersionCoach).ok;
+
+  /// The record covers everything this build can ask for — no acceptance
+  /// to offer. Anything less (nothing on record, or an older rung) leaves
+  /// the accept control up, so a runner refused by an AI endpoint always
+  /// has somewhere to go.
+  bool get _aiConsentCurrent =>
+      checkAiDisclosure(_disclosure, kAiDisclosureCurrentVersion).ok;
   // In-flight guard for the multi-second account actions (full backup,
   // restore, CSV export, sign-out) so a double-tap can't fire two backup
   // builds / two share sheets / two restore loops.
@@ -78,7 +96,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   void initState() {
     super.initState();
     widget.preferences.addListener(_onChange);
-    _loadCoachConsent();
+    _loadAiDisclosure();
     _loadAvatar();
   }
 
@@ -98,21 +116,25 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   @override
   void onAuthUserChanged(String? userId) {
     setState(() {
-      _coachConsentAt = null;
+      _disclosure = const AiDisclosureRecord();
       _avatarUrl = null;
     });
-    _loadCoachConsent();
+    _loadAiDisclosure();
     _loadAvatar();
   }
 
-  Future<void> _loadCoachConsent() async {
+  Future<void> _loadAiDisclosure() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
     try {
-      final at = await api.fetchCoachConsentAt();
-      if (mounted) setState(() => _coachConsentAt = at);
-    } catch (_) {
-      // Non-fatal: leave the withdrawal control hidden if the lookup fails.
+      final record = aiDisclosureFromProfileRow(await api.fetchAiDisclosure());
+      if (mounted) setState(() => _disclosure = record);
+    } catch (e) {
+      // Non-fatal, and fail-closed: an unreadable record leaves the
+      // withdrawal control hidden and the accept control offered, which is
+      // the safe way round — a runner can always re-accept, and the RPC is
+      // monotone so doing so cannot walk a wider acceptance back.
+      debugPrint('settings account: AI disclosure lookup failed: $e');
     }
   }
 
@@ -273,18 +295,31 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     }
   }
 
-  Future<void> _withdrawCoachConsent() async {
+  Future<void> _acceptAiDisclosure() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    final l10n = AppLocalizations.of(context);
+    // The dialog owns the write and reports the record the SERVER stored;
+    // a null result is a cancel (or a failure it already surfaced), so
+    // nothing here may assume an acceptance landed.
+    final recorded = await showAiDisclosureDialog(context, api);
+    if (recorded == null || !mounted) return;
+    setState(() => _disclosure = recorded);
+    showTopBanner(context, l10n.settingsAccountAiConsentAccepted);
+  }
+
+  Future<void> _withdrawAiDisclosure() async {
     final api = widget.apiClient;
     if (api == null || _coachConsentWithdrawing) return;
     setState(() => _coachConsentWithdrawing = true);
     final l10n = AppLocalizations.of(context);
     try {
-      await api.withdrawCoachConsent();
+      await api.withdrawAiDisclosureConsent();
       if (!mounted) return;
-      setState(() => _coachConsentAt = null);
+      setState(() => _disclosure = const AiDisclosureRecord());
       showTopBanner(context, l10n.settingsAccountCoachConsentWithdrawn);
     } catch (e) {
-      debugPrint('SettingsAccountScreen coach-consent withdraw failed: $e');
+      debugPrint('SettingsAccountScreen AI-consent withdraw failed: $e');
       if (mounted) {
         showTopBanner(
             context,
@@ -938,7 +973,19 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 );
               },
             ),
-            if (signedIn && _coachConsentAt != null)
+            if (signedIn && !_aiConsentCurrent)
+              ListTile(
+                leading: const Icon(Icons.verified_user_outlined),
+                title: Text(_aiConsentGranted
+                    ? l10n.settingsAccountAiConsentUpdateTitle
+                    : l10n.settingsAccountAiConsentGrantTitle),
+                subtitle: Text(_aiConsentGranted
+                    ? l10n.settingsAccountAiConsentUpdateSubtitle
+                    : l10n.settingsAccountAiConsentGrantSubtitle),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _acceptAiDisclosure,
+              ),
+            if (signedIn && _aiConsentGranted)
               ListTile(
                 leading: const Icon(Icons.block),
                 title: Text(l10n.settingsAccountCoachConsentWithdraw),
@@ -951,7 +998,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                       )
                     : null,
                 onTap:
-                    _coachConsentWithdrawing ? null : _withdrawCoachConsent,
+                    _coachConsentWithdrawing ? null : _withdrawAiDisclosure,
               ),
             if (widget.runStore != null) ...[
               const Divider(),

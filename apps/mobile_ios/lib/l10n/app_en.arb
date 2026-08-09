@@ -7503,6 +7503,15 @@
   "@coachConsentSaving": {
     "description": "Consent gate accept button while saving"
   },
+  "aiDisclosureRecordFailed": "Couldn't record consent: {error}",
+  "@aiDisclosureRecordFailed": {
+    "description": "Banner shown when recording AI-disclosure consent fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "coachNoPlanOption": "No plan (recent runs only)",
   "@coachNoPlanOption": {
     "description": "Plan-switcher dropdown: no plan option"
@@ -7987,15 +7996,6 @@
   "settingsAccountAiConsentAccepted": "AI disclosure accepted.",
   "@settingsAccountAiConsentAccepted": {
     "description": "Banner shown after the widened AI disclosure is accepted"
-  },
-  "settingsAccountAiConsentFailed": "Couldn't record consent: {error}",
-  "@settingsAccountAiConsentFailed": {
-    "description": "Banner shown when recording AI-disclosure consent fails",
-    "placeholders": {
-      "error": {
-        "type": "Object"
-      }
-    }
   },
   "settingsAccountDeleteFailed": "Account deletion failed: {error}",
   "@settingsAccountDeleteFailed": {

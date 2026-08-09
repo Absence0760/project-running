@@ -113,13 +113,37 @@ void main() {
             'in the same transaction');
   });
 
-  test('withdrawCoachConsent reaches the RPC (no client-side silent bail)',
+  test(
+      'withdrawAiDisclosureConsent reaches the RPC (no client-side silent bail)',
       () async {
     // The RPC itself raises 42501 when unauthenticated; with a live
     // session it must complete without the old `uid == null → return`
     // path ever mattering.
-    await api.withdrawCoachConsent();
+    await api.withdrawAiDisclosureConsent();
     final row = profileRow(await client.rpc('get_my_profile'))!;
     expect(row['coach_consent_at'], isNull);
+    expect(row['ai_disclosure_version'], isNull);
+  });
+
+  test('record + read round-trip carries the version the server stored',
+      () async {
+    // Both halves of the record move together (the DB CHECK forbids any
+    // other pairing), and the read must go through get_my_profile() —
+    // neither column is in the cross-user column grant, so a direct
+    // select could only ever report "no consent".
+    final recorded = await api.recordAiDisclosureConsent(2);
+    expect(recorded['ai_disclosure_version'], 2);
+    expect(recorded['coach_consent_at'], isNotNull);
+
+    final read = await api.fetchAiDisclosure();
+    expect(read!['ai_disclosure_version'], 2);
+    expect(read['coach_consent_at'], recorded['coach_consent_at']);
+
+    // Monotone: re-accepting a lower rung leaves the wider one standing.
+    final again = await api.recordAiDisclosureConsent(1);
+    expect(again['ai_disclosure_version'], 2);
+    expect(again['coach_consent_at'], recorded['coach_consent_at']);
+
+    await api.withdrawAiDisclosureConsent();
   });
 }

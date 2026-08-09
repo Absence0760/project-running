@@ -5603,6 +5603,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get coachConsentSaving => 'Registrando consentimento…';
 
   @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Não foi possível registar o consentimento: $error';
+  }
+
+  @override
   String get coachNoPlanOption => 'Sem plano (apenas corridas recentes)';
 
   @override
@@ -5972,11 +5977,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsAccountAiConsentAccepted => 'Informações de IA aceites.';
-
-  @override
-  String settingsAccountAiConsentFailed(Object error) {
-    return 'Não foi possível registar o consentimento: $error';
-  }
 
   @override
   String settingsAccountDeleteFailed(Object error) {
@@ -18250,6 +18250,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get coachConsentSaving => 'Registrando consentimento…';
 
   @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Não foi possível registrar o consentimento: $error';
+  }
+
+  @override
   String get coachNoPlanOption => 'Sem plano (apenas corridas recentes)';
 
   @override
@@ -18618,11 +18623,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsAccountAiConsentAccepted => 'Informações de IA aceitas.';
-
-  @override
-  String settingsAccountAiConsentFailed(Object error) {
-    return 'Não foi possível registrar o consentimento: $error';
-  }
 
   @override
   String settingsAccountDeleteFailed(Object error) {
