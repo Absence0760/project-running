@@ -30,6 +30,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 
 import { parseAuthHeader } from '../../coach/limits';
+import type { SupabaseClientFactory } from '../../coach/types';
+import {
+	AI_DISCLOSURE_VERSION_ROUTE_AI,
+	aiDisclosureDenialBody,
+	gateAiDisclosure,
+} from '../../core/ai_disclosure';
 import { checkRouteRateLimit } from '../rate_limit';
 import { supabaseErrorFields } from '../../core/supabase_error';
 
@@ -66,6 +72,11 @@ export interface RouteRequestConfig {
 	publicSupabaseAnonKey: string;
 	/// Dev-only escape hatch — see the +server.ts / Lambda gates.
 	bypassPaywallEnabled: boolean;
+	/// Both wrappers leave this unset and the handler falls back to the real
+	/// `createClient`; unit tests inject a fake so the post-auth gates
+	/// (consent, tier) are exercisable without a live Supabase. Same hook
+	/// `CoachConfig` carries.
+	createClient?: SupabaseClientFactory;
 }
 
 export interface RouteRequestResult {
@@ -172,7 +183,8 @@ export async function handleRouteRequest(
 	const accessToken = parseAuthHeader(authHeader);
 	if (!accessToken) return json(401, { error: 'not authenticated' });
 
-	const supabase = createClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
+	const makeClient = config.createClient ?? createClient;
+	const supabase = makeClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
 		global: { headers: { Authorization: `Bearer ${accessToken}` } },
 	});
 	const userRes = await supabase.auth.getUser(accessToken);
@@ -185,6 +197,26 @@ export async function handleRouteRequest(
 			error: userRes.error?.message ?? 'no user returned',
 		});
 		return json(401, { error: 'not authenticated' });
+	}
+
+	// GDPR Art 6(1)(a) — issue #734. This endpoint ships the runner's typed
+	// request AND their coarse location label to Anthropic; neither was
+	// described by the Coach-scoped disclosure, so it requires the widened
+	// version of the consent record. The bypass flag is deliberately NOT
+	// honoured: it exists to skip the paywall in dev, not the lawful basis
+	// for sending a real person's data to a real sub-processor.
+	const disclosure = await gateAiDisclosure(
+		() => supabase.rpc('get_my_profile').maybeSingle(),
+		AI_DISCLOSURE_VERSION_ROUTE_AI,
+		'route-request',
+	);
+	if (!disclosure.ok) {
+		return disclosure.status === 403
+			? json(403, {
+					error: 'ai disclosure required',
+					...aiDisclosureDenialBody(AI_DISCLOSURE_VERSION_ROUTE_AI),
+				})
+			: json(500, { error: 'consent check failed' });
 	}
 
 	// Paywall gate — fail-closed. An RPC error or a non-true result leaves

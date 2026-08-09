@@ -24,6 +24,7 @@
 	import { buildRouteShareCanonical } from '$lib/share/share_meta';
 	import { describeRoute, localisedTemplate } from '$lib/routes/route_description';
 	import { requestAiDescription } from '$lib/routes/route_describe_client';
+	import { AI_DISCLOSURE_ERROR } from '$lib/core/ai_disclosure';
 	import { coachEnabled } from '$lib/coach/coach_flag';
 
 	// The "Describe this route" button always works (offline template); the
@@ -230,10 +231,15 @@
 			genDescription = ai.description;
 			genSource = ai.source;
 			showUpgradeHint = ai.upgrade;
-		} catch (_) {
+		} catch (e) {
 			// Keep the templated baseline already shown; flag the failure
-			// without clobbering the description.
-			describeError = m('routeDetail.describeFailed');
+			// without clobbering the description. A consent gap is not a
+			// failure the runner can retry away, so it gets its own copy
+			// pointing at where they can act on it.
+			describeError =
+				e instanceof Error && e.message === AI_DISCLOSURE_ERROR
+					? m('routeDetail.describeConsentRequired')
+					: m('routeDetail.describeFailed');
 		} finally {
 			describing = false;
 		}

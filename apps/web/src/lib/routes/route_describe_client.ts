@@ -12,6 +12,7 @@
 // error and keep the locally-rendered baseline.
 
 import { supabase } from '../core/supabase';
+import { AI_DISCLOSURE_ERROR } from '../core/ai_disclosure';
 import { payloadSha256Hex } from '../util/payload_hash';
 import type { RouteDescriptionInput } from './route_description';
 
@@ -74,6 +75,16 @@ export async function requestAiDescription(
 	}
 
 	if (!res.ok) {
+		// A 403 carrying the AI-disclosure code is a consent gap, not a
+		// broken request: the caller has to accept the widened disclosure
+		// before the enhancement is lawful. Surface it as its own error so
+		// the page can point somewhere useful instead of "try again".
+		if (res.status === 403) {
+			const body = (await res.json().catch(() => null)) as { code?: string } | null;
+			if (body?.code === AI_DISCLOSURE_ERROR) {
+				throw new Error(AI_DISCLOSURE_ERROR);
+			}
+		}
 		throw new Error(`route_describe_failed_${res.status}`);
 	}
 	const json = (await res.json()) as {

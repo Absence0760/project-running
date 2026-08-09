@@ -2520,29 +2520,29 @@ test('MapTiler tile fetches on anon public pages are gated on consent', () => {
 	);
 });
 
-test('Coach handler gates the Anthropic fan-out behind coach_consent_at', () => {
-	// Reason: audit/gdpr (2026-05-25). Coach forwards health-adjacent
-	// data to Anthropic (US sub-processor). Art 6(1)(a) requires an
-	// affirmative consent act before the first dispatch — opening
-	// /coach is not affirmative. The handler must read
-	// user_profiles.coach_consent_at (via the get_my_profile RPC, since
-	// the column isn't in the public-safe grant list — migration
-	// 20260707_001) and refuse before the provider stream runs.
+test('Coach handler gates the Anthropic fan-out behind the versioned AI disclosure', () => {
+	// Reason: audit/gdpr (2026-05-25), re-scoped by issue #734. Coach
+	// forwards health-adjacent data to Anthropic (US sub-processor). Art
+	// 6(1)(a) requires an affirmative consent act before the first dispatch
+	// — opening /coach is not affirmative. The handler must read the
+	// consent record (via the get_my_profile RPC, since neither column is
+	// in the public-safe grant list — migration 20260707_001) and grade it
+	// against the Coach minimum before the provider stream runs.
 	const source = read('src/lib/coach/handler.ts');
 	assert.match(
 		source,
 		/\.rpc\('get_my_profile'\)/,
-		'handler.ts must call get_my_profile() to load the self row including coach_consent_at.',
+		'handler.ts must call get_my_profile() to load the self row including the consent record.',
 	);
 	assert.match(
 		source,
-		/coach_consent_at/,
-		'handler.ts must reference coach_consent_at as the gating field.',
+		/checkAiDisclosure\([\s\S]*?AI_DISCLOSURE_VERSION_COACH/,
+		'handler.ts must grade the record with checkAiDisclosure at the Coach minimum version.',
 	);
 	assert.match(
 		source,
 		/return jsonError\(\s*403,\s*'Coach consent required[\s\S]*?\)/,
-		'handler.ts must return 403 when coach_consent_at is null — failing closed.',
+		'handler.ts must return 403 when the disclosure check fails — failing closed.',
 	);
 	// The gate must sit BEFORE any provider stream invocation. We
 	// assert ordering by checking that the consent lookup appears
@@ -2552,7 +2552,77 @@ test('Coach handler gates the Anthropic fan-out behind coach_consent_at', () => 
 	const tierIdx = source.indexOf('tier === ');
 	assert.ok(
 		consentIdx > 0 && consentIdx < tierIdx,
-		'coach_consent_at lookup must precede the tier / provider dispatch.',
+		'the consent lookup must precede the tier / provider dispatch.',
+	);
+});
+
+test('the AI route endpoints gate on the widened disclosure, above the Coach version', () => {
+	// Reason: issue #734. /api/coach/route-describe and
+	// /api/coach/route-request shipped with no consent gate at all — a Pro
+	// user who never accepted (or who withdrew) the AI disclosure still had
+	// their typed request and location label sent to Anthropic. They must
+	// require AI_DISCLOSURE_VERSION_ROUTE_AI, which is strictly above the
+	// Coach version, so an old Coach-only acceptance does not satisfy them.
+	const gate = read('src/lib/core/ai_disclosure.ts');
+	assert.match(
+		gate,
+		/AI_DISCLOSURE_VERSION_ROUTE_AI\s*=\s*2/,
+		'the route-AI minimum must stay above the Coach minimum.',
+	);
+	for (const file of [
+		'src/lib/routes/route_describe/handler.ts',
+		'src/lib/routes/route_request/handler.ts',
+	]) {
+		const source = read(file);
+		assert.match(
+			source,
+			/gateAiDisclosure\([\s\S]*?AI_DISCLOSURE_VERSION_ROUTE_AI/,
+			`${file} must gate on the widened AI disclosure before calling Anthropic.`,
+		);
+		// Ordering: the gate must precede the Anthropic client construction.
+		const gateIdx = source.indexOf('gateAiDisclosure(');
+		const anthropicIdx = source.indexOf('new Anthropic(');
+		assert.ok(
+			gateIdx > 0 && gateIdx < anthropicIdx,
+			`${file} must run the consent gate before constructing the Anthropic client.`,
+		);
+		// The dev paywall bypass must not reach into the consent branch —
+		// BYPASS_PAYWALL skips a billing check, not a lawful basis.
+		const bypassInGate = source
+			.slice(gateIdx, source.indexOf('Paywall gate', gateIdx))
+			.includes('bypassPaywallEnabled');
+		assert.ok(!bypassInGate, `${file} must not let bypassPaywallEnabled skip the consent gate.`);
+	}
+});
+
+test('the AI route clients tell a consent gap apart from the Pro paywall', () => {
+	// Reason: issue #734. Both gates answer 403 on these endpoints. A client
+	// that reads the status alone shows the Pro upsell to someone whose
+	// actual problem is a missing consent record — selling them something
+	// that would not unlock the feature. The body's `code` is the
+	// discriminator, so each client must read it.
+	for (const file of [
+		'src/lib/routes/route_request_client.ts',
+		'src/lib/routes/route_describe_client.ts',
+	]) {
+		const source = read(file);
+		assert.match(
+			source,
+			/AI_DISCLOSURE_ERROR/,
+			`${file} must branch on the AI-disclosure code, not on the 403 status alone.`,
+		);
+	}
+	// The pages must then render the consent-specific copy rather than the
+	// generic failure banner.
+	assert.match(
+		read('src/routes/routes/new/+page.svelte'),
+		/kind === 'consent'[\s\S]{0,120}aiRequestConsentRequired/,
+		'/routes/new must render the consent copy for a consent denial.',
+	);
+	assert.match(
+		read('src/routes/routes/[id]/+page.svelte'),
+		/AI_DISCLOSURE_ERROR[\s\S]{0,160}describeConsentRequired/,
+		'/routes/[id] must render the consent copy for a consent denial.',
 	);
 });
 

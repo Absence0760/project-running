@@ -234,7 +234,10 @@ test('returns 400 when body.messages is invalid (missing, wrong shape)', async (
 /// delete calls are recorded on `calls` so a test can assert nothing was
 /// written. `coach_messages.maybeSingle()` returns `{ data: null }` — the
 /// anchor-miss the fail-closed path must catch.
-function makeSupabaseStub(calls: { inserts: string[]; deletes: string[] }) {
+function makeSupabaseStub(
+	calls: { inserts: string[]; deletes: string[] },
+	profileOverride?: Record<string, unknown> | null,
+) {
 	function builder(table: string): Record<string, unknown> {
 		const result = { data: null as unknown, error: null };
 		const b: Record<string, unknown> = {
@@ -269,12 +272,16 @@ function makeSupabaseStub(calls: { inserts: string[]; deletes: string[] }) {
 			if (name === 'get_my_profile') {
 				return {
 					maybeSingle: async () => ({
-						data: {
-							coach_consent_at: '2026-01-01T00:00:00Z',
-							display_name: 'Test Runner',
-							preferred_unit: 'km',
-							health_data_consent_at: null,
-						},
+						data:
+							profileOverride === undefined
+								? {
+										coach_consent_at: '2026-01-01T00:00:00Z',
+										ai_disclosure_version: 1,
+										display_name: 'Test Runner',
+										preferred_unit: 'km',
+										health_data_consent_at: null,
+									}
+								: profileOverride,
 						error: null,
 					}),
 				};
@@ -331,6 +338,96 @@ test('regenerate with a missing anchor fails closed with 409 and inserts nothing
 		lines.some((l) => l.includes('regenerate_anchor_miss')),
 		`expected a "regenerate_anchor_miss" log line, got: ${JSON.stringify(lines)}`,
 	);
+});
+
+// ───────────── AI-disclosure consent gate (issue #734) ─────────────
+
+async function coachWithProfile(
+	profileOverride: Record<string, unknown> | null,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+	const calls = { inserts: [] as string[], deletes: [] as string[] };
+	let result!: Awaited<ReturnType<typeof handleCoach>>;
+	await captureConsoleError(async () => {
+		result = await handleCoach(
+			'Bearer fake-token',
+			{ messages: [{ role: 'user', content: 'hi' }] },
+			{
+				...baseConfig(),
+				bypassPaywallEnabled: true,
+				createClient: () => makeSupabaseStub(calls, profileOverride),
+			},
+		);
+	});
+	assert.equal(result.kind, 'json', 'a consent denial must not start an SSE stream');
+	assert.deepEqual(calls.inserts, [], 'no message may be persisted on a consent denial');
+	return parseJsonResult(result) as { status: number; body: Record<string, unknown> };
+}
+
+test('coach refuses when no consent record is on file', async () => {
+	// Reason: audit/gdpr (2026-05-25) + issue #734. The record is now
+	// versioned, so "consented" means a known version at or above the
+	// Coach minimum — not merely a non-null timestamp.
+	const { status, body } = await coachWithProfile({
+		coach_consent_at: null,
+		ai_disclosure_version: null,
+		display_name: 'Test Runner',
+		preferred_unit: 'km',
+	});
+	assert.equal(status, 403);
+	assert.equal(body.code, 'ai_disclosure_required');
+	assert.equal(body.required_version, 1);
+});
+
+test('coach refuses a half-written or unknown-version consent record', async () => {
+	// A timestamp with no version (or a version this build cannot render)
+	// is not proof of an affirmative act — deny rather than assume.
+	for (const profile of [
+		{ coach_consent_at: '2026-01-01T00:00:00Z', ai_disclosure_version: null },
+		{ coach_consent_at: '2026-01-01T00:00:00Z', ai_disclosure_version: 99 },
+		{ coach_consent_at: null, ai_disclosure_version: 1 },
+	]) {
+		const { status, body } = await coachWithProfile({
+			...profile,
+			display_name: 'Test Runner',
+			preferred_unit: 'km',
+		});
+		assert.equal(status, 403, `expected 403 for ${JSON.stringify(profile)}`);
+		assert.equal(body.code, 'ai_disclosure_required');
+	}
+});
+
+test('coach accepts the widened disclosure as well as the Coach one', async () => {
+	// The ladder is monotone: v2 is a superset of v1, so a route-AI
+	// acceptance must not lock the caller out of the Coach. Asserted via
+	// the regenerate anchor-miss branch, which sits after the consent gate
+	// and before the provider — a 409 here proves the gate let v2 through
+	// without spending a real Anthropic call to find out.
+	const calls = { inserts: [] as string[], deletes: [] as string[] };
+	let result!: Awaited<ReturnType<typeof handleCoach>>;
+	await captureConsoleError(async () => {
+		result = await handleCoach(
+			'Bearer fake-token',
+			{
+				messages: [{ role: 'user', content: 'try again' }],
+				mode: 'regenerate',
+				anchor_message_id: 'stale-anchor-id',
+			},
+			{
+				...baseConfig(),
+				bypassPaywallEnabled: true,
+				createClient: () =>
+					makeSupabaseStub(calls, {
+						coach_consent_at: '2026-01-01T00:00:00Z',
+						ai_disclosure_version: 2,
+						display_name: 'Test Runner',
+						preferred_unit: 'km',
+					}),
+			},
+		);
+	});
+	const { status, body } = parseJsonResult(result);
+	assert.equal(status, 409, 'a v2 holder must clear the Coach consent gate');
+	assert.equal((body as Record<string, unknown>).code, undefined);
 });
 
 test('returns 400 with the canonical jsonError shape (kind + content-type)', async () => {

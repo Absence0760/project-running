@@ -8,8 +8,12 @@
 --      survives pgtap's single-transaction now() (which is constant).
 --   3. A direct authenticated UPDATE of coach_consent_at is rejected by
 --      the lock trigger, so it can't be backdated outside the RPC.
---   4. The trigger guards ONLY coach_consent_at — unrelated column
+--   4. The trigger guards ONLY the consent columns — unrelated column
 --      updates on the same row still work.
+--
+-- record_coach_consent() is now the v1 entry point onto the versioned
+-- record (migration 20270511_001); the version ladder itself is pinned by
+-- ai_disclosure_consent_test.sql.
 
 begin;
 
@@ -27,8 +31,8 @@ values ('00000000-0000-0000-0000-0000000cca01', 'Consent A', 'km');
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values ('00000000-0000-0000-0000-0000000cca02', 'authenticated', 'authenticated',
         'consent-b@test.local', '', now(), now());
-insert into user_profiles (id, display_name, preferred_unit, coach_consent_at)
-values ('00000000-0000-0000-0000-0000000cca02', 'Consent B', 'km', '2020-06-01T00:00:00Z');
+insert into user_profiles (id, display_name, preferred_unit, coach_consent_at, ai_disclosure_version)
+values ('00000000-0000-0000-0000-0000000cca02', 'Consent B', 'km', '2020-06-01T00:00:00Z', 1);
 
 -- ── User A: first stamp ──────────────────────────────────────────
 set local role authenticated;
@@ -49,7 +53,7 @@ select throws_ok(
        set coach_consent_at = '2000-01-01T00:00:00Z'
        where id = '00000000-0000-0000-0000-0000000cca01' $$,
   '42501',
-  'coach_consent_at is set by record_coach_consent(), not a direct write',
+  'coach_consent_at is set by record_ai_disclosure_consent(), not a direct write',
   'a direct authenticated write to coach_consent_at is blocked'
 );
 
