@@ -1207,6 +1207,7 @@ export const messages = {
 	"runs.showMore": "{count} weitere anzeigen",
 	"runs.emptyNoData": "Noch keine Läufe.",
 	"runs.loadFailed": "Deine Läufe konnten nicht geladen werden.",
+	"runs.loadMoreFailed": "Weitere Läufe konnten nicht geladen werden.",
 	"runs.retry": "Erneut versuchen",
 	"runs.emptyNoDataHintPrefix": "Zeichne deinen ersten Lauf in der App auf oder importiere von",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",

@@ -1206,6 +1206,7 @@ export const messages = {
 	"runs.showMore": "Mostrar mais {count}",
 	"runs.emptyNoData": "Ainda não há corridas.",
 	"runs.loadFailed": "Não foi possível carregar suas corridas.",
+	"runs.loadMoreFailed": "Não foi possível carregar mais corridas.",
 	"runs.retry": "Tentar novamente",
 	"runs.emptyNoDataHintPrefix": "Grave sua primeira corrida no app ou importe de",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",

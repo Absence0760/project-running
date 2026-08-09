@@ -1215,6 +1215,7 @@ export const en = {
 	"runs.showMore": "Show {count} more",
 	"runs.emptyNoData": "No runs yet.",
 	"runs.loadFailed": "Couldn't load your runs.",
+	"runs.loadMoreFailed": "Couldn’t load more runs.",
 	"runs.retry": "Retry",
 	"runs.emptyNoDataHintPrefix": "Record your first run on the app, or import from",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",

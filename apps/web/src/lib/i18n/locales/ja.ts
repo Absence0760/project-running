@@ -1202,6 +1202,7 @@ export const messages = {
 	"runs.showMore": "さらに{count}件表示",
 	"runs.emptyNoData": "まだランがありません。",
 	"runs.loadFailed": "ランを読み込めませんでした。",
+	"runs.loadMoreFailed": "これ以上のランを読み込めませんでした。",
 	"runs.retry": "再試行",
 	"runs.emptyNoDataHintPrefix": "アプリで最初のランを記録するか、次からインポートしましょう：",
 	"runs.emptyNoDataHintLink": "Strava / Garmin",
