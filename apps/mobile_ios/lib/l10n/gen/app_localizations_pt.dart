@@ -11301,7 +11301,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get racesNearPlace => 'Perto de um local…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return 'a $distance';
   }
 
@@ -23912,7 +23912,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get racesNearPlace => 'Perto de um local…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return 'a $distance';
   }
 

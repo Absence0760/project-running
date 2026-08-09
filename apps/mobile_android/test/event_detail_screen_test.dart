@@ -9,6 +9,7 @@ import 'package:ui_kit/ui_kit.dart';
 import '../lib/event_category.dart';
 import '../lib/event_gym_template.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/preferences.dart';
 import '../lib/screens/event_detail_screen.dart';
 import '../lib/session_steps.dart';
 import '../lib/social_service.dart';
@@ -107,12 +108,14 @@ class _EventSocial extends SocialService {
     this.attendees = const [],
     this.viewerRsvp,
     this.cancelled = const {},
+    this.paceTargetSec,
   });
   ClubView? club;
   String category;
   List<AttendeeView> attendees;
   String? viewerRsvp;
   Set<DateTime> cancelled;
+  int? paceTargetSec;
   int rsvpCalls = 0;
   int clearCalls = 0;
   String? lastRsvpStatus;
@@ -129,6 +132,7 @@ class _EventSocial extends SocialService {
       authorId: 'host',
       category: category,
       distanceM: 21097,
+      paceTargetSec: paceTargetSec,
       isPublic: true,
     ),
     byday: null,
@@ -827,6 +831,52 @@ void main() {
       final lane = find.byType(TextLane).first;
       expect(tester.getSize(lane).width,
           greaterThanOrEqualTo(tester.widget<TextLane>(lane).width * 2));
+    });
+
+    testWidgets('a finisher row states the distance in the runner\'s unit',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      addTearDown(resetActivePreferencesForTest);
+
+      await pumpResults(tester);
+      expect(find.text('26.22 mi'), findsOneWidget);
+      expect(find.text('42.20 km'), findsNothing);
+    });
+  });
+
+  group('EventDetailScreen — the event metrics row', () {
+    realtimeWidgetTest('distance and target pace follow the unit pref', (
+      tester,
+    ) async {
+      // The target-pace metric read through a second, km-hardcoded fmtPace
+      // that lived in social_service.dart, so a mile-unit runner saw the
+      // event's target as a per-kilometre pace beside a distance in miles.
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      addTearDown(resetActivePreferencesForTest);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: EventDetailScreen(
+            social: _EventSocial(club: _club('member'), paceTargetSec: 300),
+            clubSlug: 'fake-slug',
+            eventId: 'fake-event-id',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('13.11 mi'), findsOneWidget);
+      // 300 s/km -> 300 * 1.609344 = 482.8 s/mi -> rounds to 483 -> 8:03.
+      expect(find.text('8:03 /mi'), findsOneWidget);
+      expect(find.text('5:00 /km'), findsNothing);
     });
   });
 }

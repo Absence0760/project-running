@@ -11327,7 +11327,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get racesNearPlace => 'Près d\'un lieu…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return 'à $distance';
   }
 

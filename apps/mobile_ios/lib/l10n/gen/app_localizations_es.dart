@@ -11304,7 +11304,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get racesNearPlace => 'Cerca de un lugar…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return 'a $distance';
   }
 

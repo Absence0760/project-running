@@ -439,15 +439,4 @@ void main() {
     });
   });
 
-  group('fmtPace', () {
-    test('null → empty string', () {
-      expect(fmtPace(null), '');
-    });
-
-    test('formats sec/km as m:ss /km with zero-padded seconds', () {
-      expect(fmtPace(300), '5:00 /km');
-      expect(fmtPace(305), '5:05 /km');
-      expect(fmtPace(65), '1:05 /km');
-    });
-  });
 }

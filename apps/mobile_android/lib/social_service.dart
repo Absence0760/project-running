@@ -12,7 +12,6 @@ import 'geocoding.dart';
 import 'l10n/date_format.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'l10n/locale_support.dart';
-import 'l10n/number_format.dart';
 import 'recurrence.dart';
 
 // Column-level grant lockdown: `clubs.invite_token` is revoked from
@@ -2025,12 +2024,3 @@ String fmtRelative(DateTime when, String localeTag, {DateTime? now}) {
 String fmtEventDate(DateTime when, String localeTag) =>
     '${formatDateShort(when, localeTag)}, ${formatTime(when, localeTag)}';
 
-String fmtKm(num metres) =>
-    formatFixed(metres / 1000, 2, activeLocaleTag);
-
-String fmtPace(int? secPerKm) {
-  if (secPerKm == null) return '';
-  final m = secPerKm ~/ 60;
-  final s = (secPerKm % 60).toString().padLeft(2, '0');
-  return '$m:$s /km';
-}

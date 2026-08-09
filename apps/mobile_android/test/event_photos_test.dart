@@ -5,8 +5,10 @@ import 'package:core_models/core_models.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/preferences.dart';
 import '../lib/social_service.dart' show RecentRunRow;
 import '../lib/widgets/event_photos.dart';
 
@@ -190,5 +192,35 @@ void main() {
     expect(api.addCalls, 1);
     expect(api.lastRunId, 'run-pick');
     expect(api.lastEventId, 'event-1');
+  });
+
+  testWidgets('mi mode: the run picker names each run in the runner\'s unit',
+      (tester) async {
+    // The picker labelled every candidate run in kilometres whatever the unit
+    // pref said, so a mile-unit runner had to convert in their head to tell
+    // which of their recent runs the photo belonged to.
+    SharedPreferences.setMockInitialValues({'use_miles': true});
+    final prefs = Preferences();
+    await prefs.init();
+    registerActivePreferences(prefs);
+    addTearDown(resetActivePreferencesForTest);
+
+    final api = _PhotosApi();
+    final recent = [
+      RecentRunRow(
+        id: 'run-pick',
+        startedAt: DateTime.utc(2026, 6, 9, 7),
+        durationS: 1800,
+        distanceM: 8046.72,
+        activityType: 'run',
+      ),
+    ];
+    await tester.pumpWidget(_host(_widget(api, recent: recent)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add photo'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('5.00 mi'), findsOneWidget);
+    expect(find.textContaining(' km'), findsNothing);
   });
 }

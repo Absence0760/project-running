@@ -3258,7 +3258,7 @@
   "racesTitle": "レースカレンダー",
   "racesSearchPlaceholder": "レースを名前で検索…",
   "racesNearPlace": "場所の近くで…",
-  "racesKmAway": "{distance}先",
+  "racesDistanceAway": "{distance}先",
   "racesDistanceAny": "すべての距離",
   "racesDistance5k": "5K",
   "racesDistance10k": "10K",

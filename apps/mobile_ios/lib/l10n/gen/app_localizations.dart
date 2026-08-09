@@ -18806,11 +18806,11 @@ abstract class AppLocalizations {
   /// **'Near a place…'**
   String get racesNearPlace;
 
-  /// Distance-from-you label on a race card
+  /// Distance-from-you label on a race card. {distance} is already formatted in the user's unit (km or mi).
   ///
   /// In en, this message translates to:
   /// **'{distance} away'**
-  String racesKmAway(String distance);
+  String racesDistanceAway(String distance);
 
   /// Distance-band chip: no filter
   ///

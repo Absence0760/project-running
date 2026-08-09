@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../exif_strip.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../preferences.dart' show formatDistanceForPref;
 import '../social_service.dart' show RecentRunRow;
 import 'photo_lightbox.dart';
 import 'top_banner.dart';
@@ -191,7 +192,7 @@ class _EventPhotosState extends State<EventPhotos> {
                         ListTile(
                           leading: const Icon(Icons.directions_run),
                           title: Text(
-                            '${(r.distanceM / 1000).toStringAsFixed(2)} km'
+                            '${formatDistanceForPref(r.distanceM)}'
                             ' · ${_dur(r.durationS)}',
                           ),
                           subtitle: Text(_dateLabel(r.startedAt)),

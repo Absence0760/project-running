@@ -3258,7 +3258,7 @@
   "racesTitle": "Calendario de carreras",
   "racesSearchPlaceholder": "Buscar carreras por nombre…",
   "racesNearPlace": "Cerca de un lugar…",
-  "racesKmAway": "a {distance}",
+  "racesDistanceAway": "a {distance}",
   "racesDistanceAny": "Cualquier distancia",
   "racesDistance5k": "5K",
   "racesDistance10k": "10K",

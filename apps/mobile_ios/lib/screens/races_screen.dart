@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../fab_clearance.dart';
+import '../preferences.dart' show formatDistanceForPref;
 import '../race_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
@@ -246,10 +247,11 @@ class _RaceCard extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final meta = <String>[
       _formatRaceDate(race.raceDate),
-      if (race.distanceM != null) '${(race.distanceM! / 1000).toStringAsFixed(1)} km',
+      if (race.distanceM != null)
+        formatDistanceForPref(race.distanceM!.toDouble()),
       if (race.locationLabel != null) race.locationLabel!,
       if (race.distanceMAway != null)
-        l.racesKmAway((race.distanceMAway! / 1000).toStringAsFixed(1)),
+        l.racesDistanceAway(formatDistanceForPref(race.distanceMAway!)),
     ];
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

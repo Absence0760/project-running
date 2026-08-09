@@ -14777,9 +14777,9 @@
   "@racesNearPlace": {
     "description": "Placeholder for the near-a-place geocode field"
   },
-  "racesKmAway": "{distance} away",
-  "@racesKmAway": {
-    "description": "Distance-from-you label on a race card",
+  "racesDistanceAway": "{distance} away",
+  "@racesDistanceAway": {
+    "description": "Distance-from-you label on a race card. {distance} is already formatted in the user's unit (km or mi).",
     "placeholders": {
       "distance": {
         "type": "String"

@@ -20,7 +20,6 @@ import 'checkpoint_checkin_screen.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
-import '../l10n/number_format.dart';
 import '../preferences.dart';
 import '../recurrence.dart';
 import '../session_steps.dart';
@@ -863,7 +862,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ],
                   if (e.row.paceTargetSec != null)
                     _metric(theme, l10n.eventTargetPace,
-                        fmtPace(e.row.paceTargetSec!)),
+                        formatPaceForPref(e.row.paceTargetSec!.toDouble())),
                 ],
               ),
             ],
@@ -1532,8 +1531,7 @@ class _ResultRow extends StatelessWidget {
     final theme = Theme.of(context);
     final rank = row.rank?.toString() ?? '—';
     final time = _formatDuration(row.durationS);
-    final distKm =
-        formatFixed(row.distanceM / 1000, 2, activeLocaleTag);
+    final distance = formatDistanceForPref(row.distanceM);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -1590,7 +1588,7 @@ class _ResultRow extends StatelessWidget {
                   fontFeatures: const [FontFeature.tabularFigures()],
                 )),
             const SizedBox(width: 10),
-            Text('$distKm km',
+            Text(distance,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 )),
