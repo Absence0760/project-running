@@ -19,7 +19,7 @@ operator process, not a legal opinion. Counsel review before EU launch.
 | Erasure | 17 | Account deletion: FK cascade + mandatory Storage drain of every user-content bucket (`runs`, `run-photos`, `route-photos`, `club-photos`; best-effort `avatars`) + third-party deauth (Strava, Garmin placeholder, RevenueCat, FCM, Stripe Connect Express account) + audit log. **route-photos/club-photos drain gap closed 2026-07-03** (audit/storage) — buckets added after the original drain code shipped had retained photo bytes post-deletion. | Settings → Delete account (email re-entry challenge) → `delete-account` EF |
 | Restriction | 18 | **No self-service toggle** — manual SOP below | operator |
 | Objection | 21 | **No self-service toggle** — manual SOP below | operator |
-| Withdraw consent | 7(3) | Disconnect integrations; **AI-coach consent is self-service withdrawable** (Settings → Account → AI Coach consent → Withdraw, backed by the `withdraw_coach_consent()` RPC — clears `coach_consent_at`, after which the coach handler's 403 gate re-blocks the Coach); telemetry opt-out in Settings | Settings |
+| Withdraw consent | 7(3) | Disconnect integrations; **AI-features consent is self-service withdrawable** (Settings → Account → AI features consent → Withdraw, backed by the `withdraw_ai_disclosure_consent()` RPC — clears the whole record, `coach_consent_at` **and** `ai_disclosure_version`, after which every AI endpoint's 403 gate re-engages: the Coach and both AI route-assistant endpoints); telemetry opt-out in Settings | Settings |
 
 ## Art 18 (restriction) + Art 21 (objection) — operator SOP
 
@@ -32,12 +32,15 @@ requests are handled manually:
    if unsure, send a confirmation link to the account email.
 3. **Scope the restriction.** Most Art 18/21 requests target a specific
    processing purpose. The realistic levers today:
-   - **Stop the AI-coach processing** — the user can do this themselves:
-     Settings → Account → AI Coach consent → Withdraw calls
-     `withdraw_coach_consent()`, which clears `coach_consent_at`; the coach
-     request handler then returns 403 until they re-consent. No operator
-     action needed. Their prompts are not retained by us (provider-side
-     ~30d, see [retention.md](retention.md)).
+   - **Stop all AI processing** — the user can do this themselves:
+     Settings → Account → AI features consent → Withdraw calls
+     `withdraw_ai_disclosure_consent()`, which clears the versioned consent
+     record (`coach_consent_at` + `ai_disclosure_version`); the coach handler
+     and both AI route-assistant endpoints then return 403 until they
+     re-consent. It is one record covering every AI feature, so withdrawal is
+     all-or-nothing by design (migration `20270511_001`, decisions § 568). No
+     operator action needed. Their prompts are not retained by us
+     (provider-side ~30d, see [retention.md](retention.md)).
    - **Stop social/feed processing** — set the account's runs to private
      (`is_public = false`) and remove follow edges if requested.
    - **Stop marketing/telemetry** — flip the Sentry/telemetry opt-out.

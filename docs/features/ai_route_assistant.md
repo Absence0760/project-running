@@ -96,9 +96,20 @@ the water tower, then a flat return along the river path."*
 - **Cost + paywall.** LLM calls cost money + latency. The AI Coach is already
   Pro-gated ([paywall.md](paywall.md)); gate the NL/description LLM calls the same
   way, with the templated description as the free default. Cache by request text.
-- **Privacy.** The NL request + start coordinates go to Anthropic — the *same*
-  sub-processor and posture as the coach (already disclosed). No new third party,
-  but record the start-location egress in the sub-processor list.
+- **Privacy.** The NL request + a coarse place label go to Anthropic — the *same*
+  sub-processor as the coach, but **not the same processing purpose**, and that
+  distinction cost us a real gap: both endpoints shipped with **no consent gate at
+  all** while `/api/coach` had one (issue #734). Reusing `coach_consent_at` was
+  not the fix — the copy the user accepted described the Coach using their
+  *training data*, so treating it as covering a typed route request would have
+  retroactively widened their agreement. Both endpoints now require
+  `AI_DISCLOSURE_VERSION_ROUTE_AI` of the versioned consent record
+  (`ai_disclosure_version`, migration `20270511_001`), and a user holding only the
+  older Coach-scoped acceptance gets a 403 with
+  `code: "ai_disclosure_required"` until they accept the widened disclosure in
+  Settings → Account. The dev `BYPASS_PAYWALL` flag deliberately does **not**
+  reach this gate — it skips a billing check, not a lawful basis. See
+  [api_database.md](../backend/api_database.md) and decisions § 568.
 - **Injection.** The surface is small (the output is a constraint object the engine
   re-validates), but hold the line: never let extracted text reach a shell, a SQL
   query, or `{@html}`; only typed, whitelisted fields cross into the engine.

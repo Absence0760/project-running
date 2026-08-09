@@ -835,7 +835,8 @@ create table user_profiles (
   gender                   text,                                -- 'male' | 'female' | 'prefer_not_to_say' | null (CHECK, 20270422_001)
   date_of_birth            date,
   height_cm                numeric(5,1),                        -- nutrition BMR (20261216_001); owner-only, off the public-safe grant
-  coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — gates /api/coach
+  coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — WHEN the AI disclosure was accepted
+  ai_disclosure_version    smallint,                            -- 20270511_001 — WHICH disclosure version; paired with coach_consent_at
   health_data_consent_at   timestamptz,                         -- GDPR Art 9(2)(a) — gates gender + DOB + height + weight persistence
   created_at               timestamptz default now()
 );
@@ -920,6 +921,49 @@ create table user_profiles (
 -- clients use the RPC.) Pinned by withdraw_coach_consent_test.sql +
 -- withdraw_health_data_consent_test.sql.
 ```
+
+**The AI consent record is VERSIONED** (migration `20270511_001`, issue #734, decisions § 568).
+`coach_consent_at` alone could only answer *whether* someone consented, never *to what* — so
+`/api/coach/route-describe` and `/api/coach/route-request`, which ship a different payload (the
+typed request plus a coarse `location_label`) for a different purpose, had no gate they could
+honestly use. Reusing the Coach stamp would have retroactively widened what an existing user
+agreed to; a second boolean would have repeated the problem on the next AI feature. The record
+is now the pair **`ai_disclosure_version` (which disclosure) + `coach_consent_at` (when)**,
+kept whole by `user_profiles_ai_disclosure_chk` — either both are set or neither is.
+
+| Version | Scope | Minimum required by |
+|---|---|---|
+| 1 | AI Coach only — profile slice, recent runs, active plan, chat text | `/api/coach` |
+| 2 | All AI features — v1 plus the AI route assistant (route stats + name, the typed request, a coarse place label) | `/api/coach/route-describe`, `/api/coach/route-request` |
+
+The ladder is **monotone by construction** — each version is a strict superset of the one below,
+which is what makes `accepted >= required` sound. A future disclosure that *narrows* could not
+join it; it would need a scope set instead.
+
+- `ai_disclosure_current_version()` — the highest version the DB knows. Its TS mirror is
+  `AI_DISCLOSURE_CURRENT_VERSION` in `apps/web/src/lib/core/ai_disclosure.ts`, and
+  `ai_disclosure.test.ts` parses the migration to fail the build on drift.
+- `record_ai_disclosure_consent(p_version smallint)` → `(version, accepted_at)` — the canonical
+  recorder. **Monotone**: accepting a version at or below the one on record is a no-op returning
+  the original stamp, so a Coach re-prompt can never walk a v2 acceptance back to v1. An unknown
+  version **raises** (`22023`) rather than being stored — a disclosure the deployment cannot
+  describe is one it cannot prove was made.
+- `withdraw_ai_disclosure_consent()` — Art 7(3). Clears **both** columns: there is one
+  acceptance of one disclosure, so withdrawal is all of it.
+- `record_coach_consent()` / `withdraw_coach_consent()` remain as the **v1 entry points** the
+  mobile apps reach through `packages/api_client` — their consent screen presents the
+  Coach-scoped copy, so recording v1 is the correct record for what they showed.
+- `lock_consent_columns` now also blocks a direct write to `ai_disclosure_version`; without that
+  a PostgREST PATCH could self-grant the widened scope.
+
+Existing acceptances backfill to **v1**, so a Coach user keeps the Coach and is refused (403,
+body `code: "ai_disclosure_required"`) by the route endpoints until they accept the widened
+disclosure in Settings → Account. Every gate fails closed: no record, a half-written record, an
+unreadable lookup, or an unknown version all deny. Pinned by `ai_disclosure_consent_test.sql`.
+
+**Pre-deploy checklist item (not a code blocker):** counsel / CISO sign-off on the v2
+disclosure copy (`coachPage.consent*` in the six web locales) before it is presented in
+production. The code, the gate, and the record ship now.
 
 `height_cm` (migration `20261216_001`, nutrition BMR) is **special-category health data** and shares the `gender`/`date_of_birth` posture: it is **owner-only** — not on the `20260707_001` public-safe column grant, so it's read back through `get_my_profile()` and never exposed to other authenticated callers or anon — and its persistence is gated on `health_data_consent_at` at the client layer, exactly like gender/DOB. Same for the `body_metrics` weight series below.
 
