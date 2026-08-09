@@ -323,6 +323,8 @@ export const messages = {
 	"dash.tsbTooltip": "Forma (TSB) — forma menos fatiga. Positivo significa fresco y listo para competir; negativo significa que acumulas fatiga.",
 	"dash.tsbLabel": "TSB (forma)",
 	"dash.tsbUnit": "forma − fatiga",
+	"dash.nextHardOne": "Próxima sesión dura en ~1 día de carrera suave.",
+	"dash.nextHardOther": "Próxima sesión dura en ~{days} días de carrera suave.",
 	"dash.gymReadinessIncluded": "Tus sesiones de gimnasio recientes se incluyen en tu fatiga.",
 	"dash.gymReadinessExcluded": "La carga del gimnasio se excluye de tu preparación para correr.",
 	"dash.mileageTitle": "Kilometraje",

@@ -323,6 +323,8 @@ export const messages = {
 	"dash.tsbTooltip": "Form (TSB) — Fitness minus Ermüdung. Positiv heißt frisch und rennbereit; negativ heißt, du trägst Ermüdung mit dir.",
 	"dash.tsbLabel": "TSB (Form)",
 	"dash.tsbUnit": "Fitness − Ermüdung",
+	"dash.nextHardOne": "Nächste harte Einheit in ~1 Tag lockerem Laufen.",
+	"dash.nextHardOther": "Nächste harte Einheit in ~{days} Tagen lockerem Laufen.",
 	"dash.gymReadinessIncluded": "Aktuelle Gym-Einheiten fließen in deine Ermüdung ein.",
 	"dash.gymReadinessExcluded": "Gym-Belastung ist von deiner Lauf-Bereitschaft ausgenommen.",
 	"dash.mileageTitle": "Kilometerleistung",

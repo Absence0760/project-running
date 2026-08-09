@@ -318,6 +318,8 @@ export const messages = {
 	"dash.tsbTooltip": "コンディション（TSB）— フィットネスから疲労を引いた値。プラスは疲労が抜けレース対応可能、マイナスは疲労が残っている状態です。",
 	"dash.tsbLabel": "TSB（コンディション）",
 	"dash.tsbUnit": "フィットネス − 疲労",
+	"dash.nextHardOne": "次のハードなセッションまで、イージーラン約1日。",
+	"dash.nextHardOther": "次のハードなセッションまで、イージーラン約{days}日。",
 	"dash.gymReadinessIncluded": "最近のジムのセッションは疲労に反映されています。",
 	"dash.gymReadinessExcluded": "ジムの負荷はランの準備度から除外されています。",
 	"dash.mileageTitle": "走行距離",

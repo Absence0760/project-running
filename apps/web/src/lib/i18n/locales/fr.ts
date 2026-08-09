@@ -323,6 +323,8 @@ export const messages = {
 	"dash.tsbTooltip": "Forme (TSB) — forme moins fatigue. Positif signifie frais et prêt à courir ; négatif signifie que tu accumules de la fatigue.",
 	"dash.tsbLabel": "TSB (forme)",
 	"dash.tsbUnit": "forme − fatigue",
+	"dash.nextHardOne": "Prochaine séance difficile dans ~1 jour de course facile.",
+	"dash.nextHardOther": "Prochaine séance difficile dans ~{days} jours de course facile.",
 	"dash.gymReadinessIncluded": "Tes séances de muscu récentes sont prises en compte dans ta fatigue.",
 	"dash.gymReadinessExcluded": "La charge de muscu est exclue de ta forme à la course.",
 	"dash.mileageTitle": "Kilométrage",

@@ -322,6 +322,8 @@ export const messages = {
 	"dash.tsbTooltip": "Forma (TSB) — condicionamento menos fadiga. Positivo significa descansado e pronto para competir; negativo significa que você está acumulando fadiga.",
 	"dash.tsbLabel": "TSB (forma)",
 	"dash.tsbUnit": "condicionamento − fadiga",
+	"dash.nextHardOne": "Próxima sessão forte em ~1 dia de corrida leve.",
+	"dash.nextHardOther": "Próxima sessão forte em ~{days} dias de corrida leve.",
 	"dash.gymReadinessIncluded": "Suas sessões recentes de musculação entram na sua fadiga.",
 	"dash.gymReadinessExcluded": "A carga da musculação fica de fora do seu preparo para correr.",
 	"dash.mileageTitle": "Quilometragem",

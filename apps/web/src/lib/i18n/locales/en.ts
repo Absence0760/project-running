@@ -331,6 +331,8 @@ export const en = {
 	"dash.tsbTooltip": "Form (TSB) — fitness minus fatigue. Positive means fresh and race-ready; negative means you're carrying fatigue.",
 	"dash.tsbLabel": "TSB (form)",
 	"dash.tsbUnit": "fitness − fatigue",
+	"dash.nextHardOne": "Next hard session in ~1 day of easy running.",
+	"dash.nextHardOther": "Next hard session in ~{days} days of easy running.",
 	"dash.gymReadinessIncluded": "Recent gym sessions are factored into your fatigue.",
 	"dash.gymReadinessExcluded": "Gym load is excluded from your run readiness.",
 	"dash.mileageTitle": "Mileage",

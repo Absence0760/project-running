@@ -1439,7 +1439,9 @@
 				</p>
 				{#if daysToHard != null}
 					<p class="fitness-next-hard">
-						Next hard session in ~{daysToHard} day{daysToHard === 1 ? '' : 's'} of easy running.
+						{daysToHard === 1
+							? m('dash.nextHardOne')
+							: m('dash.nextHardOther', { days: daysToHard })}
 					</p>
 				{/if}
 				{#if excludeGymFromReadiness && hasRecentLift}
