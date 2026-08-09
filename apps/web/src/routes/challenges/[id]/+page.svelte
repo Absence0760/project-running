@@ -161,15 +161,15 @@
 		{m('challenges.backToList')}
 	</a>
 
-	{#if notFound}
-		<p class="muted">{m('challenges.notFound')}</p>
-	{:else if loadFailed}
+	{#if loadFailed}
 		<p class="muted load-error" role="alert" data-testid="challenge-load-error">
 			{m('challenges.detailLoadFailed')}
 			<button type="button" class="btn btn-outline btn-sm" onclick={() => void load()}>
 				{m('challenges.retry')}
 			</button>
 		</p>
+	{:else if notFound}
+		<p class="muted">{m('challenges.notFound')}</p>
 	{:else if !challenge}
 		<p class="muted">…</p>
 	{:else}

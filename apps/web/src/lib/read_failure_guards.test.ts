@@ -87,10 +87,12 @@ test('/challenges/[id] keeps not-found and could-not-load apart', () => {
 		/catch[\s\S]*?notFound = true;/,
 		'the catch must not claim the challenge is missing',
 	);
+	// conventions.md: the error branch is ordered before the empty and
+	// not-found branches.
 	assert.match(
 		source,
-		/\{#if notFound\}[\s\S]*?\{:else if loadFailed\}/,
-		'the failure branch must sit between not-found and the body',
+		/\{#if loadFailed\}[\s\S]*?\{:else if notFound\}/,
+		'the failure branch must be tested before the not-found branch',
 	);
 });
 
