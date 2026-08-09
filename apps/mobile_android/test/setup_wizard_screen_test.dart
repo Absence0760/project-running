@@ -7,6 +7,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/onboarding.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/setup_wizard_screen.dart';
+import '../lib/settings_sync.dart';
 
 /// Records the two onboarding writes so the flow can be asserted without a
 /// live Supabase. Every other ApiClient method is left to the base class.
@@ -63,6 +64,7 @@ Future<void> _pump(
   Preferences prefs, {
   Locale? locale,
   String? initialPreferredUnit,
+  SettingsSyncService? settingsSync,
 }) async {
   // Host under a Navigator with a base route so the wizard's pop-on-finish
   // has somewhere to land (it's pushed as a fullscreen route in the app).
@@ -80,7 +82,7 @@ Future<void> _pump(
                   builder: (_) => SetupWizardScreen(
                     apiClient: api,
                     preferences: prefs,
-                    settingsSync: null,
+                    settingsSync: settingsSync,
                     initialPreferredUnit: initialPreferredUnit,
                   ),
                 ),
@@ -365,5 +367,92 @@ void main() {
         );
       });
     });
+
+    group('preferences bag (the answers with no local mirror)', () {
+      testWidgets('Finish writes the answer bag even when onSignedIn never ran',
+          (tester) async {
+        // Regression: SettingsSyncService.updateUniversal returned silently
+        // while its service was null, so a brand-new account's units, goal,
+        // privacy default and notification choice were dropped on the floor
+        // — no exception for the wizard's catch, nothing in the offline
+        // queue. The goal + notification keys have no local Preferences
+        // mirror, so that was the only copy.
+        final api = _FakeApi();
+        final fake = _FakeSettingsService();
+        final sync = SettingsSyncService(
+          preferences: await _prefs(),
+          serviceLoader: () async => fake,
+        );
+        await _pump(tester, api, await _prefs(), settingsSync: sync);
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+        await tester.tap(find.text(l10n.setupContinue));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(l10n.setupContinue));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text(l10n.setupGoal5k));
+        await tester.pump();
+        await tester.tap(find.text(l10n.setupGoal5k));
+        await tester.pump();
+        for (var i = 2; i < onboardingTotalSteps - 1; i++) {
+          await tester.tap(find.text(l10n.setupContinue));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text(l10n.setupCreatePlanCta));
+        await tester.pumpAndSettle(const Duration(seconds: 7));
+
+        expect(fake.universalWrites, hasLength(1));
+        final bag = fake.universalWrites.single;
+        expect(bag[SettingsKeys.primaryGoal], '5k');
+        expect(bag[SettingsKeys.preferredUnit], isNotNull);
+        expect(bag[SettingsKeys.privacyDefault], isNotNull);
+        expect(bag[SettingsKeys.pushNotifications], isNotNull);
+      });
+
+      testWidgets('a dropped answer bag is disclosed, not toasted as welcome',
+          (tester) async {
+        final api = _FakeApi();
+        final sync = SettingsSyncService(
+          preferences: await _prefs(),
+          serviceLoader: () async => throw Exception('Not authenticated'),
+        );
+        await _pump(tester, api, await _prefs(), settingsSync: sync);
+        final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+        for (var i = 0; i < onboardingTotalSteps - 1; i++) {
+          await tester.tap(find.text(l10n.setupContinue));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text(l10n.setupOpenDashboard));
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.text(l10n.setupWelcomeToast), findsNothing);
+        final prefix = l10n.setupPrefsSaveError('§§').split('§§').first;
+        expect(find.textContaining(prefix), findsOneWidget);
+        await tester.pumpAndSettle(const Duration(seconds: 7));
+      });
+    });
   });
+}
+
+class _FakeSettingsService implements SettingsService {
+  final List<Map<String, dynamic>> universalWrites = [];
+
+  @override
+  Map<String, dynamic> get universal => const <String, dynamic>{};
+  @override
+  Map<String, dynamic> get device => const <String, dynamic>{};
+  @override
+  bool get isServerHydrated => true;
+  @override
+  Future<void> updateUniversal(Map<String, dynamic> changes) async {
+    universalWrites.add(changes);
+  }
+
+  @override
+  Future<void> updateDevice(Map<String, dynamic> changes) async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

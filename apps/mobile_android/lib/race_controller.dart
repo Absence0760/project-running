@@ -1,10 +1,74 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'social_service.dart';
+
+/// SharedPreferences key holding the finisher times that haven't reached
+/// the server yet, as a JSON list of [PendingRaceResult].
+const kPendingRaceResultsKey = 'race_pending_results';
+
+/// Upper bound on the queue. A finisher time is one row per race, so this
+/// is generous; the cap only exists so a permanently-failing write can't
+/// grow the stored list without limit. Oldest entries drop first.
+const kPendingRaceResultsMax = 20;
+
+/// A finisher time that couldn't be submitted when the run finished.
+///
+/// `submitEventResult` upserts on `(event_id, instance_start, user_id)`, so
+/// replaying one is idempotent — a queued result that actually landed on a
+/// retry we never saw the response to just rewrites the same row.
+class PendingRaceResult {
+  const PendingRaceResult({
+    required this.eventId,
+    required this.instanceStart,
+    required this.runId,
+    required this.durationS,
+    required this.distanceM,
+  });
+
+  final String eventId;
+  final DateTime instanceStart;
+  final String runId;
+  final int durationS;
+  final double distanceM;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'event_id': eventId,
+        'instance_start': instanceStart.toUtc().toIso8601String(),
+        'run_id': runId,
+        'duration_s': durationS,
+        'distance_m': distanceM,
+      };
+
+  static PendingRaceResult? fromJson(Map<String, dynamic> json) {
+    final eventId = json['event_id'];
+    final instance = json['instance_start'];
+    final runId = json['run_id'];
+    final durationS = json['duration_s'];
+    final distanceM = json['distance_m'];
+    if (eventId is! String ||
+        instance is! String ||
+        runId is! String ||
+        durationS is! num ||
+        distanceM is! num) {
+      return null;
+    }
+    final parsed = DateTime.tryParse(instance);
+    if (parsed == null) return null;
+    return PendingRaceResult(
+      eventId: eventId,
+      instanceStart: parsed,
+      runId: runId,
+      durationS: durationS.toInt(),
+      distanceM: distanceM.toDouble(),
+    );
+  }
+}
 
 /// Tracks live race sessions for events the user has RSVP'd to and is
 /// therefore likely participating in. When the organiser arms a race, the
@@ -107,6 +171,7 @@ class RaceController extends ChangeNotifier {
       }
       return;
     }
+    await drainPendingResults();
     // Events the user is `going` to within the next 24h (window for
     // live races). Keeps the fetch small for a single user.
     final now = DateTime.now().toUtc();
@@ -265,6 +330,12 @@ class RaceController extends ChangeNotifier {
 
   /// Submit an event result tied to the currently hosted race, then
   /// detach. Called by the run screen once the recorder finishes.
+  ///
+  /// [detachRecorder] clears the only in-memory record that this run
+  /// belonged to a race, so a failed submit used to lose the finisher's
+  /// official time outright — the common case being a runner who crossed
+  /// the line somewhere with no signal. The result is queued to disk on
+  /// failure instead and replayed by [drainPendingResults].
   Future<void> submitResult({
     required String runId,
     required int durationS,
@@ -284,7 +355,92 @@ class RaceController extends ChangeNotifier {
       );
     } catch (e) {
       debugPrint('[RaceController.submitResult] $e');
+      await _queuePendingResult(PendingRaceResult(
+        eventId: eid,
+        instanceStart: inst,
+        runId: runId,
+        durationS: durationS,
+        distanceM: distanceM,
+      ));
     }
     detachRecorder();
+  }
+
+  bool _draining = false;
+
+  /// Replay every finisher time [submitResult] couldn't deliver. Runs off
+  /// the session poll (and therefore also off [start]), so a result queued
+  /// in a dead spot lands as soon as the phone is back on the network or
+  /// the app is next opened.
+  Future<void> drainPendingResults() async {
+    if (_draining) return;
+    final queued = await _readPendingResults();
+    if (queued.isEmpty) return;
+    _draining = true;
+    try {
+      final remaining = <PendingRaceResult>[];
+      for (final r in queued) {
+        try {
+          await _social.submitEventResult(
+            eventId: r.eventId,
+            instance: r.instanceStart,
+            durationS: r.durationS,
+            distanceM: r.distanceM,
+            runId: r.runId,
+            finisherStatus: 'finished',
+          );
+        } catch (e) {
+          debugPrint('[RaceController.drainPendingResults] $e');
+          remaining.add(r);
+        }
+      }
+      await _writePendingResults(remaining);
+    } finally {
+      _draining = false;
+    }
+  }
+
+  Future<void> _queuePendingResult(PendingRaceResult result) async {
+    try {
+      final queued = await _readPendingResults();
+      queued.removeWhere((r) =>
+          r.eventId == result.eventId &&
+          r.instanceStart.isAtSameMomentAs(result.instanceStart));
+      queued.add(result);
+      await _writePendingResults(queued.length > kPendingRaceResultsMax
+          ? queued.sublist(queued.length - kPendingRaceResultsMax)
+          : queued);
+    } catch (e) {
+      debugPrint('[RaceController._queuePendingResult] $e');
+    }
+  }
+
+  Future<List<PendingRaceResult>> _readPendingResults() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(kPendingRaceResultsKey);
+      if (raw == null || raw.isEmpty) return <PendingRaceResult>[];
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <PendingRaceResult>[];
+      return decoded
+          .whereType<Map>()
+          .map((e) => PendingRaceResult.fromJson(
+              e.map((k, v) => MapEntry(k.toString(), v))))
+          .whereType<PendingRaceResult>()
+          .toList();
+    } catch (e) {
+      debugPrint('[RaceController._readPendingResults] $e');
+      return <PendingRaceResult>[];
+    }
+  }
+
+  Future<void> _writePendingResults(List<PendingRaceResult> results) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (results.isEmpty) {
+      await prefs.remove(kPendingRaceResultsKey);
+      return;
+    }
+    await prefs.setString(
+        kPendingRaceResultsKey, jsonEncode(results.map((r) => r.toJson()).toList()));
   }
 }

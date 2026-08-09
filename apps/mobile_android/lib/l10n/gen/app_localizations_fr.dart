@@ -1068,6 +1068,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'Votre compte est configuré, mais vos préférences n\'ont pas été enregistrées : $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'Impossible de joindre le serveur pour le moment. Vous pouvez terminer la configuration plus tard — tout est modifiable dans les Réglages.';
 

@@ -292,6 +292,7 @@
   "setupCreatePlanCta": "トレーニングプランを作成",
   "setupWelcomeToast": "Threkir へようこそ！",
   "setupSaveError": "設定を保存できませんでした: {message}",
+  "setupPrefsSaveError": "アカウントの設定は完了しましたが、環境設定を保存できませんでした: {message}",
   "setupOfflineHint": "現在サーバーに接続できません。セットアップは後で完了できます — ここの内容はすべて設定で変更できます。",
   "setupFinishLater": "後で完了する",
   "setupNameTitle": "何とお呼びしましょうか？",

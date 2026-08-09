@@ -1064,6 +1064,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String setupPrefsSaveError(String message) {
+    return 'A tua conta ficou configurada, mas as tuas preferências não foram guardadas: $message';
+  }
+
+  @override
   String get setupOfflineHint =>
       'Não foi possível conectar ao servidor agora. Você pode concluir a configuração mais tarde — tudo aqui pode ser editado em Configurações.';
 
@@ -13670,6 +13675,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String setupSaveError(String message) {
     return 'Não foi possível salvar sua configuração: $message';
+  }
+
+  @override
+  String setupPrefsSaveError(String message) {
+    return 'Sua conta foi configurada, mas suas preferências não foram salvas: $message';
   }
 
   @override

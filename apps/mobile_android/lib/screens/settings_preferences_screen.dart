@@ -157,7 +157,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
     if (result != null) {
       await prefs.setSplitIntervalMetres(result);
-      await widget.settingsSync?.pushSplitInterval();
+      await _roamPush(widget.settingsSync?.pushSplitInterval);
     }
   }
 
@@ -424,6 +424,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       debugPrint('settings updateUniversal failed for $key: $e');
     }
     if (mounted) setState(() {});
+  }
+
+  /// Roam a pref that is ALREADY saved locally up to the settings bags.
+  /// Best-effort (L4) for the same reason as [_putUniversal]: the local
+  /// value is the live read path, so a signed-out / unloadable bag must
+  /// disclose in the log rather than throw out of an `onChanged` handler.
+  Future<void> _roamPush(Future<void> Function()? push) async {
+    if (push == null) return;
+    try {
+      await push();
+    } catch (e) {
+      debugPrint('settings roam push failed: $e');
+    }
   }
 
   Future<T?> _pickRadio<T>({
@@ -1144,7 +1157,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       value: prefs.voiceCueEnabled(cueId),
       onChanged: (v) async {
         await prefs.setVoiceCueEnabled(cueId, v);
-        await widget.settingsSync?.pushVoiceCueTypes();
+        await _roamPush(widget.settingsSync?.pushVoiceCueTypes);
       },
     );
   }
@@ -1251,7 +1264,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                       value: prefs.useMiles,
                       onChanged: (v) async {
                         await prefs.setUseMiles(v);
-                        await widget.settingsSync?.pushPreferredUnit();
+                        await _roamPush(
+                            widget.settingsSync?.pushPreferredUnit);
                         if (mounted) setState(() {});
                       },
                     ),
@@ -1335,7 +1349,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                       value: prefs.audioCues,
                       onChanged: (v) async {
                         await prefs.setAudioCues(v);
-                        await widget.settingsSync?.pushAudioCues();
+                        await _roamPush(widget.settingsSync?.pushAudioCues);
                       },
                     ),
                     if (prefs.audioCues)
@@ -1409,7 +1423,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                       value: prefs.keepScreenOn,
                       onChanged: (v) async {
                         await prefs.setKeepScreenOn(v);
-                        await widget.settingsSync?.pushKeepScreenOn();
+                        await _roamPush(
+                            widget.settingsSync?.pushKeepScreenOn);
                       },
                     ),
                     SwitchListTile(
@@ -1419,8 +1434,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                       onChanged: prefs.keepScreenOn
                           ? (v) async {
                               await prefs.setDimScreenWhileRecording(v);
-                              await widget.settingsSync
-                                  ?.pushDimScreenWhileRecording();
+                              await _roamPush(widget.settingsSync
+                                  ?.pushDimScreenWhileRecording);
                             }
                           : null,
                     ),

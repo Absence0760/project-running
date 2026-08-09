@@ -30,9 +30,41 @@
 //   below.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/race_controller.dart';
 import '../lib/social_service.dart';
+
+/// Records finisher submissions and can be told to fail them, standing in
+/// for the network leg `submitEventResult` would otherwise take.
+class _FakeSocial extends SocialService {
+  _FakeSocial({this.failing = false});
+
+  bool failing;
+  final List<({String eventId, DateTime instance, int durationS, double distanceM, String? runId})>
+      submitted = [];
+
+  @override
+  Future<void> submitEventResult({
+    required String eventId,
+    required DateTime instance,
+    required int durationS,
+    required double distanceM,
+    String? runId,
+    String finisherStatus = 'finished',
+    double? ageGradePct,
+    String? note,
+  }) async {
+    if (failing) throw Exception('network unreachable');
+    submitted.add((
+      eventId: eventId,
+      instance: instance,
+      durationS: durationS,
+      distanceM: distanceM,
+      runId: runId,
+    ));
+  }
+}
 
 ActiveRace race({
   String eventId = 'event-1',
@@ -226,6 +258,92 @@ void main() {
         c.active!.instanceStart,
         DateTime.utc(2026, 5, 29, 18, 0, 0),
       );
+    });
+  });
+
+  group('a failed finisher time survives detachRecorder', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('a failed submit is queued, then replayed on the next drain',
+        () async {
+      // detachRecorder() clears the hosting event/instance unconditionally,
+      // so before this the finisher's official time was gone the moment the
+      // submit failed — no retry path, nothing on disk, and the runner had
+      // no idea. The upsert key is (event_id, instance_start, user_id), so
+      // replaying is safe.
+      final social = _FakeSocial(failing: true);
+      final c = RaceController(social);
+      final instance = DateTime.utc(2026, 5, 22, 18, 0, 0);
+      c.attachRecorder(eventId: 'event-1', instance: instance);
+
+      await c.submitResult(runId: 'run-1', durationS: 1234, distanceM: 10000);
+
+      expect(social.submitted, isEmpty);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(kPendingRaceResultsKey), isNotNull);
+
+      social.failing = false;
+      await c.drainPendingResults();
+
+      expect(social.submitted, hasLength(1));
+      expect(social.submitted.single.eventId, 'event-1');
+      expect(social.submitted.single.instance, instance);
+      expect(social.submitted.single.runId, 'run-1');
+      expect(social.submitted.single.durationS, 1234);
+      expect(social.submitted.single.distanceM, 10000);
+      expect(
+          (await SharedPreferences.getInstance())
+              .getString(kPendingRaceResultsKey),
+          isNull);
+    });
+
+    test('a drain that fails again keeps the result queued', () async {
+      final social = _FakeSocial(failing: true);
+      final c = RaceController(social);
+      c.attachRecorder(
+          eventId: 'event-1', instance: DateTime.utc(2026, 5, 22, 18, 0, 0));
+      await c.submitResult(runId: 'run-1', durationS: 60, distanceM: 400);
+
+      await c.drainPendingResults();
+
+      expect(social.submitted, isEmpty);
+      expect(
+          (await SharedPreferences.getInstance())
+              .getString(kPendingRaceResultsKey),
+          isNotNull);
+    });
+
+    test('a successful submit queues nothing', () async {
+      final social = _FakeSocial();
+      final c = RaceController(social);
+      c.attachRecorder(
+          eventId: 'event-1', instance: DateTime.utc(2026, 5, 22, 18, 0, 0));
+
+      await c.submitResult(runId: 'run-1', durationS: 60, distanceM: 400);
+
+      expect(social.submitted, hasLength(1));
+      expect(
+          (await SharedPreferences.getInstance())
+              .getString(kPendingRaceResultsKey),
+          isNull);
+    });
+
+    test('re-queueing the same race replaces rather than duplicates it',
+        () async {
+      final social = _FakeSocial(failing: true);
+      final c = RaceController(social);
+      final instance = DateTime.utc(2026, 5, 22, 18, 0, 0);
+
+      c.attachRecorder(eventId: 'event-1', instance: instance);
+      await c.submitResult(runId: 'run-1', durationS: 60, distanceM: 400);
+      c.attachRecorder(eventId: 'event-1', instance: instance);
+      await c.submitResult(runId: 'run-2', durationS: 90, distanceM: 500);
+
+      social.failing = false;
+      await c.drainPendingResults();
+
+      expect(social.submitted, hasLength(1));
+      expect(social.submitted.single.runId, 'run-2');
     });
   });
 }

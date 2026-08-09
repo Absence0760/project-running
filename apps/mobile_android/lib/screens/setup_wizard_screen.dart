@@ -189,14 +189,28 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
         bag[SettingsKeys.dateOfBirth] =
             ApiClient.dateOnly(_dateOfBirth!);
       }
+      // `onboarded_at` is stamped by now, so the wizard can never re-ask —
+      // and the goal / notification answers have no local mirror to fall
+      // back on. A dropped bag write is therefore lost data, and saying
+      // "Welcome" over it would be the app reporting a success it didn't
+      // have. Complete the exit either way (trapping the user is worse),
+      // but name what didn't land.
+      String? bagError;
       try {
         await widget.settingsSync?.updateUniversal(bag);
       } catch (e) {
-        debugPrint('onboarding bag write failed (kept local): $e');
+        debugPrint('onboarding bag write failed: $e');
+        bagError = friendlyError(l10n, e);
       }
 
       if (!mounted) return;
-      showTopBanner(context, l10n.setupWelcomeToast);
+      showTopBanner(
+        context,
+        bagError == null
+            ? l10n.setupWelcomeToast
+            : l10n.setupPrefsSaveError(bagError),
+        duration: Duration(seconds: bagError == null ? 3 : 6),
+      );
       Navigator.of(context).pop(createPlan ? _primaryGoal : null);
     } catch (e) {
       debugPrint('SetupWizardScreen save failed: $e');

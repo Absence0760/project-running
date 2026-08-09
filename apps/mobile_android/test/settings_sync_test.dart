@@ -44,6 +44,30 @@ class _MemCache implements SettingsCache {
   }
 }
 
+class _FakeSettingsService implements SettingsService {
+  final List<Map<String, dynamic>> universalWrites = [];
+  final List<Map<String, dynamic>> deviceWrites = [];
+
+  @override
+  Map<String, dynamic> get universal => const <String, dynamic>{};
+  @override
+  Map<String, dynamic> get device => const <String, dynamic>{};
+  @override
+  bool get isServerHydrated => true;
+  @override
+  Future<void> updateUniversal(Map<String, dynamic> changes) async {
+    universalWrites.add(changes);
+  }
+
+  @override
+  Future<void> updateDevice(Map<String, dynamic> changes) async {
+    deviceWrites.add(changes);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -452,18 +476,84 @@ void main() {
       expect(svc.lastError, isNull);
     });
 
-    test('push* methods are no-ops when settings is null', () async {
+    test('writes load the service on demand when onSignedIn never ran',
+        () async {
+      // A null service used to make every write return silently: the setup
+      // wizard's whole answer bag (units, primary goal, notifications) was
+      // discarded with nothing thrown and nothing queued. `load()` degrades
+      // to the on-disk cache + pending queue rather than failing, so "not
+      // loaded yet" is never a reason to drop a write.
       final prefs = await freshPrefs();
-      final svc = SettingsSyncService(preferences: prefs);
+      final fake = _FakeSettingsService();
+      final svc = SettingsSyncService(
+        preferences: prefs,
+        serviceLoader: () async => fake,
+      );
 
+      await svc.updateUniversal({SettingsKeys.primaryGoal: '10k'});
+      await svc.updateDevice({SettingsKeys.keepScreenOn: true});
+      await prefs.setUseMiles(true);
       await svc.pushPreferredUnit();
-      await svc.pushAudioCues();
-      await svc.pushSplitInterval();
-      await svc.pushKeepScreenOn();
-      await svc.pushWeeklyDistanceGoal();
-      await svc.updateUniversal({'key': 'value'});
-      await svc.updateDevice({'key': 'value'});
 
+      expect(fake.universalWrites, [
+        {SettingsKeys.primaryGoal: '10k'},
+        {SettingsKeys.preferredUnit: 'mi'},
+      ]);
+      expect(fake.deviceWrites, [
+        {SettingsKeys.keepScreenOn: true},
+      ]);
+      expect(svc.synced, isTrue);
+      expect(svc.service, same(fake));
+    });
+
+    test('a write recovers after onSignedIn failed to load', () async {
+      final prefs = await freshPrefs();
+      final fake = _FakeSettingsService();
+      var attempt = 0;
+      final svc = SettingsSyncService(
+        preferences: prefs,
+        serviceLoader: () async {
+          attempt += 1;
+          if (attempt == 1) throw Exception('transient load failure');
+          return fake;
+        },
+      );
+
+      await svc.onSignedIn();
+      expect(svc.service, isNull);
+      expect(svc.synced, isFalse);
+
+      await svc.updateUniversal({SettingsKeys.privacyDefault: 'private'});
+
+      expect(fake.universalWrites, [
+        {SettingsKeys.privacyDefault: 'private'},
+      ]);
+      expect(svc.synced, isTrue);
+    });
+
+    test('a write with no loadable service throws instead of reporting success',
+        () async {
+      // The keys routed through updateUniversal have no local Preferences
+      // mirror, so a swallowed failure loses the value outright. The caller
+      // has to be able to see it.
+      final prefs = await freshPrefs();
+      final svc = SettingsSyncService(
+        preferences: prefs,
+        serviceLoader: () async => throw Exception('Not authenticated'),
+      );
+
+      await expectLater(
+        svc.updateUniversal({SettingsKeys.primaryGoal: '10k'}),
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        svc.updateDevice({SettingsKeys.keepScreenOn: true}),
+        throwsA(isA<Exception>()),
+      );
+      await expectLater(
+        svc.pushPreferredUnit(),
+        throwsA(isA<Exception>()),
+      );
       expect(svc.synced, isFalse);
     });
   });
