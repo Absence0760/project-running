@@ -10,7 +10,7 @@
 //   event: meta   data: { user_message_id, tier, limits }
 //   event: token  data: { text }            (zero or more)
 //   event: done   data: { assistant_message_id, cache, used_today }
-//   event: error  data: { message }         (mid-stream failure)
+//   event: error  data: {}                  (mid-stream failure)
 //
 // Pre-stream failures (auth, rate-limit, validation) return regular
 // JSON via `kind: 'json'` on the result — the client picks the path
@@ -353,7 +353,11 @@ export async function handleCoach(
 			message: msg,
 		});
 		await refundCapSlot('provider_init_error');
-		return jsonError(502, msg);
+		// Generic on the wire. An SDK error's `.message` carries the upstream
+		// status envelope — model id, error taxonomy, and the index of the
+		// offending message, which counts the turns we inject ahead of the
+		// caller's. The detail is in the log line above.
+		return jsonError(502, 'coach upstream unavailable');
 	}
 
 	const sseHeaders: Record<string, string> = {
@@ -503,7 +507,9 @@ export async function* coachSseStream(deps: CoachStreamDeps): AsyncIterable<Uint
 		} else {
 			await deps.persistAssistant(accumulated);
 		}
-		yield sendEvent('error', { message: msg });
+		// No upstream detail on the wire — same reasoning as the 502 above.
+		// The client renders its own localized copy when `message` is absent.
+		yield sendEvent('error', {});
 		return;
 	}
 

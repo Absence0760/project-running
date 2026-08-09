@@ -1670,6 +1670,22 @@ test('Coach 401 / 503 error responses don\'t leak provider / GoTrue internals', 
 		/jsonError\(401,\s*['"]not authenticated['"]\s*\)/,
 		'401 must return the static "not authenticated" — pass-2 commit a2ea656 closed the GoTrue oracle.',
 	);
+	// 502 + the mid-stream SSE error: neither may put the caught provider
+	// error's `.message` on the wire. On the Anthropic path that string is
+	// the upstream status envelope (model id, error taxonomy, and the
+	// `messages.N` index that counts the turns we inject ahead of the
+	// caller's); on the OpenAI-compatible path `humaniseUpstreamError` falls
+	// back to the raw upstream response body.
+	assert.doesNotMatch(
+		handler,
+		/jsonError\(502,\s*msg\s*\)/,
+		'the 502 must not echo the provider error message — log it, return a static string.',
+	);
+	assert.doesNotMatch(
+		handler,
+		/sendEvent\('error',\s*\{\s*message/,
+		'the mid-stream SSE error event must not carry the provider error message.',
+	);
 });
 
 test('Coach pre-handshake daily-limit placeholder matches the server free cap', () => {

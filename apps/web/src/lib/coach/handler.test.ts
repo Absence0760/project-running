@@ -395,11 +395,15 @@ test('returns 400 with the canonical jsonError shape (kind + content-type)', asy
 // on the next loadThread re-read. It must now persist the partial.
 
 /// A ProviderStream that yields `chunks` then optionally throws mid-stream.
-function fakeStream(chunks: string[], throwAfter: boolean): ProviderStream {
+function fakeStream(
+	chunks: string[],
+	throwAfter: boolean,
+	throwMessage = 'upstream connection reset',
+): ProviderStream {
 	return {
 		tokens: (async function* () {
 			for (const c of chunks) yield c;
-			if (throwAfter) throw new Error('upstream connection reset');
+			if (throwAfter) throw new Error(throwMessage);
 		})(),
 		finalUsage: async () => emptyUsage(),
 	};
@@ -456,6 +460,29 @@ test('mid-stream failure with a partial reply persists the partial and does NOT 
 	assert.deepEqual(refunds, [], 'a consumed slot with content must NOT be refunded');
 	assert.match(out, /event: error/, 'client still gets the error event');
 	assert.doesNotMatch(out, /event: done/, 'no done event on a failed stream');
+});
+
+test('the mid-stream error event carries no upstream detail', async () => {
+	// Reason: the handler used to put the caught error's `.message` straight
+	// on the wire. On the Anthropic path that string is the upstream status
+	// envelope (model id, error taxonomy, and the `messages.N` index that
+	// counts the turns injected ahead of the caller's); on the OpenAI-
+	// compatible path `humaniseUpstreamError` falls back to the raw upstream
+	// body. A zero-token failure also refunds the slot, so probing it was
+	// free and repeatable. The client renders its own localized copy when the
+	// event carries no message.
+	const { deps } = streamDeps({
+		providerStream: fakeStream([], true, 'Coach upstream 400: {"type":"error",' +
+			'"error":{"type":"invalid_request_error","message":"messages.2.role: ' +
+			'Input tag \'system\' found using \'role\' does not match any of the ' +
+			'expected tags"}} model=claude-sonnet-4-5'),
+	});
+	const out = await drain(coachSseStream(deps));
+
+	assert.match(out, /event: error/, 'the error event still fires');
+	assert.doesNotMatch(out, /messages\.2\.role/, 'no upstream message index on the wire');
+	assert.doesNotMatch(out, /invalid_request_error/, 'no upstream error taxonomy on the wire');
+	assert.doesNotMatch(out, /claude-sonnet/, 'no model id on the wire');
 });
 
 test('mid-stream failure with ZERO tokens refunds the slot and persists nothing', async () => {
