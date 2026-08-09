@@ -7755,7 +7755,6 @@ The shape of the fix is the point. **Nothing here is cacheable at the call site*
 
 **The regression guard is a work count, not a timing.** The test track is an array whose points count every read of a coordinate, so a test can assert the sweep read the track a bounded number of times *in total* rather than once per item — 9,606,400 reads before the catalogue fix, 1,599,600 before the slice fix, both now inside `8 × points`. That pins the complexity itself rather than a machine-dependent duration, which a flaky test would have been. Soundness gets its own guard: the pre-prefilter matcher is kept in the test file as an oracle, and a sweep of tracks (polar, antimeridian, mid-latitude) against segments nudged to either side of the tolerance in both axes asserts the fast path never rejects what the oracle matches. Dropping the `cos φ` scaling or the longitude unwrapping each fail it. Both functions are on the enforced web↔Dart parity list, so the batch shape, the extent test, and the binary search are mirrored in `segments.dart`; mobile's `autoComputeEffortsForRun` had the identical per-segment loop and batches too.
 
-<<<<<<< HEAD
 ## 559. A queue for offline writes must only ever hold writes the server has not yet seen — a refusal is not a network failure
 
 **Date:** 2026-08-09
@@ -7816,7 +7815,7 @@ exists for exactly this controller.
 The general rule: an outbound write either performs, durably queues, or throws.
 Returning normally is a claim that the user's data is safe, and a method that
 cannot keep that claim must not make it.
-=======
+
 ## 561. A meter the metered party can rewrite is not a cap — `user_coach_usage` is server-owned on every verb, not just DELETE
 
 **Date:** 2026-08-09
@@ -7876,4 +7875,3 @@ because every one of those tables also enables RLS with only `auth.uid()`-scoped
 permissive policies". An `auth.uid()`-scoped policy proves the *right person* is
 writing; it proves nothing about *what* they may write. When a policy comment
 names one column, that is the signal to check whether the grant agrees.
->>>>>>> fix/sweep-r2-sec2
