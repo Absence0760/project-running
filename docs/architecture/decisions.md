@@ -7668,3 +7668,33 @@ Worked against the real Daniels/VDOT derivation the card already uses: for a run
 One honesty cost is accepted: `easySeconds + hardSeconds` is now *classified* time and can fall a sliver short of the summed `duration_s`. The card reports shares, so a dropped sliver moves nothing — attributing it by assumption would.
 
 `intensity.ts` stays **web-only** (no Dart twin, deliberately off the enforced parity list), so this is a one-platform change. The regression that mattered most in test was the inverse of the bug: segmenting must not manufacture hard time out of an ordinary lapped easy run, and that case is pinned alongside the interval one. The interval fixture carries a companion test asserting its *whole-run* mean really does read easy, so the fix's test cannot start passing for the wrong reason.
+
+## 555. An image we cannot strip is an image we do not accept — the EXIF path fails closed on the format, sniffed from the bytes
+
+`stripImageExif` returned any unrecognised format unchanged, and every photo
+picker on web and mobile advertised `image/heic,image/heif` — the default
+camera format on every modern iPhone. Nothing downstream covered the gap: the
+Go worker's `handler_photo_process` returns early on any non-JPEG, and the
+mobile widgets called the JPEG-only `stripJpegExif` directly, so PNG and WebP
+uploads were never stripped either. The bucket then served the original back
+through a signed URL to everyone who could see the gallery, GPS EXIF intact.
+That is precisely the home coordinate the privacy-zone system (§ 33) exists to
+withhold, handed over by a different door.
+
+Two choices were available: implement HEIC/HEIF stripping (an ISO-BMFF box
+walk that has to rewrite `iloc` offsets — a large, easy-to-get-subtly-wrong
+change on a path where "subtly wrong" means a silent leak), or refuse the
+formats we cannot clean. We refuse. The accepted set is now defined *as* the
+strippable set — JPEG, PNG, WebP — with a guard test asserting the two can't
+drift apart, and the pickers no longer advertise anything else. Practically the
+cost is small: iOS Safari and `image_picker` both transcode to JPEG on the
+common paths, so the refusal bites only a deliberate Files-app pick of a raw
+`.heic`.
+
+The second half is that the format is now decided by the **bytes**, not by the
+filename. `File.type` in a browser and `XFile.name` from the gallery picker are
+both just the extension, so a `.heic` renamed `.jpg` used to be handed to the
+JPEG walker, fail its SOI check, and be returned — and uploaded — whole. A
+magic-number sniff (`detectImageMime`) now drives both the strip dispatch and
+the stored Content-Type, so the extension we write and the bytes we wrote can
+no longer disagree.

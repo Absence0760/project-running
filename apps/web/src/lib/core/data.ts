@@ -6067,12 +6067,12 @@ export interface EventPhoto extends Omit<RunPhoto, 'run_id'> {
 	uploader_name: string | null;
 }
 
+// Every key must be a format `stripImageExif` can clean — an accepted-but-
+// unstrippable type uploads a geotagged original verbatim.
 const PHOTO_MIME_TO_EXT: Record<string, string> = {
 	'image/jpeg': 'jpg',
 	'image/png': 'png',
 	'image/webp': 'webp',
-	'image/heic': 'heic',
-	'image/heif': 'heif',
 };
 
 const PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -6206,14 +6206,17 @@ export async function addRunPhoto(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 
-	const ext = PHOTO_MIME_TO_EXT[input.file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
 	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
 
 	// Strip EXIF/XMP (incl. GPS) client-side before upload so a geotagged
 	// original never sits readable in the bucket ahead of the server worker's
 	// async strip. Mirrors mobile's pre-upload strip (persona woman/family #52).
+	// The strip sniffs the bytes and refuses a format it cannot clean, so the
+	// accepted set is decided here, not by the browser-supplied File.type.
 	const file = await stripExifFromFile(input.file);
+	if (!file) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = PHOTO_MIME_TO_EXT[file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 
 	const photoId = crypto.randomUUID();
 	const storagePath = `${userId}/${photoId}.${ext}`;
@@ -6319,11 +6322,12 @@ const avatarPathsFor = (userId: string): string[] =>
 export async function uploadAvatar(file: File): Promise<string> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
-	const ext = AVATAR_MIME_TO_EXT[file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 	if (file.size > AVATAR_MAX_BYTES) throw new Error('Image too large (2 MB max)');
 
 	const clean = await stripExifFromFile(file);
+	if (!clean) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = AVATAR_MIME_TO_EXT[clean.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 	const storagePath = `${userId}/avatar.${ext}`;
 
 	// Clear any existing avatar (this ext and the others) so the upload is a
@@ -6462,11 +6466,12 @@ export async function addRoutePhoto(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 
-	const ext = PHOTO_MIME_TO_EXT[input.file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
 	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
 
 	const file = await stripExifFromFile(input.file);
+	if (!file) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = PHOTO_MIME_TO_EXT[file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 
 	const photoId = crypto.randomUUID();
 	const storagePath = `${userId}/${photoId}.${ext}`;
@@ -6626,11 +6631,12 @@ export async function addClubPhoto(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 
-	const ext = PHOTO_MIME_TO_EXT[input.file.type];
-	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
 	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
 
 	const file = await stripExifFromFile(input.file);
+	if (!file) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
+	const ext = PHOTO_MIME_TO_EXT[file.type];
+	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, or WebP only');
 
 	const photoId = crypto.randomUUID();
 	const storagePath = `${userId}/${photoId}.${ext}`;

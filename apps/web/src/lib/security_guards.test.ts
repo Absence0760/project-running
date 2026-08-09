@@ -2629,3 +2629,68 @@ test('client user_profiles selects only touch public-safe columns', () => {
 			offenders.join('\n  '),
 	);
 });
+
+test('every image type an upload surface accepts is one the EXIF stripper can clean', () => {
+	// Reason: `stripImageExif` used to return an unrecognised format
+	// unchanged, and every photo picker advertised `image/heic,image/heif`.
+	// Nothing downstream covers the gap — the Go worker's photo handler
+	// returns early on any non-JPEG (`exif.IsJPEG` in
+	// apps/job_worker/internal/handler_photo_process.go) — so an iPhone HEIC
+	// landed in the bucket with its GPS EXIF intact and the gallery served
+	// that original back to every viewer. The accepted set must therefore be
+	// a subset of the strippable set, on both the MIME→extension maps and
+	// the `accept` attribute of every file input. See decisions §33.
+	const strippable = new Set(
+		[...read('src/lib/util/exif_strip.ts').matchAll(
+			/STRIPPABLE_IMAGE_MIME_TYPES:\s*readonly string\[\]\s*=\s*\[([\s\S]*?)\]/g,
+		)]
+			.flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])),
+	);
+	assert.ok(
+		strippable.size >= 3,
+		'Could not parse STRIPPABLE_IMAGE_MIME_TYPES out of util/exif_strip.ts — renamed?',
+	);
+
+	const data = read('src/lib/core/data.ts');
+	for (const mapName of ['PHOTO_MIME_TO_EXT', 'AVATAR_MIME_TO_EXT']) {
+		const body = data.match(
+			new RegExp(`const ${mapName}: Record<string, string> = \\{([\\s\\S]*?)\\}`),
+		);
+		assert.ok(body, `Could not locate ${mapName} in core/data.ts — renamed?`);
+		const accepted = [...body![1].matchAll(/'([^']+)':/g)].map((m) => m[1]);
+		assert.ok(accepted.length > 0, `${mapName} parsed empty`);
+		for (const mime of accepted) {
+			assert.ok(
+				strippable.has(mime),
+				`${mapName} accepts "${mime}", which stripImageExif cannot clean — ` +
+					'the upload would carry its GPS metadata into the bucket.',
+			);
+		}
+	}
+
+	const root = resolve(__dirname, '..');
+	const walk = (dir: string, out: string[] = []): string[] => {
+		for (const ent of readdirSync(dir, { withFileTypes: true })) {
+			const full = `${dir}/${ent.name}`;
+			if (ent.isDirectory()) walk(full, out);
+			else if (ent.name.endsWith('.svelte')) out.push(full);
+		}
+		return out;
+	};
+	const offenders: string[] = [];
+	for (const f of walk(root)) {
+		for (const m of readFileSync(f, 'utf-8').matchAll(/accept="(image\/[^"]*)"/g)) {
+			for (const mime of m[1].split(',').map((s) => s.trim())) {
+				if (!strippable.has(mime)) {
+					offenders.push(`${f.replace(resolve(__dirname, '..', '..') + '/', '')} — accept="${mime}"`);
+				}
+			}
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		'File inputs must not advertise an image type the EXIF stripper cannot clean:\n  ' +
+			offenders.join('\n  '),
+	);
+});

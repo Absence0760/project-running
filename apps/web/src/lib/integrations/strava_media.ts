@@ -11,13 +11,14 @@ export function parseStravaMediaPaths(cell: string | undefined): string[] {
 		.split('|')
 		.flatMap((s) => s.split(','))
 		.map((s) => s.trim())
-		.filter((s) => s.length > 0 && /\.(jpe?g|png|webp|heic)$/i.test(s));
+		.filter((s) => s.length > 0 && /\.(jpe?g|png|webp)$/i.test(s));
 }
 
+// Only formats `stripImageExif` can clean — a HEIC would upload with its
+// GPS EXIF intact.
 export const STRAVA_PHOTO_MIME: Record<string, string> = {
 	jpg: 'image/jpeg',
 	jpeg: 'image/jpeg',
 	png: 'image/png',
 	webp: 'image/webp',
-	heic: 'image/heic',
 };

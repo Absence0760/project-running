@@ -92,8 +92,12 @@ EventPhotos _widget(
       canAdd: canAdd,
       myEventRunId: myEventRunId,
       fetchRecentRuns: () async => recent,
-      pickImageOverride: () async =>
-          XFile.fromData(Uint8List.fromList([1, 2, 3]), name: 'shot.jpg'),
+      // Real JPEG magic — the upload path sniffs the bytes and refuses a
+      // format its EXIF stripper doesn't understand, so a three-byte
+      // placeholder never reaches the API.
+      pickImageOverride: () async => XFile.fromData(
+          Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]),
+          name: 'shot.jpg'),
     );
 
 void main() {

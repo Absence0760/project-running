@@ -185,7 +185,7 @@ void main() {
   });
 
   group('stripImageExif', () {
-    test('dispatches by MIME and no-ops on an unknown type', () {
+    test('dispatches by MIME', () {
       final exifJpeg = Uint8List.fromList([
         ...soi,
         ..._seg(0xE1, [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]),
@@ -199,8 +199,66 @@ void main() {
         if (cleaned[i] == 0xFF && cleaned[i + 1] == 0xE1) hasApp1 = true;
       }
       expect(hasApp1, isFalse);
-      final gif = Uint8List.fromList([0x47, 0x49, 0x46, 0x38]);
-      expect(identical(stripImageExif(gif, 'image/gif'), gif), isTrue);
+    });
+
+    test('throws on a format it cannot clean, never passes it through', () {
+      // A HEIC off an iPhone carries GPS in an ISO-BMFF `Exif` item none of
+      // the three walkers understand, and the Go worker skips non-JPEG too.
+      // Returning the input here uploaded the geotagged original verbatim.
+      final heic = Uint8List.fromList(
+          [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]);
+      expect(() => stripImageExif(heic, 'image/heic'),
+          throwsA(isA<UnstrippableImageException>()));
+      expect(() => stripImageExif(heic, 'image/heif'),
+          throwsA(isA<UnstrippableImageException>()));
+      expect(() => stripImageExif(heic, 'image/gif'),
+          throwsA(isA<UnstrippableImageException>()));
+      expect(() => stripImageExif(heic, ''),
+          throwsA(isA<UnstrippableImageException>()));
+    });
+
+    test('detectImageMime sniffs the bytes and refuses anything else', () {
+      expect(detectImageMime(Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0])),
+          'image/jpeg');
+      expect(
+          detectImageMime(Uint8List.fromList(
+              [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])),
+          'image/png');
+      expect(
+          detectImageMime(Uint8List.fromList([
+            0x52, 0x49, 0x46, 0x46, 0x10, 0x00, //
+            0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+          ])),
+          'image/webp');
+      // `ftypheic` — an iPhone HEIC. Named `.jpg` it must still be refused.
+      expect(
+          detectImageMime(Uint8List.fromList([
+            0x00, 0x00, 0x00, 0x18, 0x66, 0x74, //
+            0x79, 0x70, 0x68, 0x65, 0x69, 0x63,
+          ])),
+          isNull);
+      expect(
+          detectImageMime(
+              Uint8List.fromList([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])),
+          isNull);
+      expect(detectImageMime(Uint8List(0)), isNull);
+    });
+
+    test('imageExtensionForMime covers every strippable type', () {
+      expect(imageExtensionForMime('image/jpeg'), 'jpg');
+      expect(imageExtensionForMime('image/png'), 'png');
+      expect(imageExtensionForMime('image/webp'), 'webp');
+    });
+
+    test('canStripImageExif agrees with what stripImageExif handles', () {
+      for (final mime in kStrippableImageMimeTypes) {
+        expect(canStripImageExif(mime), isTrue, reason: mime);
+        expect(() => stripImageExif(Uint8List.fromList([0x00, 0x01]), mime),
+            returnsNormally,
+            reason: mime);
+      }
+      expect(canStripImageExif('image/heic'), isFalse);
+      expect(canStripImageExif('image/heif'), isFalse);
     });
   });
 }

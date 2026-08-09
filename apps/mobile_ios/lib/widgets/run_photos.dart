@@ -15,36 +15,6 @@ import '../widgets/photo_lightbox.dart';
 import '../widgets/top_banner.dart';
 import 'confirm_destructive.dart';
 
-/// Map a picked filename to the extension we'll store the upload under.
-/// `jpeg` collapses to `jpg` (Storage path stays consistent regardless of
-/// what the picker reports), `heif` collapses to `heic` (same canonical
-/// container), and anything missing or extension-less defaults to `jpg`.
-String extensionForFilename(String filename) {
-  final n = filename.toLowerCase();
-  final dot = n.lastIndexOf('.');
-  if (dot <= 0) return 'jpg';
-  final raw = n.substring(dot + 1);
-  if (raw == 'jpeg') return 'jpg';
-  if (raw == 'heif') return 'heic';
-  return raw;
-}
-
-/// Storage `Content-Type` to send for a given extension. Keeps the
-/// browser-served preview correct on web run-share pages — signed-URL
-/// access carries the stored Content-Type to the viewer.
-String contentTypeForExtension(String ext) {
-  switch (ext) {
-    case 'png':
-      return 'image/png';
-    case 'webp':
-      return 'image/webp';
-    case 'heic':
-      return 'image/heic';
-    default:
-      return 'image/jpeg';
-  }
-}
-
 /// Mirrors the web `RunPhotos.svelte` — grid of photos for a run, with
 /// owner-gated upload (image_picker), caption edit, and delete.
 class RunPhotos extends StatefulWidget {
@@ -235,15 +205,19 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
     setState(() => _uploading = true);
     try {
       final bytes = await f.readAsBytes();
-      // Strip EXIF/XMP (incl. GPS) before the bytes leave the device —
-      // the server worker strips too, but only after upload, leaving a
-      // geotagged-original window in the bucket. Persona family-club #52.
-      final clean = stripJpegExif(Uint8List.fromList(bytes));
-      final ext = extensionForFilename(f.name);
+      // Strip EXIF/XMP (incl. GPS) before the bytes leave the device: the
+      // server worker only strips JPEG, and only after upload. Sniff the
+      // bytes rather than trusting the picked filename, and refuse a
+      // format we cannot clean instead of shipping the capture GPS.
+      final raw = Uint8List.fromList(bytes);
+      final contentType = detectImageMime(raw);
+      if (contentType == null) throw const UnstrippableImageException('');
+      final clean = stripImageExif(raw, contentType);
+      final ext = imageExtensionForMime(contentType);
       final added = await widget.api.addRunPhoto(
         runId: widget.runId,
         bytes: clean,
-        contentType: contentTypeForExtension(ext),
+        contentType: contentType,
         extension: ext,
         caption: _pendingCaptionCtrl.text.trim().isEmpty
             ? null
