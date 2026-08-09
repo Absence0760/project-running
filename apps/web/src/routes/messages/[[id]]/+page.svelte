@@ -306,8 +306,20 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
+		min-width: 0;
+	}
+	/* A flex item's default `min-width: auto` refuses to shrink below its
+	   content, so a long display name pushed the unread count out of the
+	   pane .threads clips — the one thing on the row you cannot afford to
+	   lose. The name gives way instead. */
+	.thread-top strong {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.badge {
+		flex: 0 0 auto;
 		background: var(--color-primary);
 		color: var(--color-bg);
 		border-radius: 999px;
