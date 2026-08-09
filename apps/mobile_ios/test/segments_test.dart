@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/segments.dart';
@@ -233,5 +235,80 @@ void main() {
     );
     expect(eff, isNotNull);
     expect((eff!.timeSeconds - 100).abs() < 2, isTrue);
+  });
+
+  // ─── computeGlobalSegmentEfforts (catalogue sweep) ───
+
+  /// `n` catalogue geometries spread around the world, none near `coordAt`.
+  List<GlobalSegmentGeometry> distantCatalogue(int n) {
+    final out = <GlobalSegmentGeometry>[];
+    for (var i = 0; i < n; i++) {
+      final lat = -60 + ((i * 13) % 120).toDouble();
+      final lng = -180 + ((i * 29) % 360).toDouble();
+      out.add(GlobalSegmentGeometry(
+        points: [Waypoint(lat: lat, lng: lng), Waypoint(lat: lat + 0.004, lng: lng)],
+        distanceM: 450,
+      ));
+    }
+    return out;
+  }
+
+  test('global sweep: each entry equals the single-segment result', () {
+    final track = _straightTrack(points: 200, stepM: 5, stepS: 1);
+    final catalogue = <GlobalSegmentGeometry>[
+      GlobalSegmentGeometry(points: [coordAt(100), coordAt(600)], distanceM: 500),
+      GlobalSegmentGeometry(points: [coordAt(600), coordAt(100)], distanceM: 500),
+      GlobalSegmentGeometry(points: [coordAt(100), coordAt(600)], distanceM: 200),
+      ...distantCatalogue(3),
+    ];
+
+    final swept = computeGlobalSegmentEfforts(track, catalogue);
+    final oneByOne =
+        catalogue.map((s) => computeGlobalSegmentEffort(track, s)).toList();
+
+    expect(swept.length, catalogue.length);
+    for (var i = 0; i < catalogue.length; i++) {
+      expect(swept[i]?.timeSeconds, oneByOne[i]?.timeSeconds);
+      expect(swept[i]?.startedAt, oneByOne[i]?.startedAt);
+    }
+    expect(swept[0], isNotNull);
+    expect(swept[1], isNull);
+    expect(swept[2], isNull);
+    expect(swept.sublist(3).every((e) => e == null), isTrue);
+  });
+
+  test('global sweep: a segment just inside the tolerance is still matched', () {
+    // The extent test must be conservative — a segment offset laterally by
+    // less than the tolerance is a real match and must survive the reject.
+    final track = _straightTrack(points: 200, stepM: 5, stepS: 1);
+    final offsetDeg = 30 / (111320 * math.cos(37 * math.pi / 180)); // ~30 m east
+    Waypoint nudge(double d) =>
+        Waypoint(lat: coordAt(d).lat, lng: coordAt(d).lng + offsetDeg);
+    final eff = computeGlobalSegmentEfforts(track, [
+      GlobalSegmentGeometry(points: [nudge(100), nudge(600)], distanceM: 500),
+    ]).first;
+    expect(eff, isNotNull);
+    expect((eff!.timeSeconds - 100).abs() < 2, isTrue);
+  });
+
+  test('global sweep: a run straddling the antimeridian still matches', () {
+    // The extent is a planar frame, so it goes through geo.dart's unwrapping —
+    // a naive min/max would read this track as spanning the globe and admit
+    // everything, or read the segment as 40,000 km away and reject it.
+    const degPerM = 1 / 111320;
+    final t0 = DateTime.utc(2026, 1, 1).millisecondsSinceEpoch;
+    final track = <Waypoint>[];
+    for (var i = 0; i < 200; i++) {
+      track.add(Waypoint(
+        lat: 0.5 + i * 5 * degPerM,
+        lng: i < 100 ? 179.9999 : -179.9999,
+        timestamp:
+            DateTime.fromMillisecondsSinceEpoch(t0 + i * 1000, isUtc: true),
+      ));
+    }
+    final eff = computeGlobalSegmentEfforts(track, [
+      GlobalSegmentGeometry(points: [track[20], track[120]], distanceM: 500),
+    ]).first;
+    expect(eff, isNotNull);
   });
 }

@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import {
 	computeEffortFromTrack,
 	computeGlobalSegmentEffort,
+	computeGlobalSegmentEfforts,
+	type GlobalSegmentGeometry,
 	assignCompetitionRanks,
 	crownLabel,
 	SEGMENT_AGE_BANDS,
@@ -383,4 +385,117 @@ test('global: tolerates start/end falling between run samples', () => {
 	});
 	assert.notEqual(eff, null);
 	assert.ok(Math.abs(eff!.time_seconds - 100) < 2);
+});
+
+// ─── computeGlobalSegmentEfforts (catalogue sweep) ───
+
+/**
+ * A `straightTrack` whose points count every read of a coordinate, so a test
+ * can assert how much of the track an algorithm actually walked rather than
+ * timing it.
+ */
+function countingTrack(points: number): { track: TrackPoint[]; reads: () => number } {
+	let reads = 0;
+	const plain = straightTrack({ points, stepM: 5, stepS: 1 });
+	const track = plain.map((p) => ({
+		get lat() {
+			reads++;
+			return p.lat;
+		},
+		get lng() {
+			reads++;
+			return p.lng;
+		},
+		ts: p.ts,
+	})) as TrackPoint[];
+	return { track, reads: () => reads };
+}
+
+/** `n` catalogue geometries spread around the world, none near `coordAt`. */
+function distantCatalogue(n: number): GlobalSegmentGeometry[] {
+	const out: GlobalSegmentGeometry[] = [];
+	for (let i = 0; i < n; i++) {
+		const lat = -60 + ((i * 13) % 120);
+		const lng = -180 + ((i * 29) % 360);
+		out.push({ points: [{ lat, lng }, { lat: lat + 0.004, lng }], distance_m: 450 });
+	}
+	return out;
+}
+
+test('global sweep: rejects distant segments without walking the track for each', () => {
+	// The run-detail sweep scores one run against the whole catalogue
+	// (GLOBAL_SEGMENT_SCORING_LIMIT = 500). Scoring each segment in isolation
+	// walked every track point twice per segment before the check that
+	// rejected it, so the sweep cost segments x points — seconds of blocked
+	// main thread on a long track. The track may be walked a bounded number
+	// of times TOTAL, never once per segment.
+	const { track, reads } = countingTrack(4000);
+	const catalogue = distantCatalogue(400);
+
+	const efforts = computeGlobalSegmentEfforts(track, catalogue);
+
+	assert.equal(efforts.length, 400);
+	assert.ok(
+		efforts.every((e) => e === null),
+		'no distant segment should match',
+	);
+	// Measuring the extent reads both coordinates of every point once. Allow
+	// generous headroom for that and a little more; the pre-fix implementation
+	// read ~2 coordinates x 2 passes x 400 segments = 6.4M.
+	assert.ok(
+		reads() <= track.length * 8,
+		`swept catalogue read the track ${reads()} times over ${track.length} points`,
+	);
+});
+
+test('global sweep: each entry equals the single-segment result', () => {
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	const catalogue: GlobalSegmentGeometry[] = [
+		{ points: [coordAt(100), coordAt(600)], distance_m: 500 }, // matches
+		{ points: [coordAt(600), coordAt(100)], distance_m: 500 }, // wrong way
+		{ points: [coordAt(100), coordAt(600)], distance_m: 200 }, // length guard
+		...distantCatalogue(3),
+	];
+
+	const swept = computeGlobalSegmentEfforts(track, catalogue);
+	const oneByOne = catalogue.map((s) => computeGlobalSegmentEffort(track, s));
+
+	assert.deepEqual(swept, oneByOne);
+	assert.notEqual(swept[0], null);
+	assert.equal(swept[1], null);
+	assert.equal(swept[2], null);
+});
+
+test('global sweep: a segment just inside the tolerance is still matched', () => {
+	// The extent test must be conservative — a segment offset laterally by
+	// less than the tolerance is a real match and must survive the reject.
+	const track = straightTrack({ points: 200, stepM: 5, stepS: 1 });
+	const offsetDeg = 30 / (111_320 * Math.cos((37 * Math.PI) / 180)); // ~30 m east
+	const nudge = (d: number) => ({ lat: coordAt(d).lat, lng: coordAt(d).lng + offsetDeg });
+	const eff = computeGlobalSegmentEfforts(track, [
+		{ points: [nudge(100), nudge(600)], distance_m: 500 },
+	])[0];
+	assert.notEqual(eff, null);
+	assert.ok(Math.abs(eff!.time_seconds - 100) < 2);
+});
+
+test('global sweep: a run straddling the antimeridian still matches', () => {
+	// The extent is a planar frame, so it goes through geo.ts's unwrapping —
+	// a naive min/max would read this track as spanning the globe and admit
+	// everything, or read the segment as 40,000 km away and reject it.
+	const degPerM = 1 / 111_320;
+	const t0 = Date.parse('2026-01-01T00:00:00Z');
+	const track: TrackPoint[] = [];
+	for (let i = 0; i < 200; i++) {
+		track.push({
+			lat: 0.5 + i * 5 * degPerM,
+			lng: i < 100 ? 179.9999 : -179.9999,
+			ts: new Date(t0 + i * 1000).toISOString(),
+		});
+	}
+	const at = (i: number) => ({ lat: track[i].lat, lng: track[i].lng });
+	const eff = computeGlobalSegmentEfforts(track, [
+		{ points: [at(20), at(120)], distance_m: 500 },
+	])[0];
+	assert.notEqual(eff, null);
 });
