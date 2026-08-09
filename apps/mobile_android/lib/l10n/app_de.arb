@@ -1620,6 +1620,7 @@
   "coachNewConversationFailed": "Neue Unterhaltung konnte nicht gestartet werden.",
   "coachOpenArchiveFailed": "Archiv konnte nicht geöffnet werden.",
   "coachArchiveDeleteFailed": "Archiv konnte nicht gelöscht werden: {error}",
+  "coachReactionFailed": "Deine Reaktion konnte nicht gespeichert werden. Bitte erneut versuchen.",
   "coachCopied": "In die Zwischenablage kopiert",
   "settingsAccountTitle": "Konto",
   "settingsAccountBackendNotConfigured": "Backend nicht konfiguriert",

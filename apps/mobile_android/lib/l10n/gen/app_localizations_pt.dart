@@ -5807,6 +5807,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get coachReactionFailed =>
+      'Não foi possível guardar a tua reação. Tenta novamente.';
+
+  @override
   String get coachCopied => 'Copiado para a área de transferência';
 
   @override
@@ -18408,6 +18412,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String coachArchiveDeleteFailed(String error) {
     return 'Não foi possível excluir o arquivo: $error';
   }
+
+  @override
+  String get coachReactionFailed =>
+      'Não foi possível salvar sua reação. Tente novamente.';
 
   @override
   String get coachCopied => 'Copiado para a área de transferência';

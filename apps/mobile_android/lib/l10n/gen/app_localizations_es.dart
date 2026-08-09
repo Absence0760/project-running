@@ -5806,6 +5806,10 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get coachReactionFailed =>
+      'No se pudo guardar tu reacción. Inténtalo de nuevo.';
+
+  @override
   String get coachCopied => 'Copiado al portapapeles';
 
   @override

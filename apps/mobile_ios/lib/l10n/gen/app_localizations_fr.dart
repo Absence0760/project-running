@@ -5824,6 +5824,10 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get coachReactionFailed =>
+      'Impossible d’enregistrer votre réaction. Réessayez.';
+
+  @override
   String get coachCopied => 'Copié dans le presse-papiers';
 
   @override

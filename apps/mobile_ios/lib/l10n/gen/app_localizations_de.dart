@@ -5818,6 +5818,10 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get coachReactionFailed =>
+      'Deine Reaktion konnte nicht gespeichert werden. Bitte erneut versuchen.';
+
+  @override
   String get coachCopied => 'In die Zwischenablage kopiert';
 
   @override

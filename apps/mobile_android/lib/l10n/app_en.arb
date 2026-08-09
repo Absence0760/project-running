@@ -7775,6 +7775,10 @@
       }
     }
   },
+  "coachReactionFailed": "Couldn't save your reaction. Try again.",
+  "@coachReactionFailed": {
+    "description": "Banner shown when writing a thumbs up/down on a coach message fails; the thumb reverts"
+  },
   "coachCopied": "Copied to clipboard",
   "@coachCopied": {
     "description": "Top-banner shown after copying a message"
