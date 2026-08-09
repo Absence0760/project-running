@@ -3183,6 +3183,7 @@ export type Database = {
           elevation_m: number | null
           featured_at: string | null
           geom: unknown
+          geom_public: unknown
           id: string
           is_featured: boolean
           is_public: boolean | null
@@ -3206,6 +3207,7 @@ export type Database = {
           elevation_m?: number | null
           featured_at?: string | null
           geom?: unknown
+          geom_public?: unknown
           id?: string
           is_featured?: boolean
           is_public?: boolean | null
@@ -3229,6 +3231,7 @@ export type Database = {
           elevation_m?: number | null
           featured_at?: string | null
           geom?: unknown
+          geom_public?: unknown
           id?: string
           is_featured?: boolean
           is_public?: boolean | null
@@ -4106,6 +4109,7 @@ export type Database = {
       user_profiles: {
         Row: {
           age_confirmed_at: string | null
+          ai_disclosure_version: number | null
           avatar_url: string | null
           billing_issue_at: string | null
           coach_consent_at: string | null
@@ -4128,6 +4132,7 @@ export type Database = {
         }
         Insert: {
           age_confirmed_at?: string | null
+          ai_disclosure_version?: number | null
           avatar_url?: string | null
           billing_issue_at?: string | null
           coach_consent_at?: string | null
@@ -4150,6 +4155,7 @@ export type Database = {
         }
         Update: {
           age_confirmed_at?: string | null
+          ai_disclosure_version?: number | null
           avatar_url?: string | null
           billing_issue_at?: string | null
           coach_consent_at?: string | null
@@ -4735,6 +4741,7 @@ export type Database = {
         Args: { p_target_id: string; p_target_kind: string }
         Returns: boolean
       }
+      ai_disclosure_current_version: { Args: never; Returns: number }
       am_i_admin: { Args: never; Returns: boolean }
       approve_event_result: {
         Args: {
@@ -5193,6 +5200,7 @@ export type Database = {
         Args: never
         Returns: {
           age_confirmed_at: string | null
+          ai_disclosure_version: number | null
           avatar_url: string | null
           billing_issue_at: string | null
           coach_consent_at: string | null
@@ -5289,6 +5297,15 @@ export type Database = {
           rpe: number
           started_at: string
           weight_kg: number
+          workout_id: string
+        }[]
+      }
+      gym_has_weighted_sets: { Args: never; Returns: boolean }
+      gym_workout_summaries: {
+        Args: { p_limit?: number }
+        Returns: {
+          exercise_count: number
+          is_pr: boolean
           workout_id: string
         }[]
       }
@@ -5459,6 +5476,10 @@ export type Database = {
           tag: string
         }[]
       }
+      privacy_aware_route_geom: {
+        Args: { p_user_id: string; p_waypoints: Json }
+        Returns: unknown
+      }
       privacy_aware_start_point: {
         Args: { p_waypoints: Json; p_zones: Json }
         Returns: unknown
@@ -5518,6 +5539,13 @@ export type Database = {
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: undefined
+      }
+      record_ai_disclosure_consent: {
+        Args: { p_version: number }
+        Returns: {
+          accepted_at: string
+          version: number
+        }[]
       }
       record_coach_consent: { Args: never; Returns: string }
       redeem_coach_invite: { Args: { token: string }; Returns: string }
@@ -5919,6 +5947,7 @@ export type Database = {
           week_start: string
         }[]
       }
+      withdraw_ai_disclosure_consent: { Args: never; Returns: undefined }
       withdraw_coach_consent: { Args: never; Returns: undefined }
       withdraw_health_data_consent: { Args: never; Returns: undefined }
     }
