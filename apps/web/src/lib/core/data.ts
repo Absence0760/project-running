@@ -78,6 +78,7 @@ import type { RecapPeriodKind } from '../types';
 import { normaliseExerciseName } from '../gym/gym_prs';
 import { GYM_SESSION_DRAFT_KEY } from '../gym/gym_session_draft';
 import type { YearInRunningRecap } from '../runs/recap';
+import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
 import type {
 	CoachAthleteStatus,
 	SessionPlan,
@@ -147,6 +148,10 @@ export interface FetchRunsOptions {
 	 * in the first place (#332).
 	 */
 	columns?: string;
+	/** Inclusive lower bound on `started_at`, as an ISO instant. */
+	startedAtFrom?: string;
+	/** Exclusive upper bound on `started_at`, as an ISO instant. */
+	startedAtBefore?: string;
 }
 
 export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
@@ -156,12 +161,15 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	// `/tmp/data-isolation-audit/client-realtime.md` M2.
 	const userId = auth.user?.id;
 	if (!userId) return [];
-	const build = () =>
-		supabase
+	const build = () => {
+		let q = supabase
 			.from(TABLES.runs)
 			.select(opts?.columns ?? '*')
-			.eq('user_id', userId)
-			.order('started_at', { ascending: false });
+			.eq('user_id', userId);
+		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
+		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
+		return q.order('started_at', { ascending: false });
+	};
 
 	let rows: any[];
 	if (opts?.limit != null) {
@@ -349,6 +357,44 @@ export const PERIOD_SUMMARY_RUN_COLUMNS = 'id, started_at, distance_m, duration_
 /// silently short.
 export async function fetchRunsForPeriodSummary(): Promise<Run[]> {
 	return fetchRuns({ columns: PERIOD_SUMMARY_RUN_COLUMNS, throwOnError: true });
+}
+
+/// Exactly the columns the recap engine reads off an in-period run: the
+/// distance / duration totals, elevation (with the legacy `metadata.
+/// elevation_m` fallback `elevationOf` still honours), the activity type
+/// behind the run-family longest / fastest rules, and the route id for the
+/// unique-route tally. `source` rides along because `fetchRuns` narrows it on
+/// every row it returns.
+export const RECAP_RUN_COLUMNS =
+	'id, started_at, distance_m, duration_s, elevation_gain_m, activity_type, route_id, source, metadata';
+
+/// Runs shaped for a recap card, without the lifetime `select('*')` scan both
+/// pages used to do — ~3,000 full rows, `metadata` bag and all, to render a
+/// card built from the ~250 inside the year (a monthly card, ~20).
+///
+/// Two reads instead of one: the recap year at `RECAP_RUN_COLUMNS`, plus every
+/// run's `started_at` and nothing else. The recap engine reaches a run outside
+/// the period only through `computeRunStreaks`, which reads that one column,
+/// so the second read reproduces `bestStreakDays` / `currentStreakDays`
+/// exactly — including a streak that crosses 31 Dec (`recap.test.ts` pins the
+/// engine's dependency, `recap_window.test.ts` pins the equivalence). Both
+/// recap routes take the whole year: the monthly card carries the year's
+/// twelve-month strip.
+export async function fetchRunsForRecap(year: number): Promise<Run[]> {
+	const win = recapYearWindow(year);
+	const [windowed, allStartedAt] = await Promise.all([
+		fetchRuns({
+			columns: RECAP_RUN_COLUMNS,
+			startedAtFrom: win.fromIso,
+			startedAtBefore: win.beforeIso,
+		}),
+		fetchRuns({ columns: 'started_at' }),
+	]);
+	return mergeRecapRuns(
+		windowed,
+		allStartedAt.map((r) => r.started_at),
+		win,
+	);
 }
 
 /// Supplementary counts for the Year-in-Running recap that can't be
@@ -8689,6 +8735,11 @@ export interface GymWorkout {
 	/// execution trio and, while a session is in flight, the
 	/// `gym_session_draft` snapshot. Registered in docs/backend/metadata.md.
 	metadata: Record<string, unknown> | null;
+	/// Trigger-maintained totals over the workout's sets (migration
+	/// 20261214_001, contract in docs/backend/derived_state.md) — the list row
+	/// reads them off the row rather than summing raw sets client-side.
+	set_count: number;
+	volume_kg: number;
 }
 
 export interface GymSet {
@@ -8749,6 +8800,13 @@ export interface GymSetWithDate {
 /// the empty "log your first workout" card (a real failure otherwise reads as a
 /// brand-new lifter whose history vanished). Mirrors the
 /// `fetchExerciseRecordsWithError` convention.
+/// PostgREST renders a `numeric` column as a JSON number or a string depending
+/// on its magnitude, so every numeric the gym reads is coerced on the way in.
+function numericOrZero(v: unknown): number {
+	const n = typeof v === 'string' ? Number(v) : v;
+	return typeof n === 'number' && Number.isFinite(n) ? n : 0;
+}
+
 export async function fetchGymWorkoutsWithError(
 	limit = 50,
 ): Promise<{ workouts: GymWorkout[]; error: string | null }> {
@@ -8761,12 +8819,76 @@ export async function fetchGymWorkoutsWithError(
 		.order('started_at', { ascending: false })
 		.limit(limit);
 	if (error) return { workouts: [], error: error.message };
-	return { workouts: (data ?? []) as GymWorkout[], error: null };
+	const workouts = ((data ?? []) as GymWorkout[]).map((w) => ({
+		...w,
+		set_count: numericOrZero(w.set_count),
+		volume_kg: numericOrZero(w.volume_kg),
+	}));
+	return { workouts, error: null };
 }
 
 /// Recent gym workouts for the signed-in user, newest first.
 export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
 	return (await fetchGymWorkoutsWithError(limit)).workouts;
+}
+
+/// The two per-workout values the /gym list needs that no column carries:
+/// whether the workout set a personal record, and how many distinct exercises
+/// it contained.
+export interface GymWorkoutSummary {
+	workoutId: string;
+	exerciseCount: number;
+	isPr: boolean;
+}
+
+/// Per-workout PR flags + exercise counts for the /gym list, aggregated by the
+/// `gym_workout_summaries` RPC (migration 20270510_001).
+///
+/// /gym used to answer both questions in the browser from every gym_sets row
+/// the account held — an unbounded read PostgREST truncates at 1000 rows, so
+/// past ~40 sessions the badges and counts were quietly computed from a
+/// partial, unordered history. A PR badge is an all-time question, so no
+/// client-side window could fix it; the aggregation had to move to SQL, the
+/// way gym_exercise_records + gym_exercise_names already did for /gym/records
+/// and the composer autocomplete. `gym_prs.ts` remains the definition of a PR
+/// — the RPC mirrors it, and the two are pinned against one fixture by
+/// gym_workout_summaries.test.ts + gym_workout_summaries_test.sql.
+///
+/// Surfaces the error like `fetchGymWorkoutsWithError`: an empty result on a
+/// failed read would silently strip every badge and show 0 exercises a row.
+export async function fetchGymWorkoutSummariesWithError(
+	limit = 100,
+): Promise<{ summaries: GymWorkoutSummary[]; error: string | null }> {
+	if (!auth.user?.id) return { summaries: [], error: null };
+	const { data, error } = await supabase.rpc('gym_workout_summaries', { p_limit: limit });
+	if (error) return { summaries: [], error: error.message };
+	const rows = (data ?? []) as Array<{
+		workout_id: string;
+		exercise_count: number | string | null;
+		is_pr: boolean | null;
+	}>;
+	return {
+		summaries: rows.map((r) => ({
+			workoutId: r.workout_id,
+			exerciseCount: numericOrZero(r.exercise_count),
+			isPr: r.is_pr === true,
+		})),
+		error: null,
+	};
+}
+
+/// Has the user ever logged a set carrying a positive weight? Gates the
+/// /gym/records link, which only surfaces weighted exercises. All-time, so a
+/// lifter whose last weighted session predates the list page still gets the
+/// link. Degrades to false (link hidden) on a failed read.
+export async function fetchGymHasWeightedSets(): Promise<boolean> {
+	if (!auth.user?.id) return false;
+	const { data, error } = await supabase.rpc('gym_has_weighted_sets');
+	if (error) {
+		console.error('fetchGymHasWeightedSets failed', error);
+		return false;
+	}
+	return data === true;
 }
 
 /// A single workout plus its sets in set_index order. Returns null when the
@@ -8821,10 +8943,15 @@ export async function fetchGymSessionDraft(routineId: string): Promise<GymWorkou
 /// pass it on surfaces that only reason about recent training (e.g. the
 /// dashboard's 90-day training-load curve + its 5 most-recent-lift cards) so a
 /// multi-year lifter's whole gym_sets history (~15k rows) isn't shipped to the
-/// browser on every load. Surfaces that need all-time data (the per-workout PR
-/// badges on /gym + /gym/[id]) pass nothing and read the full set; all-time
-/// per-exercise bests go through fetchExerciseRecords (server-aggregated)
-/// instead. perf-hunt follow-up 2026-06-10.
+/// browser on every load. perf-hunt follow-up 2026-06-10.
+///
+/// Nothing reads this unwindowed any more. An all-time question is a server
+/// question: PostgREST caps an unbounded SELECT at 1000 rows, so the /gym PR
+/// badges that used to pass no window were computed from a truncated,
+/// unordered history past ~40 sessions. Those go through
+/// `fetchGymWorkoutSummariesWithError`; per-exercise bests through
+/// `fetchExerciseRecords`; per-workout prior sets on /gym/[id] through
+/// `fetchExerciseSetHistoryBatch`. All three aggregate or scope in SQL.
 export async function fetchGymSetHistoryWithError(opts?: {
 	sinceDays?: number;
 }): Promise<{ sets: GymSetWithDate[]; error: string | null }> {

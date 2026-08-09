@@ -2055,6 +2055,18 @@ The batched sibling (migration `20270323_001`): the same row shape plus a leadin
 
 Returns `(exercise_name, uses)` — distinct trimmed exercise names + use counts, most-used first — for the gym editor's autocomplete datalist (migration `20261226_001`, perf-hunt follow-up). Bounded to the count of distinct exercises (dozens) so the History page never pulls raw set history just to derive names. Names stay case-preserved (trim only), matching the prior client behaviour. SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_names_test.sql`.
 
+### `gym_workout_summaries(p_limit integer default 100)`
+
+Returns `(workout_id, exercise_count, is_pr)` — one row per workout the `/gym` list shows (migration `20270510_001`, decisions §568). Closes the residual §138 left open: the list's per-workout PR badge is an all-time question ("did this workout beat everything logged before it?"), so the client read the user's whole `gym_sets` history unwindowed — and PostgREST caps an unbounded SELECT at **1000 rows**, so past ~40 sessions of 25 sets the badges were computed from a truncated, unordered slice. `p_limit` bounds the rows returned; the PR judgement always runs over the caller's **entire** history, which also fixes a second bug — the client walked only the 100 workouts it had fetched, so a lift set 101 workouts ago failed to suppress a badge and `/gym` disagreed with `/gym/[id]`.
+
+`is_pr` mirrors `gym_prs.ts#RunningPrTracker`: walking oldest → newest (ties broken by id), a workout is flagged when any one exercise's best single-set weight, best single-set volume, or best Epley e1rm strictly beats every earlier workout's — an exercise with no earlier set counting as a PR. Volume and e1rm round to 1 dp on both sides of the comparison, as `round1()` does. `exercise_count` is the distinct **normalised** names (a whitespace-only name passes the `length(1..120)` CHECK; it counts toward the workout's stored `set_count` / `volume_kg` but is not an exercise). Recompute-on-read, so it can't drift from `gym_sets`. SECURITY INVOKER, owner-scoped, granted to `authenticated`. Web `fetchGymWorkoutSummariesWithError` (`core/data.ts`). pgTAP `gym_workout_summaries_test.sql` (14 tests) and web `gym_workout_summaries.test.ts` build the **same fixture** and assert the same four PR workouts, one through the RPC and one through the real `RunningPrTracker`, so the SQL and TS definitions can't drift apart.
+
+The list's other two row stats need no RPC: `gym_workouts.set_count` / `volume_kg` are trigger-maintained columns ([derived_state.md](derived_state.md)) the page was re-deriving from raw sets.
+
+### `gym_has_weighted_sets()`
+
+Returns a boolean: has the caller ever logged a set with a positive `weight_kg`? Gates the Records link on `/gym`, since `/gym/records` only surfaces weighted exercises (migration `20270510_001`). All-time and `exists`-early-exit, so it stays honest for a lifter whose last weighted session is further back than the list page reaches — the case a per-page flag would get wrong. SECURITY INVOKER, owner-scoped. Web `fetchGymHasWeightedSets`. Covered by `gym_workout_summaries_test.sql`.
+
 ---
 
 ## Challenges & competitions

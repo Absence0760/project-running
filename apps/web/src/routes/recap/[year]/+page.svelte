@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchRuns, fetchRecapExtras, publishRecap } from '$lib/core/data';
+	import { fetchRunsForRecap, fetchRecapExtras, publishRecap } from '$lib/core/data';
 	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
 	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
 	import { buildRecapShareCanonical } from '$lib/share/share_recap_meta';
@@ -33,7 +33,7 @@
 		}
 		const yr = year;
 		[runs, extras] = await Promise.all([
-			fetchRuns(),
+			valid ? fetchRunsForRecap(yr) : Promise.resolve([] as Run[]),
 			valid ? fetchRecapExtras(yr) : Promise.resolve({ photoCount: 0, personalRecordCount: 0 })
 		]);
 		loading = false;
