@@ -21,6 +21,7 @@
 	let { data }: { data: { id: string; donated: string | null } } = $props();
 
 	let loading = $state(true);
+	let loadFailed = $state(false);
 	let fundraiser = $state<Fundraiser | null>(null);
 	let totals = $state<FundraiserTotals | null>(null);
 	let feed = $state<FundraiserFeedEntry[]>([]);
@@ -51,6 +52,7 @@
 
 	async function load() {
 		loading = true;
+		loadFailed = false;
 		// Fail-closed: with fundraising off (PUBLIC_FUNDRAISING_ENABLED unset,
 		// the pre-Stripe default) the public page shows its not-found state
 		// rather than a donate flow that would dead-end. See fundraising_flag.ts.
@@ -59,9 +61,18 @@
 			loading = false;
 			return;
 		}
-		fundraiser = await fetchFundraiserById(data.id);
-		if (fundraiser) await refreshTotalsFeed();
-		loading = false;
+		// A donor arriving on a link is the wrong person to tell "this
+		// campaign doesn't exist" when the read simply failed.
+		try {
+			fundraiser = await fetchFundraiserById(data.id);
+			if (fundraiser) await refreshTotalsFeed();
+		} catch (e) {
+			console.error('fundraiser load failed', e);
+			fundraiser = null;
+			loadFailed = true;
+		} finally {
+			loading = false;
+		}
 	}
 
 	onMount(async () => {
@@ -137,6 +148,13 @@
 <main class="fundraiser-page">
 	{#if loading}
 		<p class="state">{m('fundraiser.loading')}</p>
+	{:else if loadFailed}
+		<p class="state load-error" role="alert" data-testid="fundraiser-load-error">
+			{m('fundraiser.loadFailed')}
+			<button type="button" class="btn btn-secondary" onclick={() => void load()}>
+				{m('fundraiser.retry')}
+			</button>
+		</p>
 	{:else if !fundraiser}
 		<p class="state">{m('fundraiser.notFound')}</p>
 	{:else}
@@ -294,6 +312,12 @@
 	}
 	.state {
 		color: var(--color-text-secondary);
+	}
+	.load-error {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-sm);
 	}
 	.hero-head {
 		display: flex;

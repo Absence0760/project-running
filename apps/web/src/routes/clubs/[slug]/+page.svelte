@@ -651,8 +651,15 @@
 			expandedThreads = { ...expandedThreads, [postId]: null };
 			return;
 		}
-		const replies = await fetchPostReplies(postId);
-		expandedThreads = { ...expandedThreads, [postId]: replies };
+		try {
+			const replies = await fetchPostReplies(postId);
+			expandedThreads = { ...expandedThreads, [postId]: replies };
+		} catch (e) {
+			showToast(
+				tr('clubHome.repliesLoadFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+		}
 	}
 
 	async function sendReply(postId: string) {
@@ -667,6 +674,13 @@
 			expandedThreads = { ...expandedThreads, [postId]: replies };
 			// Refresh reply counts on the top-level post list.
 			posts = await fetchClubPosts(club.id, 20);
+		} catch (e) {
+			// The draft is only cleared once the write lands, so it is still
+			// in the box to send again.
+			showToast(
+				tr('clubHome.replyFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
 		} finally {
 			replyBusyId = null;
 		}

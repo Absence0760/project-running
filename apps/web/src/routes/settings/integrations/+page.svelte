@@ -214,6 +214,7 @@
 
 	let zipProgress = $state<StravaZipProgress | null>(null);
 	let zipError = $state('');
+	let zipFileInput: HTMLInputElement | null = $state(null);
 
 	async function handleZipSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
@@ -248,6 +249,7 @@
 
 	let garminProgress = $state<GarminZipProgress | null>(null);
 	let garminError = $state('');
+	let garminFileInput: HTMLInputElement | null = $state(null);
 
 	async function handleGarminSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
@@ -397,10 +399,16 @@
 					>{m('settingsIntegrations.stravaBulkLink')}</a
 				>{m('settingsIntegrations.stravaBulkSuffix')}
 			</p>
-			<label class="zip-btn">
+			<button type="button" class="zip-btn" onclick={() => zipFileInput?.click()}>
 				{m('settingsIntegrations.chooseStravaZip')}
-				<input type="file" accept=".zip,application/zip" onchange={handleZipSelect} hidden />
-			</label>
+			</button>
+			<input
+				bind:this={zipFileInput}
+				type="file"
+				accept=".zip,application/zip"
+				onchange={handleZipSelect}
+				style="display: none"
+			/>
 			{#if zipError}
 				<p class="zip-error" role="alert">{zipError}</p>
 			{/if}
@@ -448,10 +456,16 @@
 				>{m('settingsIntegrations.garminBulkFrag4')}<code>.fit</code>{m('settingsIntegrations.garminBulkFrag5')}<code>.gpx</code> /
 				<code>.tcx</code>{m('settingsIntegrations.garminBulkFrag6')}
 			</p>
-			<label class="zip-btn">
+			<button type="button" class="zip-btn" onclick={() => garminFileInput?.click()}>
 				{m('settingsIntegrations.chooseGarminExport')}
-				<input type="file" accept=".fit,.zip,application/octet-stream,application/zip" onchange={handleGarminSelect} hidden />
-			</label>
+			</button>
+			<input
+				bind:this={garminFileInput}
+				type="file"
+				accept=".fit,.zip,application/octet-stream,application/zip"
+				onchange={handleGarminSelect}
+				style="display: none"
+			/>
 			{#if garminError}
 				<p class="zip-error" role="alert">{garminError}</p>
 			{/if}
@@ -854,7 +868,9 @@
 		padding: 0.5rem 0.9rem;
 		background: var(--color-primary);
 		color: white;
+		border: none;
 		border-radius: var(--radius-md);
+		font-family: inherit;
 		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;

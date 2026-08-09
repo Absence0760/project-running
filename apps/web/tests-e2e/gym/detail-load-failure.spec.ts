@@ -108,4 +108,51 @@ test.describe('gym detail — a partial read failure is a failure', () => {
 		// The Start button must not be offered against a routine we could not read.
 		await expect(page.getByTestId('routine-start')).toHaveCount(0);
 	});
+
+	test('Retry re-enters loading rather than flashing "Routine not found"', async ({ page }) => {
+		// `load()` cleared `loadError` without raising `loading`, so the
+		// in-flight re-read fell through to the `!detail` branch and the page
+		// told the author their routine was gone — for the whole round trip,
+		// which on a slow read is as long as the read takes. The retry is
+		// deliberately answered slowly here so that window is observable.
+		const admin = getAdminClient();
+		const { data: r, error } = await admin
+			.from('gym_routines')
+			.insert({ author_id: USER_A.id, title: `E2E routine-retry ${stamp()}`, exercise_count: 1 })
+			.select('id')
+			.single();
+		if (error || !r) throw error ?? new Error('seed routine failed');
+		routineId = r.id as string;
+		await admin.from('gym_routine_exercises').insert({
+			routine_id: routineId,
+			exercise_name: 'Deadlift',
+			exercise_key: 'deadlift',
+			position: 0,
+		});
+
+		let attempt = 0;
+		await page.route('**/rest/v1/gym_routine_exercises*', async (route) => {
+			if (route.request().method() !== 'GET') return route.fallback();
+			attempt += 1;
+			if (attempt === 1) {
+				await route.fulfill({ status: 500, body: 'boom' });
+				return;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 3_000));
+			await route.fallback();
+		});
+
+		await page.goto(`/gym/routines/${routineId}`);
+
+		const banner = page.getByTestId('routine-load-error');
+		await expect(banner).toBeVisible({ timeout: 15_000 });
+
+		await banner.getByRole('button', { name: 'Retry' }).click();
+		// Mid-flight: neither the failure it has left nor a headstone.
+		await expect(page.getByText('Routine not found.')).toHaveCount(0);
+		await expect(banner).toHaveCount(0);
+
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText('Routine not found.')).toHaveCount(0);
+	});
 });

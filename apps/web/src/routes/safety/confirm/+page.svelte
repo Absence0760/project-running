@@ -89,11 +89,13 @@
 	.card {
 		max-width: 440px;
 		width: 100%;
-		background: #fff;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
 		border-radius: 14px;
 		padding: 2rem;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+		box-shadow: var(--shadow-sm);
 		text-align: center;
+		color: var(--color-text);
 	}
 	h1 {
 		margin: 0 0 1rem;
@@ -109,18 +111,6 @@
 	}
 	p.bad {
 		color: var(--color-danger-text);
-	}
-	.btn-primary {
-		display: inline-block;
-		background: var(--color-primary);
-		color: #fff;
-		text-decoration: none;
-		border: none;
-		cursor: pointer;
-		font-size: 1rem;
-		border-radius: 8px;
-		padding: 0.6rem 1.3rem;
-		font-weight: 600;
 	}
 	.sms-opt {
 		display: inline-flex;

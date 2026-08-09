@@ -21,6 +21,7 @@
 		type RestoreProgress,
 		type RestoreResult,
 	} from '$lib/backup/backup';
+	import { transferStageKey } from '$lib/backup/stage_labels';
 	import {
 		isPushSupported,
 		pushPermission,
@@ -1259,11 +1260,19 @@
 		<div class="btn-row">
 			<button class="btn btn-primary" onclick={handleBackup} disabled={backingUp || restoring}>
 				<span class="material-symbols">archive</span>
-				{backingUp ? (backupProgress ? `${backupProgress.stage}...` : m('settingsAccount.backingUp')) : m('settingsAccount.downloadBackup')}
+				{backingUp
+					? backupProgress
+						? m(transferStageKey(backupProgress.stage))
+						: m('settingsAccount.backingUp')
+					: m('settingsAccount.downloadBackup')}
 			</button>
 			<button class="btn btn-outline" onclick={() => restoreFileInput.click()} disabled={backingUp || restoring}>
 				<span class="material-symbols">unarchive</span>
-				{restoring ? (restoreProgress ? `${restoreProgress.stage}...` : m('settingsAccount.restoring')) : m('settingsAccount.restoreBackup')}
+				{restoring
+					? restoreProgress
+						? m(transferStageKey(restoreProgress.stage))
+						: m('settingsAccount.restoring')
+					: m('settingsAccount.restoreBackup')}
 			</button>
 			<input bind:this={restoreFileInput} type="file" accept=".zip" onchange={handleRestoreFile} style="display: none" />
 		</div>

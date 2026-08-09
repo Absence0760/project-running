@@ -24,21 +24,33 @@
 	let waypoints = $state<TrackPoint[]>([]);
 	let loading = $state(true);
 	let notFound = $state(false);
+	let loadFailed = $state(false);
 
-	onMount(async () => {
-		// `fetchRouteById` is the owner-aware reader: owner / club member
-		// gets the full route via RLS; anon / non-owner gets the
-		// `public_routes` view (no `geom` / `start_point`) plus
-		// server-side privacy-zone clipping for `waypoints`.
-		const r = await fetchRouteById(data.id);
-		if (!r) {
-			notFound = true;
-		} else {
-			route = r;
-			waypoints = (r.waypoints ?? []) as TrackPoint[];
+	async function load() {
+		loading = true;
+		notFound = false;
+		loadFailed = false;
+		try {
+			// `fetchRouteById` is the owner-aware reader: owner / club member
+			// gets the full route via RLS; anon / non-owner gets the
+			// `public_routes` view (no `geom` / `start_point`) plus
+			// server-side privacy-zone clipping for `waypoints`.
+			const r = await fetchRouteById(data.id);
+			if (!r) {
+				notFound = true;
+			} else {
+				route = r;
+				waypoints = (r.waypoints ?? []) as TrackPoint[];
+			}
+		} catch (e) {
+			console.error('share route load failed', e);
+			loadFailed = true;
+		} finally {
+			loading = false;
 		}
-		loading = false;
-	});
+	}
+
+	onMount(load);
 
 	let elevations = $derived(waypoints.map((w) => w.ele ?? 0));
 	let hasElevationData = $derived(
@@ -83,6 +95,18 @@
 <SharePageShell>
 	{#if loading}
 		<main class="content" id="main-content"><p class="status">{m('shell.loading')}</p></main>
+	{:else if loadFailed}
+		<main class="content" id="main-content">
+			<div class="notfound-card" role="alert" data-testid="share-route-load-error">
+				<h1>{m('routeDetail.loadFailedTitle')}</h1>
+				<p class="notfound-sub">{m('routeDetail.loadFailedBody')}</p>
+				<div class="notfound-actions">
+					<button type="button" class="btn btn-primary" onclick={() => void load()}>
+						{m('routeDetail.retry')}
+					</button>
+				</div>
+			</div>
+		</main>
 	{:else if notFound}
 		<main class="content" id="main-content">
 			<div class="notfound-card">
