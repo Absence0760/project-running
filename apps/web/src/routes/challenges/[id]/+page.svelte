@@ -41,6 +41,7 @@
 
 	let challenge = $state<ChallengeWithMeta | null>(null);
 	let notFound = $state(false);
+	let loadFailed = $state(false);
 	let board = $state<ChallengeLeaderboardRow[]>([]);
 	let clubNames = $state<Record<string, string>>({});
 	let myClubs = $state<ClubWithMeta[]>([]);
@@ -62,8 +63,12 @@
 	);
 	const canManageChallenge = $derived(isCreator || isClubAdminForChallenge);
 
+	// A challenge that isn't there and a challenge we couldn't read are
+	// different answers. Collapsing both into `notFound` told a creator
+	// their own challenge was gone whenever the read failed.
 	async function load() {
 		notFound = false;
+		loadFailed = false;
 		try {
 			const c = await fetchChallengeById(id);
 			if (!c) {
@@ -76,8 +81,9 @@
 				myClubs = await fetchMyClubs();
 				clubNames = Object.fromEntries(myClubs.map((cl) => [cl.id, cl.name]));
 			}
-		} catch {
-			notFound = true;
+		} catch (e) {
+			console.error('challenge load failed', e);
+			loadFailed = true;
 		}
 	}
 	$effect(() => {
@@ -157,6 +163,13 @@
 
 	{#if notFound}
 		<p class="muted">{m('challenges.notFound')}</p>
+	{:else if loadFailed}
+		<p class="muted load-error" role="alert" data-testid="challenge-load-error">
+			{m('challenges.detailLoadFailed')}
+			<button type="button" class="btn btn-outline btn-sm" onclick={() => void load()}>
+				{m('challenges.retry')}
+			</button>
+		</p>
 	{:else if !challenge}
 		<p class="muted">…</p>
 	{:else}
@@ -266,6 +279,12 @@
 <style>
 	.page {
 		padding: var(--page-padding-y) var(--page-padding-x);
+	}
+	.load-error {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-sm);
 	}
 	.back {
 		display: inline-flex;

@@ -1122,7 +1122,13 @@
 	async function drawRouteLine(id: string) {
 		let coords = geomCache.get(id);
 		if (!coords) {
-			const route = await fetchRouteById(id);
+			// The line preview is an L4 overlay on top of a map that already
+			// works — a failed read leaves the pin unhighlighted rather than
+			// escaping as an unhandled rejection.
+			const route = await fetchRouteById(id).catch((e) => {
+				console.debug('route line preview failed', e);
+				return null;
+			});
 			// The cursor may have moved on while the fetch was in flight.
 			if (hoveredRouteId !== id) return;
 			if (!route?.waypoints || route.waypoints.length < 2) return;
@@ -1168,7 +1174,10 @@
 	async function ensureGeom(id: string): Promise<[number, number][] | null> {
 		const cached = geomCache.get(id);
 		if (cached) return cached;
-		const route = await fetchRouteById(id);
+		const route = await fetchRouteById(id).catch((e) => {
+			console.debug('pinned route line fetch failed', e);
+			return null;
+		});
 		if (!route?.waypoints || route.waypoints.length < 2) return null;
 		const coords = route.waypoints.map((w) => [w.lng, w.lat] as [number, number]);
 		geomCache.set(id, coords);

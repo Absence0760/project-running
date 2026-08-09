@@ -65,6 +65,7 @@
 	let markerSnap = $state(true);
 	let markerPendingDrag = $state<{ id: string; lat: number; lng: number } | null>(null);
 	let loading = $state(true);
+	let loadFailed = $state(false);
 	let reviews = $state<any[]>([]);
 	let reviewsError = $state(false);
 	let showReviewForm = $state(false);
@@ -78,16 +79,19 @@
 			: null,
 	);
 
-	onMount(async () => {
-		// Wait for auth to resolve before fetching the row. Without
-		// this, `isOwner` (a $derived from auth.user) starts false and
-		// owner-only affordances (toggleStar, togglePublic, tag editor)
-		// silently no-op on early clicks. ready() falls through to the
-		// fetch on its timeout regardless, so anon visitors hitting a
-		// public route aren't stalled.
-		await auth.ready();
-		route = await fetchRouteById(data.id);
-		loading = false;
+	async function loadRoute() {
+		loading = true;
+		loadFailed = false;
+		try {
+			route = await fetchRouteById(data.id);
+		} catch (e) {
+			console.error('fetchRouteById failed', e);
+			route = null;
+			loadFailed = true;
+			return;
+		} finally {
+			loading = false;
+		}
 		if (route) {
 			displayWaypoints = (route.waypoints ?? []) as typeof displayWaypoints;
 			try {
@@ -103,6 +107,17 @@
 				reviewsError = true;
 			}
 		}
+	}
+
+	onMount(async () => {
+		// Wait for auth to resolve before fetching the row. Without
+		// this, `isOwner` (a $derived from auth.user) starts false and
+		// owner-only affordances (toggleStar, togglePublic, tag editor)
+		// silently no-op on early clicks. ready() falls through to the
+		// fetch on its timeout regardless, so anon visitors hitting a
+		// public route aren't stalled.
+		await auth.ready();
+		await loadRoute();
 	});
 
 	async function submitReview() {
@@ -495,6 +510,19 @@
 
 {#if loading}
 	<div class="route-detail"><p class="loading">&nbsp;</p></div>
+{:else if loadFailed}
+	<div class="route-detail">
+		<a href="/routes" class="back-link page-back">
+			<span class="material-symbols">arrow_back</span> {m('routeDetail.backRoutes')}
+		</a>
+		<div class="not-found" role="alert" data-testid="route-load-error">
+			<h1>{m('routeDetail.loadFailedTitle')}</h1>
+			<p>{m('routeDetail.loadFailedBody')}</p>
+			<button type="button" class="btn btn-primary" onclick={() => void loadRoute()}>
+				{m('routeDetail.retry')}
+			</button>
+		</div>
+	</div>
 {:else if !route}
 	<div class="route-detail">
 		<a href="/routes" class="back-link page-back">

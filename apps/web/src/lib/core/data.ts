@@ -1607,6 +1607,12 @@ export async function setRouteClubId(routeId: string, clubId: string | null): Pr
 /// owner check here — not RLS — is what stops a non-owner club member
 /// from reading the unclipped waypoints. Closes the audit/public-rows
 /// + audit/privacy-zones High finding.
+///
+/// Returns null ONLY when the row genuinely is not there (or is not
+/// visible to the caller — RLS filters rows, it does not error). A
+/// transport or permission failure throws, so a caller can tell "this
+/// route was deleted" apart from "we could not reach the server" and
+/// offer a retry instead of a headstone.
 export async function fetchRouteById(id: string): Promise<Route | null> {
 	const viewerId = auth.user?.id ?? null;
 	const ownerRead = await supabase
@@ -1614,6 +1620,7 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 		.select('*')
 		.eq('id', id)
 		.maybeSingle();
+	if (ownerRead.error) throw ownerRead.error;
 	if (ownerRead.data) {
 		// `shadow_hidden` is a server-/trigger-owned moderation column
 		// (migration 20270218_001) the client has no business reading; the
@@ -1645,8 +1652,11 @@ export async function fetchRouteById(id: string): Promise<Route | null> {
 	// The metadata read and the server-clip RPC both key only on `id`, so
 	// fire them concurrently instead of serialising two round trips.
 	const assembled = await assemblePublicRoute(
-		async () =>
-			(await supabase.from('public_routes').select('*').eq('id', id).maybeSingle()).data,
+		async () => {
+			const read = await supabase.from('public_routes').select('*').eq('id', id).maybeSingle();
+			if (read.error) throw read.error;
+			return read.data;
+		},
 		() => fetchClippedRouteForViewer(id),
 	);
 	if (!assembled) return null;
@@ -11068,9 +11078,13 @@ function fundraiserFromRow(row: Record<string, unknown>): Fundraiser {
 	return { ...(row as Fundraiser), status: row.status as FundraiserStatus };
 }
 
+/// Null means the fundraiser is not there; a failed read throws, so the
+/// public page can offer a donor a retry instead of telling them the
+/// campaign they were linked to does not exist.
 export async function fetchFundraiserById(id: string): Promise<Fundraiser | null> {
 	const { data, error } = await supabase.from('fundraisers').select('*').eq('id', id).maybeSingle();
-	if (error || !data) return null;
+	if (error) throw error;
+	if (!data) return null;
 	return fundraiserFromRow(data);
 }
 
