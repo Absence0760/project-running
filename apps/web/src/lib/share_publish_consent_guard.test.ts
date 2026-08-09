@@ -82,11 +82,7 @@ test('the share-consent copy is localized in all six catalogues', () => {
 	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
 		const source = read(`src/lib/i18n/locales/${locale}.ts`);
 		for (const key of keys) {
-			assert.match(
-				source,
-				new RegExp(`"${key.replace(/\./g, '\\.')}":`),
-				`${key} missing from ${locale}.ts`,
-			);
+			assert.ok(source.includes(`"${key}":`), `${key} missing from ${locale}.ts`);
 		}
 	}
 });
