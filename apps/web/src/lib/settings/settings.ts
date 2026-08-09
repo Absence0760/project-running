@@ -12,6 +12,7 @@ import {
 	type PendingChange,
 	type PrefsCache,
 } from './settings_cache';
+import { SettingsWriteError, drainQueue, pushOrQueue } from './settings_write';
 
 /// Typed accessor for `user_settings` + `user_device_settings`.
 ///
@@ -179,6 +180,10 @@ export async function loadSettings(userId: string): Promise<LoadedSettings> {
 	}
 }
 
+/// Rejects when the server refused the change (RLS, CHECK, expired JWT);
+/// resolves — having queued the change for a later drain — when the
+/// network is what failed. See `./settings_write` for why the two must
+/// not be treated alike.
 export async function updateUniversal(userId: string, changes: PrefsBag): Promise<PrefsBag> {
 	const deviceId = getDeviceId();
 
@@ -189,15 +194,15 @@ export async function updateUniversal(userId: string, changes: PrefsBag): Promis
 	const merged = applyPrefsChanges(base, changes);
 	cache.writeUniversal(userId, merged);
 
-	try {
-		await pushUniversal(userId, changes);
-	} catch {
-		// Server unreachable — queue the change verbatim so a future
-		// `loadSettings` drains it against a fresh server bag. Storing
-		// the *changes* (not the merged result) means a concurrent
-		// write from another device isn't clobbered on replay.
-		cache.appendPending(userId, deviceId, { isDevice: false, changes });
-	}
+	await pushOrQueue({
+		push: () => pushUniversal(userId, changes),
+		// Queue the change verbatim so a future `loadSettings` drains it
+		// against a fresh server bag. Storing the *changes* (not the merged
+		// result) means a concurrent write from another device isn't
+		// clobbered on replay.
+		queue: () => cache.appendPending(userId, deviceId, { isDevice: false, changes }),
+		rollback: () => cache.writeUniversal(userId, base),
+	});
 
 	return merged;
 }
@@ -209,11 +214,11 @@ export async function updateDevice(userId: string, changes: PrefsBag): Promise<P
 	const merged = applyPrefsChanges(base, changes);
 	cache.writeDevice(userId, deviceId, merged);
 
-	try {
-		await pushDevice(userId, deviceId, changes);
-	} catch {
-		cache.appendPending(userId, deviceId, { isDevice: true, changes });
-	}
+	await pushOrQueue({
+		push: () => pushDevice(userId, deviceId, changes),
+		queue: () => cache.appendPending(userId, deviceId, { isDevice: true, changes }),
+		rollback: () => cache.writeDevice(userId, deviceId, base),
+	});
 
 	return merged;
 }
@@ -221,13 +226,13 @@ export async function updateDevice(userId: string, changes: PrefsBag): Promise<P
 async function pushUniversal(userId: string, changes: PrefsBag): Promise<void> {
 	// Read-merge-write against the server bag so a concurrent edit
 	// from another device isn't silently overwritten.
-	const { data, error } = await supabase
+	const readRes = await supabase
 		.from('user_settings')
 		.select('prefs')
 		.eq('user_id', userId)
 		.maybeSingle();
-	if (error) throw error;
-	const merged = applyPrefsChanges((data?.prefs as PrefsBag) ?? {}, changes);
+	if (readRes.error) throw new SettingsWriteError(readRes);
+	const merged = applyPrefsChanges((readRes.data?.prefs as PrefsBag) ?? {}, changes);
 	// Upsert, not update: rows are client-provisioned, so a missing row
 	// makes an update match 0 rows and report success — the change is
 	// neither stored nor queued, and the next load reverts it (#234).
@@ -239,7 +244,7 @@ async function pushUniversal(userId: string, changes: PrefsBag): Promise<void> {
 			{ user_id: userId, prefs: merged, updated_at: new Date().toISOString() },
 			{ onConflict: 'user_id' },
 		);
-	if (updRes.error) throw updRes.error;
+	if (updRes.error) throw new SettingsWriteError(updRes);
 	// Stamp the cache with the canonical server-merged value so a
 	// device with a stale base picks up the union, not just its own
 	// delta.
@@ -247,14 +252,14 @@ async function pushUniversal(userId: string, changes: PrefsBag): Promise<void> {
 }
 
 async function pushDevice(userId: string, deviceId: string, changes: PrefsBag): Promise<void> {
-	const { data, error } = await supabase
+	const readRes = await supabase
 		.from('user_device_settings')
 		.select('prefs')
 		.eq('user_id', userId)
 		.eq('device_id', deviceId)
 		.maybeSingle();
-	if (error) throw error;
-	const merged = applyPrefsChanges((data?.prefs as PrefsBag) ?? {}, changes);
+	if (readRes.error) throw new SettingsWriteError(readRes);
+	const merged = applyPrefsChanges((readRes.data?.prefs as PrefsBag) ?? {}, changes);
 	// Upsert for the same 0-row reason as pushUniversal; the insert arm
 	// needs platform (NOT NULL) + label, matching the auto-provision row.
 	const updRes = await supabase
@@ -270,28 +275,21 @@ async function pushDevice(userId: string, deviceId: string, changes: PrefsBag): 
 			},
 			{ onConflict: 'user_id,device_id' },
 		);
-	if (updRes.error) throw updRes.error;
+	if (updRes.error) throw new SettingsWriteError(updRes);
 	cache.writeDevice(userId, deviceId, merged);
 }
 
 async function drainPending(userId: string, deviceId: string): Promise<void> {
 	const queue = cache.readPending(userId, deviceId);
 	if (queue.length === 0) return;
-	for (const change of queue) {
-		try {
-			if (change.isDevice) {
-				await pushDevice(userId, deviceId, change.changes);
-			} else {
-				await pushUniversal(userId, change.changes);
-			}
-		} catch {
-			// Stop draining on the first failure — preserving order so
-			// a later successful drain replays the rest. Don't clear
-			// the queue; the next refresh will retry.
-			return;
-		}
-	}
+	const unsent = await drainQueue(queue, (change) =>
+		change.isDevice
+			? pushDevice(userId, deviceId, change.changes)
+			: pushUniversal(userId, change.changes),
+	);
+	if (unsent.length === queue.length) return;
 	cache.clearPending(userId, deviceId);
+	for (const change of unsent) cache.appendPending(userId, deviceId, change);
 }
 
 export function detectPlatform(): string {
