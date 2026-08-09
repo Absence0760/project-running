@@ -25,6 +25,7 @@
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { isValidUuid } from '../_shared/input_validation.ts';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { validateReturnUrl } from '../events-connect-onboard/lib.ts';
@@ -73,6 +74,11 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
   const fundraiserId = typeof body.fundraiser_id === 'string' ? body.fundraiser_id : null;
   if (!fundraiserId) {
     return Response.json({ error: 'missing_fundraiser' }, { status: 400 });
+  }
+  // Checked before the rate limit below so a malformed id can neither
+  // 500 on the `.eq('id', …)` cast nor burn an anon bucket slot.
+  if (!isValidUuid(fundraiserId)) {
+    return Response.json({ error: 'invalid_fundraiser' }, { status: 400 });
   }
   const amountOutcome = validateDonationAmount(body.amount_cents);
   if (amountOutcome !== 'ok') {

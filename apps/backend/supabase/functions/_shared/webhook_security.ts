@@ -85,17 +85,6 @@ export function validateFreshness(
   return 'ok';
 }
 
-/// RFC 4122 v1-v5 UUID shape (8-4-4-4-12 hex). RevenueCat's app_user_id
-/// should be the Supabase user id, but a misconfiguration could ship
-/// their internal Customer-ID format here. Without this guard the
-/// downstream `.eq('id', userId)` lookup raises Postgres
-/// `22P02 invalid_input_syntax`, which bubbles as a 500 and sends RC
-/// into retry storms.
-export function isValidUuid(s: string): boolean {
-  if (typeof s !== 'string') return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
-}
-
 /// RevenueCat assigns `$RCAnonymousID:<random>` to users who haven't
 /// signed in. We can't map them to a Supabase profile until they alias,
 /// at which point RC fires another event. Returning a 200-skipped here
