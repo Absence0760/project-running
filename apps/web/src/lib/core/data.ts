@@ -78,6 +78,7 @@ import type { RecapPeriodKind } from '../types';
 import { normaliseExerciseName } from '../gym/gym_prs';
 import { GYM_SESSION_DRAFT_KEY } from '../gym/gym_session_draft';
 import type { YearInRunningRecap } from '../runs/recap';
+import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
 import type {
 	CoachAthleteStatus,
 	SessionPlan,
@@ -147,6 +148,10 @@ export interface FetchRunsOptions {
 	 * in the first place (#332).
 	 */
 	columns?: string;
+	/** Inclusive lower bound on `started_at`, as an ISO instant. */
+	startedAtFrom?: string;
+	/** Exclusive upper bound on `started_at`, as an ISO instant. */
+	startedAtBefore?: string;
 }
 
 export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
@@ -156,12 +161,15 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	// `/tmp/data-isolation-audit/client-realtime.md` M2.
 	const userId = auth.user?.id;
 	if (!userId) return [];
-	const build = () =>
-		supabase
+	const build = () => {
+		let q = supabase
 			.from(TABLES.runs)
 			.select(opts?.columns ?? '*')
-			.eq('user_id', userId)
-			.order('started_at', { ascending: false });
+			.eq('user_id', userId);
+		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
+		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
+		return q.order('started_at', { ascending: false });
+	};
 
 	let rows: any[];
 	if (opts?.limit != null) {
@@ -349,6 +357,44 @@ export const PERIOD_SUMMARY_RUN_COLUMNS = 'id, started_at, distance_m, duration_
 /// silently short.
 export async function fetchRunsForPeriodSummary(): Promise<Run[]> {
 	return fetchRuns({ columns: PERIOD_SUMMARY_RUN_COLUMNS, throwOnError: true });
+}
+
+/// Exactly the columns the recap engine reads off an in-period run: the
+/// distance / duration totals, elevation (with the legacy `metadata.
+/// elevation_m` fallback `elevationOf` still honours), the activity type
+/// behind the run-family longest / fastest rules, and the route id for the
+/// unique-route tally. `source` rides along because `fetchRuns` narrows it on
+/// every row it returns.
+export const RECAP_RUN_COLUMNS =
+	'id, started_at, distance_m, duration_s, elevation_gain_m, activity_type, route_id, source, metadata';
+
+/// Runs shaped for a recap card, without the lifetime `select('*')` scan both
+/// pages used to do — ~3,000 full rows, `metadata` bag and all, to render a
+/// card built from the ~250 inside the year (a monthly card, ~20).
+///
+/// Two reads instead of one: the recap year at `RECAP_RUN_COLUMNS`, plus every
+/// run's `started_at` and nothing else. The recap engine reaches a run outside
+/// the period only through `computeRunStreaks`, which reads that one column,
+/// so the second read reproduces `bestStreakDays` / `currentStreakDays`
+/// exactly — including a streak that crosses 31 Dec (`recap.test.ts` pins the
+/// engine's dependency, `recap_window.test.ts` pins the equivalence). Both
+/// recap routes take the whole year: the monthly card carries the year's
+/// twelve-month strip.
+export async function fetchRunsForRecap(year: number): Promise<Run[]> {
+	const win = recapYearWindow(year);
+	const [windowed, allStartedAt] = await Promise.all([
+		fetchRuns({
+			columns: RECAP_RUN_COLUMNS,
+			startedAtFrom: win.fromIso,
+			startedAtBefore: win.beforeIso,
+		}),
+		fetchRuns({ columns: 'started_at' }),
+	]);
+	return mergeRecapRuns(
+		windowed,
+		allStartedAt.map((r) => r.started_at),
+		win,
+	);
 }
 
 /// Supplementary counts for the Year-in-Running recap that can't be
