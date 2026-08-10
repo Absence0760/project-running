@@ -33,11 +33,15 @@
 --      fix — anonymous /share/run/<id> visitors need it for kudos
 --      / comments / photos / segment efforts / live pings).
 --   5. `public.is_run_visible_to` has been dropped.
---   6/7. `recompute_event_ranks` grants.
+--   6/7. `recompute_event_ranks` stays closed to PUBLIC and to
+--      `authenticated` — 20270516_001 made the calling trigger
+--      SECURITY DEFINER rather than granting the RPC out.
+--   8. An authenticated writer can land an event result and it comes
+--      out ranked (the behaviour 7 used to stand in for by proxy).
 
 begin;
 
-select plan(9);
+select plan(10);
 
 -- 1. weekly_mileage has search_path = public pinned.
 select results_eq(
@@ -133,14 +137,55 @@ select is(
   'PUBLIC cannot EXECUTE recompute_event_ranks (closed in 20260711_001)'
 );
 
--- 7. recompute_event_ranks IS executable by authenticated (the
---    AFTER-INSERT trigger on event_results runs in the writer's
---    SECURITY INVOKER context — drop this grant and inserts fail).
+-- 7. recompute_event_ranks is not executable by `authenticated` either.
+--    This assertion used to demand the opposite, on the reasoning that
+--    the AFTER trigger on event_results runs in the writer's context and
+--    so the writer needs the grant. It contradicted assertion 6 above,
+--    and the grant it demanded had in fact never existed: `20260711_001`
+--    revoked EXECUTE from PUBLIC (where `authenticated` inherited it) and
+--    nothing granted it back, so every authenticated event_results write
+--    aborted with `42501 permission denied for function
+--    recompute_event_ranks`. `20270516_001` closed it the other way —
+--    `event_results_rerank_trigger` is SECURITY DEFINER now, so it never
+--    consults the writer's grants and the re-rank RPC stays shut to every
+--    client role.
 select is(
   has_function_privilege('authenticated', 'recompute_event_ranks(uuid, timestamptz)', 'execute'),
-  true,
-  'authenticated CAN EXECUTE recompute_event_ranks (the event_results AFTER-INSERT trigger calls it)'
+  false,
+  'authenticated cannot EXECUTE recompute_event_ranks — the trigger is '
+  'SECURITY DEFINER, so no client role needs the grant'
 );
+
+-- 8. The behaviour assertion 7 was standing in for, tested directly: an
+--    authenticated writer can land an event result, and it comes out
+--    ranked. A trigger that loses its definer marking fails HERE with the
+--    42501 above, rather than passing a grant proxy.
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
+values ('00000000-0000-0000-0000-0000000fe001', 'authenticated', 'authenticated',
+        'organiser@fh.local', '', now(), now());
+insert into user_profiles (id, display_name)
+values ('00000000-0000-0000-0000-0000000fe001', 'Organiser');
+insert into clubs (id, owner_id, name, slug, is_public)
+values ('00000000-0000-0000-0000-0000000fec01', '00000000-0000-0000-0000-0000000fe001',
+        'Hygiene Club', 'hygiene-club-fh', true);
+insert into events (id, club_id, author_id, title, starts_at, is_public, category)
+values ('00000000-0000-0000-0000-0000000fee01', '00000000-0000-0000-0000-0000000fec01',
+        '00000000-0000-0000-0000-0000000fe001', 'Hygiene Race', now(), true, 'run');
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000fe001","role":"authenticated"}';
+insert into event_results (event_id, instance_start, user_id, duration_s, distance_m, finisher_status)
+values ('00000000-0000-0000-0000-0000000fee01', '2027-01-01T09:00:00Z',
+        '00000000-0000-0000-0000-0000000fe001', 1800, 5000, 'finished');
+select is(
+  (select rank from event_results
+     where event_id = '00000000-0000-0000-0000-0000000fee01'
+       and user_id = '00000000-0000-0000-0000-0000000fe001'),
+  1,
+  'an authenticated writer can insert an event result and the rerank trigger '
+  'ranks it without needing an EXECUTE grant of its own'
+);
+reset role;
 
 select * from finish();
 
