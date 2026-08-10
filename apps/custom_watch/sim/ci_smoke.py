@@ -649,11 +649,14 @@ WORKOUT_PLAN = (
 # unaided; the last transition and the completion are then driven by BTN5,
 # which is the §354 claim.
 WORKOUT_AUTO_STEPS = 4
-# Per auto-advanced step. The widest gap the demo workout produces on bench_jog
-# is the ~40 s warmup, so this is several times the observed worst case — loose
-# enough to absorb a loaded runner's virtual-time drift, and irrelevant to a
-# broken firmware, which fails on the WRONG STEP the moment it reports one
-# rather than on this deadline.
+# Per auto-advanced step, and RE-ARMED on each transition rather than
+# multiplied by WORKOUT_AUTO_STEPS up front. The widest gap the demo workout
+# produces on bench_jog is the ~40 s warmup, so this is several times the
+# observed worst case — loose enough to absorb a loaded runner's virtual-time
+# drift, and irrelevant to a broken firmware, which fails on the WRONG STEP the
+# moment it reports one rather than on this deadline. The multiplied form was
+# 720 s against this scenario's 300 s CI budget, so the outer budget always won
+# and the branch below could never say what it was written to say.
 WORKOUT_STEP_TIMEOUT = 180
 # The gap, in the FIRMWARE's own virtual seconds, inside which a lap press has
 # to produce its edge for the press to be what caused it. Deliberately far
@@ -739,6 +742,17 @@ RECORD_SNAPSHOT = re.compile(r"record: (\w+) dist=([\d.]+)m")
 # seconds. Virtual, not wall: every gap `dropout` reasons about is a gap the
 # FIRMWARE saw, and the two clocks drift apart under host load.
 LINE_STAMP = re.compile(r"^\s*([\d.]+)\s")
+# How long the published-fix stream may go quiet, in the FIRMWARE's own virtual
+# seconds, before a wait that needs the runner to be MOVING is waiting on
+# nothing. The fixtures feed a fix a second, so this is thirty missed ones: far
+# past any scheduling jitter, and far under the budget a stalled scenario would
+# otherwise burn. Measured against the newest line in the stream rather than
+# against wall clock for the same reason `dropout` measures its voids that way
+# — and the tasks that keep stamping lines while the GPS is silent (baro and
+# the recorder, both 1 Hz) are exactly what proves the firmware is still
+# running. `dropout` is the one scenario this must never be applied to: its
+# voids ARE the subject, and it reasons about them itself.
+GNSS_SILENCE_S = 30.0
 
 Panel = namedtuple("Panel", "path width height dark data")
 
@@ -1097,6 +1111,32 @@ def stamped(tail, pattern):
         if stamp is not None:
             out.append((float(stamp.group(1)), m))
     return out
+
+
+def gnss_silence_s(tail):
+    """Virtual seconds between the newest decoded line and the newest fix.
+
+    None until a first fix has been published: before that there is nothing to
+    have gone quiet, and every caller has already waited for one.
+
+    This distinguishes the two things a stalled distance assertion can mean. A
+    runner that is not moving and a GPS feed that has stopped look identical
+    from inside the firmware — the recorder auto-pauses either way — so a
+    scenario that waits on distance without checking this reports the runner
+    broken when the fixture is what died (CI run 31361094964, `workout`).
+    """
+    tail.poll()
+    newest_line = None
+    for line in reversed(tail.lines):
+        stamp = LINE_STAMP.match(line)
+        if stamp is None:
+            continue
+        t = float(stamp.group(1))
+        if newest_line is None:
+            newest_line = t
+        if FIX_PUBLISHED.search(line):
+            return newest_line - t
+    return None
 
 
 def read_link_frames(sim, wanted, timeout):
@@ -3017,7 +3057,8 @@ def scenario_workout(sim):
     # compared at the end: a runner that reports the wrong step should say so on
     # the step it gets wrong, not after the timeout for a step that will never
     # come.
-    deadline = time.monotonic() + WORKOUT_STEP_TIMEOUT * WORKOUT_AUTO_STEPS
+    deadline = time.monotonic() + WORKOUT_STEP_TIMEOUT
+    settled = 0
     while True:
         sim.alive()
         got = workout_transitions(sim.tail)
@@ -3032,15 +3073,32 @@ def scenario_workout(sim):
                 )
         if len(got) >= WORKOUT_AUTO_STEPS:
             break
+        if len(got) > settled:
+            settled = len(got)
+            deadline = time.monotonic() + WORKOUT_STEP_TIMEOUT
+        # Asked BEFORE the deadline, because it answers a question the deadline
+        # cannot: every step here ends on distance or on time-while-moving, so
+        # a fixture that stopped feeding stalls the runner without the runner
+        # being wrong, and the message below would blame the firmware for it.
+        silence = gnss_silence_s(sim.tail)
+        if silence is not None and silence > GNSS_SILENCE_S:
+            raise SmokeFailure(
+                f"the published-fix stream went quiet {silence:.0f} virtual "
+                f"seconds ago, with the workout on transition {len(got)} of "
+                f"{WORKOUT_AUTO_STEPS}. The GPS fixture stopped feeding, not "
+                "the runner's steps — look for the launcher's own "
+                "'watch-sim: GPS write failed' line in sim-output.log"
+            )
         if time.monotonic() >= deadline:
             raise SmokeFailure(
                 f"the workout advanced {len(got)} of {WORKOUT_AUTO_STEPS} steps "
                 f"unaided ({' -> '.join(k for _, (k, _, _) in got) or 'none'}) "
-                "before the deadline. Each step ends on ONE axis — the reps and "
-                "the warmup on distance, the recovery on its 30 s — so a stall "
-                "at transition 3 is a runner that never settles a duration step "
-                "and a stall at transition 1 one that never settles a distance "
-                "step"
+                f"and then made no further progress for {WORKOUT_STEP_TIMEOUT}s "
+                "with the fix stream still live. Each step ends on ONE axis — "
+                "the reps and the warmup on distance, the recovery on its 30 s "
+                "— so a stall at transition 3 is a runner that never settles a "
+                "duration step and a stall at transition 1 one that never "
+                "settles a distance step"
             )
         time.sleep(0.5)
     passed(
