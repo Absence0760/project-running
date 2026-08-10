@@ -128,3 +128,17 @@ test('isOfficialMarker — null / undefined owner id is never official (fail clo
 	assert.equal(isOfficialMarker({ user_id: 'owner-1' }, null), false);
 	assert.equal(isOfficialMarker({ user_id: 'owner-1' }, undefined), false);
 });
+
+test('sortMarkers orders same-second created_at by timestamp, fractional part or not', () => {
+	// `localeCompare` treats the fractional-second `.` as variable punctuation,
+	// so the fraction-less spelling Postgres writes at exactly zero microseconds
+	// sorted after a later marker in the same second.
+	const markers = [
+		{ id: 'second', position_m: 900, created_at: '2026-06-15T09:00:00.4+00:00' },
+		{ id: 'first', position_m: 900, created_at: '2026-06-15T09:00:00+00:00' }
+	];
+	assert.deepEqual(
+		sortMarkers(markers).map((m) => m.id),
+		['first', 'second']
+	);
+});
