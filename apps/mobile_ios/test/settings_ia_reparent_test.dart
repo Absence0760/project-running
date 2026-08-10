@@ -107,6 +107,9 @@ void main() {
       await _pumpAccount(tester, prefs);
 
       // Population first: the account screen genuinely rendered its own body.
+      // It scrolls — the AI-disclosure tile sits above this — so reach the
+      // anchor the same way the sibling test reaches the privacy picker.
+      await _scrollTo(tester, find.text('Delete account'));
       expect(find.text('Delete account'), findsOneWidget);
       expect(find.text('Privacy zones'), findsNothing);
       expect(find.text('Guided runs'), findsNothing);
