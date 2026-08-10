@@ -33,7 +33,7 @@ test.describe('/challenges/[id] — a failed read is not a missing challenge', (
 			.insert({
 				creator_id: USER_A.id,
 				title: `e2e-challenge-load-failure ${now}`,
-				scope: 'public',
+				scope: 'individual',
 				metric: 'distance',
 				goal_value: 100000,
 				starts_at: new Date(now - 86400000).toISOString(),
