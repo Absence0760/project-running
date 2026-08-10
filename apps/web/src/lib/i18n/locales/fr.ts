@@ -226,6 +226,7 @@ export const messages = {
 	"coachChat.tierFree": "Gratuit",
 	"coachChat.messagesRemaining": "{remaining} sur {total} messages restants aujourd'hui",
 	"coachChat.priorityContext": "fenêtre de contexte prioritaire",
+	"coachChat.tierUnknown": "Impossible de vérifier votre offre — envoyez un message pour confirmer votre quota",
 	"coachChat.cacheNote": "Cache : lu {read} · écrit {wrote} · entrée {in} · sortie {out}",
 	"coachChat.syncedTitle": "Enregistré dans ton compte et synchronisé sur tous tes appareils.",
 	"coachChat.synced": "Synchronisé",
