@@ -3,11 +3,13 @@ package bouncehook
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 const testSecret = "0123456789abcdef0123456789abcdef" // 32 chars — meets the floor
@@ -284,5 +286,51 @@ func TestClassify_PureBranches(t *testing.T) {
 				t.Fatalf("classify(%s): want %d, got %d (%+v)", c.body, c.want, len(got), got)
 			}
 		})
+	}
+}
+
+// TestIPRateLimiterTableStaysBounded pins the limiter table's size. clientIP
+// keys on caller-supplied forwarding headers and the throttle runs before the
+// shared-secret compare, so an unauthenticated caller could mint one permanent
+// bucket per fabricated header value and grow the table until the worker
+// process — job-drain loop included — ran out of memory.
+func TestIPRateLimiterTableStaysBounded(t *testing.T) {
+	l := newIPRateLimiter(120, time.Hour)
+	now := time.Unix(1_700_000_000, 0)
+	for i := 0; i < 200_000; i++ {
+		l.allow(fmt.Sprintf("10.%d.%d.%d", i>>16&255, i>>8&255, i&255), now)
+	}
+	l.mu.Lock()
+	n := len(l.buckets)
+	l.mu.Unlock()
+	if n > maxIPBuckets {
+		t.Fatalf("limiter retained %d buckets after 200k distinct keys, cap is %d", n, maxIPBuckets)
+	}
+}
+
+// TestIPRateLimiterEvictsIdleButKeepsLiveThrottle pins that bounding the table
+// didn't cost the throttle: a caller inside the window is still cut off at the
+// rate, and a bucket idle past the refill interval (back at the full token cap,
+// so carrying no state) is dropped rather than kept forever.
+func TestIPRateLimiterEvictsIdleButKeepsLiveThrottle(t *testing.T) {
+	l := newIPRateLimiter(3, time.Hour)
+	now := time.Unix(1_700_000_000, 0)
+
+	for i := 0; i < 3; i++ {
+		if !l.allow("1.2.3.4", now) {
+			t.Fatalf("request %d inside the rate was throttled", i)
+		}
+	}
+	if l.allow("1.2.3.4", now) {
+		t.Fatal("4th request in the window should be throttled")
+	}
+
+	later := now.Add(2 * time.Hour)
+	l.allow("5.6.7.8", later)
+	l.mu.Lock()
+	_, stillThere := l.buckets["1.2.3.4"]
+	l.mu.Unlock()
+	if stillThere {
+		t.Fatal("bucket idle past the refill interval should have been evicted")
 	}
 }

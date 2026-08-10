@@ -140,15 +140,15 @@ func (h *RedisHub) Publish(runID string, p Ping) int {
 // late-joiner behaviour).
 func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error) {
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
-	out := make(chan Ping, subBufferSize)
+	sub := &subscriber{ch: make(chan Ping, subBufferSize)}
 
 	// Pre-load last-known so a late joiner sees the runner immediately.
 	if last := h.LastKnown(runID); last != nil {
-		out <- *last
+		sub.trySend(*last)
 	}
 
-	closeFn := h.startForwarder(ctx, pubsub, out)
-	return out, closeFn, nil
+	closeFn := h.startForwarder(ctx, pubsub, sub)
+	return sub.ch, closeFn, nil
 }
 
 // SubscribeWithHistory opens the pub/sub subscription FIRST, then
@@ -167,8 +167,8 @@ func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, fu
 // exactly-once.
 func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHistory int) ([]Ping, <-chan Ping, func(), error) {
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
-	out := make(chan Ping, subBufferSize)
-	closeFn := h.startForwarder(ctx, pubsub, out)
+	sub := &subscriber{ch: make(chan Ping, subBufferSize)}
+	closeFn := h.startForwarder(ctx, pubsub, sub)
 
 	history := h.History(runID, maxHistory)
 	// A ping PUBLISHed in the SUBSCRIBE→LRANGE window lands in BOTH the
@@ -181,20 +181,28 @@ func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHi
 	// carries — and we never race the forwarder by writing back into
 	// `out`. The channel from here on carries only pings PUBLISHed after
 	// the drain, which are strictly newer again.
-	if buffered := drainBuffered(out); len(buffered) > 0 {
+	if buffered := drainBuffered(sub.ch); len(buffered) > 0 {
 		history = append(dedupHistoryTail(history, buffered), buffered...)
 	}
-	return history, out, closeFn, nil
+	return history, sub.ch, closeFn, nil
 }
 
 // startForwarder wires the cancel-driven close + the Redis-message
 // forwarding goroutine shared by both subscribe paths.
-func (h *RedisHub) startForwarder(ctx context.Context, pubsub *redis.PubSub, out chan Ping) func() {
+//
+// The subscriber's mutex is what makes the teardown safe: `pubsub.Close()`
+// does not wait for the forwarder, and go-redis hands a message to it before
+// the close lands, so an unguarded `close(out)` here races a send already in
+// flight — and a send case on a closed channel is *ready*, so the forwarder's
+// `default:` arm does not save it. That panic is on a bare goroutine, outside
+// any http handler's recover, so it takes the whole worker process (job-drain
+// loop included) down on an ordinary WebSocket disconnect.
+func (h *RedisHub) startForwarder(ctx context.Context, pubsub *redis.PubSub, sub *subscriber) func() {
 	closeOnce := &sync.Once{}
 	closeFn := func() {
 		closeOnce.Do(func() {
 			_ = pubsub.Close()
-			close(out)
+			sub.close()
 		})
 	}
 
@@ -219,12 +227,10 @@ func (h *RedisHub) startForwarder(ctx context.Context, pubsub *redis.PubSub, out
 				h.log().Debug("redis_hub: bad payload, skipping", "err", err)
 				continue
 			}
-			select {
-			case out <- p:
-			default:
-				// Buffer full — drop. The spectator misses one
-				// ping; the next one (≤5 s) arrives normally.
-			}
+			// A false here is either "buffer full" (the spectator
+			// misses one ping; the next arrives ≤5 s later) or
+			// "already unsubscribed". Both are drops.
+			sub.trySend(p)
 		}
 	}()
 
@@ -419,6 +425,54 @@ func (h *RedisHub) roomFor(runID string) *redisRoom {
 		h.rooms[runID] = r
 	}
 	return r
+}
+
+// RunGC drops per-process room caches whose last successful fetch is older
+// than [maxIdle], returning how many went. Redis owns the fan-out and the
+// per-run keys carry their own TTL, but these rooms do not: they are the
+// process-local zone + run-meta caches, and without a sweep the map grows one
+// entry per distinct run the replica has ever authorised, for the process
+// lifetime. Dropping one costs at most a Supabase round-trip on the next touch
+// — the entry is well past CacheRefreshTTL by then and would be re-fetched
+// anyway. Mirrors [Hub.RunGC].
+func (h *RedisHub) RunGC(maxIdle time.Duration) int {
+	cutoff := time.Now().Add(-maxIdle)
+	h.roomsMu.Lock()
+	defer h.roomsMu.Unlock()
+	dropped := 0
+	for id, r := range h.rooms {
+		r.mu.Lock()
+		last := r.zonesAt
+		if r.runMetaAt.After(last) {
+			last = r.runMetaAt
+		}
+		r.mu.Unlock()
+		if last.Before(cutoff) {
+			delete(h.rooms, id)
+			dropped++
+		}
+	}
+	return dropped
+}
+
+// StartGC spawns a background goroutine that runs RunGC every [interval] until
+// [ctx] is done. Returns immediately. Mirrors [Hub.StartGC].
+func (h *RedisHub) StartGC(ctx context.Context, interval, maxIdle time.Duration) {
+	if interval <= 0 || maxIdle <= 0 {
+		return
+	}
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				h.RunGC(maxIdle)
+			}
+		}
+	}()
 }
 
 func (h *RedisHub) log() *slog.Logger {
