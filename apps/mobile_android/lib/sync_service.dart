@@ -93,12 +93,12 @@ class SyncService with WidgetsBindingObserver {
     }
   }
 
-  void _onConnectivity(List<ConnectivityResult> results) {
+  Future<void> _onConnectivity(List<ConnectivityResult> results) async {
     final online = results.any((r) =>
         r == ConnectivityResult.wifi ||
         r == ConnectivityResult.mobile ||
         r == ConnectivityResult.ethernet);
-    if (online) _trySync('connectivity');
+    if (online) await _trySync('connectivity');
   }
 
   /// Test-only: drives the same code path the connectivity / lifecycle
@@ -110,8 +110,14 @@ class SyncService with WidgetsBindingObserver {
   /// Test-only: drives the connectivity branch directly without the
   /// `Connectivity().onConnectivityChanged` stream subscription.
   /// Production calls land here via [_onConnectivity].
+  ///
+  /// Returns the cycle's future so a caller can await it. A test that
+  /// fires this and then pumps the event queue is racing real disk I/O
+  /// inside the cycle: while it is still in flight [_trySync]'s
+  /// reentrancy guard silently drops the next trigger, so a second
+  /// event asserts against one push instead of two.
   @visibleForTesting
-  void debugOnConnectivity(List<ConnectivityResult> results) =>
+  Future<void> debugOnConnectivity(List<ConnectivityResult> results) =>
       _onConnectivity(results);
 
   /// Test-only: read the current backoff state for assertions.

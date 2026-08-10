@@ -1396,38 +1396,6 @@ jobs:
       # composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
-      # `supabase start` returns before every sidecar is ready to
-      # serve requests. On a slow runner the auto-started edge-runtime
-      # can still be cold when the first delete-account-guards fetch
-      # lands (CI run 26478978751 shard 4: the GET → 405 test timed out
-      # at 30s on the fetch alone, before any subsequent test ran), and
-      # Storage REST can still be 502'ing when the first track-download
-      # test fires. Both are observation-only — the containers DO come
-      # up eventually — so a one-time wait-loop here costs at most ~60s
-      # on a slow runner and zero on a warm one. Cheaper than a flaky
-      # retry budget.
-      - name: Wait for stack sidecars (storage REST + edge runtime)
-        run: |
-          for endpoint in \
-            "http://127.0.0.1:54321/storage/v1/bucket" \
-            "http://127.0.0.1:54321/functions/v1/refresh-tokens"; do
-            for i in $(seq 1 30); do
-              code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$endpoint" || echo 000)
-              # Any HTTP response (401 / 403 / 405 / 500 / 503) means
-              # kong routed + the upstream answered. Only network-
-              # level `000` means the sidecar is still cold.
-              if [ "$code" != "000" ]; then
-                echo "ready: $endpoint -> $code"
-                break
-              fi
-              echo "wait: $endpoint (attempt $i)"
-              sleep 2
-            done
-            if [ "$code" = "000" ]; then
-              echo "::error::$endpoint never responded after 60s"
-              exit 1
-            fi
-          done
       # We do NOT run `supabase db reset` to seed. reset recreates the
       # DB and RESTARTS the storage + edge-runtime containers mid-flight,
       # then polls /storage/v1/bucket until it answers. On a loaded
@@ -1555,25 +1523,6 @@ jobs:
           version: 2.84.2
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
-      - name: Wait for stack sidecars (storage REST + edge runtime)
-        run: |
-          for endpoint in \
-            "http://127.0.0.1:54321/storage/v1/bucket" \
-            "http://127.0.0.1:54321/functions/v1/refresh-tokens"; do
-            for i in $(seq 1 30); do
-              code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$endpoint" || echo 000)
-              if [ "$code" != "000" ]; then
-                echo "ready: $endpoint -> $code"
-                break
-              fi
-              echo "wait: $endpoint (attempt $i)"
-              sleep 2
-            done
-            if [ "$code" = "000" ]; then
-              echo "::error::$endpoint never responded after 60s"
-              exit 1
-            fi
-          done
       - name: Verify the seed loaded
         working-directory: apps/backend
         run: |
@@ -1669,25 +1618,6 @@ jobs:
           version: 2.84.2
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
-      - name: Wait for stack sidecars (storage REST + edge runtime)
-        run: |
-          for endpoint in \
-            "http://127.0.0.1:54321/storage/v1/bucket" \
-            "http://127.0.0.1:54321/functions/v1/refresh-tokens"; do
-            for i in $(seq 1 30); do
-              code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$endpoint" || echo 000)
-              if [ "$code" != "000" ]; then
-                echo "ready: $endpoint -> $code"
-                break
-              fi
-              echo "wait: $endpoint (attempt $i)"
-              sleep 2
-            done
-            if [ "$code" = "000" ]; then
-              echo "::error::$endpoint never responded after 60s"
-              exit 1
-            fi
-          done
       - name: Verify GoTrue picked up the keycloak provider
         run: |
           # The provider must be live for the lane to drive it. If env()

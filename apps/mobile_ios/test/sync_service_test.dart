@@ -614,8 +614,7 @@ void main() {
       final api = _FakeApiClient();
       final svc = SyncService(apiClient: api, runStore: store);
 
-      svc.debugOnConnectivity([ConnectivityResult.wifi]);
-      await pumpEventQueue();
+      await svc.debugOnConnectivity([ConnectivityResult.wifi]);
 
       expect(api.saveBatchCallCount, 1);
     });
@@ -626,14 +625,15 @@ void main() {
       final api = _FakeApiClient();
       final svc = SyncService(apiClient: api, runStore: store);
 
-      svc.debugOnConnectivity([ConnectivityResult.mobile]);
-      await pumpEventQueue();
+      // Awaited, not pumped: the cycle does real disk I/O, and while it
+      // is still in flight the reentrancy guard drops the next trigger
+      // outright — so a pumped second event asserts one push, not two.
+      await svc.debugOnConnectivity([ConnectivityResult.mobile]);
       // The first sync drained both runs in one batch; mark them so a
       // second connectivity event has fresh work to do.
       await store.save(makeRun('r-after-mobile'));
 
-      svc.debugOnConnectivity([ConnectivityResult.ethernet]);
-      await pumpEventQueue();
+      await svc.debugOnConnectivity([ConnectivityResult.ethernet]);
 
       // Two distinct sync cycles → two batch pushes.
       expect(api.saveBatchCallCount, 2);
@@ -644,8 +644,7 @@ void main() {
       final api = _FakeApiClient();
       final svc = SyncService(apiClient: api, runStore: store);
 
-      svc.debugOnConnectivity([ConnectivityResult.none]);
-      await pumpEventQueue();
+      await svc.debugOnConnectivity([ConnectivityResult.none]);
 
       expect(api.saveBatchCallCount, 0);
     });
@@ -659,8 +658,8 @@ void main() {
       final api = _FakeApiClient();
       final svc = SyncService(apiClient: api, runStore: store);
 
-      svc.debugOnConnectivity([ConnectivityResult.bluetooth, ConnectivityResult.wifi]);
-      await pumpEventQueue();
+      await svc
+          .debugOnConnectivity([ConnectivityResult.bluetooth, ConnectivityResult.wifi]);
 
       expect(api.saveBatchCallCount, 1);
     });
@@ -672,8 +671,7 @@ void main() {
       final api = _FakeApiClient();
       final svc = SyncService(apiClient: api, runStore: store);
 
-      svc.debugOnConnectivity([ConnectivityResult.bluetooth]);
-      await pumpEventQueue();
+      await svc.debugOnConnectivity([ConnectivityResult.bluetooth]);
 
       expect(api.saveBatchCallCount, 0);
     });
