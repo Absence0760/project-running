@@ -12,6 +12,11 @@ type grid struct {
 	minLat  float64
 	minLng  float64
 	cells   map[int64][]int32
+	// Bounding box of the POPULATED cells, in cell coordinates. NearestNode
+	// bounds its ring expansion to this box at both ends, which is what keeps
+	// an off-extract query cheap and the loop terminating.
+	minCol, maxCol int32
+	minRow, maxRow int32
 }
 
 // gridCellM is the target cell size. A few hundred metres keeps each bucket
@@ -42,10 +47,58 @@ func buildGrid(lat, lng []float64) *grid {
 		cells:   make(map[int64][]int32),
 	}
 	for i := range lat {
-		key := g.cellKey(g.col(lng[i]), g.row(lat[i]))
+		col, row := g.col(lng[i]), g.row(lat[i])
+		if i == 0 {
+			g.minCol, g.maxCol, g.minRow, g.maxRow = col, col, row, row
+		} else {
+			g.minCol = min(g.minCol, col)
+			g.maxCol = max(g.maxCol, col)
+			g.minRow = min(g.minRow, row)
+			g.maxRow = max(g.maxRow, row)
+		}
+		key := g.cellKey(col, row)
 		g.cells[key] = append(g.cells[key], int32(i))
 	}
 	return g
+}
+
+// ringToExtent is the smallest ring radius around (cc, cr) that can hold a
+// populated cell: the Chebyshev distance from the query cell to the populated
+// bounding box, or 0 when the query sits inside it. Every smaller ring lies
+// wholly outside the box and is therefore guaranteed empty.
+func (g *grid) ringToExtent(cc, cr int32) int32 {
+	dCol := int32(0)
+	switch {
+	case cc < g.minCol:
+		dCol = g.minCol - cc
+	case cc > g.maxCol:
+		dCol = cc - g.maxCol
+	}
+	dRow := int32(0)
+	switch {
+	case cr < g.minRow:
+		dRow = g.minRow - cr
+	case cr > g.maxRow:
+		dRow = cr - g.maxRow
+	}
+	return max(dCol, dRow)
+}
+
+// ringPastExtent is the largest ring radius around (cc, cr) that can still hold
+// a populated cell — the Chebyshev distance to the farthest corner of the
+// populated bounding box. Every larger ring is guaranteed empty, so the search
+// is complete once it has been scanned.
+func (g *grid) ringPastExtent(cc, cr int32) int32 {
+	col := max(absI32(cc-g.minCol), absI32(cc-g.maxCol))
+	row := max(absI32(cr-g.minRow), absI32(cr-g.maxRow))
+	return max(col, row)
+}
+
+func absI32(v int32) int32 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 func (g *grid) row(lat float64) int32 { return int32(math.Floor((lat - g.minLat) / g.cellLat)) }
@@ -70,8 +123,16 @@ func (g *Graph) NearestNode(lat, lng float64) (int32, bool) {
 	// Expand ring radius until we've found a candidate AND the inner edge of
 	// the next ring is farther than the best candidate (so no closer node can
 	// hide further out). Cell size in metres bounds that comparison.
-	for ring := int32(0); ; ring++ {
-		found := scanRing(gr, cc, cr, ring, func(idx int32) {
+	//
+	// Both ends of the sweep are pinned to the index's populated extent. The
+	// first ring skips the empty rings between an off-extract query and the
+	// data — walking those is quadratic in the distance, so a start point
+	// outside the loaded PBF used to pin a core for minutes. The last ring is
+	// what terminates the loop; the previous rule ("this ring was empty, so
+	// stop") is unsound on a sparse network, where an empty ring can sit
+	// between the current best and a strictly closer node further out.
+	for ring, last := gr.ringToExtent(cc, cr), gr.ringPastExtent(cc, cr); ring <= last; ring++ {
+		scanRing(gr, cc, cr, ring, func(idx int32) {
 			d := haversineM(lat, lng, g.lat[idx], g.lng[idx])
 			if d < bestD {
 				bestD = d
@@ -93,44 +154,35 @@ func (g *Graph) NearestNode(lat, lng float64) (int32, bool) {
 				break
 			}
 		}
-		// Guard against an unbounded loop if the point is wildly off-graph:
-		// once a ring covered the whole index extent and we still have a best,
-		// stop. `found` is false when a ring touched no populated cells AND we
-		// already have a candidate.
-		if !found && best >= 0 && ring > 0 {
-			break
-		}
-		if ring > 1<<20 { // pathological safety valve
-			break
-		}
 	}
 	return best, best >= 0
 }
 
 // scanRing visits every populated cell on the square ring at Chebyshev distance
-// `ring` from (cc, cr), calling visit for each node. Returns whether any cell
-// on the ring existed in the index (used to terminate over empty regions).
-func scanRing(gr *grid, cc, cr, ring int32, visit func(int32)) bool {
-	any := false
+// `ring` from (cc, cr), calling visit for each node. The walk is clipped to the
+// populated bounding box, so a distant ring costs the box's width/height rather
+// than the ring's own perimeter — without that clip a far-off query would pay
+// O(ring) per ring even though every cell outside the box is empty by
+// construction.
+func scanRing(gr *grid, cc, cr, ring int32, visit func(int32)) {
 	visitCell := func(col, row int32) {
-		if nodes, ok := gr.cells[gr.cellKey(col, row)]; ok {
-			any = true
-			for _, idx := range nodes {
-				visit(idx)
-			}
+		if row < gr.minRow || row > gr.maxRow || col < gr.minCol || col > gr.maxCol {
+			return
+		}
+		for _, idx := range gr.cells[gr.cellKey(col, row)] {
+			visit(idx)
 		}
 	}
 	if ring == 0 {
 		visitCell(cc, cr)
-		return any
+		return
 	}
-	for col := cc - ring; col <= cc+ring; col++ {
+	for col := max(cc-ring, gr.minCol); col <= min(cc+ring, gr.maxCol); col++ {
 		visitCell(col, cr-ring)
 		visitCell(col, cr+ring)
 	}
-	for row := cr - ring + 1; row <= cr+ring-1; row++ {
+	for row := max(cr-ring+1, gr.minRow); row <= min(cr+ring-1, gr.maxRow); row++ {
 		visitCell(cc-ring, row)
 		visitCell(cc+ring, row)
 	}
-	return any
 }

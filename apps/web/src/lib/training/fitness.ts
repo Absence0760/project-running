@@ -89,12 +89,16 @@ export function isReturningFromGap(
 /// reliable import, distance is >= MIN_QUALIFYING_DISTANCE_M, duration / distance
 /// both sane. Indoor / treadmill runs are excluded — their distance is
 /// belt-/estimate-derived, not measured, so feeding it to VDOT inflates the
-/// runner's fitness ceiling (#16).
+/// runner's fitness ceiling (#16). Cycling is excluded for the same reason
+/// `goals.ts` excludes it from pace: bike speed is not running speed, and
+/// `currentVdot` takes the MAX over runs, so a single commute rides straight to
+/// the top and takes the threshold pace, TSS and race predictions with it.
 export function qualifyingRuns(runs: Run[]): Run[] {
 	return runs.filter(
 		(r) =>
 			r.distance_m >= MIN_QUALIFYING_DISTANCE_M &&
 			r.duration_s >= 300 &&
+			r.activity_type !== 'cycle' &&
 			(r.metadata as Record<string, unknown> | null)?.indoor !== true &&
 			(r.source === 'app' ||
 				r.source === 'watch' ||

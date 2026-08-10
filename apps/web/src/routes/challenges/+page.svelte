@@ -21,7 +21,19 @@
 	let browseOffset = $state(0);
 	let browseDone = $state(false);
 	let browseLoading = $state(false);
+	let browseError = $state<string | null>(null);
 	let activeSearch = $state('');
+	// Latest-wins sequencing for Browse, matching SocialPeople/SocialClubs: a
+	// newer search must invalidate an older response, never be refused by it.
+	let browseGen = 0;
+
+	// The data layer rethrows PostgREST's error object, which is not an Error
+	// instance at runtime, so `String(e)` rendered the reason line as the
+	// literal "[object Object]".
+	function errorText(e: unknown): string {
+		const msg = (e as { message?: unknown } | null)?.message;
+		return typeof msg === 'string' && msg.length > 0 ? msg : String(e);
+	}
 
 	// A load *failure* is kept distinct from the genuinely-empty state so a
 	// broken fetch surfaces an error + retry instead of masquerading as
@@ -31,25 +43,37 @@
 		try {
 			mine = await fetchChallenges({ mine: true });
 		} catch (e) {
-			mineError = e instanceof Error ? e.message : String(e);
+			mineError = errorText(e);
 		}
 	}
 
 	async function loadBrowse(reset: boolean, term: string) {
-		if (browseLoading) return;
+		// Only the append path (Load more) may be refused while one is in
+		// flight; refusing a *new search* would leave the list showing an
+		// older term's results — and `activeSearch` pointing at that older
+		// term, so the next Load more would page a query the box no longer
+		// shows. A new search supersedes instead.
+		if (!reset && browseLoading) return;
+		const gen = ++browseGen;
 		browseLoading = true;
+		browseError = null;
 		const offset = reset ? 0 : browseOffset;
 		try {
 			const rows = await browsePublicChallenges({ search: term, limit: BROWSE_PAGE, offset });
+			if (gen !== browseGen) return;
 			browse = reset ? rows : [...(browse ?? []), ...rows];
 			browseOffset = offset + rows.length;
 			browseDone = rows.length < BROWSE_PAGE;
 			activeSearch = term;
-		} catch {
+		} catch (e) {
+			if (gen !== browseGen) return;
+			// Same reasoning as `mine` above: a failed browse must not render
+			// as "no public challenges to join", which is a different fact.
+			browseError = errorText(e);
 			if (reset) browse = [];
 			browseDone = true;
 		} finally {
-			browseLoading = false;
+			if (gen === browseGen) browseLoading = false;
 		}
 	}
 
@@ -162,7 +186,18 @@
 				/>
 			</div>
 		</div>
-		{#if browse === null}
+		{#if browseError}
+			<div class="error-banner" role="alert">
+				<span class="material-symbols" aria-hidden="true">error</span>
+				<div>
+					<strong>{m('challenges.loadFailed')}</strong>
+					<span class="error-detail">{browseError}</span>
+				</div>
+				<button class="btn btn-outline btn-sm" onclick={() => loadBrowse(true, search.trim())}>
+					{m('plansPage.retry')}
+				</button>
+			</div>
+		{:else if browse === null}
 			<p class="muted">…</p>
 		{:else if browse.length === 0}
 			<div class="empty-state">

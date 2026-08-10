@@ -51,10 +51,20 @@ DateTime _previousLocalDay(DateTime d) {
 /// matter — the helper bucketises by local day and dedupes.
 /// [today] anchors "current" (usually `DateTime.now()`). Future-dated
 /// runs are clamped to <= today's local date.
-RunStreaks computeRunStreaks(List<DateTime> runStarts, DateTime today) {
+/// [bestSince] bounds `best`, for a caller reporting a bounded period
+/// rather than all of history: only a streak reaching this local day or
+/// later counts. A qualifying streak still counts at its *full* length,
+/// days before the bound included, so one running 28 Dec → 3 Jan is
+/// seven days long on the January card. Omit it for the all-time best.
+RunStreaks computeRunStreaks(
+  List<DateTime> runStarts,
+  DateTime today, [
+  DateTime? bestSince,
+]) {
   if (runStarts.isEmpty) return const RunStreaks(current: 0, best: 0);
 
   final todayKey = _localDayKey(today);
+  final sinceKey = bestSince == null ? null : _localDayKey(bestSince);
 
   final dayKeys = <String>{};
   for (final r in runStarts) {
@@ -66,20 +76,24 @@ RunStreaks computeRunStreaks(List<DateTime> runStarts, DateTime today) {
   final sortedKeys = dayKeys.toList()..sort();
 
   // Best streak — walk the sorted set, increment on consecutive days,
-  // reset on gap, track max.
-  var best = 1;
-  var run = 1;
-  for (var i = 1; i < sortedKeys.length; i++) {
-    final prev = sortedKeys[i - 1];
+  // reset on gap, track max. `run` is the length of the streak ending
+  // at the day being visited, so testing that day against `sinceKey`
+  // admits a streak the moment it reaches the period and, because `run`
+  // keeps growing to the streak's end, records its full length.
+  var best = 0;
+  var run = 0;
+  for (var i = 0; i < sortedKeys.length; i++) {
     final here = sortedKeys[i];
-    final parts = prev.split('-').map(int.parse).toList();
-    final expected =
-        _localDayKey(DateTime(parts[0], parts[1], parts[2] + 1));
-    if (here == expected) {
-      run += 1;
-      if (run > best) best = run;
-    } else {
+    if (i == 0) {
       run = 1;
+    } else {
+      final parts = sortedKeys[i - 1].split('-').map(int.parse).toList();
+      final expected =
+          _localDayKey(DateTime(parts[0], parts[1], parts[2] + 1));
+      run = here == expected ? run + 1 : 1;
+    }
+    if (sinceKey == null || here.compareTo(sinceKey) >= 0) {
+      if (run > best) best = run;
     }
   }
 

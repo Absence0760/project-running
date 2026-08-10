@@ -593,15 +593,19 @@ func main() {
 		Persister: client,
 		RunMeta:   runMetaFetcher,
 	}
-	// Start the idle-room GC sweeper. Only the in-process Hub needs
-	// it — the Redis backend's per-room key has a 24h TTL set on
-	// every publish. /audit/livehub C2 + M4.
+	// Reap idle push-rate-limiter buckets. They live on the Server, not
+	// the Hub, so this is backend-agnostic — gating it on the in-process
+	// Hub left every Redis deploy leaking one bucket per distinct run for
+	// the process lifetime, the exact leak StartLimiterGC exists to close.
+	hubSrv.StartLimiterGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
+	// Start the idle-room GC sweeper. Both backends need one: the Redis
+	// backend's per-run KEYS carry a 24h TTL, but its per-process zone +
+	// run-meta room cache does not. /audit/livehub C2 + M4.
+	if redisHub, ok := hub.(*livehub.RedisHub); ok {
+		redisHub.StartGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
+	}
 	if inProc, ok := hub.(*livehub.Hub); ok {
 		inProc.StartGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
-		// Reap idle push-rate-limiter buckets on the same cadence — they
-		// live on the Server, not the Hub, so the room GC above doesn't
-		// touch them (they would otherwise leak one entry per distinct run).
-		hubSrv.StartLimiterGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
 		// Live-ping Bridge: republish legacy Supabase Realtime pings
 		// (recorders still on live_run_pings) into hub rooms, so a hub
 		// spectator sees a run recorded on the legacy transport during

@@ -22,6 +22,7 @@ function r(partial: {
 	distance_m: number;
 	duration_s: number;
 	source?: Run['source'];
+	activity_type?: string;
 	metadata?: Record<string, unknown> | null;
 }): Run {
 	return {
@@ -31,6 +32,7 @@ function r(partial: {
 		distance_m: partial.distance_m,
 		duration_s: partial.duration_s,
 		source: partial.source ?? 'app',
+		activity_type: partial.activity_type ?? 'run',
 		track_url: null,
 		track: null,
 		route_id: null,
@@ -60,6 +62,23 @@ test('qualifyingRuns — drops sub-1.5km runs (too noisy for VDOT)', () => {
 test('qualifyingRuns — admits a sustained 1.5-2km comeback run', () => {
 	const comeback = r({ started_at: '2026-04-01T07:00:00Z', distance_m: 1800, duration_s: 600 });
 	assert.deepEqual(qualifyingRuns([comeback]), [comeback]);
+});
+
+test('qualifyingRuns — drops cycling, so one commute cannot set the VDOT ceiling', () => {
+	// currentVdot takes the MAX over qualifying runs, so a 20 km/h bike ride
+	// scored as a run doubles the runner's VDOT and every figure derived from it.
+	const runs = [
+		r({ started_at: '2026-04-21T07:00:00Z', distance_m: 5000, duration_s: 1800 }),
+		r({ started_at: '2026-04-24T07:00:00Z', distance_m: 5000, duration_s: 1800 }),
+	];
+	const ride = r({
+		started_at: '2026-04-27T07:00:00Z',
+		distance_m: 25000,
+		duration_s: 4500,
+		activity_type: 'cycle',
+	});
+	assert.deepEqual(qualifyingRuns([...runs, ride]), runs);
+	assert.equal(currentVdot([...runs, ride], NOW), currentVdot(runs, NOW));
 });
 
 test('qualifyingRuns — drops sub-5min runs (sprint efforts)', () => {

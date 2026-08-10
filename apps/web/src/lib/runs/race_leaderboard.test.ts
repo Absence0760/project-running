@@ -61,3 +61,18 @@ test('comparator is deterministic regardless of input order', () => {
 	assert.deepEqual(first, second);
 	assert.deepEqual(first, ['c', 'a', 'b']);
 });
+
+test('two odometer-less runners still fall back to the user_id discriminator', () => {
+	// The exact shape postRacePing writes when a watch pushes raw GPS with no
+	// odometer. Both elapsed times defaulted to Infinity and their difference was
+	// NaN, so the board reordered these runners on every refresh.
+	const rows: LeaderboardSortable[] = [
+		{ user_id: 'aaa', distance_m: 5000, elapsed_s: null },
+		{ user_id: 'bbb', distance_m: 5000, elapsed_s: null },
+		{ user_id: 'ccc', distance_m: 5000, elapsed_s: null },
+		{ user_id: 'ddd', distance_m: 5000, elapsed_s: null }
+	];
+	assert.equal(compareLeaderboard(rows[3], rows[0]), 1);
+	assert.deepEqual(sorted(rows), ['aaa', 'bbb', 'ccc', 'ddd']);
+	assert.deepEqual(sorted([...rows].reverse()), ['aaa', 'bbb', 'ccc', 'ddd']);
+});

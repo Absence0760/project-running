@@ -16,6 +16,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
 	import { trackDirty } from '$lib/core/form_dirty';
+	import { toMinorUnits } from '$lib/format/minor_units';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
 	import { EVENT_CATEGORIES, isAthleticCategory } from '$lib/social/event_category';
@@ -348,7 +349,7 @@
 			if (charge && chargesEnabled && priceMajor != null && priceMajor > 0) {
 				try {
 					await setEventPricing(event.id, {
-						price_cents: Math.round(priceMajor * 100),
+						price_cents: toMinorUnits(priceMajor, currency),
 						currency,
 						refund_policy: refundPolicy,
 						sales_close_offset_minutes: Math.max(0, Math.floor(salesCloseOffset ?? 0))

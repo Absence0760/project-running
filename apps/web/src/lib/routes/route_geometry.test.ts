@@ -260,6 +260,53 @@ test('distanceAlongRoute — picks the nearest of two close segments', () => {
 	assert.ok(Math.abs(d! - 50) < 2, `got ${d}`);
 });
 
+test('distanceAlongRoute — a later segment can still win', () => {
+	// Guard against a fix that degenerates into "always the first segment":
+	// an L (east 100 m, then north 100 m) probed 2 m east of the vertical
+	// leg, near its top, must resolve into the SECOND leg (>100 m).
+	const wps = [
+		distWp(0),
+		distWp(100),
+		wp(100 / metresPerDegLng, 100 / metresPerDegLng),
+	];
+	const probe = { lat: 90 / metresPerDegLng, lng: 102 / metresPerDegLng };
+	const d = distanceAlongRoute(probe, wps);
+	assert.ok(d !== null);
+	assert.ok(Math.abs(d! - 190) < 2, `expected ~190 m on the second leg, got ${d}`);
+});
+
+test('distanceAlongRoute — an out-and-back does not flip limbs on 1 cm of jitter', () => {
+	// 3.47 km due north and back (0.03125° = 1/32, so both limbs are the
+	// same ground twice over). Ranking candidates by a perpendicular measured
+	// inside each segment's OWN planar frame compares incommensurable numbers:
+	// the return limb anchors its frame 3.5 km further north, where cos(lat)
+	// is smaller, so it always reports the smaller "distance" to a point that
+	// is exactly as far from both. A GPS fix 1 cm off the line then resolves
+	// 3.5 km further along the course than the same fix on it.
+	const oab = [wp(45, 0), wp(45.03125, 0), wp(45, 0)];
+	const total = polylineLengthMetres(oab);
+	const mid = 45.015625; // half way up the outbound limb
+	const oneCm = 0.01 / (metresPerDegLng * Math.cos((mid * Math.PI) / 180));
+
+	const onLine = distanceAlongRoute({ lat: mid, lng: 0 }, oab);
+	const east = distanceAlongRoute({ lat: mid, lng: oneCm }, oab);
+	const west = distanceAlongRoute({ lat: mid, lng: -oneCm }, oab);
+	assert.ok(onLine !== null && east !== null && west !== null);
+
+	assert.ok(
+		Math.abs(east! - onLine!) < 1,
+		`1 cm east moved the answer ${Math.abs(east! - onLine!).toFixed(0)} m`,
+	);
+	assert.ok(
+		Math.abs(west! - onLine!) < 1,
+		`1 cm west moved the answer ${Math.abs(west! - onLine!).toFixed(0)} m`,
+	);
+	assert.ok(
+		Math.abs(onLine! - total / 4) < 1,
+		`expected the outbound limb (~${(total / 4).toFixed(0)} m), got ${onLine}`,
+	);
+});
+
 test('distanceAlongRoute — clamps to [0, totalLength]', () => {
 	const wps = [distWp(0), distWp(100), distWp(200)];
 	const total = polylineLengthMetres(wps);

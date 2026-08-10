@@ -22,6 +22,14 @@
 --      (positive control).
 --   3. Authenticated caller raises 42501 calling with another
 --      user's user_id (the High-severity fix).
+--   4. The EXECUTE grants themselves: service_role + authenticated hold
+--      it, public + anon do not. Coverage 1 asserts the service-role
+--      BEHAVIOUR, but `revoke … from public` also stripped the EXECUTE
+--      that service_role held only through PUBLIC, so the call was
+--      rejected at the grant layer before the body's service-role branch
+--      could run — aborting this whole file at its first assertion.
+--      Restored in 20270515_001; pinned here as a privilege so a future
+--      re-emission of the revoke/grant pair cannot drop it again.
 --
 -- The anon-role grant-level deny is verified at migration time
 -- (`revoke ... from public, anon`) and tested cross-cuttingly by
@@ -31,7 +39,7 @@
 
 begin;
 
-select plan(3);
+select plan(4);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -39,6 +47,17 @@ values
    'self@pr.local', '', now(), now()),
   ('00000000-0000-0000-0000-000000000fa2', 'authenticated', 'authenticated',
    'other@pr.local', '', now(), now());
+
+-- 0. The grant matrix behind coverage 1. Asserted before the call so a
+--    stripped service_role EXECUTE reports as a failed assertion rather
+--    than a 42501 that aborts the file.
+select ok(
+  has_function_privilege('service_role', 'public.refresh_personal_records_for_user(uuid)', 'EXECUTE')
+    and has_function_privilege('authenticated', 'public.refresh_personal_records_for_user(uuid)', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.refresh_personal_records_for_user(uuid)', 'EXECUTE')
+    and not has_function_privilege('public', 'public.refresh_personal_records_for_user(uuid)', 'EXECUTE'),
+  'EXECUTE is held by service_role + authenticated only — not public, not anon'
+);
 
 set local role service_role;
 

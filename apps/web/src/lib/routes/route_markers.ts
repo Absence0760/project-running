@@ -94,13 +94,21 @@ export interface MarkerLike {
 export function sortMarkers<T extends MarkerLike>(markers: T[]): T[] {
 	return [...markers].sort((a, b) => {
 		if (a.position_m == null && b.position_m == null) {
-			return a.created_at.localeCompare(b.created_at);
+			return byCreatedAt(a, b);
 		}
 		if (a.position_m == null) return 1;
 		if (b.position_m == null) return -1;
 		if (a.position_m !== b.position_m) return a.position_m - b.position_m;
-		return a.created_at.localeCompare(b.created_at);
+		return byCreatedAt(a, b);
 	});
+}
+
+/// Compared by code point, not by ICU collation: `localeCompare` treats the
+/// fractional-second `.` as variable punctuation, so a Postgres timestamp
+/// written without one (microseconds exactly zero) sorts AFTER a timestamp in
+/// the same second that has one. The Dart twin uses `String.compareTo`.
+function byCreatedAt(a: MarkerLike, b: MarkerLike): number {
+	return a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0;
 }
 
 export interface CutoffParts {

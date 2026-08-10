@@ -313,15 +313,49 @@ export function resolveTrainingPaces(input: {
 
 // ─────────────────────── Phase schedule ───────────────────────
 
+const PHASE_SHARES: ReadonlyArray<readonly [PlanPhase, number]> = [
+	['base', 0.3],
+	['build', 0.4],
+	['peak', 0.2],
+	['taper', 0.1]
+];
+
+/**
+ * Weeks per phase, in `PHASE_SHARES` order, over the non-race weeks.
+ *
+ * Flooring each share independently loses up to three weeks of the total to
+ * rounding, and the taper — the smallest share, and the one the leftover used
+ * to be — absorbed all of it: at exactly 10 and exactly 5 total weeks the
+ * floors consumed every non-race week, leaving zero taper and the peak week
+ * hard against race day. Largest-remainder keeps the sum exact at every total,
+ * and the taper's first week is reserved before the split so rounding can
+ * never be what takes it away.
+ */
+function phaseWeekCounts(totalWeeks: number): number[] {
+	const trainWeeks = totalWeeks - 1;
+	if (trainWeeks <= 0) return [0, 0, 0, 0];
+	const exact = PHASE_SHARES.map(([, share]) => share * (trainWeeks - 1));
+	const counts = exact.map((v) => Math.floor(v));
+	counts[counts.length - 1] += 1;
+	let left = trainWeeks - counts.reduce((a, b) => a + b, 0);
+	const frac = exact.map((v) => v - Math.floor(v));
+	const order = exact.map((_, i) => i).sort((a, b) => frac[b] - frac[a] || a - b);
+	for (const i of order) {
+		if (left <= 0) break;
+		counts[i]++;
+		left--;
+	}
+	return counts;
+}
+
 export function phaseFor(weekIndex: number, totalWeeks: number): PlanPhase {
-	const base = Math.floor(totalWeeks * 0.3);
-	const build = Math.floor(totalWeeks * 0.4);
-	const peak = Math.floor(totalWeeks * 0.2);
-	// Remaining weeks → taper. Final week is always 'race'.
 	if (weekIndex >= totalWeeks - 1) return 'race';
-	if (weekIndex < base) return 'base';
-	if (weekIndex < base + build) return 'build';
-	if (weekIndex < base + build + peak) return 'peak';
+	const counts = phaseWeekCounts(totalWeeks);
+	let end = 0;
+	for (let i = 0; i < counts.length; i++) {
+		end += counts[i];
+		if (weekIndex < end) return PHASE_SHARES[i][0];
+	}
 	return 'taper';
 }
 

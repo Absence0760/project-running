@@ -153,13 +153,23 @@ pub fn plan_chunk_read(
     })
 }
 
-/// Whether the phone's read cursor after a served chunk (`next_offset`) has
-/// reached the end of run `run_seq`'s blob — the point the run counts as pulled
-/// and becomes the preferred eviction victim. `false` for a run the directory
-/// does not hold, so an unknown id can never mark anything synced.
-pub fn chunk_completes_run(dir: &SlotDir, run_seq: u32, next_offset: u32) -> bool {
-    dir.find(run_seq)
-        .is_some_and(|(_, size)| next_offset >= size)
+/// Record that the chunk covering `[chunk_from, next_offset)` of run `run_seq`
+/// was served, and report whether the phone has now been sent the whole blob —
+/// the point the run counts as pulled and becomes the preferred eviction victim.
+/// `false` for a run the directory does not hold, so an unknown id can never
+/// mark anything synced.
+///
+/// Takes the chunk's START as well as the cursor behind it because
+/// [`plan_chunk_read`] answers any offset it is asked for (see
+/// [`SlotDir::note_chunk_served`]): a cursor past the end proves the last byte
+/// was served, and nothing about the ones before it.
+pub fn chunk_completes_run(
+    dir: &mut SlotDir,
+    run_seq: u32,
+    chunk_from: u32,
+    next_offset: u32,
+) -> bool {
+    dir.note_chunk_served(run_seq, chunk_from, next_offset)
 }
 
 /// Which config page a read must trust and the generation it carries, given
@@ -338,21 +348,27 @@ mod tests {
 
         /// Serve chunk requests until the blob is exhausted, exactly as the BLE
         /// task does, and return the reassembled bytes plus the final cursor.
+        /// Pull a whole run the way the phone does — chunk by chunk from zero,
+        /// banking each one — and report the bytes plus whether the store now
+        /// counts the run fully served.
         fn pull_all(
             &self,
-            dir: &SlotDir,
+            dir: &mut SlotDir,
             run_seq: u32,
             cap: u16,
-        ) -> (heapless::Vec<u8, 4096>, u32) {
+        ) -> (heapless::Vec<u8, 4096>, bool) {
             let mut out: heapless::Vec<u8, 4096> = heapless::Vec::new();
             let mut cursor = 0u32;
+            let mut complete = false;
             while let Some(plan) = plan_chunk_read(dir, BASE, run_seq, cursor, cap) {
                 let mut buf = [0u8; 4096];
                 self.read(plan.at, &mut buf[..plan.len]);
                 out.extend_from_slice(&buf[..plan.len]).expect("fits");
+                let from = cursor;
                 cursor += plan.len as u32;
+                complete = chunk_completes_run(dir, run_seq, from, cursor);
             }
-            (out, cursor)
+            (out, complete)
         }
     }
 
@@ -517,8 +533,8 @@ mod tests {
         let plan = plan_slot_write(&mut dir, BASE, 7, 41, blob.len()).expect("fits");
         flash.apply(plan, &blob);
 
-        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
-        assert_eq!(cursor, blob.len() as u32);
+        let (pulled, complete) = flash.pull_all(&mut dir, 7, 244);
+        assert!(complete, "every byte served");
         assert_eq!(&pulled[..], &blob[..], "byte-exact reassembly");
         assert!(verify_blob(&pulled));
     }
@@ -535,8 +551,8 @@ mod tests {
         flash.apply(plan, &blob);
 
         for cap in [1u16, 2, 3, 7, 16, 17, 100, 244, 700, 4096] {
-            let (pulled, cursor) = flash.pull_all(&dir, 3, cap);
-            assert_eq!(cursor, blob.len() as u32, "cap {cap}");
+            let (pulled, complete) = flash.pull_all(&mut dir, 3, cap);
+            assert!(complete, "cap {cap}: every byte served");
             assert_eq!(&pulled[..], &blob[..], "cap {cap}");
         }
     }
@@ -633,14 +649,17 @@ mod tests {
         // Pull two chunks, then "disconnect": the phone keeps only its cursor.
         let mut cursor = 0u32;
         let mut first_half: heapless::Vec<u8, 4096> = heapless::Vec::new();
+        let mut complete = false;
         for _ in 0..2 {
             let plan = plan_chunk_read(&dir, BASE, 2, cursor, 100).expect("in range");
             let mut buf = [0u8; 100];
             flash.read(plan.at, &mut buf[..plan.len]);
             first_half.extend_from_slice(&buf[..plan.len]).unwrap();
+            let from = cursor;
             cursor += plan.len as u32;
+            complete = chunk_completes_run(&mut dir, 2, from, cursor);
         }
-        assert!(!chunk_completes_run(&dir, 2, cursor), "not yet complete");
+        assert!(!complete, "not yet complete");
 
         // Reconnect and resume from the stored cursor.
         let mut whole = first_half;
@@ -648,28 +667,51 @@ mod tests {
             let mut buf = [0u8; 100];
             flash.read(plan.at, &mut buf[..plan.len]);
             whole.extend_from_slice(&buf[..plan.len]).unwrap();
+            let from = cursor;
             cursor += plan.len as u32;
+            complete = chunk_completes_run(&mut dir, 2, from, cursor);
         }
         assert_eq!(&whole[..], &blob[..], "no gap and no duplicated byte");
         assert!(verify_blob(&whole));
-        assert!(chunk_completes_run(&dir, 2, cursor));
+        assert!(complete);
     }
 
     #[test]
-    fn chunk_completes_run_only_at_or_past_the_blob_end() {
+    fn chunk_completes_run_only_once_every_byte_has_been_served() {
         let mut dir = SlotDir::new();
         plan_slot_write(&mut dir, BASE, 5, 0, 100).expect("fits");
-        assert!(!chunk_completes_run(&dir, 5, 0));
-        assert!(!chunk_completes_run(&dir, 5, 99));
+        assert!(!chunk_completes_run(&mut dir, 5, 0, 0));
+        assert!(!chunk_completes_run(&mut dir, 5, 0, 99));
         assert!(
-            chunk_completes_run(&dir, 5, 100),
-            "exactly the end completes"
+            chunk_completes_run(&mut dir, 5, 99, 100),
+            "the chunk that carries the last byte completes it"
         );
-        assert!(chunk_completes_run(&dir, 5, 101));
+        assert!(chunk_completes_run(&mut dir, 5, 100, 101));
         assert!(
-            !chunk_completes_run(&dir, 6, u32::MAX),
+            !chunk_completes_run(&mut dir, 6, 0, u32::MAX),
             "an unknown run is never marked synced"
         );
+    }
+
+    #[test]
+    fn a_tail_only_request_does_not_retire_a_run_the_phone_never_pulled() {
+        // The failure this guards: `run_chunk` answers any offset it is asked
+        // for, so a phone that requested only the last byte of a 100-byte blob
+        // used to have the whole run counted as pulled — after which eviction
+        // preferred it over runs that really had been synced, and `! RUN LOST`
+        // stayed quiet because nothing unsynced appeared to be at risk.
+        let mut dir = SlotDir::new();
+        plan_slot_write(&mut dir, BASE, 5, 0, 100).expect("fits");
+        assert!(
+            !chunk_completes_run(&mut dir, 5, 99, 100),
+            "one tail byte is not a pulled run"
+        );
+        assert!(
+            !chunk_completes_run(&mut dir, 5, 0, 50),
+            "and the front half alone still is not"
+        );
+        // Only the chunk that closes the gap does it.
+        assert!(chunk_completes_run(&mut dir, 5, 50, 100));
     }
 
     #[test]
@@ -679,7 +721,7 @@ mod tests {
         let mut dir = SlotDir::new();
         plan_slot_write(&mut dir, BASE, 9, 0, 0).expect("zero-length is placeable");
         assert_eq!(plan_chunk_read(&dir, BASE, 9, 0, 244), None);
-        assert!(chunk_completes_run(&dir, 9, 0));
+        assert!(chunk_completes_run(&mut dir, 9, 0, 0));
     }
 
     #[test]
@@ -731,13 +773,13 @@ mod tests {
         };
         flash.apply(plan, &blob);
 
-        let recovered = recover_dir(&mut flash);
+        let mut recovered = recover_dir(&mut flash);
         assert_eq!(recovered.run_count(), 1);
         assert_eq!(recovered.find(30), Some((2, blob_len(6))));
         assert_eq!(recovered.next_run_seq(), 31);
 
         // And the recovered run reads back byte-exactly from slot 2.
-        let (pulled, _) = flash.pull_all(&recovered, 30, 244);
+        let (pulled, _) = flash.pull_all(&mut recovered, 30, 244);
         assert_eq!(&pulled[..], &blob[..]);
     }
 
@@ -797,11 +839,11 @@ mod tests {
         assert_eq!(blob.len() as u32, blob_len(0));
         flash.write(BASE, &blob);
 
-        let dir = recover_dir(&mut flash);
+        let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.find(8), Some((0, blob_len(0))));
         // Nothing to pull past the header + footer, and it verifies.
-        let (pulled, cursor) = flash.pull_all(&dir, 8, 244);
-        assert_eq!(cursor, blob_len(0));
+        let (pulled, complete) = flash.pull_all(&mut dir, 8, 244);
+        assert!(complete, "every byte served");
         assert!(verify_blob(&pulled));
     }
 
@@ -812,9 +854,9 @@ mod tests {
         assert_eq!(blob.len() as u32, blob_len(MAX_POINTS_PER_RUN));
         flash.write(BASE, &blob);
 
-        let dir = recover_dir(&mut flash);
+        let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.find(12), Some((0, blob_len(MAX_POINTS_PER_RUN))));
-        let (pulled, _) = flash.pull_all(&dir, 12, 244);
+        let (pulled, _) = flash.pull_all(&mut dir, 12, 244);
         assert_eq!(&pulled[..], &blob[..]);
         assert!(verify_blob(&pulled));
     }
@@ -882,10 +924,10 @@ mod tests {
             "a prior-boot start is clamped out of the future"
         );
 
-        let (pulled, cursor) = flash.pull_all(&dir, 21, 244);
+        let (pulled, complete) = flash.pull_all(&mut dir, 21, 244);
         assert_eq!(&pulled[..], &blob[..]);
         assert!(verify_blob(&pulled));
-        assert!(chunk_completes_run(&dir, 21, cursor));
+        assert!(complete);
         dir.mark_synced(21);
 
         // Once synced it becomes the eviction victim, so the next run reuses it.
@@ -971,18 +1013,19 @@ mod tests {
             flash.apply(plan, &blob);
             // The phone pulls each run as it lands, so eviction has a synced
             // victim to sacrifice.
-            let (pulled, cursor) = flash.pull_all(&dir, seq, 244);
+            let (pulled, complete) = flash.pull_all(&mut dir, seq, 244);
             assert_eq!(&pulled[..], &blob[..], "run {seq} pulled intact");
-            assert!(chunk_completes_run(&dir, seq, cursor));
+            assert!(complete);
             dir.mark_synced(seq);
         }
         assert_eq!(dir.run_count(), SLOT_COUNT as u8);
         assert_eq!(dir.next_run_seq(), 10);
 
         // Everything still advertised reads back and verifies.
-        for entry in dir.manifest().iter() {
-            let (pulled, cursor) = flash.pull_all(&dir, entry.run_seq, 244);
-            assert_eq!(cursor, entry.size, "run {} size matches", entry.run_seq);
+        let manifest = dir.manifest();
+        for entry in manifest.iter() {
+            let (pulled, complete) = flash.pull_all(&mut dir, entry.run_seq, 244);
+            assert!(complete, "run {} fully served", entry.run_seq);
             assert!(verify_blob(&pulled), "run {} verifies", entry.run_seq);
         }
         // The runs that were evicted are gone from the directory, not stale.
@@ -1006,13 +1049,13 @@ mod tests {
                 flash.apply(plan, &blob);
             }
         }
-        let dir = recover_dir(&mut flash);
+        let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.run_count(), SLOT_COUNT as u8);
         assert_eq!(dir.find(0), None, "run 0's page was overwritten by run 4");
         assert_eq!(dir.find(4), Some((0, blob_len(3))));
         assert_eq!(dir.next_run_seq(), 5);
         for seq in 1..5u32 {
-            let (pulled, _) = flash.pull_all(&dir, seq, 244);
+            let (pulled, _) = flash.pull_all(&mut dir, seq, 244);
             assert!(verify_blob(&pulled), "run {seq} verifies after the reboot");
         }
     }
@@ -1045,16 +1088,16 @@ mod tests {
             "the third checkpoint erases the slot holding the FIRST, not the second"
         );
 
-        let dir = recover_dir(&mut flash);
+        let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.run_count(), 1, "the run survived the torn checkpoint");
-        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        let (pulled, complete) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(
             &pulled[..],
             &later[..],
             "the second checkpoint came back whole"
         );
         assert!(verify_blob(&pulled));
-        assert!(chunk_completes_run(&dir, 7, cursor));
+        assert!(complete);
     }
 
     #[test]
@@ -1078,10 +1121,10 @@ mod tests {
         let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.run_count(), 1);
         assert_eq!(dir.pending_partial_count(), 1);
-        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        let (pulled, complete) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(&pulled[..], &ckpt[..]);
         assert!(verify_blob(&pulled));
-        assert!(chunk_completes_run(&dir, 7, cursor));
+        assert!(complete);
 
         // The phone pulling it through retires the marker; a run started
         // afterwards never re-arms it off its own checkpoints.
@@ -1107,14 +1150,14 @@ mod tests {
             flash.apply(plan, &blob);
         }
 
-        let dir = recover_dir(&mut flash);
+        let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.manifest().len(), 1, "one run, not two copies of it");
         assert_eq!(
             dir.find(7),
             Some((1, blob_len(20))),
             "the newer checkpoint, at the slot its bytes occupy"
         );
-        let (pulled, _) = flash.pull_all(&dir, 7, 244);
+        let (pulled, _) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(&pulled[..], &a_checkpoint(7, 41, 20, 200)[..]);
         assert!(verify_blob(&pulled));
         assert_eq!(dir.next_run_seq(), 8, "the id is not reused");
@@ -1138,12 +1181,12 @@ mod tests {
 
         // The LIVE directory already falls back — the superseded checkpoint's
         // entry outlived the write, so the run is servable without a reboot.
-        let (live, _) = flash.pull_all(&dir, 7, 244);
+        let (live, _) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(&live[..], &a_checkpoint(7, 41, 20, 200)[..]);
 
-        let dir = recover_dir(&mut flash);
+        let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.run_count(), 1);
-        let (pulled, _) = flash.pull_all(&dir, 7, 244);
+        let (pulled, _) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(
             &pulled[..],
             &a_checkpoint(7, 41, 20, 200)[..],
@@ -1170,14 +1213,14 @@ mod tests {
         flash.erase(plan.erase_from, plan.erase_to);
         dir.commit_failed(plan.slot);
 
-        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        let (pulled, complete) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(
             &pulled[..],
             &ckpt[..],
             "the checkpoint is served in its place"
         );
         assert!(verify_blob(&pulled));
-        assert!(chunk_completes_run(&dir, 7, cursor));
+        assert!(complete);
         assert_eq!(recover_dir(&mut flash).find(7), dir.find(7));
     }
 
@@ -1204,9 +1247,9 @@ mod tests {
             "shorter than a checkpoint"
         );
 
-        let dir = recover_dir(&mut flash);
+        let mut dir = recover_dir(&mut flash);
         assert_eq!(dir.manifest().len(), 1, "one entry, not the pair");
-        let (pulled, _) = flash.pull_all(&dir, 7, 244);
+        let (pulled, _) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(&pulled[..], &final_blob[..], "the committed blob won");
         assert!(verify_blob(&pulled));
     }
@@ -1244,7 +1287,7 @@ mod tests {
                 "and the live run is not served even when asked for by id"
             );
             assert!(
-                !chunk_completes_run(&dir, 7, u32::MAX),
+                !chunk_completes_run(&mut dir, 7, 0, u32::MAX),
                 "nor can it be marked synced"
             );
         }
@@ -1254,10 +1297,10 @@ mod tests {
         flash.apply(plan, &final_blob);
         dir.commit_written(plan.slot);
         assert_eq!(dir.manifest_at(1_000).len(), 2, "now the run appears, once");
-        let (pulled, cursor) = flash.pull_all(&dir, 7, 244);
+        let (pulled, complete) = flash.pull_all(&mut dir, 7, 244);
         assert_eq!(&pulled[..], &final_blob[..]);
         assert!(verify_blob(&pulled));
-        assert!(chunk_completes_run(&dir, 7, cursor));
+        assert!(complete);
     }
 
     /// How far a config rewrite got before the battery gave out.

@@ -238,7 +238,7 @@ Roadbook buildRoadbook(
 
     RoadbookCutoff? cutoff;
     if (stop.isCutoff) {
-      final limit = _cutoffLimitS(stop.cutoffMeta, startClockMin, elapsed);
+      final limit = _cutoffLimitS(stop.cutoffMeta, startClockMin);
       if (limit != null) {
         final margin = limit - elapsed;
         cutoff = RoadbookCutoff(
@@ -281,23 +281,29 @@ Roadbook buildRoadbook(
   );
 }
 
-int? _cutoffLimitS(dynamic meta, double? startClockMin, double projectedElapsedS) {
+int? _cutoffLimitS(dynamic meta, double? startClockMin) {
   final cutoff = parseCutoff(meta);
   if (cutoff == null) return null;
   if (cutoff.elapsedS != null) return cutoff.elapsedS;
   if (cutoff.clock != null && startClockMin != null) {
     final parts = cutoff.clock!.split(':');
-    // A clock field carries no day, so a bare cutoff clock is ambiguous once a
-    // race runs longer than 24h ('14:00' on an 08:00 start could be hour 6 or
-    // hour 30). Snap to the whole day nearest the leg's projected arrival, so a
-    // 30h checkpoint resolves to 30h, not the same-day 6h. Never before the
-    // start (k >= 0), so an at-or-before-start clock still wraps to >= 24h.
+    // A clock field carries no day, so it resolves to that wall clock's first
+    // occurrence after the race start and nothing else — a clock equal to the
+    // start reads as the 24h limit it is meant to express, never a 0-second
+    // window. A limit past 24h has to be written as cutoff_elapsed_s, the only
+    // field that carries a day.
+    //
+    // The day was previously snapped to whichever whole day sat nearest the
+    // leg's projected arrival, which made the limit a function of the goal
+    // time: a slower goal pushed the projection over a day boundary and turned
+    // a blown cutoff into "safe, 12h to spare", and two spectators of the same
+    // live run saw different limits for the same checkpoint. A cutoff is a
+    // property of the race, so it may not depend on how fast anyone is
+    // expected to run.
     var baseMin =
         (int.parse(parts[0]) * 60 + int.parse(parts[1])) - startClockMin;
     if (baseMin <= 0) baseMin += _minutesPerDay;
-    final k = math.max(
-        0, ((projectedElapsedS / 60 - baseMin) / _minutesPerDay).round());
-    return ((baseMin + k * _minutesPerDay) * 60).round();
+    return (baseMin * 60).round();
   }
   return null;
 }

@@ -2,9 +2,14 @@
 // the displayed initial, and a deterministic hue so the same id always gets the
 // same placeholder colour. No runes → unit-testable via `tsx --test`.
 
-/** First non-whitespace character of a name, uppercased; `?` when empty. */
+/** First non-whitespace character of a name, uppercased; `?` when empty.
+ *
+ * Iterated by code point, not by UTF-16 unit: a name starting with an emoji or
+ * a mathematical-alphanumeric letter is a surrogate pair, and indexing `[0]`
+ * hands the placeholder a lone high surrogate that renders as `�`. */
 export function initial(name: string | null | undefined): string {
-	return (name?.trim()?.[0] ?? '?').toUpperCase();
+	const trimmed = name?.trim();
+	return ([...(trimmed ?? '')][0] ?? '?').toUpperCase();
 }
 
 /** Stable hue (0–359) derived from an id, for the placeholder background.
