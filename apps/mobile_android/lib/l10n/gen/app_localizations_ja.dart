@@ -2923,6 +2923,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get routeDetailDescribeFailed => '説明を生成できませんでした。もう一度お試しください。';
 
   @override
+  String get routeDetailDescribeConsentRequired =>
+      'AIによる説明には、更新されたAIの説明への同意が必要です。';
+
+  @override
+  String get routeDetailReviewDisclosure => '説明を確認';
+
+  @override
   String get routeDetailEnhanceUpgradeHint =>
       'AIによる説明はPro機能です。アップグレードして強化しましょう。';
 
@@ -5231,11 +5238,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coachNewConversation => '新しい会話';
 
   @override
-  String get coachConsentHeadline => 'コーチとチャットする前に';
+  String get coachConsentHeadline => 'AI機能を使う前に';
 
   @override
   String get coachConsentIntro =>
-      '的確なアドバイスのため、コーチはあなたのトレーニングデータの一部を、米国のAIモデルプロバイダーである Anthropic に送信します。その一部には以下が含まれます：';
+      'ThrekirのAI機能（コーチとAIルートアシスタント）は、あなたのデータの一部を、米国のAIモデルプロバイダーである Anthropic に送信します。利用する機能に応じて、その一部には以下が含まれます：';
 
   @override
   String get coachConsentBulletProfile => '生年月日、性別、設定済みの心拍ゾーン。';
@@ -5250,6 +5257,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coachConsentBulletMessages => '下の画面で入力するチャットメッセージ。';
 
   @override
+  String get coachConsentBulletRoutes =>
+      'AIルートアシスタント利用時: ルートの名称と数値データ、入力したリクエスト、おおまかな地名。正確な座標は送信しません。';
+
+  @override
   String get coachConsentProcessing =>
       'Anthropic は Threkir に代わってデータ処理条件に基づきデータを処理します。既定では Threkir の顧客データでモデルを学習しません。移転の仕組み、保持期間、撤回の権利を含む詳細は、プライバシーポリシーをご覧ください。';
 
@@ -5261,10 +5272,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get coachConsentCancel => 'キャンセル';
 
   @override
-  String get coachConsentAccept => '同意する — コーチを開始';
+  String get coachConsentAccept => '同意する — AI機能を有効にする';
 
   @override
   String get coachConsentSaving => '同意を記録中…';
+
+  @override
+  String aiDisclosureRecordFailed(Object error) {
+    return '同意を記録できませんでした：$error';
+  }
 
   @override
   String get coachNoPlanOption => 'プランなし（最近のランのみ）';
@@ -5584,19 +5600,36 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAccountDeleted => 'アカウントを削除しました';
 
   @override
-  String get settingsAccountCoachConsentWithdraw => 'コーチへの同意を撤回';
+  String get settingsAccountCoachConsentWithdraw => 'AI機能への同意を撤回';
 
   @override
   String get settingsAccountCoachConsentActive =>
-      'コーチによるトレーニングデータの使用を停止します。いつでも再度同意できます。';
+      'ThrekirのAI機能によるデータの使用を停止します。いつでも再度同意できます。';
 
   @override
-  String get settingsAccountCoachConsentWithdrawn => 'コーチへの同意を撤回しました。';
+  String get settingsAccountCoachConsentWithdrawn => 'AI機能への同意を撤回しました。';
 
   @override
   String settingsAccountCoachConsentWithdrawFailed(Object error) {
     return '撤回に失敗しました：$error';
   }
+
+  @override
+  String get settingsAccountAiConsentUpdateTitle => '更新されたAIの説明に同意する';
+
+  @override
+  String get settingsAccountAiConsentUpdateSubtitle =>
+      '説明の対象となる機能が増えました。内容を確認して同意すると、AIルートアシスタントを利用できます。';
+
+  @override
+  String get settingsAccountAiConsentGrantTitle => 'AIの説明を確認する';
+
+  @override
+  String get settingsAccountAiConsentGrantSubtitle =>
+      'ThrekirのAI機能は、データを使用する前に同意を求めます。説明を読み、ここで同意できます。';
+
+  @override
+  String get settingsAccountAiConsentAccepted => 'AIの説明に同意しました。';
 
   @override
   String settingsAccountDeleteFailed(Object error) {

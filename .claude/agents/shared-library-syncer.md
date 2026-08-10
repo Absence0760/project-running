@@ -19,6 +19,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/training/training_load.ts` | `apps/mobile_android/lib/training_load.dart` | `training/training_load.test.ts` ↔ `test/training_load_test.dart` |
 | `apps/web/src/lib/training/fitness.ts` | `apps/mobile_android/lib/fitness.dart` | `training/fitness.test.ts` ↔ `test/fitness_test.dart` |
 | `apps/web/src/lib/routes/track_projection.ts` | `projectTrack` / `isTrackRenderable` helpers inside `apps/mobile_android/lib/widgets/track_preview.dart` | `routes/track_projection.test.ts` ↔ `test/track_preview_test.dart` |
+| `apps/web/src/lib/core/ai_disclosure.ts` (client half only — `gateAiDisclosure` / `aiDisclosureDenialBody` are server-side) | `apps/mobile_android/lib/ai_disclosure.dart` | `core/ai_disclosure.test.ts` ↔ `test/ai_disclosure_test.dart` |
 | `apps/web/src/lib/runs/checkpoint_projection.ts` | `apps/mobile_android/lib/checkpoint_projection.dart` | `runs/checkpoint_projection.test.ts` ↔ `test/checkpoint_projection_test.dart` |
 | `apps/web/src/lib/runs/race_phases.ts` | `apps/mobile_android/lib/race_phases.dart` | `runs/race_phases.test.ts` ↔ `test/race_phases_test.dart` |
 | `apps/web/src/lib/util/rate_limit_errors.ts` | `apps/mobile_android/lib/rate_limit_errors.dart` | `util/rate_limit_errors.test.ts` ↔ `test/rate_limit_errors_test.dart` |

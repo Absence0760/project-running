@@ -24,7 +24,10 @@ class _ConsentedApi extends ApiClient {
   @override
   String? get userId => 'u-viewer';
   @override
-  Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => const {
+        'ai_disclosure_version': 2,
+        'coach_consent_at': '2026-01-01T00:00:00Z',
+      };
 }
 
 /// Consented, but the message fetch never resolves — so the thread's own
@@ -82,7 +85,10 @@ class _ArchiveFailApi extends ApiClient {
   String? get userId => 'u-viewer';
 
   @override
-  Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => const {
+        'ai_disclosure_version': 2,
+        'coach_consent_at': '2026-01-01T00:00:00Z',
+      };
 
   @override
   Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) async => [
@@ -121,7 +127,10 @@ class _ArchivesApi extends ApiClient {
   String? get userId => 'u-viewer';
 
   @override
-  Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => const {
+        'ai_disclosure_version': 2,
+        'coach_consent_at': '2026-01-01T00:00:00Z',
+      };
 
   @override
   Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) async =>
@@ -263,27 +272,27 @@ void main() {
       expect(find.text('Before you chat with Coach'), findsNothing);
     });
 
-    testWidgets('without coach_consent_at the chat is gated behind the GDPR '
-        'disclosure (audit/gdpr 2026-05-25)', (tester) async {
+    testWidgets('without an AI-disclosure record the chat is gated behind the '
+        'GDPR disclosure (audit/gdpr 2026-05-25)', (tester) async {
       // Reason: Coach forwards health-adjacent data to Anthropic
       // (US sub-processor) — GDPR Art 6(1)(a) requires an
       // affirmative consent act before the first dispatch. The
       // _bootstrap fetch fails against the unconnected local
-      // Supabase, so _consentAt resolves to null, which must render
+      // Supabase, so the record resolves empty, which must render
       // the disclosure copy instead of the chat composer.
       await _pump(tester);
       // Pump past the post-frame fetch attempt + the 100ms safety
       // margin to let _consentChecked flip true on failure.
       await tester.pump(const Duration(milliseconds: 200));
       expect(
-        find.text('Before you chat with Coach'),
+        find.text("Before you use Threkir's AI features"),
         findsOneWidget,
         reason:
-            'consent disclosure must be visible when '
-            'coach_consent_at is null — see audit/gdpr (2026-05-25).',
+            'consent disclosure must be visible when there is no '
+            'record — see audit/gdpr (2026-05-25).',
       );
       expect(
-        find.text('I consent — start Coach'),
+        find.text('I consent — enable AI features'),
         findsOneWidget,
         reason:
             'the I-consent CTA must be reachable from the '

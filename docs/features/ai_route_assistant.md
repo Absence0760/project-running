@@ -110,6 +110,19 @@ the water tower, then a flat return along the river path."*
   Settings → Account. The dev `BYPASS_PAYWALL` flag deliberately does **not**
   reach this gate — it skips a billing check, not a lawful basis. See
   [api_database.md](../backend/api_database.md) and decisions § 571.
+- **Where a runner accepts it.** One disclosure component per platform, rendered
+  by every host that writes the record: web's `AiDisclosureNotice.svelte` (the
+  `/coach` first-use dialog + Settings → Account) and mobile's
+  `widgets/ai_disclosure_notice.dart` (the Coach gate, a Settings → Account tile,
+  and the route-detail fallback notice, which offers it inline and re-runs the
+  enhancement on acceptance). Mobile writes `record_ai_disclosure_consent()`
+  directly — the v1 `record_coach_consent()` wrapper has no client left — and
+  offers the acceptance whenever the record is not current, missing or stale, so
+  the route-detail notice always leads somewhere that can act on it. Both
+  platforms branch on the 403 body's `code`, never on the bare status: the
+  paywall answers 403 on the same endpoint, and a consent gap shown as a Pro
+  upsell sends a runner to buy something that would not unlock it. The templated
+  description keeps rendering underneath (decisions § 573).
 - **Injection.** The surface is small (the output is a constraint object the engine
   re-validates), but hold the line: never let extracted text reach a shell, a SQL
   query, or `{@html}`; only typed, whitelisted fields cross into the engine.

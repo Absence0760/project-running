@@ -952,9 +952,11 @@ join it; it would need a scope set instead.
   describe is one it cannot prove was made.
 - `withdraw_ai_disclosure_consent()` — Art 7(3). Clears **both** columns: there is one
   acceptance of one disclosure, so withdrawal is all of it.
-- `record_coach_consent()` / `withdraw_coach_consent()` remain as the **v1 entry points** the
-  mobile apps reach through `packages/api_client` — their consent screen presents the
-  Coach-scoped copy, so recording v1 is the correct record for what they showed.
+- `record_coach_consent()` / `withdraw_coach_consent()` remain as **v1 entry points** in SQL,
+  but **no client calls them**: mobile now presents the same widened disclosure web does, so
+  the honest record is v2 and `packages/api_client` writes it through
+  `record_ai_disclosure_consent()` directly (decisions § 573). Two client paths writing one
+  consent record is the defect the versioning exists to prevent, one layer down.
 - `lock_consent_columns` now also blocks a direct write to `ai_disclosure_version`; without that
   a PostgREST PATCH could self-grant the widened scope.
 

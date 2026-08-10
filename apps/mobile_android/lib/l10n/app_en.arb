@@ -4126,6 +4126,14 @@
   "@routeDetailDescribeFailed": {
     "description": "Non-blocking error when the AI enhancement fails; the templated baseline stays shown"
   },
+  "routeDetailDescribeConsentRequired": "AI descriptions need your consent to the updated AI disclosure.",
+  "@routeDetailDescribeConsentRequired": {
+    "description": "Shown when an AI description is refused because the AI disclosure has not been accepted"
+  },
+  "routeDetailReviewDisclosure": "Review disclosure",
+  "@routeDetailReviewDisclosure": {
+    "description": "Button that opens the AI disclosure from the route-description fallback notice"
+  },
   "routeDetailEnhanceUpgradeHint": "AI descriptions are a Pro feature. Upgrade to enhance.",
   "@routeDetailEnhanceUpgradeHint": {
     "description": "Upsell shown to free users; the templated description still shows"
@@ -7447,11 +7455,11 @@
   "@coachNewConversation": {
     "description": "Default active-thread title when empty"
   },
-  "coachConsentHeadline": "Before you chat with Coach",
+  "coachConsentHeadline": "Before you use Threkir's AI features",
   "@coachConsentHeadline": {
     "description": "Consent gate headline"
   },
-  "coachConsentIntro": "To give you grounded advice, Coach forwards a slice of your training data to Anthropic, our AI model provider in the United States. That slice includes:",
+  "coachConsentIntro": "Threkir's AI features — the Coach and the AI route assistant — forward a slice of your data to Anthropic, our AI model provider in the United States. Depending on which feature you use, that slice includes:",
   "@coachConsentIntro": {
     "description": "Consent gate intro paragraph"
   },
@@ -7471,6 +7479,10 @@
   "@coachConsentBulletMessages": {
     "description": "Consent gate bullet: chat messages"
   },
+  "coachConsentBulletRoutes": "For the AI route assistant: the route's name and stats, the request you type, and a coarse place label — never your precise coordinates.",
+  "@coachConsentBulletRoutes": {
+    "description": "Consent gate bullet: AI route assistant"
+  },
   "coachConsentProcessing": "Anthropic processes the data on Threkir's behalf under their data-processing terms; they do not train their models on Threkir customer data by default. Full details — including transfer mechanism, retention, and your withdrawal rights — are in our privacy policy.",
   "@coachConsentProcessing": {
     "description": "Consent gate data-processing paragraph"
@@ -7483,13 +7495,22 @@
   "@coachConsentCancel": {
     "description": "Consent gate cancel button"
   },
-  "coachConsentAccept": "I consent — start Coach",
+  "coachConsentAccept": "I consent — enable AI features",
   "@coachConsentAccept": {
     "description": "Consent gate accept button"
   },
   "coachConsentSaving": "Recording consent…",
   "@coachConsentSaving": {
     "description": "Consent gate accept button while saving"
+  },
+  "aiDisclosureRecordFailed": "Couldn't record consent: {error}",
+  "@aiDisclosureRecordFailed": {
+    "description": "Banner shown when recording AI-disclosure consent fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "coachNoPlanOption": "No plan (recent runs only)",
   "@coachNoPlanOption": {
@@ -7935,26 +7956,46 @@
   "@settingsAccountDeleted": {
     "description": "Banner shown after the account is deleted"
   },
-  "settingsAccountCoachConsentWithdraw": "Withdraw AI Coach consent",
+  "settingsAccountCoachConsentWithdraw": "Withdraw AI features consent",
   "@settingsAccountCoachConsentWithdraw": {
-    "description": "Settings > Account tile title to withdraw AI-coach consent (GDPR Art 7(3))"
+    "description": "Settings > Account tile title to withdraw AI-features consent (GDPR Art 7(3))"
   },
-  "settingsAccountCoachConsentActive": "Stop the Coach from using your training data. You can grant consent again any time.",
+  "settingsAccountCoachConsentActive": "Stop Threkir's AI features from using your data. You can consent again any time.",
   "@settingsAccountCoachConsentActive": {
-    "description": "Subtitle under the withdraw-coach-consent tile"
+    "description": "Subtitle under the withdraw-AI-consent tile"
   },
-  "settingsAccountCoachConsentWithdrawn": "AI Coach consent withdrawn.",
+  "settingsAccountCoachConsentWithdrawn": "AI features consent withdrawn.",
   "@settingsAccountCoachConsentWithdrawn": {
-    "description": "Banner shown after AI-coach consent is withdrawn"
+    "description": "Banner shown after AI-features consent is withdrawn"
   },
   "settingsAccountCoachConsentWithdrawFailed": "Couldn't withdraw consent: {error}",
   "@settingsAccountCoachConsentWithdrawFailed": {
-    "description": "Banner shown when withdrawing AI-coach consent fails",
+    "description": "Banner shown when withdrawing AI-features consent fails",
     "placeholders": {
       "error": {
         "type": "Object"
       }
     }
+  },
+  "settingsAccountAiConsentUpdateTitle": "Accept the updated AI disclosure",
+  "@settingsAccountAiConsentUpdateTitle": {
+    "description": "Settings > Account tile title to accept a widened AI disclosure"
+  },
+  "settingsAccountAiConsentUpdateSubtitle": "The disclosure now covers more features. Review and accept it to use the AI route assistant.",
+  "@settingsAccountAiConsentUpdateSubtitle": {
+    "description": "Subtitle under the accept-updated-AI-disclosure tile"
+  },
+  "settingsAccountAiConsentGrantTitle": "Review the AI disclosure",
+  "@settingsAccountAiConsentGrantTitle": {
+    "description": "Settings > Account tile title to read and accept the AI disclosure for the first time"
+  },
+  "settingsAccountAiConsentGrantSubtitle": "Threkir's AI features ask for your consent before using your data. Read the disclosure and accept it here.",
+  "@settingsAccountAiConsentGrantSubtitle": {
+    "description": "Subtitle under the review-AI-disclosure tile"
+  },
+  "settingsAccountAiConsentAccepted": "AI disclosure accepted.",
+  "@settingsAccountAiConsentAccepted": {
+    "description": "Banner shown after the widened AI disclosure is accepted"
   },
   "settingsAccountDeleteFailed": "Account deletion failed: {error}",
   "@settingsAccountDeleteFailed": {
