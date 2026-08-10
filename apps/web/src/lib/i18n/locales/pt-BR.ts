@@ -225,6 +225,7 @@ export const messages = {
 	"coachChat.tierFree": "Grátis",
 	"coachChat.messagesRemaining": "{remaining} de {total} mensagens restantes hoje",
 	"coachChat.priorityContext": "janela de contexto prioritária",
+	"coachChat.tierUnknown": "Não foi possível verificar seu plano — envie uma mensagem para confirmar seu limite",
 	"coachChat.cacheNote": "Cache: lidos {read} · escritos {wrote} · entrada {in} · saída {out}",
 	"coachChat.syncedTitle": "Salvo na sua conta e sincronizado entre dispositivos.",
 	"coachChat.synced": "Sincronizado",
