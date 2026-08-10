@@ -83,7 +83,6 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
   if (!isValidTimestamptz(instanceStart)) {
     return Response.json({ error: 'invalid_instance_start' }, { status: 400 });
   }
-  const instanceMs = Date.parse(instanceStart);
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
