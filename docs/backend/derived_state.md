@@ -31,6 +31,18 @@ retention cron referenced in a comment that was never created.
   `20270424_001` (#378); before that both were silently excluded, so a fastest 5K
   run at parkrun never earned a PR. `award_achievements_for_user` uses the
   identical source list so distance badges and PRs agree on what counts.
+- **Eligible activity types:** the **run family** — every `runs.activity_type`
+  except `cycle` (`20270514_001`). A bicycle covers a PR bracket at speeds no
+  runner reaches, so before that migration a 5 km ride at 9:00 permanently
+  displaced the runner's genuine 25:00 5K, and an 80 km ride earned the 50 km
+  `distance_single` platinum badge. The rule is the client's, not a new one:
+  `recap.ts` / `recap.dart` gate every "longest" / "fastest" claim on
+  `isRunFamily = (activity_type ?? 'run') !== 'cycle'`. The split is deliberate
+  — **`award_achievements_for_user` applies it to `distance_single` only**;
+  `distance_lifetime` and the streak stay cross-modal, matching the same
+  helper's cross-modal totals and the client `computeRunStreaks`, which is fed
+  every activity type. Already-granted badges are never revoked (the awarder is
+  insert-on-conflict-do-nothing and has never revoked anything).
 - **Authoritative recompute:** the body of `refresh_personal_records_for_user(p_user_id)`
   — the cumulative result of the widened brackets (`20260528000002`),
   embedded-best efforts (`20260529000002`; read from the promoted
@@ -47,13 +59,18 @@ retention cron referenced in a comment that was never created.
   `is_dnf` / `fastest_{5k,10k,half_marathon,marathon}_s` values actually
   changed (the old trigger's OF column list, moved in-function because
   transition tables forbid column lists; `metadata` left the watch list with
-  the embedded-best promotion, `20270325_001`), and refreshes both the old
-  and new owner on a `user_id` change.
+  the embedded-best promotion, `20270325_001`, and `activity_type` joined it
+  with the run-family filter, `20270514_001` — a re-typed run changes what the
+  authoritative query returns, so it has to re-derive), and refreshes both the
+  old and new owner on a `user_id` change. `trigger_award_achievements_runs`
+  watches `activity_type` for the same reason.
 - **Manual rebuild:** `select refresh_personal_records_for_user(id) from auth.users;`
 - **Pinned by:** `personal_records_cache_invariants_test.sql` (mutate a run, assert
   the cache matches the authoritative query), `personal_records_statement_trigger_test.sql`
   (multi-row statements refresh once per affected user and still land the
-  authoritative result), plus the brackets / DNF / embedded / mile suites.
+  authoritative result), `personal_records_run_family_test.sql` (a bike ride
+  holds no PR and no single-run distance badge; a re-type re-derives the cache),
+  plus the brackets / DNF / embedded / mile suites.
 - **Trap:** this function is the canonical bare-body casualty. Any new migration
   that does `create or replace function refresh_personal_records_for_user` must
   patch the **latest** body, not rewrite from scratch.

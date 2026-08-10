@@ -545,6 +545,13 @@ struct SlotMeta {
     /// the run may still commit, and while it records it is not a run at all as
     /// far as every consumer here is concerned.
     partial: bool,
+    /// Bytes of this blob handed to the phone, counted CONTIGUOUSLY from zero
+    /// ([`SlotDir::note_chunk_served`]). What [`synced`](Self::synced) is set
+    /// from, and it exists because the read cursor the phone sends is not by
+    /// itself evidence that anything before it was ever served: chunk reads are
+    /// deliberately answered out of order, so one request for the last byte
+    /// would otherwise retire the whole run.
+    served_to: u32,
 }
 
 /// In-RAM index of which slot holds which run, and which of those runs are
@@ -637,6 +644,7 @@ impl SlotDir {
                 finished: true,
                 write_no: 0,
                 partial: !r.finished,
+                served_to: 0,
             });
         }
         dir
@@ -674,6 +682,7 @@ impl SlotDir {
             finished: false,
             write_no,
             partial: false,
+            served_to: 0,
         });
         slot
     }
@@ -700,6 +709,7 @@ impl SlotDir {
             finished: true,
             write_no,
             partial: false,
+            served_to: 0,
         });
         slot
     }
@@ -739,6 +749,31 @@ impl SlotDir {
                 s.partial = true;
             }
         }
+    }
+
+    /// Record that bytes `[from, to)` of `run_seq`'s blob were served, and report
+    /// whether the phone has now been sent the WHOLE blob.
+    ///
+    /// The high-water only advances on a chunk that begins at or before it, so
+    /// coverage means contiguous-from-zero rather than "the cursor got past the
+    /// end". A chunk read is served at whatever offset is asked for — that is
+    /// deliberate, and it is what lets a resumed transfer pick up where it
+    /// stopped — so without this a single 1-byte request for the tail of a
+    /// 4 KiB blob retired the run: eviction then preferred it over runs that
+    /// genuinely had been pulled, `! RUN LOST` stayed quiet because the store
+    /// believed nothing unsynced was at risk, and the runner's track went
+    /// silently. `false` for a run the directory does not hold as finished.
+    pub fn note_chunk_served(&mut self, run_seq: u32, from: u32, to: u32) -> bool {
+        for s in self.slots.iter_mut().flatten() {
+            if s.run_seq != run_seq || !s.finished {
+                continue;
+            }
+            if from <= s.served_to {
+                s.served_to = s.served_to.max(to.min(s.size));
+            }
+            return s.served_to >= s.size;
+        }
+        false
     }
 
     /// Mark a finished run as fully pulled by the phone, so a later reservation

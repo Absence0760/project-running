@@ -80,6 +80,26 @@ void main() {
       expect(qualifying, hasLength(1));
       expect(qualifying.first.id, outdoor.id);
     });
+
+    test('drops cycling, so one commute cannot set the VDOT ceiling', () {
+      // Mirrors the cycling-exclusion test in fitness.test.ts. currentVdot takes
+      // the MAX over qualifying runs, so a 20 km/h ride scored as a run doubles
+      // the runner's VDOT and every figure derived from it.
+      final now = DateTime.utc(2026, 5, 1);
+      final runs = [
+        _r(distance: 5000, durationS: 1800, startedAt: now.subtract(const Duration(days: 9))),
+        _r(distance: 5001, durationS: 1800, startedAt: now.subtract(const Duration(days: 5))),
+      ];
+      final ride = _r(
+        distance: 25000,
+        durationS: 4500,
+        startedAt: now.subtract(const Duration(days: 3)),
+        metadata: {'activity_type': 'cycle'},
+      );
+      expect(qualifyingRuns([...runs, ride]).map((r) => r.id).toList(),
+          runs.map((r) => r.id).toList());
+      expect(currentVdot([...runs, ride], now: now), currentVdot(runs, now: now));
+    });
   });
 
   group('currentVdot', () {

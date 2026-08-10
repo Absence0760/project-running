@@ -192,3 +192,24 @@ test('a fractional-rep set keeps its fraction in the e1RM estimate', () => {
 	assert.equal(p.sessions[0].bestEst1RmKg, 118.3);
 	assert.equal(p.sessions[0].volumeKg, 550);
 });
+
+test('two sessions in the same second order by timestamp, fractional part or not', () => {
+	// Postgres omits the fractional seconds when they are exactly zero, so one
+	// column legitimately yields both spellings. ICU collation sorted the
+	// fraction-less row last, reversing the pair and flipping the delta's sign.
+	const sets: DatedGymSet[] = [
+		s({ workout_id: 'wA', started_at: '2026-01-05T18:00:00+00:00', weight_kg: 60 }),
+		s({ workout_id: 'wB', started_at: '2026-01-05T18:00:00.482000+00:00', weight_kg: 80 }),
+	];
+	const prog = exerciseProgress(sets, 'Bench Press');
+	assert.ok(prog != null);
+	assert.deepEqual(
+		prog!.sessions.map((x) => x.workoutId),
+		['wA', 'wB'],
+	);
+	assert.ok(prog!.est1RmDeltaKg != null && prog!.est1RmDeltaKg > 0);
+	assert.equal(
+		previousExerciseSession(sets, 'Bench Press', '2026-01-05T18:00:00.482000+00:00')?.workoutId,
+		'wA',
+	);
+});

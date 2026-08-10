@@ -329,14 +329,52 @@ TrainingPaces resolveTrainingPaces({
 
 // ─────────────────────── Phases ───────────────────────
 
+const List<PlanPhase> _phaseOrder = [
+  PlanPhase.base,
+  PlanPhase.build,
+  PlanPhase.peak,
+  PlanPhase.taper,
+];
+const List<double> _phaseShares = [0.3, 0.4, 0.2, 0.1];
+
+/// Weeks per phase, in [_phaseOrder], over the non-race weeks.
+///
+/// Flooring each share independently loses up to three weeks of the total to
+/// rounding, and the taper — the smallest share, and the one the leftover used
+/// to be — absorbed all of it: at exactly 10 and exactly 5 total weeks the
+/// floors consumed every non-race week, leaving zero taper and the peak week
+/// hard against race day. Largest-remainder keeps the sum exact at every total,
+/// and the taper's first week is reserved before the split so rounding can
+/// never be what takes it away.
+List<int> _phaseWeekCounts(int totalWeeks) {
+  final trainWeeks = totalWeeks - 1;
+  if (trainWeeks <= 0) return [0, 0, 0, 0];
+  final exact = _phaseShares.map((s) => s * (trainWeeks - 1)).toList();
+  final counts = exact.map((v) => v.floor()).toList();
+  counts[counts.length - 1] += 1;
+  var left = trainWeeks - counts.reduce((a, b) => a + b);
+  final frac = exact.map((v) => v - v.floorToDouble()).toList();
+  final order = List<int>.generate(exact.length, (i) => i)
+    ..sort((a, b) {
+      final byFrac = frac[b].compareTo(frac[a]);
+      return byFrac != 0 ? byFrac : a.compareTo(b);
+    });
+  for (final i in order) {
+    if (left <= 0) break;
+    counts[i] += 1;
+    left -= 1;
+  }
+  return counts;
+}
+
 PlanPhase phaseFor(int weekIndex, int totalWeeks) {
-  final base = (totalWeeks * 0.3).floor();
-  final build = (totalWeeks * 0.4).floor();
-  final peak = (totalWeeks * 0.2).floor();
   if (weekIndex >= totalWeeks - 1) return PlanPhase.race;
-  if (weekIndex < base) return PlanPhase.base;
-  if (weekIndex < base + build) return PlanPhase.build;
-  if (weekIndex < base + build + peak) return PlanPhase.peak;
+  final counts = _phaseWeekCounts(totalWeeks);
+  var end = 0;
+  for (var i = 0; i < counts.length; i++) {
+    end += counts[i];
+    if (weekIndex < end) return _phaseOrder[i];
+  }
   return PlanPhase.taper;
 }
 

@@ -16,6 +16,7 @@
 		closeFundraiser
 	} from '$lib/core/data';
 	import { fundraisingEnabled } from '$lib/social/fundraising_flag';
+	import { toMinorUnits } from '$lib/format/minor_units';
 	import type { Fundraiser, FundraiserFeedEntry, FundraiserTotals } from '$lib/types';
 
 	let { data }: { data: { id: string; donated: string | null } } = $props();
@@ -115,7 +116,7 @@
 
 	async function submitDonation() {
 		if (donating || !fundraiser) return;
-		const cents = amountMajor != null ? Math.round(amountMajor * 100) : 0;
+		const cents = amountMajor != null ? toMinorUnits(amountMajor, fundraiser.currency) : 0;
 		if (cents <= 0) return;
 		donating = true;
 		try {

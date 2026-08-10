@@ -511,9 +511,11 @@ TypeScript unit tests for the training plan engine, written against Node's `node
 - Fall-back without race data produces valid paces
 - Marathon-only goal time yields a valid pace set
 
-**`phaseFor` (2 tests):**
+**`phaseFor` (4 tests):**
 - 16-week plan splits ~30/40/20/10 base/build/peak/taper
 - Final week is always race
+- Every total from the editor floor (4) to 30 seats a taper, keeps phases in order, and sums exactly to the total
+- A 10-week (and 5-week) plan tapers instead of peaking into race week
 
 **`generatePlan` (8 tests):**
 - Correct number of weeks produced

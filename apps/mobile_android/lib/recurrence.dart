@@ -75,6 +75,11 @@ RecurrenceFreq? recurrenceFromString(String? s) {
 /// overflowing into the following month (DateTime(y, 2, 31) → March). [useUtc]
 /// reads + builds in UTC wall-clock so the result is viewer-independent for a
 /// timezoned event (see expandInstances).
+int _monthsBetween(DateTime a, DateTime b, bool useUtc) {
+  final bb = useUtc ? b.toUtc() : b.toLocal();
+  return (bb.year - a.year) * 12 + (bb.month - a.month);
+}
+
 DateTime _addMonthsClamped(DateTime base, int months, bool useUtc) {
   final total = base.month - 1 + months;
   final year = base.year + (total ~/ 12);
@@ -140,14 +145,21 @@ List<DateTime> expandInstances(
   final useUtc = e.timezone != null;
   final hardCap = e.count ?? 1 << 30;
   final results = <DateTime>[];
+  // The walk always starts at startsAt (occurrences before [from] still count
+  // toward `count`), so its iteration budget has to reach the far end of the
+  // requested window. Budgeting off [max] — a RESULT count — stopped the walk
+  // [max] periods after the series began, so nextInstanceAfter (max = 1)
+  // reported "no next occurrence" for every series older than a fortnight.
+  final scanEnd = (e.until != null && e.until!.isBefore(to)) ? e.until! : to;
 
   if (e.freq == RecurrenceFreq.monthly) {
     // Read the anchor in the chosen clock so day-of-month + time-of-day match
     // the organiser's intended wall-clock (UTC) or the viewer's (legacy local).
     final base = useUtc ? e.startsAt.toUtc() : e.startsAt;
+    final monthBudget = _monthsBetween(base, scanEnd, useUtc) + 1;
     var produced = 0;
     for (var i = 0; produced < hardCap; i++) {
-      if (i >= max * 12) break;
+      if (i > monthBudget) break;
       // Anchor on startsAt's day-of-month and step `i` whole months from it,
       // clamping to the target month's last day (Jan-31 → Feb-28/29). Stepping
       // a running cursor instead would let a clamp permanently shrink the
@@ -186,8 +198,9 @@ List<DateTime> expandInstances(
       : DateTime(start.year, start.month, start.day);
   final anchor = startDayOnly.subtract(Duration(days: start.weekday - 1));
 
+  final dayBudget = scanEnd.difference(anchor).inDays + stepDays + 1;
   var produced = 0;
-  for (var dayOffset = 0; dayOffset < max * stepDays * 7; dayOffset++) {
+  for (var dayOffset = 0; dayOffset <= dayBudget; dayOffset++) {
     final d = anchor.add(Duration(days: dayOffset));
     if (d.isBefore(startDayOnly)) {
       continue;

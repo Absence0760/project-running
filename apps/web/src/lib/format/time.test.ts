@@ -63,6 +63,16 @@ test('formatDuration — an hour or more is H:MM:SS', () => {
 	assert.equal(formatDuration(36000 + 59 * 60 + 59), '10:59:59');
 });
 
+test('formatDuration — a fractional projection rounds to a whole second field', () => {
+	// The live cut-off card feeds a projected arrival / margin straight in, and
+	// those are not integers. An unrounded remainder used to reach the seconds
+	// field verbatim (`1:16:8.399999999999636`).
+	assert.equal(formatDuration(4568.4), '1:16:08');
+	assert.equal(formatDuration(2631.6000000000004), '43:52');
+	assert.equal(formatDuration(59.6), '1:00');
+	assert.equal(formatDuration(3599.5), '1:00:00');
+});
+
 test('formatDate / formatDateShort — render the date, short omits the year', () => {
 	const iso = '2026-03-14T08:00:00Z';
 	assert.match(formatDate(iso), /2026/);
