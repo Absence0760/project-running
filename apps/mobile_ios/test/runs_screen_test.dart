@@ -7,6 +7,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/goals.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
@@ -86,17 +87,32 @@ Future<({LocalRunStore runStore, LocalRouteStore routeStore, Preferences prefs})
   return (runStore: runStore, routeStore: routeStore, prefs: prefs);
 }
 
-/// Build N synthetic runs spaced 30 minutes apart, all anchored within
-/// the past few hours of "now" so the default `_RunsRange.week` filter
-/// keeps every run visible — pagination tests don't need to open the
-/// date-range popup (whose animation breaks pumpAndSettle in test).
+/// Build N synthetic runs, newest first, all anchored inside the CURRENT
+/// local week so the default `_RunsRange.week` filter keeps every one of them
+/// visible — pagination tests don't need to open the date-range popup (whose
+/// animation breaks pumpAndSettle in test).
+///
+/// A fixed wall-clock offset is not enough: it drops rows out of the list
+/// whenever the suite runs less than the spread's own width after the week
+/// rolls over at Monday 00:00 local, and CI at 00:24 on a Monday saw an empty
+/// list. Keep the 30-minute spacing when the week is old enough to hold it
+/// and tighten it when it isn't, so the seeded count is what every caller
+/// gets on every weekday.
 List<Run> _makeRuns(int count) {
-  final base = DateTime.now().subtract(const Duration(minutes: 5));
+  final now = DateTime.now();
+  final weekStart = weekStartLocal(now);
+  final newest = now.subtract(const Duration(minutes: 5));
+  final base = newest.isBefore(weekStart) ? weekStart : newest;
+  const gap = Duration(minutes: 30);
+  final room = base.difference(weekStart);
+  final step = count > 1 && room < gap * (count - 1)
+      ? Duration(microseconds: room.inMicroseconds ~/ (count - 1))
+      : gap;
   return [
     for (int i = 0; i < count; i++)
       Run(
         id: 'run-${i.toString().padLeft(3, '0')}',
-        startedAt: base.subtract(Duration(minutes: 30 * i)),
+        startedAt: base.subtract(step * i),
         duration: const Duration(minutes: 25),
         distanceMetres: 5000,
         track: const [],
