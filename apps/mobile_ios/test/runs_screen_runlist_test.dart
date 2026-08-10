@@ -154,15 +154,18 @@ void main() {
           distanceMetres: 5000,
           source: RunSource.app,
         );
-    // Recent dates: the run list's default range filter windows out older
-    // runs, and a filtered-out row cannot be long-pressed into selection.
     final now = DateTime.now().toUtc();
     final runs = [
       mk('r1', now.subtract(const Duration(days: 1))),
       mk('r2', now.subtract(const Duration(days: 2))),
     ];
     await tester.runAsync(() async => runStore.saveManyFromRemote(runs));
-    SharedPreferences.setMockInitialValues({});
+    // Range pinned to 'all': a filtered-out row cannot be long-pressed into
+    // selection, and the default "this week" window drops both of these on
+    // the weekday the week rolls over (CI at 00:24 on a Monday saw no rows).
+    SharedPreferences.setMockInitialValues({
+      'runs_filters_v1': jsonEncode({'range': 'all', 'sort': 'newest'}),
+    });
     final prefs = Preferences();
     await prefs.init();
 

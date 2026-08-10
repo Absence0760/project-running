@@ -6,21 +6,24 @@
 --      trigger — so the block must be asserted before any RPC runs.)
 --   2. Refuse an unauthenticated caller.
 --   3. Succeed for the authenticated owner.
---   4. Clear coach_consent_at (verified as the owner role — the column is
---      privilege-protected from the `authenticated` role).
+--   4. Clear the whole consent record — coach_consent_at AND
+--      ai_disclosure_version (verified as the owner role — both columns are
+--      privilege-protected from the `authenticated` role). A cleared
+--      timestamp beside a surviving version would leave a half-written
+--      record that the CHECK forbids and the gates would have to guess at.
 --   5. Round-trip: after withdrawal, record_coach_consent() re-stamps.
 
 begin;
 
-select plan(5);
+select plan(6);
 
 -- Seed (as the superuser test connection — bypasses the BEFORE-UPDATE gate):
 -- a user whose consent is already stamped at a fixed past time.
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values ('00000000-0000-0000-0000-0000000ccd01', 'authenticated', 'authenticated',
         'withdraw-a@test.local', '', now(), now());
-insert into user_profiles (id, display_name, preferred_unit, coach_consent_at)
-values ('00000000-0000-0000-0000-0000000ccd01', 'Withdraw A', 'km', '2020-06-01T00:00:00Z');
+insert into user_profiles (id, display_name, preferred_unit, coach_consent_at, ai_disclosure_version)
+values ('00000000-0000-0000-0000-0000000ccd01', 'Withdraw A', 'km', '2020-06-01T00:00:00Z', 1);
 
 -- ── 1. Direct write is still blocked (flag not yet raised) ────────
 set local role authenticated;
@@ -61,6 +64,12 @@ select is(
   (select coach_consent_at from user_profiles where id = '00000000-0000-0000-0000-0000000ccd01'),
   null,
   'withdraw_coach_consent() cleared coach_consent_at'
+);
+
+select is(
+  (select ai_disclosure_version from user_profiles where id = '00000000-0000-0000-0000-0000000ccd01'),
+  null,
+  'withdraw_coach_consent() cleared ai_disclosure_version too'
 );
 
 -- ── 5. Re-consent re-stamps (first-stamp-wins on the now-null row)

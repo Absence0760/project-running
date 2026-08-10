@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'ai_disclosure.dart';
 import 'payload_hash.dart';
 import 'route_description.dart';
 
@@ -53,9 +54,26 @@ Map<String, dynamic> _toBody(RouteDescriptionInput input) => {
           : {'lat': input.end!.lat, 'lng': input.end!.lng},
     };
 
+/// Does this non-200 response say the caller has not accepted the AI
+/// disclosure the endpoint requires? 403 alone cannot answer it — the
+/// paywall uses 403 too, and telling a runner to buy Pro when their actual
+/// problem is a missing consent record sends them to buy something that
+/// would not unlock the feature. Only the body's `code` decides.
+bool isAiDisclosureDenial(int status, String body) {
+  if (status != 403) return false;
+  try {
+    return (jsonDecode(body) as Map<String, dynamic>)['code'] ==
+        kAiDisclosureError;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Request an AI-enhanced description. Throws only on a non-200 response
 /// or a request failure — a 200 with `source:'template'` (not-Pro, or the
-/// server's own fallback) is a normal, non-throwing result.
+/// server's own fallback) is a normal, non-throwing result. A consent gap
+/// throws [kAiDisclosureError] so the caller can lead the runner to the
+/// disclosure instead of offering a retry that can never succeed.
 Future<AiDescriptionResult> requestAiDescription(
     RouteDescriptionInput input) async {
   final body = jsonEncode(_toBody(input));
@@ -104,6 +122,14 @@ Future<AiDescriptionResult> requestAiDescription(
 
   final raw = await res.transform(utf8.decoder).join();
   if (res.statusCode != 200) {
+    // A 403 carrying the AI-disclosure code is a consent gap, not a broken
+    // request: the runner has to accept the widened disclosure before the
+    // enhancement is lawful. It gets its own error so the screen can lead
+    // them there instead of offering a retry that can never succeed — or,
+    // worse, a Pro upsell that would not unlock it either.
+    if (isAiDisclosureDenial(res.statusCode, raw)) {
+      throw StateError(kAiDisclosureError);
+    }
     throw StateError('route_describe_failed_${res.statusCode}');
   }
   Map<String, dynamic> json;

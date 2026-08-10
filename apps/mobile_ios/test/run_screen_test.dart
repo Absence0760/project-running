@@ -406,6 +406,34 @@ void main() {
           reason: 'tapping the card opens the run detail for that run');
       semantics.dispose();
     });
+
+    testWidgets('states its distance and pace in the runner\'s unit',
+        (tester) async {
+      // Both pills were built from private km-only formatters with the unit
+      // written into the string, so a mile-unit runner's own last run read as
+      // kilometres on the screen they see most.
+      final s = await _makeStores();
+      await tester.runAsync(() async {
+        await s.runStore.save(cm.Run(
+          id: 'last-run-mi',
+          startedAt: DateTime.now().subtract(const Duration(hours: 3)),
+          duration: const Duration(minutes: 40),
+          distanceMetres: 8046.72,
+          source: cm.RunSource.app,
+        ));
+      });
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final milePrefs = Preferences();
+      await milePrefs.init();
+      registerActivePreferences(milePrefs);
+      addTearDown(resetActivePreferencesForTest);
+
+      await _pump(tester, s);
+
+      expect(find.text('5.00 mi'), findsOneWidget);
+      // 2400 s over 5 mi is 8:00 /mi.
+      expect(find.text('8:00 /mi'), findsOneWidget);
+    });
   });
 
   group('RunScreen — Start label fits its circle (issue #666 V12)', () {

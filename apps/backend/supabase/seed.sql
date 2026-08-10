@@ -1455,9 +1455,12 @@ UPDATE user_profiles
 -- short-circuits that for e2e + manual dev convenience. The dedicated
 -- consent-gate tests (web src/lib/security_guards.test.ts, mobile
 -- coach_screen_test.dart) are source-grep guards over the handler
--- code, so pre-seeded consent doesn't bypass them.
+-- code, so pre-seeded consent doesn't bypass them. Seeded at the CURRENT
+-- disclosure version so the AI route surfaces are reachable too — a real
+-- user who only ever accepted v1 is refused there (migration 20270511_001).
 UPDATE user_profiles
    SET coach_consent_at = now(),
+       ai_disclosure_version = ai_disclosure_current_version(),
        health_data_consent_at = now()
  WHERE id IN (
    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',

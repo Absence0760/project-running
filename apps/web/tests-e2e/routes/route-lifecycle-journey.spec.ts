@@ -138,11 +138,14 @@ test.describe('Routes — create → list → detail → publish → anon share 
 				page.getByRole('heading', { name: routeName, level: 1 })
 			).toBeVisible({ timeout: 10_000 });
 
-			// Key-stat tiles: distance + surface are always rendered.
+			// Key-stat tiles: distance + surface are always rendered. The surface
+			// tile names the `routes.surface` value through the one catalogue
+			// namespace (decisions § 572); the lowercase token would also match
+			// the tile's `add_road` icon ligature, so pin the localized name.
 			const keyStats = page.locator('.key-stats');
 			await expect(keyStats).toBeVisible();
 			await expect(keyStats).toContainText('Distance');
-			await expect(keyStats).toContainText('road');
+			await expect(keyStats).toContainText('Road');
 
 			// MapLibre map container mounts.
 			await expect(page.locator('.run-map').first()).toBeVisible({
@@ -199,9 +202,11 @@ test.describe('Routes — create → list → detail → publish → anon share 
 					anonPage.getByRole('heading', { name: routeName, level: 1 })
 				).toBeVisible({ timeout: 10_000 });
 
-				// The body-level .route-meta strip carries surface + distance.
-				await expect(anonPage.locator('.route-meta .surface-tag')).toContainText(
-					'road'
+				// The body-level .route-meta strip carries surface + distance. The
+				// tag renders the localized NAME of the `routes.surface` value, never
+				// the stored token (decisions § 572).
+				await expect(anonPage.locator('.route-meta .surface-tag')).toHaveText(
+					'Road'
 				);
 				await expect(anonPage.locator('.route-meta')).toContainText('8');
 			} finally {

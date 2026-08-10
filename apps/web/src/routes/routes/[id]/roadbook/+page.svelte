@@ -32,6 +32,7 @@
 	let route = $state<Route | null>(null);
 	let markers = $state<RouteMarker[]>([]);
 	let loading = $state(true);
+	let loadFailed = $state(false);
 	// The signed-in user's fueling-rate defaults (Settings → Preferences). The
 	// roadbook can override these per-page via ?carbs= / ?fluid= (shareable),
 	// falling back to these prefs, then the fuel_plan.ts constants when unset.
@@ -54,10 +55,19 @@
 
 	async function load() {
 		loading = true;
-		route = await fetchRouteById(data.id);
-		markers = route ? await fetchRouteMarkers(data.id) : [];
-		await loadFuelPrefs();
-		loading = false;
+		loadFailed = false;
+		try {
+			route = await fetchRouteById(data.id);
+			markers = route ? await fetchRouteMarkers(data.id) : [];
+			await loadFuelPrefs();
+		} catch (e) {
+			console.error('roadbook route load failed', e);
+			route = null;
+			markers = [];
+			loadFailed = true;
+		} finally {
+			loading = false;
+		}
 	}
 
 	async function loadFuelPrefs() {
@@ -308,6 +318,13 @@
 <div class="roadbook-page">
 	{#if loading}
 		<p class="muted">{m('roadbook.loading')}</p>
+	{:else if loadFailed}
+		<p class="muted load-error" role="alert" data-testid="roadbook-load-error">
+			{m('routeDetail.loadFailedBody')}
+			<button type="button" class="btn btn-outline btn-sm" onclick={() => void load()}>
+				{m('routeDetail.retry')}
+			</button>
+		</p>
 	{:else if !route}
 		<p class="muted">{m('roadbook.routeNotFound')}</p>
 	{:else}
@@ -479,6 +496,12 @@
 	.roadbook-page {
 		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 64rem;
+	}
+	.load-error {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-sm);
 	}
 	.rb-header {
 		display: flex;

@@ -460,6 +460,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
               );
+              if (!mounted) return;
               if (picked != null) setState(() => _startDate = picked);
             },
           ),

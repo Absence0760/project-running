@@ -19,7 +19,7 @@ class _EmailApi extends ApiClient {
   @override
   String? get userEmail => 'old@test.com';
   @override
-  Future<DateTime?> fetchCoachConsentAt() async => null;
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => null;
   @override
   Future<UserProfileRow?> fetchMyProfile() async => UserProfileRow(
         shadowHidden: false,

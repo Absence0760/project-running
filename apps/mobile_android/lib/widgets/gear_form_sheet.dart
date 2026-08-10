@@ -265,6 +265,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
     );
+    if (!mounted) return;
     if (picked != null) setState(() => _purchasedAt = picked);
   }
 

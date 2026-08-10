@@ -290,7 +290,7 @@ each ping → project the runner onto the planned line
        status ∈ on | tight | behind | unknown
 ```
 
-The card shows the next cut-off's name, distance to go, projected arrival, and a green/amber/red margin chip. **The staleness contract is the whole point:** when `live_freshness` flags the last fix as stale (or pace is unknown), the helper returns `status: 'unknown'` — the card still names the checkpoint + distance but shows "waiting for a fresh signal" and **suppresses the verdict**, never fabricating an ETA off an 18 h-old fix. Projection is flat recent pace (grade-adjusted remaining deferred, mirroring `checkpoint_projection`). All reads, works logged-out. See [predictive_live_tracking.md](predictive_live_tracking.md) + [decisions.md § 156](../architecture/decisions.md#156-predictive-live-tracking-reuses-the-roadbook-cutoff-legs-and-fails-to-unknown-when-the-fix-is-stale).
+The card shows the next cut-off's name, distance to go, projected arrival, and a green/amber/red margin chip. **The staleness contract is the whole point:** when `live_freshness` flags the last fix as stale (or pace is unknown), the helper returns `status: 'unknown'` — the card still names the checkpoint + distance but shows "waiting for a fresh signal" and **suppresses the verdict**, never fabricating an ETA off an 18 h-old fix. Projection is flat recent pace (grade-adjusted remaining deferred, mirroring `checkpoint_projection`). All reads, works logged-out. See [predictive_live_tracking.md](predictive_live_tracking.md) + [decisions.md § 156](../architecture/decisions.md#156-predictive-live-tracking-reuses-the-roadbook-cut-off-legs-and-fails-to-unknown-when-the-fix-is-stale).
 
 ### Watch out
 

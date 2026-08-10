@@ -2,6 +2,7 @@
 	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 	import { activeFormatLocale } from '$lib/format/time';
 	import { m as tr } from '$lib/i18n/store.svelte';
+	import { clubRoleLabel, joinPolicyLabel, routeSurfaceLabel, rsvpStatusLabel } from '$lib/i18n/enum_labels.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -651,8 +652,15 @@
 			expandedThreads = { ...expandedThreads, [postId]: null };
 			return;
 		}
-		const replies = await fetchPostReplies(postId);
-		expandedThreads = { ...expandedThreads, [postId]: replies };
+		try {
+			const replies = await fetchPostReplies(postId);
+			expandedThreads = { ...expandedThreads, [postId]: replies };
+		} catch (e) {
+			showToast(
+				tr('clubHome.repliesLoadFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
+		}
 	}
 
 	async function sendReply(postId: string) {
@@ -667,6 +675,13 @@
 			expandedThreads = { ...expandedThreads, [postId]: replies };
 			// Refresh reply counts on the top-level post list.
 			posts = await fetchClubPosts(club.id, 20);
+		} catch (e) {
+			// The draft is only cleared once the write lands, so it is still
+			// in the box to send again.
+			showToast(
+				tr('clubHome.replyFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error'
+			);
 		} finally {
 			replyBusyId = null;
 		}
@@ -850,27 +865,27 @@
 				{#if club.viewer_role === 'owner'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						{tr('clubHome.roleOwnerPrefix')} <strong>{tr('clubHome.roleOwner')}</strong>
+						<strong>{tr('clubHome.viewerRoleOwner')}</strong>
 					</p>
 				{:else if club.viewer_role === 'admin'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						{tr('clubHome.roleAdminPrefix')} <strong>{tr('clubHome.roleAdmin')}</strong>
+						<strong>{tr('clubHome.viewerRoleAdmin')}</strong>
 					</p>
 				{:else if club.viewer_role === 'event_organiser'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						{tr('clubHome.roleOrganiserPrefix')} <strong>{tr('clubHome.roleOrganiser')}</strong>
+						<strong>{tr('clubHome.viewerRoleOrganiser')}</strong>
 					</p>
 				{:else if club.viewer_role === 'race_director'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						{tr('clubHome.roleDirectorPrefix')} <strong>{tr('clubHome.roleDirector')}</strong>
+						<strong>{tr('clubHome.viewerRoleDirector')}</strong>
 					</p>
 				{:else if club.viewer_role === 'member'}
 					<p class="role-line subtle">
 						<span class="material-symbols" aria-hidden="true">check_circle</span>
-						{tr('clubHome.roleMember')}
+						{tr('clubHome.viewerRoleMember')}
 					</p>
 				{/if}
 				{#if club.description}
@@ -971,7 +986,7 @@
 				<div class="admin-card-title">
 					<span class="material-symbols" aria-hidden="true">link</span>
 					<strong>{tr('clubHome.inviteLink')}</strong>
-					<span class="policy-chip">{club.join_policy}</span>
+					<span class="policy-chip">{joinPolicyLabel(club.join_policy)}</span>
 				</div>
 				{#if club.invite_token}
 					<div class="invite-row">
@@ -1283,9 +1298,9 @@
 								</div>
 							</div>
 							{#if evt.viewer_rsvp === 'going'}
-								<span class="chip chip-going">{tr('clubHome.rsvpGoing')}</span>
+								<span class="chip chip-going">{rsvpStatusLabel('going')}</span>
 							{:else if evt.viewer_rsvp === 'maybe'}
-								<span class="chip chip-maybe">{tr('clubHome.rsvpMaybe')}</span>
+								<span class="chip chip-maybe">{rsvpStatusLabel('maybe')}</span>
 							{/if}
 						</a>
 					{/each}
@@ -1408,8 +1423,10 @@
 											<span class="meta-sep">·</span>
 											<span>{tr('clubHome.elevation', { n: route.elevation_m })}</span>
 										{/if}
-										<span class="meta-sep">·</span>
-										<span class="surface-tag">{route.surface}</span>
+										{#if route.surface}
+											<span class="meta-sep">·</span>
+											<span class="surface-tag">{routeSurfaceLabel(route.surface)}</span>
+										{/if}
 										{#if route.is_public}
 											<span class="meta-sep">·</span>
 											<span class="public-tag">{tr('clubHome.publicTag')}</span>
@@ -1585,7 +1602,7 @@
 								<div class="member-name">
 									<strong>{m.display_name ?? tr('clubHome.memberFallback')}</strong>
 									{#if m.role !== 'member' && (!isAdmin || m.role === 'owner' || m.user_id === club?.owner_id)}
-										<span class="role-badge role-{m.role}">{m.role.replace('_', ' ')}</span>
+										<span class="role-badge role-{m.role}">{clubRoleLabel(m.role)}</span>
 									{/if}
 								</div>
 							</a>
@@ -1608,10 +1625,10 @@
 											}
 										}}
 									>
-										<option value="admin">{tr('clubHome.roleOptionAdmin')}</option>
-										<option value="event_organiser">{tr('clubHome.roleOptionOrganiser')}</option>
-										<option value="race_director">{tr('clubHome.roleOptionDirector')}</option>
-										<option value="member">{tr('clubHome.roleOptionMember')}</option>
+										<option value="admin">{clubRoleLabel('admin')}</option>
+										<option value="event_organiser">{clubRoleLabel('event_organiser')}</option>
+										<option value="race_director">{clubRoleLabel('race_director')}</option>
+										<option value="member">{clubRoleLabel('member')}</option>
 									</select>
 									{#if m.user_id !== auth.user?.id}
 										<button

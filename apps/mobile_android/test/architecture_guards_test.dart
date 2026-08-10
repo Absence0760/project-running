@@ -5359,6 +5359,10 @@ void main() {
       'screens/settings_safety_screen.dart::l10n.safetyTitle': 1,
       'screens/workout_detail_screen.dart::l10n.workoutRelinkTitle': 1,
       'widgets/fitness_card.dart::label': 1,
+      // Grants AI-processing consent: accepting writes a consent record and
+      // nothing else, cancelling leaves the runner exactly where they were,
+      // and the account screen's withdrawal control reverses either way.
+      'widgets/ai_disclosure_notice.dart::l10n.coachConsentHeadline': 1,
       'widgets/nutrition_log_sheet.dart::widget.result.name': 1,
       'screens/nutrition_screen.dart::l10n.nutritionSaveAsMealTitle': 1,
       'screens/nutrition_screen.dart::l10n.nutritionSaveAsRecipeTitle': 1,

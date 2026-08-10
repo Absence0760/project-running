@@ -442,6 +442,20 @@ On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical tr
 
 If the notification has an action (e.g. "Settings" on the GPS-unavailable banner), pass `actionLabel:` + `onAction:`. Tapping the action runs the callback and dismisses the banner.
 
+## Mobile async gaps — the `mounted` check goes BEFORE the `setState`, not after
+
+On the Flutter apps, every `setState` reached after an `await` needs `if (!mounted) return;` between the two. During the gap the runner can pop the route, sign out, or be navigated away by a deep link; `setState` on a defunct `State` throws, and the throw only ever happens to someone who left mid-request.
+
+Write the guard **immediately after the await that opened the gap** — not after the `setState`, and not only on the failure arm. Both were real: `runs_screen.dart` set `_syncing = false` and asked about `mounted` on the next line, and the route-detail tag row checked only inside its `catch` while the success arm wrote straight through (issue #734, 34 sites).
+
+`apps/mobile_android/test/post_await_setstate_guard_test.dart` (mirrored on iOS) scans `lib/` and fails on the next one. It is deliberately precision-tuned — a guard that lives in a helper the method calls is not seen — so a hit is a real finding, and the allowlist is empty on purpose. A dialog `await` counts: `showDatePicker`, `confirmDestructive` and `Navigator.push` all open the same gap as a network call.
+
+## Mobile distances and paces render through the unit pref, never a hand-rolled divide
+
+A user-facing distance, pace, speed or elevation on the Flutter apps is formatted by `UnitFormat` (with an explicit `DistanceUnit`) or, on a surface that carries no `Preferences` dep, by the top-level `formatDistanceForPref` / `formatPaceForPref` / `formatElevationForPref` in `lib/preferences.dart`. **Never `'${(metres / 1000).toStringAsFixed(2)} km'`** — that is the shape that leaves a mile-unit runner reading kilometres, and it has been swept out of the browse surfaces twice now (#733 target pace, #734 race calendar / event photos / event results / last-run card).
+
+Two corollaries. **Don't add a second formatter beside the shared one** — `social_service.dart` grew its own km-only `fmtPace`, so the event target-pace metric disagreed with the unit-aware distance printed next to it. And **an i18n key names the concept, not the unit**: the message takes an already-formatted `{distance}`, so `racesKmAway` was renamed to `racesDistanceAway`; a key that claims kilometres is how the next edit reintroduces them.
+
 ## Mobile create/edit-entity forms — `showFullScreenForm`
 
 On the Flutter apps, every "add / edit X" form presents as a full-screen dialog built through `showFullScreenForm<T>(context, title:, builder:)` in `lib/widgets/full_screen_form.dart` (see [decisions.md § 129](decisions.md)). It pushes a `MaterialPageRoute(fullscreenDialog: true)` wrapping the body in `Scaffold` + `AppBar(title)` + `SafeArea`; lay the body out with `FullScreenFormBody(children: [...])` and label field groups with `FormSectionLabel`.
@@ -688,6 +702,32 @@ Canonical button styles live in `apps/web/src/app.css` under the comma-separated
 **Don't redefine these classes in a page or component.** Local copies drift over time and the buttons stop matching across pages — exactly the problem the centralisation solved. If you need a one-off variant, give it a page-specific name (`.btn-google`, `.btn-save`, `.btn-ghost`, `.btn-connect`, ...) and let it extend the canonical class via the markup (`class="btn btn-primary btn-save"`). Avoid overriding the `padding` or `font-size` of the canonical classes — that's how drift starts.
 
 The `/settings/upgrade`, `/login`, and `/` (landing) surfaces deliberately ship larger marketing-CTA buttons; those override the canonical sizes via Svelte-scoped local rules and are documented exceptions, not the pattern.
+
+## Web file pickers — a button drives the input, never a `<label>` wrapping it
+
+A native `<input type="file">` cannot be styled, so every picker hides it. The
+tempting shorthand — a `<label>` wrapping a `hidden` input — leaves the control
+with **no focusable element at all**: the input is out of the tab order and a
+label is not a control, so clicking the label is the only way to open the
+chooser. Four shipped that way (`/settings/integrations` twice,
+`/clubs/[slug]/events/[id]`'s results CSV import, and `ImportRoute`'s drop
+zone — whose own comment claimed keyboard users had a Browse button).
+
+The idiom is a real `<button type="button">` whose `onclick` forwards to a
+bound, off-screen input:
+
+```svelte
+<button type="button" class="my-btn" onclick={() => picker?.click()}>Choose file</button>
+<input bind:this={picker} type="file" accept=".csv" onchange={onPick} style="display: none" />
+```
+
+**Not extracted into a shared component**, deliberately: the button carries each
+surface's own component-scoped class (`.browse-btn`, `.import-file`, `.zip-btn`),
+and Svelte's scoped styles do not reach into a child component's markup, so a
+wrapper would force every caller to restyle or to leak its rules through
+`:global()`. What generalises is the guard —
+`a11y_picker_guards.test.ts` sweeps every template, bounding each `<label>` at
+its own closing tag before looking inside it.
 
 ## Svelte 5 `$effect` — never read state you write in the same effect
 
@@ -1074,13 +1114,17 @@ Pairs with the "Test hygiene" section below — tests for a piece go in the **sa
 ## A value domain gets ONE vocabulary, and a destination gets a name of its own
 
 Two rules from the same failure — a user-facing name that more than one place
-was allowed to decide (decisions § 547).
+was allowed to decide (decisions § 547, generalised in § 572).
 
 **A closed value domain has exactly one catalogue namespace and one resolver.**
 When a column's value set is fixed by a CHECK constraint (`activity_type`,
-`workout_kind`, …), every surface that names a value resolves through the one
-helper — web `runs/activity_type.svelte.ts#activityTypeLabel`, mobile
-`activity_type_labels.dart#activityTypeLabel`. Do NOT mint
+`workout_kind`, `surface`, `join_policy`, `role`, an RSVP `status`, …), every
+surface that names a value resolves through the one helper — web
+`runs/activity_type.svelte.ts#activityTypeLabel` and
+`i18n/enum_labels.svelte.ts` (`routeSurfaceLabel` / `joinPolicyLabel` /
+`clubRoleLabel` / `rsvpStatusLabel`), mobile
+`activity_type_labels.dart#activityTypeLabel`. Register a new union in
+`i18n/enum_labels.ts` and the guard picks it up. Do NOT mint
 `<surface>.activity<Value>` keys for a picker, a filter chip and a detail
 header: seven such namespaces existed for five values and they disagreed
 *inside* a locale (German `hike` was both "Wandern" and "Wanderung"), and four
@@ -1096,9 +1140,21 @@ token "stroller" in every language. Corollaries:
   — so a new one fails wherever it lands, and an entry must say why the value
   cannot be resolved (an open vendor string like a FIT `sub_sport` can; a closed
   domain cannot).
+- **Never interpolate the stored token into the DOM.** `{route.surface}`,
+  `{club.join_policy}`, `{club.viewer_role}`, `{run.activity_type}` — nine such
+  renders shipped, and they read as English in all six locales while the page
+  around them was translated. `i18n/enum_vocabulary.test.ts` scans every
+  template for the shape in **text position only**: picking an icon, a class or
+  a prop off the value (`title={seg.role}`, `class="tl-{seg.role}"`) is
+  legitimate and never shown.
 - **Derive the value set, don't restate it.** The guards parse the CHECK out of
-  the migration, so widening the domain fails the build until every catalogue
-  carries the new key.
+  the migration or the union out of `types.ts`, so widening the domain fails the
+  build until every catalogue carries the new key.
+- **The key-shape sweep does not see abbreviations.** `clubHome.roleOptionDirector`
+  named `race_director` and no matcher keyed on the value can catch it; widening
+  the tail to any word swallows `plansPage.statusActive`. The blind spot is
+  pinned as a must-spare fixture rather than papered over — when you add a
+  vocabulary, hand-sweep for abbreviated duplicates once.
 - **An unrecognised value renders VERBATIM, never title-cased.** A title-cased
   token is indistinguishable from a real translation and hides the drift on
   exactly the surface where it would be noticed.

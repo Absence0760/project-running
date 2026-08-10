@@ -32,6 +32,11 @@
 	const isOwner = $derived(!!detail && !!auth.user && detail.routine.author_id === auth.user.id);
 
 	async function load() {
+		// Retry re-enters the loading state: leaving `loading` false while
+		// the re-read is in flight drops straight past the failure branch
+		// into "Routine not found", which is the claim this page exists to
+		// avoid making.
+		loading = true;
 		loadError = null;
 		try {
 			detail = await fetchGymRoutineDetail(routineId);
@@ -40,15 +45,20 @@
 			// must not tell an author their routine is gone.
 			loadError = e instanceof Error ? e.message : String(e);
 			detail = null;
-			loading = false;
 			return;
+		} finally {
+			loading = false;
 		}
-		loading = false;
 		// Only the author of a personal (non-club) routine with at least one
 		// admin club sees the publish-as-template control.
 		if (detail && auth.user?.id && detail.routine.author_id === auth.user.id && !detail.routine.club_id) {
-			const clubs = await fetchMyClubs();
-			adminClubs = clubs.filter((c) => c.viewer_role === 'owner' || c.viewer_role === 'admin');
+			try {
+				const clubs = await fetchMyClubs();
+				adminClubs = clubs.filter((c) => c.viewer_role === 'owner' || c.viewer_role === 'admin');
+			} catch (e) {
+				console.debug('club list for publish control failed', e);
+				adminClubs = [];
+			}
 		}
 	}
 

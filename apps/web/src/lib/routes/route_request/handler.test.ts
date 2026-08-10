@@ -31,7 +31,13 @@ function baseConfig(): RouteRequestConfig {
 
 function parse(result: Awaited<ReturnType<typeof handleRouteRequest>>): {
 	status: number;
-	body: { error?: string; upgrade?: boolean; constraints?: unknown };
+	body: {
+		error?: string;
+		upgrade?: boolean;
+		constraints?: unknown;
+		code?: string;
+		required_version?: number;
+	};
 } {
 	return { status: result.status, body: JSON.parse(result.body) };
 }
@@ -86,4 +92,113 @@ test('a valid request shape passes input validation (no 400) — fails later on 
 
 test('MAX_REQUEST_TEXT_CHARS is a sane cap', () => {
 	assert.ok(MAX_REQUEST_TEXT_CHARS >= 200 && MAX_REQUEST_TEXT_CHARS <= 2000);
+});
+
+// ─────────────── AI-disclosure consent gate (issue #734) ───────────────
+
+/// Minimal Supabase stand-in: enough for auth.getUser + the two RPCs the
+/// gates read. Injected through `config.createClient`, which exists so the
+/// post-auth branches are reachable without a live stack.
+function stubClient(profileRow: unknown, opts: { isPro?: boolean; profileError?: unknown } = {}) {
+	return () =>
+		({
+			auth: {
+				getUser: async () => ({ data: { user: { id: 'user-1' } }, error: null }),
+			},
+			rpc: (name: string) => {
+				if (name === 'get_my_profile') {
+					return {
+						maybeSingle: async () => ({
+							data: profileRow,
+							error: opts.profileError ?? null,
+						}),
+					};
+				}
+				return Promise.resolve({ data: opts.isPro === true, error: null });
+			},
+		}) as never;
+}
+
+const ACCEPTED_AT = '2026-01-01T00:00:00Z';
+const VALID_REQUEST = { request: 'a flat 10k loop', location_label: 'Boston, MA' };
+
+test('refuses a caller who accepted only the Coach disclosure', async () => {
+	// Reason: issue #734. This endpoint ships the typed request AND the
+	// location label to Anthropic — neither is in the v1 Coach copy.
+	const r = parse(
+		await handleRouteRequest('Bearer x', VALID_REQUEST, {
+			...baseConfig(),
+			createClient: stubClient({ ai_disclosure_version: 1, coach_consent_at: ACCEPTED_AT }),
+		}),
+	);
+	assert.equal(r.status, 403);
+	assert.equal(r.body.code, 'ai_disclosure_required');
+	assert.equal(r.body.required_version, 2);
+	// Not the paywall upsell — the client must not show "upgrade to Pro"
+	// to someone whose problem is a missing consent record.
+	assert.equal(r.body.upgrade, undefined);
+});
+
+test('refuses a caller with no consent record at all', async () => {
+	const r = parse(
+		await handleRouteRequest('Bearer x', VALID_REQUEST, {
+			...baseConfig(),
+			createClient: stubClient({ ai_disclosure_version: null, coach_consent_at: null }),
+		}),
+	);
+	assert.equal(r.status, 403);
+	assert.equal(r.body.code, 'ai_disclosure_required');
+});
+
+test('refuses a version this build does not know — fail closed, never grant', async () => {
+	const r = parse(
+		await handleRouteRequest('Bearer x', VALID_REQUEST, {
+			...baseConfig(),
+			createClient: stubClient({ ai_disclosure_version: 99, coach_consent_at: ACCEPTED_AT }),
+		}),
+	);
+	assert.equal(r.status, 403);
+	assert.equal(r.body.code, 'ai_disclosure_required');
+});
+
+test('an unreadable consent record is a 500, not a silent pass', async () => {
+	const r = parse(
+		await handleRouteRequest('Bearer x', VALID_REQUEST, {
+			...baseConfig(),
+			createClient: stubClient(null, { profileError: { code: '42501', message: 'denied' } }),
+		}),
+	);
+	assert.equal(r.status, 500);
+	assert.equal(r.body.error, 'consent check failed');
+});
+
+test('the widened acceptance clears the consent gate — the tier gate is what answers next', async () => {
+	const r = parse(
+		await handleRouteRequest('Bearer x', VALID_REQUEST, {
+			...baseConfig(),
+			createClient: stubClient(
+				{ ai_disclosure_version: 2, coach_consent_at: ACCEPTED_AT },
+				{ isPro: false },
+			),
+		}),
+	);
+	assert.equal(r.status, 403);
+	assert.equal(r.body.error, 'pro required');
+	assert.equal(r.body.upgrade, true);
+	assert.equal(r.body.code, undefined);
+});
+
+test('the dev paywall bypass does not bypass the consent gate', async () => {
+	// Reason: BYPASS_PAYWALL exists to skip a billing check in local dev.
+	// A lawful basis for sending a real person's data to a real
+	// sub-processor is not a billing check.
+	const r = parse(
+		await handleRouteRequest('Bearer x', VALID_REQUEST, {
+			...baseConfig(),
+			bypassPaywallEnabled: true,
+			createClient: stubClient({ ai_disclosure_version: 1, coach_consent_at: ACCEPTED_AT }),
+		}),
+	);
+	assert.equal(r.status, 403);
+	assert.equal(r.body.code, 'ai_disclosure_required');
 });

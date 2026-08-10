@@ -24,6 +24,7 @@
 	import { buildRouteShareCanonical } from '$lib/share/share_meta';
 	import { describeRoute, localisedTemplate } from '$lib/routes/route_description';
 	import { requestAiDescription } from '$lib/routes/route_describe_client';
+	import { AI_DISCLOSURE_ERROR } from '$lib/core/ai_disclosure';
 	import { coachEnabled } from '$lib/coach/coach_flag';
 
 	// The "Describe this route" button always works (offline template); the
@@ -31,6 +32,7 @@
 	const coachOn = coachEnabled();
 	import { env } from '$env/dynamic/public';
 	import { m } from '$lib/i18n/store.svelte';
+	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import type { Route } from '$lib/types';
 
@@ -65,6 +67,7 @@
 	let markerSnap = $state(true);
 	let markerPendingDrag = $state<{ id: string; lat: number; lng: number } | null>(null);
 	let loading = $state(true);
+	let loadFailed = $state(false);
 	let reviews = $state<any[]>([]);
 	let reviewsError = $state(false);
 	let showReviewForm = $state(false);
@@ -78,16 +81,19 @@
 			: null,
 	);
 
-	onMount(async () => {
-		// Wait for auth to resolve before fetching the row. Without
-		// this, `isOwner` (a $derived from auth.user) starts false and
-		// owner-only affordances (toggleStar, togglePublic, tag editor)
-		// silently no-op on early clicks. ready() falls through to the
-		// fetch on its timeout regardless, so anon visitors hitting a
-		// public route aren't stalled.
-		await auth.ready();
-		route = await fetchRouteById(data.id);
-		loading = false;
+	async function loadRoute() {
+		loading = true;
+		loadFailed = false;
+		try {
+			route = await fetchRouteById(data.id);
+		} catch (e) {
+			console.error('fetchRouteById failed', e);
+			route = null;
+			loadFailed = true;
+			return;
+		} finally {
+			loading = false;
+		}
 		if (route) {
 			displayWaypoints = (route.waypoints ?? []) as typeof displayWaypoints;
 			try {
@@ -103,6 +109,17 @@
 				reviewsError = true;
 			}
 		}
+	}
+
+	onMount(async () => {
+		// Wait for auth to resolve before fetching the row. Without
+		// this, `isOwner` (a $derived from auth.user) starts false and
+		// owner-only affordances (toggleStar, togglePublic, tag editor)
+		// silently no-op on early clicks. ready() falls through to the
+		// fetch on its timeout regardless, so anon visitors hitting a
+		// public route aren't stalled.
+		await auth.ready();
+		await loadRoute();
 	});
 
 	async function submitReview() {
@@ -215,10 +232,15 @@
 			genDescription = ai.description;
 			genSource = ai.source;
 			showUpgradeHint = ai.upgrade;
-		} catch (_) {
+		} catch (e) {
 			// Keep the templated baseline already shown; flag the failure
-			// without clobbering the description.
-			describeError = m('routeDetail.describeFailed');
+			// without clobbering the description. A consent gap is not a
+			// failure the runner can retry away, so it gets its own copy
+			// pointing at where they can act on it.
+			describeError =
+				e instanceof Error && e.message === AI_DISCLOSURE_ERROR
+					? m('routeDetail.describeConsentRequired')
+					: m('routeDetail.describeFailed');
 		} finally {
 			describing = false;
 		}
@@ -495,6 +517,19 @@
 
 {#if loading}
 	<div class="route-detail"><p class="loading">&nbsp;</p></div>
+{:else if loadFailed}
+	<div class="route-detail">
+		<a href="/routes" class="back-link page-back">
+			<span class="material-symbols">arrow_back</span> {m('routeDetail.backRoutes')}
+		</a>
+		<div class="not-found" role="alert" data-testid="route-load-error">
+			<h1>{m('routeDetail.loadFailedTitle')}</h1>
+			<p>{m('routeDetail.loadFailedBody')}</p>
+			<button type="button" class="btn btn-primary" onclick={() => void loadRoute()}>
+				{m('routeDetail.retry')}
+			</button>
+		</div>
+	</div>
 {:else if !route}
 	<div class="route-detail">
 		<a href="/routes" class="back-link page-back">
@@ -559,7 +594,7 @@
 								<span class="material-symbols">
 									{route.surface === 'trail' ? 'terrain' : route.surface === 'mixed' ? 'alt_route' : 'add_road'}
 								</span>
-								{route.surface}
+								{routeSurfaceLabel(route.surface)}
 							</span>
 							<span class="key-stat-label">{m('routeDetail.statSurface')}</span>
 						</div>

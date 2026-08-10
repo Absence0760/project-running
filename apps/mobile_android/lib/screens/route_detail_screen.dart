@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart'
     show AppSemanticColors, StatGrid, StatTile, StatusPill, motionScrollTo;
 
+import '../ai_disclosure.dart';
 import '../apple_watch_route_bridge.dart';
 import '../auth_error.dart';
 import '../backend_timeout.dart';
@@ -41,6 +42,7 @@ import '../undo_queue.dart';
 import '../watch_course.dart';
 import '../watch_roadbook.dart';
 import 'roadbook_screen.dart';
+import '../widgets/ai_disclosure_notice.dart';
 import '../widgets/app_bar_actions.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/missing_map_tiles_hint.dart';
@@ -216,6 +218,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   String? _genSource;
   bool _describing = false;
   bool _describeFailed = false;
+  bool _describeConsentRequired = false;
   bool _showUpgradeHint = false;
 
   @override
@@ -370,6 +373,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     setState(() {
       _describing = true;
       _describeFailed = false;
+      _describeConsentRequired = false;
       _showUpgradeHint = false;
     });
 
@@ -412,10 +416,32 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       });
     } catch (e) {
       debugPrint('route_detail: requestAiDescription failed: $e');
-      if (mounted) setState(() => _describeFailed = true);
+      // The templated baseline stays on screen either way (L1 must always
+      // work). A consent gap is not something a retry fixes, so it gets its
+      // own line plus a way to act on it.
+      final consent = e is StateError && e.message == kAiDisclosureError;
+      if (mounted) {
+        setState(() {
+          _describeConsentRequired = consent;
+          _describeFailed = !consent;
+        });
+      }
     } finally {
       if (mounted) setState(() => _describing = false);
     }
+  }
+
+  /// Open the AI disclosure from the fallback notice and, when the runner
+  /// accepts, re-run the enhancement they were refused. Nothing here
+  /// assumes the write landed — a cancelled or failed dialog resolves null
+  /// and the templated baseline simply stays.
+  Future<void> _reviewAiDisclosure() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    final recorded = await showAiDisclosureDialog(context, api);
+    if (recorded == null || !mounted) return;
+    setState(() => _describeConsentRequired = false);
+    await _describe();
   }
 
   /// The "Describe this route" surface shown when the route has no
@@ -490,6 +516,26 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.error,
               ),
+            ),
+          ),
+        if (_describeConsentRequired)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.routeDetailDescribeConsentRequired,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (widget.apiClient != null)
+                  TextButton(
+                    onPressed: _reviewAiDisclosure,
+                    child: Text(l10n.routeDetailReviewDisclosure),
+                  ),
+              ],
             ),
           ),
       ],
@@ -2290,15 +2336,15 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
     setState(() { _saving = true; });
     try {
       await api.updateRouteTags(widget.route.id, next);
+      if (!mounted) return;
       setState(() { _tags = next; _saving = false; _controller.clear(); });
       widget.onChange(next);
     } catch (e) {
       debugPrint('route detail tag save failed: $e');
+      if (!mounted) return;
       setState(() => _saving = false);
-      if (mounted) {
-        showTopBanner(
-            context, AppLocalizations.of(context).routeDetailTagSaveFailed(friendlyError(AppLocalizations.of(context), e)));
-      }
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailTagSaveFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 
@@ -2309,15 +2355,15 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
     setState(() { _saving = true; });
     try {
       await api.updateRouteTags(widget.route.id, next);
+      if (!mounted) return;
       setState(() { _tags = next; _saving = false; });
       widget.onChange(next);
     } catch (e) {
       debugPrint('updateRouteTags (remove) failed for ${widget.route.id}: $e');
+      if (!mounted) return;
       setState(() => _saving = false);
-      if (mounted) {
-        showTopBanner(
-            context, AppLocalizations.of(context).routeDetailTagRemoveFailed(friendlyError(AppLocalizations.of(context), e)));
-      }
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailTagRemoveFailed(friendlyError(AppLocalizations.of(context), e)));
     }
   }
 

@@ -167,10 +167,13 @@ test.describe('Routes — build → save → detail → GPX export', () => {
 				page.getByRole('heading', { name: routeName, level: 1 })
 			).toBeVisible({ timeout: 10_000 });
 
+			// The surface tile names the `routes.surface` value through the one
+			// catalogue namespace (decisions § 572); the lowercase token would
+			// also match the tile's `add_road` icon ligature, so pin the name.
 			const keyStats = page.locator('.key-stats');
 			await expect(keyStats).toBeVisible();
 			await expect(keyStats).toContainText('Distance');
-			await expect(keyStats).toContainText('road');
+			await expect(keyStats).toContainText('Road');
 
 			// MapLibre map container mounts.
 			await expect(page.locator('.run-map').first()).toBeVisible({

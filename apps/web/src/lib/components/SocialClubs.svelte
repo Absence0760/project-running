@@ -10,6 +10,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import VerifiedBadge from '$lib/components/VerifiedBadge.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import { clubRoleLabel } from '$lib/i18n/enum_labels.svelte';
 	import type { ClubWithMeta } from '$lib/types';
 
 	let subtab = $state<'browse' | 'mine'>('mine');
@@ -260,7 +261,7 @@
 							{m(club.member_count === 1 ? 'socialClubs.memberCountOne' : 'socialClubs.memberCountMany', { n: club.member_count })}
 						</span>
 						{#if club.viewer_role}
-							<span class="chip chip-mine">{club.viewer_role}</span>
+							<span class="chip chip-mine">{clubRoleLabel(club.viewer_role)}</span>
 						{:else if club.viewer_status === 'pending'}
 							<span class="chip chip-pending" title={m('socialClubs.requestPendingTitle')}>
 								{m('socialClubs.requestPending')}

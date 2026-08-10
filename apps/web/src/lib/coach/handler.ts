@@ -17,6 +17,13 @@
 // off `content-type`.
 
 import { createClient } from '@supabase/supabase-js';
+import {
+	AI_DISCLOSURE_VERSION_COACH,
+	aiDisclosureDenialBody,
+	aiDisclosureFromProfileRow,
+	checkAiDisclosure,
+} from '../core/ai_disclosure';
+import { supabaseErrorFields } from '../core/supabase_error';
 import { buildContext, type CoachProfileRow } from './context';
 import {
 	clampRunsLimit,
@@ -117,15 +124,16 @@ export async function handleCoach(
 	}
 
 	// GDPR Art 6(1)(a): refuse to fan out to Anthropic until the data
-	// subject has explicitly accepted the first-use disclosure on
+	// subject has explicitly accepted the AI-processing disclosure on
 	// /coach. Client UI also gates this, but the handler is the load-
 	// bearing check — a hand-rolled cURL request must fail closed.
-	// See audit/gdpr (2026-05-25).
+	// See audit/gdpr (2026-05-25) and decisions.md § 571 for why the
+	// record carries the disclosure VERSION rather than a bare flag.
 	//
-	// user_profiles.coach_consent_at is not in the public-safe column
-	// grant list (migration 20260707_001), so a direct
-	// `.select('coach_consent_at')` returns null for the caller's role.
-	// Go through the SECURITY DEFINER `get_my_profile()` RPC instead.
+	// The consent columns are not in the public-safe column grant list
+	// (migration 20260707_001), so a direct `.select()` returns null for
+	// the caller's role. Go through the SECURITY DEFINER
+	// `get_my_profile()` RPC instead.
 	const consentLookup = await supabase.rpc('get_my_profile').maybeSingle();
 	if (consentLookup.error) {
 		console.error('[coach] consent lookup failed', supabaseErrorFields(consentLookup.error));
@@ -137,13 +145,25 @@ export async function handleCoach(
 	// buildContext needs (display_name / preferred_unit / health consent),
 	// so it's threaded down instead of re-fetched there.
 	const profileRow = consentLookup.data as
-		| (CoachProfileRow & { coach_consent_at: string | null })
+		| (CoachProfileRow & {
+				coach_consent_at: string | null;
+				ai_disclosure_version: number | null;
+		  })
 		| null;
-	if (!profileRow?.coach_consent_at) {
+	const disclosure = checkAiDisclosure(
+		aiDisclosureFromProfileRow(profileRow),
+		AI_DISCLOSURE_VERSION_COACH,
+	);
+	if (!disclosure.ok) {
+		console.error('[coach] ai disclosure denied', {
+			reason: disclosure.reason,
+			required_version: AI_DISCLOSURE_VERSION_COACH,
+		});
 		return jsonError(
 			403,
 			'Coach consent required. Visit /coach in the app and accept ' +
-				'the first-use disclosure before retrying.',
+				'the AI disclosure before retrying.',
+			aiDisclosureDenialBody(AI_DISCLOSURE_VERSION_COACH),
 		);
 	}
 
@@ -538,17 +558,4 @@ function jsonError(
 	extra: Record<string, unknown> = {},
 ): CoachResult {
 	return buildJsonError(status, error, extra) as CoachResult;
-}
-
-/// Extract only the log-safe fields from a Supabase/PostgREST error.
-/// `.code` + `.message` are safe to log; `.details` and `.hint` can
-/// echo row fragments — the caller's chat content is Art 9 health/injury
-/// data on this path — and the raw object must never reach CloudWatch.
-/// Mirrors the `.code`/`.message` pattern used in rate_limit_errors.ts +
-/// the Edge Functions, and the security_guards.test.ts raw-object ban.
-/// /audit/pii-in-logs.
-export function supabaseErrorFields(
-	err: { code?: string; message?: string } | null | undefined,
-): { code: string | undefined; message: string | undefined } {
-	return { code: err?.code, message: err?.message };
 }

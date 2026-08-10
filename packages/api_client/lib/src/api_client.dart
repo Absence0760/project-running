@@ -2524,51 +2524,73 @@ class ApiClient {
     return UserProfileRow.fromJson(row);
   }
 
-  /// Read the GDPR Art 6(1)(a) coach-consent timestamp on the signed-in
-  /// user's `user_profiles` row. Returns null when consent has not yet
-  /// been recorded — callers should gate any Coach fan-out behind this.
-  /// See audit/gdpr (2026-05-25).
-  Future<DateTime?> fetchCoachConsentAt() async {
-    final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return null;
-    final row = await _client
-        .from('user_profiles')
-        .select('coach_consent_at')
-        .eq('id', viewerId)
-        .maybeSingle();
-    final raw = row?['coach_consent_at'];
-    if (raw == null) return null;
-    return DateTime.tryParse(raw as String);
+  /// Read the signed-in user's versioned AI-disclosure consent record
+  /// (GDPR Art 6(1)(a)) as the `{ai_disclosure_version, coach_consent_at}`
+  /// pair the clients grade with `checkAiDisclosure`. Null when signed out
+  /// or the profile row has not been provisioned.
+  ///
+  /// Goes through `get_my_profile()` because neither column is in the
+  /// cross-user column grant (migration 20260707_001 / 20270424000002): a
+  /// direct `.select('coach_consent_at')` is rejected outright with 42501,
+  /// so the read it replaced could only ever report "no consent".
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async {
+    if (_client.auth.currentUser?.id == null) return null;
+    final res = await _client.rpc('get_my_profile');
+    final row = (res is List ? (res.isEmpty ? null : res.first) : res)
+        as Map<String, dynamic>?;
+    if (row == null) return null;
+    return {
+      'ai_disclosure_version': row['ai_disclosure_version'],
+      'coach_consent_at': row['coach_consent_at'],
+    };
   }
 
-  /// Record the GDPR Art 6(1)(a) coach-consent acceptance for the signed-
-  /// in user via the `record_coach_consent()` SECURITY DEFINER RPC, which
-  /// stamps the SERVER's now() first-stamp-wins (not a client-chosen,
-  /// backdatable value) and is the only sanctioned writer — direct writes
-  /// to `coach_consent_at` are blocked at the DB. Returns the effective
-  /// (original-if-already-set) timestamp.
-  Future<DateTime?> recordCoachConsent() async {
+  /// Record acceptance of AI-disclosure [version] via the
+  /// `record_ai_disclosure_consent()` SECURITY DEFINER RPC — the only
+  /// sanctioned writer (direct writes to either column are blocked by the
+  /// `lock_consent_columns` trigger). The server stamps its own now() and
+  /// is monotone: accepting at or below the version already on record
+  /// leaves the original stamp standing.
+  ///
+  /// Returns what the SERVER now holds, keyed like [fetchAiDisclosure] so
+  /// one parser grades both. Throws when the RPC comes back without a
+  /// complete record — a locally synthesised version or timestamp would
+  /// let a screen unlock a feature off a write that never landed
+  /// (decisions § 560).
+  Future<Map<String, dynamic>> recordAiDisclosureConsent(int version) async {
     if (_client.auth.currentUser?.id == null) {
       throw StateError('not signed in');
     }
-    final res = await _client.rpc('record_coach_consent');
-    if (res is! String) return null;
-    return DateTime.tryParse(res);
+    final res = await _client.rpc(
+      'record_ai_disclosure_consent',
+      params: {'p_version': version},
+    );
+    final row = (res is List ? (res.isEmpty ? null : res.first) : res)
+        as Map<String, dynamic>?;
+    final storedVersion = row?['version'];
+    final acceptedAt = row?['accepted_at'];
+    if (storedVersion is! int || acceptedAt is! String || acceptedAt.isEmpty) {
+      throw StateError('consent not recorded');
+    }
+    return {
+      'ai_disclosure_version': storedVersion,
+      'coach_consent_at': acceptedAt,
+    };
   }
 
-  /// Withdraw coach consent (GDPR Art 7(3)) via the
-  /// `withdraw_coach_consent()` SECURITY DEFINER RPC — the sanctioned
-  /// inverse of [recordCoachConsent]. Clears the server-held stamp; the
-  /// coach request gate then re-blocks the Coach until the user
-  /// re-consents through [recordCoachConsent].
+  /// Withdraw the AI-disclosure consent record (GDPR Art 7(3)) via the
+  /// `withdraw_ai_disclosure_consent()` SECURITY DEFINER RPC — the
+  /// sanctioned inverse of [recordAiDisclosureConsent]. There is one
+  /// acceptance of one disclosure at one version, so withdrawal clears all
+  /// of it and every AI endpoint's 403 gate re-engages.
   ///
   /// Throws on a missing session: a silent return here would let the
   /// caller confirm a withdrawal that never reached the server.
-  Future<void> withdrawCoachConsent() async {
+  Future<void> withdrawAiDisclosureConsent() async {
     if (_client.auth.currentUser?.id == null) {
       throw StateError('not signed in');
     }
-    await _client.rpc('withdraw_coach_consent');
+    await _client.rpc('withdraw_ai_disclosure_consent');
   }
 
   /// Self-read of the full `user_profiles` row, including

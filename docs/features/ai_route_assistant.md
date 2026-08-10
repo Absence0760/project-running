@@ -96,9 +96,33 @@ the water tower, then a flat return along the river path."*
 - **Cost + paywall.** LLM calls cost money + latency. The AI Coach is already
   Pro-gated ([paywall.md](paywall.md)); gate the NL/description LLM calls the same
   way, with the templated description as the free default. Cache by request text.
-- **Privacy.** The NL request + start coordinates go to Anthropic — the *same*
-  sub-processor and posture as the coach (already disclosed). No new third party,
-  but record the start-location egress in the sub-processor list.
+- **Privacy.** The NL request + a coarse place label go to Anthropic — the *same*
+  sub-processor as the coach, but **not the same processing purpose**, and that
+  distinction cost us a real gap: both endpoints shipped with **no consent gate at
+  all** while `/api/coach` had one (issue #734). Reusing `coach_consent_at` was
+  not the fix — the copy the user accepted described the Coach using their
+  *training data*, so treating it as covering a typed route request would have
+  retroactively widened their agreement. Both endpoints now require
+  `AI_DISCLOSURE_VERSION_ROUTE_AI` of the versioned consent record
+  (`ai_disclosure_version`, migration `20270511_001`), and a user holding only the
+  older Coach-scoped acceptance gets a 403 with
+  `code: "ai_disclosure_required"` until they accept the widened disclosure in
+  Settings → Account. The dev `BYPASS_PAYWALL` flag deliberately does **not**
+  reach this gate — it skips a billing check, not a lawful basis. See
+  [api_database.md](../backend/api_database.md) and decisions § 571.
+- **Where a runner accepts it.** One disclosure component per platform, rendered
+  by every host that writes the record: web's `AiDisclosureNotice.svelte` (the
+  `/coach` first-use dialog + Settings → Account) and mobile's
+  `widgets/ai_disclosure_notice.dart` (the Coach gate, a Settings → Account tile,
+  and the route-detail fallback notice, which offers it inline and re-runs the
+  enhancement on acceptance). Mobile writes `record_ai_disclosure_consent()`
+  directly — the v1 `record_coach_consent()` wrapper has no client left — and
+  offers the acceptance whenever the record is not current, missing or stale, so
+  the route-detail notice always leads somewhere that can act on it. Both
+  platforms branch on the 403 body's `code`, never on the bare status: the
+  paywall answers 403 on the same endpoint, and a consent gap shown as a Pro
+  upsell sends a runner to buy something that would not unlock it. The templated
+  description keeps rendering underneath (decisions § 573).
 - **Injection.** The surface is small (the output is a constraint object the engine
   re-validates), but hold the line: never let extracted text reach a shell, a SQL
   query, or `{@html}`; only typed, whitelisted fields cross into the engine.

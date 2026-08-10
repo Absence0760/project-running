@@ -25,7 +25,10 @@ class _ArchiveApi extends ApiClient {
   String? get userId => 'u-viewer';
 
   @override
-  Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+  Future<Map<String, dynamic>?> fetchAiDisclosure() async => const {
+        'ai_disclosure_version': 2,
+        'coach_consent_at': '2026-01-01T00:00:00Z',
+      };
 
   @override
   Future<List<CoachMessageRow>> fetchCoachMessages({String? planId}) async =>

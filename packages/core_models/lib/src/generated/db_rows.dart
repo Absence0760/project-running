@@ -3744,6 +3744,7 @@ class RouteRow {
   static const String colDescription = 'description';
   static const String colIsFeatured = 'is_featured';
   static const String colShadowHidden = 'shadow_hidden';
+  static const String colGeomPublic = 'geom_public';
 
   final String id;
   final String userId;
@@ -3766,6 +3767,7 @@ class RouteRow {
   final String? description;
   final bool isFeatured;
   final bool shadowHidden;
+  final dynamic geomPublic;
 
   const RouteRow({
     required this.id,
@@ -3789,6 +3791,7 @@ class RouteRow {
     this.description,
     required this.isFeatured,
     required this.shadowHidden,
+    this.geomPublic,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -3813,6 +3816,7 @@ class RouteRow {
     description: json['description'] as String?,
     isFeatured: (json['is_featured'] as bool?) ?? false,
     shadowHidden: (json['shadow_hidden'] as bool?) ?? false,
+    geomPublic: json['geom_public'],
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -3837,6 +3841,7 @@ class RouteRow {
     colDescription: description,
     colIsFeatured: isFeatured,
     colShadowHidden: shadowHidden,
+    colGeomPublic: geomPublic,
   };
 }
 
@@ -4866,6 +4871,7 @@ class UserProfileRow {
   static const String colShadowHidden = 'shadow_hidden';
   static const String colTierUpdatedEventTs = 'tier_updated_event_ts';
   static const String colHandle = 'handle';
+  static const String colAiDisclosureVersion = 'ai_disclosure_version';
 
   final String id;
   final String? displayName;
@@ -4887,6 +4893,7 @@ class UserProfileRow {
   final bool shadowHidden;
   final int? tierUpdatedEventTs;
   final String? handle;
+  final int? aiDisclosureVersion;
 
   const UserProfileRow({
     required this.id,
@@ -4909,6 +4916,7 @@ class UserProfileRow {
     required this.shadowHidden,
     this.tierUpdatedEventTs,
     this.handle,
+    this.aiDisclosureVersion,
   });
 
   factory UserProfileRow.fromJson(Map<String, dynamic> json) => UserProfileRow(
@@ -4932,6 +4940,7 @@ class UserProfileRow {
     shadowHidden: (json['shadow_hidden'] as bool?) ?? false,
     tierUpdatedEventTs: (json['tier_updated_event_ts'] as num?)?.toInt(),
     handle: json['handle'] as String?,
+    aiDisclosureVersion: (json['ai_disclosure_version'] as num?)?.toInt(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -4955,6 +4964,7 @@ class UserProfileRow {
     colShadowHidden: shadowHidden,
     colTierUpdatedEventTs: tierUpdatedEventTs,
     colHandle: handle,
+    colAiDisclosureVersion: aiDisclosureVersion,
   };
 }
 

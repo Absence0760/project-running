@@ -49,7 +49,19 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // touches is in GUARDED_TABLES, every ADD takes the NOT VALID two-step, and a
 // bare VALIDATE takes SHARE UPDATE EXCLUSIVE (reads and writes pass), so the
 // scanner passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270508';
+// 20270509: routes.geom_public — a nullable ADD COLUMN with no default (a
+// metadata-only flip), a keyset-batched backfill, one GIST index, and function
+// bodies. No constraint of any kind, and `routes` is not in GUARDED_TABLES, so
+// the scanner passed it with zero violations before this bump.
+// 20270510: two new stable functions (gym_workout_summaries,
+// gym_has_weighted_sets) with their grants — no table DDL of any kind, so
+// the scanner passed it with zero violations before this bump.
+// 20270511: user_profiles.ai_disclosure_version — a nullable ADD COLUMN with
+// no default (a metadata-only flip), a pairing CHECK added NOT VALID and
+// VALIDATEd in the documented two-step, plus function and trigger bodies.
+// user_profiles is not in GUARDED_TABLES and the two-step is taken anyway, so
+// the scanner passed it with zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270511';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { USER_A } from '../fixtures/users';
+import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 
 /**
  * i18n foundation — client-side locale negotiation.
@@ -50,6 +51,22 @@ test.describe('i18n locale negotiation', () => {
 		await p2.goto('/login');
 		await expect(p2.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
 		await en.close();
+	});
+
+	test('a stored enum value renders as a translated name, not the database token', async ({
+		browser,
+	}) => {
+		// The seeded public route stores `surface = 'road'`. Every surface that
+		// names a narrow-union value resolves it through the one catalogue
+		// namespace (decisions § 572); before that, nine surfaces interpolated
+		// the token straight into the DOM and a German reader got "road".
+		const context = await browser.newContext({ locale: 'de-DE' });
+		const page = await context.newPage();
+		await page.goto(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+		await expect(page.locator('.route-meta .surface-tag')).toHaveText('Straße');
+		await expect(page.locator('.route-meta')).not.toContainText('road');
+		await context.close();
 	});
 
 	test('an unsupported language falls back to English', async ({ browser }) => {

@@ -143,6 +143,7 @@ class _CheckpointCheckinScreenState extends State<CheckpointCheckinScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() => _busy = true);
     final now = DateTime.now().toUtc();
     try {

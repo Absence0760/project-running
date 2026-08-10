@@ -161,9 +161,11 @@ create index routes_public_newest_sort on routes (created_at desc nulls last)
 -- so the old is_featured=true-only partial index served nothing (issue #407).
 ```
 
-**`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger from `waypoints->0->>'lat'/'lng'`. A GiST spatial index powers the `nearby_routes` RPC for proximity search.
+**`start_point`** is a PostGIS `geography(Point, 4326)` column storing the route's starting coordinates. It is auto-populated by a `BEFORE INSERT OR UPDATE` trigger which, since `20260925_001`, snaps it to the first waypoint that is **not** inside one of the owner's privacy zones (`NULL` when every waypoint is). A GiST spatial index powers the `nearby_routes` RPC for proximity search, which filters `start_point is not null` — so a route built entirely from home drops out of proximity search rather than pinning it.
 
 **`geom`** is the matching `geography(LineString, 4326)` column for the *full* route, populated from `waypoints` by the same kind of `BEFORE INSERT OR UPDATE` trigger (`routes_set_geom`). Backed by `routes_geom_gist`. Unlocks queries that `start_point` can't answer — "routes that pass through this area", "routes that intersect another route", "routes near a run's track" — via `ST_Intersects` / `ST_DWithin` against the line itself. Both client codegens emit it as opaque (`unknown` in TS, `dynamic` in Dart); the binary EWKB never reaches a renderer, so callers should keep using `waypoints` for drawing and reach for `geom` only inside RPC bodies. Routes with fewer than two valid lat/lng waypoints store `null` (a LineString needs at least two points). Because a `select('*')` would ship this binary over the wire for nothing, the "My routes" read (`fetchRoutesWithError`) enumerates an explicit `ROUTE_LIST_COLS` (base table) / `PUBLIC_ROUTE_LIST_COLS` (view) that omits `geom` + `start_point` — mirroring the `CLUB_SELECT_COLS` idiom.
+
+**`geom_public`** is the same LineString **clipped to the owner's privacy zones** — the geometry a non-owner is already served by `clip_route_for_viewer`, materialised so a public spatial predicate has something zone-aware to run against. Maintained by the same trigger pair as `start_point` (folded into `routes_set_geom`, plus the `user_settings` zones trigger for a retroactive re-clip), backed by `routes_geom_public_gist`, and derived through `privacy_aware_route_geom` → `clip_track_for_user` so it can never drift from the read path. `routes_within_box` is its only consumer and **fails closed** on it: `geom_public is not null` with no fallback to `geom`, so a fully-in-zone route is not returned at all. Registered in [`derived_state.md`](derived_state.md); rationale in `docs/architecture/decisions.md § 566`. Opaque to both codegens, same as `geom`.
 
 **`club_id`** makes a route club-owned: any club admin can edit it, any member can read it regardless of `is_public`. Two RLS policies layer on top of the existing user-owned + public-readable policies — `"club members read club routes"` (SELECT where `club_id is not null and is_club_member(club_id)`) and `"club admins write club routes"` (ALL where `club_id is not null and is_club_admin(club_id)`). See `docs/architecture/decisions.md § 30` and `docs/features/clubs.md § Club-owned routes`. The owner policy `"users own their routes"` carries a `with check (auth.uid() = user_id and (club_id is null or private.is_club_admin(club_id)))` (migration `20270123_001`) so the OR'd permissive evaluation can't be used to set `club_id` to a club you don't administer — a non-admin can only ever write personal (`club_id is null`) rows. The same owner-path `club_id` lockdown is applied to `training_plans` (`"users own their plans"`, club branch additionally requires `is_template = true`) and `session_plans` (`"authors own their session plans"`).
 
@@ -835,7 +837,8 @@ create table user_profiles (
   gender                   text,                                -- 'male' | 'female' | 'prefer_not_to_say' | null (CHECK, 20270422_001)
   date_of_birth            date,
   height_cm                numeric(5,1),                        -- nutrition BMR (20261216_001); owner-only, off the public-safe grant
-  coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — gates /api/coach
+  coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — WHEN the AI disclosure was accepted
+  ai_disclosure_version    smallint,                            -- 20270511_001 — WHICH disclosure version; paired with coach_consent_at
   health_data_consent_at   timestamptz,                         -- GDPR Art 9(2)(a) — gates gender + DOB + height + weight persistence
   created_at               timestamptz default now()
 );
@@ -920,6 +923,51 @@ create table user_profiles (
 -- clients use the RPC.) Pinned by withdraw_coach_consent_test.sql +
 -- withdraw_health_data_consent_test.sql.
 ```
+
+**The AI consent record is VERSIONED** (migration `20270511_001`, issue #734, decisions § 571).
+`coach_consent_at` alone could only answer *whether* someone consented, never *to what* — so
+`/api/coach/route-describe` and `/api/coach/route-request`, which ship a different payload (the
+typed request plus a coarse `location_label`) for a different purpose, had no gate they could
+honestly use. Reusing the Coach stamp would have retroactively widened what an existing user
+agreed to; a second boolean would have repeated the problem on the next AI feature. The record
+is now the pair **`ai_disclosure_version` (which disclosure) + `coach_consent_at` (when)**,
+kept whole by `user_profiles_ai_disclosure_chk` — either both are set or neither is.
+
+| Version | Scope | Minimum required by |
+|---|---|---|
+| 1 | AI Coach only — profile slice, recent runs, active plan, chat text | `/api/coach` |
+| 2 | All AI features — v1 plus the AI route assistant (route stats + name, the typed request, a coarse place label) | `/api/coach/route-describe`, `/api/coach/route-request` |
+
+The ladder is **monotone by construction** — each version is a strict superset of the one below,
+which is what makes `accepted >= required` sound. A future disclosure that *narrows* could not
+join it; it would need a scope set instead.
+
+- `ai_disclosure_current_version()` — the highest version the DB knows. Its TS mirror is
+  `AI_DISCLOSURE_CURRENT_VERSION` in `apps/web/src/lib/core/ai_disclosure.ts`, and
+  `ai_disclosure.test.ts` parses the migration to fail the build on drift.
+- `record_ai_disclosure_consent(p_version smallint)` → `(version, accepted_at)` — the canonical
+  recorder. **Monotone**: accepting a version at or below the one on record is a no-op returning
+  the original stamp, so a Coach re-prompt can never walk a v2 acceptance back to v1. An unknown
+  version **raises** (`22023`) rather than being stored — a disclosure the deployment cannot
+  describe is one it cannot prove was made.
+- `withdraw_ai_disclosure_consent()` — Art 7(3). Clears **both** columns: there is one
+  acceptance of one disclosure, so withdrawal is all of it.
+- `record_coach_consent()` / `withdraw_coach_consent()` remain as **v1 entry points** in SQL,
+  but **no client calls them**: mobile now presents the same widened disclosure web does, so
+  the honest record is v2 and `packages/api_client` writes it through
+  `record_ai_disclosure_consent()` directly (decisions § 573). Two client paths writing one
+  consent record is the defect the versioning exists to prevent, one layer down.
+- `lock_consent_columns` now also blocks a direct write to `ai_disclosure_version`; without that
+  a PostgREST PATCH could self-grant the widened scope.
+
+Existing acceptances backfill to **v1**, so a Coach user keeps the Coach and is refused (403,
+body `code: "ai_disclosure_required"`) by the route endpoints until they accept the widened
+disclosure in Settings → Account. Every gate fails closed: no record, a half-written record, an
+unreadable lookup, or an unknown version all deny. Pinned by `ai_disclosure_consent_test.sql`.
+
+**Pre-deploy checklist item (not a code blocker):** counsel / CISO sign-off on the v2
+disclosure copy (`coachPage.consent*` in the six web locales) before it is presented in
+production. The code, the gate, and the record ship now.
 
 `height_cm` (migration `20261216_001`, nutrition BMR) is **special-category health data** and shares the `gender`/`date_of_birth` posture: it is **owner-only** — not on the `20260707_001` public-safe column grant, so it's read back through `get_my_profile()` and never exposed to other authenticated callers or anon — and its persistence is gated on `health_data_consent_at` at the client layer, exactly like gender/DOB. Same for the `body_metrics` weight series below.
 
@@ -1858,7 +1906,9 @@ select * from nearby_routes(51.5074, -0.1278, 50000, 50);
 
 ### `routes_within_box(min_lat, min_lng, max_lat, max_lng, max_results)`
 
-Viewport-shaped companion to `nearby_routes`. Returns public routes whose **full polyline** (`routes.geom`) intersects the bounding box, sorted by distance from the box centre. Requires the LineString geography column from migration `20260607_001_routes_geom_linestring.sql`.
+Viewport-shaped companion to `nearby_routes`. Returns public routes whose **privacy-clipped polyline** (`routes.geom_public`) intersects the bounding box, sorted by distance from the box centre. Requires the clipped LineString column from migration `20270509_001_routes_geom_public.sql`.
+
+The predicate deliberately does **not** read `routes.geom`. Running it over the raw line while returning `id` made this RPC — which is granted to `anon` — a membership oracle: a grid sweep of small boxes traced the in-zone tail of a public route at box resolution, recovering exactly the coordinate privacy zones exist to withhold (decisions §566). It also **fails closed**: a route with no `geom_public` (fully inside a zone, or fewer than two valid waypoints) is not returned, rather than falling back to the unclipped column.
 
 ```sql
 select * from routes_within_box(-37.83, 144.94, -37.78, 144.99, 50);
@@ -2050,6 +2100,18 @@ The batched sibling (migration `20270323_001`): the same row shape plus a leadin
 ### `gym_exercise_names()`
 
 Returns `(exercise_name, uses)` — distinct trimmed exercise names + use counts, most-used first — for the gym editor's autocomplete datalist (migration `20261226_001`, perf-hunt follow-up). Bounded to the count of distinct exercises (dozens) so the History page never pulls raw set history just to derive names. Names stay case-preserved (trim only), matching the prior client behaviour. SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_names_test.sql`.
+
+### `gym_workout_summaries(p_limit integer default 100)`
+
+Returns `(workout_id, exercise_count, is_pr)` — one row per workout the `/gym` list shows (migration `20270510_001`, decisions §568). Closes the residual §138 left open: the list's per-workout PR badge is an all-time question ("did this workout beat everything logged before it?"), so the client read the user's whole `gym_sets` history unwindowed — and PostgREST caps an unbounded SELECT at **1000 rows**, so past ~40 sessions of 25 sets the badges were computed from a truncated, unordered slice. `p_limit` bounds the rows returned; the PR judgement always runs over the caller's **entire** history, which also fixes a second bug — the client walked only the 100 workouts it had fetched, so a lift set 101 workouts ago failed to suppress a badge and `/gym` disagreed with `/gym/[id]`.
+
+`is_pr` mirrors `gym_prs.ts#RunningPrTracker`: walking oldest → newest (ties broken by id), a workout is flagged when any one exercise's best single-set weight, best single-set volume, or best Epley e1rm strictly beats every earlier workout's — an exercise with no earlier set counting as a PR. Volume and e1rm round to 1 dp on both sides of the comparison, as `round1()` does. `exercise_count` is the distinct **normalised** names (a whitespace-only name passes the `length(1..120)` CHECK; it counts toward the workout's stored `set_count` / `volume_kg` but is not an exercise). Recompute-on-read, so it can't drift from `gym_sets`. SECURITY INVOKER, owner-scoped, granted to `authenticated`. Web `fetchGymWorkoutSummariesWithError` (`core/data.ts`). pgTAP `gym_workout_summaries_test.sql` (14 tests) and web `gym_workout_summaries.test.ts` build the **same fixture** and assert the same four PR workouts, one through the RPC and one through the real `RunningPrTracker`, so the SQL and TS definitions can't drift apart.
+
+The list's other two row stats need no RPC: `gym_workouts.set_count` / `volume_kg` are trigger-maintained columns ([derived_state.md](derived_state.md)) the page was re-deriving from raw sets.
+
+### `gym_has_weighted_sets()`
+
+Returns a boolean: has the caller ever logged a set with a positive `weight_kg`? Gates the Records link on `/gym`, since `/gym/records` only surfaces weighted exercises (migration `20270510_001`). All-time and `exists`-early-exit, so it stays honest for a lifter whose last weighted session is further back than the list page reaches — the case a per-page flag would get wrong. SECURITY INVOKER, owner-scoped. Web `fetchGymHasWeightedSets`. Covered by `gym_workout_summaries_test.sql`.
 
 ---
 

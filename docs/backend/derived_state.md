@@ -78,11 +78,53 @@ retention cron referenced in a comment that was never created.
   overcount by including private runs and leave the cache permanently above
   what the trigger maintains).
 
+## `routes.geom_public`
+
+- **What it caches:** the route's polyline **as a non-owner is allowed to see
+  it** — the owner's privacy zones already clipped off (`20270509_001`). It
+  exists so a public spatial predicate has zone-aware geometry to run against:
+  `routes_within_box` is granted to `anon`, and running its `ST_Intersects`
+  over the raw `geom` while returning the route id made it a membership oracle
+  that traced the in-zone tail box by box (decisions §566). This is a privacy
+  boundary, not a performance cache — a stale or missing value must never fall
+  back to `geom`.
+- **Authoritative recompute:** the LineString over
+  `clip_track_for_user(routes.user_id, routes.waypoints)`, or `NULL` when that
+  clip leaves fewer than two valid points. `privacy_aware_route_geom(waypoints,
+  user_id)` **is** that query — it calls `clip_track_for_user` rather than
+  re-implementing the zone walk, precisely so the cached geometry cannot drift
+  away from what `clip_route_for_viewer` serves.
+- **Consumers (read the cache, do NOT recompute):** `routes_within_box`, which
+  fails closed on `geom_public is not null` with no `geom` fallback.
+  `nearby_routes` is deliberately not a consumer — its predicate and ordering
+  run on the zone-aware `start_point` (`20260925_001`).
+- **Maintained by:** the same trigger pair as `start_point` —
+  `routes_set_geom()` (BEFORE INSERT OR UPDATE OF waypoints on `routes`, folded
+  into the existing `geom` trigger so the two columns can't be written by
+  different paths) and `user_settings_recompute_route_start_points()` (AFTER
+  UPDATE OF prefs on `user_settings`, short-circuited when `privacy_zones` is
+  unchanged), which recomputes `start_point` and `geom_public` in one pass over
+  the owner's routes. Both are SECURITY DEFINER.
+- **Known drift (accepted):** the routes trigger watches `waypoints` only, so a
+  `user_id` change would leave the value computed against the previous owner's
+  zones. Routes never change hands today; the same assumption already underpins
+  `start_point`.
+- **Manual rebuild:** `update routes r set geom_public =
+  privacy_aware_route_geom(r.waypoints, r.user_id) where r.geom is not null;`
+  (batch it by id range on a populated database — `20270509_001`'s backfill is
+  the worked form).
+- **Pinned by:** `routes_within_box_geom_public_test.sql` — asserts the raw
+  `geom` crosses the head box, that an anon `routes_within_box` sweep over that
+  box returns nothing, that the out-of-zone body still answers, and that a
+  later zone change re-clips routes saved before it.
+
 ## `gym_workouts.set_count` / `gym_workouts.volume_kg`
 
 - **What it caches:** the number of sets in a workout and its total
   `sum(reps * weight_kg)`. Lets the `activities` view's lift branch read flat
-  columns instead of two correlated subqueries per workout row (F7).
+  columns instead of two correlated subqueries per workout row (F7), and the
+  `/gym` list render its per-row stats without fetching a single set
+  (decisions §568 — it used to re-derive both from raw `gym_sets`).
 - **Authoritative recompute:** for a workout `w`,
   `count(*)` and `sum(coalesce(reps,0) * coalesce(weight_kg,0))` over
   `gym_sets where workout_id = w.id` (0 when there are no sets).

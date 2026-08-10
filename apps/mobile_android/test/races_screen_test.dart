@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/geocoding.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/preferences.dart';
 import '../lib/race_service.dart';
 import '../lib/screens/races_screen.dart';
 
@@ -53,7 +55,10 @@ class _FakeRaceService extends RaceService {
 }
 
 RaceListingView _listing(String id, String name,
-        {int? distanceM, bool verified = true, String provider = 'manual'}) =>
+        {int? distanceM,
+        double? distanceMAway,
+        bool verified = true,
+        String provider = 'manual'}) =>
     RaceListingView(
       id: id,
       provider: provider,
@@ -65,7 +70,7 @@ RaceListingView _listing(String id, String name,
       entryUrl: 'https://example.com/register',
       resultsUrl: null,
       isVerified: verified,
-      distanceMAway: null,
+      distanceMAway: distanceMAway,
     );
 
 Widget _app(RaceService service,
@@ -312,5 +317,48 @@ void main() {
       lessThan(tester.getRect(find.byType(FloatingActionButton)).top),
       reason: 'the last card must end above the button that floats over it',
     );
+  });
+
+  group('RacesScreen — the runner\'s distance unit', () {
+    testWidgets('a mile-unit runner reads the card in miles', (tester) async {
+      // Both figures on a race card were built by dividing metres by 1000 and
+      // writing " km" after it, so browsing races was the one surface that
+      // ignored the unit pref the rest of the app honours.
+      SharedPreferences.setMockInitialValues({'use_miles': true});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      addTearDown(resetActivePreferencesForTest);
+
+      final service = _FakeRaceService(results: [
+        _listing('r-mi', 'Imperial Half',
+            distanceM: 21097, distanceMAway: 8046.72),
+      ]);
+      await tester.pumpWidget(_app(service));
+      await tester.pump();
+
+      expect(find.textContaining('13.11 mi'), findsOneWidget,
+          reason: 'the race distance');
+      expect(find.textContaining('5.00 mi away'), findsOneWidget,
+          reason: 'the distance-from-you label');
+      expect(find.textContaining(' km'), findsNothing);
+    });
+
+    testWidgets('a km-unit runner still reads kilometres', (tester) async {
+      SharedPreferences.setMockInitialValues({'use_miles': false});
+      final prefs = Preferences();
+      await prefs.init();
+      registerActivePreferences(prefs);
+      addTearDown(resetActivePreferencesForTest);
+
+      final service = _FakeRaceService(results: [
+        _listing('r-km', 'Metric Half', distanceM: 21097, distanceMAway: 5000),
+      ]);
+      await tester.pumpWidget(_app(service));
+      await tester.pump();
+
+      expect(find.textContaining('21.10 km'), findsOneWidget);
+      expect(find.textContaining('5.00 km away'), findsOneWidget);
+    });
   });
 }

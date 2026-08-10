@@ -21,6 +21,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { supabaseErrorFields } from '../core/supabase_error';
+
 export type RateLimitVerdict = 'ok' | 'limited' | 'error';
 
 /// Increment + check the caller's fixed-window bucket. `'ok'` when the
@@ -45,11 +47,12 @@ export async function checkRouteRateLimit(
 		p_window_seconds: windowSeconds,
 	});
 	if (error || !Array.isArray(data) || data.length === 0) {
-		// Message only — a PostgREST error's details/hint can echo row
-		// values into the log aggregator (mirrors the coach handler).
+		// The `?? error` this replaces put the whole PostgrestError in the
+		// log line whenever `.message` was absent — exactly the case the
+		// scrub exists for.
 		console.error(
 			`[rate_limit] check_rate_limit(${bucket}) failed; denying fail-closed:`,
-			(error as { message?: string } | null)?.message ?? error,
+			supabaseErrorFields(error),
 		);
 		return 'error';
 	}

@@ -414,3 +414,57 @@ test('buildMonthInRunningRecap: out-of-range month is zero, never throws', () =>
 	assert.equal(r.runCount, 0);
 	assert.equal(r.totalDistanceM, 0);
 });
+
+// --- Cross-year-boundary streaks -------------------------------------------
+//
+// Streaks are the one recap output derived from runs OUTSIDE the recap period:
+// `computeRunStreaks` is handed the whole run set, clamped only at the period's
+// last day. So a streak running 28 Dec → 3 Jan is the 2026 card's best streak
+// even though four of its days are 2025 runs. These pin that dependency before
+// any windowed fetch lands underneath the pages (#734).
+
+const BOUNDARY_STREAK_DAYS = [
+	'2025-12-28',
+	'2025-12-29',
+	'2025-12-30',
+	'2025-12-31',
+	'2026-01-01',
+	'2026-01-02',
+	'2026-01-03',
+];
+
+function boundaryStreakRuns(): Run[] {
+	return BOUNDARY_STREAK_DAYS.map((day) =>
+		mkRun({ startedAt: `${day}T10:00:00`, distance_m: 5000, duration_s: 1500 }),
+	);
+}
+
+test('buildYearInRunningRecap: the 2026 best streak counts the December 2025 days', () => {
+	const r = buildYearInRunningRecap(boundaryStreakRuns(), 2026);
+	// Only the three January runs are inside the year…
+	assert.equal(r.runCount, 3);
+	assert.equal(r.totalDistanceM, 15000);
+	// …but the streak spans the boundary, so dropping the 2025 runs from the
+	// input would report 3 here instead of 7.
+	assert.equal(r.bestStreakDays, 7);
+	// Anchored at 31 Dec 2026, nine months after the last run.
+	assert.equal(r.currentStreakDays, 0);
+});
+
+test('buildYearInRunningRecap: the 2025 card clamps the streak at 31 Dec 2025', () => {
+	const r = buildYearInRunningRecap(boundaryStreakRuns(), 2025);
+	assert.equal(r.runCount, 4);
+	// Runs after the anchor day are excluded, so the 2026 half is not counted.
+	assert.equal(r.bestStreakDays, 4);
+	assert.equal(r.currentStreakDays, 4);
+});
+
+test('buildMonthInRunningRecap: January 2026 best streak counts the December 2025 days', () => {
+	const r = buildMonthInRunningRecap(boundaryStreakRuns(), 2026, 1);
+	assert.equal(r.runCount, 3);
+	assert.equal(r.bestStreakDays, 7);
+	// The month card still carries the whole year's monthly buckets, so a month
+	// page needs the full year's runs, not just the month's.
+	assert.equal(r.monthly.length, 12);
+	assert.equal(r.monthly[0].runCount, 3);
+});

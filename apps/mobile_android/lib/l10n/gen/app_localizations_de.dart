@@ -3111,6 +3111,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Beschreibung konnte nicht erstellt werden. Bitte erneut versuchen.';
 
   @override
+  String get routeDetailDescribeConsentRequired =>
+      'KI-Beschreibungen benötigen deine Einwilligung in die aktualisierten KI-Hinweise.';
+
+  @override
+  String get routeDetailReviewDisclosure => 'Hinweise ansehen';
+
+  @override
   String get routeDetailEnhanceUpgradeHint =>
       'KI-Beschreibungen sind eine Pro-Funktion. Upgrade zum Verbessern.';
 
@@ -5561,11 +5568,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get coachNewConversation => 'Neue Unterhaltung';
 
   @override
-  String get coachConsentHeadline => 'Bevor du mit dem Coach chattest';
+  String get coachConsentHeadline => 'Bevor du die KI-Funktionen nutzt';
 
   @override
   String get coachConsentIntro =>
-      'Um dir fundierte Ratschläge zu geben, leitet der Coach einen Teil deiner Trainingsdaten an Anthropic weiter, unseren KI-Modellanbieter in den USA. Dieser Teil umfasst:';
+      'Die KI-Funktionen von Threkir — der Coach und der KI-Routenassistent — leiten einen Teil deiner Daten an Anthropic weiter, unseren KI-Modellanbieter in den USA. Je nach genutzter Funktion umfasst dieser Teil:';
 
   @override
   String get coachConsentBulletProfile =>
@@ -5583,6 +5590,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die Chatnachrichten, die du im Bildschirm unten eingibst.';
 
   @override
+  String get coachConsentBulletRoutes =>
+      'Für den KI-Routenassistenten: Name und Eckdaten der Route, dein eingegebener Wunsch und eine grobe Ortsangabe — niemals deine genauen Koordinaten.';
+
+  @override
   String get coachConsentProcessing =>
       'Anthropic verarbeitet die Daten im Auftrag von Threkir gemäß ihren Auftragsverarbeitungsbedingungen; standardmäßig trainieren sie ihre Modelle nicht mit Threkir-Kundendaten. Alle Details — einschließlich Übermittlungsmechanismus, Speicherdauer und deinen Widerrufsrechten — findest du in unserer Datenschutzerklärung.';
 
@@ -5594,10 +5605,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get coachConsentCancel => 'Abbrechen';
 
   @override
-  String get coachConsentAccept => 'Ich stimme zu — Coach starten';
+  String get coachConsentAccept => 'Ich stimme zu — KI-Funktionen aktivieren';
 
   @override
   String get coachConsentSaving => 'Einwilligung wird gespeichert…';
+
+  @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Einwilligung konnte nicht gespeichert werden: $error';
+  }
 
   @override
   String get coachNoPlanOption => 'Kein Plan (nur letzte Läufe)';
@@ -5940,20 +5956,38 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsAccountCoachConsentWithdraw =>
-      'Coach-Einwilligung widerrufen';
+      'Einwilligung in KI-Funktionen widerrufen';
 
   @override
   String get settingsAccountCoachConsentActive =>
-      'Hindere den Coach daran, deine Trainingsdaten zu verwenden. Du kannst jederzeit erneut einwilligen.';
+      'Hindere die KI-Funktionen von Threkir daran, deine Daten zu verwenden. Du kannst jederzeit erneut einwilligen.';
 
   @override
   String get settingsAccountCoachConsentWithdrawn =>
-      'Coach-Einwilligung widerrufen.';
+      'Einwilligung in KI-Funktionen widerrufen.';
 
   @override
   String settingsAccountCoachConsentWithdrawFailed(Object error) {
     return 'Widerruf fehlgeschlagen: $error';
   }
+
+  @override
+  String get settingsAccountAiConsentUpdateTitle =>
+      'Aktualisierte KI-Hinweise akzeptieren';
+
+  @override
+  String get settingsAccountAiConsentUpdateSubtitle =>
+      'Die Hinweise decken jetzt mehr Funktionen ab. Lies sie und stimme zu, um den KI-Routenassistenten zu nutzen.';
+
+  @override
+  String get settingsAccountAiConsentGrantTitle => 'KI-Hinweise ansehen';
+
+  @override
+  String get settingsAccountAiConsentGrantSubtitle =>
+      'Die KI-Funktionen von Threkir fragen vor der Nutzung deiner Daten nach deiner Einwilligung. Lies die Hinweise und stimme hier zu.';
+
+  @override
+  String get settingsAccountAiConsentAccepted => 'KI-Hinweise akzeptiert.';
 
   @override
   String settingsAccountDeleteFailed(Object error) {
@@ -11314,7 +11348,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get racesNearPlace => 'In der Nähe eines Ortes…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return '$distance entfernt';
   }
 

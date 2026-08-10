@@ -118,6 +118,63 @@ test.describe('/clubs/[slug] — threaded replies', () => {
 
 });
 
+test.describe('/clubs/[slug] — a failed reply says so', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('a rejected reply insert surfaces an error and keeps the draft', async ({ page }) => {
+		// sendReply had try/finally and no catch, so a rejected insert did
+		// nothing at all: no reply appeared, no error appeared, and the only
+		// signal was the button re-enabling — which reads as "try again",
+		// inviting the re-click that duplicates the post once the write
+		// starts landing.
+		const admin = getAdminClient();
+		const parentBody = `e2e-reply-failure-parent ${Date.now()}`;
+		const replyBody = `e2e-reply-failure ${Date.now()}`;
+
+		const { data: planted } = await admin
+			.from('club_posts')
+			.insert({ club_id: SYDNEY_RUN_CLUB_ID, author_id: USER_A.id, body: parentBody })
+			.select('id')
+			.single();
+		const parentId = (planted as { id: string }).id;
+
+		await page.route('**/rest/v1/club_posts*', async (route) => {
+			if (route.request().method() !== 'POST') return route.fallback();
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ message: 'simulated reply insert failure' })
+			});
+		});
+
+		try {
+			await page.goto('/clubs/richmond-run-club');
+			const parent = page.locator('article.post', { hasText: parentBody });
+			await expect(parent).toBeVisible({ timeout: 10_000 });
+			await parent.getByRole('button', { name: 'Reply' }).click();
+			const replyInput = parent.locator('.reply-form input[type="text"]');
+			await expect(replyInput).toBeVisible({ timeout: 5_000 });
+			await replyInput.fill(replyBody);
+			await parent.locator('.reply-form button[type="submit"]').click();
+
+			await expect(page.locator('.toast.toast-error')).toContainText('post your reply', {
+				timeout: 10_000
+			});
+			// The draft survives, so the runner can send it again rather than
+			// retype it.
+			await expect(replyInput).toHaveValue(replyBody);
+
+			const { data: replies } = await admin
+				.from('club_posts')
+				.select('id')
+				.eq('parent_post_id', parentId);
+			expect(replies?.length ?? 0).toBe(0);
+		} finally {
+			await admin.from('club_posts').delete().eq('id', parentId);
+		}
+	});
+});
+
 test.describe('/clubs/[slug] — reply double-submit guard', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 

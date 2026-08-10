@@ -2082,6 +2082,13 @@ class _RunScreenState extends State<RunScreen> {
             debugPrint('treadmill sample stream error: $e');
           },
         );
+        if (!mounted) {
+          // The listen above outlives dispose() — the subscription it stored
+          // was never in _treadmillSub when dispose() cancelled.
+          await _treadmillSub?.cancel();
+          _treadmillSub = null;
+          return;
+        }
         setState(() {
           _treadmillMode = true;
           _treadmillSpeedKmh = null;
@@ -5415,13 +5422,9 @@ PostLiveVisibilityAction postLiveVisibilityActionOnStop({
       : PostLiveVisibilityAction.revertToDefault;
 }
 
-String _formatKm(double metres) =>
-    formatFixed(metres / 1000, 2, activeLocaleTag);
-
 String _formatPace(Duration duration, double metres) {
   if (metres < 10) return '--:--';
-  final secondsPerKm = duration.inSeconds / (metres / 1000);
-  return UnitFormat.pace(secondsPerKm, DistanceUnit.km);
+  return formatPaceForPref(duration.inSeconds / (metres / 1000));
 }
 
 class _LastRunCard extends StatelessWidget {
@@ -5501,12 +5504,12 @@ class _LastRunCard extends StatelessWidget {
                         children: [
                           _metricPill(
                             theme,
-                            '${_formatKm(run.distanceMetres)} km',
+                            formatDistanceForPref(run.distanceMetres),
                           ),
                           const SizedBox(width: 6),
                           _metricPill(
                             theme,
-                            '${_formatPace(run.duration, run.distanceMetres)} /km',
+                            _formatPace(run.duration, run.distanceMetres),
                           ),
                         ],
                       ),
@@ -5707,7 +5710,7 @@ class _RoutePreviewCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${_formatKm(route.distanceMetres)} km',
+                      formatDistanceForPref(route.distanceMetres),
                       style: theme.textTheme.bodySmall,
                     ),
                     if (route.elevationGainMetres > 0) ...[

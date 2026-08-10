@@ -4,6 +4,8 @@ Short records of non-obvious choices that the code alone doesn't explain. Reach 
 
 This is not a strict ADR template — each entry is a few paragraphs: what we decided, why, and what we traded away. Append new entries to the bottom; don't rewrite history. Date them when you know the date.
 
+**Numbering.** A new entry takes the next number **above the current maximum heading number** — never the next gap, and never a number you inferred from the entry count. Several sessions share one checkout, so two appending on the same day will otherwise pick the same number; 104, 137 and 178 each ended up claimed by two unrelated entries that way, and 137 alone had 49 inbound references split across both meanings before it was untangled. The numbers are identifiers, not an ordering: the file is not monotonic, gaps are expected, and an entry never moves once written — renumber a collision rather than relocating anything. `apps/web/src/lib/decisions_numbering_guard.test.ts` fails CI on a repeated number.
+
 ---
 
 ## 1. Both watches are native: Apple Watch is Swift / SwiftUI, Wear OS is Kotlin / Compose-for-Wear
@@ -512,7 +514,7 @@ We solve it with two schema additions, deliberately small:
 
 **Decided:** April 2026 · captured before the migration that adds `user_follows` and the `/feed` + `/u/[id]` surfaces.
 
-The clubs/events social layer (decisions §0–§28) is a *group* abstraction — useful for race directors and weekly-meetup organisers, but the wrong shape for the runner who just wants to see what their three running friends did this week. That's the surface every consumer running app (Strava, Nike Run Club, Garmin Connect) builds first. We add it as a parallel social layer rather than reusing club_members because the audience model is different: club membership is bidirectional and gated; following is asymmetric and instant.
+The clubs/events social layer (decisions §1–§28) is a *group* abstraction — useful for race directors and weekly-meetup organisers, but the wrong shape for the runner who just wants to see what their three running friends did this week. That's the surface every consumer running app (Strava, Nike Run Club, Garmin Connect) builds first. We add it as a parallel social layer rather than reusing club_members because the audience model is different: club membership is bidirectional and gated; following is asymmetric and instant.
 
 We ship three things together:
 
@@ -2513,7 +2515,7 @@ Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-ret
 
 ---
 
-## 104. Overlapping start pins list their routes; routes can be pinned to keep them visible
+## 574. Overlapping start pins list their routes; routes can be pinned to keep them visible
 
 **Decided (2026-05-31):** two follow-ons to the hover-preview model (§ 101 / § 102), both on web + the mobile twin.
 
@@ -2527,7 +2529,7 @@ Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-ret
 
 **Decided (2026-05-31):** clicking *any* route surface on `/routes/heatmap` — a list row, a map dot, a previewed line, or an overlap-popup row — used to navigate to `/routes/[id]`. A single mis-click yanked the user off the discovery map, discarding their filters, pan, and kept routes; the dot was the worst offender (it opened a popup whose primary action was the same navigation). The owner flagged this as bad UX.
 
-**A click now *inspects*, never *leaves*.** Clicking a route toggles "keep on map" (draws / removes its violet line) everywhere. Navigation moved behind an explicit, labelled **"View route →"** link — one per sidebar row, one per overlap-popup row. The route dot no longer opens a navigable popup at all; it just keeps / un-keeps. This collapses the older two-control model (§ 104: a separate keep button + a click-to-navigate row) into one: the row body *is* the keep target, and the old pin button is replaced by the View link. Power users keep a fast path — the View link is a real `<a href>`, so ctrl/cmd-click and right-click still open the detail page directly. Club pins are unchanged (their popup is informational, its only action a "View club" link).
+**A click now *inspects*, never *leaves*.** Clicking a route toggles "keep on map" (draws / removes its violet line) everywhere. Navigation moved behind an explicit, labelled **"View route →"** link — one per sidebar row, one per overlap-popup row. The route dot no longer opens a navigable popup at all; it just keeps / un-keeps. This collapses the older two-control model (§ 574: a separate keep button + a click-to-navigate row) into one: the row body *is* the keep target, and the old pin button is replaced by the View link. Power users keep a fast path — the View link is a real `<a href>`, so ctrl/cmd-click and right-click still open the detail page directly. Club pins are unchanged (their popup is informational, its only action a "View club" link).
 
 This is **web-only for now**: the mobile twin already avoids the mis-click trap (a tap selects → shows a route card → the card's button navigates), so it has no equivalent bug to fix. Whether mobile should adopt the same click-keeps model (rather than its select-card) is an open product question, not a parity regression.
 
@@ -2930,7 +2932,7 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
-## 137. Generate-a-route-by-distance moves server-side to a dedicated Lambda + self-hosted GraphHopper round_trip
+## 575. Generate-a-route-by-distance moves server-side to a dedicated Lambda + self-hosted GraphHopper round_trip
 
 **Decided (2026-06-09):** the "generate a loop of N km from here" feature moves off the in-browser heuristic and onto a server-side call to a self-hosted **GraphHopper** `round_trip` engine, fronted by its own AWS Lambda Function URL (mirroring the coach + share Lambdas). The old client path scaffolded a radial polygon at a guessed radius, snapped it to roads via OSRM, and **bisected** the radius across ~4 latency-bound iterations to home in on the target distance. The single-radius knob is a poor lever on lopsided road networks — when the reachable streets are dense on one side and sparse on the other, scaling one radius can't hit the target without overshooting badly (a 5 km target produced an 8.22 km lasso), and each correction costs a full round-trip so the loop runs out of iterations before it converges. GraphHopper's `round_trip` algorithm targets the requested distance *inside* the engine per call, so a single request lands close; we race a few seeds (`heading`/seed variations) server-side and pick the best-shaped loop by **enclosed-area efficiency** (`apps/web/src/lib/routes/generate/select.ts`) so the result is a real loop, not a there-and-back spur.
 
@@ -2979,7 +2981,7 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 
 **Trade-off — a parity pair was intentionally broken.** `exercise_records.ts` was a documented byte-identical TS↔Dart pair; the web side is now the RPC while mobile keeps its client-side `exercise_records.dart` + `gym_records_screen.dart`. The two compute the same bests via different paths, each pinned by its own tests, and are no longer kept byte-identical (removed from the parity-pairs list). The `gym_prs.ts`↔`.dart` PR-engine pair and `exercise_history`↔`.dart` stay byte-identical. Mobile still reads its full set history client-side — the same perf issue exists there and is a separate, Dart-side follow-up.
 
-**Residual.** The `/gym` list's temporal per-workout PR badges (`prWorkoutIds`) still read the full history: deciding "did each displayed workout set an all-time PR up to that point" inherently needs every prior set across all exercises, so it can't be windowed or served by a bests RPC. Fully eliminating it needs a write-time `gym_workouts.pr_kinds` flag with a cascading recompute (changing a record-holder flips later workouts' badges) — a multi-day feature tracked in `followups.md`.
+**Residual — closed 2026-08-09, see [§ 568](#568-an-all-time-question-is-a-server-question--the-gym-pr-badges-were-being-answered-from-a-truncated-page).** The `/gym` list's temporal per-workout PR badges (`prWorkoutIds`) still read the full history: deciding "did each displayed workout set an all-time PR up to that point" inherently needs every prior set across all exercises, so it can't be windowed or served by a bests RPC. Fully eliminating it needs a write-time `gym_workouts.pr_kinds` flag with a cascading recompute (changing a record-holder flips later workouts' badges) — a multi-day feature tracked in `followups.md`. The reasoning above is right about the *shape* of the question and wrong about the only remedy: § 568 answers it with a **recompute-on-read** RPC, which owes no cascade at all.
 
 ---
 
@@ -3416,7 +3418,7 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 - **Why not a per-site HTML scraper** (the `§ 168` deferral): CTLive is an authenticated JSON API, so the durable path is the same server-side API call + dedup the RunSignUp leg uses, not the brittle/abusive HTML crawl the deferral warned against. RaceResult / UltraSignup stay deferred precisely because they lack an equivalently clean API surface; manual paste remains their non-API path.
 - **Not built**: the opt-in toggle UI (web Settings checkbox + mobile switch) for the engagement streams — the pref is read server-side today; a per-recipient send cap / frequency cap across the two streams; analytics on drip open/convert. Deferred.
 
-## 178. Route-photo server-side thumbnails + EXIF strip reuse the run-photo worker shape — a `route_photo_process` kind with bucket-aware backend methods, not a copied handler
+## 576. Route-photo server-side thumbnails + EXIF strip reuse the run-photo worker shape — a `route_photo_process` kind with bucket-aware backend methods, not a copied handler
 
 **Decided (2026-06-20, migration `20270224_001`).** The deferred half of roadmap row 8 (server-side thumbnails + an EXIF worker for route photos) ships as the exact sibling of the run-photo `photo_process` path, not a parallel implementation:
 
@@ -7897,3 +7899,176 @@ The obvious fix was the redacted-view pattern `public_runs` and `public_gym_work
 So the invariant moved to write time instead: a BEFORE INSERT OR UPDATE trigger nulls all three on any `is_template` row. That is narrower and truer to the data. A template row is a *copy* made for publishing — both publishers insert a sibling and leave the source plan untouched — so these columns have no reason to hold a value on it at all. It also fixes the stored rows rather than hiding them at read time, which a view would not have done for anything already published; the migration backfills those in the same statement. A runner's own plan keeps its `vdot`, which pace derivation reads, and the pgtap suite pins that non-template case alongside the template ones so the rule cannot widen into a blanket null.
 
 The classification this settles: plan-level `notes` is owner-only, the same call migration `20270313_001` made for `gym_workouts.notes`. Per-workout `plan_workouts.notes` stays — that is plan design, and design is the thing being published. An author-written blurb describing a template is a separate feature wanting its own column, not the runner's private field.
+
+## 565. A repeated bug class earns a source-level guard, and the guard is tuned for precision — a noisy one gets suppressed, a quiet one keeps working
+
+**Date:** 2026-08-09
+
+Issue #734's `setState`-after-`await` sweep found 34 sites, nine of which had been named by hand. Fixing 34 and stopping would have bought a few weeks: the shape is what an `await` plus a state update looks like when you write it naturally, so it comes back. The durable half is `post_await_setstate_guard_test.dart`, and its design is the part worth recording.
+
+The scan is structural, not a backwards regex over the file. It walks a frame per `{`, marks a frame as a function body when the brace follows `async` or a paren whose head is not a control keyword, and records the last `await` and the last `mounted` on the innermost enclosing function frame. Three rules do the real work: a closure body starts a fresh frame (an await in the enclosing method says nothing about a callback that runs later), a block ending in `return`/`throw`/`break`/`continue` does not hand its awaits to the code after it (`if (x) { await f(); return; }` is not a gap), and a `mounted` anywhere earlier in the chain counts, so all three idioms — early return, `if (mounted) setState(...)`, `if (!context.mounted) return;` — read as guarded. Without the escaping-block rule the first draft flagged two sites that were already correct.
+
+**The trade is precision over recall, on purpose.** A guard that lives in a helper the method calls, or on only one branch of a conditional, is invisible to the scan and the site is let through. That direction is the safe one: a guard with false positives gets an allowlist entry, then another, then it is noise nobody reads, and the next real finding is suppressed alongside them. A guard that misses some cases still catches the shape people actually write. The allowlist is empty and the intent is that it stays that way — an entry is a claim that the async gap cannot reach a disposed `State`, not a convenience. The same reasoning applies to the next guard of this kind: pin the shape you can recognise structurally, and let the ones you cannot fall through.
+## 566. A redacted response over an unredacted predicate is still a read of the unredacted data — `routes_within_box` gets its own clipped geometry
+
+**Date:** 2026-08-09
+
+`20270504_001` closed `heatmap_points_in_bbox`, which handed anon the unclipped route polyline as output, and its header named the sibling it was leaving open: `routes_within_box` reads the same raw `routes.geom` in its `WHERE` clause. That RPC is granted to `anon` and its response is genuinely redacted — it returns `setof public_routes`, which carries no coordinates at all. The leak is not in what comes back, it is in *which rows* come back. `ST_Intersects(r.geom, box)` ran against the unclipped line while the response carried `pr.id`, so sweeping a grid of small boxes and recording the ids that answer traces the in-zone tail of a public route at whatever resolution the attacker cares to pay for. It is slower than reading the coordinates outright and it needs the route id up front, but it recovers the same coordinate §33 exists to withhold.
+
+The tempting fix — clip inside the predicate, the way the heatmap RPC now filters its densified points — does not work here. The heatmap emits points and can drop them one at a time; a bbox predicate has to have *something* to intersect, and re-clipping the line on every call would run the zone walk over every candidate route on every viewport pan. So the geometry gets materialised instead: a `geom_public geography(LineString, 4326)` column on `routes`, maintained by exactly the trigger pair `20260925_001` already uses for the privacy-aware `start_point` — a BEFORE trigger on `routes` for waypoint writes, and an AFTER trigger on `user_settings` so adding a zone retroactively re-clips every route the owner already saved. It is folded into the existing `routes_set_geom` rather than given a second trigger, so `geom` and `geom_public` cannot be written by different paths and drift apart.
+
+**What it holds is the clipped line, not a stricter one.** `privacy_aware_route_geom` delegates the zone walk to `clip_track_for_user` rather than re-implementing it, so `geom_public` is the LineString of exactly the waypoints `clip_route_for_viewer` already serves a non-owner. That equality is the point: a grid sweep can now only confirm geometry the caller could have downloaded in one request, so the oracle carries no information the read path did not already give away. Had the two implementations been written separately, a later edit to one would silently re-open the leak with nothing failing.
+
+`routes_within_box` fails closed on the new column — `geom_public is not null` with no fallback to `geom`, so a route whose clipped line has fewer than two points drops out of viewport search entirely, matching the way a fully-in-zone route already drops out of `nearby_routes` on a NULL `start_point`. `nearby_routes` itself needed no change: both its predicate and its ordering already run on the zone-aware `start_point`.
+
+The pgtap pins the oracle rather than the column. It asserts the raw `geom` *does* cross the head box (so the "not returned" case cannot pass for the wrong reason), then that an anon caller gets nothing back from that box while the same route still answers a box drawn over its out-of-zone body.
+
+## 567. A secret you cannot stop sending in the URL is a secret you can stop *trusting* from the URL — the Strava webhook grows a header path first, and rotates second
+
+**Date:** 2026-08-09
+
+Strava does not sign webhook payloads; their security model is that the callback URL is secret. The receivers compensate with a shared secret in that URL's query string, which Strava preserves on both the GET handshake and the POST event. That works, and it is also written verbatim into a request log line on every single delivery — Supabase's function logs for the Edge Function, the worker's HTTP log for the Go endpoint. Log read access is not a small group, and the recovered value forges activity ingests into any user's `runs` by enumerable athlete id. The secret is authenticating the channel while being published alongside it.
+
+The fix everybody reaches for — move it to a header — is not available on its own terms: Strava's subscription API accepts a callback **URL** and nothing else, so there is no field to put a header in. That is what left this open through two sweeps. But the constraint binds only the *sender*. The receivers can accept both, and that is what they now do: `X-Webhook-Secret` is read first, the query param is the fallback, and the two collapse to one value before a single constant-time compare so neither path is the weak one.
+
+**The header is consulted first and wins outright — a wrong header does not fall through to the query param.** A fallback-on-mismatch would have made the header decorative: an attacker holding the logged URL secret would simply omit the header and keep working, and a legitimate caller would never learn its header was misconfigured. One judgement per request is also what makes step 5 of the runbook meaningful — once a caller moves to the header, it cannot silently regress to the query path.
+
+This does not close the finding, and the code says so rather than implying otherwise. Retiring the query path needs a Strava re-registration plus a rotation, which is operator work; it is written up as an ordered pre-deploy item in `docs/ops/deployment.md` § "Owed: move `STRAVA_WEBHOOK_SECRET` off the query string", including the trap that the Edge Function is the documented **rollback** path — hardening only the Go worker would mean a rollback re-opens the hole, so both had to grow the header before the registration could move. Until the rotation lands the residual exposure stands: the channel is authenticated but not confidential.
+
+The same commit closed the unrelated body-drain leak on that function. Deno holds the connection open for an unread request stream, so a caller POST-streaming a chunked body into any of the refusal branches (503 unconfigured, 429 throttled, 403 wrong secret, 405 wrong method) kept a slot until the runtime timeout — a slow-loris against the one function reachable by URL alone, with no JWT. Every pre-body exit now routes through a `refuseUnread` helper that cancels the body first, and the wiring test asserts *every* `return` before `readJsonWithLimit` goes through it. That is the point of doing it structurally rather than sprinkling `discardBody` calls: the guard can then state the invariant, and the next branch someone adds fails the test instead of quietly leaking.
+## 568. An all-time question is a server question — the gym PR badges were being answered from a truncated page
+
+**Date:** 2026-08-09
+
+`/gym` called `fetchGymSetHistoryWithError()` with no window, and the doc comment defended that: a per-workout PR badge asks whether a workout beat everything logged before it, and no windowed read can answer an all-time question. The defence was sound and the read was still broken, at the other end. PostgREST caps an unbounded SELECT at 1000 rows. Past roughly forty sessions of twenty-five sets, the page was reasoning over a truncated slice in no defined order — badges on workouts that set nothing, no badge on workouts that did, and per-row volume / set / exercise counts reading zero for whatever fell off the end. Nothing failed; the numbers were simply wrong, and got wronger the longer someone trained.
+
+§ 138 recorded this as the one residual it could not close, and said eliminating it needed a write-time `gym_workouts.pr_kinds` flag with a cascading recompute, because deleting a record-holding workout flips every later workout's badge. That reasoning is right about the shape of the question and wrong about the only remedy: it treats "the answer depends on all history" as implying "the answer must be stored". `gym_workout_summaries(p_limit)` computes it on read instead — a window function partitioned by normalised exercise name, framed `unbounded preceding to 1 preceding`, so each workout is judged against every earlier one in a single pass. There is no cache, so there is no cascade and no invariant to maintain; a deleted workout is simply absent from the next read. It is the same call `gym_exercise_records` made for all-time bests, one step further along in time.
+
+The row stats needed no new SQL at all. `gym_workouts.set_count` and `volume_kg` have been trigger-maintained columns since `20261214_001`, and the list was summing raw sets to re-derive them; the autocomplete already had `gym_exercise_names()`. Adding a third and fourth aggregate would have been building what was already there. What was genuinely missing was two values: the PR flag and the distinct-exercise count, plus a one-line `gym_has_weighted_sets()` for the Records link — all-time on purpose, because a per-page flag would hide the link from a lifter whose last weighted session is older than the hundred workouts shown.
+
+Moving the judgement server-side also silently fixed a bug nobody had filed. The client walked only the hundred workouts it had fetched, so a lift set a hundred and one workouts ago failed to suppress a badge, and `/gym` disagreed with `/gym/[id]`, which judges against all-time through `fetchExerciseSetHistoryBatch`. They agree now.
+
+**The SQL is a mirror, so it is pinned like one.** `gym_prs.ts` remains the definition of a PR — it is a TS↔Dart parity pair and the RPC is a third copy of the same rules, which is exactly the arrangement that drifts. `gym_workout_summaries_test.sql` and `gym_workout_summaries.test.ts` build the same six-workout fixture and assert the same four PR workouts, one by calling the RPC and one by running the real `RunningPrTracker`. Neither side can be edited alone. The fixture is chosen to separate the three metrics rather than to be realistic: a weight PR under a whitespace-differing spelling, a volume-and-e1rm PR at an unchanged top weight, a bodyweight session that is no PR, and a whitespace-only exercise name — which passes the `length(1..120)` CHECK, counts toward the workout's stored volume because it is work performed, and is not an exercise.
+
+## 569. The recap reads one column of a lifetime and every column of a year, because only the streak looks outside the period
+
+**Date:** 2026-08-09
+
+Both recap routes called `fetchRuns()` — no window, `select('*')` — to render one card. On a representative row that is 912 B, so a 3,000-run history ships 2.6 MB to build a card from the ~250 runs inside the year, or the ~20 inside a month. The obvious fix, a date window, is wrong: `buildYearInRunningRecap` hands the *whole* list to `computeRunStreaks`, so `bestStreakDays` on the 2026 card counts a streak that began in December 2025, and a window would quietly shorten it. `recap.test.ts` now pins that dependency in three cases — the annual card either side of the boundary and the January monthly card — and it was written and committed **before** the window landed, so the test proves the behaviour it was written against rather than the behaviour that survived.
+
+The asymmetry is what the fix exploits: an out-of-period run is reachable through exactly one path, `computeRunStreaks`, which reads nothing but `started_at`. Everything else is behind the in-year filter. So `fetchRunsForRecap` issues two reads in parallel — the year at the recap column set, and every run's `started_at` on its own — and rebuilds the flat list the engine expects, stubbing the out-of-window rows with their timestamp and zeros. 234 KB instead of 2.6 MB, 91 % less, with no change to the round-trip count and no change to any output.
+
+**The stub is the load-bearing part, so it is stated rather than assumed.** `mergeRecapRuns` is a pure helper with its own suite, and the test that matters asserts a `deepEqual` between the recap built from the split read and the recap built from the full rows, across three years and three months. That is an equivalence proof, not an assertion of intent — if a future reader teaches the engine to read `distance_m` off an out-of-period run, it fails. The stub's remaining fields are zeroed rather than plausible for the same reason: an obviously-empty run is a better thing for that reader to find than a quietly wrong total.
+
+Deliberately not done: changing `buildYearInRunningRecap` to compute `bestStreakDays` over the year alone. It would make the window sufficient on its own and is arguably the more defensible reading of a "Year in Running" card, but it changes what the card claims, and `recap` is a TS↔Dart parity pair — the mobile twin would have to move with it. That is a product decision about the number, not a fetch optimisation, and it does not belong in the same change.
+
+## 570. Reads that were serial only because they were written in sequence — the dashboard's mount, and the two it did twice
+
+**Date:** 2026-08-09
+
+The dashboard's `onMount` opened with a seven-read `Promise.all` and then ran five more awaits one after another: the fitness-snapshot write, `loadSettings`, the gym pair, the nutrition block, and `get_my_profile`. Two of those were duplicates — `loadTodaysNutrition` fetched its own `loadSettings` (two selects) and its own `get_my_profile`, both of which a stage above had already fetched. Eighteen requests over seven serial stages on the app's highest-traffic page; three of the requests bought nothing, and four of the stages were serial only because of the order the code had been written in.
+
+One batch, then the work that depends on it: fifteen requests over three stages. **The dependency that is real is worth naming, because it is not visible from the call sites:** `loadTodaysNutrition` filters `runs` and `gymWorkouts` down to today, and the fitness snapshot is computed from `runs`. Both must stay downstream of the batch that fills those. Everything else — settings, gym, profile — depends on nothing and belongs in the batch.
+
+Merging them costs something the per-stage `try`/`catch` blocks were paying for: a rejection anywhere in a `Promise.all` rejects the whole batch, and the settings, gym and profile reads are additive — a blip in any of them must not take the run-derived cards down. Each is now individually `.catch`-guarded, which is the same contract expressed at the call rather than around it. A failed settings read still degrades to the cached bag, exactly as `loadSettings` itself does when the network is unreachable.
+
+The cached-prefs paint moved *ahead* of the batch rather than sitting between it and `loadSettings`, which is what § 79 wanted in the first place — the widgets now paint from cache while the network is in flight instead of after it, and the one-off `week_start_day` peek that existed only to anchor the weekly-mileage chart could go, since `applyDashboardSettings` already reads that key. `dashboard_load.test.ts` source-guards the shape, following the pattern `coach/context.test.ts` established for its own no-duplicate-`get_my_profile` invariant: a mount of fifteen reads has no useful unit-test seam, so the guard reads the source and fails if a read leaves the batch or a duplicate returns.
+## 571. Consent that cannot say what it was for cannot be reused — the AI disclosure becomes a versioned record, not a flag
+
+**Date:** 2026-08-09
+
+`/api/coach` refused to reach Anthropic until `user_profiles.coach_consent_at` was set. Its two siblings — `/api/coach/route-describe` and `/api/coach/route-request`, reached through the same Lambda, holding the same API key, calling the same model — checked nothing. A Pro user who had never accepted the disclosure, or who had withdrawn it, still had their typed route request and a `location_label` forwarded. Both endpoints authenticated the caller correctly; what was missing was the lawful basis, not the identity.
+
+The one-line fix would have been to read `coach_consent_at` in the two route handlers. It is the wrong fix, and the reason is what this entry is really about. The copy those users accepted says the Coach forwards *their training data* so it can give grounded advice. A route request is a different payload for a different purpose. Treating an acceptance of the first as covering the second is exactly the retroactive widening Art 7(2) refuses, and it would have been invisible: the column would have looked "consented" either way. **A boolean records that someone said yes. It cannot record what they were asked.**
+
+A second column (`route_ai_consent_at`) was the obvious next answer and is also wrong — it defers the problem by exactly one feature. So the record carries a **version**: `ai_disclosure_version` beside `coach_consent_at`, one meaning *which* disclosure and one *when*, held together by a CHECK so a half-written record cannot exist. v1 is the Coach-only disclosure; v2 is the widened all-AI-features one. Each endpoint declares the minimum it needs, and existing acceptances backfill to v1 — so every current Coach user keeps the Coach and is refused by the route endpoints until they read the wider copy and accept it. The comparison `accepted >= required` is only sound because the ladder is monotone by construction: each version is a strict superset of the last. A future disclosure that *narrowed* could not join this ladder and would need a scope set instead; that constraint is recorded in the migration so it is not discovered later by someone assuming a number is just a number.
+
+Three smaller calls fall out of it. **Unknown versions deny.** A stored version above what the build knows is treated as no consent at all, not as "more than enough" — we cannot render a disclosure we do not have, so we cannot assert it was made; the denial is logged with its reason so version skew is distinguishable from a genuine refusal rather than looking like a user problem. **`BYPASS_PAYWALL` does not reach this gate.** It exists so a developer can skip a billing check locally; a lawful basis for sending a real person's data to a real sub-processor is not a billing check, and the two route handlers honour the bypass for the tier check on the line above while ignoring it here. **The Coach surface is gated at v1, not at the current version.** A user who accepted the Coach disclosure consented to precisely what the Coach does; re-prompting them there to unlock a feature they were not asking for is bundling. The widened acceptance is offered where the wider feature lives — Settings → Account — and the route endpoints' 403 carries `code: "ai_disclosure_required"` so the client points there instead of showing the Pro upsell that a bare 403 would have implied.
+
+The disclosure text itself now lives in one component rendered by both hosts, because two surfaces writing the same consent record while describing different processing is the same defect one layer up. Counsel / CISO sign-off on the v2 copy is a pre-deploy checklist item, not a reason to leave the gate unwritten (§ 150).
+
+## 572. § 547's one-vocabulary rule, generalised off the `types.ts` unions — and the render nobody had thought to guard
+
+**Date:** 2026-08-09
+
+§ 547 gave `runs.activity_type` one namespace and one resolver after seven had
+drifted apart. Issue #734's carryover found the same failure four more times,
+plus a mode of it the § 547 guard was not built to see.
+
+**The unguarded mode: the raw token, straight into the DOM.** Nine templates
+interpolated a stored value with no resolver anywhere in the path —
+`{route.surface}` on `/routes`, `/routes/[id]`, `/segments/[id]`,
+`/share/route/[id]`, the club route list, the explorer and the heatmap;
+`{club.join_policy}` and `{club.viewer_role}`; `{run.activity_type}` twice on a
+club event, at a call site where the canonical `activityTypeLabel()` already
+existed and simply was not imported; and `{a.status}` on its attendee list. A
+German or Japanese reader got "road", "invite", "race_director", "stroller",
+"waitlisted" inside otherwise translated pages. § 547's guard scans catalogue
+*key names*, so a surface that never asked the catalogue anything was invisible
+to it. `/clubs/[slug]` was worse than invisible: it hand-formatted a role with
+`m.role.replace('_', ' ')`, which is § 547's hand-capitalisation defect wearing
+a different function.
+
+**Where a vocabulary did exist it existed more than once**, and the six
+measured within-locale disagreements read exactly like § 547's: Spanish `road`
+was "Asfalto" on the route builder and "Carretera" in the routes filter,
+Brazilian `road` "Asfalto" and "Estrada"; French `going` "J'y vais" on an event
+and "Participe" on the club home, German "Zugesagt" and "Nimmt teil", Japanese
+"参加する" and "参加". Eleven duplicate keys across four unions, deleted.
+
+**The registry, and why it is one file rather than four.** § 547's shape —
+a pure `<name>.ts` beside a rune-carrying `<name>.svelte.ts` — is right for
+`activity_type`, which also owns icons and a value order every picker follows.
+Repeating it for `RouteSurface`, `JoinPolicy`, `ClubRole` and `RsvpStatus`
+would be eight files whose only content is a list. Instead `i18n/enum_labels.ts`
+registers the unions and `enum_labels.svelte.ts` exposes one resolver each, and
+the guard iterates the registry: adding a union is one line plus its keys, and
+it is guarded from that moment. `activity_type` deliberately stays where it is —
+moving it would churn thirty call sites to no benefit, and its resolver's
+contract is identical.
+
+**The value domain is derived from `types.ts`, not the migration.** § 547
+parsed the CHECK because `activity_type`'s union and its CHECK are one column.
+Two of the four here are not: `segments.surface` shares `RouteSurface` with
+`routes.surface`, and `event_attendees.status` has no CHECK at all —
+`waitlisted` is written by a trigger. The union declaration is what every one
+of them actually mirrors, and `check_constraint_unions.mjs` already pins the
+unions that do have a CHECK back to it, so deriving from `types.ts` keeps the
+chain complete without inventing a second parser.
+
+**The render sweep matches text position only.** `title={seg.role}` and
+`class="tl-{seg.role}"` pick an attribute or a colour off the value and never
+show it; flagging those would have meant an allowlist, and an allowlist is how
+a guard becomes noise (§ 565). The scan's own honesty check is that it convicts
+exactly the eleven sites this round removed when run against the previous
+commit, and nothing else in 203 templates. `status` is deliberately not among
+the scanned columns — it names an RSVP on one table and a plan, a report, an
+order, a projection and an HTTP response elsewhere.
+
+**One blind spot is recorded rather than closed.** A duplicate key whose tail
+*abbreviates* the value — `clubHome.roleOptionDirector` for `race_director` —
+is invisible to a matcher keyed on the value, and widening the tail to any word
+swallows `plansPage.statusActive`. It is pinned as a must-spare fixture with the
+reason, so the next reader knows the hand sweep is load-bearing there and does
+not mistake silence for coverage.
+
+**Two sentence forms were rewritten rather than resolved through the
+vocabulary.** `clubHome.roleOwnerPrefix` + `clubHome.roleOwner` composed
+"You're the" + "owner" — a second role vocabulary *and* a grammatical
+concatenation that only works in English by accident ("You're a" + "owner" is
+what the same pattern produces one value over). Eight keys became four whole
+sentences. A whole sentence is not a vocabulary: nothing can resolve a value
+through it, so it cannot drift from the canonical name the way a bare noun does.
+## 573. Mobile presents the widened disclosure too, which retires the v1 entry points and exposes a consent read that had never worked
+
+**Date:** 2026-08-09
+
+§ 571 versioned the AI-processing consent record and gated the two route-AI endpoints at v2. Mobile calls `route-describe` from route detail, and mobile had no surface on which anyone could accept v2 — so every mobile runner's "Describe this route" silently fell back to the templated sentence forever. Fail-closed and therefore correct; also a shipped capability that quietly stopped working with no explanation and no way to fix it. That is the shape of gap a fail-closed gate leaves behind, and it is the client's job to close it, not the gate's.
+
+The migration had anticipated mobile staying on `record_coach_consent()` / `withdraw_coach_consent()` — the v1 entry points — on the grounds that mobile's screen showed the Coach-scoped copy, so v1 was the honest record for what it displayed. That reasoning holds only while the copy stays narrow. Mobile now shows the same widened disclosure web does, from one `AiDisclosureNotice` widget rendered by all three of its hosts (the Coach first-use gate, a Settings → Account tile, and the route-detail fallback notice), so the honest record is v2 and mobile writes it through `record_ai_disclosure_consent()` directly. Nothing calls the v1 wrappers any more; they stay in SQL as the DB's own compatibility surface, but `packages/api_client` no longer carries them, because two client paths writing one consent record is the defect § 571 exists to prevent, one layer down.
+
+Wiring the read through `get_my_profile()` turned up something the flag-shaped design had hidden. `ApiClient.fetchCoachConsentAt()` selected `coach_consent_at` directly off `user_profiles`, and that column has not been in the `authenticated` column grant since the 20260707_001 lockdown — PostgREST rejects the whole read with 42501. Both callers caught the throw and treated it as "no consent", so the Coach re-presented its disclosure on every single open (harmless only because the recorder is first-stamp-wins) and Settings never rendered the withdrawal tile at all: mobile had **no** Art 7(3) self-service withdrawal, and nothing failed loudly enough to say so. A boolean that reads as `false` on an authorization error is indistinguishable from a genuine refusal — which is the same lesson § 571 drew about what a flag cannot record, arriving from the read side.
+
+One deliberate divergence from web. Web offers the acceptance only when a *stale* record is on file; a user with nothing on record is expected to meet the disclosure at the Coach. Mobile offers it whenever the record is not current — missing or stale — because the route-detail notice has to lead somewhere, and "accept it in Settings" pointing at a screen with no accept control is worse than not pointing at all. The tile's copy switches between reviewing and updating; the withdrawal tile stays keyed to *anything* being on record, so the two controls answer different questions and can both be present.
+
+The route-detail 403 branches on the body's `code`, never on the bare status: the paywall answers 403 on the same endpoint, and a consent gap shown as a Pro upsell sends a runner to buy something that would not unlock it. The templated description keeps rendering underneath either way — the L1 baseline does not depend on any of this.

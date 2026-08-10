@@ -132,8 +132,8 @@ Web-first (`decisions.md §24`). All paths under `apps/web/src/`.
 - `fetchFundraiserForRun(runId)` / `fetchFundraiserForEvent(eventId)` → `Fundraiser | null`
 - `fetchFundraiserById(id)` → public page load
 - `createFundraiser(input)` / `updateFundraiser(id, patch)` / `closeFundraiser(id)`
-- `fetchFundraiserTotals(id)` → `{ raisedCents, donorCount, goalCents }` (calls `fundraiser_totals` RPC)
-- `fetchFundraiserFeed(id, limit)` → public donation feed (calls `fundraiser_feed` RPC)
+- `fetchFundraiserTotals(id)` → `{ raisedCents, donorCount, goalCents }` (calls `fundraiser_totals` RPC). **Throws on a failed read**; `null` means the RPC answered with no rows (nothing donated yet). Both once did `if (error || !data) return null/[]`, which drew a thermometer at "0 raised · 0 supporters" over "Be the first to donate" whenever a read failed — a false claim about someone else's campaign, made to an anonymous donor (`conventions.md § A failed read is not an empty result`).
+- `fetchFundraiserFeed(id, limit)` → public donation feed (calls `fundraiser_feed` RPC). **Throws on a failed read**; `[]` is a genuinely empty feed.
 - `startDonationCheckout(fundraiserId, amountCents, { displayName, message, isAnonymous })` → `{ url }` (invokes `donations-checkout`)
 - Reuse existing `fetchPayoutAccount` / `startConnectOnboarding`.
 
@@ -144,12 +144,13 @@ Web-first (`decisions.md §24`). All paths under `apps/web/src/`.
 - `FundraiserFeedEntry` / `FundraiserTotals` projection interfaces (RPC row shapes)
 
 **Routes / components (new):**
-- `apps/web/src/routes/fundraisers/[id]/+page.svelte` + `+page.ts` — the **public fundraiser page**: hero (title, charity, story rendered with the existing markdown/HTML-sanitise path used elsewhere — never raw `{@html}`), **thermometer** (`GoalThermometer.svelte`, raised/goal bar with a11y `role="progressbar"` + aria-valuenow/max), **donation feed** (`DonationFeed.svelte`, name + amount + message), **"Donate" CTA** → amount picker → `startDonationCheckout` → Stripe → `?donated=1` success poll (the `<5s` poll pattern `fetchMyOrder` uses). Owner sees a Close + Edit control.
+- `apps/web/src/routes/fundraisers/[id]/+page.svelte` + `+page.ts` — the **public fundraiser page**: hero (title, charity, story rendered with the existing markdown/HTML-sanitise path used elsewhere — never raw `{@html}`), **thermometer** (`GoalThermometer.svelte`, raised/goal bar with a11y `role="progressbar"` + aria-valuenow/max), **donation feed** (`DonationFeed.svelte`, name + amount + message), **"Donate" CTA** → amount picker → `startDonationCheckout` → Stripe → `?donated=1` success poll (the `<5s` poll pattern `fetchMyOrder` uses). Owner sees a Close + Edit control. The campaign row and its two panels are **three separate reads**: a panel that could not be read renders its own `role="alert"` line plus a Retry that re-reads only that panel, ahead of the panel's empty state, while the hero, story and Donate CTA stay up. `FundraiserSection` reads totals outside the campaign's `try` for the same reason — one shared catch had let a totals failure erase a live campaign down to the owner's create CTA.
 - `apps/web/src/lib/components/FundraiserCard.svelte` — compact thermometer + Donate button, embedded on run-detail + event-detail.
 - `apps/web/src/lib/components/FundraiserEditor.svelte` — create/edit (charity name, url, title, story, goal). A "Set up payouts first" gate that links to `/settings/payouts` and is **disabled until `host_can_take_payment`** (reuse the EventEditor Charge-toggle gate).
 - **Run-detail** `apps/web/src/routes/runs/[id]/+page.svelte` — owner gets "Raise money for a charity" → FundraiserEditor; if a fundraiser exists, render `FundraiserCard` for all viewers.
 - **Event-detail** `apps/web/src/routes/clubs/[slug]/events/[id]/+page.svelte` — same affordance, organiser-gated; renders `FundraiserCard`.
 - **Share**: the public `/fundraisers/[id]` page is the share URL; add it to the existing share/copy-link affordance pattern (no new infra).
+- **Layout gate**: `/fundraisers/` is in `isAnonAllowed()` in `apps/web/src/routes/+layout.svelte` (shell-wrapped for a signed-in viewer, like `/clubs/` — `decisions.md §62`). Anon-readability is decided at three layers and all three have to agree: the anchor-visibility RLS, the anon `execute` grants on `fundraiser_totals` / `fundraiser_feed`, and this list. It was missing from the list until 2026-08-09, so the logged-out stranger the share URL exists for was bounced to `/login` while every backend layer was already open to them — the shipped e2e ran signed-in and never saw it. `tests-e2e/fundraising/detail-load-failure.spec.ts` runs anonymously and pins the whole path.
 
 ## Mobile implementation (Android + iOS twin)
 

@@ -115,6 +115,12 @@
 	// path runs/[id] uses). Feed the shared age-grade helper so the PR table can
 	// score each record against the world standard for the runner's age & sex.
 	// Both stay null when the profile lacks the data → the column self-hides.
+	// `height_cm` on the same row feeds the nutrition targets.
+	interface DashboardProfile {
+		height_cm?: number | null;
+		date_of_birth?: string | null;
+		gender?: string | null;
+	}
 	let viewerDobIso = $state<string | null>(null);
 	let viewerGender = $state<string | null>(null);
 
@@ -467,18 +473,41 @@
 		// the same pattern.
 		await auth.ready();
 		goals = loadGoals(auth.user?.id);
-		// Anchor the weekly-mileage chart on the user's week_start_day. The
-		// authoritative settings load happens after this fetch (below), so
-		// read the cached pref up front; a cold cache falls back to Monday
-		// and reconciles on the next load (same eventual-consistency shape
-		// the bag-backed cards use — decisions §79).
-		const uidEarly = auth.user?.id;
-		if (uidEarly) {
-			const wsd = effective<string>(peekCachedSettings(uidEarly), 'week_start_day');
-			if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
-		}
+		const uid = auth.user?.id;
+		// Offline-first: paint every bag-backed widget from the cache before a
+		// single request leaves, so the Fitness + Intensity cards and the
+		// weekly-mileage chart's week anchor aren't held hostage by network
+		// latency. The loadSettings below reconciles with the server and its
+		// values overwrite these. Decisions §79.
+		if (uid) applyDashboardSettings(peekCachedSettings(uid));
+		// One batch. Nothing here reads anything else here, so the only reason
+		// the settings / gym / profile reads used to run after this one was
+		// that they were written after it — three extra serial round trips on
+		// the app's highest-traffic page, two of them duplicates of a read
+		// further down. The ordering that IS real is preserved below:
+		// loadTodaysNutrition reads `runs` and `gymWorkouts`, and the snapshot
+		// write reads `runs`, so both stay downstream of this batch.
+		//
+		// Each additive read is guarded individually: a rejection inside a
+		// Promise.all rejects the whole batch, and a settings or gym blip must
+		// not take the run-derived cards down with it — the same contract the
+		// per-read try/catch blocks gave.
 		let runsRead: { runs: Run[]; error: string | null };
-		[runsRead, allTimeStats, weeklyMileage, personalRecords, planOverview, upcomingEvent, fitnessHistory] = await Promise.all([
+		let settingsRead: LoadedSettings | null;
+		let gymRead: [GymWorkout[], GymSetWithDate[]] | null;
+		let profileRead: DashboardProfile | null;
+		[
+			runsRead,
+			allTimeStats,
+			weeklyMileage,
+			personalRecords,
+			planOverview,
+			upcomingEvent,
+			fitnessHistory,
+			settingsRead,
+			gymRead,
+			profileRead,
+		] = await Promise.all([
 			fetchRunsForDashboard(),
 			fetchRunAllTimeStats(),
 			fetchWeeklyMileage(currentLocale(), weekStartDay),
@@ -486,81 +515,79 @@
 			fetchActivePlanOverview(),
 			fetchNextRsvpedEvent(48),
 			fetchFitnessSnapshots(60),
+			uid ? loadSettings(uid).catch(() => null) : Promise.resolve(null),
+			// Multi-modal: fold logged gym sessions into the same load curve as
+			// runs. A pure runner's queries return empty, so the cards + curve
+			// stay run-only purely by data presence. multi_modal.md Tier-1
+			// lift→load. The 180-day bound is because the dashboard only
+			// reasons about recent training — the 90-day load curve and the 5
+			// most-recent-lift cards. perf-hunt 2026-06-10.
+			Promise.all([fetchGymWorkouts(50), fetchGymSetHistory({ sinceDays: 180 })]).catch(
+				() => null,
+			),
+			// Viewer DOB + sex for age-grading the PR table, and height for the
+			// nutrition targets. Self-read via get_my_profile (gender is
+			// deny-by-default for direct SELECTs).
+			fetchDashboardProfile(),
 		]);
 		runs = runsRead.runs;
 		// Every card below derives from `runs`. If that read failed there is
 		// nothing truthful to render, so state it rather than painting an
 		// empty account over the top of it.
 		loadError = runsRead.error;
-		// Compute a fresh snapshot from today's runs and persist it so
-		// the trend chart accumulates history over time. Best-effort —
-		// an RLS blip just leaves the chart with yesterday's data.
-		const snap = computeSnapshot(runs);
-		try {
-			await insertFitnessSnapshot(snap);
-		} catch (_) {
-			/* silent */
+		// A missing bag (new user, or RLS blip) just leaves `weeklyGoalMetres`
+		// null and the goal card hidden.
+		if (settingsRead) applyDashboardSettings(settingsRead);
+		// An RLS blip just leaves the curve run-only — the contract: a
+		// lift-load failure can't corrupt run readiness.
+		if (gymRead) [gymWorkouts, gymHistory] = gymRead;
+		if (typeof profileRead?.date_of_birth === 'string') viewerDobIso = profileRead.date_of_birth;
+		if (
+			profileRead?.gender === 'male' ||
+			profileRead?.gender === 'female' ||
+			profileRead?.gender === 'prefer_not_to_say'
+		) {
+			viewerGender = profileRead.gender;
 		}
-		// Best-effort load of the user's weekly-mileage goal from the
-		// settings bag. A missing bag (new user, or RLS blip) just
-		// leaves `weeklyGoalMetres = null` and the goal card stays hidden.
-		try {
-			const uid = auth.user?.id;
-			if (uid) {
-				// Offline-first: paint the bag-backed widgets from the
-				// cache before the network fetch completes so the
-				// Fitness card + Intensity card aren't held hostage by
-				// network latency. The trailing loadSettings call
-				// reconciles with the server — its values overwrite the
-				// cached ones below. Decisions §79.
-				applyDashboardSettings(peekCachedSettings(uid));
-				const settings = await loadSettings(uid);
-				applyDashboardSettings(settings);
-			}
-		} catch (_) {
-			// silent — goal card is additive, not load-blocking
-		}
-		// Multi-modal: fold logged gym sessions into the same load curve as
-		// runs. Best-effort — an RLS blip just leaves the curve run-only (the
-		// contract: a lift-load failure can't corrupt run readiness). A pure
-		// runner's queries return empty, so the cards + curve stay run-only
-		// purely by data presence. multi_modal.md Tier-1 lift→load.
-		try {
-			[gymWorkouts, gymHistory] = await Promise.all([
-				fetchGymWorkouts(50),
-				// The dashboard only reasons about recent training — the 90-day
-				// training-load curve and the 5 most-recent-lift cards. Bound the
-				// gym-set read to 180 days so a multi-year lifter's whole history
-				// isn't shipped here on every dashboard load. perf-hunt 2026-06-10.
-				fetchGymSetHistory({ sinceDays: 180 }),
-			]);
-		} catch (_) {
-			/* silent — gym cards + lift-load are additive */
-		}
-		// Today's nutrition rings — the "today's modality" Home card. Best-effort
-		// + self-hiding: a runner who logged nothing today gets `todaysFood = []`
-		// and the card never renders. Reuses the SAME target math + dynamic-TDEE
-		// exercise add as /nutrition so the rings agree across surfaces, and
-		// inherits its Art 9 health-consent gate (targets stay null without body
-		// metrics — the rings then render unfilled, exactly as /nutrition does).
-		await loadTodaysNutrition();
-		// Best-effort viewer DOB + sex for age-grading the PR table. Self-read
-		// via get_my_profile (gender is deny-by-default for direct SELECTs). A
-		// failure or missing fields just leaves the age-grade column hidden.
-		try {
-			const { data: prof } = await supabase.rpc('get_my_profile');
-			const p = prof as { date_of_birth?: string | null; gender?: string | null } | null;
-			if (typeof p?.date_of_birth === 'string') viewerDobIso = p.date_of_birth;
-			if (p?.gender === 'male' || p?.gender === 'female' || p?.gender === 'prefer_not_to_say') {
-				viewerGender = p.gender;
-			}
-		} catch (_) {
-			/* silent — age-grade column is additive */
-		}
+		await Promise.all([
+			// Compute a fresh snapshot from today's runs and persist it so
+			// the trend chart accumulates history over time. Best-effort —
+			// an RLS blip just leaves the chart with yesterday's data.
+			insertFitnessSnapshot(computeSnapshot(runs)).catch(() => {
+				/* silent */
+			}),
+			// Today's nutrition rings — the "today's modality" Home card.
+			// Best-effort + self-hiding: a runner who logged nothing today gets
+			// `todaysFood = []` and the card never renders. Reuses the SAME
+			// target math + dynamic-TDEE exercise add as /nutrition so the rings
+			// agree across surfaces, and inherits its Art 9 health-consent gate
+			// (targets stay null without body metrics — the rings then render
+			// unfilled, exactly as /nutrition does).
+			loadTodaysNutrition(settingsRead, profileRead),
+		]);
 		loading = false;
 	});
 
-	async function loadTodaysNutrition() {
+	/// The self-read the age-grade column and the nutrition targets both need.
+	/// `gender` is deny-by-default for direct SELECTs, so it comes through the
+	/// get_my_profile RPC. Degrades to null — both consumers are additive.
+	async function fetchDashboardProfile(): Promise<DashboardProfile | null> {
+		try {
+			const { data } = await supabase.rpc('get_my_profile');
+			return (data as DashboardProfile | null) ?? null;
+		} catch (_) {
+			return null;
+		}
+	}
+
+	/// `settings` and `profile` are the ones onMount already loaded — this used
+	/// to re-read both, duplicating three round trips behind two more serial
+	/// stages. Null means that read failed; the targets then fall back to the
+	/// same defaults a missing value gives.
+	async function loadTodaysNutrition(
+		settings: LoadedSettings | null,
+		profile: DashboardProfile | null,
+	) {
 		const uid = auth.user?.id;
 		if (!uid) return;
 		try {
@@ -575,11 +602,10 @@
 				nutritionTargets = null;
 				return;
 			}
-			const [settings, weight, profileRes] = await Promise.all([
-				loadSettings(uid),
-				fetchLatestWeightKg(),
-				supabase.rpc('get_my_profile'),
-			]);
+			// A failed settings read degrades to the cached bag, exactly as
+			// loadSettings itself does when the network is unreachable.
+			const prefs = settings ?? peekCachedSettings(uid);
+			const weight = await fetchLatestWeightKg();
 			const isToday = (iso: string) => iso >= todayStartIso && iso < tomorrowIso;
 			const todayRuns = runs.filter((r) => isToday(r.started_at));
 			const todayGym = gymWorkouts.filter((w) => isToday(w.started_at));
@@ -588,17 +614,14 @@
 				gymSessions: todayGym.map((w) => ({ durationS: w.duration_s })),
 				weightKg: weight,
 			});
-			const prof = profileRes.data as
-				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
-				| null;
 			nutritionTargets = computeNutritionTargets({
 				weightKg: weight,
-				heightCm: prof?.height_cm ?? null,
-				ageYears: ageFromDob(prof?.date_of_birth, Date.now()),
-				sex: prof?.gender ?? null,
+				heightCm: profile?.height_cm ?? null,
+				ageYears: ageFromDob(profile?.date_of_birth, Date.now()),
+				sex: profile?.gender ?? null,
 				activityLevel:
-					effective<ActivityLevel>(settings, 'nutrition_activity_level', 'moderate') ?? 'moderate',
-				goal: effective<WeightGoal>(settings, 'nutrition_goal', 'maintain') ?? 'maintain',
+					effective<ActivityLevel>(prefs, 'nutrition_activity_level', 'moderate') ?? 'moderate',
+				goal: effective<WeightGoal>(prefs, 'nutrition_goal', 'maintain') ?? 'maintain',
 				exerciseKcal,
 			});
 		} catch (_) {

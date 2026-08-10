@@ -129,6 +129,62 @@ func TestServer_RejectsWrongUrlSecret(t *testing.T) {
 	}
 }
 
+func TestServer_AcceptsSecretFromHeader(t *testing.T) {
+	// The header path exists so the secret stops riding in the query
+	// string, where every request log line records it verbatim. Strava
+	// itself can only be configured with a URL, so the query path stays
+	// — but any other caller (and Strava, once re-registered) should use
+	// the header.
+	srv := &Server{WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok"}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, err := http.NewRequest(http.MethodGet, base+"/v1/strava/webhook?hub.challenge=abc123&hub.verify_token=verify-tok", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(WebhookSecretHeader, "url-secret-32-chars-long-deadbeef")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d, want 200", resp.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["hub.challenge"] != "abc123" {
+		t.Fatalf("hub.challenge=%q, want abc123", body["hub.challenge"])
+	}
+}
+
+func TestServer_WrongHeaderSecretDoesNotFallBackToQuery(t *testing.T) {
+	// A caller that supplies the header gets ONE judgement on it. If a
+	// wrong header fell through to the query param, an attacker who
+	// learned the URL secret from a log could keep using it while
+	// probing the header, and the header path would add nothing.
+	srv := &Server{WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok"}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, err := http.NewRequest(http.MethodGet, base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef&hub.challenge=abc&hub.verify_token=verify-tok", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(WebhookSecretHeader, "wrong-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("status=%d, want 403", resp.StatusCode)
+	}
+}
+
 func TestServer_MissingSecretConfigReturnsServiceUnavailable(t *testing.T) {
 	// Operator misconfiguration — the env var didn't land on the
 	// deploy. Refuse rather than silently accept unauthenticated

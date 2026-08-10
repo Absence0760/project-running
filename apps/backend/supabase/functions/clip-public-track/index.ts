@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
-import { isValidUuid } from '../_shared/webhook_security.ts';
+import { isValidUuid } from '../_shared/input_validation.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 
 // Serves a privacy-zone-clipped track for a public run. Replaces

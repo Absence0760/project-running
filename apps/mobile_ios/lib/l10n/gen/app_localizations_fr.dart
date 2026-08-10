@@ -3113,6 +3113,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de générer une description. Veuillez réessayer.';
 
   @override
+  String get routeDetailDescribeConsentRequired =>
+      'Les descriptions par IA nécessitent votre consentement à l\'information sur l\'IA mise à jour.';
+
+  @override
+  String get routeDetailReviewDisclosure => 'Consulter l\'information';
+
+  @override
   String get routeDetailEnhanceUpgradeHint =>
       'Les descriptions par IA sont une fonctionnalité Pro. Passez à Pro pour en profiter.';
 
@@ -5563,11 +5570,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get coachNewConversation => 'Nouvelle conversation';
 
   @override
-  String get coachConsentHeadline => 'Avant de discuter avec Coach';
+  String get coachConsentHeadline =>
+      'Avant d\'utiliser les fonctionnalités d\'IA';
 
   @override
   String get coachConsentIntro =>
-      'Pour vous donner des conseils pertinents, Coach transmet une partie de vos données d\'entraînement à Anthropic, notre fournisseur de modèles d\'IA aux États-Unis. Cette partie comprend :';
+      'Les fonctionnalités d\'IA de Threkir — Coach et l\'assistant d\'itinéraires — transmettent une partie de vos données à Anthropic, notre fournisseur de modèles d\'IA aux États-Unis. Selon la fonctionnalité utilisée, cette partie comprend :';
 
   @override
   String get coachConsentBulletProfile =>
@@ -5586,6 +5594,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Les messages que vous tapez dans l\'écran ci-dessous.';
 
   @override
+  String get coachConsentBulletRoutes =>
+      'Pour l\'assistant d\'itinéraires : le nom et les caractéristiques du parcours, la demande que vous saisissez et une indication de lieu approximative — jamais vos coordonnées précises.';
+
+  @override
   String get coachConsentProcessing =>
       'Anthropic traite les données pour le compte de Threkir selon ses conditions de traitement ; par défaut, ils n\'entraînent pas leurs modèles sur les données clients de Threkir. Tous les détails — y compris le mécanisme de transfert, la conservation et vos droits de retrait — figurent dans notre politique de confidentialité.';
 
@@ -5597,10 +5609,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get coachConsentCancel => 'Annuler';
 
   @override
-  String get coachConsentAccept => 'J\'accepte — démarrer Coach';
+  String get coachConsentAccept =>
+      'J\'accepte — activer les fonctionnalités d\'IA';
 
   @override
   String get coachConsentSaving => 'Enregistrement du consentement…';
+
+  @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Impossible d\'enregistrer le consentement : $error';
+  }
 
   @override
   String get coachNoPlanOption => 'Aucun plan (courses récentes uniquement)';
@@ -5946,20 +5964,40 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get settingsAccountCoachConsentWithdraw =>
-      'Retirer le consentement au Coach';
+      'Retirer le consentement aux fonctionnalités d\'IA';
 
   @override
   String get settingsAccountCoachConsentActive =>
-      'Empêchez le Coach d\'utiliser vos données d\'entraînement. Vous pouvez consentir à nouveau à tout moment.';
+      'Empêchez les fonctionnalités d\'IA de Threkir d\'utiliser vos données. Vous pouvez consentir à nouveau à tout moment.';
 
   @override
   String get settingsAccountCoachConsentWithdrawn =>
-      'Consentement au Coach retiré.';
+      'Consentement aux fonctionnalités d\'IA retiré.';
 
   @override
   String settingsAccountCoachConsentWithdrawFailed(Object error) {
     return 'Échec du retrait : $error';
   }
+
+  @override
+  String get settingsAccountAiConsentUpdateTitle =>
+      'Accepter l\'information sur l\'IA mise à jour';
+
+  @override
+  String get settingsAccountAiConsentUpdateSubtitle =>
+      'L\'information couvre désormais davantage de fonctionnalités. Lisez-la et acceptez-la pour utiliser l\'assistant d\'itinéraires.';
+
+  @override
+  String get settingsAccountAiConsentGrantTitle =>
+      'Consulter l\'information sur l\'IA';
+
+  @override
+  String get settingsAccountAiConsentGrantSubtitle =>
+      'Les fonctionnalités d\'IA de Threkir demandent votre consentement avant d\'utiliser vos données. Lisez l\'information et acceptez-la ici.';
+
+  @override
+  String get settingsAccountAiConsentAccepted =>
+      'Information sur l\'IA acceptée.';
 
   @override
   String settingsAccountDeleteFailed(Object error) {
@@ -11327,7 +11365,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get racesNearPlace => 'Près d\'un lieu…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return 'à $distance';
   }
 

@@ -28,6 +28,7 @@
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { isValidTimestamptz, isValidUuid } from '../_shared/input_validation.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
@@ -73,8 +74,13 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
   if (!eventId || !instanceStart) {
     return Response.json({ error: 'missing_event_or_instance' }, { status: 400 });
   }
-  const instanceMs = Date.parse(instanceStart);
-  if (!Number.isFinite(instanceMs)) {
+  if (!isValidUuid(eventId)) {
+    return Response.json({ error: 'invalid_event_id' }, { status: 400 });
+  }
+  // Stricter than the `Date.parse` this replaces: that accepted forms
+  // Postgres rejects, so the value passed validation and 22007'd on the
+  // `.eq('instance_start', …)` below.
+  if (!isValidTimestamptz(instanceStart)) {
     return Response.json({ error: 'invalid_instance_start' }, { status: 400 });
   }
 

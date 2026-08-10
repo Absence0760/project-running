@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/ai_disclosure.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/route_describe_client.dart';
@@ -134,6 +135,44 @@ void main() {
           findsOneWidget);
       // No AI attribution since the model call failed.
       expect(find.text("Written by AI from this route's stats"), findsNothing);
+    });
+
+    testWidgets('a consent gap keeps the baseline and points at the '
+        'disclosure, not a retry', (tester) async {
+      // Issue #734: /api/coach/route-describe now refuses a caller who has
+      // not accepted the widened AI disclosure. That is not a transient
+      // failure, so "please try again" would be a lie — and the paywall
+      // shares the same 403, so it must not read as an upsell either.
+      await _pump(
+        tester,
+        checkPro: () async => true,
+        describeAi: (_) async => throw StateError(kAiDisclosureError),
+      );
+      await _tapDescribe(tester);
+
+      expect(find.textContaining('River Loop is a'), findsOneWidget);
+      expect(
+        find.text(
+            'AI descriptions need your consent to the updated AI disclosure.'),
+        findsOneWidget,
+      );
+      expect(find.text("Couldn't generate a description. Please try again."),
+          findsNothing);
+      expect(find.text('AI descriptions are a Pro feature. Upgrade to enhance.'),
+          findsNothing);
+    });
+  });
+
+  group('isAiDisclosureDenial', () {
+    test('only a 403 whose body carries the code is a consent denial', () {
+      const body = '{"code":"ai_disclosure_required","required_version":2}';
+      expect(isAiDisclosureDenial(403, body), isTrue);
+      // The paywall's own 403 must not be read as a consent gap.
+      expect(isAiDisclosureDenial(403, '{"error":"upgrade required"}'), isFalse);
+      expect(isAiDisclosureDenial(500, body), isFalse);
+      expect(isAiDisclosureDenial(403, 'not json'), isFalse);
+      expect(isAiDisclosureDenial(403, ''), isFalse);
+      expect(isAiDisclosureDenial(403, '[]'), isFalse);
     });
   });
 }

@@ -94,6 +94,7 @@ class _ImportScreenState extends State<ImportScreen> {
     try {
       final granted = await HealthConnectImporter.requestPermission();
       if (!granted) {
+        if (!mounted) return;
         setState(() {
           _busy = false;
           _status = l10n.importHealthPermissionDenied(_healthLabel);
@@ -103,6 +104,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
       await _maybeSeedBodyWeight();
 
+      if (!mounted) return;
       setState(() => _status = l10n.importHealthReadingWorkouts);
       final imported = await HealthConnectImporter.fetchWorkouts();
       final runs = imported.runs;
@@ -333,6 +335,7 @@ class _ImportScreenState extends State<ImportScreen> {
     final path = result.files.first.path;
     if (path == null) return;
 
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _status = l10n.importStatusReadingCsv;
@@ -369,6 +372,7 @@ class _ImportScreenState extends State<ImportScreen> {
     final path = picked.files.first.path;
     if (path == null) return;
 
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _status = l10n.importStatusRestoringBackup;
@@ -407,6 +411,7 @@ class _ImportScreenState extends State<ImportScreen> {
     );
     if (result == null || result.files.isEmpty) return;
 
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _status = l10n.importStatusReadingExport;

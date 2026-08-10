@@ -14,7 +14,7 @@
  * behind an injectable `Fetcher`, the engine URL is a server-only env
  * (`GRAPH_CYCLE_URL`, never `PUBLIC_`) so the browser never calls the sidecar
  * directly and user start-coordinates stay on our infra, and the shared-secret
- * `X-Engine-Key` header is forwarded when configured (decisions §45 / §137).
+ * `X-Engine-Key` header is forwarded when configured (decisions §45 / §575).
  */
 
 import type { Fetcher, LoopCandidate } from './graphhopper';

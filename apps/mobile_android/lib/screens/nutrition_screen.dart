@@ -369,6 +369,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (name == null) return;
     if (_savingMeal) return;
+    if (!mounted) return;
     setState(() => _savingMeal = true);
     final draft = templateFromEntries(
       name,
@@ -616,6 +617,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (result == null) return;
     if (_savingRecipe) return;
+    if (!mounted) return;
     setState(() => _savingRecipe = true);
     final draft = recipeFromEntries(
       result.name,

@@ -3100,6 +3100,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não foi possível gerar uma descrição. Tente novamente.';
 
   @override
+  String get routeDetailDescribeConsentRequired =>
+      'As descrições por IA precisam do seu consentimento às informações de IA atualizadas.';
+
+  @override
+  String get routeDetailReviewDisclosure => 'Ver as informações';
+
+  @override
   String get routeDetailEnhanceUpgradeHint =>
       'Descrições com IA são um recurso Pro. Faça upgrade para aprimorar.';
 
@@ -5550,11 +5557,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get coachNewConversation => 'Nova conversa';
 
   @override
-  String get coachConsentHeadline => 'Antes de conversar com o Coach';
+  String get coachConsentHeadline =>
+      'Antes de utilizar as funcionalidades de IA';
 
   @override
   String get coachConsentIntro =>
-      'Para dar conselhos fundamentados, o Coach envia uma parte dos seus dados de treino à Anthropic, nosso provedor de modelos de IA nos Estados Unidos. Essa parte inclui:';
+      'As funcionalidades de IA da Threkir — o Coach e o assistente de rotas com IA — enviam uma parte dos seus dados à Anthropic, nosso provedor de modelos de IA nos Estados Unidos. Consoante a funcionalidade utilizada, essa parte inclui:';
 
   @override
   String get coachConsentBulletProfile =>
@@ -5573,6 +5581,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'As mensagens de chat que você digita na tela abaixo.';
 
   @override
+  String get coachConsentBulletRoutes =>
+      'Para o assistente de rotas com IA: o nome e os dados da rota, o pedido que escreve e uma referência aproximada do lugar — nunca as suas coordenadas exatas.';
+
+  @override
   String get coachConsentProcessing =>
       'A Anthropic processa os dados em nome da Threkir conforme seus termos de processamento; por padrão, não treinam seus modelos com dados de clientes da Threkir. Todos os detalhes — incluindo o mecanismo de transferência, a retenção e seus direitos de retirada — estão na nossa política de privacidade.';
 
@@ -5584,10 +5596,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get coachConsentCancel => 'Cancelar';
 
   @override
-  String get coachConsentAccept => 'Eu consinto — iniciar o Coach';
+  String get coachConsentAccept =>
+      'Eu consinto — ativar as funcionalidades de IA';
 
   @override
   String get coachConsentSaving => 'Registrando consentimento…';
+
+  @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Não foi possível registar o consentimento: $error';
+  }
 
   @override
   String get coachNoPlanOption => 'Sem plano (apenas corridas recentes)';
@@ -5927,20 +5945,38 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsAccountCoachConsentWithdraw =>
-      'Retirar consentimento do Coach';
+      'Retirar o consentimento para as funcionalidades de IA';
 
   @override
   String get settingsAccountCoachConsentActive =>
-      'Impeça o Coach de usar seus dados de treino. Você pode consentir novamente quando quiser.';
+      'Impeça as funcionalidades de IA da Threkir de utilizarem os seus dados. Pode consentir novamente quando quiser.';
 
   @override
   String get settingsAccountCoachConsentWithdrawn =>
-      'Consentimento do Coach retirado.';
+      'Consentimento para as funcionalidades de IA retirado.';
 
   @override
   String settingsAccountCoachConsentWithdrawFailed(Object error) {
     return 'Falha ao retirar o consentimento: $error';
   }
+
+  @override
+  String get settingsAccountAiConsentUpdateTitle =>
+      'Aceitar as informações de IA atualizadas';
+
+  @override
+  String get settingsAccountAiConsentUpdateSubtitle =>
+      'As informações passaram a abranger mais funcionalidades. Leia-as e aceite-as para utilizar o assistente de rotas com IA.';
+
+  @override
+  String get settingsAccountAiConsentGrantTitle => 'Ver as informações de IA';
+
+  @override
+  String get settingsAccountAiConsentGrantSubtitle =>
+      'As funcionalidades de IA da Threkir pedem o seu consentimento antes de utilizarem os seus dados. Leia as informações e aceite-as aqui.';
+
+  @override
+  String get settingsAccountAiConsentAccepted => 'Informações de IA aceites.';
 
   @override
   String settingsAccountDeleteFailed(Object error) {
@@ -11301,7 +11337,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get racesNearPlace => 'Perto de um local…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return 'a $distance';
   }
 
@@ -15713,6 +15749,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Não foi possível gerar uma descrição. Tente novamente.';
 
   @override
+  String get routeDetailDescribeConsentRequired =>
+      'As descrições por IA precisam do seu consentimento às informações de IA atualizadas.';
+
+  @override
+  String get routeDetailReviewDisclosure => 'Ver as informações';
+
+  @override
   String get routeDetailEnhanceUpgradeHint =>
       'Descrições com IA são um recurso Pro. Faça upgrade para aprimorar.';
 
@@ -18163,11 +18206,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get coachNewConversation => 'Nova conversa';
 
   @override
-  String get coachConsentHeadline => 'Antes de conversar com o Coach';
+  String get coachConsentHeadline => 'Antes de usar os recursos de IA';
 
   @override
   String get coachConsentIntro =>
-      'Para dar conselhos fundamentados, o Coach envia uma parte dos seus dados de treino à Anthropic, nosso provedor de modelos de IA nos Estados Unidos. Essa parte inclui:';
+      'Os recursos de IA do Threkir — o Coach e o assistente de rotas com IA — enviam uma parte dos seus dados à Anthropic, nosso provedor de modelos de IA nos Estados Unidos. Dependendo do recurso que você usa, essa parte inclui:';
 
   @override
   String get coachConsentBulletProfile =>
@@ -18186,6 +18229,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'As mensagens de chat que você digita na tela abaixo.';
 
   @override
+  String get coachConsentBulletRoutes =>
+      'Para o assistente de rotas com IA: o nome e os dados da rota, o pedido que você digita e uma referência aproximada do lugar — nunca suas coordenadas exatas.';
+
+  @override
   String get coachConsentProcessing =>
       'A Anthropic processa os dados em nome da Threkir conforme seus termos de processamento; por padrão, não treinam seus modelos com dados de clientes da Threkir. Todos os detalhes — incluindo o mecanismo de transferência, a retenção e seus direitos de retirada — estão na nossa política de privacidade.';
 
@@ -18197,10 +18244,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get coachConsentCancel => 'Cancelar';
 
   @override
-  String get coachConsentAccept => 'Eu consinto — iniciar o Coach';
+  String get coachConsentAccept => 'Eu consinto — ativar os recursos de IA';
 
   @override
   String get coachConsentSaving => 'Registrando consentimento…';
+
+  @override
+  String aiDisclosureRecordFailed(Object error) {
+    return 'Não foi possível registrar o consentimento: $error';
+  }
 
   @override
   String get coachNoPlanOption => 'Sem plano (apenas corridas recentes)';
@@ -18539,20 +18591,38 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsAccountCoachConsentWithdraw =>
-      'Retirar consentimento do Coach';
+      'Retirar o consentimento para os recursos de IA';
 
   @override
   String get settingsAccountCoachConsentActive =>
-      'Impeça o Coach de usar seus dados de treino. Você pode consentir novamente quando quiser.';
+      'Impeça os recursos de IA do Threkir de usarem seus dados. Você pode consentir novamente quando quiser.';
 
   @override
   String get settingsAccountCoachConsentWithdrawn =>
-      'Consentimento do Coach retirado.';
+      'Consentimento para os recursos de IA retirado.';
 
   @override
   String settingsAccountCoachConsentWithdrawFailed(Object error) {
     return 'Falha ao retirar o consentimento: $error';
   }
+
+  @override
+  String get settingsAccountAiConsentUpdateTitle =>
+      'Aceitar as informações de IA atualizadas';
+
+  @override
+  String get settingsAccountAiConsentUpdateSubtitle =>
+      'As informações agora cobrem mais recursos. Leia-as e aceite-as para usar o assistente de rotas com IA.';
+
+  @override
+  String get settingsAccountAiConsentGrantTitle => 'Ver as informações de IA';
+
+  @override
+  String get settingsAccountAiConsentGrantSubtitle =>
+      'Os recursos de IA do Threkir pedem seu consentimento antes de usar seus dados. Leia as informações e aceite-as aqui.';
+
+  @override
+  String get settingsAccountAiConsentAccepted => 'Informações de IA aceitas.';
 
   @override
   String settingsAccountDeleteFailed(Object error) {
@@ -23912,7 +23982,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get racesNearPlace => 'Perto de um local…';
 
   @override
-  String racesKmAway(String distance) {
+  String racesDistanceAway(String distance) {
     return 'a $distance';
   }
 

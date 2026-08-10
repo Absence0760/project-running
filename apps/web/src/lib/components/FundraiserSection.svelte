@@ -32,17 +32,18 @@
 	let loading = $state(true);
 	let fundraiser = $state<Fundraiser | null>(null);
 	let totals = $state<FundraiserTotals | null>(null);
+	let totalsFailed = $state(false);
 	let createOpen = $state(false);
 
 	async function load() {
 		loading = true;
+		totalsFailed = false;
 		try {
 			fundraiser = runId
 				? await fetchFundraiserForRun(runId)
 				: eventId
 					? await fetchFundraiserForEvent(eventId)
 					: null;
-			totals = fundraiser ? await fetchFundraiserTotals(fundraiser.id) : null;
 		} catch (e) {
 			// A transient load failure must NOT hide the owner's "Create
 			// fundraiser" CTA. Leaving fundraiser null falls through to the
@@ -50,10 +51,21 @@
 			// than sticking on loading and hiding the whole section.
 			console.warn('fundraiser load failed', e);
 			fundraiser = null;
-			totals = null;
-		} finally {
-			loading = false;
 		}
+		// Read separately: a totals failure must not erase a campaign that
+		// loaded, and it must not be shown as "0 raised" either.
+		if (fundraiser) {
+			try {
+				totals = await fetchFundraiserTotals(fundraiser.id);
+			} catch (e) {
+				console.warn('fundraiser totals load failed', e);
+				totals = null;
+				totalsFailed = true;
+			}
+		} else {
+			totals = null;
+		}
+		loading = false;
 	}
 
 	onMount(() => {
@@ -70,7 +82,7 @@
 {#if fundraisingOn && !loading}
 	{#if fundraiser}
 		<section class="section fundraiser-section">
-			<FundraiserCard {fundraiser} {totals} />
+			<FundraiserCard {fundraiser} {totals} {totalsFailed} />
 			<a class="view-link" href={`/fundraisers/${fundraiser.id}`}>{m('fundraiser.feedTitle')}</a>
 		</section>
 	{:else if isOwner}

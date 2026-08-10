@@ -20,6 +20,7 @@ import 'package:ui_kit/ui_kit.dart'
         reduceMotion,
         syncMotionLoop;
 
+import '../ai_disclosure.dart';
 import '../backend_timeout.dart';
 import '../auth_error.dart';
 import '../payload_hash.dart';
@@ -28,6 +29,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../training_service.dart';
+import '../widgets/ai_disclosure_notice.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/surface_peer_strip.dart';
@@ -180,13 +182,16 @@ class _CoachScreenState extends State<CoachScreen> {
   RealtimeChannel? _realtimeChannel;
   StreamSubscription<dynamic>? _streamSub;
 
-  /// GDPR Art 6(1)(a) first-use consent state. `_consentChecked` is
-  /// false until the bootstrap fetch returns; `_consentAt` is null when
-  /// the user has not yet accepted the disclosure. Until both are set
-  /// the chat surface is not rendered — no SSE request can fire. See
-  /// audit/gdpr (2026-05-25).
+  /// GDPR Art 6(1)(a) first-use consent state. `_consentChecked` is false
+  /// until the bootstrap fetch returns; `_disclosure` holds the versioned
+  /// record. Until it grades at [kAiDisclosureVersionCoach] the chat
+  /// surface is not rendered — no SSE request can fire. The gate is the
+  /// COACH rung, not the current one: a runner who accepted the older
+  /// Coach-only disclosure consented to exactly this, and re-prompting
+  /// them here to unlock a different feature would be bundling. See
+  /// audit/gdpr (2026-05-25) and decisions.md § 571.
   bool _consentChecked = false;
-  DateTime? _consentAt;
+  AiDisclosureRecord _disclosure = const AiDisclosureRecord();
   bool _consentSaving = false;
   String? _consentError;
 
@@ -213,11 +218,12 @@ class _CoachScreenState extends State<CoachScreen> {
     // _reloadAll + _subscribeRealtime can run regardless — they hit
     // Supabase directly and do not transmit data to the AI provider.
     try {
-      _consentAt = await widget.api.fetchCoachConsentAt();
+      _disclosure =
+          aiDisclosureFromProfileRow(await widget.api.fetchAiDisclosure());
     } catch (e) {
       // Fail closed — a lookup error means the disclosure stays up.
       debugPrint('coach_screen: consent lookup failed: $e');
-      _consentAt = null;
+      _disclosure = const AiDisclosureRecord();
     }
     if (mounted) setState(() => _consentChecked = true);
     try {
@@ -247,10 +253,15 @@ class _CoachScreenState extends State<CoachScreen> {
       _consentError = null;
     });
     try {
-      final at = await widget.api.recordCoachConsent();
+      // The copy above is the current disclosure, so accepting it grants
+      // the current scope — and the record the screen then trusts is the
+      // one the SERVER returned, never a locally synthesised stamp
+      // (decisions § 560).
+      final row = await widget.api
+          .recordAiDisclosureConsent(kAiDisclosureCurrentVersion);
       if (!mounted) return;
       setState(() {
-        _consentAt = at;
+        _disclosure = aiDisclosureFromProfileRow(row);
         _consentSaving = false;
       });
     } catch (e) {
@@ -918,8 +929,9 @@ class _CoachScreenState extends State<CoachScreen> {
 
     // GDPR Art 6(1)(a) gate. _consentChecked stays false until the
     // bootstrap fetch settles so we never flash the chat surface
-    // before the lookup completes. _consentAt being null means the
-    // user must accept the disclosure before any chat fans out.
+    // before the lookup completes. A record that doesn't grade at the
+    // Coach rung means the user must accept the disclosure before any
+    // chat fans out.
     if (!_consentChecked) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.coachTitle)),
@@ -929,7 +941,7 @@ class _CoachScreenState extends State<CoachScreen> {
         ),
       );
     }
-    if (_consentAt == null) {
+    if (!checkAiDisclosure(_disclosure, kAiDisclosureVersionCoach).ok) {
       return _buildCoachConsentScaffold(theme, l10n);
     }
 
@@ -1051,31 +1063,7 @@ class _CoachScreenState extends State<CoachScreen> {
                 style: theme.textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
-              Text(
-                l10n.coachConsentIntro,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.only(left: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('• ${l10n.coachConsentBulletProfile}'),
-                    const SizedBox(height: 4),
-                    Text('• ${l10n.coachConsentBulletRuns}'),
-                    const SizedBox(height: 4),
-                    Text('• ${l10n.coachConsentBulletPlan}'),
-                    const SizedBox(height: 4),
-                    Text('• ${l10n.coachConsentBulletMessages}'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                l10n.coachConsentProcessing,
-                style: theme.textTheme.bodyMedium,
-              ),
+              const AiDisclosureNotice(),
               const SizedBox(height: 12),
               Text(
                 l10n.coachConsentAction,

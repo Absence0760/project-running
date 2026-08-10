@@ -8,10 +8,15 @@
 	let {
 		fundraiser,
 		totals,
+		totalsFailed = false,
 		compact = false
 	}: {
 		fundraiser: Fundraiser;
 		totals: FundraiserTotals | null;
+		/// The totals read FAILED, as distinct from `totals === null` meaning
+		/// nothing has been donated yet. A thermometer at zero is a claim about
+		/// someone else's campaign, so the failure gets said out loud instead.
+		totalsFailed?: boolean;
 		compact?: boolean;
 	} = $props();
 
@@ -57,7 +62,13 @@
 		</p>
 	</header>
 
-	<GoalThermometer raisedCents={raised} goalCents={goal} {donorCount} currency={fundraiser.currency} />
+	{#if totalsFailed}
+		<p class="totals-error" role="alert" data-testid="fundraiser-card-totals-error">
+			{m('fundraiser.totalsFailed')}
+		</p>
+	{:else}
+		<GoalThermometer raisedCents={raised} goalCents={goal} {donorCount} currency={fundraiser.currency} />
+	{/if}
 
 	{#if closed}
 		<p class="closed">{m('fundraiser.closed')}</p>
@@ -84,6 +95,10 @@
 	.closed {
 		color: var(--color-text-secondary);
 		font-weight: 600;
+	}
+	.totals-error {
+		margin: 0;
+		color: var(--color-text-secondary);
 	}
 	.fundraiser-card.compact header h3 {
 		font-size: 1rem;

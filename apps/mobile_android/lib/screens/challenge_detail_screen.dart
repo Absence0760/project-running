@@ -120,6 +120,7 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
       cancelLabel: l10n.checkpointCancel,
     );
     if (!ok || _busy) return;
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       await widget.social.leaveChallenge(widget.challengeId);

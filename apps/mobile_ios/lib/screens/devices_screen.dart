@@ -445,6 +445,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
       builder: (_) => _AddOverrideSheet(eligible: eligible),
     );
     if (entry == null) return;
+    if (!mounted) return;
     setState(() => _current[entry.key] = entry.value);
   }
 

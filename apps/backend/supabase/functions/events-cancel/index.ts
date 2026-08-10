@@ -32,6 +32,7 @@
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { isValidTimestamptz, isValidUuid } from '../_shared/input_validation.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { cancelAction, resolveRefundEligibility, type RefundPolicy } from './lib.ts';
@@ -59,6 +60,14 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
   const instanceStart = typeof body.instance_start === 'string' ? body.instance_start : null;
   if (!eventId || !instanceStart) {
     return Response.json({ error: 'missing_event_or_instance' }, { status: 400 });
+  }
+  // Both go straight into `.eq()` on typed columns below — an unchecked
+  // value is a Postgres cast error surfacing as a 500, not a 400.
+  if (!isValidUuid(eventId)) {
+    return Response.json({ error: 'invalid_event_id' }, { status: 400 });
+  }
+  if (!isValidTimestamptz(instanceStart)) {
+    return Response.json({ error: 'invalid_instance_start' }, { status: 400 });
   }
 
   const authHeader = req.headers.get('Authorization');
