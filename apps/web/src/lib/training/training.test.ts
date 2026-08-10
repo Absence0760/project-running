@@ -326,6 +326,37 @@ test('phaseFor: final week is always race', () => {
 	}
 });
 
+test('phaseFor: every total from the editor floor up seats a taper and sums exact', () => {
+	const order = ['base', 'build', 'peak', 'taper', 'race'];
+	// 4 is the plan editor's `min` on the free-text total-weeks override.
+	for (let total = 4; total <= 30; total++) {
+		const seq = Array.from({ length: total }, (_, i) => phaseFor(i, total));
+		assert.equal(seq.length, total, `total ${total}: every week must land in a phase`);
+		for (let i = 1; i < seq.length; i++) {
+			assert.ok(
+				order.indexOf(seq[i]) >= order.indexOf(seq[i - 1]),
+				`total ${total}: phases must not run backwards (${seq.join(',')})`
+			);
+		}
+		assert.equal(seq.filter((p) => p === 'race').length, 1, `total ${total}: one race week`);
+		assert.ok(seq.includes('taper'), `total ${total}: taper starved (${seq.join(',')})`);
+		// Four phases need four non-race weeks; below that one must go empty, and
+		// the taper asserted above is never the one dropped.
+		if (total >= 5) {
+			for (const phase of ['base', 'build', 'peak']) {
+				assert.ok(seq.includes(phase), `total ${total}: ${phase} starved (${seq.join(',')})`);
+			}
+		}
+	}
+});
+
+test('phaseFor: a 10-week plan tapers instead of peaking into race week', () => {
+	// 10 and 5 floored to exactly the non-race block (3+4+2 and 1+2+1), so the
+	// taper got nothing and the 100 %-volume peak week sat against race day.
+	assert.equal(phaseFor(8, 10), 'taper');
+	assert.equal(phaseFor(3, 5), 'taper');
+});
+
 // ─────────────────────── Plan generation ───────────────────────
 
 test('generatePlan: produces the requested number of weeks', () => {

@@ -360,6 +360,44 @@ void main() {
         expect(phaseFor(total - 1, total), PlanPhase.race);
       }
     });
+
+    test('every total from the editor floor up seats a taper and sums exact', () {
+      const order = [
+        PlanPhase.base,
+        PlanPhase.build,
+        PlanPhase.peak,
+        PlanPhase.taper,
+        PlanPhase.race,
+      ];
+      // 4 is the plan editor's minimum on the total-weeks override.
+      for (var total = 4; total <= 30; total++) {
+        final seq = [for (var i = 0; i < total; i++) phaseFor(i, total)];
+        expect(seq.length, total, reason: 'total $total: every week lands in a phase');
+        for (var i = 1; i < seq.length; i++) {
+          expect(order.indexOf(seq[i]) >= order.indexOf(seq[i - 1]), isTrue,
+              reason: 'total $total: phases must not run backwards ($seq)');
+        }
+        expect(seq.where((p) => p == PlanPhase.race).length, 1,
+            reason: 'total $total: one race week');
+        expect(seq.contains(PlanPhase.taper), isTrue,
+            reason: 'total $total: taper starved ($seq)');
+        // Four phases need four non-race weeks; below that one must go empty,
+        // and the taper asserted above is never the one dropped.
+        if (total >= 5) {
+          for (final phase in [PlanPhase.base, PlanPhase.build, PlanPhase.peak]) {
+            expect(seq.contains(phase), isTrue,
+                reason: 'total $total: $phase starved ($seq)');
+          }
+        }
+      }
+    });
+
+    test('a 10-week plan tapers instead of peaking into race week', () {
+      // 10 and 5 floored to exactly the non-race block (3+4+2 and 1+2+1), so
+      // the taper got nothing and the 100 % peak week sat against race day.
+      expect(phaseFor(8, 10), PlanPhase.taper);
+      expect(phaseFor(3, 5), PlanPhase.taper);
+    });
   });
 
   group('generatePlan', () {
