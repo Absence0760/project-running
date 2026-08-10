@@ -97,14 +97,22 @@ fn grade_cutoff(cutoff_s: f64, arrival_s: f64) -> CutoffVerdict {
 
 /// Earliest crossing stamp for a checkpoint id, mirroring the web map that keeps
 /// the smallest stamp when a checkpoint somehow has two.
+///
+/// A non-finite stamp is dropped rather than compared. Every ordering
+/// comparison against `NaN` is false, so a "keep the one already held unless the
+/// new one is smaller" test cannot express *reject* — it falls through to the
+/// replace arm and the corrupt stamp takes the slot. From there the pace, every
+/// projected arrival, and every cut-off margin are `NaN`, and `grade_cutoff`'s
+/// two ordering tests both fail, so a blown cut-off grades **Safe**. That is the
+/// one verdict this must never invent.
 fn earliest_crossing(crossings: &[ProjectionCrossing<'_>], id: &str) -> Option<f64> {
     let mut best: Option<f64> = None;
     for x in crossings {
-        if x.checkpoint_id == id {
-            match best {
-                Some(b) if b <= x.elapsed_s => {}
-                _ => best = Some(x.elapsed_s),
-            }
+        if x.checkpoint_id != id || !x.elapsed_s.is_finite() {
+            continue;
+        }
+        if best.is_none_or(|b| x.elapsed_s < b) {
+            best = Some(x.elapsed_s);
         }
     }
     best
@@ -498,6 +506,57 @@ mod tests {
         assert!(p.covered_m.abs() < 1e-9);
         assert_eq!(p.pace_s_per_m, None);
         assert!(p.legs.iter().all(|l| l.projected_elapsed_s.is_none()));
+    }
+
+    #[test]
+    fn a_nonfinite_crossing_stamp_is_dropped_not_kept() {
+        // The web map keeps the smallest stamp, which discards a later NaN
+        // because `NaN < prev` is false. Written as its negation the same test
+        // ADMITS it, and one corrupt stamp then poisons the pace, every
+        // projected arrival, and every margin — grading a blown cut-off Safe,
+        // in both directions of the duplicate's arrival order.
+        let cps = [
+            ProjectionCheckpoint {
+                id: "a",
+                position_m: 1_000.0,
+                cutoff_elapsed_s: Some(3_600.0),
+            },
+            ProjectionCheckpoint {
+                id: "b",
+                position_m: 2_000.0,
+                cutoff_elapsed_s: Some(3_000.0),
+            },
+        ];
+        for stamps in [
+            [3_600.0, f64::NAN],
+            [f64::NAN, 3_600.0],
+            [f64::INFINITY, 3_600.0],
+        ] {
+            let cr = [
+                ProjectionCrossing {
+                    checkpoint_id: "a",
+                    elapsed_s: stamps[0],
+                },
+                ProjectionCrossing {
+                    checkpoint_id: "a",
+                    elapsed_s: stamps[1],
+                },
+            ];
+            let p = project_runner(&cps, &cr);
+            assert_eq!(leg(&p, "a").actual_elapsed_s, Some(3_600.0));
+            assert_eq!(p.pace_s_per_m, Some(3.6));
+            assert_eq!(leg(&p, "b").projected_elapsed_s, Some(7_200.0));
+            assert_eq!(leg(&p, "b").cutoff.unwrap().status, CutoffStatus::Miss);
+        }
+        // Nothing but a bad stamp leaves the checkpoint unreached, never
+        // reached-at-an-unknown-time.
+        let only_bad = [ProjectionCrossing {
+            checkpoint_id: "a",
+            elapsed_s: f64::NAN,
+        }];
+        let p = project_runner(&cps, &only_bad);
+        assert!(!leg(&p, "a").reached);
+        assert_eq!(p.pace_s_per_m, None);
     }
 
     #[test]
