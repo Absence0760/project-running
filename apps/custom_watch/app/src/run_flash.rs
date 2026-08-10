@@ -1080,14 +1080,14 @@ impl RunStore {
         self.dir.manifest_at(watch_uptime_s)
     }
 
-    /// Once the phone has pulled through a run's blob end (`next_offset` is its
-    /// read cursor after the chunk just served), mark the run synced so eviction
-    /// sacrifices it before a still-unsynced run. RAM-only, best-effort (L4):
-    /// the synced bit is not persisted across a reboot. Consumed by the BLE
-    /// run-sync task; unused in the default build.
+    /// Record the chunk just served — `[chunk_from, next_offset)` of the run's
+    /// blob — and, once the phone has been sent every byte of it, mark the run
+    /// synced so eviction sacrifices it before a still-unsynced run. RAM-only,
+    /// best-effort (L4): the synced bit is not persisted across a reboot.
+    /// Consumed by the BLE run-sync task; unused in the default build.
     #[cfg_attr(not(feature = "ble"), allow(dead_code))]
-    pub fn mark_synced_if_complete(&mut self, run_seq: u32, next_offset: u32) {
-        if flash_plan::chunk_completes_run(&self.dir, run_seq, next_offset) {
+    pub fn mark_synced_if_complete(&mut self, run_seq: u32, chunk_from: u32, next_offset: u32) {
+        if flash_plan::chunk_completes_run(&mut self.dir, run_seq, chunk_from, next_offset) {
             self.dir.mark_synced(run_seq);
             self.publish_pending();
             self.bump_manifest_gen();

@@ -3594,7 +3594,10 @@ mod tests {
             queued += 1;
             banked_moving_s += lap.moving_s;
         }
-        assert_eq!(queued, PENDING_LAP_CAP, "the queue filled but never spilled");
+        assert_eq!(
+            queued, PENDING_LAP_CAP,
+            "the queue filled but never spilled"
+        );
         assert_eq!(
             u32::from(s.lap) - 1,
             queued as u32,
