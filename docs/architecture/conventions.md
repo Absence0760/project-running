@@ -369,6 +369,15 @@ There is no third option. These count as "papering over with the test" and are f
 
 When you spot a candidate fix that fits one of those patterns, stop and surface the underlying issue. If you cannot fix the app issue in the same session, raise it explicitly — don't half-mask it via the test.
 
+### A wait must name a signal only the thing being waited on can produce
+
+The rule behind the "real readiness signal" clause above, and the one three separate CI flakes broke at once ([decisions.md § 574](decisions.md)). A check that observes something *correlated* with readiness passes early and turns into a flake that reads as a bug somewhere else:
+
+- **`pumpEventQueue()` is not a wait on an async service.** It runs a fixed number of event-loop turns; a cycle doing real disk I/O can outlast them, and the assertion then reads pre-completion state. Give the service a `@visibleForTesting` accessor that returns the in-flight future and `await` it. A fire-and-forget that outlives its test also writes into the directory `tearDown` just deleted — same defect.
+- **An intermediary's error is not a readiness signal.** A gateway answers `502/503/504` precisely *because* it could not reach the thing you are waiting for. Probe for a status the upstream itself authors (a handler's own `405`, a real password grant's `200`) and treat the 5xx family as not-ready.
+- **An inner deadline must fit inside the outer budget**, or the outer one always fires first and the specific diagnosis underneath is dead code. Prefer a deadline re-armed on progress over one multiplied by the number of expected steps.
+- **When a stall has two possible causes, check the cheap one first.** A firmware that stops receiving GPS and a runner who stopped moving look identical from inside the recorder; a wait on distance that cannot tell them apart blames the wrong component every time.
+
 ## If you see something wrong, fix it
 
 A sibling rule to the one above. When you're working in a file and notice something **that doesn't look right, doesn't act correctly, or isn't optimal**, fix it in the same session. Don't walk past it on the grounds of "out of scope" — by the time anyone else looks, the broken thing will still be broken AND your touch in the file's git blame will look like a tacit endorsement.
