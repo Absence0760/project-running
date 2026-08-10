@@ -50,3 +50,14 @@ grant select, insert, update, delete on public.global_segments to service_role;
 grant select on public.global_segment_efforts to anon;
 grant select, insert, delete on public.global_segment_efforts to authenticated;
 grant select, insert, update, delete on public.global_segment_efforts to service_role;
+
+-- Withholding the UPDATE grant is not the same as the verb being unreachable:
+-- what a fresh table already carries comes from the stack's default privileges,
+-- and those differ across Supabase CLI versions (CI pins 2.84.2, where the
+-- default ACL for a new public table does carry UPDATE for `authenticated`; a
+-- current CLI does not). So revoke it, and the "no UPDATE policy means no UPDATE
+-- verb" property holds wherever the migration runs instead of resting on which
+-- CLI built the database. Safe for the one writer: the effort upsert passes
+-- `ignoreDuplicates`, which is INSERT ... ON CONFLICT DO NOTHING and needs no
+-- UPDATE privilege.
+revoke update on public.global_segment_efforts from anon, authenticated;
