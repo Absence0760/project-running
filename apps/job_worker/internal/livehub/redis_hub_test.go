@@ -3,6 +3,7 @@ package livehub
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -498,5 +499,45 @@ func TestRedisHub_UnsubDuringPublishDoesNotPanic(t *testing.T) {
 		close(stop)
 		cancel()
 		teardown()
+	}
+}
+
+// TestRedisHub_RunGCDropsIdleRoomCaches pins the reaper on the Redis backend's
+// per-process room map. Redis owns the fan-out and its per-run keys carry a 24h
+// TTL, but the zone + run-meta caches these rooms hold are process-local and
+// had no eviction at all: the map grew one entry per distinct run the replica
+// ever authorised and kept it for the process lifetime.
+func TestRedisHub_RunGCDropsIdleRoomCaches(t *testing.T) {
+	hub, _, teardown := newRedisTestHub(t)
+	defer teardown()
+
+	ctx := context.Background()
+	zones := &fakeZoneFetcher{}
+	for i := 0; i < 500; i++ {
+		if _, err := hub.LoadZones(ctx, fmt.Sprintf("run-%d", i), zones); err != nil {
+			t.Fatalf("LoadZones: %v", err)
+		}
+	}
+	hub.roomsMu.Lock()
+	before := len(hub.rooms)
+	hub.roomsMu.Unlock()
+	if before != 500 {
+		t.Fatalf("expected 500 cached rooms, got %d", before)
+	}
+
+	// A fresh cache must survive a sweep whose idle window it is inside.
+	if dropped := hub.RunGC(time.Hour); dropped != 0 {
+		t.Fatalf("fresh rooms dropped by an hour-wide sweep: %d", dropped)
+	}
+	// Past the window they go — the entries are well beyond CacheRefreshTTL by
+	// then and would be re-fetched on next touch regardless.
+	if dropped := hub.RunGC(-time.Second); dropped != 500 {
+		t.Fatalf("idle sweep dropped %d rooms, want 500", dropped)
+	}
+	hub.roomsMu.Lock()
+	after := len(hub.rooms)
+	hub.roomsMu.Unlock()
+	if after != 0 {
+		t.Fatalf("rooms map still holds %d entries after the sweep", after)
 	}
 }

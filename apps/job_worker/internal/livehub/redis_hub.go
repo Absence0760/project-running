@@ -427,6 +427,54 @@ func (h *RedisHub) roomFor(runID string) *redisRoom {
 	return r
 }
 
+// RunGC drops per-process room caches whose last successful fetch is older
+// than [maxIdle], returning how many went. Redis owns the fan-out and the
+// per-run keys carry their own TTL, but these rooms do not: they are the
+// process-local zone + run-meta caches, and without a sweep the map grows one
+// entry per distinct run the replica has ever authorised, for the process
+// lifetime. Dropping one costs at most a Supabase round-trip on the next touch
+// — the entry is well past CacheRefreshTTL by then and would be re-fetched
+// anyway. Mirrors [Hub.RunGC].
+func (h *RedisHub) RunGC(maxIdle time.Duration) int {
+	cutoff := time.Now().Add(-maxIdle)
+	h.roomsMu.Lock()
+	defer h.roomsMu.Unlock()
+	dropped := 0
+	for id, r := range h.rooms {
+		r.mu.Lock()
+		last := r.zonesAt
+		if r.runMetaAt.After(last) {
+			last = r.runMetaAt
+		}
+		r.mu.Unlock()
+		if last.Before(cutoff) {
+			delete(h.rooms, id)
+			dropped++
+		}
+	}
+	return dropped
+}
+
+// StartGC spawns a background goroutine that runs RunGC every [interval] until
+// [ctx] is done. Returns immediately. Mirrors [Hub.StartGC].
+func (h *RedisHub) StartGC(ctx context.Context, interval, maxIdle time.Duration) {
+	if interval <= 0 || maxIdle <= 0 {
+		return
+	}
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				h.RunGC(maxIdle)
+			}
+		}
+	}()
+}
+
 func (h *RedisHub) log() *slog.Logger {
 	if h.Log != nil {
 		return h.Log
