@@ -250,7 +250,12 @@
 		// /events/[id] only resolves the club slug and forwards to the
 		// nested page above; gating it tighter than its destination would
 		// bounce an anon visitor who could have read the event.
-		path.startsWith('/events/');
+		path.startsWith('/events/') ||
+		// A fundraiser page is a share target a logged-out stranger follows in
+		// order to donate — the anchor-visibility RLS and the donations
+		// checkout both admit anon (fundraising.md). Without the prefix the
+		// auth guard bounced exactly that visitor to /login.
+		path.startsWith('/fundraisers/');
 
 	function isActive(href: string, path: string): boolean {
 		return path.startsWith(href);
