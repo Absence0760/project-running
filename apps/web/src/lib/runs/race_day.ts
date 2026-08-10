@@ -103,16 +103,32 @@ export function negativeSplitPacing(
 	const units = Math.ceil(distanceM / unitMetres);
 	const totalUnits = distanceM / unitMetres;
 	const halfUnits = totalUnits / 2;
-	const splits: number[] = [];
+	const ideal: number[] = [];
 	for (let i = 0; i < units; i++) {
-		const startU = i;
-		const endU = Math.min(i + 1, totalUnits);
-		const segU = endU - startU;
+		const segU = Math.min(i + 1, totalUnits) - i;
 		// Pace for the split is the pace at its midpoint unit.
-		const midU = startU + segU / 2;
-		const pace = midU < halfUnits ? firstHalfPace : secondHalfPace;
-		splits.push(Math.round(pace * segU));
+		const midU = i + segU / 2;
+		ideal.push((midU < halfUnits ? firstHalfPace : secondHalfPace) * segU);
 	}
+	// The half-distance mark rarely lands on a split boundary, so the two halves
+	// cover slightly different distances and the symmetric ±delta no longer sums
+	// to totalSec; scaling to the target restores that while leaving the first-
+	// to-second-half ratio untouched. Splits are then emitted as differences of
+	// rounded cumulative times, so per-split rounding can't accumulate — a
+	// marathon's 43 independently-rounded splits summed 15 s past the finish
+	// time printed directly above them. Same invariant evenSplitPacing keeps.
+	const idealTotal = ideal.reduce((a, b) => a + b, 0);
+	const scale = idealTotal > 0 ? totalSec / idealTotal : 1;
+	const splits: number[] = [];
+	let cumIdeal = 0;
+	let emitted = 0;
+	for (let i = 0; i < units - 1; i++) {
+		cumIdeal += ideal[i] * scale;
+		const cut = Math.round(cumIdeal);
+		splits.push(cut - emitted);
+		emitted = cut;
+	}
+	splits.push(Math.round(totalSec) - emitted);
 	return { avgSecPerKm, splitsSec: splits, label: 'negative-split' };
 }
 

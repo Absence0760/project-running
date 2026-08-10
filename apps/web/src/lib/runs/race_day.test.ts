@@ -173,11 +173,31 @@ test('negativeSplitPacing: first half slower, second half faster', () => {
 	}
 });
 
-test('negativeSplitPacing: sum of splits ≈ total time', () => {
+test('negativeSplitPacing: sum of splits is the total time', () => {
 	const s = negativeSplitPacing(10_000, 3000, 2);
 	const sum = s.splitsSec.reduce((a, b) => a + b, 0);
 	// 5 km @ (300+6) + 5 km @ (300-6) = 1530 + 1470 = 3000.
-	assert.ok(Math.abs(sum - 3000) <= 10);
+	assert.equal(sum, 3000);
+});
+
+test('negativeSplitPacing: splits sum to the predicted finish on partial-unit races', () => {
+	// The panel prints the predicted finish directly above the split list, so a
+	// list that adds to something else is a visible contradiction. Every split
+	// used to be rounded independently, drifting a marathon 15 s past its goal.
+	const cases: [number, number, number][] = [
+		[42195, 12600, 1000],
+		[21097.5, 6300, 1000],
+		[5000, 1500, MILE_METRES],
+		[42195, 12600, MILE_METRES],
+	];
+	for (const [distanceM, totalSec, unitMetres] of cases) {
+		const s = negativeSplitPacing(distanceM, totalSec, 2, unitMetres);
+		assert.equal(
+			s.splitsSec.reduce((a, b) => a + b, 0),
+			totalSec,
+			`${distanceM} m in ${totalSec} s over ${unitMetres} m units`,
+		);
+	}
 });
 
 test('negativeSplitPacing: 0% delta → even splits', () => {
