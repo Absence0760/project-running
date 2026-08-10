@@ -343,7 +343,7 @@ test('phaseFor: every total from the editor floor up seats a taper and sums exac
 		// Four phases need four non-race weeks; below that one must go empty, and
 		// the taper asserted above is never the one dropped.
 		if (total >= 5) {
-			for (const phase of ['base', 'build', 'peak']) {
+			for (const phase of ['base', 'build', 'peak'] as const) {
 				assert.ok(seq.includes(phase), `total ${total}: ${phase} starved (${seq.join(',')})`);
 			}
 		}
