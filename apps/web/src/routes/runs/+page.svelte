@@ -21,6 +21,7 @@
 	import { ACTIVITY_TYPE_ICONS } from '$lib/runs/activity_type';
 	import { activityTypeLabel } from '$lib/runs/activity_type.svelte';
 	import type { Snapshot } from './$types';
+	import { runsFetchMode } from './fetch_mode';
 
 	// The full run list — filters, pagination, bulk-delete, manual entry.
 	// Split out of /history (which is now the unified cross-modal timeline)
@@ -87,20 +88,20 @@
 		dateRange === 'custom' && !customFrom && !customTo ? prevNonCustomRange : dateRange
 	);
 
-	/// Pagination only applies in browse mode — All time with NO source
-	/// + NO activity narrowing. The moment the user adds a filter, the
-	/// list switches to full-fetch and Load More disappears: otherwise
-	/// the first 50 rows from the DB might contain only a handful of
-	/// matches (e.g. 5 Strava runs in the first 50 by date) and the
-	/// user has to keep clicking Load More to walk the whole list.
-	/// Filters are still client-side; full-fetch is acceptable because
-	/// even a heavy account has <10k runs. Pushing filters to the
+	/// Pagination only applies in browse mode — All time, NO source + NO
+	/// activity narrowing, and the one sort key that matches the server's
+	/// own order. The moment the user narrows OR re-orders, the list
+	/// switches to full-fetch and Load More disappears: otherwise the
+	/// first 50 rows from the DB might contain only a handful of matches
+	/// (e.g. 5 Strava runs in the first 50 by date) and the user has to
+	/// keep clicking Load More to walk the whole list. Filtering and
+	/// sorting are both client-side; full-fetch is acceptable because
+	/// even a heavy account has <10k runs. Pushing them into the
 	/// fetchRuns query would let us paginate under narrowing — a
 	/// backlog item once accounts grow past that bound.
+	/// See ./fetch_mode.ts for why the sort key belongs in this gate.
 	let fetchMode = $derived<'paginated' | 'full'>(
-		effectiveDateRange === 'all' && sourceFilter === 'all' && activityFilter === 'all'
-			? 'paginated'
-			: 'full'
+		runsFetchMode({ effectiveDateRange, sourceFilter, activityFilter, sortKey })
 	);
 
 	/// Filters persist across navigation via localStorage so the user
