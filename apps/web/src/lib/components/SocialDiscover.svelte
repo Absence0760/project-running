@@ -8,6 +8,8 @@
 		type EventWeekday,
 	} from '$lib/core/data';
 	import { formatDistance } from '$lib/format/units.svelte';
+	import { formatPrice } from '$lib/format/format_price';
+	import { fromMinorUnits } from '$lib/format/minor_units';
 
 	let query = $state('');
 	let category = $state<'' | 'run' | 'cycle' | 'class' | 'social'>('');
@@ -165,14 +167,8 @@
 
 	function priceLabel(r: PublicEventResult): string {
 		if (r.price_cents == null) return m('discover.free');
-		try {
-			return (r.price_cents / 100).toLocaleString(undefined, {
-				style: 'currency',
-				currency: (r.currency ?? 'usd').toUpperCase(),
-			});
-		} catch {
-			return `${(r.price_cents / 100).toFixed(2)} ${(r.currency ?? '').toUpperCase()}`;
-		}
+		const currency = (r.currency ?? 'usd').toUpperCase();
+		return formatPrice(fromMinorUnits(r.price_cents, currency), { currency });
 	}
 
 	function cadenceLabel(r: PublicEventResult): string {
