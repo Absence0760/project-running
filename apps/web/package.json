@@ -30,7 +30,7 @@
 		"normalize.css": "8.0.1",
 		"oauth2-mock-server": "9.1.0",
 		"svelte": "5.56.8",
-		"svelte-check": "4.7.4",
+		"svelte-check": "4.7.5",
 		"typescript": "6.0.3",
 		"unplugin-icons": "23.0.1",
 		"vite": "8.2.1"
@@ -41,14 +41,14 @@
 		"@resvg/resvg-js": "^2.6.2",
 		"@sentry/sveltekit": "^10.69.0",
 		"@supabase/ssr": "^0.12.4",
-		"@supabase/supabase-js": "^2.110.8",
+		"@supabase/supabase-js": "^2.112.2",
 		"@zip.js/zip.js": "^2.8.34",
 		"fit-file-parser": "^4.1.0",
 		"html-to-image": "^1.11.13",
-		"isomorphic-dompurify": "^3.21.0",
+		"isomorphic-dompurify": "^3.22.0",
 		"jszip": "^3.10.1",
-		"maplibre-gl": "^6.1.0",
-		"marked": "^18.0.7",
+		"maplibre-gl": "^6.2.0",
+		"marked": "^18.0.9",
 		"material-symbols": "^0.45.10"
 	}
 }
