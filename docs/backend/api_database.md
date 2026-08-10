@@ -1138,8 +1138,13 @@ affected user, a `security definer` helper that deletes + re-inserts the
 caller's rows (full rebuild per user on any run change — simpler to reason
 about than incremental; batching per statement keeps a bulk import at one
 rebuild per chunk instead of one per row). The UPDATE trigger's old OF
-column list lives in the trigger function as a changed-value filter over
-the same six columns.
+column list lives in the trigger function as a changed-value filter, and
+`activity_type` is one of the watched columns since `20270514_001`.
+Candidates are **run-family only** — every `activity_type` except `cycle`
+(`20270514_001`), matching the client's `isRunFamily` rule in `recap.ts`;
+a bicycle otherwise covers a PR bracket at a speed no runner reaches and
+takes the bracket permanently. See
+[derived_state.md](derived_state.md#personal_records).
 The helper is guarded: `auth.uid() is not null and auth.uid() !=
 p_user_id` raises `not authorized`, so a logged-in attacker can't call
 the RPC with a victim's id. Service-role / seed inserts run with
@@ -1197,7 +1202,10 @@ constraint does not stop a rename). Same idiom as `coach_messages`,
 recomputes the full earned set (longest-run + lifetime distance off `runs`,
 best streak off run days, PR count off `personal_records`, completed-plan count
 off `training_plans`) and `insert ... on conflict do nothing`s the new awards,
-**returning only the newly-inserted rows**. Thresholds duplicate the
+**returning only the newly-inserted rows**. Longest-run is **run-family only**
+(`activity_type <> 'cycle'`, `20270514_001`) while lifetime distance and the
+streak stay cross-modal — the same split `recap.ts` makes; the UPDATE dispatch
+trigger watches `activity_type` to match. Thresholds duplicate the
 `badges.ts` catalogue (the lockstep contract; `achievements_test.sql` pins it).
 A `pg_advisory_xact_lock` per user serialises concurrent fires. Triggers
 `runs_award_achievements` / `personal_records_award_achievements` /
