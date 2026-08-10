@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
 	import { formatPrice } from '$lib/format/format_price';
+	import { fromMinorUnits } from '$lib/format/minor_units';
 	import { fundraiserProgress } from '$lib/social/fundraiser_progress';
 
 	let {
@@ -17,8 +18,8 @@
 
 	const progress = $derived(fundraiserProgress(raisedCents, goalCents));
 	const cur = $derived(currency.toUpperCase());
-	const raised = $derived(formatPrice(raisedCents / 100, { currency: cur }));
-	const goal = $derived(formatPrice(goalCents / 100, { currency: cur }));
+	const raised = $derived(formatPrice(fromMinorUnits(raisedCents, cur), { currency: cur }));
+	const goal = $derived(formatPrice(fromMinorUnits(goalCents, cur), { currency: cur }));
 	const pctLabel = $derived(`${Math.round(progress.rawPct)}%`);
 </script>
 

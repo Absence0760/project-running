@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatPrice } from './format_price.js';
+import { fromMinorUnits } from './minor_units.js';
 
 test('formatPrice: en-US uses $9.99', () => {
 	assert.equal(formatPrice(9.99, { locale: 'en-US' }), '$9.99');
@@ -29,4 +30,37 @@ test('formatPrice: ja-JP shows USD with cents (amount is dollars, not yen)', () 
 
 test('formatPrice: explicit currency override beats the USD default (real localized price path)', () => {
 	assert.equal(formatPrice(9.99, { locale: 'en-US', currency: 'EUR' }), '€9.99');
+});
+
+test('formatPrice: a zero-decimal currency renders whole, with no forced cents', () => {
+	const formatted = formatPrice(1000, { locale: 'ja-JP', currency: 'JPY' });
+	assert.ok(formatted.includes('1,000'), `expected a whole 1,000 in ${formatted}`);
+	assert.ok(!formatted.includes('.00'), `a yen amount has no minor unit: ${formatted}`);
+});
+
+test('formatPrice: a ¥1,000 donation round-trips from minor units at full value', () => {
+	// Stripe hands a zero-decimal amount over in the BASE unit, so 1000 is
+	// ¥1,000. The old blanket `/ 100` rendered this as ¥10.
+	const formatted = formatPrice(fromMinorUnits(1000, 'JPY'), {
+		locale: 'en-US',
+		currency: 'JPY'
+	});
+	assert.equal(formatted, '¥1,000');
+});
+
+test('formatPrice: a three-decimal currency keeps all three', () => {
+	const formatted = formatPrice(fromMinorUnits(1500, 'KWD'), {
+		locale: 'en-US',
+		currency: 'KWD'
+	});
+	assert.ok(formatted.includes('1.500'), `expected three decimals in ${formatted}`);
+});
+
+test('formatPrice: the fallback path names the real currency, never a stray dollar sign', () => {
+	// An unusable currency code makes Intl throw. The old fallback printed
+	// `$` over whatever the amount actually was.
+	const formatted = formatPrice(9.99, { locale: 'en-US', currency: 'ZZ' });
+	assert.ok(!formatted.includes('$'), `must not claim dollars: ${formatted}`);
+	assert.ok(formatted.includes('9.99'), `expected the amount in ${formatted}`);
+	assert.ok(formatted.includes('ZZ'), `expected the currency code in ${formatted}`);
 });

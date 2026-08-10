@@ -456,6 +456,12 @@ A user-facing distance, pace, speed or elevation on the Flutter apps is formatte
 
 Two corollaries. **Don't add a second formatter beside the shared one** — `social_service.dart` grew its own km-only `fmtPace`, so the event target-pace metric disagreed with the unit-aware distance printed next to it. And **an i18n key names the concept, not the unit**: the message takes an already-formatted `{distance}`, so `racesKmAway` was renamed to `racesDistanceAway`; a key that claims kilometres is how the next edit reintroduces them.
 
+## Web money crosses the minor-unit boundary through `minor_units`, never `/ 100`
+
+Every `*_cents` column holds a Stripe amount in the currency's **minor** unit, and 100 is not that unit's scale in every currency. Stripe stores a zero-decimal currency (JPY, KRW, VND, CLP, ISK, XOF…) in its **base** unit — a ¥1,000 donation arrives as `1000` — and a three-decimal one (BHD, JOD, KWD, OMR, TND) in thousandths, where it further requires the amount to be a multiple of 10. So convert with `fromMinorUnits(amountMinor, currency)` / `toMinorUnits(amountMajor, currency)` in `src/lib/format/minor_units.ts`, which reads the scale off the currency (Intl first, with Stripe's explicit tables as the fallback). A blanket `/ 100` renders that yen donation as ¥10 on a public feed; a blanket `* 100` charges a host a hundredfold.
+
+`formatPrice` takes a **major**-unit amount and sets no fraction-digit override — the currency's own convention is the correct one, and forcing two prints ¥1,000.00 and truncates KWD 1.500 to 1.50. A source guard in `minor_units.test.ts` fails the suite on a hard-coded 100 beside a cents identifier.
+
 ## Mobile create/edit-entity forms — `showFullScreenForm`
 
 On the Flutter apps, every "add / edit X" form presents as a full-screen dialog built through `showFullScreenForm<T>(context, title:, builder:)` in `lib/widgets/full_screen_form.dart` (see [decisions.md § 129](decisions.md)). It pushes a `MaterialPageRoute(fullscreenDialog: true)` wrapping the body in `Scaffold` + `AppBar(title)` + `SafeArea`; lay the body out with `FullScreenFormBody(children: [...])` and label field groups with `FormSectionLabel`.
