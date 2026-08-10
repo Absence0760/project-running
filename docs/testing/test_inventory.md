@@ -872,7 +872,12 @@ tests-e2e/
   routes/
     list.spec.ts               — /routes (search, filter, tab switch)
     detail.spec.ts             — /routes/[id] (star, public toggle, tag add+remove, review submit + DB upsert)
+    detail-load-failure.spec.ts — /routes/[id] a failed read is not a deleted route: a 500 on the route read renders the retryable load error, never the not-found line, and Retry recovers
     import.spec.ts             — /routes Import-route modal: drop a GPX → preview → Save → land on /routes/[new]
+  challenges/
+    detail-load-failure.spec.ts — /challenges/[id] a failed read is not a missing challenge: the load error with Retry renders ahead of the not-found line, and a failed leaderboard read reports itself rather than reading as an absent challenge
+  fundraising/
+    detail-load-failure.spec.ts — /fundraisers/[id] read failures seen as an ANONYMOUS donor (the only spec that visits the page logged out, which is what caught the layout auth guard never listing `/fundraisers/`): a failed campaign read shows the retryable error instead of "isn't available", and a failed totals or feed read reports that panel without blanking the page
   plans/
     list.spec.ts               — /plans (list + drill into /plans/[id])
     create.spec.ts             — /plans wizard end-to-end: create → land on detail → abandon → delete
