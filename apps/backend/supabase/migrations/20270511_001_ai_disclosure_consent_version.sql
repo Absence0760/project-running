@@ -171,6 +171,11 @@ grant execute on function withdraw_ai_disclosure_consent() to authenticated, ser
 -- through these two names (packages/api_client). Accepting v1 is the
 -- correct record for the copy they show, so they stay as the v1 entry
 -- points rather than being redirected at a scope their UI never described.
+--
+-- Superseded later the same day: mobile now presents the widened copy and
+-- calls record_ai_disclosure_consent() / withdraw_ai_disclosure_consent()
+-- directly, so nothing calls these two wrappers today. They are kept as the
+-- v1 rung of the ladder, not as a mobile entry point. See decisions.md § 573.
 create or replace function record_coach_consent()
 returns timestamptz
 language plpgsql
