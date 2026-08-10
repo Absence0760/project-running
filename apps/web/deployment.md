@@ -14,7 +14,7 @@ The web app has two parts:
 
 1. **Static site** — every route except the server-backed `/api/*` paths. SvelteKit prerenders / SPA-renders these. Served from S3 (private bucket) via CloudFront with Origin Access Control (OAC).
 2. **Server-side `/api/coach/+server.ts`** — needs a runtime that can stream Anthropic responses back to the client. Deployed as a Node 24 Lambda Function URL; CloudFront routes `/api/coach/*` to it as a separate behaviour on the same distribution.
-3. **Server-side `/api/routes/generate/+server.ts`** — distance-targeted loop generation. Calls the self-hosted GraphHopper `round_trip` engine, which must never be reachable from the browser (the user's start coordinates would otherwise leave our infra). Deployed as its own Node 24 Lambda Function URL; CloudFront routes `/api/routes/generate*` to it as a separate behaviour. See [decisions.md § 137](../../docs/architecture/decisions.md#137-generate-a-route-by-distance-moves-server-side-to-a-dedicated-lambda--self-hosted-graphhopper-round_trip).
+3. **Server-side `/api/routes/generate/+server.ts`** — distance-targeted loop generation. Calls the self-hosted GraphHopper `round_trip` engine, which must never be reachable from the browser (the user's start coordinates would otherwise leave our infra). Deployed as its own Node 24 Lambda Function URL; CloudFront routes `/api/routes/generate*` to it as a separate behaviour. See [decisions.md § 575](../../docs/architecture/decisions.md#575-generate-a-route-by-distance-moves-server-side-to-a-dedicated-lambda--self-hosted-graphhopper-round_trip).
 
 Same domain, same CORS posture for both halves. No API Gateway in front of the Lambda — Function URLs are free, support response streaming, and skip the per-request API Gateway cost. ACM cert lives in `us-east-1` (CloudFront only reads from there, regardless of where the rest of the stack runs).
 
@@ -207,7 +207,7 @@ The only SSR route in the app, and the only one that costs money to run.
 
 ## Generate-route `/api/routes/generate` specifics — Lambda
 
-Distance-targeted loop generation (decisions §137). `apps/web/lambda/generate-route/` wraps `$lib/routes/generate/handler` as a non-streaming JSON Function URL handler (mirroring `lambda/coach` + `lambda/share-route`); `build.mjs` bundles via esbuild → `dist/generate-route.zip`. CloudFront routes `/api/routes/generate*` to it; CI's `release-web.yml` updates the Lambda code on every published `web@*` GitHub Release.
+Distance-targeted loop generation (decisions §575). `apps/web/lambda/generate-route/` wraps `$lib/routes/generate/handler` as a non-streaming JSON Function URL handler (mirroring `lambda/coach` + `lambda/share-route`); `build.mjs` bundles via esbuild → `dist/generate-route.zip`. CloudFront routes `/api/routes/generate*` to it; CI's `release-web.yml` updates the Lambda code on every published `web@*` GitHub Release.
 
 **Why a server-side hop at all.** The browser must never call GraphHopper directly — the request carries the user's start coordinates, and `GRAPHHOPPER_URL` is a server-only env (never `PUBLIC_`) so those coordinates stay inside our infra. The Lambda is the only thing that talks to the engine. The same posture now holds on the OSRM side: the route builder's manual snapping/routing rides the osrm-proxy Lambda below (issue #198), so no routing engine is reachable from the browser.
 

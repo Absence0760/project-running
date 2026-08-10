@@ -5,7 +5,7 @@
 not just where the street grid happens to be roughly circular. Successor to the
 polygon generator ([route_loop_generation.md](route_loop_generation.md), v2, now
 retired) and the GraphHopper `round_trip` fallback
-([decisions §137](../architecture/decisions.md)). Written 2026-06-10 after a user
+([decisions §575](../architecture/decisions.md)). Written 2026-06-10 after a user
 observed that even with good distance accuracy, the generated route "still didn't
 use the loop in the neighbourhood."
 
@@ -92,7 +92,7 @@ standalone Go sidecar; the only remaining work is the operator-gated Fly deploy.
   `generate-loop.spec.ts` reframed onto graph-cycle.
 - **P3 — `release-graph-cycle.yml`** (deploys the Fly app on a `graph-cycle@*`
   tag, mirroring `release-osrm.yml`), Terraform Lambda-env wiring, docs (this
-  doc + decisions §137 + the sub-processor changelog).
+  doc + decisions §575 + the sub-processor changelog).
 
 **Live measurement** (local Virginia extract, 405 MB → **14.2 M nodes / 29.4 M
 edges**, graph built in **27.7 s**; 5 km target):
@@ -263,7 +263,7 @@ P1 is purely the prod graph build, with no remaining algorithm risk.)
   (graph-cycle-first + round_trip fallback) + selection reuse + unit tests (mocked
   sidecar); polygon retired; `+server.ts` / Lambda parity; e2e reframed.
 - **P3 — ship — ✅ DONE (code) / operator-gated (deploy)**: live measurement (VA
-  extract), Lambda + Terraform wiring, `release-graph-cycle.yml`, docs/§137 +
+  extract), Lambda + Terraform wiring, `release-graph-cycle.yml`, docs/§575 +
   sub-processor note. The Fly app create + volume + PBF seed + secret + first
   deploy need operator access (§ Deploy handoff).
 
@@ -307,7 +307,7 @@ P1 is purely the prod graph build, with no remaining algorithm risk.)
 
 The proposal above is the original design record. For the as-shipped system see:
 **§ Built results** + **§ Deploy handoff** (above), `apps/graph_cycle/README.md`
-(the sidecar), and [decisions §137 amendment](../architecture/decisions.md). The
+(the sidecar), and [decisions §575 amendment](../architecture/decisions.md). The
 algorithm was ported verbatim from the P0 spike; nothing in the design changed at
 build time beyond the two resolved decisions and the review fixes.
 

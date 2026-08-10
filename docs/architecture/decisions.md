@@ -4,6 +4,8 @@ Short records of non-obvious choices that the code alone doesn't explain. Reach 
 
 This is not a strict ADR template — each entry is a few paragraphs: what we decided, why, and what we traded away. Append new entries to the bottom; don't rewrite history. Date them when you know the date.
 
+**Numbering.** A new entry takes the next number **above the current maximum heading number** — never the next gap, and never a number you inferred from the entry count. Several sessions share one checkout, so two appending on the same day will otherwise pick the same number; 104, 137 and 178 each ended up claimed by two unrelated entries that way, and 137 alone had 49 inbound references split across both meanings before it was untangled. The numbers are identifiers, not an ordering: the file is not monotonic, gaps are expected, and an entry never moves once written — renumber a collision rather than relocating anything. `apps/web/src/lib/decisions_numbering_guard.test.ts` fails CI on a repeated number.
+
 ---
 
 ## 1. Both watches are native: Apple Watch is Swift / SwiftUI, Wear OS is Kotlin / Compose-for-Wear
@@ -2513,7 +2515,7 @@ Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-ret
 
 ---
 
-## 104. Overlapping start pins list their routes; routes can be pinned to keep them visible
+## 574. Overlapping start pins list their routes; routes can be pinned to keep them visible
 
 **Decided (2026-05-31):** two follow-ons to the hover-preview model (§ 101 / § 102), both on web + the mobile twin.
 
@@ -2527,7 +2529,7 @@ Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-ret
 
 **Decided (2026-05-31):** clicking *any* route surface on `/routes/heatmap` — a list row, a map dot, a previewed line, or an overlap-popup row — used to navigate to `/routes/[id]`. A single mis-click yanked the user off the discovery map, discarding their filters, pan, and kept routes; the dot was the worst offender (it opened a popup whose primary action was the same navigation). The owner flagged this as bad UX.
 
-**A click now *inspects*, never *leaves*.** Clicking a route toggles "keep on map" (draws / removes its violet line) everywhere. Navigation moved behind an explicit, labelled **"View route →"** link — one per sidebar row, one per overlap-popup row. The route dot no longer opens a navigable popup at all; it just keeps / un-keeps. This collapses the older two-control model (§ 104: a separate keep button + a click-to-navigate row) into one: the row body *is* the keep target, and the old pin button is replaced by the View link. Power users keep a fast path — the View link is a real `<a href>`, so ctrl/cmd-click and right-click still open the detail page directly. Club pins are unchanged (their popup is informational, its only action a "View club" link).
+**A click now *inspects*, never *leaves*.** Clicking a route toggles "keep on map" (draws / removes its violet line) everywhere. Navigation moved behind an explicit, labelled **"View route →"** link — one per sidebar row, one per overlap-popup row. The route dot no longer opens a navigable popup at all; it just keeps / un-keeps. This collapses the older two-control model (§ 574: a separate keep button + a click-to-navigate row) into one: the row body *is* the keep target, and the old pin button is replaced by the View link. Power users keep a fast path — the View link is a real `<a href>`, so ctrl/cmd-click and right-click still open the detail page directly. Club pins are unchanged (their popup is informational, its only action a "View club" link).
 
 This is **web-only for now**: the mobile twin already avoids the mis-click trap (a tap selects → shows a route card → the card's button navigates), so it has no equivalent bug to fix. Whether mobile should adopt the same click-keeps model (rather than its select-card) is an open product question, not a parity regression.
 
@@ -2930,7 +2932,7 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
-## 137. Generate-a-route-by-distance moves server-side to a dedicated Lambda + self-hosted GraphHopper round_trip
+## 575. Generate-a-route-by-distance moves server-side to a dedicated Lambda + self-hosted GraphHopper round_trip
 
 **Decided (2026-06-09):** the "generate a loop of N km from here" feature moves off the in-browser heuristic and onto a server-side call to a self-hosted **GraphHopper** `round_trip` engine, fronted by its own AWS Lambda Function URL (mirroring the coach + share Lambdas). The old client path scaffolded a radial polygon at a guessed radius, snapped it to roads via OSRM, and **bisected** the radius across ~4 latency-bound iterations to home in on the target distance. The single-radius knob is a poor lever on lopsided road networks — when the reachable streets are dense on one side and sparse on the other, scaling one radius can't hit the target without overshooting badly (a 5 km target produced an 8.22 km lasso), and each correction costs a full round-trip so the loop runs out of iterations before it converges. GraphHopper's `round_trip` algorithm targets the requested distance *inside* the engine per call, so a single request lands close; we race a few seeds (`heading`/seed variations) server-side and pick the best-shaped loop by **enclosed-area efficiency** (`apps/web/src/lib/routes/generate/select.ts`) so the result is a real loop, not a there-and-back spur.
 
@@ -3416,7 +3418,7 @@ Before this, the three were inconsistent: web committed `.env.development` (Vite
 - **Why not a per-site HTML scraper** (the `§ 168` deferral): CTLive is an authenticated JSON API, so the durable path is the same server-side API call + dedup the RunSignUp leg uses, not the brittle/abusive HTML crawl the deferral warned against. RaceResult / UltraSignup stay deferred precisely because they lack an equivalently clean API surface; manual paste remains their non-API path.
 - **Not built**: the opt-in toggle UI (web Settings checkbox + mobile switch) for the engagement streams — the pref is read server-side today; a per-recipient send cap / frequency cap across the two streams; analytics on drip open/convert. Deferred.
 
-## 178. Route-photo server-side thumbnails + EXIF strip reuse the run-photo worker shape — a `route_photo_process` kind with bucket-aware backend methods, not a copied handler
+## 576. Route-photo server-side thumbnails + EXIF strip reuse the run-photo worker shape — a `route_photo_process` kind with bucket-aware backend methods, not a copied handler
 
 **Decided (2026-06-20, migration `20270224_001`).** The deferred half of roadmap row 8 (server-side thumbnails + an EXIF worker for route photos) ships as the exact sibling of the run-photo `photo_process` path, not a parallel implementation:
 

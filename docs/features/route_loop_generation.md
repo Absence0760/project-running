@@ -6,10 +6,10 @@ when the v3 graph-cycle generator shipped: graph-cycle searches the real foot
 graph and beat the polygon sweep at every test start (clean loops where the
 polygon found zero), so polygon added no coverage as a middle tier. See
 [graph_cycle_loop_generation.md](graph_cycle_loop_generation.md) +
-[decisions §137 amendment](../architecture/decisions.md). Kept as a historical
+[decisions §575 amendment](../architecture/decisions.md). Kept as a historical
 design record. *Original status (2026-06-09): BUILT — generator + polygon-first
 integration shipped.* Augmented the GraphHopper `round_trip` generator
-([decisions §137](../architecture/decisions.md)) for the "Generate a route by
+([decisions §575](../architecture/decisions.md)) for the "Generate a route by
 distance" feature. Written 2026-06-09 after a user reported generated loops
 radiating out on a long road instead of using the dense street grid near the
 start; built 2026-06-10. **Refined after a multi-start, multi-distance
@@ -162,7 +162,7 @@ good loop, replacing `round_trip`'s seed re-roll.
   *largest-achievable-loop probe + 3-way choice is DEFERRED* (see §Loop-poor
   fallback). ~1 day remaining.
 - **P4 — tests + ship**: unit tests (pure placement/scoring, mocked engine) +
-  e2e happy path + measure across density tiers + docs/§137 + Lambda parity +
+  e2e happy path + measure across density tiers + docs/§575 + Lambda parity +
   tuning. ~1 day.
 
 **Total ≈ 3.5–4 days.**

@@ -186,7 +186,7 @@ lambda/
                     # GRAPH_CYCLE_URL/GRAPHHOPPER_URL are server-only. Enforces a
                     # DB-backed per-user throttle (check_rate_limit, bucket
                     # 'generate-route', 60/h, fail-closed) on top of the per-IP WAF —
-                    # issue #339, $lib/routes/rate_limit.ts. Decisions §137/§204/§260.
+                    # issue #339, $lib/routes/rate_limit.ts. Decisions §575/§204/§260.
   osrm-proxy/       # GET-only JSON Lambda for /api/routes/osrm/* — the server hop for
                     # the route builder's OSRM waypoint snapping/routing (issue #198,
                     # decisions §243). Wraps $lib/routes/osrm_proxy/handler (validates +
