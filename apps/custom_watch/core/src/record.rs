@@ -95,6 +95,19 @@ pub const MIN_MOVING_SPEED_MPS: f64 = 0.5;
 /// the constant in `run_recorder._distanceToSegmentMetres`.
 pub const METRES_PER_DEGREE_LAT: f64 = 111_320.0;
 
+/// How many closed laps wait for the app's drain between events
+/// ([`Recorder::pop_closed_lap`]).
+///
+/// A cap rather than a growable queue because this is `no_std` — and no cap is
+/// large enough on its own: one accepted fix after a throttled-mode dropout can
+/// carry the moving-time axis past an unbounded number of boundaries (a two-hour
+/// canyon void at the five-minute rung is 24), so the catch-up in
+/// [`Recorder::check_auto_lap`] is bounded by the room left here instead. The
+/// lap that does not fit is folded into the closing one rather than closed and
+/// dropped: the run's lap COUNT on the wrist and the lap records in the synced
+/// blob have to be the same number.
+pub const PENDING_LAP_CAP: usize = 16;
+
 /// Auto-lap boundary of the default trigger ([`AutoLap::Km1`]): the current lap
 /// closes on the first accepted fix that carries it past this distance. A
 /// manual lap resets the countdown, so the boundary is always measured from the
@@ -1087,9 +1100,8 @@ pub struct Recorder {
     /// Closed laps awaiting flash persistence, drained by the app's record
     /// task via [`pop_closed_lap`](Recorder::pop_closed_lap). A queue rather
     /// than `last_lap` alone because one throttled-mode fix can close several
-    /// laps at once and each must reach the stored blob. Sized for the worst
-    /// realistic multi-close (a long dropout in Expedition mode).
-    pending_laps: heapless::Deque<Lap, 16>,
+    /// laps at once and each must reach the stored blob.
+    pending_laps: heapless::Deque<Lap, PENDING_LAP_CAP>,
     /// Streaming grade estimate for live GAP, fed each accepted fix with the
     /// baro-preferred altitude.
     gap: GapEstimator,
@@ -2269,7 +2281,9 @@ impl Recorder {
             return;
         }
         if let Some(boundary) = self.auto_lap.distance_m() {
-            while self.distance_m - self.lap_start_distance_m >= 2.0 * boundary {
+            while self.catch_up_has_room()
+                && self.distance_m - self.lap_start_distance_m >= 2.0 * boundary
+            {
                 self.close_lap_at(self.lap_start_distance_m + boundary);
             }
             if self.distance_m - self.lap_start_distance_m >= boundary {
@@ -2277,13 +2291,27 @@ impl Recorder {
             }
         }
         if let Some(budget) = self.auto_lap.moving_s() {
-            while self.moving_s - self.lap_start_moving_s >= 2 * budget {
+            while self.catch_up_has_room() && self.moving_s - self.lap_start_moving_s >= 2 * budget
+            {
                 self.close_lap_at_moving(self.lap_start_moving_s + budget);
             }
             if self.moving_s - self.lap_start_moving_s >= budget {
                 self.close_lap();
             }
         }
+    }
+
+    /// Whether the catch-up may place another boundary, keeping one slot back
+    /// for the close that ends it.
+    ///
+    /// The queue drains between events, never inside one, so a catch-up that
+    /// filled it would go on closing laps the counter counts and the blob never
+    /// receives — the wrist would finish reading one lap total and the synced
+    /// row another. Stopping short folds the boundaries that do not fit into the
+    /// closing lap instead, which is what a single-boundary close already does
+    /// with its overshoot.
+    fn catch_up_has_room(&self) -> bool {
+        self.pending_laps.len() + 1 < PENDING_LAP_CAP
     }
 
     /// The runner's local time of day, extrapolated from the receiver's last
@@ -2359,6 +2387,9 @@ impl Recorder {
     /// instead of merging them all into one giant lap (which silently corrupts
     /// the lap counter/index and every split thereafter).
     fn close_lap_at(&mut self, close_distance_m: f64) {
+        if self.pending_laps.is_full() {
+            return;
+        }
         let elapsed = self.elapsed_s();
         let lap_distance = close_distance_m - self.lap_start_distance_m;
         let open_distance = self.distance_m - self.lap_start_distance_m;
@@ -2378,9 +2409,9 @@ impl Recorder {
             moving_s: lap_moving,
         };
         self.last_lap = Some(closed);
-        // Queue for flash persistence (v2 lap records). A full queue drops
-        // the NEW close from storage only — display state above is already
-        // set — and can only happen if the app stops draining between events.
+        // Queue for flash persistence (v2 lap records). The full-queue case is
+        // refused above rather than dropped here: display state and the stored
+        // blob move together or not at all.
         let _ = self.pending_laps.push_back(closed);
         self.lap_index = self.lap_index.saturating_add(1);
         self.lap_start_distance_m = close_distance_m;
@@ -2399,6 +2430,9 @@ impl Recorder {
     /// lap would let the anchor drift a second per lap, and a 60-lap race would
     /// bank a minute of moving time that no lap contains.
     fn close_lap_at_moving(&mut self, close_moving_s: u32) {
+        if self.pending_laps.is_full() {
+            return;
+        }
         let lap_moving = close_moving_s.saturating_sub(self.lap_start_moving_s);
         let open_moving = self.moving_s - self.lap_start_moving_s;
         let frac = if open_moving > 0 {
@@ -3536,6 +3570,39 @@ mod tests {
         assert_eq!(r.pop_closed_lap().unwrap().moving_s, 300);
         assert_eq!(r.pop_closed_lap().unwrap().moving_s, 400);
         assert!(r.pop_closed_lap().is_none());
+    }
+
+    #[test]
+    fn a_catch_up_past_the_queue_folds_instead_of_closing_laps_that_vanish() {
+        // A two-hour canyon void at the five-minute rung banks 24 budgets on one
+        // accepted fix — more boundaries than the drain-between-events queue
+        // holds. The catch-up must stop where the queue does: every lap the
+        // counter counted has to be a lap the synced blob carries, or the wrist
+        // and the Supabase row disagree about how many laps the race had.
+        let mut r = Recorder::new();
+        r.set_auto_lap(AutoLap::Min5);
+        r.set_fix_interval_s(60);
+        r.start(0);
+        r.on_fix(&fix(north(0.0), -105.0, 1.5, 0));
+        // 7650 m over 5100 s = 1.5 m/s: inside the interval-scaled jump ceiling
+        // (10 m/s * 5100 s) and 17 budgets of moving time.
+        r.on_fix(&fix(north(7650.0), -105.0, 1.5, 5100));
+        let s = r.snapshot();
+        let mut queued = 0;
+        let mut banked_moving_s = 0;
+        while let Some(lap) = r.pop_closed_lap() {
+            queued += 1;
+            banked_moving_s += lap.moving_s;
+        }
+        assert_eq!(queued, PENDING_LAP_CAP, "the queue filled but never spilled");
+        assert_eq!(
+            u32::from(s.lap) - 1,
+            queued as u32,
+            "the lap counter must not run ahead of what flash receives"
+        );
+        // Nothing is lost, only merged: the closing lap absorbs the boundaries
+        // that did not fit, so the banked moving time is still the whole void.
+        assert_eq!(banked_moving_s, 5100);
     }
 
     #[test]
