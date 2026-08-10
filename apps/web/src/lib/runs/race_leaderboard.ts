@@ -23,7 +23,11 @@ export interface LeaderboardSortable {
 export function compareLeaderboard(a: LeaderboardSortable, b: LeaderboardSortable): number {
 	const byDistance = (b.distance_m ?? 0) - (a.distance_m ?? 0);
 	if (byDistance !== 0) return byDistance;
-	const byElapsed = (a.elapsed_s ?? Infinity) - (b.elapsed_s ?? Infinity);
-	if (byElapsed !== 0) return byElapsed;
+	// Compared, not subtracted: two runners who both lack an elapsed time gave
+	// Infinity - Infinity = NaN, and `NaN !== 0` short-circuited the user_id
+	// discriminator this module exists to reach.
+	const aElapsed = a.elapsed_s ?? Infinity;
+	const bElapsed = b.elapsed_s ?? Infinity;
+	if (aElapsed !== bElapsed) return aElapsed - bElapsed;
 	return a.user_id < b.user_id ? -1 : a.user_id > b.user_id ? 1 : 0;
 }
