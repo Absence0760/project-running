@@ -457,3 +457,46 @@ func TestRedisHub_DedupHistoryTail(t *testing.T) {
 		t.Fatalf("dedupHistoryTail must compare BPM by value; trimmed a non-matching ping")
 	}
 }
+
+// TestRedisHub_UnsubDuringPublishDoesNotPanic pins the teardown race on the
+// Redis path. pubsub.Close() does not wait for the forwarder goroutine, so a
+// message already handed to it is forwarded AFTER the subscription is torn
+// down. Closing the subscriber channel from unsub while that send is in flight
+// panicked with "send on closed channel" — a select's default arm does not
+// rescue a send on a closed channel, and the panic is on a bare goroutine
+// outside any handler's recover, so it killed the whole worker process
+// (job-drain loop included) on an ordinary spectator disconnect.
+func TestRedisHub_UnsubDuringPublishDoesNotPanic(t *testing.T) {
+	for round := 0; round < 40; round++ {
+		hub, _, teardown := newRedisTestHub(t)
+		ctx, cancel := context.WithCancel(context.Background())
+
+		_, ch, unsub, err := hub.SubscribeWithHistory(ctx, "run-A", 0)
+		if err != nil {
+			t.Fatalf("round %d: subscribe: %v", round, err)
+		}
+		stop := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					hub.Publish("run-A", Ping{Lat: 51.5, Lng: -0.1})
+				}
+			}
+		}()
+		// Let pings start flowing, and keep the buffer draining so the
+		// forwarder's send case stays live rather than falling to `default`.
+		go func() {
+			for range ch {
+			}
+		}()
+		time.Sleep(2 * time.Millisecond)
+
+		unsub()
+		close(stop)
+		cancel()
+		teardown()
+	}
+}
