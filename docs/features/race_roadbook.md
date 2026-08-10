@@ -40,11 +40,19 @@ Open-Meteo (`routes/elevation.ts`) so effort can fire on any route.
 
 `parseCutoff(marker.meta)` (reused from `route_markers`) yields a limit:
 `cutoff_elapsed_s` directly, or `cutoff_clock − startClock` (needs a start
-clock). A bare clock carries no day, so for a race longer than 24h that raw
-offset is ambiguous — `14:00` on an `08:00` start is hour 6 *or* hour 30. The
-limit snaps to the whole day nearest that leg's projected arrival (`k ≥ 0` days
-added, never resolving before the start), so a 30h checkpoint resolves to 30h,
-not the same-day 6h; an at-or-before-start clock still wraps to ≥ 24h.
+clock). A bare clock carries no day, so it resolves to that wall clock's **first
+occurrence after the start** and nothing else — `14:00` on an `08:00` start is
+hour 6, and a clock equal to the start reads as the 24h limit it is meant to
+express rather than a 0-second window. A limit past 24h has to be authored as
+`cutoff_elapsed_s`, the only field that carries a day.
+
+The limit used to snap to whichever whole day sat nearest that leg's projected
+arrival, which made it a function of the goal time: a slower goal pushed the
+projection over a day boundary and turned a blown cutoff into "safe, 12h to
+spare", and two spectators of the same live run saw different limits for the
+same checkpoint. A cutoff is a property of the race, so it may not depend on how
+fast anyone is expected to run.
+
 `marginS = limit − projectedElapsed`; `status` is
 `miss` (negative), `tight` (within `CUTOFF_TIGHT_S` = 30 min), else `safe`.
 
