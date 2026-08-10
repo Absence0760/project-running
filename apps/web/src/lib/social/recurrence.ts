@@ -102,6 +102,13 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 	const hardCap = event.recurrence_count ?? Infinity;
 	const results: Date[] = [];
 	const step = event.recurrence_freq === 'biweekly' ? 14 : 7;
+	// The walk always starts at `starts_at` (occurrences before `from` still
+	// count toward `recurrence_count`), so its iteration budget has to reach the
+	// far end of the requested window. Budgeting off `max` — a RESULT count —
+	// stopped the walk `max` periods after the series began, so `nextInstanceAfter`
+	// (max = 1) reported "no next occurrence" for every series older than a
+	// fortnight.
+	const scanEnd = until && until < to ? until : to;
 	const byday: Weekday[] =
 		event.recurrence_freq === 'monthly'
 			? ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] // unused for monthly; we use the day-of-month of starts_at
@@ -114,8 +121,9 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 		// month's last day (Jan-31 → Feb-28/29). Stepping a running cursor would
 		// let a clamp permanently shrink the day-of-month (Jan-31 → Feb-28 →
 		// Mar-28), drifting off the intended day.
+		const monthBudget = monthsBetween(start, scanEnd, !!event.timezone) + 1;
 		for (let i = 0; produced < hardCap; i++) {
-			if (i >= max * 12) break;
+			if (i > monthBudget) break;
 			const cursor = addMonthsClamped(start, i, !!event.timezone);
 			if (until && cursor > until) break;
 			// recurrence_count caps TOTAL occurrences from starts_at, not the
@@ -142,7 +150,8 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 	// midnight time-of-day (d at midnight < start at, say, 09:00).
 	const anchor = wc.startOfWeek(start);
 	const startDayOnly = wc.startOfDay(start);
-	for (let dayOffset = 0; dayOffset < max * step * 7; dayOffset++) {
+	const dayBudget = Math.floor((scanEnd.getTime() - anchor.getTime()) / 86_400_000) + step + 1;
+	for (let dayOffset = 0; dayOffset <= dayBudget; dayOffset++) {
 		const d = wc.addDays(anchor, dayOffset);
 		if (d < startDayOnly) continue;
 		if (until && d > wc.addDays(until, 1)) break;
@@ -204,6 +213,14 @@ function addDays(d: Date, n: number): Date {
 	const c = new Date(d);
 	c.setDate(c.getDate() + n);
 	return c;
+}
+
+function monthsBetween(a: Date, b: Date, useUtc: boolean): number {
+	const ay = useUtc ? a.getUTCFullYear() : a.getFullYear();
+	const am = useUtc ? a.getUTCMonth() : a.getMonth();
+	const by = useUtc ? b.getUTCFullYear() : b.getFullYear();
+	const bm = useUtc ? b.getUTCMonth() : b.getMonth();
+	return (by - ay) * 12 + (bm - am);
 }
 
 function addMonthsClamped(base: Date, months: number, useUtc: boolean): Date {
