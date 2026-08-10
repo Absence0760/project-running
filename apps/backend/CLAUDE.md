@@ -231,6 +231,18 @@ grant select on public.<view> to <intended audience>;
 
 `view_write_privileges_test.sql` pins this with an information_schema catch-all, so a view created without the reset fails the pgtap job.
 
+### Every new TABLE must grant its own client surface
+
+The mirror-image trap of the view rule above, and the one that actually bit. The `postgres`-owned default ACL for tables in `public` is `anon=Dxtm / authenticated=Dxtm / service_role=Dxtm` — TRUNCATE, REFERENCES, TRIGGER, MAINTAIN, and **none** of SELECT/INSERT/UPDATE/DELETE. So a `create table` in a migration produces a table no app role can read or write; RLS never even gets consulted, PostgREST just returns `42501 permission denied for table …`. This is the same class as the 2026-07-13 prod onboarding incident that produced `20270408_001_restore_role_grant_matrix.sql`, which made the whole matrix explicit — from that migration on, **the grant is the migration's job**. `20270411_001` created `global_segments` + `global_segment_efforts` three days later, granted EXECUTE on its two RPCs, and never granted the tables: the entire catalogue feature 42501'd from every client (only the SECURITY DEFINER leaderboard RPC worked, because it runs as the owner), and it broke two pgtap suites at fixture setup. Fixed forward in `20270512_001`. End every new table with the surface its policies were written against:
+
+```sql
+grant select on public.<table> to anon;                              -- if publicly readable
+grant select, insert, update, delete on public.<table> to authenticated;  -- only the verbs a policy covers
+grant select, insert, update, delete on public.<table> to service_role;   -- always the full set
+```
+
+Two catch-alls fail the pgtap job when this is skipped: `role_grant_matrix_test.sql` on the read side (every public base table must be readable by `authenticated`, table- or column-level) and `global_segment_grants_test.sql` on the write side (every public base table must carry full `service_role` DML — the check a zero-grant table trips).
+
 ### Every new function must pin `search_path`
 
 `create function` / `create or replace function` bodies must carry `set search_path = public` (add `, extensions` if the body references postgis/pg_trgm objects) — for SECURITY DEFINER functions it's a hijack defence, for plain invoker functions it silences the Supabase security advisor's "Function Search Path Mutable" lint and keeps resolution independent of the caller's session. The backfill was `20270415_001` (via `ALTER FUNCTION … SET`, never a body rewrite); `function_search_path_test.sql` is a pg_proc catch-all that fails the pgtap suite on any unpinned public function. The eight `public_*` views the same advisor flags as "Security Definer View" are intentional and stay definer — see decisions.md §244 before "fixing" them.
