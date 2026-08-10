@@ -49,11 +49,13 @@ test.describe('/clubs/[slug]', () => {
 
 		// Runner's display_name (Jared Howard, per seed) must surface in
 		// the .member-list. Strong tag inside the link, so anchor the
-		// query on the role text.
+		// query on the role text. The badge renders the localized NAME of
+		// the `club_members.role` value, never the stored token
+		// (decisions § 572).
 		const memberList = page.locator('.member-list');
 		await expect(memberList).toBeVisible({ timeout: 10_000 });
 		await expect(memberList.getByText('Jared Howard')).toBeVisible();
-		await expect(memberList.getByText('owner', { exact: true })).toBeVisible();
+		await expect(memberList.getByText('Owner', { exact: true })).toBeVisible();
 	});
 
 	test('Routes tab on Richmond Run Club: admin sees "+ New route" + "Transfer" affordances', async ({
