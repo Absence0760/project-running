@@ -150,6 +150,7 @@ Web-first (`decisions.md §24`). All paths under `apps/web/src/`.
 - **Run-detail** `apps/web/src/routes/runs/[id]/+page.svelte` — owner gets "Raise money for a charity" → FundraiserEditor; if a fundraiser exists, render `FundraiserCard` for all viewers.
 - **Event-detail** `apps/web/src/routes/clubs/[slug]/events/[id]/+page.svelte` — same affordance, organiser-gated; renders `FundraiserCard`.
 - **Share**: the public `/fundraisers/[id]` page is the share URL; add it to the existing share/copy-link affordance pattern (no new infra).
+- **Layout gate**: `/fundraisers/` is in `isAnonAllowed()` in `apps/web/src/routes/+layout.svelte` (shell-wrapped for a signed-in viewer, like `/clubs/` — `decisions.md §62`). Anon-readability is decided at three layers and all three have to agree: the anchor-visibility RLS, the anon `execute` grants on `fundraiser_totals` / `fundraiser_feed`, and this list. It was missing from the list until 2026-08-09, so the logged-out stranger the share URL exists for was bounced to `/login` while every backend layer was already open to them — the shipped e2e ran signed-in and never saw it. `tests-e2e/fundraising/detail-load-failure.spec.ts` runs anonymously and pins the whole path.
 
 ## Mobile implementation (Android + iOS twin)
 
