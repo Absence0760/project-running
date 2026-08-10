@@ -219,4 +219,102 @@ void main() {
       );
     });
   });
+
+  group('computeRunStreaks — bestSince bounds best to a period', () {
+    test('omitted still reports the all-time best', () {
+      expect(
+        computeRunStreaks(
+          [
+            localNoon(2024, 2, 1),
+            localNoon(2024, 2, 2),
+            localNoon(2024, 2, 3),
+            localNoon(2026, 5, 13),
+          ],
+          localNoon(2026, 5, 13),
+        ),
+        const RunStreaks(current: 1, best: 3),
+      );
+    });
+
+    test('drops a streak that ended before the period', () {
+      expect(
+        computeRunStreaks(
+          [
+            localNoon(2024, 2, 1),
+            localNoon(2024, 2, 2),
+            localNoon(2024, 2, 3),
+            localNoon(2026, 5, 13),
+          ],
+          localNoon(2026, 5, 13),
+          localNoon(2026, 1, 1),
+        ),
+        const RunStreaks(current: 1, best: 1),
+      );
+    });
+
+    test('a streak crossing into the period keeps its full length', () {
+      // 28 Dec → 3 Jan. The January card owns it, at seven days, not three.
+      final days = [
+        localNoon(2025, 12, 28),
+        localNoon(2025, 12, 29),
+        localNoon(2025, 12, 30),
+        localNoon(2025, 12, 31),
+        localNoon(2026, 1, 1),
+        localNoon(2026, 1, 2),
+        localNoon(2026, 1, 3),
+      ];
+      expect(
+        computeRunStreaks(days, localNoon(2026, 1, 31), localNoon(2026, 1, 1))
+            .best,
+        7,
+      );
+    });
+
+    test('a streak ending the day before the bound does not count', () {
+      final days = [
+        localNoon(2025, 12, 28),
+        localNoon(2025, 12, 29),
+        localNoon(2025, 12, 31),
+      ];
+      final out =
+          computeRunStreaks(days, localNoon(2026, 1, 31), localNoon(2026, 1, 1));
+      expect(out.best, 0, reason: 'nothing reaches January');
+      expect(out.current, 0);
+    });
+
+    test('picks the longest of several in-period streaks', () {
+      final days = [
+        // 5 days, all before the bound.
+        localNoon(2025, 6, 1),
+        localNoon(2025, 6, 2),
+        localNoon(2025, 6, 3),
+        localNoon(2025, 6, 4),
+        localNoon(2025, 6, 5),
+        // 2 days in period.
+        localNoon(2026, 3, 1),
+        localNoon(2026, 3, 2),
+        // 4 days in period — the answer.
+        localNoon(2026, 7, 10),
+        localNoon(2026, 7, 11),
+        localNoon(2026, 7, 12),
+        localNoon(2026, 7, 13),
+      ];
+      expect(
+        computeRunStreaks(days, localNoon(2026, 12, 31), localNoon(2026, 1, 1))
+            .best,
+        4,
+      );
+    });
+
+    test('a bound after the anchor admits nothing', () {
+      final out = computeRunStreaks(
+        [localNoon(2026, 5, 12), localNoon(2026, 5, 13)],
+        localNoon(2026, 5, 13),
+        localNoon(2027, 1, 1),
+      );
+      expect(out.best, 0);
+      // `current` is anchored at `today` and unaffected by the bound.
+      expect(out.current, 2);
+    });
+  });
 }

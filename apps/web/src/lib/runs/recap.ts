@@ -307,11 +307,14 @@ export function buildYearInRunningRecap(
 
 	// Streaks — pass the *full* run set (not just inYear) because a
 	// streak that started in the previous year still counts the days
-	// it covered in this year. Anchor "today" at Dec 31 23:59 local.
+	// it covered in this year. Anchor "today" at Dec 31 23:59 local, and
+	// bound `best` at Jan 1 so a streak that ended before this year is
+	// somebody else's card's headline, not this one's.
 	const endOfYear = new Date(year, 11, 31, 23, 59);
 	const streaks = computeRunStreaks(
 		runs.map((r) => new Date(r.started_at)),
 		endOfYear,
+		new Date(year, 0, 1),
 	);
 
 	const photoCount = Math.max(0, Math.trunc(extras.photoCount ?? 0));
@@ -446,6 +449,7 @@ export function buildMonthInRunningRecap(
 	const streaks = computeRunStreaks(
 		runs.map((r) => new Date(r.started_at)),
 		endOfMonth,
+		new Date(year, month - 1, 1),
 	);
 
 	const photoCount = Math.max(0, Math.trunc(extras.photoCount ?? 0));

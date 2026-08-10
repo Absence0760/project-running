@@ -73,6 +73,15 @@ export function interpolateAlongRoute(
  * polyline has < 2 waypoints. The runner's live position is rarely
  * exactly on the planned line (GPS drift, course offset), so we project
  * onto the nearest segment rather than requiring an exact match.
+ *
+ * Each segment is projected in its own local planar frame — accurate, since
+ * the frame is anchored at that segment's start — but the candidates are
+ * ranked by the great-circle distance to the projected foot, the way
+ * `route_snap.ts` does it. A perpendicular measured *inside* a segment's frame
+ * is scaled by the cosine of that segment's own start latitude, so the numbers
+ * are not comparable across segments: on an out-and-back the return limb
+ * anchors further along and always reports the smaller offset to a point
+ * equidistant from both, which flips the answer by the length of a limb.
  */
 export function distanceAlongRoute(
 	point: { lat: number; lng: number },
@@ -84,30 +93,24 @@ export function distanceAlongRoute(
 	const rPerDeg = 6_371_000 * deg;
 	let seen = 0;
 	let best = 0;
-	let bestPerp = Infinity;
+	let bestOffset = Infinity;
 	for (let i = 1; i < waypoints.length; i++) {
 		const a = waypoints[i - 1];
 		const b = waypoints[i];
 		const segLen = haversineM(a.lat, a.lng, b.lat, b.lng);
 		const cosLat = Math.cos(a.lat * deg);
-		const ax = 0;
-		const ay = 0;
 		const bx = lonDeltaDeg(a.lng, b.lng) * cosLat * rPerDeg;
 		const by = (b.lat - a.lat) * rPerDeg;
 		const px = lonDeltaDeg(a.lng, point.lng) * cosLat * rPerDeg;
 		const py = (point.lat - a.lat) * rPerDeg;
-		const abx = bx - ax;
-		const aby = by - ay;
-		const abLenSq = abx * abx + aby * aby;
+		const abLenSq = bx * bx + by * by;
 		const t =
-			abLenSq <= 0 ? 0 : Math.min(1, Math.max(0, (px * abx + py * aby) / abLenSq));
-		const projx = ax + abx * t;
-		const projy = ay + aby * t;
-		const dx = px - projx;
-		const dy = py - projy;
-		const perp = Math.sqrt(dx * dx + dy * dy);
-		if (perp < bestPerp) {
-			bestPerp = perp;
+			abLenSq <= 0 ? 0 : Math.min(1, Math.max(0, (px * bx + py * by) / abLenSq));
+		const footLat = a.lat + (b.lat - a.lat) * t;
+		const footLng = wrapLonDeg(a.lng + lonDeltaDeg(a.lng, b.lng) * t);
+		const offset = haversineM(point.lat, point.lng, footLat, footLng);
+		if (offset < bestOffset) {
+			bestOffset = offset;
 			best = seen + t * segLen;
 		}
 		seen += segLen;
