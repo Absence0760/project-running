@@ -371,7 +371,7 @@ When you spot a candidate fix that fits one of those patterns, stop and surface 
 
 ### A wait must name a signal only the thing being waited on can produce
 
-The rule behind the "real readiness signal" clause above, and the one three separate CI flakes broke at once ([decisions.md § 574](decisions.md)). A check that observes something *correlated* with readiness passes early and turns into a flake that reads as a bug somewhere else:
+The rule behind the "real readiness signal" clause above, and the one three separate CI flakes broke at once ([decisions.md § 577](decisions.md)). A check that observes something *correlated* with readiness passes early and turns into a flake that reads as a bug somewhere else:
 
 - **`pumpEventQueue()` is not a wait on an async service.** It runs a fixed number of event-loop turns; a cycle doing real disk I/O can outlast them, and the assertion then reads pre-completion state. Give the service a `@visibleForTesting` accessor that returns the in-flight future and `await` it. A fire-and-forget that outlives its test also writes into the directory `tearDown` just deleted — same defect.
 - **An intermediary's error is not a readiness signal.** A gateway answers `502/503/504` precisely *because* it could not reach the thing you are waiting for. Probe for a status the upstream itself authors (a handler's own `405`, a real password grant's `200`) and treat the 5xx family as not-ready.

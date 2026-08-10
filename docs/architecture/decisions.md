@@ -8072,7 +8072,7 @@ Wiring the read through `get_my_profile()` turned up something the flag-shaped d
 One deliberate divergence from web. Web offers the acceptance only when a *stale* record is on file; a user with nothing on record is expected to meet the disclosure at the Coach. Mobile offers it whenever the record is not current — missing or stale — because the route-detail notice has to lead somewhere, and "accept it in Settings" pointing at a screen with no accept control is worse than not pointing at all. The tile's copy switches between reviewing and updating; the withdrawal tile stays keyed to *anything* being on record, so the two controls answer different questions and can both be present.
 
 The route-detail 403 branches on the body's `code`, never on the bare status: the paywall answers 403 on the same endpoint, and a consent gap shown as a Pro upsell sends a runner to buy something that would not unlock it. The templated description keeps rendering underneath either way — the L1 baseline does not depend on any of this.
-## 574. Three green checks that were watching the wrong thing — a wait proves readiness only when it names an answer nothing else can give
+## 577. Three green checks that were watching the wrong thing — a wait proves readiness only when it names an answer nothing else can give
 
 **Date:** 2026-08-10
 
