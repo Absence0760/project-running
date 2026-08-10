@@ -15,21 +15,30 @@ pub const BASELINE_ML_PER_KG: f64 = 35.0;
 pub const DEFAULT_BASELINE_ML: f64 = 2000.0;
 /// Extra water per minute of logged exercise (~480 ml/hr sweat replacement).
 pub const EXERCISE_ML_PER_MIN: f64 = 8.0;
+/// Ceiling on the exercise add-on: four hours' worth (1.92 L). Past that the
+/// linear nudge stops being a nudge — a logged 12 h ultra would ask for 5.8 L
+/// of add-on and a 24 h effort ~11.5 L, which is not a daily baseline, it is a
+/// hyponatremia risk printed as a goal. Long-effort fluid belongs to the
+/// in-race plan ([`crate::fuel_plan`]), which allocates per leg against aid
+/// stations.
+pub const MAX_EXERCISE_MINUTES: f64 = 240.0;
 /// Targets round to this for a tidy number.
 pub const TARGET_ROUND_ML: f64 = 50.0;
 
 /// Daily water goal in ml from bodyweight + today's exercise minutes. Always
 /// returns a positive target (the flat baseline covers missing bodyweight).
+/// The exercise add-on stops scaling at [`MAX_EXERCISE_MINUTES`].
 pub fn hydration_target_ml(weight_kg: Option<f64>, exercise_minutes: Option<f64>) -> f64 {
     let baseline = match weight_kg {
         Some(w) if w > 0.0 => w * BASELINE_ML_PER_KG,
         _ => DEFAULT_BASELINE_ML,
     };
-    let exercise = match exercise_minutes {
-        Some(m) if m > 0.0 => m * EXERCISE_ML_PER_MIN,
+    let counted_minutes = match exercise_minutes {
+        Some(m) if m > 0.0 => m.min(MAX_EXERCISE_MINUTES),
         _ => 0.0,
     };
-    libm::round((baseline + exercise) / TARGET_ROUND_ML) * TARGET_ROUND_ML
+    libm::round((baseline + counted_minutes * EXERCISE_ML_PER_MIN) / TARGET_ROUND_ML)
+        * TARGET_ROUND_ML
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -99,6 +108,19 @@ mod tests {
         );
         assert_eq!(hydration_target_ml(Some(70.0), Some(60.0)), 2950.0);
         assert_eq!(hydration_target_ml(None, Some(30.0)), 2250.0);
+    }
+
+    /// Mirrors the web suite's "the exercise add-on stops scaling at four
+    /// hours" and "below the cap the add-on still scales linearly" cases. This
+    /// is the device a 12 h and a 24 h effort actually get logged on, so the
+    /// cap matters here more than anywhere it was ported from.
+    #[test]
+    fn the_exercise_add_on_stops_scaling_at_four_hours() {
+        let capped = hydration_target_ml(Some(70.0), Some(MAX_EXERCISE_MINUTES));
+        assert_eq!(capped, 4350.0);
+        assert_eq!(hydration_target_ml(Some(70.0), Some(720.0)), capped);
+        assert_eq!(hydration_target_ml(Some(70.0), Some(1440.0)), capped);
+        assert_eq!(hydration_target_ml(Some(70.0), Some(120.0)), 3400.0);
     }
 
     #[test]
