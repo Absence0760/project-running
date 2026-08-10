@@ -2,7 +2,9 @@ package graph
 
 import (
 	"math"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/paulmach/osm"
 )
@@ -147,5 +149,93 @@ func TestNearestNodeMatchesBruteForceHighLat(t *testing.T) {
 					qLat, qLng, gotD, bruteNearestDist(qLat, qLng))
 			}
 		}
+	}
+}
+
+// TestNearestNodeMatchesBruteForceSparseNetwork pins the ring-termination
+// invariant on a SPARSE network, where cells the width of gridCellM are mostly
+// empty. The ring sweep used to stop at the first ring that touched no
+// populated cell once it already held a candidate — but on a sparse graph an
+// empty ring routinely sits between the current best and a strictly closer node
+// further out, so that rule returned the wrong snap node (hundreds of metres
+// wrong, ~0.7% of queries over this generator). Every query must agree with a
+// brute-force scan.
+func TestNearestNodeMatchesBruteForceSparseNetwork(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	for trial := 0; trial < 300; trial++ {
+		b := newBuilder()
+		n := 3 + rng.Intn(12)
+		for i := 0; i < n; i++ {
+			b.addNode(int64(i), Coord{
+				Lat: 51.5 + metresToDegLat(rng.Float64()*4000),
+				Lng: -0.12 + metresToDegLng(rng.Float64()*4000, 51.5),
+			})
+		}
+		for i := 1; i < n; i++ {
+			b.addSegment(int64(i-1), int64(i))
+		}
+		g := b.finalize()
+
+		for q := 0; q < 40; q++ {
+			qLat := 51.5 + metresToDegLat(rng.Float64()*4000)
+			qLng := -0.12 + metresToDegLng(rng.Float64()*4000, 51.5)
+			got, ok := g.NearestNode(qLat, qLng)
+			if !ok {
+				t.Fatalf("trial %d query %d: no nearest on a %d-node graph", trial, q, n)
+			}
+			want := math.Inf(1)
+			for i := range g.lat {
+				if d := haversineM(qLat, qLng, g.lat[i], g.lng[i]); d < want {
+					want = d
+				}
+			}
+			gotD := haversineM(qLat, qLng, g.lat[got], g.lng[got])
+			if gotD > want+1e-6 {
+				t.Fatalf("trial %d query %d: NearestNode dist %.1f m != brute-force %.1f m",
+					trial, q, gotD, want)
+			}
+		}
+	}
+}
+
+// TestNearestNodeOffExtractStaysBounded pins the cost of a query far outside the
+// loaded extract — a runner whose start point is in a region the PBF doesn't
+// cover. The sweep must skip straight to the extract instead of walking every
+// 200 m ring in between: that walk is quadratic in the distance, so a
+// continental-scale offset used to spin for minutes inside a request handler
+// whose WriteTimeout is 30 s, with no cancellation.
+func TestNearestNodeOffExtractStaysBounded(t *testing.T) {
+	g := gridGraph(20, 20, 100, 51.5, -0.12)
+	gr := g.grid
+
+	// ~4000 km north of the extract.
+	qLat, qLng := 51.5+metresToDegLat(4_000_000), -0.12
+	cr, cc := gr.row(qLat), gr.col(qLng)
+
+	first := gr.ringToExtent(cc, cr)
+	last := gr.ringPastExtent(cc, cr)
+	if first < 10_000 {
+		t.Fatalf("expected the query to sit far outside the extract, first ring = %d", first)
+	}
+	// The number of rings that can hold data is the extract's own span, not the
+	// distance to it. 20x20 nodes at 100 m spacing spans ~2 km = ~10 cells.
+	if span := last - first; span > 64 {
+		t.Fatalf("ring window spans %d rings; expected it bounded by the extract extent", span)
+	}
+
+	start := time.Now()
+	got, ok := g.NearestNode(qLat, qLng)
+	elapsed := time.Since(start)
+	if !ok {
+		t.Fatal("NearestNode found nothing for an off-extract query")
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("off-extract query took %s; the ring sweep is not bounded by the extract", elapsed)
+	}
+	// The northernmost row of the grid is nearest; every node in it is equidistant
+	// in latitude, so only assert we snapped into that row.
+	wantLat := 51.5 + 19*metresToDegLat(100)
+	if math.Abs(g.lat[got]-wantLat) > 1e-9 {
+		t.Fatalf("snapped to lat %.6f, want the extract's northern edge %.6f", g.lat[got], wantLat)
 	}
 }

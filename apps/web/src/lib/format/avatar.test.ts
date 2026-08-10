@@ -17,6 +17,11 @@ test('initial — first non-whitespace char, uppercased', () => {
 	assert.equal(initial('évie'), 'É');
 });
 
+test('initial — a non-BMP first character survives whole, not as a lone surrogate', () => {
+	assert.equal(initial('😀 Runner'), '😀');
+	assert.equal(initial('𝓐lice'), '𝓐');
+});
+
 test('initial — fallback to ? for empty/whitespace/nullish', () => {
 	assert.equal(initial(null), '?');
 	assert.equal(initial(undefined), '?');

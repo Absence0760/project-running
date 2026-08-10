@@ -280,7 +280,15 @@
 	let tier = $state<'free' | 'pro' | null>(null);
 	let dailyLimit = $state<number>(TIER_LIMITS.free.dailyLimit);
 	let usedToday = $state(0);
-	let limitReached = $derived(usedToday >= dailyLimit);
+	/// True once something authoritative has answered which tier this is —
+	/// the `is_pro` RPC, or the server on a send. Until then `dailyLimit` is
+	/// only the conservative seed above, so it must not be quoted as fact or
+	/// used to take the composer away: the free cap is lower than a Pro
+	/// runner's real usage, and a failed lookup would otherwise read as
+	/// "you're out of messages, upgrade" to someone who already has.
+	/// /api/coach re-checks the tier server-side, so nothing is granted here.
+	let tierKnown = $state(false);
+	let limitReached = $derived(tierKnown && usedToday >= dailyLimit);
 	let remaining = $derived(Math.max(0, dailyLimit - usedToday));
 
 	interface ContextSummary {
@@ -300,17 +308,21 @@
 		cachedUserId = session.user.id;
 		await loadThread(session.user.id);
 		await loadArchives();
-		const [{ data: usage }, { data: isPro }] = await Promise.all([
+		const [usageRes, proRes] = await Promise.all([
 			supabase.rpc('get_coach_usage', { p_user_id: session.user.id }),
 			supabase.rpc('is_pro'),
 		]);
-		if (typeof usage === 'number') usedToday = usage;
-		if (isPro === true) {
-			tier = 'pro';
-			dailyLimit = TIER_LIMITS.pro.dailyLimit;
+		if (typeof usageRes.data === 'number') usedToday = usageRes.data;
+		if (proRes.error) {
+			// A failed lookup is not evidence of a free account. Treating it
+			// as one downgraded the badge to Free and, because the seeded
+			// free cap sits below a Pro runner's real usage, swapped their
+			// composer for an upgrade prompt over a transient blip.
+			console.warn('[coach] tier lookup failed', proRes.error);
 		} else {
-			tier = 'free';
-			dailyLimit = TIER_LIMITS.free.dailyLimit;
+			tier = proRes.data === true ? 'pro' : 'free';
+			dailyLimit = TIER_LIMITS[tier].dailyLimit;
+			tierKnown = true;
 		}
 
 		await loadContextSummary(session.user.id);
@@ -537,7 +549,10 @@
 					error = t('coachChat.errorStaleThread');
 				} else if (res.status === 429) {
 					usedToday = j.used ?? dailyLimit;
-					if (typeof j.tier === 'string') tier = j.tier;
+					if (typeof j.tier === 'string') {
+						tier = j.tier;
+						tierKnown = true;
+					}
 					if (typeof j.limit === 'number') dailyLimit = j.limit;
 					error = j.message ?? t('coachChat.errorDailyLimit', { count: dailyLimit });
 				} else {
@@ -608,7 +623,10 @@
 					messages[userIdx] = { ...m, id: userMessageId };
 				}
 			}
-			if (typeof parsed.tier === 'string') tier = parsed.tier as 'free' | 'pro';
+			if (typeof parsed.tier === 'string') {
+				tier = parsed.tier as 'free' | 'pro';
+				tierKnown = true;
+			}
 			const limits = parsed.limits as { daily_limit: number } | undefined;
 			if (limits && typeof limits.daily_limit === 'number') dailyLimit = limits.daily_limit;
 		} else if (event === 'token') {
@@ -1118,7 +1136,7 @@
 				{:else if tier === 'free'}
 					<span class="tier-badge tier-free">{t('coachChat.tierFree')}</span>
 				{/if}
-				{t('coachChat.messagesRemaining', { remaining, total: dailyLimit })}{#if tier === 'pro'} · {t('coachChat.priorityContext')}{/if}
+				{#if tierKnown}{t('coachChat.messagesRemaining', { remaining, total: dailyLimit })}{#if tier === 'pro'} · {t('coachChat.priorityContext')}{/if}{:else}{t('coachChat.tierUnknown')}{/if}
 			</span>
 			{#if lastCache && (lastCache.read > 0 || lastCache.create > 0)}
 				<span class="cache-note">

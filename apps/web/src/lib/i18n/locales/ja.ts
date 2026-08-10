@@ -221,6 +221,7 @@ export const messages = {
 	"coachChat.tierFree": "無料",
 	"coachChat.messagesRemaining": "本日残り {remaining}/{total} メッセージ",
 	"coachChat.priorityContext": "優先コンテキストウィンドウ",
+	"coachChat.tierUnknown": "プランを確認できませんでした — メッセージを送信して利用可能数をご確認ください",
 	"coachChat.cacheNote": "キャッシュ: 読み込み {read} · 書き込み {wrote} · 入力 {in} · 出力 {out}",
 	"coachChat.syncedTitle": "アカウントに保存され、デバイス間で同期されます。",
 	"coachChat.synced": "同期済み",

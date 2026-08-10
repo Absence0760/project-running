@@ -999,12 +999,13 @@ mod imp {
                                 let mut guard = store.lock().await;
                                 let n =
                                     guard.read_chunk(req.run_seq, req.offset, &mut scratch[..want]);
-                                // Reaching the blob end means the phone has pulled
-                                // this whole run: mark it synced so eviction keeps
-                                // a still-unsynced run over it.
+                                // Banking the bytes actually served is what lets
+                                // the store tell a whole pulled run from a phone
+                                // that only ever asked for the tail.
                                 if n > 0 {
                                     guard.mark_synced_if_complete(
                                         req.run_seq,
+                                        req.offset,
                                         req.offset + n as u32,
                                     );
                                 }

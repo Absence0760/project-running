@@ -134,9 +134,15 @@ export function exerciseProgress(
 
 	if (groups.size === 0) return null;
 
+	// Compared by code point, not by ICU collation: `localeCompare` treats the
+	// fractional-second `.` as variable punctuation, so a Postgres timestamp
+	// written without one (microseconds exactly zero) sorts AFTER a timestamp in
+	// the same second that has one — reversing two sessions and flipping the
+	// sign of the est-1RM delta. `previousExerciseSession` below already scans
+	// with `<`, and the Dart twin sorts with `compareTo`.
 	const ordered = [...groups.values()].sort((a, b) => {
-		if (a.startedAt !== b.startedAt) return a.startedAt.localeCompare(b.startedAt);
-		return a.workoutId.localeCompare(b.workoutId);
+		if (a.startedAt !== b.startedAt) return a.startedAt < b.startedAt ? -1 : 1;
+		return a.workoutId < b.workoutId ? -1 : a.workoutId > b.workoutId ? 1 : 0;
 	});
 
 	let runningBestE1rm = -Infinity;

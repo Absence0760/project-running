@@ -291,15 +291,39 @@ dim "buttons: click BTN1-5 in the --gui window, or in the monitor run  runMacro 
 # leg and then nothing, and the void never ended). Holding the write fd open past
 # the last line did not change that. Whatever buffers between here and the
 # emulated UARTE only drains while the writer is still writing.
+# The feed survives a failed write and says so. It used to run under the
+# inherited `set -e` with its stderr on /dev/null, so ONE write that did not
+# take ended the GPS stream for the rest of the session and left no trace: the
+# firmware simply stopped receiving fixes, which is indistinguishable from a
+# runner standing still, so the recorder auto-paused and every distance-driven
+# assertion waited out its budget. CI run 31361094964, scenario `workout`: four
+# fixes, then nothing for the remaining 270 s of a 300 s budget, and a failure
+# that read as a broken workout runner. Reopening the pty is the recovery that
+# matters — the reader on the other side is Renode, which outlives a transient
+# write error — and giving up is now loud rather than silent.
 (
-	exec 3>"$GPS_PTY"
+	set +e
+	open_gps() {
+		exec 3>"$GPS_PTY"
+	}
+	if ! open_gps; then
+		echo "watch-sim: could not open the GPS pty $GPS_PTY for writing" >&2
+		exit 1
+	fi
 	while true; do
 		while IFS= read -r line; do
-			printf '%s\r\n' "$line" >&3
+			if ! printf '%s\r\n' "$line" >&3; then
+				echo "watch-sim: GPS write failed, reopening $GPS_PTY" >&2
+				exec 3>&-
+				if ! open_gps; then
+					echo "watch-sim: GPS pty gone — the fix stream stops here" >&2
+					exit 1
+				fi
+			fi
 			sleep 0.5
 		done < "$NMEA_FILE"
 	done
-) 2>/dev/null &
+) &
 
 step "Streaming defmt logs (Ctrl-C to stop)"
 dim "NMEA feed: $NMEA_FILE -> sysbus.uart0 at 1 Hz"

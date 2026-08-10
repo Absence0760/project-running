@@ -210,3 +210,76 @@ test('streaks.ts is DST-safe: previousLocalDay uses Y/M/D arithmetic', () => {
 		'expected Y/M/D arithmetic in previousLocalDay',
 	);
 });
+
+// --- bestSince: bounding `best` to a reporting period -----------------------
+
+test('computeRunStreaks: bestSince omitted still reports the all-time best', () => {
+	const out = computeRunStreaks(
+		[localNoon(2024, 2, 1), localNoon(2024, 2, 2), localNoon(2024, 2, 3), localNoon(2026, 5, 13)],
+		localNoon(2026, 5, 13),
+	);
+	assert.deepEqual(out, { current: 1, best: 3 });
+});
+
+test('computeRunStreaks: bestSince drops a streak that ended before the period', () => {
+	const out = computeRunStreaks(
+		[localNoon(2024, 2, 1), localNoon(2024, 2, 2), localNoon(2024, 2, 3), localNoon(2026, 5, 13)],
+		localNoon(2026, 5, 13),
+		localNoon(2026, 1, 1),
+	);
+	assert.deepEqual(out, { current: 1, best: 1 });
+});
+
+test('computeRunStreaks: a streak crossing into the period keeps its full length', () => {
+	// 28 Dec → 3 Jan. The January card owns it, at seven days, not three.
+	const days = [
+		localNoon(2025, 12, 28),
+		localNoon(2025, 12, 29),
+		localNoon(2025, 12, 30),
+		localNoon(2025, 12, 31),
+		localNoon(2026, 1, 1),
+		localNoon(2026, 1, 2),
+		localNoon(2026, 1, 3),
+	];
+	const out = computeRunStreaks(days, localNoon(2026, 1, 31), localNoon(2026, 1, 1));
+	assert.equal(out.best, 7);
+});
+
+test('computeRunStreaks: a streak ending the day before the bound does not count', () => {
+	const days = [localNoon(2025, 12, 28), localNoon(2025, 12, 29), localNoon(2025, 12, 31)];
+	const out = computeRunStreaks(days, localNoon(2026, 1, 31), localNoon(2026, 1, 1));
+	assert.equal(out.best, 0, 'nothing reaches January');
+	assert.equal(out.current, 0);
+});
+
+test('computeRunStreaks: bestSince picks the longest of several in-period streaks', () => {
+	const days = [
+		// 5 days, all before the bound.
+		localNoon(2025, 6, 1),
+		localNoon(2025, 6, 2),
+		localNoon(2025, 6, 3),
+		localNoon(2025, 6, 4),
+		localNoon(2025, 6, 5),
+		// 2 days in period.
+		localNoon(2026, 3, 1),
+		localNoon(2026, 3, 2),
+		// 4 days in period — the answer.
+		localNoon(2026, 7, 10),
+		localNoon(2026, 7, 11),
+		localNoon(2026, 7, 12),
+		localNoon(2026, 7, 13),
+	];
+	const out = computeRunStreaks(days, localNoon(2026, 12, 31), localNoon(2026, 1, 1));
+	assert.equal(out.best, 4);
+});
+
+test('computeRunStreaks: a bound after the anchor admits nothing', () => {
+	const out = computeRunStreaks(
+		[localNoon(2026, 5, 12), localNoon(2026, 5, 13)],
+		localNoon(2026, 5, 13),
+		localNoon(2027, 1, 1),
+	);
+	assert.equal(out.best, 0);
+	// `current` is anchored at `today` and unaffected by the bound.
+	assert.equal(out.current, 2);
+});

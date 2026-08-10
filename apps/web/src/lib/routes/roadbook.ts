@@ -217,7 +217,7 @@ export function buildRoadbook(
 		}
 
 		if (stop.isCutoff) {
-			const cutoff = cutoffLimitS(stop.cutoffMeta, opts.startClockMin ?? null, elapsed);
+			const cutoff = cutoffLimitS(stop.cutoffMeta, opts.startClockMin ?? null);
 			if (cutoff != null) {
 				const marginS = cutoff - elapsed;
 				leg.cutoff = {
@@ -249,18 +249,20 @@ export function buildRoadbook(
  * start. Prefers `cutoff_elapsed_s`; otherwise derives from `cutoff_clock`
  * minus the start clock. Null when neither resolves.
  *
- * A clock field carries no day, so a bare `cutoff_clock` is ambiguous once a
- * race runs longer than 24h: '14:00' on a race that started at 08:00 could be
- * hour 6 or hour 30. We snap to the whole day nearest the leg's projected
- * arrival (`projectedElapsedS`) — so a 30h checkpoint resolves to 30h, not the
- * same-day 6h the raw offset alone would give. Never resolves before the start
- * (k ≥ 0), so an at-or-before-start clock still yields at least the 24h wrap.
+ * A clock field carries no day, so it resolves to that wall clock's first
+ * occurrence after the race start and nothing else — a clock equal to the
+ * start reads as the 24h limit it is meant to express, never a 0-second
+ * window. A limit past 24h has to be written as `cutoff_elapsed_s`, the only
+ * field that carries a day.
+ *
+ * The day was previously snapped to whichever whole day sat nearest the leg's
+ * projected arrival, which made the limit a function of the goal time: a
+ * slower goal pushed the projection over a day boundary and turned a blown
+ * cutoff into "safe, 12h to spare", and two spectators of the same live run
+ * saw different limits for the same checkpoint. A cutoff is a property of the
+ * race, so it may not depend on how fast anyone is expected to run.
  */
-function cutoffLimitS(
-	meta: unknown,
-	startClockMin: number | null,
-	projectedElapsedS: number
-): number | null {
+function cutoffLimitS(meta: unknown, startClockMin: number | null): number | null {
 	const cutoff = parseCutoff(meta);
 	if (!cutoff) return null;
 	if (cutoff.elapsedS !== undefined) return cutoff.elapsedS;
@@ -268,8 +270,7 @@ function cutoffLimitS(
 		const [h, m] = cutoff.clock.split(':').map(Number);
 		let baseMin = h * 60 + m - startClockMin;
 		if (baseMin <= 0) baseMin += MINUTES_PER_DAY;
-		const k = Math.max(0, Math.round((projectedElapsedS / 60 - baseMin) / MINUTES_PER_DAY));
-		return (baseMin + k * MINUTES_PER_DAY) * 60;
+		return baseMin * 60;
 	}
 	return null;
 }

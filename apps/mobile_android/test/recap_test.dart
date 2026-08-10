@@ -599,4 +599,71 @@ void main() {
       expect(json['month'], 3);
     });
   });
+
+  // The flip side of the boundary rule: a streak has to *reach* the period
+  // to be the period's streak. computeRunStreaks clamps only at the anchor
+  // day, so the whole of the runner's history used to be in scope and a
+  // long-dead streak became "your best streak" on a card titled with a year
+  // it never touched — and shipped in the published snapshot.
+  group('out-of-period streaks', () {
+    /// A 40-day streak in early 2024, then a short one inside the period.
+    List<Run> staleStreakRuns() => [
+          for (var i = 0; i < 40; i++)
+            _run(
+              id: 'old-$i',
+              startedAt: DateTime(2024, 2, 1 + i, 10),
+              distanceM: 5000,
+            ),
+          for (var i = 0; i < 3; i++)
+            _run(
+              id: 'new-$i',
+              startedAt: DateTime(2026, 3, 10 + i, 10),
+              distanceM: 5000,
+            ),
+        ];
+
+    test('a streak from a previous year is not this year\'s best', () {
+      final r = buildYearInRunningRecap(staleStreakRuns(), 2026);
+      expect(r.runCount, 3);
+      expect(r.bestStreakDays, 3,
+          reason: 'the 2024 streak must not headline the 2026 card');
+    });
+
+    test('an out-of-period streak earns no trophy', () {
+      final r = buildYearInRunningRecap(staleStreakRuns(), 2026);
+      expect(
+        r.badges.where((b) => b.id.startsWith('streak')),
+        isEmpty,
+        reason: 'a 2024 streak must not put a streak trophy on the 2026 grid',
+      );
+    });
+
+    test('a year with no runs at all has no streak', () {
+      final r = buildYearInRunningRecap(staleStreakRuns(), 2025);
+      expect(r.runCount, 0);
+      expect(r.bestStreakDays, 0);
+      expect(r.currentStreakDays, 0);
+    });
+
+    test('a streak from an earlier month is not this month\'s best', () {
+      // The 3-day streak sits in March; the April card must not claim it.
+      final r = buildMonthInRunningRecap(staleStreakRuns(), 2026, 4);
+      expect(r.runCount, 0);
+      expect(r.bestStreakDays, 0);
+      expect(r.badges.where((b) => b.id.startsWith('streak')), isEmpty);
+    });
+
+    test('the month the streak ran in still reports it', () {
+      final r = buildMonthInRunningRecap(staleStreakRuns(), 2026, 3);
+      expect(r.runCount, 3);
+      expect(r.bestStreakDays, 3);
+    });
+
+    test('the published snapshot carries the period-bounded streak', () {
+      final json = recapSnapshotJson(
+        buildYearInRunningRecap(staleStreakRuns(), 2026),
+      );
+      expect(json['bestStreakDays'], 3);
+    });
+  });
 }

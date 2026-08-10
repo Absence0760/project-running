@@ -55,12 +55,16 @@ const double kMinQualifyingDistanceM = 1500;
 /// Qualifying runs for fitness math: an actual recording or reliable
 /// import, distance >= kMinQualifyingDistanceM, duration >= 5 min. Indoor /
 /// treadmill runs are excluded — belt-/estimate-derived distance must not feed
-/// VDOT (#16).
+/// VDOT (#16). Cycling is excluded for the same reason goals.dart excludes it
+/// from pace: bike speed is not running speed, and currentVdot takes the MAX
+/// over runs, so one commute rides straight to the top and takes the threshold
+/// pace, TSS and race predictions with it.
 List<Run> qualifyingRuns(Iterable<Run> runs) {
   return [
     for (final r in runs)
       if (r.distanceMetres >= kMinQualifyingDistanceM &&
           r.duration.inSeconds >= 300 &&
+          r.metadata?['activity_type'] != 'cycle' &&
           r.metadata?['indoor'] != true &&
           (r.source == RunSource.app ||
               r.source == RunSource.watch ||

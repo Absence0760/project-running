@@ -61,7 +61,24 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // VALIDATEd in the documented two-step, plus function and trigger bodies.
 // user_profiles is not in GUARDED_TABLES and the two-step is taken anyway, so
 // the scanner passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270511';
+// 20270512: table grants for the global-segment catalogue pair plus a matching
+// UPDATE revoke. Privilege changes only — no table DDL of any kind, so the
+// scanner passed it with zero violations before this bump.
+// 20270513: replaces the global_segment_leaderboard function body to reduce to
+// one row per athlete — no table DDL, so the scanner passed it with zero
+// violations before this bump.
+// 20270514: replaces refresh_personal_records_for_user and the two statement
+// triggers' watch lists, then backfills. The backfill is scoped to the users who
+// own a cycle run and refreshes each one's own rows, so there is no table-wide
+// rewrite and no constraint of any kind; the scanner passed it with zero
+// violations before this bump.
+// 20270515: a single EXECUTE grant on an existing function — no table DDL, so
+// the scanner passed it with zero violations before this bump.
+// 20270516: marks event_results_rerank_trigger SECURITY DEFINER and revokes
+// EXECUTE on the re-rank RPC from the client roles. Function body and privileges
+// only — no table DDL, so the scanner passed it with zero violations before this
+// bump.
+export const GRANDFATHER_CUTOFF = '20270516';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

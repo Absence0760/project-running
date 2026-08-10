@@ -1,3 +1,5 @@
+import { currencyFractionDigits } from './minor_units';
+
 const FALLBACK_LOCALE = 'en-US';
 const FALLBACK_CURRENCY = 'USD';
 
@@ -11,7 +13,9 @@ export interface FormatPriceOptions {
 	locale?: string;
 }
 
-export function formatPrice(usdAmount: number, opts: FormatPriceOptions = {}): string {
+/// `amount` is in the currency's MAJOR unit. A figure that came out of Stripe
+/// is in minor units — put it through `fromMinorUnits` first, never `/ 100`.
+export function formatPrice(amount: number, opts: FormatPriceOptions = {}): string {
 	const locale = opts.locale ?? detectLocale();
 	// The amount is a raw USD figure we do NOT FX-convert. Rendering a
 	// localized currency symbol over it (e.g. € on a de-DE locale) would
@@ -22,13 +26,13 @@ export function formatPrice(usdAmount: number, opts: FormatPriceOptions = {}): s
 	// explicitly. audit-findings 2026-05-30 Medium [regional].
 	const currency = opts.currency ?? FALLBACK_CURRENCY;
 	try {
+		// No fraction-digit override: a currency's own convention is the right
+		// one. Forcing two renders ¥1,000 as ¥1,000.00 and KWD 1.500 as KWD 1.50.
 		return new Intl.NumberFormat(locale, {
 			style: 'currency',
 			currency,
-			minimumFractionDigits: 2,
-			maximumFractionDigits: 2,
-		}).format(usdAmount);
+		}).format(amount);
 	} catch {
-		return `$${usdAmount.toFixed(2)}`;
+		return `${amount.toFixed(currencyFractionDigits(currency))} ${currency.toUpperCase()}`;
 	}
 }

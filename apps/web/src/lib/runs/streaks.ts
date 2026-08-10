@@ -54,11 +54,23 @@ function previousLocalDay(d: Date): Date {
  *                  local day and dedupes internally.
  * @param today Anchor for "current" (usually `new Date()`). Local
  *              date is what counts. Future-dated runs are ignored.
+ * @param bestSince Lower bound for `best`, for a caller reporting a
+ *                  bounded period rather than all of history: only a
+ *                  streak reaching this local day or later counts. A
+ *                  qualifying streak still counts at its *full* length,
+ *                  days before the bound included, so one running 28 Dec
+ *                  → 3 Jan is seven days long on the January card.
+ *                  Omit it for the all-time best.
  */
-export function computeRunStreaks(runStarts: Date[], today: Date): RunStreaks {
+export function computeRunStreaks(
+	runStarts: Date[],
+	today: Date,
+	bestSince?: Date | null,
+): RunStreaks {
 	if (runStarts.length === 0) return { current: 0, best: 0 };
 
 	const todayKey = localDayKey(today);
+	const sinceKey = bestSince ? localDayKey(bestSince) : null;
 
 	// Distinct local-day keys for every run, clamped to <= today so a
 	// runner whose phone clock is ahead by an hour doesn't get a
@@ -73,21 +85,25 @@ export function computeRunStreaks(runStarts: Date[], today: Date): RunStreaks {
 	const sortedKeys = [...dayKeys].sort();
 
 	// Best streak — walk the sorted set, increment on consecutive days,
-	// reset on gap, track max.
-	let best = 1;
-	let run = 1;
-	for (let i = 1; i < sortedKeys.length; i++) {
-		const prev = sortedKeys[i - 1];
+	// reset on gap, track max. `run` is the length of the streak ending
+	// at the day being visited, so testing that day against `sinceKey`
+	// admits a streak the moment it reaches the period and, because
+	// `run` keeps growing to the streak's end, records its full length.
+	let best = 0;
+	let run = 0;
+	for (let i = 0; i < sortedKeys.length; i++) {
 		const here = sortedKeys[i];
-		// "Consecutive" means here is exactly previous-+1-day in local
-		// time. Build prev's Date and step forward one local day.
-		const [py, pm, pd] = prev.split('-').map((s) => parseInt(s, 10));
-		const expected = localDayKey(new Date(py, pm - 1, pd + 1));
-		if (here === expected) {
-			run += 1;
-			if (run > best) best = run;
-		} else {
+		if (i === 0) {
 			run = 1;
+		} else {
+			// "Consecutive" means here is exactly previous-+1-day in local
+			// time. Build prev's Date and step forward one local day.
+			const [py, pm, pd] = sortedKeys[i - 1].split('-').map((s) => parseInt(s, 10));
+			const expected = localDayKey(new Date(py, pm - 1, pd + 1));
+			run = here === expected ? run + 1 : 1;
+		}
+		if (sinceKey == null || here >= sinceKey) {
+			if (run > best) best = run;
 		}
 	}
 
