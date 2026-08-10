@@ -73,6 +73,7 @@
 	import { expandSessionSteps, type SessionPlanInput } from '$lib/social/session_steps';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { formatPrice } from '$lib/format/format_price';
+	import { fromMinorUnits } from '$lib/format/minor_units';
 	import { registrationOpen, resolveRefundEligibility } from '$lib/social/paid_registration';
 	import { buildEventIcs, icsFilename } from '$lib/social/event_ics';
 	import { env } from '$env/dynamic/public';
@@ -420,7 +421,7 @@
 
 	let priceFormatted = $derived(
 		pricing
-			? formatPrice(pricing.price_cents / 100, {
+			? formatPrice(fromMinorUnits(pricing.price_cents, pricing.currency), {
 					currency: pricing.currency.toUpperCase()
 				})
 			: ''

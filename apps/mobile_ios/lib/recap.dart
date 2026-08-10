@@ -335,10 +335,14 @@ YearInRunningRecap buildYearInRunningRecap(
     }
   });
 
+  // Anchor "today" at Dec 31 23:59 local, and bound `best` at Jan 1 so a
+  // streak that ended before this year is somebody else's card's headline,
+  // not this one's.
   final endOfYear = DateTime(year, 12, 31, 23, 59);
   final streaks = computeRunStreaks(
     runs.map((r) => r.startedAt).toList(),
     endOfYear,
+    DateTime(year, 1, 1),
   );
 
   final monthlyList = <RecapMonthBucket>[
@@ -476,6 +480,7 @@ YearInRunningRecap buildMonthInRunningRecap(
   final streaks = computeRunStreaks(
     runs.map((r) => r.startedAt).toList(),
     endOfMonth,
+    DateTime(year, month, 1),
   );
 
   final photoCount = extras.photoCount < 0 ? 0 : extras.photoCount;

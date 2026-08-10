@@ -468,3 +468,67 @@ test('buildMonthInRunningRecap: January 2026 best streak counts the December 202
 	assert.equal(r.monthly.length, 12);
 	assert.equal(r.monthly[0].runCount, 3);
 });
+
+// --- Out-of-period streaks -------------------------------------------------
+//
+// The flip side of the boundary rule: a streak has to *reach* the period to be
+// the period's streak. `computeRunStreaks` clamps only at the anchor day, so
+// the whole of the runner's history used to be in scope and a long-dead streak
+// became "your best streak" on a card titled with a year it never touched —
+// and shipped in the public share image.
+
+/** A 40-day streak in early 2024, then a short one inside the target period. */
+function staleStreakRuns(): Run[] {
+	const out: Run[] = [];
+	for (let i = 0; i < 40; i++) {
+		const d = new Date(2024, 1, 1 + i);
+		out.push(
+			mkRun({
+				id: `old-${i}`,
+				startedAt: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T10:00:00`,
+				distance_m: 5000,
+				duration_s: 1500,
+			}),
+		);
+	}
+	for (const day of ['2026-03-10', '2026-03-11', '2026-03-12']) {
+		out.push(mkRun({ id: day, startedAt: `${day}T10:00:00`, distance_m: 5000, duration_s: 1500 }));
+	}
+	return out;
+}
+
+test('buildYearInRunningRecap: a streak from a previous year is not this year’s best', () => {
+	const r = buildYearInRunningRecap(staleStreakRuns(), 2026);
+	assert.equal(r.runCount, 3);
+	assert.equal(r.bestStreakDays, 3, 'the 2024 streak must not headline the 2026 card');
+});
+
+test('buildYearInRunningRecap: an out-of-period streak earns no trophy', () => {
+	const r = buildYearInRunningRecap(staleStreakRuns(), 2026);
+	assert.equal(
+		r.badges.find((b) => b.id.startsWith('streak')),
+		undefined,
+		'a 2024 streak must not put a streak trophy on the 2026 grid',
+	);
+});
+
+test('buildYearInRunningRecap: a year with no runs at all has no streak', () => {
+	const r = buildYearInRunningRecap(staleStreakRuns(), 2025);
+	assert.equal(r.runCount, 0);
+	assert.equal(r.bestStreakDays, 0);
+	assert.equal(r.currentStreakDays, 0);
+});
+
+test('buildMonthInRunningRecap: a streak from an earlier month is not this month’s best', () => {
+	// The 3-day streak sits in March; the April card must not claim it.
+	const r = buildMonthInRunningRecap(staleStreakRuns(), 2026, 4);
+	assert.equal(r.runCount, 0);
+	assert.equal(r.bestStreakDays, 0);
+	assert.equal(r.badges.find((b) => b.id.startsWith('streak')), undefined);
+});
+
+test('buildMonthInRunningRecap: the month the streak ran in still reports it', () => {
+	const r = buildMonthInRunningRecap(staleStreakRuns(), 2026, 3);
+	assert.equal(r.runCount, 3);
+	assert.equal(r.bestStreakDays, 3);
+});

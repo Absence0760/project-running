@@ -76,6 +76,16 @@ Waypoint? interpolateAlongRoute(
 /// exactly on the planned line (GPS drift, course offset), so we
 /// project onto the nearest segment rather than requiring an exact
 /// match.
+///
+/// Each segment is projected in its own local planar frame — accurate,
+/// since the frame is anchored at that segment's start — but the
+/// candidates are ranked by the great-circle distance to the projected
+/// foot, the way `route_snap.dart` does it. A perpendicular measured
+/// *inside* a segment's frame is scaled by the cosine of that segment's
+/// own start latitude, so the numbers are not comparable across
+/// segments: on an out-and-back the return limb anchors further along
+/// and always reports the smaller offset to a point equidistant from
+/// both, which flips the answer by the length of a limb.
 double? distanceAlongRoute(
   ({double lat, double lng}) point,
   List<Waypoint> waypoints,
@@ -86,7 +96,7 @@ double? distanceAlongRoute(
   const rPerDeg = 6371000.0 * deg;
   var seen = 0.0;
   var best = 0.0;
-  var bestPerp = double.infinity;
+  var bestOffset = double.infinity;
   for (var i = 1; i < waypoints.length; i++) {
     final a = waypoints[i - 1];
     final b = waypoints[i];
@@ -100,13 +110,11 @@ double? distanceAlongRoute(
     final t = abLenSq <= 0
         ? 0.0
         : ((px * bx + py * by) / abLenSq).clamp(0.0, 1.0);
-    final projx = bx * t;
-    final projy = by * t;
-    final dx = px - projx;
-    final dy = py - projy;
-    final perp = sqrt(dx * dx + dy * dy);
-    if (perp < bestPerp) {
-      bestPerp = perp;
+    final footLat = a.lat + (b.lat - a.lat) * t;
+    final footLng = wrapLonDeg(a.lng + lonDeltaDeg(a.lng, b.lng) * t);
+    final offset = haversineMetres(point.lat, point.lng, footLat, footLng);
+    if (offset < bestOffset) {
+      bestOffset = offset;
       best = seen + t * segLen;
     }
     seen += segLen;

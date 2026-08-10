@@ -17,11 +17,16 @@ top week, unique routes, photo + PR counts, an earned trophy grid, and a
 
 `apps/web/src/lib/runs/recap.ts` ↔ `apps/mobile_android/lib/recap.dart` (kept
 byte-behaviour-identical; registered in the root `CLAUDE.md` parity list,
-31 web mirror tests / 30 Dart).
+40 web mirror tests / 36 Dart).
 
 - `buildYearInRunningRecap(runs, year, extras?)` → `YearInRunningRecap`.
   Pass **all** the user's runs (not just the year's) so the streak can extend
-  across the year boundary. Totals + most-used-activity are cross-modal
+  across the year boundary. `bestStreakDays` is the **period's** best, not the
+  all-time best: only a streak reaching the period counts, and one that does
+  counts at its full length (28 Dec → 3 Jan is seven days on the January card).
+  A streak that ended before the period contributes nothing — see
+  [decisions.md § 577](../architecture/decisions.md). Totals +
+  most-used-activity are cross-modal
   (cycling included); **longest run + fastest pace are run-family only** (a bike
   ride can't masquerade as the year's longest run). Filters by **local**
   calendar year so a New Year's Eve evening run files correctly.

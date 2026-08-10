@@ -594,7 +594,7 @@ mod tests {
             plan_chunk_read(&dir, BASE, req.run_seq, req.offset, cap),
             None
         );
-        assert!(!chunk_completes_run(&dir, req.run_seq, u32::MAX));
+        assert!(!chunk_completes_run(&mut dir, req.run_seq, 0, u32::MAX));
 
         let past_end = ChunkRequest {
             run_seq: 7,
@@ -643,6 +643,7 @@ mod tests {
         for entry in entries.iter() {
             let mut pulled: heapless::Vec<u8, SLOT_LEN> = heapless::Vec::new();
             let mut cursor = 0u32;
+            let mut complete = false;
             // The phone asks for more than one notification can carry every time.
             let want = chunk_notify_len(1024, NOTIFY_CAP);
             while let Some(plan) = plan_chunk_read(&dir, BASE, entry.run_seq, cursor, want) {
@@ -651,10 +652,12 @@ mod tests {
                 pulled
                     .extend_from_slice(&region[at..at + plan.len])
                     .expect("fits");
+                let from = cursor;
                 cursor += plan.len as u32;
+                complete = chunk_completes_run(&mut dir, entry.run_seq, from, cursor);
             }
             assert_eq!(cursor, entry.size, "pulled exactly the advertised size");
-            assert!(chunk_completes_run(&dir, entry.run_seq, cursor));
+            assert!(complete, "run {} counts as fully served", entry.run_seq);
             assert!(verify_blob(&pulled), "run {} verifies", entry.run_seq);
             let expected = blobs
                 .iter()

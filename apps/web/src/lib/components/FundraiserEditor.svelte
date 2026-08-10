@@ -8,6 +8,7 @@
 		type CreateFundraiserInput
 	} from '$lib/core/data';
 	import type { Fundraiser } from '$lib/types';
+	import { fromMinorUnits, toMinorUnits } from '$lib/format/minor_units';
 	import { onMount, untrack } from 'svelte';
 
 	let {
@@ -28,8 +29,11 @@
 	let charityUrl = $state(untrack(() => existing?.charity_url ?? ''));
 	let title = $state(untrack(() => existing?.title ?? ''));
 	let story = $state(untrack(() => existing?.story ?? ''));
-	// Goal entered in major units; stored in cents.
-	let goalMajor = $state<number | null>(untrack(() => (existing ? existing.goal_cents / 100 : null)));
+	// Goal entered in major units; stored in the currency's minor unit.
+	const currency = untrack(() => existing?.currency ?? 'usd');
+	let goalMajor = $state<number | null>(
+		untrack(() => (existing ? fromMinorUnits(existing.goal_cents, currency) : null))
+	);
 
 	let chargesEnabled = $state(false);
 	let loadingGate = $state(true);
@@ -53,7 +57,7 @@
 		if (!canSave || saving) return;
 		saving = true;
 		try {
-			const goalCents = Math.round((goalMajor as number) * 100);
+			const goalCents = toMinorUnits(goalMajor as number, currency);
 			if (existing) {
 				await updateFundraiser(existing.id, {
 					charityName,

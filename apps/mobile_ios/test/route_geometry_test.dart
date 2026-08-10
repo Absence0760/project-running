@@ -1,3 +1,5 @@
+import 'dart:math' show cos, pi;
+
 import 'package:core_models/core_models.dart' show Waypoint;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -366,6 +368,59 @@ void main() {
       expect(d!, lessThan(100),
           reason: 'should project onto the first horizontal leg');
       expect(d, closeTo(50, 2));
+    });
+
+    test('a later segment can still win', () {
+      // Guard against a fix that degenerates into "always the first
+      // segment": an L (east 100 m, then north 100 m) probed 2 m east
+      // of the vertical leg, near its top, must resolve into the
+      // SECOND leg (>100 m).
+      final wps = [
+        distWp(0),
+        distWp(100),
+        wp(
+          100 / metresPerDegLngAtEquator,
+          100 / metresPerDegLngAtEquator,
+        ),
+      ];
+      final probe = (
+        lat: 90 / metresPerDegLngAtEquator,
+        lng: 102 / metresPerDegLngAtEquator,
+      );
+      final d = distanceAlongRoute(probe, wps);
+      expect(d, isNotNull);
+      expect(d, closeTo(190, 2));
+    });
+
+    test('an out-and-back does not flip limbs on 1 cm of jitter', () {
+      // 3.47 km due north and back (0.03125° = 1/32, so both limbs are
+      // the same ground twice over). Ranking candidates by a
+      // perpendicular measured inside each segment's OWN planar frame
+      // compares incommensurable numbers: the return limb anchors its
+      // frame 3.5 km further north, where cos(lat) is smaller, so it
+      // always reports the smaller "distance" to a point that is
+      // exactly as far from both. A GPS fix 1 cm off the line then
+      // resolves 3.5 km further along the course than the same fix on
+      // it.
+      final oab = [wp(45, 0), wp(45.03125, 0), wp(45, 0)];
+      final total = polylineLengthMetres(oab);
+      const mid = 45.015625; // half way up the outbound limb
+      final oneCm =
+          0.01 / (metresPerDegLngAtEquator * cos(mid * pi / 180));
+
+      final onLine = distanceAlongRoute((lat: mid, lng: 0.0), oab);
+      final east = distanceAlongRoute((lat: mid, lng: oneCm), oab);
+      final west = distanceAlongRoute((lat: mid, lng: -oneCm), oab);
+      expect(onLine, isNotNull);
+      expect(east, isNotNull);
+      expect(west, isNotNull);
+
+      expect(east!, closeTo(onLine!, 1),
+          reason: '1 cm east must not move the answer');
+      expect(west!, closeTo(onLine, 1),
+          reason: '1 cm west must not move the answer');
+      expect(onLine, closeTo(total / 4, 1),
+          reason: 'the fix sits on the outbound limb');
     });
 
     test('clamps to [0, totalLength]', () {

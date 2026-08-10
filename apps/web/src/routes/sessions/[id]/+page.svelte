@@ -46,6 +46,7 @@
 	let failedFinish = $state<{ results: SessionStepResult[]; adherence: SessionAdherence } | null>(
 		null
 	);
+	let savingFinish = $state(false);
 
 	const back = smartBack();
 	const planId = $derived($page.params.id ?? '');
@@ -165,10 +166,16 @@
 	}
 
 	async function onSessionFinish(results: SessionStepResult[], adherence: SessionAdherence) {
+		// `failedFinish` only clears on success, so the retry banner stays
+		// mounted for the whole in-flight retry: without this guard a second
+		// click logs the same session as a second gym workout, which then
+		// double-counts into history, exercise calories and training load.
+		if (savingFinish) return;
 		if (!plan) {
 			running = false;
 			return;
 		}
+		savingFinish = true;
 		const draft = workoutDraftFromSession(expanded, plan.title, plan.discipline);
 		try {
 			await createGymWorkout({
@@ -203,6 +210,7 @@
 			failedFinish = { results, adherence };
 			showToast(t('session.run.saveFailed'), 'error');
 		} finally {
+			savingFinish = false;
 			running = false;
 		}
 	}
@@ -286,8 +294,13 @@
 		{#if failedFinish}
 			<div class="save-failed" role="alert" data-testid="session-save-failed">
 				<span>{t('session.run.saveFailed')}</span>
-				<button class="btn btn-sm" onclick={retrySessionSave} data-testid="session-retry-save">
-					{t('session.run.retry')}
+				<button
+					class="btn btn-sm"
+					onclick={retrySessionSave}
+					disabled={savingFinish}
+					data-testid="session-retry-save"
+				>
+					{savingFinish ? t('shell.loading') : t('session.run.retry')}
 				</button>
 			</div>
 		{/if}

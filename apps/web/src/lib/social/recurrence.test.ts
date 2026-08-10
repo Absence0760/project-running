@@ -305,6 +305,57 @@ test('nextInstanceAfter — returns null past recurrence_until', () => {
 	assert.equal(next, null);
 });
 
+test('nextInstanceAfter — a years-old weekly series still reports its next occurrence', () => {
+	// A club's long-running Monday-night run. The scan budget used to be derived
+	// from `max` (1 here), so the walk gave up 49 days after the series began and
+	// the caller fell back to showing starts_at — years in the past — as the next
+	// instance, scoping the going-count to a stale instance key.
+	const e = ev({
+		starts_at: '2024-01-01T09:00:00Z',
+		recurrence_freq: 'weekly',
+		recurrence_byday: ['MO'],
+		timezone: 'UTC',
+	});
+	const next = nextInstanceAfter(e, new Date('2026-08-09T00:00:00Z'));
+	assert.equal(next?.toISOString(), '2026-08-10T09:00:00.000Z');
+});
+
+test('nextInstanceAfter — a years-old monthly series still reports its next occurrence', () => {
+	const e = ev({
+		starts_at: '2024-01-15T09:00:00Z',
+		recurrence_freq: 'monthly',
+		timezone: 'UTC',
+	});
+	const next = nextInstanceAfter(e, new Date('2026-08-09T00:00:00Z'));
+	assert.equal(next?.toISOString(), '2026-08-15T09:00:00.000Z');
+});
+
+test('expandInstances — a small max does not shorten how far the scan reaches', () => {
+	// `max` caps the RESULT count, never the distance walked: a four-instance
+	// preview of a window two years past starts_at must still find them.
+	const e = ev({
+		starts_at: '2024-01-01T09:00:00Z',
+		recurrence_freq: 'weekly',
+		recurrence_byday: ['MO'],
+		timezone: 'UTC',
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-08-01T00:00:00Z'),
+		new Date('2026-08-31T00:00:00Z'),
+		4,
+	);
+	assert.deepEqual(
+		out.map((d) => d.toISOString()),
+		[
+			'2026-08-03T09:00:00.000Z',
+			'2026-08-10T09:00:00.000Z',
+			'2026-08-17T09:00:00.000Z',
+			'2026-08-24T09:00:00.000Z',
+		],
+	);
+});
+
 test('expandInstances — timezoned weekly anchors instance_start to UTC wall-clock, viewer-independent', () => {
 	// The capacity key + race-arm key for a recurring instance must be the same
 	// instant for every spectator. With a timezone present the expansion reads +

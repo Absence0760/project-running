@@ -819,6 +819,13 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 	// recompression) since the source is already deflated.
 	tracksAdded := 0
 	for _, r := range in.Runs {
+		// A nil fetcher skips its section, per BackupFetchers. Every other
+		// section guards; these two did not, so a caller taking the documented
+		// option and a run row whose track_url matched the canonical shape
+		// called through a nil func and panicked.
+		if f.RawTrack == nil {
+			break
+		}
 		if r.TrackURL == nil || *r.TrackURL == "" {
 			continue
 		}
@@ -851,6 +858,9 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 	// re-home the per-point HR for trackless runs.
 	hrAdded := 0
 	for _, r := range in.Runs {
+		if f.RawTrack == nil {
+			break
+		}
 		if r.HrSeriesURL == nil || *r.HrSeriesURL == "" {
 			continue
 		}

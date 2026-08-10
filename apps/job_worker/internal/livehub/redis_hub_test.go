@@ -3,6 +3,7 @@ package livehub
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -455,5 +456,88 @@ func TestRedisHub_DedupHistoryTail(t *testing.T) {
 	// Differing BPM at the same distance is NOT an overlap.
 	if got := dedupHistoryTail([]Ping{mk(2, bpm(130))}, []Ping{mk(2, bpm(131))}); len(got) != 1 {
 		t.Fatalf("dedupHistoryTail must compare BPM by value; trimmed a non-matching ping")
+	}
+}
+
+// TestRedisHub_UnsubDuringPublishDoesNotPanic pins the teardown race on the
+// Redis path. pubsub.Close() does not wait for the forwarder goroutine, so a
+// message already handed to it is forwarded AFTER the subscription is torn
+// down. Closing the subscriber channel from unsub while that send is in flight
+// panicked with "send on closed channel" — a select's default arm does not
+// rescue a send on a closed channel, and the panic is on a bare goroutine
+// outside any handler's recover, so it killed the whole worker process
+// (job-drain loop included) on an ordinary spectator disconnect.
+func TestRedisHub_UnsubDuringPublishDoesNotPanic(t *testing.T) {
+	for round := 0; round < 40; round++ {
+		hub, _, teardown := newRedisTestHub(t)
+		ctx, cancel := context.WithCancel(context.Background())
+
+		_, ch, unsub, err := hub.SubscribeWithHistory(ctx, "run-A", 0)
+		if err != nil {
+			t.Fatalf("round %d: subscribe: %v", round, err)
+		}
+		stop := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					hub.Publish("run-A", Ping{Lat: 51.5, Lng: -0.1})
+				}
+			}
+		}()
+		// Let pings start flowing, and keep the buffer draining so the
+		// forwarder's send case stays live rather than falling to `default`.
+		go func() {
+			for range ch {
+			}
+		}()
+		time.Sleep(2 * time.Millisecond)
+
+		unsub()
+		close(stop)
+		cancel()
+		teardown()
+	}
+}
+
+// TestRedisHub_RunGCDropsIdleRoomCaches pins the reaper on the Redis backend's
+// per-process room map. Redis owns the fan-out and its per-run keys carry a 24h
+// TTL, but the zone + run-meta caches these rooms hold are process-local and
+// had no eviction at all: the map grew one entry per distinct run the replica
+// ever authorised and kept it for the process lifetime.
+func TestRedisHub_RunGCDropsIdleRoomCaches(t *testing.T) {
+	hub, _, teardown := newRedisTestHub(t)
+	defer teardown()
+
+	ctx := context.Background()
+	zones := &fakeZoneFetcher{}
+	for i := 0; i < 500; i++ {
+		if _, err := hub.LoadZones(ctx, fmt.Sprintf("run-%d", i), zones); err != nil {
+			t.Fatalf("LoadZones: %v", err)
+		}
+	}
+	hub.roomsMu.Lock()
+	before := len(hub.rooms)
+	hub.roomsMu.Unlock()
+	if before != 500 {
+		t.Fatalf("expected 500 cached rooms, got %d", before)
+	}
+
+	// A fresh cache must survive a sweep whose idle window it is inside.
+	if dropped := hub.RunGC(time.Hour); dropped != 0 {
+		t.Fatalf("fresh rooms dropped by an hour-wide sweep: %d", dropped)
+	}
+	// Past the window they go — the entries are well beyond CacheRefreshTTL by
+	// then and would be re-fetched on next touch regardless.
+	if dropped := hub.RunGC(-time.Second); dropped != 500 {
+		t.Fatalf("idle sweep dropped %d rooms, want 500", dropped)
+	}
+	hub.roomsMu.Lock()
+	after := len(hub.rooms)
+	hub.roomsMu.Unlock()
+	if after != 0 {
+		t.Fatalf("rooms map still holds %d entries after the sweep", after)
 	}
 }
