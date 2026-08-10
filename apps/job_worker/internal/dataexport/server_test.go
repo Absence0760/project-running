@@ -1776,3 +1776,34 @@ func TestServer_BackupFormatToleratesExtraTablesError(t *testing.T) {
 		t.Errorf("backup export must ship despite extra-tables error; got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// TestBuildBackupZip_NilRawTrackFetcherSkipsSection pins BackupFetchers'
+// documented contract — "a nil field skips its section". Every section honoured
+// it except the tracks and HR-sidecar loops, which called through the nil func
+// as soon as a run carried a track_url in the canonical shape, panicking the
+// export handler. The existing section tests only survived because their
+// fixtures had no matching TrackURL.
+func TestBuildBackupZip_NilRawTrackFetcherSkipsSection(t *testing.T) {
+	trackURL := "uid/r1.json.gz"
+	hrURL := "uid/r1.hr.json.gz"
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID:       "uid",
+		ExportedFrom: "test",
+		Runs: []ExportRun{{
+			ID: "r1", UserID: "uid",
+			TrackURL: &trackURL, HrSeriesURL: &hrURL,
+		}},
+	}, BackupFetchers{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range zr.File {
+		if strings.HasPrefix(f.Name, "tracks/") || strings.HasPrefix(f.Name, "hr/") {
+			t.Errorf("nil RawTrack fetcher must skip its section; got %s", f.Name)
+		}
+	}
+}
