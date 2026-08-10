@@ -514,7 +514,7 @@ We solve it with two schema additions, deliberately small:
 
 **Decided:** April 2026 · captured before the migration that adds `user_follows` and the `/feed` + `/u/[id]` surfaces.
 
-The clubs/events social layer (decisions §0–§28) is a *group* abstraction — useful for race directors and weekly-meetup organisers, but the wrong shape for the runner who just wants to see what their three running friends did this week. That's the surface every consumer running app (Strava, Nike Run Club, Garmin Connect) builds first. We add it as a parallel social layer rather than reusing club_members because the audience model is different: club membership is bidirectional and gated; following is asymmetric and instant.
+The clubs/events social layer (decisions §1–§28) is a *group* abstraction — useful for race directors and weekly-meetup organisers, but the wrong shape for the runner who just wants to see what their three running friends did this week. That's the surface every consumer running app (Strava, Nike Run Club, Garmin Connect) builds first. We add it as a parallel social layer rather than reusing club_members because the audience model is different: club membership is bidirectional and gated; following is asymmetric and instant.
 
 We ship three things together:
 

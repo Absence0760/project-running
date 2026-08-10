@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -24,11 +25,11 @@ import { resolve } from 'node:path';
  * pinned so that fixing one forces its entry out — the list can shrink, never
  * grow.
  *
- * Scope: heading numbers and in-file `§N` references. Markdown anchor links from
- * OTHER files (`decisions.md#137-…`) embed the title as well as the number and
- * are deliberately not checked here; five of those are broken today for reasons
- * unrelated to numbering (a `cut-off`/`cutoff` title drift on § 156, and two
- * bare `#68` anchors carrying no slug).
+ * The third assertion closes the same failure from the outside: a `decisions.md#N-title`
+ * link embeds the title as well as the number, so it breaks on a renumber AND on a
+ * title edit that never touches a number. It is checked only in Markdown, where such a
+ * string is genuinely a link — `contains('decisions.md#68')` inside a Dart guard test is
+ * a prefix matcher, not a link, and would be a false positive.
  */
 
 const repoRoot = resolve(import.meta.dirname, '..', '..', '..', '..');
@@ -39,7 +40,6 @@ const decisionsPath = resolve(repoRoot, 'docs/architecture/decisions.md');
 /// moment its reference is corrected — the pinning assertion below fails if a
 /// listed number stops dangling, so this map cannot silently rot.
 const KNOWN_DANGLING_REFS = new Map<number, string>([
-	[0, 'the range "§0–§28" opens below § 1, the lowest entry there has ever been'],
 	[613, '"the §613 frozen-trace-on-reload behaviour" — no entry 613; likely an issue number'],
 	[4704, '"§ 4704\'s `+` packing" — no entry 4704, and § 470 is unrelated to the glyph table']
 ]);
@@ -95,5 +95,44 @@ test('every §N reference inside decisions.md resolves to an entry', () => {
 		[],
 		`KNOWN_DANGLING_REFS lists ${repaired.join(', ')}, which no longer dangle. Delete those entries — ` +
 			`the allowlist may only shrink.`
+	);
+});
+
+/// GitHub's heading slug: lowercase, drop everything but word chars, spaces and
+/// hyphens, then map each space to its own hyphen. Runs of spaces are NOT
+/// collapsed — "app + domain" loses the `+` and keeps both spaces, which is why
+/// the real anchors carry double hyphens.
+function slugFor(heading: string): string {
+	return heading
+		.toLowerCase()
+		.replace(/[^\w\s-]/g, '')
+		.trim()
+		.replace(/ /g, '-');
+}
+
+test('every decisions.md anchor link in a Markdown file resolves to a heading', () => {
+	const doc = decisionsDoc();
+	const slugs = new Set(
+		[...doc.matchAll(/^#{2,6} (.+)$/gm)].map((m) => slugFor(m[1]))
+	);
+
+	const files = execFileSync('git', ['ls-files', '*.md'], { cwd: repoRoot, encoding: 'utf-8' })
+		.split('\n')
+		.filter(Boolean);
+
+	const broken: string[] = [];
+	for (const file of files) {
+		const text = readFileSync(resolve(repoRoot, file), 'utf-8');
+		for (const m of text.matchAll(/decisions\.md#([\w-]+)/g)) {
+			if (!slugs.has(m[1])) broken.push(`${file} -> #${m[1]}`);
+		}
+	}
+
+	assert.deepEqual(
+		broken,
+		[],
+		`Markdown links point at decisions.md anchors that no heading produces:\n  ${broken.join('\n  ')}\n` +
+			`An anchor embeds the entry's TITLE as well as its number, so renumbering an entry or ` +
+			`rewording its heading breaks every link naming it. Update the links.`
 	);
 });
