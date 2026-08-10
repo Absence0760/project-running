@@ -151,6 +151,51 @@ void main() {
       expect(next, isNull);
     });
 
+    test('nextInstanceAfter — a years-old weekly series still reports its next occurrence', () {
+      // The scan budget used to be derived from `max` (1 here), so the walk gave
+      // up 49 days after the series began and a club's long-running Monday-night
+      // run reported no next occurrence at all.
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2024, 1, 1, 9, 0, 0),
+        freq: RecurrenceFreq.weekly,
+        byday: const [Weekday.mo],
+        timezone: 'UTC',
+      );
+      final next = nextInstanceAfter(e, DateTime.utc(2026, 8, 9));
+      expect(next?.toUtc().toIso8601String(), '2026-08-10T09:00:00.000Z');
+    });
+
+    test('nextInstanceAfter — a years-old monthly series still reports its next occurrence', () {
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2024, 1, 15, 9, 0, 0),
+        freq: RecurrenceFreq.monthly,
+        timezone: 'UTC',
+      );
+      final next = nextInstanceAfter(e, DateTime.utc(2026, 8, 9));
+      expect(next?.toUtc().toIso8601String(), '2026-08-15T09:00:00.000Z');
+    });
+
+    test('expandInstances — a small max does not shorten how far the scan reaches', () {
+      final e = EventRecurrence(
+        startsAt: DateTime.utc(2024, 1, 1, 9, 0, 0),
+        freq: RecurrenceFreq.weekly,
+        byday: const [Weekday.mo],
+        timezone: 'UTC',
+      );
+      final out = expandInstances(
+        e,
+        DateTime.utc(2026, 8, 1),
+        DateTime.utc(2026, 8, 31),
+        max: 4,
+      );
+      expect(out.map((d) => d.toUtc().toIso8601String()).toList(), [
+        '2026-08-03T09:00:00.000Z',
+        '2026-08-10T09:00:00.000Z',
+        '2026-08-17T09:00:00.000Z',
+        '2026-08-24T09:00:00.000Z',
+      ]);
+    });
+
     test('until date stops expansion — no instance falls after until', () {
       final utcStart = DateTime.utc(2026, 4, 1, 8, 0, 0);
       final until = DateTime.utc(2026, 4, 22);
