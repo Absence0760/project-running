@@ -644,7 +644,11 @@ class RunRecordingService : Service() {
         // 12 h ultra rendered "720:34" on the ongoing notification while the
         // tile beside it rendered "12:00:34" for the same run.
         val timeStr = formatElapsed(elapsedMs)
-        val distStr = getString(R.string.distance_km, formatKm(distanceM))
+        // ...and the distance beside it honours preferredUnit, which the service
+        // already carries and the tile already uses. Hardcoding km here meant a
+        // mi-mode runner read 8.05 km on the ongoing-activity chip and 5.00 mi
+        // on the tile beside it, for the same run.
+        val distStr = formatDistanceLabel(distanceM)
         val text = getString(R.string.notif_time_distance, timeStr, distStr)
         val title = if (paused) getString(R.string.notif_paused) else getString(R.string.notif_recording_run)
 
@@ -675,7 +679,7 @@ class RunRecordingService : Service() {
                         .addPart(
                             "distance",
                             Status.TextPart(
-                                getString(R.string.distance_km, formatKm(distanceM)),
+                                formatDistanceLabel(distanceM),
                             ),
                         )
                         .build()
@@ -718,6 +722,14 @@ class RunRecordingService : Service() {
     private fun releaseWakeLock() {
         wakeLock?.takeIf { it.isHeld }?.release()
         wakeLock = null
+    }
+
+    /// Distance rendered in the runner's own unit, for the ongoing notification
+    /// and the Ongoing Activity chip. Mirrors what the tile's formatStatRow
+    /// does; the two sit side by side on the watch face.
+    private fun formatDistanceLabel(distanceM: Double): String = when (preferredUnit) {
+        DistanceUnit.KM -> getString(R.string.distance_km, formatDistance(distanceM, DistanceUnit.KM))
+        DistanceUnit.MI -> getString(R.string.distance_mi, formatDistance(distanceM, DistanceUnit.MI))
     }
 
     companion object {

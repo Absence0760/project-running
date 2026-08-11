@@ -246,15 +246,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         totalPausedInterval += Date().timeIntervalSince(pausedAt)
         self.pausedAt = nil
         lastLocationForDistance = nil
-        // ...and the pace look-back, which walks `track` backwards until 200 m
-        // accumulate and divides by the timestamp span. Clearing only the
-        // distance anchor left that window free to cross the pause: after a
-        // 20-minute aid-station stop, ~200 m over ~1300 s read 1:48:35 /km on
-        // the display AND fired a false "too slow" alert, self-correcting only
-        // after 200 m of post-resume running — on every stop, all race. This is
-        // issue #371's defect, fixed for distance and never applied to pace.
-        track.removeAll(keepingCapacity: true)
-        currentPace = nil
+        sealPaceWindow()
         locationManager.startUpdatingLocation()
         healthKit.resumeSession()
         state = .recording
@@ -384,6 +376,25 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// impossible jumps (>=100 m, e.g. a reacquisition teleport); anything
     /// outside contributes zero. Pure so the pause->wander->resume behaviour
     /// can be unit-tested without a live `CLLocationManager`.
+    /// Drop the pace look-back so it cannot span a discontinuity.
+    ///
+    /// `updatePace` walks `track` backwards until 200 m accumulate and divides
+    /// by the timestamp span, so any gap the distance accumulator refused to
+    /// credit would be timed against metres it never counted. Two places create
+    /// that gap and BOTH must seal: a pause (a 20-minute aid-station stop read
+    /// 1:48:35 /km and fired a false "too slow" alert — issue #371's defect,
+    /// fixed for distance and never applied to pace), and the re-anchor escape
+    /// below, where dropped fixes mean the same thing. The canonical Flutter
+    /// recorder seals `_paceFloorIdx` at both, noting that the error "runs in
+    /// the direction that SUPPRESSES a safety warning".
+    ///
+    /// Clearing `track` loses nothing: it is a bounded in-memory window used
+    /// only for pace and the per-fix delta — the trace itself streams to disk.
+    private func sealPaceWindow() {
+        track.removeAll(keepingCapacity: true)
+        currentPace = nil
+    }
+
     /// Rebase the distance anchor once a genuine interval has passed without
     /// an accepted fix, WITHOUT crediting the un-sampled gap. Mirrors the
     /// Flutter recorder's `_gpsReanchorAfterSeconds`.
@@ -415,7 +426,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                     distanceMetres += delta
                     lastLocationForDistance = location
                 } else if location.timestamp.timeIntervalSince(last.timestamp) >= Self.gpsReanchorSeconds {
+                    // Rebasing without crediting the gap's metres is the SAME
+                    // discontinuity a pause creates, so it seals the pace window
+                    // too — the canonical Flutter recorder does both.
                     lastLocationForDistance = location
+                    sealPaceWindow()
                 }
             } else {
                 lastLocationForDistance = location
