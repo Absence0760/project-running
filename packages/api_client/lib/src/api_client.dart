@@ -755,7 +755,7 @@ class ApiClient {
       trackUrl: trackUrl,
       isPublic: isPublic,
     );
-    final json = row.toJson();
+    final json = _runUpsertBody(row.toJson());
     if (run.externalId != null && run.externalId!.isNotEmpty) {
       await _client.from(RunRow.table).upsert(json,
           onConflict: '${RunRow.colUserId},${RunRow.colExternalId}');
@@ -884,7 +884,7 @@ class ApiClient {
       final trackUrl = trackUrls[r.id] ??
           (r.metadata?['track_url'] as String?) ??
           '';
-      return RunRow(
+      return _runUpsertBody(RunRow(
         id: r.id,
         userId: userId,
         // Same UTC-normalisation as saveRun — see comment there.
@@ -905,7 +905,7 @@ class ApiClient {
         externalId: r.externalId,
         metadata: _metadataWithoutPromotedColumns(r.metadata),
         trackUrl: trackUrl.isEmpty ? null : trackUrl,
-      ).toJson();
+      ).toJson());
     }).toList();
 
     int saved = 0;
@@ -5480,13 +5480,23 @@ class ApiClient {
   /// Live-spectator hydration. Fetches existing `live_run_pings` for a
   /// run in chronological order so a newly-mounted spectator screen can
   /// catch up on the trail before subscribing to realtime inserts.
+  /// The spectator's ping backlog, oldest-first for replay.
+  ///
+  /// Fetched NEWEST-first and reversed, never ascending: PostgREST caps a
+  /// result at 1000 rows, and at the broadcaster's 5 s interval that is 83
+  /// minutes. An ascending fetch therefore returns the OLDEST 83 minutes of a
+  /// long race and omits the runner's current position entirely — on a
+  /// 100-miler opened six hours in, the spectator sees the start of the trail
+  /// and nothing since, until the next realtime insert happens to arrive.
+  /// Web fixed exactly this (issue #334) and pins the shape in data.test.ts.
   Future<List<Map<String, dynamic>>> fetchLiveRunPings(String runId) async {
     final rows = await _client
         .from('live_run_pings')
         .select('lat, lng, ele, distance_m, elapsed_s, at')
         .eq('run_id', runId)
-        .order('at', ascending: true);
-    return (rows as List).cast<Map<String, dynamic>>();
+        .order('at', ascending: false)
+        .limit(1000);
+    return (rows as List).cast<Map<String, dynamic>>().reversed.toList();
   }
 
   /// Pre-create a stub `runs` row so live spectator pings can land
@@ -7482,3 +7492,22 @@ class ActivityRow {
     );
   }
 }
+
+/// The body a `runs` upsert may send.
+///
+/// `RunRow.toJson()` emits all 24 columns unconditionally, nulls included, and
+/// an `ON CONFLICT DO UPDATE` writes those nulls over whatever the server
+/// holds. Several of those columns are not represented on the Dart `Run` model
+/// at all — `is_public`, `event_id`, `race_listing_id`, `concluded_at` — so the
+/// phone always sends null for them and a re-sync silently reverts server
+/// state. Concretely: a runner shares a run (`is_public = true`), later edits
+/// its title while offline, and the next `saveRunsBatch` sets `is_public` back
+/// to null — the run drops out of `public_runs`, its `/share/run/{id}` link
+/// 404s, and the phone shows nothing wrong because it never knew the column.
+///
+/// Stripping nulls means an upsert can only ever ADD or CHANGE a value, never
+/// clear one. That is the same trade-off `buildSaveRouteBody` already takes,
+/// and targeted clears go through `updateRunFields`, which sends only the keys
+/// it means to write.
+Map<String, dynamic> _runUpsertBody(Map<String, dynamic> json) =>
+    Map<String, dynamic>.from(json)..removeWhere((k, v) => v == null);
