@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/nativepush"
 )
 
 // fakeBackend records every call so tests can pin the worker's
@@ -1480,6 +1482,13 @@ func TestIsTransient(t *testing.T) {
 	}{
 		{"5xx", &HTTPError{StatusCode: 503}, true},
 		{"4xx", &HTTPError{StatusCode: 404}, false},
+		// 429 is "come back later", not a rejection. Both push handlers encode
+		// a throttling response as a transient HTTPError; classifying it as
+		// permanent here failed the job outright and dropped the push.
+		{"429 rate limit", &HTTPError{StatusCode: 429}, true},
+		{"499 is still permanent", &HTTPError{StatusCode: 499}, false},
+		{"400 is still permanent", &HTTPError{StatusCode: 400}, false},
+		{"600 is out of the 5xx band", &HTTPError{StatusCode: 600}, false},
 		{"timeout substring", errors.New("dial tcp: i/o timeout"), true},
 		{"connection refused", errors.New("connection refused"), true},
 		{"deadline exceeded", context.DeadlineExceeded, true},
@@ -1491,6 +1500,25 @@ func TestIsTransient(t *testing.T) {
 				t.Errorf("isTransient(%v) = %v, want %v", tc.err, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestIsTransient_AgreesWithPushClassifiers — the push handlers decide which
+// upstream statuses deserve a retry and encode that decision as a typed
+// *HTTPError; the worker then re-decides via isTransient. Two classifiers for
+// one question drifted apart on 429: nativepush.IsTransient said retry, the
+// worker said fail. Pin that they agree on every status either one accepts, so
+// a future edit to one has to move the other.
+func TestIsTransient_AgreesWithPushClassifiers(t *testing.T) {
+	for status := 100; status < 600; status++ {
+		pushWants := nativepush.IsTransient(status)
+		if !pushWants {
+			continue
+		}
+		if !isTransient(&HTTPError{StatusCode: status}) {
+			t.Errorf("nativepush.IsTransient(%d) = true but the worker would "+
+				"permanently fail the job", status)
+		}
 	}
 }
 
