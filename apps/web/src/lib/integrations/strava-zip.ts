@@ -14,7 +14,7 @@
 
 import JSZip from 'jszip';
 import { parseRouteFile, type ImportedRoute } from './import';
-import { parseFitBuffer } from './garmin-fit';
+import { parseFitBuffer, computeEmbeddedBests } from './garmin-fit';
 import { saveRun, addRunPhoto } from '../core/data';
 import { TABLES, METADATA_KEYS } from '../core/schema';
 import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
@@ -240,6 +240,11 @@ async function importOne(
 		activity_type: activityType,
 		metadata,
 		track: track ?? undefined,
+		// The promoted fastest-window columns `refresh_personal_records_for_user`
+		// reads. Without them an imported long run can never yield the 5K/10K PR
+		// hiding inside its track, so five years of migrated Strava history lands
+		// with zero embedded bests — the Garmin importer already does this.
+		...(track ? { embedded_bests: computeEmbeddedBests(track) } : {}),
 		title: row[idx.name] || null,
 		// Cross-source dedupe — matches the mobile ZIP + Strava-
 		// OAuth writers. /audit/strava M3.

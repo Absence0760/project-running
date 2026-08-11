@@ -1168,9 +1168,14 @@ export async function saveRun(input: {
 	if (!userId) throw new Error('Not authenticated');
 	const isPublic = input.isPublic ?? (await defaultRunIsPublic(userId));
 
-	// elevation_m and title are not columns on `runs` (elevation_m lives on
-	// `routes`; title has no DB column). Merge both into metadata so they
-	// survive the round-trip. See docs/backend/metadata.md for the registered keys.
+	// `title` has no DB column, so it survives the round-trip in metadata only.
+	// `elevation_m` is different: migration 20270302_001 promoted total ascent to
+	// the first-class `runs.elevation_gain_m` column and its contract is that
+	// "writers populate both" — the jsonb key for the readers that still use it
+	// (recap fallback, export, the Go worker) and the column for the ones that
+	// sum it in SQL. The vert challenge aggregate sums the COLUMN, so writing
+	// only the metadata key leaves every vert leaderboard stuck at 0 m.
+	// See docs/backend/metadata.md for the registered keys.
 	const mergedMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
 	if (input.title) mergedMetadata[METADATA_KEYS.title] = input.title;
 	if (input.elevation_m != null) mergedMetadata[METADATA_KEYS.elevation_m] = input.elevation_m;
@@ -1184,6 +1189,7 @@ export async function saveRun(input: {
 		metadata: mergedMetadata,
 		is_public: isPublic,
 	};
+	if (input.elevation_m != null) row.elevation_gain_m = input.elevation_m;
 	if (input.embedded_bests) Object.assign(row, input.embedded_bests);
 	if (input.external_id) row.external_id = input.external_id;
 
