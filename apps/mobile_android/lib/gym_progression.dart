@@ -33,7 +33,12 @@ class ProgressionSetLike {
   final num? reps;
   final num? weightKg;
   final num? rpe;
-  const ProgressionSetLike({this.reps, this.weightKg, this.rpe});
+
+  /// gym_sets.set_type — raw string (matches the DB CHECK union). A ramp-up
+  /// set is not evidence about the working target, so it must not be judged
+  /// against it. Null reads as 'working', matching the column default.
+  final String? setType;
+  const ProgressionSetLike({this.reps, this.weightKg, this.rpe, this.setType});
 }
 
 class ProgressionInput {
@@ -83,8 +88,11 @@ double _positiveOr(Object? v, double fallback) {
   return (n != null && n > 0) ? n : fallback;
 }
 
-/// The heaviest working weight across the session — the anchor a load increment
-/// is added to. Null when no set carried a positive weight (bodyweight work).
+/// The heaviest weight the lifter actually COMPLETED — the anchor a load
+/// increment is added to. Null when no completed set carried a positive weight
+/// (bodyweight work). Callers must pass the completed subset: anchoring on a
+/// set that was merely attempted prescribes a load off a weight the lifter
+/// failed to lift.
 double? _topWeight(List<ProgressionSetLike> sets) {
   double? top;
   for (final s in sets) {
@@ -107,14 +115,27 @@ ProgressionSuggestion nextPrescription(ProgressionInput input) {
 
   final params = input.params ?? const {};
   final sets = input.lastSets;
+  // Warmups are excluded before anything is judged. Every "did they hit the
+  // target?" test below is an `every` over this list, so a 2-rep ramp-up set
+  // counted as a failed working set and held the load — forever, for anyone who
+  // warms up, which is everyone. gym_adherence states the same rule for
+  // planned-vs-actual grading; the prescriber simply never received the column.
+  // A null setType is 'working', matching the DB default.
   final completed = sets.where((s) {
+    if ((s.setType ?? 'working') == 'warmup') return false;
     final r = _numericOrNull(s.reps);
     return r != null && r > 0;
   }).toList();
 
   final repsMin = _numericOrNull(input.targetRepsMin);
   final repsMax = _numericOrNull(input.targetRepsMax);
-  final weight = _topWeight(sets);
+  // Anchor on what was COMPLETED, not on what was attempted. `gym_sets.reps`
+  // is nullable and CHECK-allows 0, and the editor writes a row for every set
+  // typed — so "weight entered, reps left blank" and "failed attempt logged as
+  // 0" are normal shapes. Scanning the raw list made the failed heavier attempt
+  // the anchor and then added the increment to it, prescribing more than a
+  // weight the lifter had just missed.
+  final weight = _topWeight(completed);
   final step = _positiveOr(params['incrementKg'], 2.5);
 
   switch (input.scheme) {

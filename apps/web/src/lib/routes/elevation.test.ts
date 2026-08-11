@@ -129,3 +129,123 @@ test('sampleCoordinates — indices align with the sampled coordinates', () => {
 		assert.deepEqual(sampled[k], coords[indices[k]]);
 	}
 });
+
+/// Grants consent and stubs fetch for the duration of `body`, restoring both.
+async function withConsentAndFetch(
+	handler: (url: string) => Promise<Response>,
+	body: () => Promise<void>,
+): Promise<void> {
+	const originalFetch = globalThis.fetch;
+	const originalLs = (globalThis as { localStorage?: unknown }).localStorage;
+	(globalThis as { localStorage?: unknown }).localStorage = {
+		getItem: (k: string) =>
+			k === 'cookie_consent' ? JSON.stringify({ choice: 'accepted' }) : null,
+	};
+	globalThis.fetch = ((url: string) => handler(String(url))) as typeof fetch;
+	try {
+		await body();
+	} finally {
+		globalThis.fetch = originalFetch;
+		if (originalLs === undefined) delete (globalThis as { localStorage?: unknown }).localStorage;
+		else (globalThis as { localStorage?: unknown }).localStorage = originalLs;
+	}
+}
+
+test('a failed batch zeroes the whole lookup, never splices zeros into real data', async () => {
+	// 250 alpine waypoints = 3 batches. The middle one is rate-limited. The old
+	// per-batch fallback returned [2000..2099] ++ [0 x 100] ++ [2200..2249]:
+	// calculateElevationGain read 2348 m of gain against a true 249 m, the
+	// roadbook's `some(e => e !== 0)` all-zeros guard passed, and GPX export
+	// wrote <ele>0</ele> for 100 mid-mountain trackpoints.
+	const coords: [number, number][] = Array.from(
+		{ length: 250 },
+		(_, i) => [6.87 + i * 0.0001, 45.9] as [number, number],
+	);
+	let batch = 0;
+	await withConsentAndFetch(
+		async () => {
+			const n = batch++;
+			if (n === 1) return { ok: false, status: 429, json: async () => ({}) } as unknown as Response;
+			const start = n === 0 ? 2000 : 2200;
+			const len = n === 0 ? 100 : 50;
+			return {
+				ok: true,
+				json: async () => ({ elevation: Array.from({ length: len }, (_, i) => start + i) }),
+			} as unknown as Response;
+		},
+		async () => {
+			const out = await fetchElevations(coords);
+			assert.equal(out.length, 250);
+			assert.ok(
+				out.every((e) => e === 0),
+				'a partial failure must degrade to all-zeros, not interleave',
+			);
+			assert.equal(calculateElevationGain(out), 0, 'no phantom climb');
+		},
+	);
+});
+
+test('a thrown fetch on a later batch also zeroes the whole lookup', async () => {
+	const coords: [number, number][] = Array.from(
+		{ length: 150 },
+		(_, i) => [6.87 + i * 0.0001, 45.9] as [number, number],
+	);
+	let batch = 0;
+	await withConsentAndFetch(
+		async () => {
+			if (batch++ === 0) {
+				return {
+					ok: true,
+					json: async () => ({ elevation: Array.from({ length: 100 }, () => 1500) }),
+				} as unknown as Response;
+			}
+			throw new Error('network down');
+		},
+		async () => {
+			const out = await fetchElevations(coords);
+			assert.equal(out.length, 150);
+			assert.ok(out.every((e) => e === 0));
+		},
+	);
+});
+
+test('a short elevation array is a failure, not a silent shift', async () => {
+	// Accepting a short array would push fewer readings than the batch had, so
+	// every later batch's altitudes would land on the wrong coordinates.
+	const coords: [number, number][] = Array.from(
+		{ length: 150 },
+		(_, i) => [6.87 + i * 0.0001, 45.9] as [number, number],
+	);
+	await withConsentAndFetch(
+		async () =>
+			({ ok: true, json: async () => ({ elevation: [1, 2, 3] }) }) as unknown as Response,
+		async () => {
+			const out = await fetchElevations(coords);
+			assert.equal(out.length, 150);
+			assert.ok(out.every((e) => e === 0));
+		},
+	);
+});
+
+test('every batch succeeding still returns the real profile', async () => {
+	// The guard must not turn a healthy multi-batch lookup into zeros.
+	const coords: [number, number][] = Array.from(
+		{ length: 150 },
+		(_, i) => [6.87 + i * 0.0001, 45.9] as [number, number],
+	);
+	let batch = 0;
+	await withConsentAndFetch(
+		async () => {
+			const len = batch++ === 0 ? 100 : 50;
+			return {
+				ok: true,
+				json: async () => ({ elevation: Array.from({ length: len }, () => 1500) }),
+			} as unknown as Response;
+		},
+		async () => {
+			const out = await fetchElevations(coords);
+			assert.equal(out.length, 150);
+			assert.ok(out.every((e) => e === 1500));
+		},
+	);
+});

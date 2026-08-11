@@ -2243,6 +2243,7 @@ export const messages = {
 	"live.updatedMinutes": "{n}分前に更新",
 	"live.updatedHours": "{n}時間前に更新",
 	"live.updatedDays": "{n}日前に更新",
+	"live.updatedUnknown": "最終更新時刻は不明です",
 	"live.badgeFinished": "終了",
 	"live.badgeNotBroadcasting": "配信なし",
 	"live.badgeConnectionLost": "接続が切れました",

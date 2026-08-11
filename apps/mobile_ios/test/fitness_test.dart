@@ -409,4 +409,23 @@ void main() {
       expect(snap.qualifyingRunCount, 0);
     });
   });
+
+  test('qualifyingRuns accepts every value of the RunSource enum', () {
+    // The web twin's test listed six sources and called that "every recognised
+    // source", so it passed while `parkrun` and `race` — a certified weekly 5K
+    // and a chip-timed official result, the two most authoritative sources
+    // there are — were silently dropped from every fitness calculation.
+    // Enumerate the real enum so a new value fails here until classified.
+    for (final source in RunSource.values) {
+      final run = Run(
+        id: 'r-${source.name}',
+        startedAt: DateTime.utc(2026, 4, 1, 7),
+        distanceMetres: 5000,
+        duration: const Duration(seconds: 1500),
+        source: source,
+      );
+      expect(qualifyingRuns([run]).length, 1,
+          reason: 'source ${source.name} must qualify');
+    }
+  });
 }

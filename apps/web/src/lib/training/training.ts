@@ -273,13 +273,19 @@ const FALLBACK_GOAL_PACE_SEC_PER_KM = 600;
  * preview "estimated — add a recent run for personalised paces" rather than
  * presenting a placeholder as a confident prescription. Persona round-5
  * runner-comeback.
+ *
+ * `goalPaceSecPerKm` is the resolved race pace the bands were derived FROM,
+ * returned so a caller prescribing the goal effort itself (the race workout,
+ * `marathon_pace` sessions) uses it directly instead of trying to invert a
+ * band's multiplier back out. It is deliberately not gender-calibrated: the
+ * calibration shapes training zones, but the runner's goal is their goal.
  */
 export function resolveTrainingPacesWithMeta(input: {
 	goalDistanceM: number;
 	goalTimeSec?: number | null;
 	recent5kSec?: number | null;
 	gender?: TrainingGender;
-}): { paces: TrainingPaces; isFallback: boolean } {
+}): { paces: TrainingPaces; isFallback: boolean; goalPaceSecPerKm: number } {
 	let goalPaceSecPerKm: number;
 	let isFallback = false;
 	if (input.recent5kSec) {
@@ -291,7 +297,11 @@ export function resolveTrainingPacesWithMeta(input: {
 		goalPaceSecPerKm = FALLBACK_GOAL_PACE_SEC_PER_KM;
 		isFallback = true;
 	}
-	return { paces: pacesFromGoalPace(goalPaceSecPerKm, input.gender ?? null), isFallback };
+	return {
+		paces: pacesFromGoalPace(goalPaceSecPerKm, input.gender ?? null),
+		isFallback,
+		goalPaceSecPerKm
+	};
 }
 
 /**
@@ -454,7 +464,11 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 			? input.goalDistanceM!
 			: GOAL_DISTANCES_M[input.goalEvent];
 	const totalWeeks = input.weeks ?? defaultPlanWeeks(input.goalEvent);
-	const { paces, isFallback: pacesAreFallback } = resolveTrainingPacesWithMeta({
+	const {
+		paces,
+		isFallback: pacesAreFallback,
+		goalPaceSecPerKm
+	} = resolveTrainingPacesWithMeta({
 		goalDistanceM,
 		goalTimeSec: input.goalTimeSec,
 		recent5kSec: input.recent5kSec,
@@ -494,7 +508,7 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 			weeklyKm,
 			paces,
 			goalDistanceM,
-			goalPaceSecPerKm: paces.marathon * (goalDistanceM >= 21_000 ? 1 : 0.95),
+			goalPaceSecPerKm,
 			masters
 		});
 		// The stated weekly volume must equal what the week actually
@@ -916,7 +930,7 @@ function allocateQualityKm(
 	} else if (w.phase === 'peak') {
 		if (w.daysPerWeek >= 3) a = intervalsWorkout(placeholder, w.paces);
 		if (w.daysPerWeek >= 5)
-			b = marathonPaceWorkout(placeholder, w.paces, w.goalDistanceM);
+			b = marathonPaceWorkout(placeholder, w.paces, w.goalDistanceM, w.goalPaceSecPerKm);
 	} else if (w.phase === 'taper') {
 		if (w.daysPerWeek >= 3) a = tempoWorkout(placeholder, 4, w.paces);
 	}
@@ -976,19 +990,26 @@ function intervalsWorkout(date: string, paces: TrainingPaces): GeneratedWorkout 
 function marathonPaceWorkout(
 	date: string,
 	paces: TrainingPaces,
-	goalDistanceM: number
+	goalDistanceM: number,
+	goalPaceSecPerKm: number
 ): GeneratedWorkout {
-	const mpKm = goalDistanceM >= 21_000 ? 10 : 5;
+	const isLongGoal = goalDistanceM >= 21_000;
+	const mpKm = isLongGoal ? 10 : 5;
+	// On a half/marathon plan this session IS goal-pace practice — the note
+	// says so, and that is why it doubles to 10 km. On a 5K/10K plan it is a
+	// steady aerobic session at marathon *effort*, which is genuinely slower
+	// than the goal, so the training band is the right prescription there.
+	const steadyPace = isLongGoal ? Math.round(goalPaceSecPerKm) : paces.marathon;
 	return {
 		scheduled_date: date,
 		kind: 'marathon_pace',
 		target_distance_m: (mpKm + 3) * 1000,
 		target_duration_seconds: null,
-		target_pace_sec_per_km: paces.marathon,
+		target_pace_sec_per_km: steadyPace,
 		target_pace_tolerance_sec: 8,
 		structure: {
 			warmup: { distance_m: 1500, pace: 'easy' },
-			steady: { distance_m: mpKm * 1000, pace_sec_per_km: paces.marathon },
+			steady: { distance_m: mpKm * 1000, pace_sec_per_km: steadyPace },
 			cooldown: { distance_m: 1500, pace: 'easy' }
 		},
 		notes: `${mpKm} km @ goal marathon pace.`

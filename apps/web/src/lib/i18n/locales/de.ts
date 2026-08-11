@@ -2248,6 +2248,7 @@ export const messages = {
 	"live.updatedMinutes": "Vor {n} Min. aktualisiert",
 	"live.updatedHours": "Vor {n} Std. aktualisiert",
 	"live.updatedDays": "Vor {n} T. aktualisiert",
+	"live.updatedUnknown": "Zeitpunkt der letzten Aktualisierung unbekannt",
 	"live.badgeFinished": "Beendet",
 	"live.badgeNotBroadcasting": "Sendet nicht",
 	"live.badgeConnectionLost": "Verbindung verloren",

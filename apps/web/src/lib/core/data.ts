@@ -8959,7 +8959,7 @@ export async function fetchGymSetHistoryWithError(opts?: {
 	if (!userId) return { sets: [], error: null };
 	let query = supabase
 		.from(TABLES.gym_sets)
-		.select('workout_id, exercise_name, reps, weight_kg, rpe, duration_s, gym_workouts!inner(started_at, user_id)')
+		.select('workout_id, exercise_name, reps, weight_kg, rpe, duration_s, set_type, gym_workouts!inner(started_at, user_id)')
 		.eq('gym_workouts.user_id', userId);
 	if (opts?.sinceDays != null) {
 		const since = new Date(Date.now() - opts.sinceDays * 86_400_000).toISOString();

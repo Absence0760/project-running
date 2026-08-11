@@ -19,7 +19,7 @@
 /// - **ATL / CTL / TSB:** standard exponentially-weighted moving
 ///   averages over daily TSS. 7-day ATL, 42-day CTL, TSB = CTL − ATL.
 
-import type { Run } from '../types';
+import type { Run, RunSource } from '../types';
 import { kLayoffResetDays, localDateKey } from './training_load';
 
 export interface FitnessSnapshot {
@@ -93,6 +93,25 @@ export function isReturningFromGap(
 /// `goals.ts` excludes it from pace: bike speed is not running speed, and
 /// `currentVdot` takes the MAX over runs, so a single commute rides straight to
 /// the top and takes the threshold pace, TSS and race predictions with it.
+/// Which `runs.source` values carry a trustworthy distance + duration for
+/// fitness math. Declared as a total map over `RunSource` rather than an `||`
+/// chain so adding a value to the union is a type error here until it is
+/// consciously classified — the previous chain silently omitted `parkrun` and
+/// `race`, the two most authoritative sources there are (a certified weekly 5K
+/// and a chip-timed official result). Migration
+/// `20270424_001_pr_achievements_include_parkrun_race` fixed exactly this
+/// omission in the SQL PR + achievement filters; the client copy was missed.
+const SOURCE_QUALIFIES: Record<RunSource, boolean> = {
+	app: true,
+	watch: true,
+	strava: true,
+	garmin: true,
+	healthkit: true,
+	healthconnect: true,
+	parkrun: true,
+	race: true,
+};
+
 export function qualifyingRuns(runs: Run[]): Run[] {
 	return runs.filter(
 		(r) =>
@@ -100,12 +119,7 @@ export function qualifyingRuns(runs: Run[]): Run[] {
 			r.duration_s >= 300 &&
 			r.activity_type !== 'cycle' &&
 			(r.metadata as Record<string, unknown> | null)?.indoor !== true &&
-			(r.source === 'app' ||
-				r.source === 'watch' ||
-				r.source === 'strava' ||
-				r.source === 'garmin' ||
-				r.source === 'healthkit' ||
-				r.source === 'healthconnect'),
+			SOURCE_QUALIFIES[r.source] === true,
 	);
 }
 

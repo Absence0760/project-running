@@ -929,4 +929,99 @@ void main() {
       expect(weekVol(zero, 0), weekVol(noAnchor, 0));
     });
   });
+
+  test('the race workout is prescribed at the goal pace, at every distance', () {
+    // The generator used to hand the week builder a goal pace reconstructed
+    // from the derived `marathon` band: `paces.marathon * (goalDistance >=
+    // 21000 ? 1 : 0.95)`. Since that band is `goalPace * 1.06`, the 0.95
+    // roughly undid it on 5K/10K plans but the `1` left half + marathon plans
+    // prescribing the race 6% slower than the runner's goal.
+    final cases = <List<Object>>[
+      [GoalEvent.distance5k, 1200, 5000.0],
+      [GoalEvent.distance10k, 2700, 10000.0],
+      [GoalEvent.distanceHalf, 6300, 21097.5],
+      [GoalEvent.distanceFull, 12600, 42195.0],
+    ];
+    for (final c in cases) {
+      final goalEvent = c[0] as GoalEvent;
+      final goalTimeSec = c[1] as int;
+      final distanceM = c[2] as double;
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: goalEvent,
+        goalTimeSec: goalTimeSec,
+        startDate: DateTime(2026, 1, 5),
+        daysPerWeek: 5,
+        weeks: 16,
+      ));
+      final goalPace = goalTimeSec / (distanceM / 1000);
+      final race = plan.weeks
+          .expand((w) => w.workouts)
+          .firstWhere((w) => w.kind == WorkoutKind.race);
+      expect(race.targetPaceSecPerKm, isNotNull, reason: '$goalEvent');
+      // Within a second per km — the only slack is integer sec/km rounding.
+      expect((race.targetPaceSecPerKm! - goalPace).abs() <= 1, isTrue,
+          reason: '$goalEvent: race pace ${race.targetPaceSecPerKm} '
+              'should be goal pace ${goalPace.toStringAsFixed(1)}');
+    }
+  });
+
+  test('marathon_pace sessions are prescribed at the goal pace, not the band', () {
+    final plan = generatePlan(GeneratePlanInput(
+      goalEvent: GoalEvent.distanceFull,
+      goalTimeSec: 12600,
+      startDate: DateTime(2026, 1, 5),
+      daysPerWeek: 5,
+      weeks: 16,
+    ));
+    final goalPace = 12600 / 42.195;
+    final mp = plan.weeks
+        .expand((w) => w.workouts)
+        .where((w) => w.kind == WorkoutKind.marathonPace)
+        .toList();
+    expect(mp, isNotEmpty);
+    for (final w in mp) {
+      expect((w.targetPaceSecPerKm! - goalPace).abs() <= 1, isTrue,
+          reason: 'marathon_pace ${w.targetPaceSecPerKm} should be goal pace');
+      // The structure the workout runner executes must agree with the headline.
+      expect(w.structure!.steady!['pace_sec_per_km'], w.targetPaceSecPerKm);
+    }
+  });
+
+  test('a 10K plan keeps marathon_pace on the training band, not the goal pace', () {
+    // The other side of the same branch: on a short-distance goal this session
+    // is steady aerobic work at marathon *effort*, legitimately slower than
+    // goal pace. Pinning it stops the fix above from over-reaching.
+    final plan = generatePlan(GeneratePlanInput(
+      goalEvent: GoalEvent.distance10k,
+      goalTimeSec: 2700,
+      startDate: DateTime(2026, 1, 5),
+      daysPerWeek: 5,
+      weeks: 16,
+    ));
+    final resolved = resolveTrainingPacesWithMeta(
+      goalDistanceM: 10000,
+      goalTimeSec: 2700,
+    );
+    final mp = plan.weeks
+        .expand((w) => w.workouts)
+        .where((w) => w.kind == WorkoutKind.marathonPace)
+        .toList();
+    expect(mp, isNotEmpty);
+    for (final w in mp) {
+      expect(w.targetPaceSecPerKm, resolved.paces.marathon);
+      expect(w.targetPaceSecPerKm! > 270, isTrue,
+          reason: 'slower than the 10K goal pace');
+    }
+  });
+
+  test('the goal pace the bands derive from is returned, ungendered', () {
+    final male = resolveTrainingPacesWithMeta(
+        goalDistanceM: 42195, goalTimeSec: 12600);
+    final female = resolveTrainingPacesWithMeta(
+        goalDistanceM: 42195, goalTimeSec: 12600, gender: 'female');
+    expect(male.goalPaceSecPerKm, female.goalPaceSecPerKm);
+    expect((male.goalPaceSecPerKm - 12600 / 42.195).abs() < 0.001, isTrue);
+    expect(male.paces.easy == female.paces.easy, isFalse,
+        reason: 'bands still calibrate');
+  });
 }

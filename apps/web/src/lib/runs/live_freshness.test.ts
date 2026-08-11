@@ -44,6 +44,38 @@ test('an exactly-now ping reads as fresh "now"', () => {
 	assert.equal(f.stale, false);
 });
 
-function pick(f: { bucket: string; value: number }): [string, number] {
+test('an age that cannot be established fails closed as stale, never fresh', () => {
+	// `new Date(malformed).getTime()` is NaN, and every comparison against NaN
+	// is false — so the old code reported `stale: false` (a green LIVE dot) plus
+	// "Updated NaN days ago" for a runner whose position age is unknowable.
+	for (const bad of [NaN, Infinity, -Infinity]) {
+		const f = freshnessFor(bad, NOW);
+		assert.equal(f.stale, true, `sentAtMs ${bad} must fail closed`);
+		assert.equal(f.bucket, 'unknown');
+		assert.equal(f.ageMs, null);
+		assert.equal(f.value, null);
+	}
+});
+
+test('a non-finite clock also fails closed rather than inverting the age', () => {
+	for (const bad of [NaN, Infinity]) {
+		const f = freshnessFor(NOW, bad);
+		assert.equal(f.stale, true, `nowMs ${bad} must fail closed`);
+		assert.equal(f.bucket, 'unknown');
+	}
+});
+
+test('a finite ping is never routed into the unknown bucket', () => {
+	// Guards the shape of the finite-check: a legitimately old but readable
+	// ping must still bucket + report a number, not collapse into `unknown`.
+	const old = freshnessFor(NOW - 400 * 24 * 3600_000, NOW);
+	assert.equal(old.bucket, 'days');
+	assert.equal(old.value, 400);
+	assert.equal(old.stale, true);
+	assert.equal(freshnessFor(0, NOW).bucket, 'days');
+	assert.equal(freshnessFor(NOW, NOW).bucket, 'now');
+});
+
+function pick(f: { bucket: string; value: number | null }): [string, number | null] {
 	return [f.bucket, f.value];
 }

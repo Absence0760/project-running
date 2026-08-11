@@ -187,6 +187,8 @@
 				return m('live.updatedHours', { n: f.value });
 			case 'days':
 				return m('live.updatedDays', { n: f.value });
+			case 'unknown':
+				return m('live.updatedUnknown');
 		}
 	}
 

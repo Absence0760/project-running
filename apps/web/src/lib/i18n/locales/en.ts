@@ -2256,6 +2256,7 @@ export const en = {
 	"live.updatedMinutes": "Updated {n} min ago",
 	"live.updatedHours": "Updated {n}h ago",
 	"live.updatedDays": "Updated {n}d ago",
+	"live.updatedUnknown": "Last update time unknown",
 	"live.badgeFinished": "Finished",
 	"live.badgeNotBroadcasting": "Not broadcasting",
 	"live.badgeConnectionLost": "Connection lost",

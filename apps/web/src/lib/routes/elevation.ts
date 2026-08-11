@@ -63,21 +63,40 @@ export async function fetchElevations(
 		// "Calculating route…" spinner can't recover. Zeros-on-failure
 		// is preferable to a hung UI; the route still saves, the user
 		// just doesn't get an elevation profile.
+		// A failed batch fails the WHOLE lookup. Pushing zeros for just this
+		// batch and continuing spliced a fabricated sea-level plateau into the
+		// middle of a real profile — and a partial failure is the likely one,
+		// since a long route is 5-50 back-to-back requests against a
+		// rate-limited free API. A 250-point alpine route whose middle batch
+		// was throttled read as 2348 m of gain instead of 249 m, passed the
+		// roadbook's `some(e => e !== 0)` all-zeros guard, booked a phantom
+		// 2200 m climb into the crew schedule, and wrote <ele>0</ele> for 100
+		// mid-mountain trackpoints on GPX export. All-zeros is an honest
+		// "no elevation data"; interleaved zeros are indistinguishable from
+		// terrain.
 		let res: Response;
 		try {
 			res = await fetch(url, { signal: AbortSignal.timeout(8000) });
 		} catch {
-			results.push(...batch.map(() => 0));
-			continue;
+			return coordinates.map(() => 0);
 		}
 
 		if (!res.ok) {
-			// Fall back to zeros if elevation service is unavailable
-			results.push(...batch.map(() => 0));
-			continue;
+			return coordinates.map(() => 0);
 		}
 
-		const data: { elevation: number[] } = await res.json();
+		let data: { elevation?: number[] } | null = null;
+		try {
+			data = (await res.json()) as { elevation?: number[] };
+		} catch {
+			return coordinates.map(() => 0);
+		}
+
+		// A short or absent array would otherwise silently shift every
+		// subsequent batch's readings onto the wrong coordinates.
+		if (!Array.isArray(data?.elevation) || data.elevation.length !== batch.length) {
+			return coordinates.map(() => 0);
+		}
 		results.push(...data.elevation);
 	}
 

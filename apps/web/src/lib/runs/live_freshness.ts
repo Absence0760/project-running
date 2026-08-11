@@ -10,33 +10,56 @@
 /// Returns a *structured* result (no language) so web (`m()`) and the Dart
 /// twin (ARB) localize identically. TS↔Dart parity pair with
 /// `apps/mobile_android/lib/live_freshness.dart` — keep in lockstep.
+///
+/// The `unknown` bucket is deliberately web-only: Dart's `int` parameters
+/// cannot represent NaN, so the twin has no way to be handed an age it
+/// cannot establish. Adding the enum value there would be dead code.
 
 /// A ping older than this is treated as stale. ~18 missed 5s broadcaster
 /// pings: long enough to ride out ordinary cellular flakiness, short
 /// enough that a real signal loss surfaces within a minute and a half.
 export const LIVE_STALE_AFTER_MS = 90_000;
 
-export type FreshnessBucket = 'now' | 'seconds' | 'minutes' | 'hours' | 'days';
+export type FreshnessBucket = 'now' | 'seconds' | 'minutes' | 'hours' | 'days' | 'unknown';
 
-export interface Freshness {
-	/// Age of the last ping in ms, clamped to >= 0 (a future-dated ping
-	/// from clock skew reads as "just now", never a negative age).
-	ageMs: number;
-	/// True once `ageMs >= staleAfterMs` — the caller should stop
-	/// presenting the position as live-current.
-	stale: boolean;
-	/// Coarsened time bucket for display; pair with `value`.
-	bucket: FreshnessBucket;
-	/// The number to show for the bucket (e.g. bucket `minutes`, value 3
-	/// → "Updated 3 min ago"). 0 for `now`.
-	value: number;
-}
+/// Discriminated on `bucket` so a caller that switches on it narrows `value`
+/// to a real number on every displayable branch, and cannot pass the
+/// unknown-age null into a formatter expecting one.
+export type Freshness =
+	| {
+			/// Age of the last ping in ms, clamped to >= 0 (a future-dated ping
+			/// from clock skew reads as "just now", never a negative age).
+			ageMs: number;
+			/// True once `ageMs >= staleAfterMs` — the caller should stop
+			/// presenting the position as live-current.
+			stale: boolean;
+			/// Coarsened time bucket for display; pair with `value`.
+			bucket: Exclude<FreshnessBucket, 'unknown'>;
+			/// The number to show for the bucket (e.g. bucket `minutes`, value 3
+			/// → "Updated 3 min ago"). 0 for `now`.
+			value: number;
+	  }
+	| {
+			/// The age could not be established at all.
+			ageMs: null;
+			/// Always true — an unknown age fails closed.
+			stale: true;
+			bucket: 'unknown';
+			value: null;
+	  };
 
 export function freshnessFor(
 	sentAtMs: number,
 	nowMs: number,
 	staleAfterMs: number = LIVE_STALE_AFTER_MS,
 ): Freshness {
+	// A malformed `at` column / missing `sent_at_ms` yields NaN here, and every
+	// downstream comparison against NaN is false — so an age we cannot establish
+	// would render as a green LIVE dot, the exact failure this module exists to
+	// prevent. Fail closed: unknown age is stale.
+	if (!Number.isFinite(sentAtMs) || !Number.isFinite(nowMs)) {
+		return { ageMs: null, stale: true, bucket: 'unknown', value: null };
+	}
 	const ageMs = Math.max(0, nowMs - sentAtMs);
 	const stale = ageMs >= staleAfterMs;
 	const s = Math.floor(ageMs / 1000);

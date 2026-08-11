@@ -149,8 +149,16 @@ RunnerProjection projectRunner(
     }
   }
 
-  final paceSPerM =
-      lastElapsedS != null && coveredM > 0 ? lastElapsedS / coveredM : null;
+  // `lastElapsedS > 0` matters as much as `coveredM > 0`. A stamp at or before
+  // the race start (a volunteer's tablet running fast, or the RD firing Go
+  // after a start-area checkpoint already scanned) clamps to elapsed 0, and a
+  // pace of exactly 0 is finite — so every remaining checkpoint projected an
+  // arrival of 0 and graded "safe" with the full cutoff as its margin. An
+  // unusable sample must leave future cutoffs ungraded, as a runner with no
+  // crossings at all already does.
+  final paceSPerM = lastElapsedS != null && lastElapsedS > 0 && coveredM > 0
+      ? lastElapsedS / coveredM
+      : null;
 
   var blownCutoff = false;
   final legs = ordered.map((c) {

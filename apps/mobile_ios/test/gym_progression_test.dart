@@ -256,4 +256,126 @@ void main() {
     expect(out.suggestedWeightKg, isNotNull);
     expect(out.suggestedWeightKg! > 0, isTrue);
   });
+
+  test('the load anchor is a weight the lifter completed, never one they missed',
+      () {
+    // `gym_sets.reps` is nullable and CHECK-allows 0, and the composer writes a
+    // row for every set typed — so a failed top single logged as 0 reps, or a
+    // set whose weight was entered before the reps, are normal stored shapes.
+    // _topWeight scanned the raw list, so the missed 110 became the anchor and
+    // the increment was added to IT: the app told the lifter to try 112.5 after
+    // they had just failed 110.
+    const threeGoodSets = [
+      ProgressionSetLike(reps: 5, weightKg: 100),
+      ProgressionSetLike(reps: 5, weightKg: 100),
+      ProgressionSetLike(reps: 5, weightKg: 100),
+    ];
+    for (final missed in const [
+      ProgressionSetLike(reps: 0, weightKg: 110),
+      ProgressionSetLike(reps: null, weightKg: 110),
+    ]) {
+      final got = nextPrescription(ProgressionInput(
+        scheme: ProgressionScheme.linear,
+        lastSets: [...threeGoodSets, missed],
+        targetRepsMin: 5,
+        targetRepsMax: 5,
+      ));
+      expect(got.suggestedWeightKg, 102.5);
+      expect(got.reason, ProgressionReason.increaseWeight);
+    }
+  });
+
+  test('a missed heavier attempt does not inflate a hold either', () {
+    final got = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [
+        ProgressionSetLike(reps: 5, weightKg: 100),
+        ProgressionSetLike(reps: 3, weightKg: 100),
+        ProgressionSetLike(reps: 0, weightKg: 120),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, ProgressionReason.hold);
+    expect(got.suggestedWeightKg, 100);
+  });
+
+  test('a warmup set does not count as a failed working set', () {
+    // The prescriber judges "did they hit the target?" with an `every` over the
+    // completed sets. gym_sets.set_type has existed since 20270101_001 and the
+    // composer writes it, but ProgressionSetLike dropped the column — so a
+    // 2-rep ramp-up read as a working set that missed a 5-rep target and held
+    // the load. Since the lifter warms up again next session, the stall
+    // repeats: anyone who warms up never gets an increase at all.
+    const working = [
+      ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+      ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+      ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+    ];
+    const withRamp = [
+      ProgressionSetLike(reps: 5, weightKg: 40, setType: 'warmup'),
+      ProgressionSetLike(reps: 3, weightKg: 60, setType: 'warmup'),
+      ProgressionSetLike(reps: 2, weightKg: 80, setType: 'warmup'),
+      ...working,
+    ];
+    final bare = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: working,
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    final ramped = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: withRamp,
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(bare.reason, ProgressionReason.increaseWeight);
+    expect(ramped.reason, bare.reason);
+    expect(ramped.suggestedWeightKg, bare.suggestedWeightKg);
+  });
+
+  test('a null set_type is treated as working', () {
+    final got = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [
+        ProgressionSetLike(reps: 5, weightKg: 100),
+        ProgressionSetLike(reps: 5, weightKg: 100),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, ProgressionReason.increaseWeight);
+    expect(got.suggestedWeightKg, 102.5);
+  });
+
+  test('warmups do not pad the five_by_five completed-set count', () {
+    final got = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.fiveByFive,
+      lastSets: [
+        ProgressionSetLike(reps: 5, weightKg: 40, setType: 'warmup'),
+        ProgressionSetLike(reps: 5, weightKg: 60, setType: 'warmup'),
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, isNot(ProgressionReason.increaseWeight));
+  });
+
+  test('a warmup-only session yields no working evidence', () {
+    final got = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [
+        ProgressionSetLike(reps: 5, weightKg: 40, setType: 'warmup'),
+        ProgressionSetLike(reps: 3, weightKg: 60, setType: 'warmup'),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, ProgressionReason.hold);
+    expect(got.suggestedWeightKg, isNull);
+  });
 }

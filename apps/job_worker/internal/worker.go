@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
@@ -573,11 +574,20 @@ func (w *Worker) maybeAutoLinkRoute(
 }
 
 // isTransient classifies an error as worth-retrying. Network blips,
-// 5xx upstream, request timeouts → defer + retry. 4xx, malformed
-// payload, missing run, RLS denial → permanent.
+// 429 rate limits, 5xx upstream, request timeouts → defer + retry.
+// Other 4xx, malformed payload, missing run, RLS denial → permanent.
 func isTransient(err error) bool {
 	var hErr *HTTPError
 	if errors.As(err, &hErr) {
+		// 429 is a "come back later", not a rejection. Both push handlers
+		// deliberately encode a throttling response as a transient HTTPError
+		// (see nativepush.IsTransient, which agrees), so dropping it here
+		// permanently failed the job and left the row's sent_at unstamped
+		// with no job left to drain it — losing the push in exactly the
+		// fan-out burst that provoked the throttle.
+		if hErr.StatusCode == http.StatusTooManyRequests {
+			return true
+		}
 		return hErr.StatusCode >= 500 && hErr.StatusCode < 600
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
