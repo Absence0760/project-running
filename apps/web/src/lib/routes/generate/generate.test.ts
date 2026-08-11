@@ -168,6 +168,38 @@ test('enclosedAreaM2 of an out-and-back spur is ~zero', () => {
 	assert.ok(enclosedAreaM2(spurLoop(0, 0, 0.01)) < 1);
 });
 
+test('enclosedAreaM2 is unchanged by the antimeridian', () => {
+	// A local planar frame built from RAW longitudes is wrong by a whole turn
+	// across 180°: the same square scored ~38,435 km² on the line against
+	// ~1 km² off it, so areaEfficiency read 30,186 instead of 0.785. Taveuni,
+	// Fiji (lat -16.8) is a real place the 180th meridian runs through.
+	const lat = -16.8;
+	const control = squareLoop(179.0, lat, 0.005);
+	const crossing = squareLoop(179.999, lat, 0.005);
+	assert.ok(
+		Math.abs(enclosedAreaM2(crossing) - enclosedAreaM2(control)) /
+			enclosedAreaM2(control) < 1e-9,
+		'a loop straddling 180° must enclose the same area as one that does not',
+	);
+});
+
+test('pickBestLoop is not hijacked by a spur that crosses the antimeridian', () => {
+	// inBandScore = areaEfficiency x closeness, and closeness never drops below
+	// 0.85 in-band — so ANY line-crossing candidate outscored every well-formed
+	// loop by four orders of magnitude, and a degenerate spur won outright.
+	const lat = -16.8;
+	const spur = spurLoop(179.999, lat, 0.01);
+	const round = squareLoop(179.0, lat, 0.005);
+	const best = pickBestLoop(
+		[
+			{ coordinates: spur, distanceM: 4000 },
+			{ coordinates: round, distanceM: 4000 },
+		] as never,
+		4000,
+	);
+	assert.deepEqual(best?.coordinates, round);
+});
+
 test('areaEfficiency ranks a square loop well above a spur', () => {
 	const sq = { coordinates: squareLoop(0, 0, 0.01), distanceM: 4 * 0.02 * 111320 };
 	const sp = { coordinates: spurLoop(0, 0, 0.01), distanceM: 4 * 0.01 * 111320 };

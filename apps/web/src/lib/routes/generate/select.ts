@@ -18,6 +18,7 @@
  *    when 5 km was asked. Shape breaks ties.
  */
 
+import { unwrapLonDeg } from '../geo';
 import type { LoopCandidate } from './graphhopper';
 
 /// Tolerance band (fraction of target) within which candidates are "close
@@ -34,16 +35,33 @@ const DISTANCE_BAND = 0.15;
 export function enclosedAreaM2(coords: ReadonlyArray<[number, number]>): number {
 	if (coords.length < 4) return 0;
 	const lat0 = coords[0][1];
+	const lng0 = coords[0][0];
 	const mPerDegLat = 111320;
 	const mPerDegLng = 111320 * Math.cos((lat0 * Math.PI) / 180);
 	let area = 0;
 	for (let i = 0; i < coords.length; i++) {
-		const [lng1, lat1] = coords[i];
-		const [lng2, lat2] = coords[(i + 1) % coords.length];
-		const x1 = lng1 * mPerDegLng;
-		const y1 = lat1 * mPerDegLat;
-		const x2 = lng2 * mPerDegLng;
-		const y2 = lat2 * mPerDegLat;
+		const [rawLng1, lat1] = coords[i];
+		const [rawLng2, lat2] = coords[(i + 1) % coords.length];
+		// Unwrap onto the first vertex's side of the antimeridian before the
+		// shoelace. This is the local planar frame `geo.ts` (decisions §463 /
+		// §468 / §473) says every east-west delta must go through: a raw
+		// longitude subtraction across 180° is wrong by a whole turn, so a ~1 km²
+		// loop on the line scored 38,434,980,800 m² and its areaEfficiency came
+		// out at 30,186 instead of 0.788. Since inBandScore multiplies
+		// efficiency by a closeness factor that never drops below 0.85 in-band,
+		// ANY line-crossing candidate outscored every well-formed loop by four
+		// orders of magnitude — so pickBestLoop returned a degenerate 4 m-wide
+		// out-and-back spur over a perfect square loop nearby.
+		// Offsets FROM the first vertex, not absolute projected coordinates. The
+		// shoelace is translation-invariant, but at absolute scale each term is
+		// ~1e13 while the answer is ~1e6, so cancellation eats most of the
+		// significand; anchoring at the origin keeps full precision.
+		const lng1 = unwrapLonDeg(lng0, rawLng1);
+		const lng2 = unwrapLonDeg(lng0, rawLng2);
+		const x1 = (lng1 - lng0) * mPerDegLng;
+		const y1 = (lat1 - lat0) * mPerDegLat;
+		const x2 = (lng2 - lng0) * mPerDegLng;
+		const y2 = (lat2 - lat0) * mPerDegLat;
 		area += x1 * y2 - x2 * y1;
 	}
 	return Math.abs(area) / 2;
