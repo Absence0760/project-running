@@ -200,8 +200,11 @@ class _ImportScreenState extends State<ImportScreen> {
 
     final filled =
         HealthConnectImporter.runsWithBackfilledTracks(candidates, routes.tracks);
+    // Keep the RESIDENT instances save() returns: markManySynced matches by
+    // object identity, and our own `filled` copies can never match it.
+    final storedFilled = <Run>[];
     for (final run in filled) {
-      await widget.runStore.save(run);
+      storedFilled.add(await widget.runStore.save(run));
     }
 
     final api = widget.apiClient;
@@ -209,7 +212,7 @@ class _ImportScreenState extends State<ImportScreen> {
       try {
         final failed = await api.saveRunsBatch(filled);
         await widget.runStore.markManySynced(
-          filled.where((r) => !failed.contains(r.id)),
+          storedFilled.where((r) => !failed.contains(r.id)),
         );
       } catch (e) {
         debugPrint('Route backfill cloud push failed: $e');
@@ -274,8 +277,8 @@ class _ImportScreenState extends State<ImportScreen> {
         continue;
       }
       try {
-        await widget.runStore.save(run);
-        savedRuns.add(run);
+        // The resident instance, not our own copy — see markManySynced.
+        savedRuns.add(await widget.runStore.save(run));
       } catch (e) {
         localErrors.add(StravaImportError(run.id, e.toString()));
       }

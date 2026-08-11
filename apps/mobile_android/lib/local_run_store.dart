@@ -307,7 +307,14 @@ class LocalRunStore extends ChangeNotifier {
 
   /// Save a freshly-recorded run locally. Stamps `last_modified_at` and marks
   /// it as unsynced.
-  Future<void> save(Run run) async {
+  ///
+  /// Returns the RESIDENT instance — the stamped/owner-tagged copy actually
+  /// held in `_runs`, not the argument. [markManySynced] identifies rows by
+  /// object identity, so a caller that saves and then pushes must hand back
+  /// what was stored: passing its own instance can never match, and the run
+  /// would stay unsynced forever while re-uploading its full track on every
+  /// drain.
+  Future<Run> save(Run run) async {
     Run stamped = _withLastModified(run, DateTime.now());
     // Owner-tag the run with the userId that was signed in at save
     // time. Prevents the cross-user contamination bug on a shared
@@ -345,6 +352,7 @@ class LocalRunStore extends ChangeNotifier {
     if (wasSynced) await _persistSyncedIds();
     await _persistIndex();
     notifyListeners();
+    return stamped;
   }
 
   /// Whether a run with this id exists anywhere in the local history — the

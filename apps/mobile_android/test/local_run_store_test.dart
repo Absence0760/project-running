@@ -123,6 +123,29 @@ void main() {
       expect(reloaded.unsyncedRuns.map((r) => r.id), ['R']);
     });
 
+    test('a run marked synced right after save() actually flips', () async {
+      // markManySynced matches by object identity, and save() stores a
+      // STAMPED/owner-tagged copy — not the caller's instance. The import
+      // paths save and then immediately push, so passing their own copies
+      // matched nothing: every imported run stayed unsynced forever and
+      // re-uploaded its full gzipped track on every drain. save() returns the
+      // resident instance for exactly this.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      final mine = makeRun(id: 'R');
+      final stored = await store.save(mine);
+      expect(identical(stored, mine), isFalse,
+          reason: 'precondition: save stamps a new instance');
+
+      await store.markManySynced([stored]);
+      expect(store.unsyncedRuns.map((r) => r.id), isEmpty);
+
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.unsyncedRuns.map((r) => r.id), isEmpty);
+    });
+
     test('re-saving a synced id survives a cold reload as unsynced', () async {
       // M4: save() overwrote the file and stamped the summary unsynced but
       // left the id in `_syncedIds` and never wrote the sidecar, so an
