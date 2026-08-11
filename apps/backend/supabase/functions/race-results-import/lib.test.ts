@@ -21,6 +21,7 @@ import {
   parseRaceResultRow,
   raceExternalId,
   runSignUpResultsUrl,
+  chronoTrackScopeGate,
   runSignUpScopeGate,
   ultraSignUpResultsUrl,
 } from './lib.ts';
@@ -475,4 +476,23 @@ Deno.test('EF gate flow: unscoped rejected, bib-scoped enriches exactly one', ()
   // 4. Scoped, but the whole field slips through unfiltered → enrich rejected
   //    rather than stamping mapped[0] (the winner) onto the caller's run.
   assertEquals(matchResultGate(field.length).error, 'ambiguous_match');
+});
+
+Deno.test('chronoTrackScopeGate — a bib-less request is rejected before any fetch', () => {
+  // chronoTrackResultsUrl only narrows upstream when a bib is supplied, so an
+  // unscoped request pulls the WHOLE finisher field and mapChronoTrackResult
+  // stamps the caller's user_id on all 2000 of them — the winner's 2:09 lands
+  // as the caller's marathon PR. Same fail-closed rule the RunSignUp leg has.
+  const gate = chronoTrackScopeGate({});
+  assertEquals(gate.ok, false);
+  assertEquals(gate.status, 400);
+  assertEquals(gate.error, 'chronotrack_bib_required');
+});
+
+Deno.test('chronoTrackScopeGate — a blank bib does not count as scoped', () => {
+  assertEquals(chronoTrackScopeGate({ bib: '   ' }).ok, false);
+});
+
+Deno.test('chronoTrackScopeGate — a bib scopes the request', () => {
+  assertEquals(chronoTrackScopeGate({ bib: '1423' }).ok, true);
 });

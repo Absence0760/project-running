@@ -6,6 +6,7 @@ import { withSentry } from '../_shared/sentry.ts';
 import {
   chronoTrackConfigured,
   chronoTrackResultsUrl,
+  chronoTrackScopeGate,
   extractChronoTrackResults,
   extractRunSignUpResults,
   extractUltraSignUpResults,
@@ -60,7 +61,22 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   // when the named provider's credentials are unset, without needing a listing.
   // The ChronoTrack Settings card uses this to disable itself with an explainer.
   if (body.probe === true) {
+    // Every credential-gated provider has to be probed, not just ChronoTrack:
+    // reporting `configured: true` for runsignup / ultrasignup while their keys
+    // are unset made the UI enable a card that 503s on the very next call.
     if (provider === 'chronotrack' && !chronoTrackConfigured((n) => Deno.env.get(n))) {
+      return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+    }
+    if (
+      provider === 'runsignup' &&
+      !(Deno.env.get('RUNSIGNUP_API_KEY') && Deno.env.get('RUNSIGNUP_API_SECRET'))
+    ) {
+      return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+    }
+    if (
+      provider === 'ultrasignup' &&
+      !(Deno.env.get('ULTRASIGNUP_API_KEY') && Deno.env.get('ULTRASIGNUP_API_SECRET'))
+    ) {
       return Response.json({ error: 'provider_not_configured' }, { status: 503 });
     }
     return Response.json({ configured: true });
@@ -204,6 +220,16 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     const eventId = (listing.provider_race_id as string | null) ?? '';
     if (!eventId) {
       return Response.json({ error: 'listing has no ChronoTrack event id' }, { status: 400 });
+    }
+    // Scope BEFORE the fetch, exactly as the RunSignUp leg does: an unscoped
+    // ChronoTrack request returns the whole finisher field, and every row of it
+    // would be inserted as the caller's own run (issue #360's failure mode, on
+    // the provider that never got the gate).
+    const ctScope = chronoTrackScopeGate({
+      bib: typeof body.bib === 'string' ? body.bib : undefined,
+    });
+    if (!ctScope.ok) {
+      return Response.json({ error: ctScope.error }, { status: ctScope.status });
     }
     const url = chronoTrackResultsUrl({
       eventId,

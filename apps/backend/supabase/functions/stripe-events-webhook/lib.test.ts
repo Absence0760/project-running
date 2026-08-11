@@ -12,6 +12,7 @@ import {
   donationStatusTransition,
   isDonationSession,
   orderStatusTransition,
+  refundScopeOfCharge,
   parseStripeEventEnvelope,
   shouldReleaseDedupe,
   verifyStripeSignature,
@@ -269,4 +270,43 @@ Deno.test('shouldReleaseDedupe — a 4xx is the caller\'s fault and stays dedupe
   for (const status of [400, 401, 404, 409, 422]) {
     assertEquals(shouldReleaseDedupe(status), false, `status ${status}`);
   }
+});
+
+Deno.test('refundScopeOfCharge — refunded:true is a full refund', () => {
+  assertStrictEquals(refundScopeOfCharge({ refunded: true, amount: 5000, amount_refunded: 5000 }), 'full');
+});
+
+Deno.test('refundScopeOfCharge — a goodwill part-refund is partial', () => {
+  // Stripe emits charge.refunded for a PARTIAL refund too; `refunded` is the
+  // discriminator and is false until the whole charge is returned.
+  assertStrictEquals(refundScopeOfCharge({ refunded: false, amount: 5000, amount_refunded: 500 }), 'partial');
+});
+
+Deno.test('refundScopeOfCharge — refunded:false with nothing refunded is not a partial refund', () => {
+  // Must not become a status change on the strength of a zero refund.
+  assertStrictEquals(refundScopeOfCharge({ refunded: false, amount: 5000, amount_refunded: 0 }), 'full');
+});
+
+Deno.test('refundScopeOfCharge — unknown amounts fall back to full', () => {
+  // Historical behaviour, and the safe direction for the buyer.
+  assertStrictEquals(refundScopeOfCharge({}), 'full');
+  assertStrictEquals(refundScopeOfCharge({ amount: 5000 }), 'full');
+});
+
+Deno.test('orderStatusTransition — a partial refund keeps the registration', () => {
+  // event_orders_status_check has carried partially_refunded since the table
+  // was created and nothing ever wrote it: every charge.refunded was treated
+  // as full, so a $5 goodwill refund on a $50 workshop flipped the order to
+  // refunded and the handler DELETED the buyer's seat, which
+  // promote_event_waitlist then handed to someone else.
+  assertStrictEquals(
+    orderStatusTransition('paid', 'charge.refunded', 'partial'),
+    'partially_refunded',
+  );
+  assertStrictEquals(orderStatusTransition('paid', 'charge.refunded', 'full'), 'refunded');
+});
+
+Deno.test('orderStatusTransition — a partially refunded order is immovable on replay', () => {
+  assertStrictEquals(orderStatusTransition('partially_refunded', 'charge.refunded', 'full'), null);
+  assertStrictEquals(orderStatusTransition('partially_refunded', 'charge.refunded', 'partial'), null);
 });

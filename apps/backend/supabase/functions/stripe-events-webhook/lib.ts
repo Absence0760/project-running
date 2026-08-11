@@ -133,14 +133,48 @@ export type OrderStatus =
 export function orderStatusTransition(
   currentStatus: string,
   eventType: string,
+  refund: RefundScope = 'full',
 ): OrderStatus | null {
   if (currentStatus === 'pending') {
     if (eventType === 'checkout.session.completed') return 'paid';
     if (eventType === 'checkout.session.expired') return 'canceled';
     return null;
   }
-  if (currentStatus === 'paid' && eventType === 'charge.refunded') return 'refunded';
+  if (currentStatus === 'paid' && eventType === 'charge.refunded') {
+    return refund === 'partial' ? 'partially_refunded' : 'refunded';
+  }
   return null;
+}
+
+/// Whether a `charge.refunded` returned the WHOLE charge or only part of it.
+///
+/// Stripe emits `charge.refunded` for a partial refund too — the discriminator
+/// is the charge's own `refunded` boolean (true only when fully refunded),
+/// with `amount_refunded` vs `amount` as the arithmetic fallback. Treating
+/// every `charge.refunded` as full meant a $5 goodwill refund on a $50
+/// workshop flipped the order to `refunded` and DELETED the buyer's seat,
+/// which `promote_event_waitlist` then handed to someone else — for a
+/// registration that is still 90 % paid. `event_orders_status_check` has
+/// carried `partially_refunded` since the table was created and nothing ever
+/// wrote it.
+///
+/// Unknown / missing amounts fall back to `full`: that is the historical
+/// behaviour, and it is the safe direction for the BUYER (they keep the money
+/// and lose the seat) rather than for us.
+export type RefundScope = 'full' | 'partial';
+
+export function refundScopeOfCharge(charge: Record<string, unknown>): RefundScope {
+  if (charge.refunded === true) return 'full';
+  const amount = typeof charge.amount === 'number' ? charge.amount : null;
+  const refunded = typeof charge.amount_refunded === 'number' ? charge.amount_refunded : null;
+  if (charge.refunded === false) {
+    // Explicitly not fully refunded. Only call it partial when some money
+    // actually moved — a `refunded:false` with no refunded amount is not a
+    // refund at all, and must not become a status change.
+    return refunded !== null && refunded > 0 ? 'partial' : 'full';
+  }
+  if (amount === null || refunded === null || refunded <= 0) return 'full';
+  return refunded < amount ? 'partial' : 'full';
 }
 
 /// Is this Checkout Session a donation (vs a paid-event seat)? The
