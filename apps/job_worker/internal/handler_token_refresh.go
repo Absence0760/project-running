@@ -93,10 +93,13 @@ func (w *Worker) handleTokenRefresh(ctx context.Context, _ *Job) error {
 				// audit/strava High #2: branch on 4xx (permanent) vs
 				// 5xx + network (transient). 4xx → mark disconnected
 				// so the next sweep doesn't pick this row up forever.
-				// Use a typed HTTPError check (mirrors isTransient in
-				// worker.go) so a wrapped error still routes correctly.
-				var httpErr *HTTPError
-				if errors.As(err, &httpErr) && httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 {
+				// Scoped to a *stravaGrantError* specifically: only
+				// Strava's own /oauth/token leg can tell us the grant
+				// is broken. A 4xx from any Supabase hop in refreshOne
+				// means our backend is unhappy, not the user's link.
+				var grantErr *stravaGrantError
+				if errors.As(err, &grantErr) && grantErr.inner.StatusCode >= 400 && grantErr.inner.StatusCode < 500 {
+					httpErr := grantErr.inner
 					reason := classifyStravaRefreshFailure(httpErr)
 					if dErr := w.Backend.MarkIntegrationDisconnected(ctx, userID, "strava", reason); dErr != nil {
 						w.Log.Warn("token_refresh: mark-disconnected failed",
@@ -136,6 +139,20 @@ func (w *Worker) handleTokenRefresh(ctx context.Context, _ *Job) error {
 		"disconnected", disconnected)
 	return nil
 }
+
+// stravaGrantError marks a failure that came from Strava's own /oauth/token
+// leg — the only failure that says anything about the user's grant. Every
+// other hop in refreshOne talks to Supabase, and SupabaseClient.do produces an
+// *HTTPError for any non-2xx too, so matching a bare 4xx anywhere in the chain
+// let a PostgREST 401 (rotated service key, a migration briefly revoking
+// execute on get_integration_tokens) disconnect every integration in the
+// batch — permanently, since FetchExpiringStravaIntegrations filters on
+// disconnected_at is null. Unwraps to the *HTTPError so isTransient and the
+// classifier keep working unchanged.
+type stravaGrantError struct{ inner *HTTPError }
+
+func (e *stravaGrantError) Error() string { return e.inner.Error() }
+func (e *stravaGrantError) Unwrap() error { return e.inner }
 
 // classifyStravaRefreshFailure inspects a 4xx response from Strava's
 // /oauth/token endpoint and emits the short tag for
@@ -196,6 +213,10 @@ func (w *Worker) refreshOne(ctx context.Context, userID string) error {
 
 	fresh, err := w.Strava.Refresh(ctx, tokens.RefreshToken)
 	if err != nil {
+		var hErr *HTTPError
+		if errors.As(err, &hErr) {
+			return fmt.Errorf("strava refresh: %w", &stravaGrantError{inner: hErr})
+		}
 		return fmt.Errorf("strava refresh: %w", err)
 	}
 

@@ -1863,6 +1863,95 @@ func TestTokenRefresh_5xxIsTransientAndDoesntDisconnect(t *testing.T) {
 	}
 }
 
+func TestTokenRefresh_SupabaseAuthFailureDoesNotDisconnect(t *testing.T) {
+	// The disconnect branch means "Strava says this grant is dead". Only
+	// Strava's /oauth/token leg can say that. refreshOne also talks to
+	// Supabase twice, and SupabaseClient.do returns an *HTTPError for any
+	// non-2xx, so a bare 4xx match disconnected users for OUR failure: a
+	// rotated service key or a migration briefly revoking execute on
+	// get_integration_tokens returns 401 for EVERY row in the batch, and
+	// FetchExpiringStravaIntegrations filters on `disconnected_at is null`,
+	// so those rows are never retried again. Every affected user has to
+	// manually reconnect, tagged with a reason indistinguishable from a
+	// genuine revocation.
+	for _, status := range []int{401, 403, 404} {
+		be := newFakeBackend()
+		be.expiring = []IntegrationRow{
+			{ID: 1, UserID: "dave"},
+			{ID: 2, UserID: "erin"},
+		}
+		be.tokensByUser = map[string]TokenPair{
+			"dave": {RefreshToken: "rt-dave"},
+			"erin": {RefreshToken: "rt-erin"},
+		}
+		be.getTokenErrs = map[string]error{
+			"dave": &HTTPError{StatusCode: status, Method: "POST", Endpoint: "/rest/v1/rpc/get_integration_tokens"},
+			"erin": &HTTPError{StatusCode: status, Method: "POST", Endpoint: "/rest/v1/rpc/get_integration_tokens"},
+		}
+		be.jobs = []*Job{{ID: 9, Kind: "token_refresh", Payload: []byte(`{}`)}}
+		w := newTokenRefreshWorker(be, &fakeStrava{})
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		_ = w.Run(ctx)
+		cancel()
+		if got := len(be.markDisconnectedCalls); got != 0 {
+			t.Fatalf("supabase %d must NOT disconnect; got %d marks (%+v)",
+				status, got, be.markDisconnectedCalls)
+		}
+	}
+}
+
+func TestTokenRefresh_SupabaseWriteFailureDoesNotDisconnect(t *testing.T) {
+	// The other Supabase hop: the CAS write after a SUCCESSFUL Strava
+	// refresh. A 409/400 there is our problem, not a dead grant.
+	be := newFakeBackend()
+	be.expiring = []IntegrationRow{{ID: 1, UserID: "frank"}}
+	be.tokensByUser = map[string]TokenPair{"frank": {RefreshToken: "rt-frank"}}
+	be.setTokenErrs = map[string]error{
+		"frank": &HTTPError{StatusCode: 400, Method: "POST", Endpoint: "/rest/v1/rpc/set_integration_tokens_cas"},
+	}
+	be.jobs = []*Job{{ID: 10, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, &fakeStrava{})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+	if got := len(be.markDisconnectedCalls); got != 0 {
+		t.Fatalf("a failed CAS write must NOT disconnect; got %d marks", got)
+	}
+}
+
+func TestTokenRefresh_StravaGrantFailureStillDisconnects(t *testing.T) {
+	// The behaviour the scoping must preserve: a real 4xx from Strava's own
+	// refresh endpoint still marks the integration disconnected, with the
+	// classified reason.
+	cases := []struct {
+		status     int
+		body       string
+		wantReason string
+	}{
+		{401, "unauthorized", "unauthorized"},
+		{400, `{"error":"invalid_grant"}`, "invalid_grant"},
+	}
+	for _, tc := range cases {
+		be := newFakeBackend()
+		be.expiring = []IntegrationRow{{ID: 1, UserID: "gina"}}
+		be.tokensByUser = map[string]TokenPair{"gina": {RefreshToken: "rt-gina"}}
+		st := &fakeStrava{errsByToken: map[string]error{
+			"rt-gina": &HTTPError{StatusCode: tc.status, Body: tc.body},
+		}}
+		be.jobs = []*Job{{ID: 11, Kind: "token_refresh", Payload: []byte(`{}`)}}
+		w := newTokenRefreshWorker(be, st)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		_ = w.Run(ctx)
+		cancel()
+		if got := len(be.markDisconnectedCalls); got != 1 {
+			t.Fatalf("strava %d must disconnect; got %d marks", tc.status, got)
+		}
+		if got := be.markDisconnectedCalls[0].Reason; got != tc.wantReason {
+			t.Fatalf("reason=%q, want %q", got, tc.wantReason)
+		}
+	}
+}
+
 func TestTokenRefresh_FetchExpiringErrorFailsJob(t *testing.T) {
 	be := newFakeBackend()
 	be.fetchExpiringErr = &HTTPError{StatusCode: 500, Body: "boom"}
