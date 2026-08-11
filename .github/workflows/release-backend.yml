@@ -90,6 +90,30 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          for fn in strava-webhook strava-import parkrun-import refresh-tokens export-data revenuecat-webhook delete-account clip-public-track; do
+          # Derived from the filesystem, never a hand-kept list. The hardcoded
+          # list drifted to EIGHT functions behind: auth-email, donations-checkout,
+          # events-cancel, events-checkout, events-connect-onboard,
+          # race-listings-sync, race-results-import and stripe-events-webhook had
+          # never been deployed by any release. stripe-events-webhook is the sole
+          # idempotent writer of event_orders.status, so every paid registration
+          # would have stayed `pending` with no attendee seated; auth-email is
+          # pointed at by an ENABLED config.toml hook, which 404s every
+          # confirmation and password-reset mail when the function is absent.
+          # `supabase functions deploy` reads each function's verify_jwt from
+          # config.toml, so no per-function flags are needed here.
+          shopt -s nullglob
+          deployed=0
+          for dir in supabase/functions/*/; do
+            fn="$(basename "$dir")"
+            [ "$fn" = "_shared" ] && continue
+            [ -f "$dir/index.ts" ] || continue
+            echo "::group::deploy $fn"
             supabase functions deploy "$fn" --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+            echo "::endgroup::"
+            deployed=$((deployed + 1))
           done
+          echo "deployed $deployed edge functions"
+          if [ "$deployed" -eq 0 ]; then
+            echo "::error::no edge functions found to deploy — the glob is wrong"
+            exit 1
+          fi
