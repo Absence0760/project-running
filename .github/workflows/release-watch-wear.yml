@@ -82,14 +82,25 @@ jobs:
       - name: Decode release keystore
         env:
           WATCH_WEAR_KEYSTORE_BASE64: ${{ secrets.WATCH_WEAR_KEYSTORE_BASE64 }}
+          WATCH_WEAR_KEYSTORE_PASSWORD: ${{ secrets.WATCH_WEAR_KEYSTORE_PASSWORD }}
+          WATCH_WEAR_KEY_PASSWORD: ${{ secrets.WATCH_WEAR_KEY_PASSWORD }}
+          WATCH_WEAR_KEY_ALIAS: ${{ secrets.WATCH_WEAR_KEY_ALIAS }}
         run: |
           echo "$WATCH_WEAR_KEYSTORE_BASE64" | base64 -d > apps/watch_wear/android/app/upload-keystore.jks
-          cat > apps/watch_wear/android/key.properties <<EOF
-          storePassword=${{ secrets.WATCH_WEAR_KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.WATCH_WEAR_KEY_PASSWORD }}
-          keyAlias=${{ secrets.WATCH_WEAR_KEY_ALIAS }}
-          storeFile=app/upload-keystore.jks
-          EOF
+          # Both halves mirror the mobile release workflow, which documents
+          # having already hit each of them:
+          #  - printf from env vars, NOT a secrets-interpolated heredoc: an
+          #    unquoted heredoc shell-expands the substituted values, silently
+          #    mangling a password containing a dollar sign or a backtick.
+          #  - storeFile is resolved by Gradle's file() relative to the
+          #    android/app module dir, not android/ where key.properties lives,
+          #    so an `app/` prefix doubles into android/app/app/ and
+          #    validateSigningRelease fails with "Keystore file not found".
+          #    key.properties exists by then, so the release signing config is
+          #    selected and the build fails hard rather than falling back.
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=upload-keystore.jks\n' \
+            "$WATCH_WEAR_KEYSTORE_PASSWORD" "$WATCH_WEAR_KEY_PASSWORD" "$WATCH_WEAR_KEY_ALIAS" \
+            > apps/watch_wear/android/key.properties
 
       - name: Build AAB (signed)
         working-directory: apps/watch_wear/android
