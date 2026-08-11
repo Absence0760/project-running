@@ -2723,6 +2723,7 @@ class _RunScreenState extends State<RunScreen> {
     final metadata = <String, dynamic>{
       cm.MetadataKeys.activityType: _activityType.name,
       cm.MetadataKeys.inProgressSavedAt: DateTime.now().toIso8601String(),
+      if (indoorEstimate) cm.MetadataKeys.indoor: true,
       if (indoorEstimate) cm.MetadataKeys.indoorEstimated: true,
       if (indoorEstimate) cm.MetadataKeys.distanceSource: 'pedometer',
       if (_steps > 0) cm.MetadataKeys.steps: _steps,
@@ -2971,6 +2972,13 @@ class _RunScreenState extends State<RunScreen> {
         raw.distanceMetres == 0 &&
         _displayDistanceMetres > 0;
     if (indoorEstimate) {
+      // `indoor` is the flag every consumer tests (qualifyingRuns excludes it
+      // from the VDOT ceiling); `indoor_estimated` is audit-only. A pedometer
+      // estimate is further from measured than the treadmill belt that already
+      // sets `indoor`, so without this a stride constant that over-reads raises
+      // the runner's VDOT — and with it every training pace and race
+      // prediction — permanently, since the ceiling is a max over runs.
+      metadata[cm.MetadataKeys.indoor] = true;
       metadata[cm.MetadataKeys.indoorEstimated] = true;
       metadata[cm.MetadataKeys.distanceSource] = 'pedometer';
     }
