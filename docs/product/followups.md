@@ -224,3 +224,57 @@ no existing pinned value moved:
 
 Everything trigonometric is unaffected and needed no work: `sin`/`cos` are
 periodic, so haversine distances and great-circle bearings were always right.
+
+## Bug-hunt 2026-08-10 — verified but deferred
+
+Found during the multi-agent bug hunt that landed the fixes on
+`fix/bug-hunt-2026-08-10`. Each was reproduced by running the real module;
+they are deferred because the correct fix is a design decision, not a
+mechanical change. Do not "fix" any of these without deciding the rule first.
+
+- [ ] **`turn_cues.ts` suppresses real turns on a densely-sampled route.**
+  `generateTurnCues`' collapse pass advances the surviving vertex onto each
+  merged point (`prev.wp = waypoints[i]`) while leaving `prev.cumM` behind, so
+  on a corner sampled finer than `mergeWithinM` (15 m) it walks the kept vertex
+  *through* the corner and measures the bearing pair across a chord that cuts
+  it off. Measured at 5 m spacing: a 90° corner reports 71.6° and fires 20 m
+  early; 45° reports 34.2°; **35° and below produce no cue at all**. At 40 m
+  spacing the same bend is announced correctly, so cue behaviour depends on
+  source-polyline density — and dense is the normal case (`route_save_polyline`
+  persists the full OSRM polyline; GPX imports are 1 Hz; a power-hiked climb is
+  ~1 m spacing). The live consumer is mobile: `run_screen.dart` builds
+  `TurnCueAnnouncer` from `route.waypoints` and speaks these cues mid-run.
+  **Deleting the offending line is NOT sufficient** — verified: it fixes the
+  on-grid case but a 35° bend at 5 m spacing is still suppressed and an
+  off-grid corner still reports 63.4° for a 90° turn, because the distance-based
+  collapse discards the corner vertex itself. The real fix is choosing a
+  corner-preserving rule (keep-max-turn within a cluster, or RDP — which
+  preserves corners by construction — before cue generation) and porting it to
+  all three implementations: `turn_cues.ts`, `turn_cues.dart`,
+  `apps/custom_watch/core/src/turn_cues.rs`. Existing suites all sample at
+  ~2.2 km spacing, so none of them exercises the merge branch at all.
+  Route through `/safe-edit`.
+
+- [ ] **`roadbook.ts` silently degrades `model: 'effort'` to even pace.**
+  `walk()` zeroes the grade on any segment under `MIN_SEGMENT_M` (5 m) instead
+  of accumulating horizontal distance until the segment clears the threshold —
+  which is what the sibling `gradeAdjustedPaceSecPerKm` does with the same
+  constant. On a densely-sampled course every segment is sub-5 m, so effort
+  allocation becomes byte-identical to `'even'` while `hasElevation` and
+  `totalGainM` still report the full climb, so nothing signals the degradation.
+  Reported flip on a 4 km leg with a 25 % climb, goal 5400 s: at 20 m spacing
+  the cut-off reads `tight` with +1043 s in hand; at 3 m spacing the same gate
+  reads `miss` by 300 s. Blast radius includes `fuel_plan.ts` (scales
+  carbs/fluid by leg duration) and `live_cutoff_eta.ts`. Twins share it:
+  `roadbook.dart`, `apps/custom_watch/core/src/roadbook.rs`. The fix is
+  mechanical but changes projected arrival times on every existing roadbook, so
+  it wants its own change with the crew-sheet numbers re-verified.
+
+- [ ] **Should `backoff` and `dropset` sets also be excluded from progression
+  judging?** The warmup exclusion landed (a ramp-up set no longer reads as a
+  failed working set), matching the rule `gym_adherence` already states. But a
+  back-off or drop set is deliberately lighter too, so judging "did they hit
+  the target reps at the target weight" over them can stall progression the
+  same way. `gym_adherence` skips only `warmup`, so the fix followed that
+  precedent rather than inventing semantics. Decide the rule once and apply it
+  to both.
