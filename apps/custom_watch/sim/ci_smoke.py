@@ -753,6 +753,36 @@ LINE_STAMP = re.compile(r"^\s*([\d.]+)\s")
 # running. `dropout` is the one scenario this must never be applied to: its
 # voids ARE the subject, and it reasons about them itself.
 GNSS_SILENCE_S = 30.0
+# How long the whole decoded stream may go quiet, in WALL seconds, before the
+# guest is called wedged rather than slow.
+#
+# Deliberately the opposite clock to `GNSS_SILENCE_S` above, and it has to be:
+# a firmware that stops executing stops stamping lines, so its virtual clock
+# freezes with it and no virtual-time measurement can ever notice. Only real
+# time can tell "stopped" from "quiet".
+#
+# The floor this is set against is measured, not assumed. Across all nine
+# scenarios the widest gap between consecutive decoded lines is **1.01 s** —
+# the baro task samples at 1 Hz and stamps a line every tick under
+# `DEFMT_LOG=debug`, and that holds through the longest and quietest runs in
+# the set (`idle`, 138 s; `dropout`, 120 s, whose GPS voids are its subject and
+# still never quiet the stream). `defmt-print` writes through Rust's
+# line-buffered stdout, so a line reaches this file as soon as it is decoded
+# rather than a block later.
+#
+# 90 s is therefore ~90x the widest legitimate gap, which leaves room for a
+# loaded runner emulating well under real time and still fires long before a
+# 300 s scenario budget burns out. A false positive needs the stream to be
+# genuinely silent for a minute and a half.
+GUEST_WEDGED_S = 90.0
+# The same question asked at a wait's deadline instead of during it: was the
+# stream still alive when the claim ran out of time? A wait shorter than
+# `GUEST_WEDGED_S` can expire with the guest already dead, and reporting that
+# as an assertion failure is exactly the misattribution this pair exists to
+# stop. Five seconds is ~5x the measured 1.01 s worst gap — comfortably above
+# the cadence, comfortably below any real wedge, and only ever consulted on a
+# run that is failing regardless, so it cannot turn a pass into a failure.
+LINE_CADENCE_S = 5.0
 
 Panel = namedtuple("Panel", "path width height dark data")
 
@@ -778,11 +808,18 @@ def error(msg):
 class LogTail:
     """Incremental reader over the launcher's combined output."""
 
-    def __init__(self, path):
+    def __init__(self, path, clock=time.monotonic):
         self.path = Path(path)
         self.pos = 0
         self.partial = ""
         self.lines = []
+        # Injectable so the wedge detector can be tested without spending its
+        # threshold in real seconds.
+        self.clock = clock
+        # Wall time the stream last GREW. Seeded at construction so a guest
+        # that dies before the first wait is still measured from a real
+        # starting point rather than from whenever a wait happened to begin.
+        self.last_line_at = clock()
 
     def poll(self):
         if not self.path.exists():
@@ -795,7 +832,26 @@ class LogTail:
             return
         self.partial += chunk
         *complete, self.partial = self.partial.split("\n")
-        self.lines.extend(complete)
+        if complete:
+            self.lines.extend(complete)
+            self.last_line_at = self.clock()
+
+    def silent_s(self):
+        """Wall seconds since the stream last grew — the liveness measure."""
+        return self.clock() - self.last_line_at
+
+    def _wedged(self, what, silent_s):
+        last = self.lines[-1].strip() if self.lines else "<nothing decoded at all>"
+        return SmokeFailure(
+            f"the firmware stopped emitting {silent_s:.0f}s ago while waiting for "
+            f"{what}. This is a WEDGED GUEST, not a failure of that assertion: "
+            f"every scenario's log stream ticks at >= 1 Hz (the baro task's 1 Hz "
+            f"sample), and the widest gap ever measured across the nine scenarios "
+            f"is 1.01s, so a stream this quiet is firmware that stopped running. "
+            f"Look at the tail of the renode.log beside this run for what the CPU "
+            f"did last, not at the assertion above. Last decoded line: {last!r}. "
+            f"Known occurrence: issue #754."
+        )
 
     def mark(self):
         """Index of the next line to arrive — the "from here on" cursor a
@@ -811,7 +867,7 @@ class LogTail:
         return None
 
     def wait(self, pattern, timeout, what, guard=None, start=0):
-        deadline = time.monotonic() + timeout
+        deadline = self.clock() + timeout
         while True:
             self.poll()
             for line in self.lines[start:]:
@@ -820,10 +876,22 @@ class LogTail:
                     return m
             if guard is not None:
                 guard()
-            if time.monotonic() >= deadline:
+            # A dead guest is named as one rather than left to expire against
+            # whatever assertion happened to be waiting when it died. Checked
+            # before the deadline so an egregious silence stops burning budget,
+            # and repeated at the deadline below so a wait too short to reach
+            # this still reports the right cause.
+            silent_s = self.silent_s()
+            if silent_s >= GUEST_WEDGED_S:
+                raise self._wedged(what, silent_s)
+            if self.clock() >= deadline:
+                if silent_s >= LINE_CADENCE_S:
+                    raise self._wedged(what, silent_s)
                 raise SmokeFailure(
                     f"expected {what} within {timeout:.0f}s — no decoded log line "
-                    f"matched /{pattern.pattern}/ ({len(self.lines) - start} lines seen)"
+                    f"matched /{pattern.pattern}/ ({len(self.lines) - start} lines "
+                    f"seen, stream still live {silent_s:.1f}s after its last line, "
+                    f"so the firmware was running and the claim genuinely failed)"
                 )
             time.sleep(0.25)
 
