@@ -13,6 +13,7 @@
 /// owner already chose to make public.
 
 import { createClient } from '@supabase/supabase-js';
+import { isEntityId } from '../core/entity_id';
 
 export interface SharedWorkoutSet {
 	set_index: number;
@@ -52,6 +53,11 @@ export async function lookupSharedWorkout(
 	if (!config?.supabaseUrl || !config?.supabaseAnonKey) {
 		return { workout: null, displayName: null };
 	}
+	// A non-uuid segment raises 22P02 on the uuid column. These two lookups
+	// don't inspect `error` at all, so it degrades to a silent 404 rather than
+	// a false alarm — but the query is still pointless and the guard keeps
+	// every share lookup on one rule.
+	if (!isEntityId(id)) return { workout: null, displayName: null };
 	try {
 		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
 			auth: { persistSession: false },
