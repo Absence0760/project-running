@@ -1,6 +1,6 @@
 name: Release Wear OS
 
-# Tag: `watch_wear@1.2.3`. Builds a signed release APK + uploads to the
+# Tag: `watch_wear@1.2.3`. Builds a signed release AAB + uploads to the
 # Play Internal track under a distinct `applicationId` from the phone
 # app (Play lists Wear OS apps separately even when they share a phone
 # app — the current release workflow treats them independently).
@@ -91,14 +91,14 @@ jobs:
           storeFile=app/upload-keystore.jks
           EOF
 
-      - name: Build AAB + APK (signed)
+      - name: Build AAB (signed)
         working-directory: apps/watch_wear/android
         run: |
           # Use the same PUBLIC_SUPABASE_* secret names the web release
           # workflow reads — keeps a single pair of GitHub secrets in
           # sync with the Supabase project's anon key + URL across all
           # client deploys.
-          ./gradlew bundleRelease assembleRelease \
+          ./gradlew bundleRelease \
             -PSUPABASE_URL='${{ secrets.PUBLIC_SUPABASE_URL }}' \
             -PSUPABASE_ANON_KEY='${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}' \
             --no-daemon
@@ -114,11 +114,15 @@ jobs:
 
       - name: Attach artifacts to the Release
         # The Release already exists — it triggered this run. Upload the
-        # signed AAB + APK onto it (no name/notes → the human-authored
-        # release title + notes aren't clobbered).
+        # signed AAB onto it (no name/notes → the human-authored release
+        # title + notes aren't clobbered).
+        #
+        # Deliberately AAB-only, matching release-android.yml. A directly
+        # installable `.apk` here would be distribution outside Google
+        # Play, which from 2026-09-30 requires registering
+        # `com.threkir.watchwear` by hand in the Android Developer
+        # Console. Play-only distribution auto-registers the package.
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ github.event.release.tag_name }}
-          files: |
-            apps/watch_wear/android/app/build/outputs/bundle/release/app-release.aab
-            apps/watch_wear/android/app/build/outputs/apk/release/app-release.apk
+          files: apps/watch_wear/android/app/build/outputs/bundle/release/app-release.aab

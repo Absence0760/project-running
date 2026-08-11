@@ -99,7 +99,7 @@ create` / UI / `/release`). The last column is what the workflow attaches
 | Release tag | Runs | Signs | Publishes to | Attaches back to the Release |
 |---|---|---|---|---|
 | `mobile_android@*` | ubuntu-latest | release keystore from secrets | Play Internal track | `.aab` |
-| `watch_wear@*` | ubuntu-latest | Wear release keystore | Play Internal track (`com.threkir.watchwear`) | `.aab` + `.apk` |
+| `watch_wear@*` | ubuntu-latest | Wear release keystore | Play Internal track (`com.threkir.watchwear`) | `.aab` |
 | `mobile_ios@*` | macos-latest | *unsigned today* (skeleton until app ships) | — | `.ipa` |
 | `watch_ios@*` | macos-latest | — | — (build smoke-check only) | — |
 | `web@*` | ubuntu-latest | — | AWS S3 + CloudFront + Lambda (`prod` env at `threkir.com` / `www.threkir.com`) | build zip |
@@ -266,8 +266,13 @@ If you catch yourself running `flutter build apk` + `adb install`
 against a physical device you use normally, stop. The release APK is
 signed with a key your laptop doesn't have; it'll install as a *second*
 app alongside the Play Store one and won't sync the same installation.
-Use `flutter run` for testing, or pull the signed AAB/APK from the
-latest GitHub Release and `adb install` that.
+Use `flutter run` (or `./gradlew installDebug` for Wear) for testing.
+
+Every release workflow attaches an `.aab` and never a `.apk` — a bundle
+isn't directly installable, so there is nothing on a GitHub Release to
+`adb install`. That's deliberate: see the registration gate below. To
+test the exact signed build that shipped, join the Play Internal track
+and install from there.
 
 ## Before cutting a release
 
@@ -285,6 +290,21 @@ latest GitHub Release and `adb install` that.
   the very last step. Details + the API-vs-Console trap in
   [`apps/mobile_android/deployment.md` § Health Connect permission
   changes](../../apps/mobile_android/deployment.md#health-connect-permission-changes-gate-the-release).
+- **Android developer verification — gates any non-Play distribution.**
+  From **2026-09-30** (Brazil, Indonesia, Singapore and Thailand first;
+  global through 2027) an Android app must be registered by a verified
+  developer to install on certified devices. Distributing through Play
+  registers a package automatically: `com.threkir.app` has been
+  registered since 2026-07-14, and `com.threkir.watchwear` registers
+  itself the first time a `watch_wear@*` release reaches the Internal
+  track — no manual step, and nothing to do before that first Wear
+  release. The gate is the other direction: **do not attach an
+  installable `.apk` to a GitHub Release, or ship through any non-Play
+  channel, until that package is registered by hand** in the Android
+  Developer Console, which needs an APK signed with the release key.
+  This is why every workflow attaches an `.aab` only. `adb install` for
+  local development stays exempt. Confirm the second row appears on the
+  Play Console verification page after the first Wear release.
 - No uncommitted secrets. `grep -r SUPABASE_SERVICE_ROLE_KEY apps/` and
   friends should return only `.env.example` hits.
 - **Supabase Auth URL configuration (every release, web or mobile).**
