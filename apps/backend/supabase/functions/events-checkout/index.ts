@@ -28,6 +28,7 @@
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { selectEffectivePricing } from '../_shared/event_instance.ts';
 import { isValidTimestamptz, isValidUuid } from '../_shared/input_validation.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -165,8 +166,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
     platform_fee_bps: number;
     sales_close_offset_minutes: number;
   }>;
-  const pricing = rows.find((r) => r.instance_start === instanceStart)
-    ?? rows.find((r) => r.instance_start === null);
+  const pricing = selectEffectivePricing(rows, instanceStart);
   if (!pricing) {
     return Response.json({ error: 'event_not_priced' }, { status: 404 });
   }
