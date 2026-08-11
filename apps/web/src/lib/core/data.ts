@@ -12,6 +12,7 @@ import { stripExifFromFile } from '../util/exif_strip';
 import { entriesFromTemplate } from '../nutrition/meal_template';
 import { logInputFromRecipe } from '../nutrition/recipe';
 import { challengesToRecomputeForRun } from '../social/challenge_progress';
+import { selectEffectivePricing } from '../social/event_instance';
 import type {
 	Run,
 	Route,
@@ -3219,12 +3220,7 @@ export async function fetchEventPricing(
 		.select('*')
 		.eq('event_id', eventId);
 	if (error || !data || data.length === 0) return null;
-	const rows = data as EventPricing[];
-	if (instanceStart) {
-		const override = rows.find((r) => r.instance_start === instanceStart);
-		if (override) return override;
-	}
-	return rows.find((r) => r.instance_start == null) ?? null;
+	return selectEffectivePricing(data as EventPricing[], instanceStart);
 }
 
 /// Persist series-level (or per-instance) pricing for an event. Kept
