@@ -169,33 +169,53 @@ test('enclosedAreaM2 of an out-and-back spur is ~zero', () => {
 });
 
 test('enclosedAreaM2 is unchanged by the antimeridian', () => {
-	// A local planar frame built from RAW longitudes is wrong by a whole turn
-	// across 180°: the same square scored ~38,435 km² on the line against
-	// ~1 km² off it, so areaEfficiency read 30,186 instead of 0.785. Taveuni,
-	// Fiji (lat -16.8) is a real place the 180th meridian runs through.
-	const lat = -16.8;
-	const control = squareLoop(179.0, lat, 0.005);
-	const crossing = squareLoop(179.999, lat, 0.005);
+	// WRAPPED coordinates, which is what GraphHopper and GeoJSON actually emit:
+	// a ring straddling 180° comes back as 179.99… then -179.99…, not an
+	// unwrapped 180.004. The first version of this test built the square from
+	// unwrapped longitudes, so it never crossed the line at all — it failed
+	// pre-fix only by a 6.6x floating-point cancellation margin, pinning the
+	// shoelace-origin change rather than unwrapLonDeg.
+	const lat = -16.8; // Taveuni, Fiji — the meridian runs through the island.
+	const half = 0.005;
+	const control = squareLoop(179.0, lat, half);
+	const crossing: [number, number][] = squareLoop(180.0, lat, half).map(
+		([lng, la]) => [lng > 180 ? lng - 360 : lng, la]
+	);
+	// Precondition: the ring really does straddle the line.
+	assert.ok(crossing.some(([lng]) => lng > 0));
+	assert.ok(crossing.some(([lng]) => lng < 0));
 	assert.ok(
 		Math.abs(enclosedAreaM2(crossing) - enclosedAreaM2(control)) /
 			enclosedAreaM2(control) < 1e-9,
-		'a loop straddling 180° must enclose the same area as one that does not',
+		'a loop straddling 180° must enclose the same area as one that does not'
 	);
 });
 
 test('pickBestLoop is not hijacked by a spur that crosses the antimeridian', () => {
+	// The spur needs a non-zero latitude extent: a flat one has an exactly-zero
+	// shoelace in EVERY longitude representation (each term telescopes), so the
+	// first version of this test passed against the pre-fix code too.
+	//
 	// inBandScore = areaEfficiency x closeness, and closeness never drops below
-	// 0.85 in-band — so ANY line-crossing candidate outscored every well-formed
-	// loop by four orders of magnitude, and a degenerate spur won outright.
+	// 0.85 in-band — so a line-crossing candidate whose area is inflated by four
+	// orders of magnitude beats every well-formed loop outright.
 	const lat = -16.8;
-	const spur = spurLoop(179.999, lat, 0.01);
+	const wrap = (lng: number) => (lng > 180 ? lng - 360 : lng);
+	const spur: [number, number][] = [
+		[wrap(179.995), lat],
+		[wrap(180.005), lat],
+		[wrap(180.005), lat + 0.00002],
+		[wrap(179.995), lat + 0.00002],
+		[wrap(179.995), lat]
+	];
+	assert.ok(spur.some(([lng]) => lng > 0) && spur.some(([lng]) => lng < 0));
 	const round = squareLoop(179.0, lat, 0.005);
 	const best = pickBestLoop(
 		[
 			{ coordinates: spur, distanceM: 4000 },
-			{ coordinates: round, distanceM: 4000 },
+			{ coordinates: round, distanceM: 4000 }
 		] as never,
-		4000,
+		4000
 	);
 	assert.deepEqual(best?.coordinates, round);
 });
