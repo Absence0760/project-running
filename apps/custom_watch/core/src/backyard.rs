@@ -124,6 +124,19 @@ pub struct Backyard {
     clock_seen: bool,
     /// A loop has already closed inside the current window.
     closed_this_window: bool,
+    /// The bell has already banked a loop the runner is still walking in from.
+    ///
+    /// `on_clock` clears `closed_this_window` FOR THE NEW WINDOW before the
+    /// recorder calls `on_bell_lap`, so the backstop's loop left the new window
+    /// looking un-closed. A runner who crossed a few seconds after the bell and
+    /// pressed BTN5 as they always do then counted the SAME physical loop
+    /// twice, and the learned loop length halved with it — which then poisons
+    /// `return_margin_s` for every later loop.
+    ///
+    /// Setting `closed_this_window` in `on_bell_lap` instead would be wrong: it
+    /// would read as "the runner closed this window" at the next rollover and
+    /// disarm the backstop for the window they are actually out on.
+    bell_banked_pending: bool,
     warned_min: u8,
     warning_seq: u16,
 }
@@ -145,6 +158,7 @@ impl Backyard {
             since_bell_s: 0,
             clock_seen: false,
             closed_this_window: false,
+            bell_banked_pending: false,
             warned_min: 0,
             warning_seq: 0,
         }
@@ -212,6 +226,9 @@ impl Backyard {
             // this one.
             bell_lap_due = !self.closed_this_window;
             self.closed_this_window = false;
+            // A bank that was never walked in from must not swallow a return in
+            // the window after next.
+            self.bell_banked_pending = false;
             self.warned_min = 0;
         }
         self.since_bell_s = since;
@@ -239,6 +256,18 @@ impl Backyard {
         if !self.armed {
             return;
         }
+        if self.bell_banked_pending {
+            // This press is the runner walking in from the loop the bell
+            // already banked. Record the return, but do NOT count it again —
+            // and leave `closed_this_window` alone, because the loop they are
+            // now starting is still open and its own return must still count.
+            self.bell_banked_pending = false;
+            self.last_return = Some(Return {
+                uptime_s,
+                distance_m,
+            });
+            return;
+        }
         self.close_loop(distance_m);
         self.last_return = Some(Return {
             uptime_s,
@@ -255,6 +284,7 @@ impl Backyard {
             return;
         }
         self.close_loop(distance_m);
+        self.bell_banked_pending = true;
     }
 
     fn close_loop(&mut self, distance_m: f64) {
@@ -420,6 +450,83 @@ mod tests {
         // ...and the anchor stays at the first close, so the second press does
         // not silently lengthen the learned loop either.
         assert_eq!(v.loop_distance_m, Some(6_700.0));
+    }
+
+    #[test]
+    fn a_press_just_after_the_bell_is_the_same_loop_not_a_second() {
+        // The runner is still out when the bell sounds, so the backstop banks
+        // the loop; they cross 29 s later and press BTN5 as they always do.
+        // That is ONE physical loop.
+        //
+        // on_clock clears closed_this_window FOR THE NEW WINDOW before the
+        // recorder calls on_bell_lap, so the banked loop used to leave the new
+        // window looking un-closed and the press counted it again — doubling
+        // the one number the format is scored on, and halving the learned loop
+        // length with it, which then poisons return_margin_s for every later
+        // loop.
+        let mut b = armed();
+        b.on_clock(9 * H + 5);
+        assert!(b.on_clock(10 * H + 1), "runner still out: the backstop is due");
+        b.on_bell_lap(6_706.0);
+        assert_eq!(b.view(6_706.0, None, 3_600).loops, 1);
+
+        b.on_corral_return(3_629, 6_712.0);
+        let v = b.view(6_712.0, None, 3_629);
+        assert_eq!(v.loops, 1, "the bell already banked this loop");
+        assert_eq!(
+            v.loop_distance_m,
+            Some(6_706.0),
+            "and the learned loop is not halved"
+        );
+        assert!(v.in_corral, "the return still registers");
+    }
+
+    #[test]
+    fn the_loop_after_a_banked_one_still_counts_on_its_own_return() {
+        // The consumed bank must not stand in for the NEXT loop's close, or a
+        // runner who takes the bell backstop once would stop being counted.
+        let mut b = armed();
+        b.on_clock(9 * H + 5);
+        assert!(b.on_clock(10 * H + 1));
+        b.on_bell_lap(6_706.0);
+        b.on_corral_return(3_629, 6_712.0); // walks in from the banked loop
+        assert_eq!(b.view(6_712.0, None, 3_629).loops, 1);
+
+        // ...then runs loop 2 and returns inside its own window.
+        b.on_clock(10 * H + 55 * 60);
+        b.on_corral_return(6_900, 13_418.0);
+        assert_eq!(b.view(13_418.0, None, 6_900).loops, 2);
+
+        // The runner closed that window themselves, so the backstop stands down.
+        assert!(!b.on_clock(11 * H + 1), "no backstop after a real return");
+    }
+
+    #[test]
+    fn a_bank_nobody_walked_in_from_does_not_swallow_a_later_return() {
+        // The pending bank is cleared at the next rollover: if the runner never
+        // pressed for the banked loop, a return two windows later is their own
+        // and must count.
+        let mut b = armed();
+        b.on_clock(9 * H + 5);
+        assert!(b.on_clock(10 * H + 1));
+        b.on_bell_lap(6_706.0);
+        assert_eq!(b.view(6_706.0, None, 3_600).loops, 1);
+
+        // No press at all this window; the bell banks again. (A mid-window
+        // fold first — a rollover is recognised by the modulus going
+        // backwards, and the recorder folds this at 1 Hz.)
+        b.on_clock(10 * H + 30 * 60);
+        assert!(b.on_clock(11 * H + 1));
+        b.on_bell_lap(13_412.0);
+        assert_eq!(b.view(13_412.0, None, 7_200).loops, 2);
+
+        // Now they press, in the third window.
+        b.on_corral_return(7_230, 13_420.0);
+        assert_eq!(
+            b.view(13_420.0, None, 7_230).loops,
+            2,
+            "the second bank is the loop they walked in from"
+        );
     }
 
     #[test]
