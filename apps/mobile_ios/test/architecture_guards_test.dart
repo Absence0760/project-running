@@ -647,7 +647,7 @@ void main() {
       // encodes on the UI thread and reintroduces the freeze.
       final body = _extractMethodBody(
         source,
-        r'Future<void> save\(Run run\)\s*async\s*\{',
+        r'Future<Run> save\(Run run\)\s*async\s*\{',
       );
       expect(
         body,
@@ -733,7 +733,7 @@ void main() {
       // if the remote carries a later timestamp from a different device.
       final body = _extractMethodBody(
         source,
-        r'Future<void> save\(Run run\)\s*async\s*\{',
+        r'Future<Run> save\(Run run\)\s*async\s*\{',
       );
       expect(
         body,

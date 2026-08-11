@@ -128,8 +128,11 @@ class _CapturingRunStore extends LocalRunStore {
   final List<dynamic> captured = [];
 
   @override
-  Future<void> save(run) async {
+  Future<Run> save(run) async {
     captured.add(run);
+    // save() returns the RESIDENT instance so markManySynced can identify it;
+    // the spy has no store, so the argument IS the resident copy here.
+    return run;
   }
 
   @override
