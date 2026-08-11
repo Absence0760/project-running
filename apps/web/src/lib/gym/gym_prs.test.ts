@@ -170,3 +170,13 @@ test('RunningPrTracker.judge matches workoutPrs walked over growing prior', () =
 		assert.deepEqual(norm(viaTracker), norm(viaLoop));
 	}
 });
+
+test('normaliseExerciseName folds the same whitespace class as the Dart twin', () => {
+	// exercise_key is PERSISTED, so a name that normalises differently on the
+	// two platforms buckets one exercise into two PRs. Dart's trim() strips
+	// every Unicode White_Space code point (incl. U+0085 NEL) and JS's does
+	// not, so the class is spelled out on both sides.
+	assert.equal(normaliseExerciseName('Bench Press\u0085'), 'bench press');
+	assert.equal(normaliseExerciseName('\u00a0Bench\u2003Press\u2028'), 'bench press');
+	assert.equal(normaliseExerciseName('  Bench   press '), 'bench press');
+});

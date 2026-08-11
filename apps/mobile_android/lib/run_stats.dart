@@ -223,7 +223,13 @@ double haversineMetres(
   final sinLng = sin(dLng / 2);
   final a = sinLat * sinLat +
       cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sinLng * sinLng;
-  return r * 2 * atan2(sqrt(a), sqrt(1 - a));
+  // Clamp before the arc, matching web's `2 * asin(min(1, sqrt(a)))`. Rounding
+  // can push `a` a hair above 1 for a near-antipodal pair, and then
+  // `sqrt(1 - a)` is NaN — which propagates silently: route_geometry's
+  // interpolateAlongRoute would return the end waypoint (Dart's
+  // `NaN.clamp(0, 1)` is 1.0) instead of the midpoint.
+  final clamped = a > 1 ? 1.0 : (a < 0 ? 0.0 : a);
+  return r * 2 * asin(sqrt(clamped));
 }
 
 /// Cumulative average pace so far, in seconds per kilometre — the run's

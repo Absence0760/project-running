@@ -157,4 +157,25 @@ void main() {
     expect(p.paceSPerM, isNotNull);
     expect(p.lastElapsedS, 7200);
   });
+
+  test('co-located checkpoints keep input order past the 32-element cutover', () {
+    // Dart's List.sort is insertion sort at <= 32 elements and unstable
+    // dual-pivot quicksort above, so a big field could order two co-located
+    // checkpoints differently from web's (stable) Array.prototype.sort — and
+    // `ordered.last` is what decides `racing` vs `finished`. 34 checkpoints
+    // supplied DESCENDING, with `mat` and `gate` sharing 40000 m.
+    final checkpoints = <ProjectionCheckpoint>[
+      for (var i = 31; i >= 0; i--)
+        ProjectionCheckpoint(id: 'cp\$i', positionM: i * 1000.0),
+      const ProjectionCheckpoint(id: 'mat', positionM: 40000),
+      const ProjectionCheckpoint(id: 'gate', positionM: 40000),
+    ];
+    final p = projectRunner(
+      checkpoints,
+      const [ProjectionCrossing(checkpointId: 'mat', elapsedS: 18000)],
+    );
+    // `mat` precedes `gate` in the input, so it must NOT be the last
+    // checkpoint — the runner is still racing, not finished.
+    expect(p.status, RunnerStatus.racing);
+  });
 }
