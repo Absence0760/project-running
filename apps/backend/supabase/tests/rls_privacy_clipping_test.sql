@@ -97,8 +97,17 @@ select is(
   'privacy_in_any_zone with null zones returns false'
 );
 
--- Re-enter the authenticated context for clip_track_for_user calls.
-set local role authenticated;
+-- Call clip_track_for_user as service_role, which is how production reaches it
+-- (the clip-public-track Edge Function, and the DEFINER callers
+-- clip_route_for_viewer / privacy_aware_route_geom / route_markers_for_viewer).
+-- 20270521_001 revoked EXECUTE from `authenticated` as well as `anon`: the
+-- function trims LEADING in-zone points, so a 3-point probe is a one-bit
+-- inside/outside oracle and ~40 calls locate a stranger's home (decisions §585).
+-- The assertions below test the CLIPPING LOGIC, not the grant — the grant is
+-- pinned in rls_audit_function_grant_lockdowns_test. The function is SECURITY
+-- DEFINER and reads the TARGET user's zones by parameter, so the caller's role
+-- does not change any result here.
+set local role service_role;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000c101"}';
 
 -- ── clip_track_for_user ──
