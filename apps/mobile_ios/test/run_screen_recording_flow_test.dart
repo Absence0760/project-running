@@ -99,8 +99,11 @@ class _CapturingRunStore extends LocalRunStore {
   int clearInProgressCalls = 0;
 
   @override
-  Future<void> save(run) async {
+  Future<cm.Run> save(run) async {
     captured.add(run);
+    // save() returns the RESIDENT instance so markManySynced can identify it;
+    // the spy has no store, so the argument IS the resident copy here.
+    return run;
   }
 
   @override
