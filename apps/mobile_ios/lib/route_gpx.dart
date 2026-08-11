@@ -58,7 +58,9 @@ String toRouteGpxWithMarkers(
     final lng = coordinates[i][0];
     final lat = coordinates[i][1];
     final ele = i < elevations.length ? elevations[i] : 0;
-    trackpoints.add('      <trkpt lat="$lat" lon="$lng"><ele>$ele</ele></trkpt>');
+    trackpoints.add(
+        '      <trkpt lat="${_gpxNum(lat)}" lon="${_gpxNum(lng)}">'
+        '<ele>${_gpxNum(ele)}</ele></trkpt>');
   }
 
   return '''<?xml version="1.0" encoding="UTF-8"?>
@@ -80,7 +82,7 @@ ${trackpoints.join('\n')}
 
 String _renderWaypoint(RouteGpxMarker m) {
   final parts = <String>[
-    '  <wpt lat="${m.lat}" lon="${m.lng}">',
+    '  <wpt lat="${_gpxNum(m.lat)}" lon="${_gpxNum(m.lng)}">',
     '<name>${_escapeXml(m.label)}</name>',
     '<type>${_escapeXml(m.kind)}</type>',
   ];
@@ -122,4 +124,23 @@ String _escapeXml(String str) {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&apos;');
+}
+
+/// Render a coordinate the way the web twin's template literal does, so the
+/// exported file is byte-identical on both platforms.
+///
+/// Dart's `$double` interpolation always writes a decimal point, so a whole
+/// degree came out `lat="47.0"` here and `lat="47"` on web, and an integral
+/// elevation `<ele>400.0</ele>` against `<ele>400</ele>`. The Dart side was
+/// also internally inconsistent: the missing-elevation fallback is an `int 0`,
+/// so it emitted `<ele>0</ele>` while a supplied `0.0` emitted `<ele>0.0</ele>`.
+/// Both forms are schema-valid GPX, but the two suites pinned DIFFERENT bytes
+/// for the same input while the docs claimed lockstep.
+String _gpxNum(num v) {
+  if (v is int) return v.toString();
+  final d = v.toDouble();
+  if (d.isFinite && d == d.roundToDouble() && d.abs() < 1e21) {
+    return d.toInt().toString();
+  }
+  return d.toString();
 }

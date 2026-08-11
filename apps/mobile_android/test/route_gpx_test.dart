@@ -108,7 +108,7 @@ void main() {
     final xml = toRouteGpxWithMarkers('Loop', coords3, elevs3, []);
     expect('<wpt '.allMatches(xml).length, 0);
     expect('<trkpt '.allMatches(xml).length, 3);
-    expect(xml, contains('<trkpt lat="47.37" lon="8.54"><ele>400.0</ele>'));
+    expect(xml, contains('<trkpt lat="47.37" lon="8.54"><ele>400</ele>'));
   });
 
   test('toRouteGpxWithMarkers — missing elevation falls back to 0', () {
@@ -126,5 +126,24 @@ void main() {
     final trkIdx = xml.indexOf('<trk>');
     expect(wptIdx > -1 && trkIdx > -1, isTrue);
     expect(wptIdx < trkIdx, isTrue);
+  });
+
+  test('whole-degree coordinates render without a trailing .0, as web does', () {
+    // Dart's $double interpolation always writes a decimal point, so the two
+    // platforms exported different bytes for the same route while the docs
+    // claimed lockstep — and each suite pinned its own answer.
+    final xml = toRouteGpxWithMarkers(
+      'Whole',
+      const [
+        [8.0, 47.0],
+        [8.5, 47.5],
+        [9.0, 48.0],
+      ],
+      const [400.0, 410.5, 0.0],
+      const [],
+    );
+    expect(xml, contains('<trkpt lat="47" lon="8"><ele>400</ele>'));
+    expect(xml, contains('<ele>410.5</ele>'));
+    expect(xml, contains('<ele>0</ele>'));
   });
 }

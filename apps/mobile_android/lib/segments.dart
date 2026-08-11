@@ -103,7 +103,12 @@ EffortResult? _effortFromIndex(
   if (!(elapsed > 0)) return null;
   return EffortResult(
     timeSeconds: elapsed,
-    startedAt: DateTime.fromMillisecondsSinceEpoch(startMs.round(), isUtc: true),
+    // Truncate toward zero, as web's `new Date(startTs)` does (the Date
+    // constructor applies ToInteger). `.round()` rounds half away from zero, so
+    // an interpolated 2997.7386 ms start was written as …02.998Z here and
+    // …02.997Z on web for the same effort.
+    startedAt:
+        DateTime.fromMillisecondsSinceEpoch(startMs.truncate(), isUtc: true),
   );
 }
 

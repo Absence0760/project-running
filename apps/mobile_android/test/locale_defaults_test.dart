@@ -61,4 +61,21 @@ void main() {
       expect(regionOfLocale(''), '');
     });
   });
+
+  test('defaultWeekStartForLocale agrees with the web twin on the CLDR set', () {
+    // The hand-written 16-region table disagreed with CLDR for 19 regions, and
+    // web consults Intl first while Dart cannot — so these locales seeded a
+    // different week start per platform and `currentWeek` bucketed the
+    // dashboard onto different seven days.
+    for (final loc in [
+      'pt-PT', 'th-TH', 'id-ID', 'en-SG', 'ar-SA', 'es-DO', 'es-GT', 'es-HN',
+      'es-SV', 'es-NI', 'es-PA', 'es-PY', 'en-KE', 'am-ET', 'ur-PK', 'bn-BD',
+    ]) {
+      expect(defaultWeekStartForLocale(loc), 'sunday', reason: loc);
+    }
+    // Argentina is Monday-first in CLDR; the old table wrongly listed it.
+    expect(defaultWeekStartForLocale('es-AR'), 'monday');
+    // A Saturday-first region (firstDay 6) is modelled as monday on both sides.
+    expect(defaultWeekStartForLocale('ar-EG'), 'monday');
+  });
 }
