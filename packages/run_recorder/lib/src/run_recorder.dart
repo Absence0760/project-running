@@ -1100,6 +1100,18 @@ class RunRecorder {
           // frozen for the rest of the run (#330). Both gates must agree the
           // gap is short for a hop to fail closed, so a zero/near-zero-dt
           // duplicate arriving immediately is still rejected as a teleport.
+          //
+          // Seal the pace window at the same time, exactly as resume() and
+          // _beginResumed() do — this branch creates the identical
+          // discontinuity. The gap's metres are deliberately NOT credited, so
+          // a rolling window spanning it times the un-credited distance
+          // against the gap's clock: 5 clean fixes at 200 s/km followed by a
+          // 12 s Doze batch 150 m on measured 128 s/km, i.e. the recorder
+          // claiming zero extra metres and a sub-world-record pace at once.
+          // That value feeds the pace-alert and cut-off catch-up voice cues
+          // and live_cutoff_eta's projection, so the error runs in the
+          // direction that SUPPRESSES a safety warning.
+          _paceFloorIdx = _track.length;
           _lastTrackedPosition = pos;
           _lastTrackedPositionAt = pos.timestamp;
           _lastTrackedElapsed = _stopwatch.elapsed;

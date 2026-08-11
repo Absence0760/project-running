@@ -278,3 +278,147 @@ mechanical change. Do not "fix" any of these without deciding the rule first.
   same way. `gym_adherence` skips only `warmup`, so the fix followed that
   precedent rather than inventing semantics. Decide the rule once and apply it
   to both.
+
+## Bug-hunt round 2, 2026-08-10 — verified but deferred
+
+Found by the second multi-agent sweep (recording engine, Edge Functions, SQL,
+Rust firmware, native watch apps), landed alongside the fixes on
+`fix/bug-hunt-2026-08-10-r2`. Each was reproduced against the real module or
+the live catalog. Deferred because the fix needs a schema decision, a product
+call, or a three-way lockstep port — not because it is uncertain.
+
+### Blocks a whole feature
+
+- [ ] **`event_pricing` upsert can never succeed — 42P10 on every call.**
+  The table has no primary key and only two *partial* unique indexes;
+  `setEventPricing` upserts with `onConflict: 'event_id,instance_start'` (and
+  an `'event_id'` branch). PostgREST emits no index predicate, so Postgres
+  cannot infer a partial index as arbiter. Proved with a non-executing
+  `EXPLAIN` on both branches: *"there is no unique or exclusion constraint
+  matching the ON CONFLICT specification"*. An organiser can therefore never
+  attach a price to an event. Note this is the *second* independent blocker on
+  the same rail — the checkout response-key mismatch fixed in this branch was
+  the first, so paid events stay unreachable until this one lands too. The
+  durable fix is one non-partial unique on a normalised instance key replacing
+  the two partial indexes, which is a schema change on a table that may hold
+  prod rows: route through `/safe-migration` and the `migration_locks.md`
+  playbook. No pgtap covers it (`paid_events_test.sql` only does plain
+  inserts).
+
+### Wrong data, fix needs a decision
+
+- [ ] **Enabling treadmill mode mid-run zeroes the accumulated distance.**
+  `setTreadmillSample` anchors its baseline at the belt's own total, so
+  `_reportedDistanceMetres` drops the GPS kilometres the moment the belt
+  engages — measured: 60 m of GPS distance becomes 0.0, and a later belt
+  reading of 100 m reports 100, not 160. Mid-run is the *only* way to enable
+  it (`treadmill_live_mode.md` § open questions), so every activation lands on
+  an already-accumulating run, and `lapsToCanonicalJson` clamps the negative
+  delta so `metadata.laps` records a silent 0 m lap. **But** `run_recorder_test.dart`'s
+  *"clearTreadmillMode reverts to the GPS distance"* pins the same discard in
+  the opposite direction (20 m GPS + belt 1000→1200 asserts 200, not 220), so
+  the current behaviour is a deliberate "two independent accumulators, show
+  the active source", not an oversight. Changing it is a product call about
+  what distance means across a source switch — decide the rule for both
+  directions at once, then fix and re-pin.
+
+### Three-way lockstep port
+
+- [ ] **`turn_cues` collapse deletes the corner vertex it exists to preserve.**
+  Independently confirmed this round in the firmware core, which reproduced it
+  numerically: a single 90° left corner at 100 m sampled at 10 m spacing
+  announces `SlightLeft at 80.0` *and* `SlightLeft at 100.0` — one turn
+  reported twice, both under-classified, the first 20 m early, and "turns
+  remaining" reading 2 on a one-corner course. A shallower bend splits into
+  two sub-`min_angle` halves and produces no cue at all. This is the round-1
+  finding, now with a third confirmed implementation: `turn_cues.ts`,
+  `turn_cues.dart`, `apps/custom_watch/core/src/turn_cues.rs`. Deleting the
+  offending line remains insufficient (verified in round 1). Fix web-first per
+  § 24 as a lockstep triple.
+
+### Firmware (bench-gated trigger, host-tested logic)
+
+- [ ] **Barometric altitude bypasses the `plausible_gps` gate.** Every
+  GPS-sourced altitude is narrowed to `-500..9000 m`; the barometric one —
+  preferred over GPS at every one of those sites — is gated nowhere. A stuck-
+  high I²C burst yields `-8789.741 m` and books 10,389 m of false loss, and the
+  sample survives every later profile thinning for the rest of the run. The
+  same read also reduces to a ~300,000 hPa sea-level pressure that can raise a
+  spurious Storm banner. Trigger is bench-gated (the sim models the driver's
+  own belief), so this is *host-tested*, not *bench-verified*, per
+  `quality_standards.md`.
+- [ ] **`FixGate` has no re-anchor escape.** Above `MAX_SPEED_MPS` (10 m/s)
+  displacement outruns the gate's ceiling forever. Measured: course pushed at
+  home, 40 km driven at 80 km/h → 0 fixes accepted, 129 rejected, first
+  acceptance 36 minutes after arrival — so no off-course latch if the gun goes
+  in that window, while the map marker keeps moving from the raw fix. The
+  recorder has exactly this escape hatch (`GPS_REANCHOR_AFTER_S`); the gate
+  does not.
+- [ ] **`backyard` reads any backward clock step as a corral bell**, including
+  1 s. The value is an extrapolation off an anchor with no monotonicity check,
+  which retreats ~7 times over a 100-hour backyard at 20 ppm. It also clears
+  `closed_this_window`, so a return the runner already marked is forgotten and
+  the real bell double-counts. Separately, bell-then-press counts one loop
+  twice (`on_bell_lap` increments without setting `closed_this_window`);
+  press-then-press and press-then-bell are tested, bell-then-press is not.
+
+### Watch apps
+
+- [ ] **Wear `drainQueue` has no re-entrancy guard** and cold start fires two
+  (cached-session restore and phone-bridge restore both call it, neither gated
+  by backoff at zero failures). Both take the same queue snapshot; `pushRun`
+  deletes the track file last, so the loser either re-uploads a multi-MB ultra
+  track over LTE or hits `FileNotFoundException` — which `classifyDrainError`
+  does not match, so it surfaces a raw ENOENT as a sync failure for a run that
+  uploaded fine. Same gap lets two `refreshAccessToken()` calls race a
+  rotating refresh token.
+- [ ] **Wear `LocalRunStore.save`/`remove` read-modify-write outside the
+  DataStore transaction**, so an uploaded run can be resurrected after its
+  track file is deleted — every later drain throws ENOENT and the entry never
+  clears. Fix is to move the whole mutation inside one `edit` lambda.
+- [ ] **iOS pace look-back spans a pause.** `resume()` clears
+  `lastLocationForDistance` (the #371 fix) but not `track`, so `updatePace`
+  divides a ~200 m look-back by a span containing the entire stop. A 12-minute
+  aid stop makes the first ~200 m after resume read on the order of an hour per
+  km, published to the complication and to `checkPaceAlert` — the same class of
+  bug as the recorder pace-gap fix landed in this branch, on the other platform.
+- [ ] **Both watch apps keep the only copy of an unsynced run's GPS track in
+  the OS-purgeable cache directory** (Wear `context.cacheDir`, iOS
+  `.cachesDirectory`). After a purge the queue still promises "Sync 3 runs"
+  while every push throws ENOENT. A not-yet-synced payload is not a cache.
+- [ ] **iOS `HKWorkoutSession` failure is swallowed** — `didFailWithError` is
+  empty and nothing nils the session, so HR freezes on a plausible number and a
+  partial `avg_bpm` is stamped as if it covered the whole run.
+
+### Smaller, still real
+
+- [ ] **A partial Stripe refund is processed as a full refund.**
+  `charge.amount` / `amount_refunded` are never read, so a £5 goodwill refund
+  on a £50 registration marks the order `refunded` and hands the seat to a
+  waitlister; the `partially_refunded` state in lib.ts is never produced.
+- [ ] **`events-checkout`'s stable idempotency key + now-derived `expires_at`**
+  makes every retry a Stripe `idempotency_error` → 502 for ~24 h. The header
+  comment's "a double-click reuses the same session" is inverted.
+- [ ] **`export-data` backup truncates every table at PostgREST's 1000-row
+  cap** (no Range/limit/paging), and `manifest.json` reports the truncated
+  count as the true one — an Art 20 completeness problem. `strava-import`
+  already pages correctly; the Go path has the same shape.
+- [ ] **`search_public_events` derives `p_byday` in the session timezone**
+  while the sibling `p_time` filter correctly uses the event's, so every
+  evening event west of UTC is filed under the wrong weekday.
+- [ ] **`clubs_member_count_trigger` double-counts** a combined
+  `status` + `club_id` UPDATE (two non-exclusive `if` blocks); the sibling
+  `routes_run_count_trigger` gets this right with was/is deltas. Note
+  `derived_state.md` currently claims the pgtap "guards every branch" — it
+  never changes `club_id`, so that claim is false.
+- [ ] **`routes_run_count_trigger` skips the decrement when the route's
+  visibility changed**, permanently overcounting. This is not the drift
+  `derived_state.md` accepts (that covers the *run's* `is_public`), and
+  `routes.run_count` is the only cache there with no "Pinned by" line.
+- [ ] **Recorder `dispose()` is not terminal** the way `stop()` is, so an
+  in-flight async retry callback can re-open the GPS stream after disposal —
+  an uncancellable subscription holding the foreground service and GPS radio
+  for the process's life, with every fix raising on a closed sink.
+- [ ] **`resumeSession` resets the monotonic route floor**, so distance-
+  remaining nearly doubles on a loop or out-and-back (measured 1298.5 m where
+  a fresh run reads 699.2 m) and never self-corrects.

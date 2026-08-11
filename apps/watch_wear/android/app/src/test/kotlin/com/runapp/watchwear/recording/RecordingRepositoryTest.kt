@@ -178,4 +178,78 @@ class RecordingRepositoryTest {
             RecordingRepository.Stage.values().map { it.name }.toSet(),
         )
     }
+
+    /// `update` is hit concurrently by five writers — the GPS, HR, steps and
+    /// ticker jobs on `Dispatchers.Default`, plus pause/resume/lap/stop on the
+    /// main thread via `onStartCommand`. It was a plain read-then-assign, so
+    /// whichever write landed second silently won and the other was lost.
+    ///
+    /// A lost distance write is never made up (the accumulator is read back
+    /// out of the repository on each fix). The worst case is losing the run
+    /// outright: the ticker reads a `Recording` snapshot, `stopRecording()`
+    /// writes `stage = Finished`, the ticker's stale assignment reverts it,
+    /// and `stopRecording` then clears the checkpoint — so the run is never
+    /// queued and recovery has just been deleted.
+    @Test
+    fun `concurrent updates do not lose writes`() {
+        val threads = 8
+        val perThread = 2_000
+        val barrier = java.util.concurrent.CyclicBarrier(threads)
+        val workers = (0 until threads).map {
+            Thread {
+                barrier.await()
+                repeat(perThread) {
+                    RecordingRepository.update { m ->
+                        m.copy(trackPointCount = m.trackPointCount + 1)
+                    }
+                }
+            }
+        }
+        workers.forEach { it.start() }
+        workers.forEach { it.join() }
+        assertEquals(
+            "every increment must survive; a read-then-assign loses races",
+            threads * perThread,
+            RecordingRepository.metrics.value.trackPointCount,
+        )
+    }
+
+    /// The specific shape that loses a run: a per-metric transform must never
+    /// resurrect a stage another writer has already advanced. None of the
+    /// real transforms writes `stage`, so a CAS retry re-reads and preserves
+    /// it — this pins that property rather than the timing.
+    @Test
+    fun `a metric update never reverts a concurrently-advanced stage`() {
+        val writers = 6
+        val perWriter = 2_000
+        val barrier = java.util.concurrent.CyclicBarrier(writers + 1)
+        val metricWriters = (0 until writers).map {
+            Thread {
+                barrier.await()
+                repeat(perWriter) {
+                    RecordingRepository.update { m -> m.copy(distanceM = m.distanceM + 1.0) }
+                }
+            }
+        }
+        val finisher = Thread {
+            barrier.await()
+            Thread.sleep(1)
+            RecordingRepository.update { m -> m.copy(stage = RecordingRepository.Stage.Finished) }
+        }
+        metricWriters.forEach { it.start() }
+        finisher.start()
+        metricWriters.forEach { it.join() }
+        finisher.join()
+        assertEquals(
+            "a concurrent metric write must not revert the Finished stage",
+            RecordingRepository.Stage.Finished,
+            RecordingRepository.metrics.value.stage,
+        )
+        assertEquals(
+            "and no distance may be lost in the process",
+            (writers * perWriter).toDouble(),
+            RecordingRepository.metrics.value.distanceM,
+            0.0001,
+        )
+    }
 }

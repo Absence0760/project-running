@@ -3272,7 +3272,12 @@ export async function startEventCheckout(
 		body: { event_id: eventId, instance_start: instanceStart }
 	});
 	if (error) throw error;
-	const url = (data as { url?: string } | null)?.url;
+	// `checkout_url`, matching what the Edge Function actually returns and the
+	// `startDonationCheckout` sibling below. Reading `url` here meant this
+	// never resolved: the function had already created a live Stripe session
+	// and a capacity-holding pending order by then, so every Register press
+	// burned a reservation and then threw before the buyer reached Stripe.
+	const url = (data as { checkout_url?: string } | null)?.checkout_url;
 	if (!url) throw new Error('No checkout URL returned');
 	return { url };
 }

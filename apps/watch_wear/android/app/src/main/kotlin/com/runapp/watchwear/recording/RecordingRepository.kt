@@ -4,6 +4,7 @@ import com.runapp.watchwear.GpsPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /// Process-wide singleton holding live recording state. Owned by
 /// `RunRecordingService` (which writes), observed by `RunViewModel`
@@ -77,8 +78,28 @@ object RecordingRepository {
     private val _metrics = MutableStateFlow(Metrics())
     val metrics: StateFlow<Metrics> = _metrics.asStateFlow()
 
+    /// Atomic read-modify-write. This MUST stay a CAS loop
+    /// (`MutableStateFlow.update`), not `_metrics.value = transform(...)`:
+    /// five writers hit it concurrently — the GPS, HR, steps and ticker jobs
+    /// on `Dispatchers.Default`, plus pause/resume/lap/stop on the main
+    /// thread via `onStartCommand`.
+    ///
+    /// A plain read-then-assign loses whichever write lands second. The worst
+    /// case is losing the run: the ticker reads a `Recording` snapshot,
+    /// `stopRecording()` writes `stage = Finished`, the ticker's stale
+    /// assignment reverts it, and `stopRecording` then clears the checkpoint —
+    /// so `RunViewModel.observeRecording` never sees `Finished`, never queues
+    /// the run, and recovery has just been deleted. Cancelling the ticker does
+    /// not help: cancellation cannot interrupt a non-suspending call already
+    /// in flight. The same clobber silently un-pauses a paused run and
+    /// permanently under-counts distance (the accumulator is read back out of
+    /// the repository on each fix, so a lost write is never made up).
+    ///
+    /// With a CAS loop the transform re-runs against the latest value, so a
+    /// concurrent `stage` change survives — none of the per-metric transforms
+    /// writes `stage` itself.
     fun update(transform: (Metrics) -> Metrics) {
-        _metrics.value = transform(_metrics.value)
+        _metrics.update(transform)
     }
 
     fun reset() {
