@@ -69,6 +69,7 @@
 	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
+	import { sameInstant } from '$lib/social/event_instance';
 	import { workoutDraftFromTemplate, workoutDraftFromSession } from '$lib/social/event_gym_template';
 	import { expandSessionSteps, type SessionPlanInput } from '$lib/social/session_steps';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
@@ -239,9 +240,7 @@
 	);
 	let activeException = $derived(
 		activeInstance
-			? exceptions.find(
-					(e) => new Date(e.instance_start).toISOString() === activeInstance
-				) ?? null
+			? exceptions.find((e) => sameInstant(e.instance_start, activeInstance)) ?? null
 			: null
 	);
 	let showAllInstances = $state(false);
@@ -409,7 +408,7 @@
 
 	let viewerRsvpForActive = $derived.by(() => {
 		if (!event || !activeInstance) return null;
-		if (activeInstance === event.next_instance_start) return event.viewer_rsvp;
+		if (sameInstant(activeInstance, event.next_instance_start)) return event.viewer_rsvp;
 		return rsvpSummary.viewerStatus;
 	});
 
@@ -525,7 +524,9 @@
 		attendeesHasMore = res[0].length === ROSTER_PAGE_SIZE;
 		route = res[1];
 		eventPosts = (res[2] as ClubPostWithAuthor[]).filter(
-			(p) => p.event_id === event!.id && (!p.event_instance_start || p.event_instance_start === activeInstance)
+			(p) =>
+				p.event_id === event!.id &&
+				(!p.event_instance_start || sameInstant(p.event_instance_start, activeInstance))
 		);
 		results = res[3];
 		raceSession = res[4];

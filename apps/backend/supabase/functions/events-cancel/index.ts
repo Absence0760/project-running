@@ -32,6 +32,7 @@
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
+import { selectEffectivePricing } from '../_shared/event_instance.ts';
 import { isValidTimestamptz, isValidUuid } from '../_shared/input_validation.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -131,8 +132,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
     return Response.json({ error: 'cancel_failed' }, { status: 500 });
   }
   const rows = (pricingRows ?? []) as Array<{ instance_start: string | null; refund_policy: string }>;
-  const pricing = rows.find((r) => r.instance_start === instanceStart)
-    ?? rows.find((r) => r.instance_start === null);
+  const pricing = selectEffectivePricing(rows, instanceStart);
   const refundPolicy = (pricing?.refund_policy ?? 'no_refund') as RefundPolicy;
 
   const eligibility = resolveRefundEligibility(refundPolicy, Date.now(), instanceStart);

@@ -12,6 +12,7 @@ import { stripExifFromFile } from '../util/exif_strip';
 import { entriesFromTemplate } from '../nutrition/meal_template';
 import { logInputFromRecipe } from '../nutrition/recipe';
 import { challengesToRecomputeForRun } from '../social/challenge_progress';
+import { selectEffectivePricing } from '../social/event_instance';
 import type {
 	Run,
 	Route,
@@ -3219,12 +3220,7 @@ export async function fetchEventPricing(
 		.select('*')
 		.eq('event_id', eventId);
 	if (error || !data || data.length === 0) return null;
-	const rows = data as EventPricing[];
-	if (instanceStart) {
-		const override = rows.find((r) => r.instance_start === instanceStart);
-		if (override) return override;
-	}
-	return rows.find((r) => r.instance_start == null) ?? null;
+	return selectEffectivePricing(data as EventPricing[], instanceStart);
 }
 
 /// Persist series-level (or per-instance) pricing for an event. Kept
@@ -3255,7 +3251,10 @@ export async function setEventPricing(
 			sales_close_offset_minutes: input.sales_close_offset_minutes,
 			platform_fee_bps: input.platform_fee_bps ?? 0
 		},
-		{ onConflict: input.instance_start ? 'event_id,instance_start' : 'event_id' }
+		// One arbiter for both branches: event_pricing_event_instance_uniq is
+		// non-partial (NULLS NOT DISTINCT), so a NULL instance_start conflicts
+		// with the existing series row instead of inserting a second one.
+		{ onConflict: 'event_id,instance_start' }
 	);
 	if (error) throw error;
 }

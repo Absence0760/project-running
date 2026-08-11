@@ -204,6 +204,72 @@ test.describe('paid registration — non-charge UI (slice P1)', () => {
 		await expect(page.getByTestId('register-cta')).toHaveCount(0);
 	});
 
+	test('host with charges_enabled prices an event through the editor and the row lands', async ({
+		page
+	}) => {
+		// The one path in the app that WRITES a price. Every other test here
+		// plants event_pricing with the service role, which is a plain INSERT
+		// — and a plain INSERT succeeded even while setEventPricing's upsert
+		// raised 42P10 on every call against the old partial-index shape
+		// (decisions §580). Drive the real editor so the conflict target is
+		// exercised, not just the table.
+		const admin = getAdminClient();
+		await admin.from('instructor_payout_accounts').upsert({
+			user_id: USER_A.id,
+			stripe_connect_account_id: `acct_e2e_${USER_A.id.slice(0, 8)}`,
+			charges_enabled: true,
+			payouts_enabled: true,
+			details_submitted: true,
+			country: 'US',
+			default_currency: 'usd'
+		});
+		cleanups.push(async () => {
+			await admin.from('instructor_payout_accounts').delete().eq('user_id', USER_A.id);
+		});
+
+		const title = `e2e-price-write ${Date.now()}`;
+		const dayIso = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+		await page.goto(`/clubs/${RICHMOND_SLUG}`);
+		await page.getByRole('button', { name: /New event/ }).click();
+		const modal = page.locator('.modal', { hasText: 'New event' });
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+
+		await modal.getByPlaceholder('Sunday long run').fill(title);
+		await modal.locator('input[type="date"]').first().fill(dayIso);
+		await modal.locator('input[type="time"]').first().fill('07:30');
+
+		// charges_enabled is true now, so the toggle is live and reveals the
+		// price fields.
+		const toggle = modal.getByTestId('charge-toggle');
+		await expect(toggle).toBeEnabled();
+		await toggle.check();
+		await modal.getByPlaceholder('e.g. 22.00').fill('31.50');
+
+		await modal.getByRole('button', { name: /Create event/ }).click();
+		// A pricing failure is surfaced inline by the editor rather than
+		// losing the event, so the modal closing is itself the assertion that
+		// setEventPricing did not throw.
+		await expect(modal).toHaveCount(0, { timeout: 10_000 });
+
+		const { data: created_ev } = await admin
+			.from('events')
+			.select('id')
+			.eq('title', title)
+			.maybeSingle();
+		expect(created_ev?.id, 'the event was created').toBeTruthy();
+		created.push(created_ev!.id as string);
+
+		const { data: pricing } = await admin
+			.from('event_pricing')
+			.select('instance_start, price_cents, currency')
+			.eq('event_id', created_ev!.id)
+			.maybeSingle();
+		expect(pricing, 'setEventPricing wrote a row').toBeTruthy();
+		expect(pricing!.price_cents).toBe(3150);
+		expect(pricing!.instance_start).toBeNull();
+	});
+
 	test('?paid=1 shows a processing state (no false failure)', async ({ page }) => {
 		const title = `e2e-paidparam ${Date.now()}`;
 		const id = await insertEvent({
