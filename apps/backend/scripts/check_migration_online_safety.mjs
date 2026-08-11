@@ -82,7 +82,11 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // carry pace_zone + target_pace_end_sec_per_km. Function bodies only — no table
 // DDL of any kind and no backfill, so the scanner passed it with zero
 // violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270517';
+// 20270518: swaps event_pricing's two partial unique indexes for one non-partial
+// NULLS NOT DISTINCT index so an upsert can infer an arbiter. Index DDL only —
+// no constraint of any kind, and event_pricing is not in GUARDED_TABLES — so the
+// scanner passed it with zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270518';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

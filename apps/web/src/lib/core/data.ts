@@ -3255,7 +3255,10 @@ export async function setEventPricing(
 			sales_close_offset_minutes: input.sales_close_offset_minutes,
 			platform_fee_bps: input.platform_fee_bps ?? 0
 		},
-		{ onConflict: input.instance_start ? 'event_id,instance_start' : 'event_id' }
+		// One arbiter for both branches: event_pricing_event_instance_uniq is
+		// non-partial (NULLS NOT DISTINCT), so a NULL instance_start conflicts
+		// with the existing series row instead of inserting a second one.
+		{ onConflict: 'event_id,instance_start' }
 	);
 	if (error) throw error;
 }
