@@ -18,14 +18,22 @@
 	let ready = $state(false);
 	let threads = $state<DmThread[]>([]);
 	let messages = $state<DirectMessage[]>([]);
-	let draft = $state('');
+	// Drafts are PER THREAD. A single top-level draft followed the viewer into
+	// whichever conversation they clicked next — the composer lives inside the
+	// `{#if !activeId}{:else}` branch, so switching threads never tears it down
+	// — and send() posts to the CURRENT activeId. A half-written private message
+	// to one person could be delivered to another. Keying by partner also
+	// restores the right draft on switching back, instead of destroying it.
+	let drafts = $state<Record<string, string>>({});
 	let sending = $state(false);
 	let loadingThread = $state(false);
 	let sendError = $state<string | null>(null);
 	let threadsError = $state(false);
 	let threadError = $state(false);
+	let threadGen = 0;
 
 	let activeId = $derived($page.params.id ?? null);
+	const draft = $derived(activeId ? (drafts[activeId] ?? '') : '');
 	let me = $derived(auth.user?.id ?? null);
 	let activeThread = $derived(threads.find((t) => t.partnerId === activeId) ?? null);
 
@@ -57,6 +65,9 @@
 	// Load the open conversation whenever the route param changes.
 	$effect(() => {
 		const id = activeId;
+		// A send failure belongs to the thread it happened in; leaving it pinned
+		// above the composer made it read as an error in the new conversation.
+		sendError = null;
 		if (!id || !auth.user) {
 			messages = [];
 			threadError = false;
@@ -66,16 +77,24 @@
 	});
 
 	async function openThread(id: string) {
+		// Two quick clicks leave two fetches in flight and the LAST to resolve
+		// won, so the header and URL could read one partner while the bubbles
+		// were another's — and send() would post into the thread named by the
+		// URL. Same generation idiom SocialClubs.svelte already uses.
+		const gen = ++threadGen;
 		loadingThread = true;
 		threadError = false;
 		try {
-			messages = await fetchDmThread(id);
+			const rows = await fetchDmThread(id);
+			if (gen !== threadGen) return;
+			messages = rows;
 		} catch {
+			if (gen !== threadGen) return;
 			messages = [];
 			threadError = true;
 			return;
 		} finally {
-			loadingThread = false;
+			if (gen === threadGen) loadingThread = false;
 		}
 		try {
 			await markDmThreadRead(id);
@@ -93,9 +112,11 @@
 		sending = true;
 		sendError = null;
 		try {
-			const msg = await sendDm(id, draft);
+			const body = drafts[id] ?? '';
+			const msg = await sendDm(id, body);
 			messages = [...messages, msg];
-			draft = '';
+			delete drafts[id];
+			drafts = { ...drafts };
 			try {
 				threads = await fetchDmThreads();
 			} catch {
@@ -211,7 +232,10 @@
 					{#if sendError}<p class="send-error" role="alert">{sendError}</p>{/if}
 					<div class="composer">
 						<textarea
-							bind:value={draft}
+							value={draft}
+							oninput={(e) => {
+								if (activeId) drafts[activeId] = e.currentTarget.value;
+							}}
 							onkeydown={onKeydown}
 							placeholder={tr('messages.composerPlaceholder')}
 							rows="1"

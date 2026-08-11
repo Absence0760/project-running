@@ -399,7 +399,19 @@
 					>{m('settingsIntegrations.stravaBulkLink')}</a
 				>{m('settingsIntegrations.stravaBulkSuffix')}
 			</p>
-			<button type="button" class="zip-btn" onclick={() => zipFileInput?.click()}>
+			<!-- Both imports walk for tens of minutes with no resume, and each
+			     snapshots its dedupe set from the PRE-import database — so a
+			     second walk started mid-flight treats every activity as new and
+			     loses the insert race on the unique index, reporting hundreds of
+			     phantom failures. The first importer's `finally` also removes the
+			     shared beforeunload guard while the second is still running. One
+			     at a time. -->
+			<button
+				type="button"
+				class="zip-btn"
+				disabled={zipProgress !== null || garminProgress !== null}
+				onclick={() => zipFileInput?.click()}
+			>
 				{m('settingsIntegrations.chooseStravaZip')}
 			</button>
 			<input
@@ -456,7 +468,12 @@
 				>{m('settingsIntegrations.garminBulkFrag4')}<code>.fit</code>{m('settingsIntegrations.garminBulkFrag5')}<code>.gpx</code> /
 				<code>.tcx</code>{m('settingsIntegrations.garminBulkFrag6')}
 			</p>
-			<button type="button" class="zip-btn" onclick={() => garminFileInput?.click()}>
+			<button
+				type="button"
+				class="zip-btn"
+				disabled={zipProgress !== null || garminProgress !== null}
+				onclick={() => garminFileInput?.click()}
+			>
 				{m('settingsIntegrations.chooseGarminExport')}
 			</button>
 			<input
