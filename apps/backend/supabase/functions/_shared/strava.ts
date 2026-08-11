@@ -190,7 +190,7 @@ export function isStravaRunFamily(sport: string | null | undefined): boolean {
 /// Insert a Strava activity as a `runs` row + (best-effort) upload its
 /// gzipped GPS track to Storage. Caller is responsible for dedupe.
 ///
-/// Note: `runs` has no `title` or `elevation_m` columns — both live on
+/// Note: `runs` has no `title` column — it lives on
 /// `metadata` per docs/backend/metadata.md (matches the apps/web/src/lib/data.ts
 /// saveRun writer used by the Strava + Garmin ZIP importers).
 export async function ingestActivity(
@@ -257,6 +257,14 @@ export async function ingestActivity(
 			// would catch the OAuth-then-ZIP double-import path that
 			// today only `metadata.strava_id` checks against. /audit/strava M3.
 			external_id: `strava:${stravaId}`,
+			// The promoted column the vert challenge aggregate SUMS — it sums
+			// base columns, not the jsonb bag, so writing only
+			// metadata.elevation_m left every vert board at 0 m. 20270302_001's
+			// contract is "writers populate both"; this is the live OAuth ingest
+			// (strava-import + strava-webhook), i.e. the largest population.
+			...(act.total_elevation_gain != null
+				? { elevation_gain_m: Math.round(act.total_elevation_gain) }
+				: {}),
 			metadata,
 		})
 		.select('id')

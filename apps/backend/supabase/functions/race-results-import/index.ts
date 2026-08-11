@@ -79,6 +79,11 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     ) {
       return Response.json({ error: 'provider_not_configured' }, { status: 503 });
     }
+    if (!['runsignup', 'ultrasignup', 'chronotrack', 'paste'].includes(provider)) {
+      // An unrecognised provider is not "configured" — answering true for it is
+      // the same class of bug as the two credential-gated legs above.
+      return Response.json({ error: 'unknown_provider' }, { status: 400 });
+    }
     return Response.json({ configured: true });
   }
 
@@ -225,9 +230,8 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     // ChronoTrack request returns the whole finisher field, and every row of it
     // would be inserted as the caller's own run (issue #360's failure mode, on
     // the provider that never got the gate).
-    const ctScope = chronoTrackScopeGate({
-      bib: typeof body.bib === 'string' ? body.bib : undefined,
-    });
+    const ctBib = typeof body.bib === 'string' ? body.bib.trim() : undefined;
+    const ctScope = chronoTrackScopeGate({ bib: ctBib });
     if (!ctScope.ok) {
       return Response.json({ error: ctScope.error }, { status: ctScope.status });
     }
@@ -236,7 +240,7 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
       clientId,
       userId: ctUserId,
       password,
-      bib: typeof body.bib === 'string' ? body.bib : undefined,
+      bib: ctBib,
     });
     const upstream = await fetch(url, {
       headers: { 'User-Agent': Deno.env.get('RACE_IMPORT_USER_AGENT') || 'RunApp/1.0' },
@@ -254,6 +258,12 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     mapped = extractChronoTrackResults(payload)
       .map((r) => mapChronoTrackResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
+    // Narrow client-side too, exactly as the RunSignUp leg does: the gate only
+    // proves the REQUEST was scoped, not that the upstream honoured `?bib=`.
+    // An API that ignores a filter it cannot parse returns the whole field, and
+    // every row of it carries the caller's user_id by then (issue #360).
+    // mapChronoTrackResult populates metadata.bib, so this is the same helper.
+    if (ctBib) mapped = filterResultsByBib(mapped, ctBib);
   } else if (provider === 'paste') {
     if (!body.result || typeof body.result !== 'object') {
       return Response.json({ error: 'result required for paste import' }, { status: 400 });

@@ -151,7 +151,16 @@ func IsDeadToken(status int) bool {
 }
 
 // IsTransient reports whether a provider status warrants a job retry (the push
-// service is throttling or down). 429 + any 5xx defer.
+// service is throttling or down).
+//
+// 408 / 425 / 429 / any 5xx defer — the same set the worker's own classifier
+// uses. This package cannot import the worker (that would cycle), so the rule
+// is duplicated deliberately; internal.TestIsTransient_AgreesWithPushClassifiers
+// pins the two together in BOTH directions.
 func IsTransient(status int) bool {
-	return status == http.StatusTooManyRequests || status >= 500
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
+		return true
+	}
+	return status >= 500
 }

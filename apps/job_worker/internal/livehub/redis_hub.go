@@ -177,8 +177,8 @@ func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, fu
 		sub.trySend(*last)
 	}
 
-	closeFn := h.startForwarder(ctx, pubsub, sub)
-	return sub.ch, h.withRelease(runID, closeFn), nil
+	closeFn := h.startForwarder(ctx, runID, pubsub, sub)
+	return sub.ch, closeFn, nil
 }
 
 // SubscribeWithHistory opens the pub/sub subscription FIRST, then
@@ -201,7 +201,7 @@ func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHi
 	}
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
 	sub := &subscriber{ch: make(chan Ping, subBufferSize)}
-	closeFn := h.startForwarder(ctx, pubsub, sub)
+	closeFn := h.startForwarder(ctx, runID, pubsub, sub)
 
 	history := h.History(runID, maxHistory)
 	// A ping PUBLISHed in the SUBSCRIBE→LRANGE window lands in BOTH the
@@ -217,7 +217,7 @@ func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHi
 	if buffered := drainBuffered(sub.ch); len(buffered) > 0 {
 		history = append(dedupHistoryTail(history, buffered), buffered...)
 	}
-	return history, sub.ch, h.withRelease(runID, closeFn), nil
+	return history, sub.ch, closeFn, nil
 }
 
 // startForwarder wires the cancel-driven close + the Redis-message
@@ -230,21 +230,18 @@ func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHi
 // `default:` arm does not save it. That panic is on a bare goroutine, outside
 // any http handler's recover, so it takes the whole worker process (job-drain
 // loop included) down on an ordinary WebSocket disconnect.
-// withRelease returns close, but giving the room's subscriber slot back first
-// and only once — so a double close cannot drive the count negative and a
-// missed close cannot leak a slot for the process's lifetime.
-func (h *RedisHub) withRelease(runID string, closeFn func()) func() {
-	var once sync.Once
-	return func() {
-		once.Do(func() { h.releaseSub(runID) })
-		closeFn()
-	}
-}
-
-func (h *RedisHub) startForwarder(ctx context.Context, pubsub *redis.PubSub, sub *subscriber) func() {
+func (h *RedisHub) startForwarder(ctx context.Context, runID string, pubsub *redis.PubSub, sub *subscriber) func() {
 	closeOnce := &sync.Once{}
 	closeFn := func() {
 		closeOnce.Do(func() {
+			// The room's slot is given back HERE, inside the one guarded close,
+			// so every path releases it. Wrapping only the returned closure left
+			// the cancel-driven safety net below calling the raw close: a
+			// ctx-cancelled subscribe closed the pubsub and never decremented,
+			// so the counter climbed to the cap and the run became permanently
+			// unsubscribable on that replica. sync.Once gives at-most-once, not
+			// at-least-once.
+			h.releaseSub(runID)
 			_ = pubsub.Close()
 			sub.close()
 		})

@@ -97,6 +97,9 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 	outRadius := maxFar*targetM*1.25 + 200
 	outDist, outPrev := g.dijkstra(ctx, src, -1, outRadius, nil)
 
+	if ctx.Err() != nil {
+		return CycleResult{}
+	}
 	fars := g.pickFarPoints(src, targetM, outDist)
 
 	var candidates []*Loop
@@ -105,6 +108,14 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 	// cost) so a real but circuitous loop isn't pruned.
 	returnRadius := targetM * 2.0
 	for _, f := range fars {
+		// The 61 return searches are where the wall-clock actually goes, and the
+		// per-pop check inside dijkstra is scoped to ONE search — at realistic
+		// targets each is short enough that it never reaches its 4096-pop
+		// interval, so the cancellation was evaluated zero times across the whole
+		// request. Checking between legs is what makes a disconnect stop work.
+		if ctx.Err() != nil {
+			break
+		}
 		out := reconstruct(outPrev, src, f)
 		if len(out) < 2 {
 			continue
