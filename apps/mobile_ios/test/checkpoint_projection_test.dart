@@ -115,4 +115,46 @@ void main() {
     expect(gate.cutoff!.marginS, 200);
     expect(gate.cutoff!.status, CutoffStatus.tight);
   });
+
+  test('a crossing stamped at elapsed 0 leaves future cutoffs ungraded, not "safe"', () {
+    // A volunteer's tablet running a minute fast (or the RD firing Go after a
+    // start-area checkpoint already scanned) clamps to elapsed 0 upstream. Pace
+    // then computed as 0 s/m — finite, so every remaining checkpoint projected
+    // an arrival of 0 and graded "safe" with the full cutoff as its margin: the
+    // board told the race director a runner was clear of every gate ahead.
+    final p = projectRunner(
+        cps, const [ProjectionCrossing(checkpointId: 'a', elapsedS: 0)]);
+    expect(p.paceSPerM, isNull, reason: 'a zero-elapsed sample yields no usable pace');
+    for (final leg in p.legs.where((l) => !l.reached)) {
+      expect(leg.projectedElapsedS, isNull, reason: leg.checkpointId);
+      expect(leg.cutoff, isNull, reason: leg.checkpointId);
+    }
+  });
+
+  test('a negative elapsed crossing is equally unusable', () {
+    final p = projectRunner(
+        cps, const [ProjectionCrossing(checkpointId: 'a', elapsedS: -120)]);
+    expect(p.paceSPerM, isNull);
+    expect(p.legs.where((l) => l.cutoff != null), isEmpty);
+  });
+
+  test('the smallest genuinely-positive elapsed still projects', () {
+    // The guard must reject only the unusable sample, not clamp real early data:
+    // a fast runner through a near-start checkpoint is legitimate.
+    final p = projectRunner(
+        cps, const [ProjectionCrossing(checkpointId: 'a', elapsedS: 1)]);
+    expect(p.paceSPerM, isNotNull);
+    final b = legFor(p, 'b');
+    expect(b.projectedElapsedS, isNotNull);
+    expect(b.cutoff, isNotNull);
+  });
+
+  test('a zero-elapsed crossing does not mask a later usable one', () {
+    final p = projectRunner(cps, const [
+      ProjectionCrossing(checkpointId: 'a', elapsedS: 0),
+      ProjectionCrossing(checkpointId: 'b', elapsedS: 7200),
+    ]);
+    expect(p.paceSPerM, isNotNull);
+    expect(p.lastElapsedS, 7200);
+  });
 }

@@ -114,3 +114,44 @@ test('a cutoff co-located with the last-reached checkpoint is graded on the exac
 	assert.equal(gate.cutoff!.marginS, 200);
 	assert.equal(gate.cutoff!.status, 'tight');
 });
+
+test('a crossing stamped at elapsed 0 leaves future cutoffs ungraded, not "safe"', () => {
+	// A volunteer's tablet running a minute fast (or the RD firing Go after a
+	// start-area checkpoint already scanned) clamps to elapsed 0 upstream. Pace
+	// then computed as 0 s/m — finite, so every remaining checkpoint projected
+	// an arrival of 0 and graded "safe" with the full cutoff as its margin: the
+	// board told the race director a runner was clear of every gate ahead.
+	const p = projectRunner(cps, [{ checkpointId: 'a', elapsedS: 0 }]);
+	assert.equal(p.paceSPerM, null, 'a zero-elapsed sample yields no usable pace');
+	for (const leg of p.legs.filter((l) => !l.reached)) {
+		assert.equal(leg.projectedElapsedS, null, `${leg.checkpointId} must not project`);
+		assert.equal(leg.cutoff, null, `${leg.checkpointId} must stay ungraded`);
+	}
+});
+
+test('a negative elapsed crossing is equally unusable', () => {
+	const p = projectRunner(cps, [{ checkpointId: 'a', elapsedS: -120 }]);
+	assert.equal(p.paceSPerM, null);
+	assert.equal(p.legs.filter((l) => l.cutoff !== null).length, 0);
+});
+
+test('the smallest genuinely-positive elapsed still projects', () => {
+	// The guard must reject only the unusable sample, not clamp real early data:
+	// a fast runner through a near-start checkpoint is legitimate.
+	const p = projectRunner(cps, [{ checkpointId: 'a', elapsedS: 1 }]);
+	assert.notEqual(p.paceSPerM, null);
+	const b = p.legs.find((l) => l.checkpointId === 'b')!;
+	assert.notEqual(b.projectedElapsedS, null);
+	assert.notEqual(b.cutoff, null);
+});
+
+test('a zero-elapsed crossing does not mask a later usable one', () => {
+	// Two stamps: the bogus start-area one and a real mid-course crossing. The
+	// later checkpoint is the one that sets pace, so the board still works.
+	const p = projectRunner(cps, [
+		{ checkpointId: 'a', elapsedS: 0 },
+		{ checkpointId: 'b', elapsedS: 7_200 }
+	]);
+	assert.notEqual(p.paceSPerM, null);
+	assert.equal(p.lastElapsedS, 7_200);
+});
