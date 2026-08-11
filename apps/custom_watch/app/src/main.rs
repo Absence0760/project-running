@@ -16,6 +16,7 @@
 #![no_main]
 
 use defmt::*;
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 #[cfg(not(feature = "ble"))]
@@ -24,11 +25,11 @@ use embassy_nrf::{bind_interrupts, peripherals, saadc, spim, twim, uarte};
 use embassy_sync::mutex::Mutex;
 use nrf52840_dk::Board;
 use static_cell::StaticCell;
-use {defmt_rtt as _, panic_probe as _};
 
 #[cfg(feature = "ble")]
 use nrf_softdevice::Softdevice;
 
+mod panic;
 mod run_flash;
 mod state;
 mod tasks;

@@ -449,3 +449,93 @@ pub fn bond_erase_gen() -> u32 {
 pub fn bump_bond_erase_gen() {
     BOND_ERASE_GEN.fetch_add(1, Ordering::Relaxed);
 }
+
+/// Report every `Watch`'s borrow state, for the panic handler.
+///
+/// Exists because of issue #713, whose panic — `RefCell already mutably
+/// borrowed`, raised inside `embassy_sync::watch`'s generic code — names a
+/// source line and nothing else. All 37 `Watch`es here monomorphise through
+/// that same line, so the message cannot say WHICH one, and the two candidate
+/// explanations need different evidence to tell apart: a genuine double borrow
+/// leaves the flag holding a legitimate borrow count, while the corruption seen
+/// in #754 would leave it holding something that was never a count.
+///
+/// Three words per `Watch`, not the whole struct. The first attempt dumped
+/// every byte and **destroyed its own evidence**: 37 full structs overran the
+/// defmt-rtt ring before Renode drained it, and only the last 5 lines survived
+/// — including, fatally, the loss of the `panicked` line that
+/// `sim/ci_smoke.py` scans for, which would have turned a panic back into the
+/// misattributed failure § 582 exists to prevent.
+///
+/// Which three: `RefCell`'s borrow flag is `Cell<isize>` (align 4) beside a
+/// `WatchState` carrying a `u64` (align 8), so the compiler is free to place
+/// the value first and the flag after it. The first word covers the
+/// flag-at-front layout, the last two cover flag-at-back with or without
+/// trailing padding.
+///
+/// Read through raw pointers, never a `&Watch`: the whole point is to observe a
+/// state the type system says cannot exist.
+macro_rules! watch_dump {
+    ($($w:ident),* $(,)?) => {
+        pub fn dump_watches() {
+            $(
+                {
+                    let p = core::ptr::addr_of!($w) as *const u32;
+                    let words = core::mem::size_of_val(unsafe { &*core::ptr::addr_of!($w) }) / 4;
+                    let first = unsafe { core::ptr::read_volatile(p) };
+                    let back1 = unsafe { core::ptr::read_volatile(p.add(words - 1)) };
+                    let back2 = unsafe { core::ptr::read_volatile(p.add(words - 2)) };
+                    defmt::error!(
+                        "panic: w {=str} @{=u32:#010x} n={=usize} {=u32:#010x} .. {=u32:#010x} {=u32:#010x}",
+                        stringify!($w),
+                        p as u32,
+                        words,
+                        first,
+                        back2,
+                        back1
+                    );
+                }
+            )*
+        }
+    };
+}
+
+watch_dump!(
+    FIX,
+    HR,
+    HR_SOURCE,
+    HR_OPTICAL,
+    HR_STRAP,
+    RECORD,
+    ELEVATION,
+    ALERT,
+    PAGE,
+    IDLE_VIEW,
+    PAGE_GRID,
+    STOP_ARMED,
+    SETTINGS_MENU,
+    TIMER,
+    TIMER_MENU,
+    PROFILE,
+    BACKYARD,
+    NAV,
+    COURSE,
+    PUSH_OUTCOME,
+    WORKOUT,
+    ROADBOOK,
+    SCREENS,
+    ROUTE_PROFILE,
+    TRACKBACK,
+    GNSS_MODE,
+    INTERACTION,
+    SIGNAL,
+    BATTERY,
+    SEA_LEVEL_PA,
+    STORM,
+    STORM_THRESHOLD_HPA,
+    TZ_OFFSET_MIN,
+    ICE,
+    PENDING_RUNS,
+    UNSYNCED_RUNS,
+    QNH_REZERO,
+);
