@@ -256,4 +256,47 @@ void main() {
     expect(out.suggestedWeightKg, isNotNull);
     expect(out.suggestedWeightKg! > 0, isTrue);
   });
+
+  test('the load anchor is a weight the lifter completed, never one they missed',
+      () {
+    // `gym_sets.reps` is nullable and CHECK-allows 0, and the composer writes a
+    // row for every set typed — so a failed top single logged as 0 reps, or a
+    // set whose weight was entered before the reps, are normal stored shapes.
+    // _topWeight scanned the raw list, so the missed 110 became the anchor and
+    // the increment was added to IT: the app told the lifter to try 112.5 after
+    // they had just failed 110.
+    const threeGoodSets = [
+      ProgressionSetLike(reps: 5, weightKg: 100),
+      ProgressionSetLike(reps: 5, weightKg: 100),
+      ProgressionSetLike(reps: 5, weightKg: 100),
+    ];
+    for (final missed in const [
+      ProgressionSetLike(reps: 0, weightKg: 110),
+      ProgressionSetLike(reps: null, weightKg: 110),
+    ]) {
+      final got = nextPrescription(ProgressionInput(
+        scheme: ProgressionScheme.linear,
+        lastSets: [...threeGoodSets, missed],
+        targetRepsMin: 5,
+        targetRepsMax: 5,
+      ));
+      expect(got.suggestedWeightKg, 102.5);
+      expect(got.reason, ProgressionReason.increaseWeight);
+    }
+  });
+
+  test('a missed heavier attempt does not inflate a hold either', () {
+    final got = nextPrescription(const ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [
+        ProgressionSetLike(reps: 5, weightKg: 100),
+        ProgressionSetLike(reps: 3, weightKg: 100),
+        ProgressionSetLike(reps: 0, weightKg: 120),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, ProgressionReason.hold);
+    expect(got.suggestedWeightKg, 100);
+  });
 }

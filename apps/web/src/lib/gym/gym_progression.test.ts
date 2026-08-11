@@ -301,3 +301,73 @@ test('negative/zero params never suggest a negative weight', () => {
 	);
 	assert.ok(out.suggestedWeightKg != null && out.suggestedWeightKg > 0);
 });
+
+test('the load anchor is a weight the lifter completed, never one they missed', () => {
+	// `gym_sets.reps` is nullable and CHECK-allows 0, and GymEditor writes a row
+	// for every set typed — so a failed top single logged as 0 reps, or a set
+	// whose weight was entered before the reps, are normal stored shapes.
+	// topWeight scanned the raw list, so the missed 110 became the anchor and
+	// the increment was added to IT: the app told the lifter to try 112.5 after
+	// they had just failed 110.
+	const threeGoodSets = [
+		{ reps: 5, weight_kg: 100, rpe: null },
+		{ reps: 5, weight_kg: 100, rpe: null },
+		{ reps: 5, weight_kg: 100, rpe: null }
+	];
+	for (const missed of [
+		{ reps: 0, weight_kg: 110, rpe: null },
+		{ reps: null, weight_kg: 110, rpe: null }
+	]) {
+		const got = nextPrescription({
+			scheme: 'linear',
+			lastSets: [...threeGoodSets, missed],
+			targetRepsMin: 5,
+			targetRepsMax: 5,
+			params: null
+		});
+		assert.equal(got.suggestedWeightKg, 102.5);
+		assert.equal(got.reason, 'increase_weight');
+	}
+});
+
+test('a missed heavier attempt does not inflate a hold either', () => {
+	// The same anchor feeds the hold branch: holding at a weight they failed is
+	// as wrong as increasing from it.
+	const got = nextPrescription({
+		scheme: 'linear',
+		lastSets: [
+			{ reps: 5, weight_kg: 100, rpe: null },
+			{ reps: 3, weight_kg: 100, rpe: null },
+			{ reps: 0, weight_kg: 120, rpe: null }
+		],
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	assert.equal(got.reason, 'hold');
+	assert.equal(got.suggestedWeightKg, 100);
+});
+
+test('the completed anchor holds across every weighted scheme', () => {
+	const sets = [
+		{ reps: 5, weight_kg: 90, rpe: 8 },
+		{ reps: 5, weight_kg: 90, rpe: 8 },
+		{ reps: 5, weight_kg: 90, rpe: 8 },
+		{ reps: 5, weight_kg: 90, rpe: 8 },
+		{ reps: 5, weight_kg: 90, rpe: 8 },
+		{ reps: 0, weight_kg: 130, rpe: null }
+	];
+	for (const scheme of ['five_by_five', 'double_progression', 'rpe_autoreg'] as const) {
+		const got = nextPrescription({
+			scheme,
+			lastSets: sets,
+			targetRepsMin: 5,
+			targetRepsMax: 5,
+			params: null
+		});
+		assert.ok(
+			got.suggestedWeightKg === null || got.suggestedWeightKg <= 95,
+			`${scheme} anchored on the missed 130 (got ${got.suggestedWeightKg})`
+		);
+	}
+});

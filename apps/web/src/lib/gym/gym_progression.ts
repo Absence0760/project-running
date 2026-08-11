@@ -57,8 +57,11 @@ function positiveOr(v: unknown, fallback: number): number {
 	return n != null && n > 0 ? n : fallback;
 }
 
-/// The heaviest working weight across the session — the anchor a load increment
-/// is added to. Null when no set carried a positive weight (bodyweight work).
+/// The heaviest weight the lifter actually COMPLETED — the anchor a load
+/// increment is added to. Null when no completed set carried a positive weight
+/// (bodyweight work). Callers must pass the completed subset: anchoring on a
+/// set that was merely attempted prescribes a load off a weight the lifter
+/// failed to lift.
 function topWeight(sets: ProgressionSetLike[]): number | null {
 	let top: number | null = null;
 	for (const s of sets) {
@@ -93,7 +96,13 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 
 	const repsMin = numericOrNull(input.targetRepsMin);
 	const repsMax = numericOrNull(input.targetRepsMax);
-	const weight = topWeight(sets);
+	// Anchor on what was COMPLETED, not on what was attempted. `gym_sets.reps`
+	// is nullable and CHECK-allows 0, and the editor writes a row for every set
+	// typed — so "weight entered, reps left blank" and "failed attempt logged
+	// as 0" are normal shapes. Scanning the raw list made the failed heavier
+	// attempt the anchor and then added the increment to it, prescribing more
+	// than a weight the lifter had just missed.
+	const weight = topWeight(completed);
 	const step = positiveOr(params.incrementKg, 2.5);
 
 	switch (input.scheme) {
