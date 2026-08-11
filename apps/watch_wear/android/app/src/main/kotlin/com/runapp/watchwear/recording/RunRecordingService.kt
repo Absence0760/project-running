@@ -26,6 +26,7 @@ import com.runapp.watchwear.HeartRateMonitor
 import com.runapp.watchwear.MainActivity
 import com.runapp.watchwear.Pedometer
 import com.runapp.watchwear.R
+import com.runapp.watchwear.tiles.formatElapsed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,7 +36,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Locale
 import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.pow
@@ -445,13 +445,31 @@ class RunRecordingService : Service() {
             latitude = p.lat; longitude = p.lng; time = p.epochMs
         }
         var newDistance = RecordingRepository.metrics.value.distanceM
-        lastLocation?.let { prev ->
+        // The anchor advances ONLY on an accepted delta, or on a real gap.
+        //
+        // Advancing it after a REJECTED sub-2 m hop discards that ground for
+        // good: at the 1 Hz fix rate a walker at 1.4 m/s produces ~1.4 m per
+        // fix, every one of them under the floor, so a two-hour hike accrued
+        // 0.00 km. Holding the anchor is exactly what lets two such fixes sum
+        // to 2.8 m and count. The canonical Flutter recorder assigns
+        // `_lastTrackedPosition` inside the accepted branch for this reason.
+        //
+        // The escape mirrors its `_gpsReanchorAfterSeconds`: once a real
+        // interval has passed, rebase to the fresh fix WITHOUT crediting the
+        // un-sampled gap, so a >100 m hop after dropped fixes cannot freeze the
+        // anchor for the rest of the run instead.
+        val prev = lastLocation
+        if (prev == null) {
+            lastLocation = asLoc
+        } else {
             val delta = haversineM(prev.latitude, prev.longitude, p.lat, p.lng)
             if (delta in 2.0..100.0) {
                 newDistance += delta
+                lastLocation = asLoc
+            } else if (p.epochMs - prev.time >= GPS_REANCHOR_MS) {
+                lastLocation = asLoc
             }
         }
-        lastLocation = asLoc
         val elapsedS = activeElapsedMs() / 1000.0
         val pace = if (newDistance >= 50.0 && elapsedS > 0) elapsedS / newDistance * 1000.0 else null
         val posLL = RouteMath.LatLng(p.lat, p.lng)
@@ -622,9 +640,10 @@ class RunRecordingService : Service() {
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val mins = elapsedMs / 60_000
-        val secs = (elapsedMs / 1000) % 60
-        val timeStr = String.format(Locale.getDefault(), "%d:%02d", mins, secs)
+        // Reuse the tested tile formatter: this one had no hours field, so a
+        // 12 h ultra rendered "720:34" on the ongoing notification while the
+        // tile beside it rendered "12:00:34" for the same run.
+        val timeStr = formatElapsed(elapsedMs)
         val distStr = getString(R.string.distance_km, formatKm(distanceM))
         val text = getString(R.string.notif_time_distance, timeStr, distStr)
         val title = if (paused) getString(R.string.notif_paused) else getString(R.string.notif_recording_run)
@@ -708,6 +727,12 @@ class RunRecordingService : Service() {
         /// buffer covers the whole run regardless of duration. ~4 KiB
         /// of memory per run.
         const val MAX_TRACK_OVERLAY_POINTS = 256
+
+        /// Re-anchor the distance accumulator after a real gap, so a hop that
+        /// failed the 100 m cap because fixes were dropped cannot freeze the
+        /// anchor for the rest of the run. Mirrors the Flutter recorder's
+        /// `_gpsReanchorAfterSeconds`.
+        const val GPS_REANCHOR_MS = 10_000L
 
         const val ACTION_START = "com.runapp.watchwear.action.START_RECORDING"
         const val ACTION_STOP = "com.runapp.watchwear.action.STOP_RECORDING"
