@@ -37,6 +37,7 @@ import {
   isDonationSession,
   orderStatusTransition,
   parseStripeEventEnvelope,
+  shouldReleaseDedupe,
   verifyStripeSignature,
 } from './lib.ts';
 import { secretKey } from '../_shared/api_keys.ts';
@@ -86,6 +87,45 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
     return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
   }
 
+  // Dispatch behind a dedupe release. The dedupe row is inserted BEFORE the
+  // side effect (so two concurrent deliveries can't both act), which means a
+  // handler that fails must give the row back — otherwise Stripe's retry hits
+  // the 23505 path above, answers 200 'duplicate_event', and closes the
+  // delivery for good. For checkout.session.completed that leaves a charged
+  // card with the order stuck `pending`, no seat, and no corrective event
+  // coming: nothing sweeps a lapsed reservation. strava-webhook already does
+  // this rollback for the same reason.
+  let res: Response;
+  try {
+    res = await dispatchStripeEvent(service, event);
+  } catch (err) {
+    await releaseDedupe(service, event.id);
+    throw err;
+  }
+  if (shouldReleaseDedupe(res.status)) {
+    await releaseDedupe(service, event.id);
+  }
+  return res;
+}));
+
+/// Give back the insert-first dedupe row so Stripe's retry is processed
+/// instead of being swallowed as a duplicate. Best-effort: if this fails the
+/// event is stuck either way, and logging is all we can usefully do.
+async function releaseDedupe(service: Service, eventId: string): Promise<void> {
+  const { error } = await service
+    .from('webhook_events')
+    .delete()
+    .eq('provider', WEBHOOK_PROVIDER)
+    .eq('event_id', eventId);
+  if (error) {
+    console.error('failed to release dedupe row before retry (code):', error?.code ?? 'unknown');
+  }
+}
+
+async function dispatchStripeEvent(
+  service: Service,
+  event: { id: string; type: string; data: { object: Record<string, unknown> } },
+): Promise<Response> {
   const obj = event.data.object;
 
   if (event.type === 'checkout.session.completed') {
@@ -115,7 +155,7 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
 
   // Unhandled types — recorded (dedupe) but no side effect.
   return Response.json({ ok: true, ignored: event.type });
-}));
+}
 
 type Service = ReturnType<typeof createClient>;
 

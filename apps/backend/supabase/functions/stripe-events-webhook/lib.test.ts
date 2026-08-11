@@ -13,6 +13,7 @@ import {
   isDonationSession,
   orderStatusTransition,
   parseStripeEventEnvelope,
+  shouldReleaseDedupe,
   verifyStripeSignature,
 } from './lib.ts';
 
@@ -241,4 +242,31 @@ Deno.test('donationStatusTransition — paid refunds, pending does not', () => {
 Deno.test('donationStatusTransition — a terminal donation is immovable', () => {
   assertStrictEquals(donationStatusTransition('refunded', 'charge.refunded'), null);
   assertStrictEquals(donationStatusTransition('canceled', 'checkout.session.completed'), null);
+});
+
+Deno.test('shouldReleaseDedupe — a 5xx gives the dedupe row back so Stripe can retry', () => {
+  // Every "we could not complete this" path in the handlers returns 500.
+  // Without the release, Stripe's retry hits the insert-first 23505 branch,
+  // answers 200 duplicate_event, and the delivery is closed for good — a
+  // charged card with a pending order and no seat.
+  for (const status of [500, 502, 503, 504]) {
+    assertEquals(shouldReleaseDedupe(status), true, `status ${status}`);
+  }
+});
+
+Deno.test('shouldReleaseDedupe — a successful or deliberately-final response keeps it', () => {
+  // The handlers answer 200 for outcomes that are genuinely final (unknown
+  // donation, missing metadata, an already-terminal status). Releasing there
+  // would re-open a settled event to reprocessing on any later replay.
+  for (const status of [200, 201, 204]) {
+    assertEquals(shouldReleaseDedupe(status), false, `status ${status}`);
+  }
+});
+
+Deno.test('shouldReleaseDedupe — a 4xx is the caller\'s fault and stays deduped', () => {
+  // Stripe does not retry a 4xx, and re-opening the row would let a
+  // malformed replay be processed later.
+  for (const status of [400, 401, 404, 409, 422]) {
+    assertEquals(shouldReleaseDedupe(status), false, `status ${status}`);
+  }
 });
