@@ -12,6 +12,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -116,6 +117,10 @@ class RunRecordingService : Service() {
     /// ACTION_START intent. Stamped into `RecordingRepository.Metrics` so
     /// the active-run tile renders in the runner's chosen unit.
     private var preferredUnit: DistanceUnit = DistanceUnit.KM
+
+    /// Monotonic stamp of the last accepted/rebased anchor. See the re-anchor
+    /// escape in onGps.
+    private var lastAnchorRealtimeMs: Long = 0L
 
     /// Runner's universal `privacy_default` ("public" / "followers" /
     /// "private"), passed once from the ACTION_START intent and written
@@ -459,15 +464,35 @@ class RunRecordingService : Service() {
         // un-sampled gap, so a >100 m hop after dropped fixes cannot freeze the
         // anchor for the rest of the run instead.
         val prev = lastLocation
+        val nowRealtimeMs = SystemClock.elapsedRealtime()
         if (prev == null) {
             lastLocation = asLoc
+            lastAnchorRealtimeMs = nowRealtimeMs
         } else {
             val delta = haversineM(prev.latitude, prev.longitude, p.lat, p.lng)
             if (delta in 2.0..100.0) {
                 newDistance += delta
                 lastLocation = asLoc
-            } else if (p.epochMs - prev.time >= GPS_REANCHOR_MS) {
+                lastAnchorRealtimeMs = nowRealtimeMs
+            } else if (delta > 100.0 && nowRealtimeMs - lastAnchorRealtimeMs >= GPS_REANCHOR_MS) {
+                // Over-ceiling ONLY, and on a MONOTONIC clock.
+                //
+                // The escape exists for the >100 m case: fixes were dropped, the
+                // runner really moved, and a fixed cap never scales — so without
+                // it the stale anchor only ever recedes and distance freezes for
+                // the rest of the run (#330). It must NOT fire for a sub-2 m
+                // hop: that ground is DEFERRED, and discarding the deferral is
+                // the 0.00 km bug this branch was added alongside. The firmware
+                // re-anchors inside its over-ceiling branch only and holds the
+                // anchor below the floor; this now matches.
+                //
+                // elapsedRealtime, not the fix's own stamp: a wall clock can
+                // step backwards on an NTP sync (and a mock/test provider can
+                // stall it entirely), and a negative or frozen delta means the
+                // escape never fires — freezing distance exactly the way the
+                // escape exists to prevent.
                 lastLocation = asLoc
+                lastAnchorRealtimeMs = nowRealtimeMs
             }
         }
         val elapsedS = activeElapsedMs() / 1000.0

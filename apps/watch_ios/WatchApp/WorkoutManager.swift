@@ -400,6 +400,10 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// Flutter recorder's `_gpsReanchorAfterSeconds`.
     static let gpsReanchorSeconds: TimeInterval = 10
 
+    /// Monotonic stamp of the last accepted/rebased anchor. See the re-anchor
+    /// escape in didUpdateLocations.
+    private var lastAnchorUptime: TimeInterval = 0
+
     static func distanceDelta(from: CLLocation, to: CLLocation) -> Double {
         let delta = to.distance(from: from)
         return (delta > 2 && delta < 100) ? delta : 0
@@ -420,20 +424,43 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             // anchor inside the accepted branch for this reason, with the same
             // re-anchor escape so a >100 m hop after dropped fixes cannot
             // freeze the anchor for the rest of the run instead.
+            let nowUptime = ProcessInfo.processInfo.systemUptime
             if let last = lastLocationForDistance {
                 let delta = Self.distanceDelta(from: last, to: location)
+                let rawMetres = location.distance(from: last)
                 if delta > 0 {
                     distanceMetres += delta
                     lastLocationForDistance = location
-                } else if location.timestamp.timeIntervalSince(last.timestamp) >= Self.gpsReanchorSeconds {
+                    lastAnchorUptime = nowUptime
+                } else if rawMetres >= 100,
+                          nowUptime - lastAnchorUptime >= Self.gpsReanchorSeconds {
+                    // Over-ceiling ONLY, and on a MONOTONIC clock.
+                    //
+                    // The escape exists for the >100 m case: fixes were dropped,
+                    // the runner really moved, and a fixed cap never scales — so
+                    // without it the stale anchor only recedes and distance
+                    // freezes for the rest of the run (#330). It must NOT fire
+                    // for a sub-2 m hop: that ground is DEFERRED, and discarding
+                    // the deferral is the 0.00 km bug this branch shipped
+                    // alongside. The firmware re-anchors inside its
+                    // over-ceiling branch only and holds the anchor below the
+                    // floor; this now matches.
+                    //
+                    // systemUptime, not the fix's own Date: a wall clock can
+                    // step backwards on an NTP sync, and a negative delta means
+                    // the escape never fires — freezing distance exactly the way
+                    // the escape exists to prevent.
+                    //
                     // Rebasing without crediting the gap's metres is the SAME
                     // discontinuity a pause creates, so it seals the pace window
                     // too — the canonical Flutter recorder does both.
                     lastLocationForDistance = location
+                    lastAnchorUptime = nowUptime
                     sealPaceWindow()
                 }
             } else {
                 lastLocationForDistance = location
+                lastAnchorUptime = nowUptime
             }
             lastAcceptedFix = location
 
