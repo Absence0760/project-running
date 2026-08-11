@@ -280,7 +280,15 @@ const double _kFallbackGoalPaceSecPerKm = 600;
 class ResolvedPaces {
   final TrainingPaces paces;
   final bool isFallback;
-  const ResolvedPaces(this.paces, this.isFallback);
+
+  /// The resolved race pace the bands were derived FROM, so a caller
+  /// prescribing the goal effort itself (the race workout, `marathon_pace`
+  /// sessions) uses it directly instead of inverting a band's multiplier back
+  /// out. Deliberately not gender-calibrated: the calibration shapes training
+  /// zones, but the runner's goal is their goal.
+  final double goalPaceSecPerKm;
+
+  const ResolvedPaces(this.paces, this.isFallback, this.goalPaceSecPerKm);
 }
 
 /// Resolve the runner's training paces plus whether they came from a real
@@ -310,7 +318,7 @@ ResolvedPaces resolveTrainingPacesWithMeta({
     goalPace = _kFallbackGoalPaceSecPerKm;
     isFallback = true;
   }
-  return ResolvedPaces(pacesFromGoalPace(goalPace, gender), isFallback);
+  return ResolvedPaces(pacesFromGoalPace(goalPace, gender), isFallback, goalPace);
 }
 
 TrainingPaces resolveTrainingPaces({
@@ -558,7 +566,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
       weeklyKm: weeklyKm,
       paces: paces,
       goalDistanceM: goalDistance,
-      goalPaceSecPerKm: paces.marathon * (goalDistance >= 21000 ? 1 : 0.95),
+      goalPaceSecPerKm: resolved.goalPaceSecPerKm,
       masters: masters,
     );
     // The stated weekly volume must equal what the week actually
@@ -769,6 +777,7 @@ List<GeneratedWorkout> _generateWeek({
     daysPerWeek: daysPerWeek,
     paces: paces,
     goalDistanceM: goalDistanceM,
+    goalPaceSecPerKm: goalPaceSecPerKm,
   );
   final qualityKm = (quality.a?.targetDistanceM ?? 0) / 1000 +
       (quality.b?.targetDistanceM ?? 0) / 1000;
@@ -861,6 +870,7 @@ _QualityPair _allocateQuality({
   required int daysPerWeek,
   required TrainingPaces paces,
   required double goalDistanceM,
+  required double goalPaceSecPerKm,
 }) {
   GeneratedWorkout? a, b;
   final placeholder = DateTime(2000, 1, 1);
@@ -871,7 +881,9 @@ _QualityPair _allocateQuality({
     if (daysPerWeek >= 5) b = _tempo(placeholder, 7, paces);
   } else if (phase == PlanPhase.peak) {
     if (daysPerWeek >= 3) a = _intervals(placeholder, paces);
-    if (daysPerWeek >= 5) b = _marathonPace(placeholder, paces, goalDistanceM);
+    if (daysPerWeek >= 5) {
+      b = _marathonPace(placeholder, paces, goalDistanceM, goalPaceSecPerKm);
+    }
   } else if (phase == PlanPhase.taper) {
     if (daysPerWeek >= 3) a = _tempo(placeholder, 4, paces);
   }
@@ -939,17 +951,28 @@ GeneratedWorkout _intervals(DateTime date, TrainingPaces p) {
   );
 }
 
-GeneratedWorkout _marathonPace(DateTime date, TrainingPaces p, double goalDistanceM) {
-  final mpKm = goalDistanceM >= 21000 ? 10 : 5;
+GeneratedWorkout _marathonPace(
+  DateTime date,
+  TrainingPaces p,
+  double goalDistanceM,
+  double goalPaceSecPerKm,
+) {
+  final isLongGoal = goalDistanceM >= 21000;
+  final mpKm = isLongGoal ? 10 : 5;
+  // On a half/marathon plan this session IS goal-pace practice — the note says
+  // so, and that is why it doubles to 10 km. On a 5K/10K plan it is a steady
+  // aerobic session at marathon *effort*, which is genuinely slower than the
+  // goal, so the training band is the right prescription there.
+  final steadyPace = isLongGoal ? goalPaceSecPerKm.round() : p.marathon;
   return GeneratedWorkout(
     scheduledDate: date,
     kind: WorkoutKind.marathonPace,
     targetDistanceM: (mpKm + 3) * 1000.0,
-    targetPaceSecPerKm: p.marathon,
+    targetPaceSecPerKm: steadyPace,
     targetPaceToleranceSec: 8,
     structure: WorkoutStructure(
       warmup: {'distance_m': 1500, 'pace': 'easy'},
-      steady: {'distance_m': mpKm * 1000, 'pace_sec_per_km': p.marathon},
+      steady: {'distance_m': mpKm * 1000, 'pace_sec_per_km': steadyPace},
       cooldown: {'distance_m': 1500, 'pace': 'easy'},
     ),
     notes: '$mpKm km @ goal marathon pace.',

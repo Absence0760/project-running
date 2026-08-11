@@ -938,3 +938,93 @@ test('longRunDistance: flat 33% of weekly volume (rounded), 0 → 0', () => {
 	assert.equal(longRunDistance(wk(50)), 17); // round(16.5)
 	assert.equal(longRunDistance(wk(0)), 0);
 });
+
+test('the race workout is prescribed at the goal pace, at every distance', () => {
+	// The generator used to hand `generateWeek` a goal pace reconstructed from
+	// the derived `marathon` band: `paces.marathon * (goalDistanceM >= 21_000 ?
+	// 1 : 0.95)`. Since that band is `goalPace * 1.06`, the 0.95 roughly undid
+	// it on 5K/10K plans but the `1` left half + marathon plans prescribing the
+	// race 6% slower than the runner's goal — a 3:30 marathon plan whose race
+	// workout implied a 3:42 finish.
+	const cases: Array<[string, number, number]> = [
+		['distance_5k', 1_200, 5_000],
+		['distance_10k', 2_700, 10_000],
+		['distance_half', 6_300, 21_097],
+		['distance_full', 12_600, 42_195]
+	];
+	for (const [goalEvent, goalTimeSec, distanceM] of cases) {
+		const plan = generatePlan({
+			goalEvent: goalEvent as GeneratePlanInput['goalEvent'],
+			goalTimeSec,
+			startDate: '2026-01-05',
+			daysPerWeek: 5,
+			weeks: 16
+		});
+		const goalPace = goalTimeSec / (distanceM / 1000);
+		const race = plan.weeks.flatMap((w) => w.workouts).find((w) => w.kind === 'race');
+		assert.ok(race, `${goalEvent} generates a race workout`);
+		assert.ok(race!.target_pace_sec_per_km !== null, `${goalEvent} race carries a pace`);
+		// Within a second per km — the only slack is integer sec/km rounding.
+		assert.ok(
+			Math.abs(race!.target_pace_sec_per_km! - goalPace) <= 1,
+			`${goalEvent}: race pace ${race!.target_pace_sec_per_km} should be goal pace ${goalPace.toFixed(1)}`
+		);
+	}
+});
+
+test('marathon_pace sessions are prescribed at the goal pace, not the training band', () => {
+	const plan = generatePlan({
+		goalEvent: 'distance_full',
+		goalTimeSec: 12_600,
+		startDate: '2026-01-05',
+		daysPerWeek: 5,
+		weeks: 16
+	});
+	const goalPace = 12_600 / 42.195;
+	const mp = plan.weeks.flatMap((w) => w.workouts).filter((w) => w.kind === 'marathon_pace');
+	assert.ok(mp.length > 0, 'a marathon plan schedules marathon-pace work');
+	for (const w of mp) {
+		assert.ok(
+			Math.abs(w.target_pace_sec_per_km! - goalPace) <= 1,
+			`marathon_pace ${w.target_pace_sec_per_km} should be goal pace ${goalPace.toFixed(1)}`
+		);
+		// The structure the mobile workout runner executes must agree with the
+		// headline target — they are read by different surfaces.
+		const steady = (w.structure as { steady?: { pace_sec_per_km?: number } } | null)?.steady;
+		assert.equal(steady?.pace_sec_per_km, w.target_pace_sec_per_km);
+	}
+});
+
+test('a 10K plan keeps marathon_pace on the training band, not the goal pace', () => {
+	// The other side of the same branch: on a short-distance goal this session
+	// is steady aerobic work at marathon *effort*, which is legitimately slower
+	// than goal pace. Pinning it stops the fix above from over-reaching.
+	const plan = generatePlan({
+		goalEvent: 'distance_10k',
+		goalTimeSec: 2_700,
+		startDate: '2026-01-05',
+		daysPerWeek: 5,
+		weeks: 16
+	});
+	const { paces } = resolveTrainingPacesWithMeta({ goalDistanceM: 10_000, goalTimeSec: 2_700 });
+	const mp = plan.weeks.flatMap((w) => w.workouts).filter((w) => w.kind === 'marathon_pace');
+	assert.ok(mp.length > 0);
+	for (const w of mp) {
+		assert.equal(w.target_pace_sec_per_km, paces.marathon);
+		assert.ok(w.target_pace_sec_per_km! > 270, 'slower than the 10K goal pace');
+	}
+});
+
+test('the goal pace the bands derive from is returned, ungendered', () => {
+	// The race is the runner's stated goal; the female calibration shapes
+	// training zones, so it must not move the goal itself.
+	const male = resolveTrainingPacesWithMeta({ goalDistanceM: 42_195, goalTimeSec: 12_600 });
+	const female = resolveTrainingPacesWithMeta({
+		goalDistanceM: 42_195,
+		goalTimeSec: 12_600,
+		gender: 'female'
+	});
+	assert.equal(male.goalPaceSecPerKm, female.goalPaceSecPerKm);
+	assert.ok(Math.abs(male.goalPaceSecPerKm - 12_600 / 42.195) < 0.001);
+	assert.notEqual(male.paces.easy, female.paces.easy, 'bands still calibrate');
+});
