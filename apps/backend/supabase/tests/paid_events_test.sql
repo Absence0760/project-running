@@ -11,7 +11,7 @@
 --     unaffected.
 
 begin;
-select plan(16);
+select plan(18);
 
 -- ── Fixtures: host (also club owner), buyer, stranger ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -138,6 +138,36 @@ select throws_ok(
   null,
   'a paid order cannot seat an instance it was not bought for'
 );
+
+-- ── a partially refunded order still backs its seat ───────────────────────
+-- `partially_refunded` became a WRITTEN state when the webhook learned to tell
+-- a partial refund from a full one. Every "valid seat" predicate still said
+-- status = 'paid', so the instructor could no longer mark that attendee
+-- present — the gate is `before insert or update` with no WHEN clause, so it
+-- re-validates on mark_attendance's attendance-only write — and waitlist
+-- promotion of a DIFFERENT attendee raised inside an AFTER-DELETE trigger,
+-- rolling back the seat release that provoked it.
+update event_orders set status = 'partially_refunded'
+ where id = 'dddd1111-0000-0000-0000-000000000001';
+
+select lives_ok(
+  $$ update event_attendees set attendance = 'attended'
+      where event_id = 'cccc1111-0000-0000-0000-000000000001'
+        and user_id = 'aaaa1111-0000-0000-0000-000000000002'
+        and instance_start = '2026-07-01 18:00+00' $$,
+  'a partially refunded order still lets the host mark attendance'
+);
+
+select lives_ok(
+  $$ update event_attendees set status = 'going'
+      where event_id = 'cccc1111-0000-0000-0000-000000000001'
+        and user_id = 'aaaa1111-0000-0000-0000-000000000002'
+        and instance_start = '2026-07-01 18:00+00' $$,
+  'a partially refunded order still backs a re-asserted going seat'
+);
+
+update event_orders set status = 'paid'
+ where id = 'dddd1111-0000-0000-0000-000000000001';
 
 -- ── RLS: order read scoping ────────────────────────────────────────────────
 -- Buyer reads their own order, not the stranger's.

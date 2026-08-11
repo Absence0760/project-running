@@ -330,11 +330,14 @@ async function handleOrderRefunded(
 
   // CAS paid->refunded (compound match on status='paid' makes the UPDATE the
   // CAS — a replayed delivery can't re-run the seat release).
+  // CAS on the status we READ, not a hardcoded 'paid' — a completing refund
+  // transitions from 'partially_refunded', and matching only 'paid' would make
+  // the seat unreleasable once any partial refund had landed.
   const { data: updated, error: updErr } = await service
     .from('event_orders')
     .update({ status: nextStatus, refunded_at: new Date().toISOString() })
     .eq('id', order.id)
-    .eq('status', 'paid')
+    .eq('status', order.status as string)
     .select('id')
     .maybeSingle();
   if (updErr) {

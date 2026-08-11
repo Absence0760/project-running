@@ -155,7 +155,11 @@ Deno.test('orderStatusTransition — pending does not refund (no charge to rever
 });
 
 Deno.test('orderStatusTransition — terminal source states never transition', () => {
-  for (const s of ['refunded', 'partially_refunded', 'failed', 'canceled']) {
+  // `partially_refunded` is deliberately NOT in this list. It was, back when
+  // nothing could write it; now that the webhook does, the order still holds a
+  // seat and the REST of the money can come back later — so a completing refund
+  // has to be able to move it on and release that seat. See the arm below.
+  for (const s of ['refunded', 'failed', 'canceled']) {
     assertStrictEquals(orderStatusTransition(s, 'checkout.session.completed'), null);
     assertStrictEquals(orderStatusTransition(s, 'checkout.session.expired'), null);
     assertStrictEquals(orderStatusTransition(s, 'charge.refunded'), null);
@@ -306,7 +310,22 @@ Deno.test('orderStatusTransition — a partial refund keeps the registration', (
   assertStrictEquals(orderStatusTransition('paid', 'charge.refunded', 'full'), 'refunded');
 });
 
-Deno.test('orderStatusTransition — a partially refunded order is immovable on replay', () => {
-  assertStrictEquals(orderStatusTransition('partially_refunded', 'charge.refunded', 'full'), null);
-  assertStrictEquals(orderStatusTransition('partially_refunded', 'charge.refunded', 'partial'), null);
+Deno.test('orderStatusTransition — a completing refund releases a partially refunded seat', () => {
+  // Refund $5 of $50, then the remaining $45. Treating partially_refunded as
+  // terminal (as this test originally asserted) meant the second refund was a
+  // no-op and the buyer kept the seat permanently on a fully refunded order.
+  assertStrictEquals(
+    orderStatusTransition('partially_refunded', 'charge.refunded', 'full'),
+    'refunded',
+  );
+  // ...but a further INSTALMENT does not release it — still partially paid.
+  assertStrictEquals(
+    orderStatusTransition('partially_refunded', 'charge.refunded', 'partial'),
+    null,
+  );
+  // The session events remain no-ops from this state.
+  assertStrictEquals(
+    orderStatusTransition('partially_refunded', 'checkout.session.completed'),
+    null,
+  );
 });

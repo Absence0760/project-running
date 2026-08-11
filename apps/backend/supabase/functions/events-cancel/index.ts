@@ -108,7 +108,10 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
     .eq('event_id', eventId)
     .eq('instance_start', instanceStart)
     .eq('buyer_user_id', user.id)
-    .in('status', ['pending', 'paid'])
+    // A partially-refunded order still holds a seat, so the buyer must still be
+    // able to give it up; excluding it left a registration that could be
+    // neither attended nor cancelled.
+    .in('status', ['pending', 'paid', 'partially_refunded'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
