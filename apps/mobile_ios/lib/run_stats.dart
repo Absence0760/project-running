@@ -223,7 +223,10 @@ double haversineMetres(
   final sinLng = sin(dLng / 2);
   final a = sinLat * sinLat +
       cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sinLng * sinLng;
-  // Clamp before the arc, matching web's `2 * asin(min(1, sqrt(a)))`. Rounding
+  // Clamp before the arc; the web twin clamps identically. (An earlier pass
+  // fixed only this side, on the false belief that web already clamped — it
+  // used the unclamped atan2 form, so the pair stayed divergent with the NaN
+  // moved to web. Both are clamped now.) Rounding
   // can push `a` a hair above 1 for a near-antipodal pair, and then
   // `sqrt(1 - a)` is NaN — which propagates silently: route_geometry's
   // interpolateAlongRoute would return the end waypoint (Dart's

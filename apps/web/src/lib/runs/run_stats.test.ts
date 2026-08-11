@@ -4,6 +4,7 @@ import {
 	movingTimeSeconds,
 	elevationGainMetres,
 	computeRealSplits,
+	haversineMetres
 } from './run_stats';
 import type { TrackPoint } from '../types';
 
@@ -267,4 +268,18 @@ test('computeRealSplits — track without elevation leaves elevation_m null', ()
 	for (const s of splits) {
 		assert.equal(s.elevation_m, null);
 	}
+});
+
+test('haversineMetres clamps instead of returning NaN near antipodal', () => {
+	// Mirror of the Dart twin. Rounding pushes `a` a hair above 1 for a
+	// near-antipodal pair, and the unclamped atan2 form then returns NaN, which
+	// propagates silently through moving time, splits and segment distances.
+	const d = haversineMetres(-87.5, 0, 87.5, 180);
+	assert.ok(Number.isFinite(d));
+	assert.ok(Math.abs(d - 20015086.796) < 1);
+});
+
+test('haversineMetres agrees with the Dart twin on ordinary distances', () => {
+	const d = haversineMetres(51.5, -0.1, 51.6, -0.2);
+	assert.ok(Math.abs(d - 13093.993) < 0.01);
 });

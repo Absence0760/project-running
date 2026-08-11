@@ -158,7 +158,12 @@ export function computeRealSplits(track: TrackPoint[], tickMetres = 1000): Split
 /**
  * Great-circle distance between two lat/lng points, in metres.
  */
-function haversineMetres(
+/**
+ * Great-circle metres between two points. Exported so the twin contract with
+ * `run_stats.dart`'s `haversineMetres` can be pinned on both sides — it was
+ * private, which is why a divergence in it went unnoticed.
+ */
+export function haversineMetres(
 	lat1: number,
 	lng1: number,
 	lat2: number,
@@ -175,5 +180,13 @@ function haversineMetres(
 			Math.cos((lat2 * Math.PI) / 180) *
 			sinLng *
 			sinLng;
-	return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	// Clamp before the arc. Rounding can push `a` a hair above 1 for a
+	// near-antipodal pair, and then `Math.sqrt(1 - a)` is NaN — which propagates
+	// silently through every consumer (moving time, splits, segment distances)
+	// rather than throwing. The Dart twin clamps identically; an earlier pass
+	// fixed only that side on the false belief that this one already did, which
+	// left the pair divergent with the NaN moved here. Measured on
+	// (-87.5, 0, 87.5, 180): unclamped NaN, clamped 20015086.796.
+	const clamped = a > 1 ? 1 : a < 0 ? 0 : a;
+	return r * 2 * Math.asin(Math.sqrt(clamped));
 }
