@@ -1484,10 +1484,14 @@ func TestIsTransient(t *testing.T) {
 		{"4xx", &HTTPError{StatusCode: 404}, false},
 		// 429 is "come back later", not a rejection. Both push handlers encode
 		// a throttling response as a transient HTTPError; classifying it as
-		// permanent here failed the job outright and dropped the push.
+		// permanent here failed the job outright and dropped the push. 408 and
+		// 425 are the same shape.
 		{"429 rate limit", &HTTPError{StatusCode: 429}, true},
+		{"408 request timeout", &HTTPError{StatusCode: 408}, true},
+		{"425 too early", &HTTPError{StatusCode: 425}, true},
 		{"499 is still permanent", &HTTPError{StatusCode: 499}, false},
 		{"400 is still permanent", &HTTPError{StatusCode: 400}, false},
+		{"401 is still permanent", &HTTPError{StatusCode: 401}, false},
 		{"600 is out of the 5xx band", &HTTPError{StatusCode: 600}, false},
 		{"timeout substring", errors.New("dial tcp: i/o timeout"), true},
 		{"connection refused", errors.New("connection refused"), true},
@@ -2027,5 +2031,35 @@ func TestTokenRefresh_DispatchUnknownKindIsPermanentFail(t *testing.T) {
 
 	if got := len(be.finished); got != 1 || be.finished[0].Status != "failed" {
 		t.Fatalf("unknown kind must fail permanent; got %v", be.finished)
+	}
+}
+
+func TestTokenRefresh_429IsTransientAndDoesntDisconnect(t *testing.T) {
+	// Strava's rate limit is per-APPLICATION and this sweep fans out 12-wide,
+	// so a 429 from the grant leg says nothing about whether the user's
+	// authorisation is still valid. Disconnecting on it took the row out of
+	// every future sweep (they filter on disconnected_at IS NULL), so the user
+	// had to manually re-authorise a connection that was never revoked — from
+	// a throttle that would have cleared on its own.
+	be := newFakeBackend()
+	be.expiring = []IntegrationRow{{ID: 1, UserID: "dave"}}
+	be.tokensByUser = map[string]TokenPair{
+		"dave": {RefreshToken: "rt-dave"},
+	}
+	st := &fakeStrava{
+		errsByToken: map[string]error{
+			"rt-dave": &HTTPError{StatusCode: 429, Body: "Rate Limit Exceeded"},
+		},
+	}
+	be.jobs = []*Job{{ID: 11, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+	if got := len(be.markDisconnectedCalls); got != 0 {
+		t.Fatalf("429 must NOT trigger disconnect; got %d marks", got)
+	}
+	if got := len(be.setTokenCalls); got != 0 {
+		t.Fatalf("set calls=%d, want 0", got)
 	}
 }

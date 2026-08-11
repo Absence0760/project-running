@@ -784,3 +784,43 @@ test('computeGlobalSegmentEffortsForRun re-reads runs.metadata immediately befor
 		'stampGlobalSegmentsScored must not merge into runMetadata (the pre-pass read) — that is the clobber.',
 	);
 });
+
+test('saveRun writes elevation_gain_m alongside the metadata key', () => {
+	// Reason: migration 20270302_001 promoted total ascent to the first-class
+	// `runs.elevation_gain_m` column because the vert challenge aggregate sums
+	// BASE columns, not the jsonb bag — its contract is "writers populate both".
+	// saveRun is the ONLY writer of elevation on any platform, and it wrote the
+	// metadata key alone, so every vert challenge board summed
+	// coalesce(elevation_gain_m, 0) over nulls and sat at 0 m forever.
+	// Keep BOTH writes: recap's Dart twin still reads metadata.elevation_m, so
+	// setting the column without the key would open a web/mobile divergence.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function saveRun(input');
+	assert.ok(start >= 0, 'Could not locate saveRun — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/row\.elevation_gain_m = input\.elevation_m/,
+		'saveRun must set the promoted elevation_gain_m column'
+	);
+	assert.match(
+		body,
+		/mergedMetadata\[METADATA_KEYS\.elevation_m\] = input\.elevation_m/,
+		'saveRun must keep writing metadata.elevation_m for the readers that use it'
+	);
+});
+
+test('the Strava ZIP importer lands embedded bests like the Garmin one', () => {
+	// Reason: refresh_personal_records_for_user reads the promoted fastest-window
+	// columns (fastest_5k_s etc.), which only arrive via saveRun's embedded_bests.
+	// garmin-zip computes them; strava-zip did not, so a migrating user's 30 km
+	// long run never yielded the 19:30 5K hiding inside its track and five years
+	// of imported history produced zero embedded bests.
+	const source = read('src/lib/integrations/strava-zip.ts');
+	assert.match(
+		source,
+		/embedded_bests: computeEmbeddedBests\(track\)/,
+		'strava-zip must pass embedded_bests when it parsed a track'
+	);
+});

@@ -7,6 +7,7 @@
 		parseISO,
 		formatISO
 	} from '$lib/training/training';
+	import { planWorkoutProgress } from '$lib/training/plan_progress';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { workoutKindMarkVar } from '$lib/training/workout_kind_color';
 	import { fmtKm } from '$lib/format/units.svelte';
@@ -73,10 +74,9 @@
 		return out;
 	});
 
-	let doneCount = $derived(weekWorkouts.filter(isWorkoutCompleted).length);
-	let activeCount = $derived(
-		weekWorkouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length
-	);
+	let weekProgress = $derived(planWorkoutProgress(weekWorkouts));
+	let doneCount = $derived(weekProgress.completed);
+	let activeCount = $derived(weekProgress.total);
 </script>
 
 {#if currentWeek}

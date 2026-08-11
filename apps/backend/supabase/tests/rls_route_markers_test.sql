@@ -22,7 +22,7 @@
 
 begin;
 
-select plan(20);
+select plan(21);
 
 -- ── Fixture: owner cc001 (with privacy zone), viewer cc002, viewer cc003 ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -155,6 +155,24 @@ values
    '00000000-0000-0000-0000-0000000cc002',
    'note', 'My water stash', 47.375, 8.545);
 select pass('non-owner adds their own personal marker to a public route');
+
+-- 10b. ...and the position trigger derives position_m for it, exactly as it
+-- does for the owner's marker in test 2. This is the regression 20270519_001
+-- closed: both triggers were invoker-security and read `routes` directly, but
+-- `routes` has no public-read RLS policy (20260703_001 moved public reads to
+-- the `public_routes` view) while the INSERT policy gates on the DEFINER
+-- helper is_route_visible_to. So the write was allowed and the read inside the
+-- trigger was not — v_geom came back NULL and the function silently took its
+-- "route has no geometry" branch. A crew member's "Aid 3" then sorted
+-- nulls-last instead of at its real distance, and dropped out of the roadbook
+-- timeline and the GPX export entirely. Test 2 could never catch it: the owner
+-- can read their own route.
+select cmp_ok(
+  (select position_m from route_markers
+     where id = '33333333-3333-3333-3333-3333000cc010'),
+  '>', 0::numeric,
+  'position_m is derived for a NON-OWNER marker too, not silently null'
+);
 
 -- 11. Viewer sees their personal marker PLUS the owner official one via the RPC.
 select results_eq(

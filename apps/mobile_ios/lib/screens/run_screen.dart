@@ -1236,6 +1236,19 @@ class _RunScreenState extends State<RunScreen> {
     _stepSub = Pedometer.stepCountStream.listen((event) {
       _pedometerRetries = 0; // reset back-off on successful event
       if (_state != _ScreenState.recording) return;
+      // A manual pause keeps [_state] at `recording`, so this listener has to
+      // honour [_manualPaused] itself — every other distance source freezes on
+      // pause (the recorder drops positions, the treadmill path rebases), but
+      // the pedometer is a CUMULATIVE device counter that keeps ticking. Left
+      // running it would credit a walk to the water fountain as distance on an
+      // indoor run, against a clock that is stopped. Dropping the baseline
+      // makes the first post-resume event re-anchor on the frozen count, so
+      // the paused steps can never re-enter one tick later.
+      if (_manualPaused) {
+        _stepsCarriedIn = _steps;
+        _stepBaselineSet = false;
+        return;
+      }
       if (!_stepBaselineSet) {
         _startSteps = event.steps - _stepsCarriedIn;
         _stepBaselineSet = true;
@@ -1931,8 +1944,19 @@ class _RunScreenState extends State<RunScreen> {
     // post-resume snapshot lands) still writes the full accumulated
     // track / stats, and the finish summary is continuous from the moment of
     // resume.
+    // An indoor partial's `distanceMetres` is the PEDOMETER estimate, not a GPS
+    // total (_saveInProgress writes _displayDistanceMetres for it). Seeding the
+    // GPS accumulator with it would make liveDistanceMetres' `gpsDistanceMetres
+    // > 0` short-circuit fire forever, freezing distance at the resume value and
+    // never consulting steps again — and the frozen non-zero accumulator also
+    // fails the `_distanceMetres == 0` indoorEstimate guard, so every later
+    // checkpoint drops `indoor_estimated` and a second process-kill discards the
+    // whole run as an unqualifying trackless partial. Restoring the step count
+    // (below) is what carries an indoor run's distance across a resume.
+    final indoorEstimateResumed =
+        partial.metadata?[cm.MetadataKeys.indoorEstimated] == true;
     _track = List<cm.Waypoint>.from(partial.track);
-    _distanceMetres = partial.distanceMetres;
+    _distanceMetres = indoorEstimateResumed ? 0 : partial.distanceMetres;
     _elapsed = partial.duration;
     _lapCount = restoredLaps.length;
     _steps = restoredSteps;
@@ -1958,7 +1982,7 @@ class _RunScreenState extends State<RunScreen> {
     try {
       await _recorder!.resumeSession(
         track: partial.track,
-        distanceMetres: partial.distanceMetres,
+        distanceMetres: indoorEstimateResumed ? 0 : partial.distanceMetres,
         elapsed: partial.duration,
         startedAt: partial.startedAt,
         laps: restoredLaps,
@@ -2699,6 +2723,7 @@ class _RunScreenState extends State<RunScreen> {
     final metadata = <String, dynamic>{
       cm.MetadataKeys.activityType: _activityType.name,
       cm.MetadataKeys.inProgressSavedAt: DateTime.now().toIso8601String(),
+      if (indoorEstimate) cm.MetadataKeys.indoor: true,
       if (indoorEstimate) cm.MetadataKeys.indoorEstimated: true,
       if (indoorEstimate) cm.MetadataKeys.distanceSource: 'pedometer',
       if (_steps > 0) cm.MetadataKeys.steps: _steps,
@@ -2947,6 +2972,13 @@ class _RunScreenState extends State<RunScreen> {
         raw.distanceMetres == 0 &&
         _displayDistanceMetres > 0;
     if (indoorEstimate) {
+      // `indoor` is the flag every consumer tests (qualifyingRuns excludes it
+      // from the VDOT ceiling); `indoor_estimated` is audit-only. A pedometer
+      // estimate is further from measured than the treadmill belt that already
+      // sets `indoor`, so without this a stride constant that over-reads raises
+      // the runner's VDOT — and with it every training pace and race
+      // prediction — permanently, since the ceiling is a max over runs.
+      metadata[cm.MetadataKeys.indoor] = true;
       metadata[cm.MetadataKeys.indoorEstimated] = true;
       metadata[cm.MetadataKeys.distanceSource] = 'pedometer';
     }

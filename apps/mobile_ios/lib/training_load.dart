@@ -88,7 +88,13 @@ double computeLiftStress(LiftForLoad lift) {
   for (final s in lift.sets) {
     final reps = s.reps;
     final weight = s.weightKg;
-    if (reps == null || reps <= 0 || weight == null || weight <= 0) continue;
+    // Non-finite has to be rejected here, not downstream: NaN <= 0 is false,
+    // so a NaN set survives aggregateDailyLiftStress' `stress <= 0` skip and
+    // then poisons every subsequent atl/ctl/tsb point in the series. Infinity
+    // is worse than useless — it silently clamps to the cap and reports a
+    // full-sized phantom session. Mirrors the web twin's numericOrNull.
+    if (reps == null || !reps.toDouble().isFinite || reps <= 0) continue;
+    if (weight == null || !weight.toDouble().isFinite || weight <= 0) continue;
     weighted += reps * weight * rpeFactor(s.rpe);
   }
   final stress = weighted * kLiftStressPerKgTonnage;

@@ -54,7 +54,8 @@
 	import {
 		orderedPlanPhases,
 		longestCompletedLongRunMetres,
-		planDistanceBanked
+		planDistanceBanked,
+		planWorkoutProgress
 	} from '$lib/training/plan_progress';
 	import { planToMarkdown, planToJson, type ExportPlan } from '$lib/training/plan_serialize';
 	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
@@ -782,11 +783,10 @@
 		return { weekIndex, totalWeeks, totalDays, calendarPct, relation, raceState };
 	});
 
-	let completed = $derived(workouts.filter(isWorkoutCompleted).length);
-	let totalActive = $derived(
-		workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length,
-	);
-	let pct = $derived(totalActive === 0 ? 0 : Math.round((completed / totalActive) * 100));
+	let progress = $derived(planWorkoutProgress(workouts));
+	let completed = $derived(progress.completed);
+	let totalActive = $derived(progress.total);
+	let pct = $derived(progress.pct);
 
 	let currentWeek = $derived(
 		currentWeekIndex != null ? (weeks[currentWeekIndex] ?? null) : null
@@ -1428,8 +1428,9 @@
 			<h2 class="section-title">{m('planDetail.weekByWeek')}</h2>
 			{#each weeks as w (w.id)}
 				{@const weekWorkouts = workoutsByWeek.get(w.id) ?? []}
-				{@const weekActive = weekWorkouts.filter((x) => x.kind !== 'rest' && !isWorkoutSkipped(x))}
-				{@const weekDone = weekWorkouts.filter(isWorkoutCompleted).length}
+				{@const weekProgress = planWorkoutProgress(weekWorkouts)}
+				{@const weekActive = weekProgress.total}
+				{@const weekDone = weekProgress.completed}
 				{@const isPast = w.week_index < (currentWeekIndex ?? -1)}
 				{@const isFuture = w.week_index > (currentWeekIndex ?? -1)}
 				<article
@@ -1447,7 +1448,7 @@
 						</div>
 						<div class="week-stats">
 							<span class="week-progress">
-								{weekDone}<em> / {weekActive.length}</em> {m('planDetail.done')}
+								{weekDone}<em> / {weekActive}</em> {m('planDetail.done')}
 							</span>
 							<span class="week-volume">{fmtKm(w.target_volume_m, 0)}</span>
 							{#if isOwner && !plan.is_template && w.phase !== 'race'}

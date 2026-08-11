@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'training.dart' show TrainingGender;
 
+import 'plan_week.dart';
 import 'relink_candidates.dart';
 import 'training.dart';
 
@@ -551,11 +552,17 @@ class TrainingService extends ChangeNotifier {
         .where((w) => w.completedRunId != null || w.manuallyCompleted)
         .length;
     final pct = active.isEmpty ? 0 : (100 * done / active.length).round();
-    final startDate = parseIsoDate(toIsoDate(plan.startDate));
-    final dayIndex = DateTime.now().difference(startDate).inDays;
-    final currentWeek = dayIndex < 0
+    // Whole-epoch-day bucketing, not a wall-clock difference: a start→today
+    // span crossing a DST transition is 167/169 h, so `inDays` truncates a day
+    // short and reports the previous week (#338). A plan whose weeks failed to
+    // load has no valid index — the helper's `weekCount - 1` would be -1.
+    final currentWeek = res.weeks.isEmpty
         ? 0
-        : (dayIndex ~/ 7).clamp(0, res.weeks.length - 1);
+        : currentPlanWeekIndex(
+            toIsoDate(plan.startDate),
+            toIsoDate(DateTime.now()),
+            res.weeks.length,
+          );
     return ActivePlanOverview(
       plan: plan,
       weeks: res.weeks,

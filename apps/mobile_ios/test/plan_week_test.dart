@@ -32,4 +32,11 @@ void main() {
   test('past the last week clamps to the final week index', () {
     expect(currentPlanWeekIndex('2026-03-01', '2026-12-01', 12), 11);
   });
+
+  test('a plan with no weeks yields no valid index', () {
+    // -1, not 0: weekCount - 1 underflows. Callers must guard the empty case
+    // themselves (fetchActiveOverview used to feed this straight into
+    // clamp(0, weeks.length - 1), and Dart's clamp THROWS on inverted bounds).
+    expect(currentPlanWeekIndex('2026-03-01', '2026-03-15', 0), -1);
+  });
 }

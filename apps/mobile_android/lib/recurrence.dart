@@ -80,6 +80,20 @@ int _monthsBetween(DateTime a, DateTime b, bool useUtc) {
   return (bb.year - a.year) * 12 + (bb.month - a.month);
 }
 
+/// Step whole CALENDAR days from a midnight cursor.
+///
+/// `add(Duration(days: n))` adds absolute 24-hour blocks. Across a DST
+/// fall-back a local midnight lands at 23:00 the PREVIOUS day, so the local
+/// calendar day repeats and every later offset is shifted by one — which
+/// flips `weekIndex % 2` and moves a biweekly series onto entirely different
+/// dates from the week of the transition onward. Web steps with
+/// `Date.setDate()`, which is calendar-based; this must match it, because the
+/// instance start is the per-occurrence RSVP capacity key and the live-race
+/// arm key, so every viewer has to compute the identical instant.
+DateTime _addDaysCalendar(DateTime dayStart, int days, bool useUtc) => useUtc
+    ? DateTime.utc(dayStart.year, dayStart.month, dayStart.day + days)
+    : DateTime(dayStart.year, dayStart.month, dayStart.day + days);
+
 DateTime _addMonthsClamped(DateTime base, int months, bool useUtc) {
   final total = base.month - 1 + months;
   final year = base.year + (total ~/ 12);
@@ -155,7 +169,12 @@ List<DateTime> expandInstances(
   if (e.freq == RecurrenceFreq.monthly) {
     // Read the anchor in the chosen clock so day-of-month + time-of-day match
     // the organiser's intended wall-clock (UTC) or the viewer's (legacy local).
-    final base = useUtc ? e.startsAt.toUtc() : e.startsAt;
+    // `.toLocal()` on the legacy path, exactly as the weekly branch below:
+    // startsAt is parsed from a +00:00 string so it carries a UTC flag, and
+    // _addMonthsClamped would otherwise read UTC day-of-month / time-of-day
+    // fields and rebuild them as a LOCAL DateTime — shifting every instance by
+    // the viewer's offset and, for a late-UTC anchor, onto the wrong day.
+    final base = useUtc ? e.startsAt.toUtc() : e.startsAt.toLocal();
     final monthBudget = _monthsBetween(base, scanEnd, useUtc) + 1;
     var produced = 0;
     for (var i = 0; produced < hardCap; i++) {
@@ -196,12 +215,12 @@ List<DateTime> expandInstances(
   final startDayOnly = useUtc
       ? DateTime.utc(start.year, start.month, start.day)
       : DateTime(start.year, start.month, start.day);
-  final anchor = startDayOnly.subtract(Duration(days: start.weekday - 1));
+  final anchor = _addDaysCalendar(startDayOnly, -(start.weekday - 1), useUtc);
 
   final dayBudget = scanEnd.difference(anchor).inDays + stepDays + 1;
   var produced = 0;
   for (var dayOffset = 0; dayOffset <= dayBudget; dayOffset++) {
-    final d = anchor.add(Duration(days: dayOffset));
+    final d = _addDaysCalendar(anchor, dayOffset, useUtc);
     if (d.isBefore(startDayOnly)) {
       continue;
     }

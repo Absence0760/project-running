@@ -366,6 +366,33 @@ test('computeLiftStress — a fat-fingered weight is capped, cannot spike the cu
 	assert.equal(computeLiftStress(typo), kLiftStressCap);
 });
 
+test('computeLiftStress — a non-finite rep or weight contributes nothing, never NaN', () => {
+	// Mirror of the Dart twin. NaN <= 0 is false, so an unguarded NaN set slips
+	// past the per-set skip AND aggregateDailyLiftStress' `stress <= 0` skip and
+	// poisons every later point in the series; Infinity clamps to the cap and
+	// reports a phantom full-sized session. numericOrNull is what stops both.
+	const nan: LiftForLoad = {
+		started_at: '2026-04-01T18:00:00Z',
+		sets: [{ reps: Number.NaN, weight_kg: 100 }],
+	};
+	assert.equal(computeLiftStress(nan), 0);
+	assert.equal(
+		computeLiftStress({
+			started_at: '2026-04-01T18:00:00Z',
+			sets: [{ reps: Number.POSITIVE_INFINITY, weight_kg: 100 }],
+		}),
+		0
+	);
+	assert.equal(
+		computeLiftStress({
+			started_at: '2026-04-01T18:00:00Z',
+			sets: [{ reps: 5, weight_kg: Number.POSITIVE_INFINITY }],
+		}),
+		0
+	);
+	assert.equal(aggregateDailyLiftStress([nan]).size, 0);
+});
+
 test('aggregateDailyLiftStress — sums by local day, skips empty sessions', () => {
 	const daily = aggregateDailyLiftStress([
 		kHardLiftSession,

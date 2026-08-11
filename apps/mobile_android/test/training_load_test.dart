@@ -379,6 +379,34 @@ void main() {
       expect(computeLiftStress(typo), kLiftStressCap);
     });
 
+    test('a non-finite rep or weight contributes nothing, never NaN', () {
+      // NaN <= 0 is false, so a NaN set slipped past both the per-set guard
+      // here and aggregateDailyLiftStress' `stress <= 0` skip, and then turned
+      // every subsequent atl/ctl/tsb point in the series into NaN. Infinity is
+      // just as bad the other way: min(Infinity, cap) silently reports a
+      // full-sized phantom session. Mirrors the web twin's numericOrNull.
+      final nan = LiftForLoad(
+        startedAt: DateTime.utc(2026, 4, 1),
+        sets: const [LiftSetForLoad(reps: double.nan, weightKg: 100)],
+      );
+      expect(computeLiftStress(nan), 0);
+
+      final inf = LiftForLoad(
+        startedAt: DateTime.utc(2026, 4, 1),
+        sets: const [LiftSetForLoad(reps: double.infinity, weightKg: 100)],
+      );
+      expect(computeLiftStress(inf), 0);
+
+      final infWeight = LiftForLoad(
+        startedAt: DateTime.utc(2026, 4, 1),
+        sets: const [LiftSetForLoad(reps: 5, weightKg: double.infinity)],
+      );
+      expect(computeLiftStress(infWeight), 0);
+
+      // And the poisoned session never reaches the daily roll-up.
+      expect(aggregateDailyLiftStress([nan]).isEmpty, isTrue);
+    });
+
     test('aggregateDailyLiftStress sums by local day, skips empty sessions', () {
       final when = DateTime.utc(2026, 4, 1);
       final daily = aggregateDailyLiftStress([

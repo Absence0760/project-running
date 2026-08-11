@@ -1168,9 +1168,14 @@ export async function saveRun(input: {
 	if (!userId) throw new Error('Not authenticated');
 	const isPublic = input.isPublic ?? (await defaultRunIsPublic(userId));
 
-	// elevation_m and title are not columns on `runs` (elevation_m lives on
-	// `routes`; title has no DB column). Merge both into metadata so they
-	// survive the round-trip. See docs/backend/metadata.md for the registered keys.
+	// `title` has no DB column, so it survives the round-trip in metadata only.
+	// `elevation_m` is different: migration 20270302_001 promoted total ascent to
+	// the first-class `runs.elevation_gain_m` column and its contract is that
+	// "writers populate both" — the jsonb key for the readers that still use it
+	// (recap fallback, export, the Go worker) and the column for the ones that
+	// sum it in SQL. The vert challenge aggregate sums the COLUMN, so writing
+	// only the metadata key leaves every vert leaderboard stuck at 0 m.
+	// See docs/backend/metadata.md for the registered keys.
 	const mergedMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
 	if (input.title) mergedMetadata[METADATA_KEYS.title] = input.title;
 	if (input.elevation_m != null) mergedMetadata[METADATA_KEYS.elevation_m] = input.elevation_m;
@@ -1184,6 +1189,7 @@ export async function saveRun(input: {
 		metadata: mergedMetadata,
 		is_public: isPublic,
 	};
+	if (input.elevation_m != null) row.elevation_gain_m = input.elevation_m;
 	if (input.embedded_bests) Object.assign(row, input.embedded_bests);
 	if (input.external_id) row.external_id = input.external_id;
 
@@ -4614,16 +4620,11 @@ export async function fetchActivePlanOverview(): Promise<ActivePlanOverview | nu
 	const { weeks, workouts } = await fetchPlan(plan.id);
 	// Local-tz today — `toISOString().slice(0,10)` returns the UTC date,
 	// which rolls a calendar day early/late depending on the viewer's TZ.
-	const { todayISO, isWorkoutSkipped } = await import('../training/training');
+	const { todayISO } = await import('../training/training');
+	const { planWorkoutProgress } = await import('../training/plan_progress');
 	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
-	const completed = workouts.filter(
-		(w) => w.manually_completed === true || w.completed_run_id != null
-	).length;
-	// Skipped workouts are off the books — neither done nor an outstanding
-	// to-do — so they leave the progress denominator entirely.
-	const total = workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length;
-	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+	const completionPct = planWorkoutProgress(workouts).pct;
 	return {
 		plan: plan as TrainingPlan,
 		weeks: weeks ?? [],
@@ -8618,16 +8619,11 @@ export async function fetchAthletePlanOverview(
 		.maybeSingle();
 	if (!plan) return null;
 	const { weeks, workouts } = await fetchPlan(plan.id);
-	const { todayISO, isWorkoutSkipped } = await import('../training/training');
+	const { todayISO } = await import('../training/training');
+	const { planWorkoutProgress } = await import('../training/plan_progress');
 	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
-	const completed = workouts.filter(
-		(w) => w.manually_completed === true || w.completed_run_id != null
-	).length;
-	// Skipped workouts are off the books — neither done nor an outstanding
-	// to-do — so they leave the progress denominator entirely.
-	const total = workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length;
-	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+	const completionPct = planWorkoutProgress(workouts).pct;
 	return {
 		plan: plan as TrainingPlan,
 		weeks: weeks ?? [],

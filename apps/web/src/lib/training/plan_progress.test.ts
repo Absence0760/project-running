@@ -4,6 +4,7 @@ import {
 	orderedPlanPhases,
 	longestCompletedLongRunMetres,
 	planDistanceBanked,
+	planWorkoutProgress,
 } from './plan_progress';
 
 // ─────────────────────── orderedPlanPhases ───────────────────────
@@ -149,4 +150,41 @@ test('planDistanceBanked: a zero-distance linked run falls back to the planned t
 
 test('planDistanceBanked: empty plan is zero / zero', () => {
 	assert.deepEqual(planDistanceBanked([]), { completedMetres: 0, plannedMetres: 0 });
+});
+
+test('planWorkoutProgress: ticking a rest day cannot push the plan over 100%', () => {
+	// A rest day is not a session, but the workout editor renders its
+	// "Mark as done" button all the same. Counting a ticked rest day in the
+	// numerator against a denominator that excludes rest reported 5 / 3 = 167%.
+	const workouts = [
+		{ kind: 'easy', manually_completed: true },
+		{ kind: 'tempo', completed_run_id: 'r1' },
+		{ kind: 'long', manually_completed: true },
+		{ kind: 'rest', manually_completed: true },
+		{ kind: 'rest', manually_completed: true },
+		{ kind: 'rest' },
+		{ kind: 'rest' },
+	];
+	assert.deepEqual(planWorkoutProgress(workouts), { completed: 3, total: 3, pct: 100 });
+});
+
+test('planWorkoutProgress: skipped sessions leave both sides of the ratio', () => {
+	const workouts = [
+		{ kind: 'easy', manually_completed: true },
+		{ kind: 'tempo' },
+		{ kind: 'long', skipped_at: '2026-07-01T00:00:00Z' },
+	];
+	assert.deepEqual(planWorkoutProgress(workouts), { completed: 1, total: 2, pct: 50 });
+});
+
+test('planWorkoutProgress: a rest-only plan is zero, not a division by zero', () => {
+	assert.deepEqual(planWorkoutProgress([{ kind: 'rest', manually_completed: true }]), {
+		completed: 0,
+		total: 0,
+		pct: 0,
+	});
+});
+
+test('planWorkoutProgress: empty plan is zero / zero', () => {
+	assert.deepEqual(planWorkoutProgress([]), { completed: 0, total: 0, pct: 0 });
 });
