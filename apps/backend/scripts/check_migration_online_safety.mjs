@@ -78,7 +78,11 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // EXECUTE on the re-rank RPC from the client roles. Function body and privileges
 // only — no table DDL, so the scanner passed it with zero violations before this
 // bump.
-export const GRANDFATHER_CUTOFF = '20270516';
+// 20270517: re-emits clone_plan_template and assign_plan_to_athlete so both
+// carry pace_zone + target_pace_end_sec_per_km. Function bodies only — no table
+// DDL of any kind and no backfill, so the scanner passed it with zero
+// violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270517';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
