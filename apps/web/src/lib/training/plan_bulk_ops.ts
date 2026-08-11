@@ -28,6 +28,8 @@ export interface RecoveryWorkoutPatch {
 	kind?: string;
 	target_distance_m?: number | null;
 	target_pace_sec_per_km?: number | null;
+	target_pace_tolerance_sec?: number | null;
+	structure?: null;
 }
 
 /// Compute the patch to apply to one workout when its week is marked as
@@ -43,6 +45,16 @@ export function recoveryWorkoutPatch(w: {
 	if (QUALITY_KINDS.has(w.kind)) {
 		patch.kind = 'recovery';
 		patch.target_pace_sec_per_km = null; // recovery = comfortable, no strict target
+		patch.target_pace_tolerance_sec = null;
+		// The interval structure has to go with the kind. It is not decoration:
+		// the workout-detail page renders it as a Structure card, and
+		// `expandWorkoutSteps` in run_recorder builds the executed step list
+		// from it — so a "Recovery" workout that kept its structure still ran
+		// the full 5x1000m VO2max session on the watch, on a deload week. It
+		// also contradicted the scaled target_distance_m below (5100 m stated,
+		// 8500 m of work described). The sibling pregnancy strip in
+		// cycle_plan.ts already clears it.
+		patch.structure = null;
 	}
 	if (w.target_distance_m != null) {
 		patch.target_distance_m = Math.round(w.target_distance_m * RECOVERY_SCALE);
