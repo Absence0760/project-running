@@ -1514,14 +1514,20 @@ func TestIsTransient(t *testing.T) {
 // worker said fail. Pin that they agree on every status either one accepts, so
 // a future edit to one has to move the other.
 func TestIsTransient_AgreesWithPushClassifiers(t *testing.T) {
+	// BOTH directions. One-directional (push => worker) let the reverse drift
+	// silently: the worker learned 408/425 while the push classifiers kept
+	// hand-rolling `429 || >=500`, so those statuses were dropped as permanent
+	// at the handler and never reached the worker that would have retried them.
 	for status := 100; status < 600; status++ {
 		pushWants := nativepush.IsTransient(status)
-		if !pushWants {
-			continue
-		}
-		if !isTransient(&HTTPError{StatusCode: status}) {
+		workerWants := isTransient(&HTTPError{StatusCode: status})
+		if pushWants && !workerWants {
 			t.Errorf("nativepush.IsTransient(%d) = true but the worker would "+
 				"permanently fail the job", status)
+		}
+		if workerWants && !pushWants {
+			t.Errorf("the worker retries %d but nativepush.IsTransient says "+
+				"permanent, so the handler drops it before the worker sees it", status)
 		}
 	}
 }

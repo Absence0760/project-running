@@ -50,9 +50,12 @@ func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM floa
 	settled := map[int32]struct{}{}
 
 	pq := &nodeHeap{{node: src, dist: 0, real: 0}}
-	// Checking ctx every pop would cost an atomic load per node; every 4096 is
-	// well inside a millisecond at the measured ~500-680 ns/node.
-	const ctxCheckEvery = 4096
+	// Checking ctx every pop would cost an atomic load per node. 512 is ~0.3 ms
+	// at the measured ~500-680 ns/node — 4096 was too coarse to fire at all on
+	// the short searches SearchCycle actually issues (it makes ~61 of them
+	// rather than one long one), so the check never ran at realistic targets.
+	// SearchCycle also bails between legs, which is the coarse-grained half.
+	const ctxCheckEvery = 512
 	pops := 0
 	for pq.Len() > 0 {
 		pops++

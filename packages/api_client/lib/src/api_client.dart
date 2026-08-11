@@ -744,6 +744,10 @@ class ApiClient {
       source: run.source.name,
       activityType: (run.metadata?['activity_type'] as String?) ?? 'run',
       isDnf: run.metadata?['is_dnf'] == true,
+      // The promoted column the vert challenge aggregate SUMS (20270302_001,
+      // "writers populate both"). metadata.elevation_m alone left every vert
+      // board reading 0 m for app-recorded and mobile-imported runs.
+      elevationGainM: _promotedDouble(run.metadata, 'elevation_m'),
       fastest5kS: _embeddedBestSeconds(run.metadata, 'fastest_5k_s'),
       fastest10kS: _embeddedBestSeconds(run.metadata, 'fastest_10k_s'),
       fastestHalfMarathonS:
@@ -896,6 +900,7 @@ class ApiClient {
         source: r.source.name,
         activityType: (r.metadata?['activity_type'] as String?) ?? 'run',
         isDnf: r.metadata?['is_dnf'] == true,
+        elevationGainM: _promotedDouble(r.metadata, 'elevation_m'),
         fastest5kS: _embeddedBestSeconds(r.metadata, 'fastest_5k_s'),
         fastest10kS: _embeddedBestSeconds(r.metadata, 'fastest_10k_s'),
         fastestHalfMarathonS:
@@ -5286,6 +5291,16 @@ class ApiClient {
   // Bag → column lift for the promoted embedded-best keys. Non-negative
   // integers only — the same domain the old SQL-side `~ '^[0-9]+$'`
   // validation admitted; anything else is dropped, never written.
+
+/// Read a numeric metadata key for a column that was PROMOTED out of the jsonb
+/// bag. The key is kept in metadata for the readers that still use it, so both
+/// are written — see 20270302_001.
+double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
+  final v = metadata?[key];
+  if (v is num && v.isFinite) return v.toDouble();
+  return null;
+}
+
   static int? _embeddedBestSeconds(Map<String, dynamic>? metadata, String key) {
     final v = metadata?[key];
     final secs = v is int ? v : (v is num ? v.toInt() : null);
