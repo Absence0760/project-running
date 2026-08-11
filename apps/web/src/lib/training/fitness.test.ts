@@ -15,7 +15,7 @@ import {
 	isReturningFromLayoff,
 	isReturningFromGap,
 } from './fitness';
-import type { Run } from '../types';
+import type { Run, RunSource } from '../types';
 
 function r(partial: {
 	started_at: string;
@@ -99,18 +99,58 @@ test('qualifyingRuns — drops indoor/treadmill runs (belt distance is not VDOT-
 	assert.deepEqual(qualifyingRuns([outdoor, treadmill]), [outdoor]);
 });
 
-test('qualifyingRuns — accepts every recognised source, drops others', () => {
-	const accepted = (['app', 'watch', 'strava', 'garmin', 'healthkit', 'healthconnect'] as const).map((s) =>
-		r({ started_at: '2026-04-01T07:00:00Z', distance_m: 5000, duration_s: 1500, source: s }),
-	);
-	const rejected = r({
-		started_at: '2026-04-01T07:00:00Z',
+test('qualifyingRuns — accepts every value of the RunSource union', () => {
+	// This test used to list six sources and call that "every recognised
+	// source", checking the reverse with a fabricated value outside the union.
+	// It therefore passed while `parkrun` and `race` — a certified weekly 5K
+	// and a chip-timed official result, the two most authoritative sources
+	// there are — were silently dropped from every fitness calculation.
+	// Enumerate the real union so a new value fails here until classified.
+	const ALL_SOURCES: RunSource[] = [
+		'app',
+		'watch',
+		'healthkit',
+		'healthconnect',
+		'strava',
+		'garmin',
+		'parkrun',
+		'race',
+	];
+	for (const source of ALL_SOURCES) {
+		const run = r({
+			started_at: '2026-04-01T07:00:00Z',
+			distance_m: 5000,
+			duration_s: 1500,
+			source,
+		});
+		assert.equal(qualifyingRuns([run]).length, 1, `source ${source} must qualify`);
+	}
+});
+
+test('a parkrun result anchors VDOT like any other timed effort', () => {
+	// The concrete consequence: a runner whose best effort is a 19:30 parkrun
+	// 5K, with slower app-recorded runs otherwise, had their whole fitness
+	// picture (threshold pace, every run's TSS, ATL/CTL/TSB, and the race
+	// predictor's anchor pool) computed off the slower run.
+	const parkrun = r({
+		started_at: '2026-04-01T08:00:00Z',
 		distance_m: 5000,
-		duration_s: 1500,
-		source: 'manual_entry' as Run['source'],
+		duration_s: 1170,
+		source: 'parkrun',
 	});
-	const out = qualifyingRuns([...accepted, rejected]);
-	assert.equal(out.length, accepted.length);
+	const tempo = r({
+		started_at: '2026-04-02T08:00:00Z',
+		distance_m: 8000,
+		duration_s: 2160,
+		source: 'app',
+	});
+	const withParkrun = currentVdot([parkrun, tempo], Date.parse('2026-04-05T00:00:00Z'));
+	const without = currentVdot([tempo], Date.parse('2026-04-05T00:00:00Z'));
+	assert.ok(withParkrun !== null && without !== null);
+	assert.ok(
+		withParkrun! > without! + 5,
+		`parkrun must lift VDOT (got ${withParkrun} vs ${without})`,
+	);
 });
 
 // ─────────────── vdotFromRun ───────────────

@@ -66,15 +66,29 @@ List<Run> qualifyingRuns(Iterable<Run> runs) {
           r.duration.inSeconds >= 300 &&
           r.metadata?['activity_type'] != 'cycle' &&
           r.metadata?['indoor'] != true &&
-          (r.source == RunSource.app ||
-              r.source == RunSource.watch ||
-              r.source == RunSource.strava ||
-              r.source == RunSource.garmin ||
-              r.source == RunSource.healthkit ||
-              r.source == RunSource.healthconnect))
+          _sourceQualifies[r.source] == true)
         r,
   ];
 }
+
+/// Which [RunSource] values carry a trustworthy distance + duration for
+/// fitness math. Declared as a total map over the enum rather than an `||`
+/// chain so adding a value is a missing-key here until it is consciously
+/// classified — the previous chain silently omitted `parkrun` and `race`, the
+/// two most authoritative sources there are (a certified weekly 5K and a
+/// chip-timed official result). Migration
+/// `20270424_001_pr_achievements_include_parkrun_race` fixed exactly this
+/// omission in the SQL PR + achievement filters; the client copy was missed.
+const Map<RunSource, bool> _sourceQualifies = {
+  RunSource.app: true,
+  RunSource.watch: true,
+  RunSource.strava: true,
+  RunSource.garmin: true,
+  RunSource.healthkit: true,
+  RunSource.healthconnect: true,
+  RunSource.parkrun: true,
+  RunSource.race: true,
+};
 
 /// Runner's VDOT from a single run. Inverts Daniels' "%VO2max at a
 /// given race pace" tables:
