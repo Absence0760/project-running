@@ -573,22 +573,30 @@ func (w *Worker) maybeAutoLinkRoute(
 	return nil
 }
 
+// isRetryableUpstreamStatus reports whether an upstream HTTP status means
+// "come back later" rather than "this will never work". Shared by isTransient
+// and the Strava refresh sweep so the two can't drift apart on 429.
+func isRetryableUpstreamStatus(status int) bool {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
+		return true
+	}
+	return status >= 500 && status < 600
+}
+
 // isTransient classifies an error as worth-retrying. Network blips,
-// 429 rate limits, 5xx upstream, request timeouts → defer + retry.
+// 5xx upstream, request timeouts, and the retry-shaped 4xx → defer + retry.
 // Other 4xx, malformed payload, missing run, RLS denial → permanent.
+//
+// 429 in particular says "come back later", not "this will never work":
+// handler_web_push and nativepush both raise it deliberately meaning retry,
+// and classifying it permanent dropped the notification for good and left
+// notifications.web_push_sent_at null with no job left to drive it. 408 and
+// 425 are the same shape.
 func isTransient(err error) bool {
 	var hErr *HTTPError
 	if errors.As(err, &hErr) {
-		// 429 is a "come back later", not a rejection. Both push handlers
-		// deliberately encode a throttling response as a transient HTTPError
-		// (see nativepush.IsTransient, which agrees), so dropping it here
-		// permanently failed the job and left the row's sent_at unstamped
-		// with no job left to drain it — losing the push in exactly the
-		// fan-out burst that provoked the throttle.
-		if hErr.StatusCode == http.StatusTooManyRequests {
-			return true
-		}
-		return hErr.StatusCode >= 500 && hErr.StatusCode < 600
+		return isRetryableUpstreamStatus(hErr.StatusCode)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true

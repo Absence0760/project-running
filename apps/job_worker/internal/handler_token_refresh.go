@@ -97,8 +97,17 @@ func (w *Worker) handleTokenRefresh(ctx context.Context, _ *Job) error {
 				// Strava's own /oauth/token leg can tell us the grant
 				// is broken. A 4xx from any Supabase hop in refreshOne
 				// means our backend is unhappy, not the user's link.
+				//
+				// ...and even from that leg, a throttle or a timeout is not a
+				// revoked grant. Strava's rate limit is per-APPLICATION and
+				// this sweep fans out 12-wide, so a 429 says nothing about the
+				// user's authorisation — yet disconnecting takes the row out of
+				// every future sweep, forcing them to re-authorise a connection
+				// that was never revoked.
 				var grantErr *stravaGrantError
-				if errors.As(err, &grantErr) && grantErr.inner.StatusCode >= 400 && grantErr.inner.StatusCode < 500 {
+				if errors.As(err, &grantErr) && grantErr.inner.StatusCode >= 400 &&
+					grantErr.inner.StatusCode < 500 &&
+					!isRetryableUpstreamStatus(grantErr.inner.StatusCode) {
 					httpErr := grantErr.inner
 					reason := classifyStravaRefreshFailure(httpErr)
 					if dErr := w.Backend.MarkIntegrationDisconnected(ctx, userID, "strava", reason); dErr != nil {
