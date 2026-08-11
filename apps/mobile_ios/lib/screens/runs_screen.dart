@@ -780,7 +780,7 @@ class _RunsScreenState extends State<RunsScreen> {
       // Same partial-success contract as SyncService — only mark
       // the runs whose track upload succeeded.
       await widget.runStore.markManySynced(
-        unsynced.where((r) => !failed.contains(r.id)).map((r) => r.id),
+        unsynced.where((r) => !failed.contains(r.id)),
       );
       synced = unsynced.length - failed.length;
       if (failed.isNotEmpty) {

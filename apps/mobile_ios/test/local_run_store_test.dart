@@ -76,7 +76,7 @@ void main() {
         track: const [],
         source: RunSource.app,
       ));
-      await seed.markManySynced(['older', 'newer']);
+      await seed.markManySynced(seed.runs);
 
       final store = LocalRunStore();
       store.residentWindow = 1;
@@ -93,6 +93,34 @@ void main() {
         source: RunSource.app,
       ));
       expect(store.unsyncedRuns.map((r) => r.id), ['older']);
+    });
+
+    test('an edit DURING a push is not marked synced', () async {
+      // saveRunsBatch uploads N gzipped tracks and can run for minutes.
+      // Marking by id alone flipped whatever was resident at that later
+      // moment, so an edit made mid-push was recorded as synced and never
+      // sent — and saveFromRemote's newer-wins then preserved the local copy,
+      // making the divergence permanent and invisible on BOTH sides. The gym
+      // store hardened against exactly this; the run store never did.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'R'));
+
+      // Snapshot the batch the way SyncService does, before the await.
+      final pushed = store.unsyncedRuns.toList();
+      expect(pushed.map((r) => r.id), ['R']);
+
+      // ...the runner edits the title while the upload is in flight.
+      await store.update(makeRun(id: 'R', distance: 4242));
+
+      // ...and the batch completes, reporting success for the run it pushed.
+      await store.markManySynced(pushed);
+
+      expect(store.unsyncedRuns.map((r) => r.id), ['R'],
+          reason: 'the edited run must stay pending for the next drain');
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.unsyncedRuns.map((r) => r.id), ['R']);
     });
 
     test('re-saving a synced id survives a cold reload as unsynced', () async {
@@ -867,7 +895,7 @@ void main() {
         await foreground.init(overrideDirectory: tempDir);
         await foreground.save(makeRun(id: 'R5', distance: 10000));
         await foreground.save(makeRun(id: 'R3', distance: 3000));
-        await foreground.markManySynced(['R5', 'R3']);
+        await foreground.markManySynced(foreground.runs);
 
         final background = LocalRunStore();
         await background.init(overrideDirectory: tempDir);

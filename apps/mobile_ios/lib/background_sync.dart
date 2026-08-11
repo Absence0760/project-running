@@ -94,7 +94,7 @@ Future<void> runBackgroundSyncCycle(
     try {
       final failed = await api.saveRunsBatch(unsynced);
       await store.markManySynced(
-        unsynced.where((r) => !failed.contains(r.id)).map((r) => r.id),
+        unsynced.where((r) => !failed.contains(r.id)),
       );
       debugPrint(
         'Background sync: pushed ${unsynced.length - failed.length} '

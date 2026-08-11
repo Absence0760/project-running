@@ -209,7 +209,7 @@ class _ImportScreenState extends State<ImportScreen> {
       try {
         final failed = await api.saveRunsBatch(filled);
         await widget.runStore.markManySynced(
-          filled.where((r) => !failed.contains(r.id)).map((r) => r.id),
+          filled.where((r) => !failed.contains(r.id)),
         );
       } catch (e) {
         debugPrint('Route backfill cloud push failed: $e');
@@ -304,7 +304,7 @@ class _ImportScreenState extends State<ImportScreen> {
         // Mark only the runs that successfully uploaded — same
         // partial-success contract as SyncService / background_sync.
         await widget.runStore.markManySynced(
-          savedRuns.where((r) => !failed.contains(r.id)).map((r) => r.id),
+          savedRuns.where((r) => !failed.contains(r.id)),
         );
       } catch (e) {
         debugPrint('Batch cloud push failed: $e');

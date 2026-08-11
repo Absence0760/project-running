@@ -235,7 +235,7 @@ class SyncService with WidgetsBindingObserver {
           // failures like an auth error — we land in the catch below.)
           final succeeded =
               unsynced.where((r) => !failed.contains(r.id)).toList();
-          await runStore.markManySynced(succeeded.map((r) => r.id));
+          await runStore.markManySynced(succeeded);
           debugPrint(
             'SyncService: pushed ${unsynced.length - failed.length} '
             '(skipped ${failed.length} on track-upload failure)',
