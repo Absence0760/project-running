@@ -271,4 +271,70 @@ void main() {
       expect(r.debugPaceSecondsPerKm, closeTo(333, 20));
     });
   });
+
+  group('pace never spans a re-anchored GPS gap (#330 follow-up)', () {
+    test('a Doze-batch gap seals the window instead of timing uncredited metres',
+        () {
+      // The #330 re-anchor rebases onto the first fix back WITHOUT crediting
+      // the un-sampled gap distance. A rolling window that walks back across
+      // it therefore times metres the recorder deliberately did not count
+      // against the gap's clock. Measured before the fix: 5 clean fixes at a
+      // true 200 s/km, then a 12 s dropout 150 m on, reported 128 s/km — the
+      // recorder claiming zero extra metres and a sub-world-record pace in the
+      // same breath. resume() and _beginResumed() already seal the window for
+      // the identical discontinuity.
+      //
+      // It matters beyond the display: run_screen feeds this to the pace-alert
+      // and cut-off catch-up voice cues, and live_cutoff_eta projects cut-off
+      // arrival from recent pace — so a too-fast reading SUPPRESSES a warning.
+      final r = RunRecorder()..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      for (var i = 0; i <= 4; i++) {
+        r.debugInjectPosition(
+            makePosition(metresEast: 50.0 * i, secondsFromStart: 10 * i));
+      }
+      expect(r.debugPaceSecondsPerKm, closeTo(200, 1),
+          reason: 'baseline: 50 m per 10 s is 200 s/km');
+      final beforeGap = r.debugDistanceMetres;
+
+      r.debugInjectPosition(
+          makePosition(metresEast: 350, secondsFromStart: 52));
+      expect(r.debugDistanceMetres, closeTo(beforeGap, 0.01),
+          reason: 'the gap itself is still not credited');
+      expect(r.debugPaceSecondsPerKm, isNull,
+          reason: 'no window may span the gap');
+    });
+
+    test('pace recovers to the true value once enough post-gap fixes land', () {
+      // Sealing the window must not disable pace for the rest of the run.
+      final r = RunRecorder()..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 300, secondsFromStart: 40));
+      expect(r.debugPaceSecondsPerKm, isNull);
+      // Post-gap: 40 m per 10 s == 250 s/km, over enough distance to fill the
+      // look-back window.
+      for (var i = 1; i <= 8; i++) {
+        r.debugInjectPosition(makePosition(
+            metresEast: 300.0 + 40 * i, secondsFromStart: 40 + 10 * i));
+      }
+      expect(r.debugPaceSecondsPerKm, closeTo(250, 5),
+          reason: 'post-gap pace is measured only against post-gap fixes');
+    });
+
+    test('a rejected teleport does not seal the window', () {
+      // The other side of the branch: a short-dt implausible hop is rejected
+      // outright, so it must not disturb a healthy pace reading.
+      final r = RunRecorder()..debugPrepareWithoutStream(maxSpeedMps: 1000);
+      r.begin();
+      for (var i = 0; i <= 4; i++) {
+        r.debugInjectPosition(
+            makePosition(metresEast: 50.0 * i, secondsFromStart: 10 * i));
+      }
+      final before = r.debugPaceSecondsPerKm;
+      // 500 m in 2 s: fails the hop cap and both re-anchor gates.
+      r.debugInjectPosition(makePosition(metresEast: 700, secondsFromStart: 42));
+      expect(r.debugPaceSecondsPerKm, closeTo(before!, 0.01));
+    });
+  });
 }
