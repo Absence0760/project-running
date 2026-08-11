@@ -1944,8 +1944,19 @@ class _RunScreenState extends State<RunScreen> {
     // post-resume snapshot lands) still writes the full accumulated
     // track / stats, and the finish summary is continuous from the moment of
     // resume.
+    // An indoor partial's `distanceMetres` is the PEDOMETER estimate, not a GPS
+    // total (_saveInProgress writes _displayDistanceMetres for it). Seeding the
+    // GPS accumulator with it would make liveDistanceMetres' `gpsDistanceMetres
+    // > 0` short-circuit fire forever, freezing distance at the resume value and
+    // never consulting steps again — and the frozen non-zero accumulator also
+    // fails the `_distanceMetres == 0` indoorEstimate guard, so every later
+    // checkpoint drops `indoor_estimated` and a second process-kill discards the
+    // whole run as an unqualifying trackless partial. Restoring the step count
+    // (below) is what carries an indoor run's distance across a resume.
+    final indoorEstimateResumed =
+        partial.metadata?[cm.MetadataKeys.indoorEstimated] == true;
     _track = List<cm.Waypoint>.from(partial.track);
-    _distanceMetres = partial.distanceMetres;
+    _distanceMetres = indoorEstimateResumed ? 0 : partial.distanceMetres;
     _elapsed = partial.duration;
     _lapCount = restoredLaps.length;
     _steps = restoredSteps;
@@ -1971,7 +1982,7 @@ class _RunScreenState extends State<RunScreen> {
     try {
       await _recorder!.resumeSession(
         track: partial.track,
-        distanceMetres: partial.distanceMetres,
+        distanceMetres: indoorEstimateResumed ? 0 : partial.distanceMetres,
         elapsed: partial.duration,
         startedAt: partial.startedAt,
         laps: restoredLaps,
