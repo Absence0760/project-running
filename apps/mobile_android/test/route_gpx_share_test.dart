@@ -43,7 +43,11 @@ void main() {
 
     test('emits the route line as trackpoints', () {
       final gpx = routeGpxFromRoute(route, const []);
-      expect(gpx, contains('<trkpt lat="39.0" lon="-120.0">'));
+      // Whole degrees render without a trailing .0, matching the web twin —
+      // Dart's $double interpolation would write lat="39.0" where web writes
+      // lat="39", and the two suites used to pin different bytes for the same
+      // route while the docs claimed lockstep.
+      expect(gpx, contains('<trkpt lat="39" lon="-120">'));
       expect('<trkpt'.allMatches(gpx).length, 2);
       // No markers → no waypoints.
       expect(gpx.contains('<wpt'), isFalse);

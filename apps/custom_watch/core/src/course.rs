@@ -368,13 +368,29 @@ impl Course {
 
             let s_lat = a.lat_deg + (b.lat_deg - a.lat_deg) * t;
             let s_lon = wrap_lon_deg(a.lon_deg + b_east_deg * t);
-            // Perpendicular offset in the same planar frame: the fix minus the
-            // foot `t * (bx, by)`. A great-circle distance here would be no more
-            // accurate — the foot point was only ever located by this same
-            // planar projection — and would cost a second haversine per segment.
-            let fx = px - bx * t;
-            let fy = py - by * t;
-            let off = libm::sqrt(fx * fx + fy * fy);
+            // Offset measured in ONE frame shared by every candidate, not in
+            // each segment's own.
+            //
+            // `t` is found in the per-segment frame and that is fine — it is one
+            // segment's internal parameter. The offset is not: it is COMPARED
+            // across segments, and each per-segment frame scales east by its own
+            // start latitude's cosine, so the numbers were not commensurate. On a
+            // north-south out-and-back with limbs 20 m apart, true offsets
+            // agreeing to 1e-12 m read 9.988765 vs 9.981872 in their own frames —
+            // a systematic ~7 mm bias toward the pole-ward-starting limb, enough
+            // to anchor on the wrong leg, after which the along-bias defends the
+            // mistake. Web hit the identical defect in distanceAlongRoute
+            // (5ffceec94).
+            //
+            // The course's own `cos_mid_lat` is the shared scale, and it is
+            // already computed once at construction — so this stays free of the
+            // per-segment transcendental this struct's caches exist to avoid.
+            // Ranking is all that needs the shared frame; a great-circle call per
+            // segment would be more precise and would cost a `project_biased`
+            // that runs on every published fix over up to 256 points.
+            let off_east = to_rad(lon_delta_deg(s_lon, lon_deg)) * R_M * self.bounds.cos_mid_lat;
+            let off_north = to_rad(lat_deg - s_lat) * R_M;
+            let off = libm::sqrt(off_east * off_east + off_north * off_north);
             let along = cumulative + seg_len * t;
 
             // Unbiased (`prev_along_m` is `None`): pure nearest offset, the
@@ -401,6 +417,15 @@ impl Course {
                 });
             }
             cumulative += seg_len;
+        }
+        // `off_m` is not just a ranking key — it is the off-course distance the
+        // nav page shows and the 40 m / 20 m latch tests — so the WINNER's is
+        // restated as a true great-circle distance to its foot. One
+        // transcendental per fix, not one per segment: this runs on every
+        // published fix over up to MAX_COURSE_POINTS segments, which is the cost
+        // `seg_cos_lat` exists to avoid.
+        if let Some(p) = best.as_mut() {
+            p.off_m = haversine_metres(lat_deg, lon_deg, p.lat_deg, p.lon_deg);
         }
         best
     }
@@ -1587,5 +1612,42 @@ mod tests {
             p.off_m
         );
         assert!(p.off_m > OFF_COURSE_THRESHOLD_M);
+    }
+
+    #[test]
+    fn an_out_and_back_snaps_to_the_limb_the_runner_is_on() {
+        // Two north-south limbs 20 m apart, queried at the exact midpoint. The
+        // true ground offsets are identical to 1e-12 m, but ranking candidates
+        // in each segment's OWN planar frame (each scaled by its own start
+        // latitude's cosine) put a systematic ~7 mm bias on the
+        // pole-ward-starting limb — enough to snap onto the return leg and flip
+        // along-route distance by the full out-and-back length.
+        let lat0 = 51.5_f64;
+        let dlat = 3_500.0 / 111_320.0;
+        let dlon = 20.0 / (111_320.0 * libm::cos(lat0 * core::f64::consts::PI / 180.0));
+        let pts = [
+            (lat0, 0.0),
+            (lat0 + dlat, 0.0),
+            (lat0 + dlat, dlon),
+            (lat0, dlon),
+        ];
+        let c = Course::from_points(&[
+            pt(pts[0].0, pts[0].1),
+            pt(pts[1].0, pts[1].1),
+            pt(pts[2].0, pts[2].1),
+            pt(pts[3].0, pts[3].1),
+        ])
+        .expect("builds");
+        // Midpoint of the OUTBOUND limb, offset half way between the two.
+        let q_lat = lat0 + dlat / 2.0;
+        let q_lon = dlon / 2.0;
+        let p = c.project(q_lat, q_lon).expect("projects");
+        // The outbound limb runs 0 -> 3500 m; the return limb starts past
+        // 3500 + 20. A correct rank lands on the outbound one.
+        assert!(
+            p.along_m < 3_600.0,
+            "snapped to the return limb: along_m = {}",
+            p.along_m
+        );
     }
 }

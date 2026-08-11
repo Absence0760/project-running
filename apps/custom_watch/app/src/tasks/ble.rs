@@ -997,24 +997,32 @@ mod imp {
                             let mut scratch = [0u8; FRAME_CAP];
                             let n = {
                                 let mut guard = store.lock().await;
-                                let n =
-                                    guard.read_chunk(req.run_seq, req.offset, &mut scratch[..want]);
-                                // Banking the bytes actually served is what lets
-                                // the store tell a whole pulled run from a phone
-                                // that only ever asked for the tail.
-                                if n > 0 {
-                                    guard.mark_synced_if_complete(
-                                        req.run_seq,
-                                        req.offset,
-                                        req.offset + n as u32,
-                                    );
-                                }
-                                n
+                                guard.read_chunk(req.run_seq, req.offset, &mut scratch[..want])
                             };
                             let mut out: Vec<u8, FRAME_CAP> = Vec::new();
                             let _ = out.extend_from_slice(&scratch[..n]);
-                            if let Err(e) = server.link.run_chunk_notify(&conn, &out) {
-                                debug!("ble: chunk notify failed {:?}", e);
+                            match server.link.run_chunk_notify(&conn, &out) {
+                                Ok(()) => {
+                                    // Bank only what the phone actually received.
+                                    // Banking before the notify meant a failed
+                                    // send still advanced the high-water and
+                                    // could mark the run synced — after which
+                                    // eviction prefers it and the `! RUN LOST`
+                                    // warning goes quiet, for bytes that never
+                                    // left the watch. Banking the bytes served
+                                    // is what lets the store tell a whole pulled
+                                    // run from a phone that only asked for the
+                                    // tail.
+                                    if n > 0 {
+                                        let mut guard = store.lock().await;
+                                        guard.mark_synced_if_complete(
+                                            req.run_seq,
+                                            req.offset,
+                                            req.offset + n as u32,
+                                        );
+                                    }
+                                }
+                                Err(e) => debug!("ble: chunk notify failed {:?}", e),
                             }
                         }
                     }

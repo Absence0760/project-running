@@ -46,8 +46,13 @@ export function projectTrack(
 	// bounding box into equal-distance units.
 	const midLat = (minLat + maxLat) / 2;
 	const lngScale = Math.abs(Math.cos((midLat * Math.PI) / 180));
-	const dLat = maxLat - minLat || 1e-6;
-	const dLng = (maxLng - minLng) * lngScale || 1e-6;
+	// A degenerate or non-finite span collapses to the epsilon rather than
+	// producing an absurd scale. `|| 1e-6` alone was falsy-only, so it caught an
+	// exact 0 but let a 1e-7 span through at a 10x different scale from the Dart
+	// twin's `max(span, 1e-6)`; `max` alone propagated NaN, which `||` absorbed.
+	// Both sides now clamp AND reject non-finite, so neither failure remains.
+	const dLat = spanOrEpsilon(maxLat - minLat);
+	const dLng = spanOrEpsilon((maxLng - minLng) * lngScale);
 	const scaleX = (vbW - pad * 2) / dLng;
 	const scaleY = (vbH - pad * 2) / dLat;
 	const scale = Math.min(scaleX, scaleY);
@@ -93,4 +98,10 @@ export function isTrackRenderable(track: TrackPoint[]): boolean {
 	const dLatM = (maxLat - minLat) * 111_320;
 	const dLngM = (maxLng - minLng) * 111_320 * Math.cos((minLat * Math.PI) / 180);
 	return Math.hypot(dLatM, dLngM) > 5;
+}
+
+/// A positive, finite span for the projection scale. Mirrors `_spanOrEpsilon`
+/// in `track_preview.dart`.
+function spanOrEpsilon(v: number): number {
+	return Number.isFinite(v) && v > 1e-6 ? v : 1e-6;
 }

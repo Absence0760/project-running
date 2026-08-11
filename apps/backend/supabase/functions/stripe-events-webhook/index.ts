@@ -37,6 +37,7 @@ import {
   isDonationSession,
   orderStatusTransition,
   parseStripeEventEnvelope,
+  refundScopeOfCharge,
   shouldReleaseDedupe,
   verifyStripeSignature,
 } from './lib.ts';
@@ -317,7 +318,12 @@ async function handleOrderRefunded(
     // retrying (a refund issued from the dashboard for an unknown charge).
     return Response.json({ ok: true, skipped: 'no_order_for_charge' });
   }
-  if (orderStatusTransition(order.status as string, 'charge.refunded') === null) {
+  // Stripe emits charge.refunded for a PARTIAL refund too. A partial refund
+  // keeps the registration: the buyer is still going, so the seat must not be
+  // released to the waitlist.
+  const scope = refundScopeOfCharge(charge);
+  const nextStatus = orderStatusTransition(order.status as string, 'charge.refunded', scope);
+  if (nextStatus === null) {
     // Not paid (already refunded / canceled) — idempotent no-op.
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
@@ -326,7 +332,7 @@ async function handleOrderRefunded(
   // CAS — a replayed delivery can't re-run the seat release).
   const { data: updated, error: updErr } = await service
     .from('event_orders')
-    .update({ status: 'refunded', refunded_at: new Date().toISOString() })
+    .update({ status: nextStatus, refunded_at: new Date().toISOString() })
     .eq('id', order.id)
     .eq('status', 'paid')
     .select('id')
@@ -338,6 +344,15 @@ async function handleOrderRefunded(
   if (!updated) {
     // Lost the CAS race to a concurrent delivery — that one released the seat.
     return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+
+  if (nextStatus === 'partially_refunded') {
+    // Money came back but the registration stands — keep the seat.
+    return Response.json({
+      ok: true,
+      order_partially_refunded: true,
+      order_id: order.id,
+    });
   }
 
   // Release the seat: delete the buyer's attendee row for this instance that

@@ -295,7 +295,11 @@ List<PrefillExercise> prefillFromRoutine(PlannedRoutine routine) {
           ? const [PrefillSet(reps: '', weightKg: null, rpe: '')]
           : sets
               .map((s) => PrefillSet(
-                    reps: s.targetRepsMin == null ? '' : '${s.targetRepsMin}',
+                    // Same JS-String rendering as rpe one line down: a
+                    // num holding 8.0 interpolates as "8.0" in Dart and "8" in
+                    // JS, and int.tryParse("8.0") is null — so the seeded rep
+                    // target silently vanished on the mobile composer.
+                    reps: rpeInputString(s.targetRepsMin),
                     weightKg: s.targetWeightKg,
                     rpe: rpeInputString(s.targetRpe),
                   ))

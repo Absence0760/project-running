@@ -246,6 +246,15 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         totalPausedInterval += Date().timeIntervalSince(pausedAt)
         self.pausedAt = nil
         lastLocationForDistance = nil
+        // ...and the pace look-back, which walks `track` backwards until 200 m
+        // accumulate and divides by the timestamp span. Clearing only the
+        // distance anchor left that window free to cross the pause: after a
+        // 20-minute aid-station stop, ~200 m over ~1300 s read 1:48:35 /km on
+        // the display AND fired a false "too slow" alert, self-correcting only
+        // after 200 m of post-resume running — on every stop, all race. This is
+        // issue #371's defect, fixed for distance and never applied to pace.
+        track.removeAll(keepingCapacity: true)
+        currentPace = nil
         locationManager.startUpdatingLocation()
         healthKit.resumeSession()
         state = .recording
@@ -375,6 +384,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// impossible jumps (>=100 m, e.g. a reacquisition teleport); anything
     /// outside contributes zero. Pure so the pause->wander->resume behaviour
     /// can be unit-tested without a live `CLLocationManager`.
+    /// Rebase the distance anchor once a genuine interval has passed without
+    /// an accepted fix, WITHOUT crediting the un-sampled gap. Mirrors the
+    /// Flutter recorder's `_gpsReanchorAfterSeconds`.
+    static let gpsReanchorSeconds: TimeInterval = 10
+
     static func distanceDelta(from: CLLocation, to: CLLocation) -> Double {
         let delta = to.distance(from: from)
         return (delta > 2 && delta < 100) ? delta : 0
@@ -386,10 +400,26 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         for location in locations {
             guard location.horizontalAccuracy >= 0, location.horizontalAccuracy < 30 else { continue }
 
+            // The anchor advances ONLY on an accepted delta, or after a real
+            // gap. Advancing it after a REJECTED sub-2 m hop discards that
+            // ground for good: at a 1 Hz fix rate a walker at 1.4 m/s produces
+            // ~1.4 m per fix, every one under the floor, so a long hike accrued
+            // 0.00 km. Holding the anchor is what lets two such fixes sum past
+            // the floor and count. The canonical Flutter recorder assigns its
+            // anchor inside the accepted branch for this reason, with the same
+            // re-anchor escape so a >100 m hop after dropped fixes cannot
+            // freeze the anchor for the rest of the run instead.
             if let last = lastLocationForDistance {
-                distanceMetres += Self.distanceDelta(from: last, to: location)
+                let delta = Self.distanceDelta(from: last, to: location)
+                if delta > 0 {
+                    distanceMetres += delta
+                    lastLocationForDistance = location
+                } else if location.timestamp.timeIntervalSince(last.timestamp) >= Self.gpsReanchorSeconds {
+                    lastLocationForDistance = location
+                }
+            } else {
+                lastLocationForDistance = location
             }
-            lastLocationForDistance = location
             lastAcceptedFix = location
 
             track.append(location)

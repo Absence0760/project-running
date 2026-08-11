@@ -11,7 +11,7 @@
 --     unaffected.
 
 begin;
-select plan(12);
+select plan(16);
 
 -- ── Fixtures: host (also club owner), buyer, stranger ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -123,6 +123,22 @@ select lives_ok(
   'going on a free event needs no order'
 );
 
+-- ── one order seats ONE instance ───────────────────────────────────────────
+-- The order above was bought for the 07-01 occurrence. Before this was
+-- enforced, the trigger matched on (id, buyer, event, status='paid') only, so
+-- the same $22 order satisfied the gate for EVERY occurrence of the weekly
+-- series — a term's worth of classes for one drop-in fee, and a refund
+-- released only the order's own instance, leaving the stolen seats behind.
+select throws_ok(
+  $$ insert into event_attendees (event_id, user_id, instance_start, status, order_id)
+     values ('cccc1111-0000-0000-0000-000000000001',
+             'aaaa1111-0000-0000-0000-000000000002', '2026-07-08 18:00+00', 'going',
+             'dddd1111-0000-0000-0000-000000000001') $$,
+  '23514',
+  null,
+  'a paid order cannot seat an instance it was not bought for'
+);
+
 -- ── RLS: order read scoping ────────────────────────────────────────────────
 -- Buyer reads their own order, not the stranger's.
 set local role authenticated;
@@ -141,6 +157,44 @@ select is(
   (select count(*)::int from event_orders),
   2,
   'event organiser sees every order for their events'
+);
+
+-- ── the INSERT grant is column-scoped, like the UPDATE grant ───────────────
+-- 20270102_001 locked `attendance` and `order_id` out of client writes but
+-- rewrote only the UPDATE grant; a table-level INSERT grant implies every
+-- column, so both stayed writable on the way IN. That let an attendee cite
+-- someone's order, and forge their own attendance on the organiser's roster —
+-- the invariant event_attendance_test pins against a direct UPDATE, reached
+-- through INSERT instead (and re-forgeable via DELETE + re-INSERT, both
+-- own-row verbs).
+set local "request.jwt.claims" = '{"sub":"aaaa1111-0000-0000-0000-000000000002","role":"authenticated"}';
+
+select throws_ok(
+  $$ insert into event_attendees (event_id, user_id, instance_start, status, order_id)
+     values ('cccc1111-0000-0000-0000-000000000002',
+             'aaaa1111-0000-0000-0000-000000000002', '2026-07-09 09:00+00', 'going',
+             'dddd1111-0000-0000-0000-000000000001') $$,
+  '42501',
+  null,
+  'a client cannot write order_id on INSERT (service-role only)'
+);
+
+select throws_ok(
+  $$ insert into event_attendees (event_id, user_id, instance_start, status, attendance)
+     values ('cccc1111-0000-0000-0000-000000000002',
+             'aaaa1111-0000-0000-0000-000000000002', '2026-07-09 09:00+00', 'going',
+             'attended') $$,
+  '42501',
+  null,
+  'a client cannot forge attendance on INSERT'
+);
+
+-- ...and the free-RSVP path a client legitimately owns still works.
+select lives_ok(
+  $$ insert into event_attendees (event_id, user_id, instance_start, status)
+     values ('cccc1111-0000-0000-0000-000000000002',
+             'aaaa1111-0000-0000-0000-000000000002', '2026-07-09 09:00+00', 'going') $$,
+  'a client can still RSVP to a free event instance'
 );
 
 -- ── RLS: a user-JWT cannot write order status ──────────────────────────────

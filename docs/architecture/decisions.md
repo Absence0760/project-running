@@ -8155,3 +8155,39 @@ The `storm` scenario went red on a PR that touches no firmware ([#752](https://g
 **Which three words is a hedge, and it is worth being honest that it is one.** `RefCell`'s borrow flag is `Cell<isize>` (align 4) beside a `WatchState` carrying a `u64` (align 8), so the compiler may place the value first and the flag after it; the first word covers flag-at-front, the last two cover flag-at-back with or without trailing padding. Every `Watch` read `0x00000000` in the first word of a quiescent dump, which is **consistent with** the flag living at offset 0 but does not prove it — an attempt to pin it by panicking from inside a live borrow was abandoned after the scaffolding proved unreliable under repeated emulation. So the dump's job is to hand a reader three concrete words per `Watch` and let them reason, not to decode the flag itself.
 
 **A `Watch` absent from the macro's list is invisible in the dump**, since `no_std` cannot iterate statics and each is named by hand. `sim/test_watch_dump.py` fails if `state.rs` declares one the list omits (or lists one that no longer exists), runs under the same `unittest discover` § 582 added to `build-firmware`, and was verified to fail as well as pass by dropping a name and watching it go red.
+
+## 584. A paid order names one instance, and a client cannot write the two columns that decide money and attendance
+
+**Date:** 2026-08-11
+
+`enforce_paid_order_for_priced_event` (20261229_001) validated the cited order on `id`, `buyer_user_id`, `event_id` and `status = 'paid'` — but never on `instance_start`, even though `event_orders.instance_start` is `NOT NULL` and `events-checkout` creates exactly one order per occurrence. So an order bought for one Wednesday satisfied the gate for every other Wednesday in a recurring series.
+
+**The grant half was a half-finished lockdown, and that is the more interesting failure.** 20270102_001 set out to make `attendance` and `order_id` service-role-only, and its own comment says so. It rewrote the **UPDATE** grant per-column and left the table-level **INSERT** grant alone — and a table grant implies every column. The invariant `event_attendance_test.sql` pins against a direct UPDATE was therefore reachable through INSERT, and re-reachable after an organiser correction via DELETE + re-INSERT, since both are own-row verbs. Verified on the local stack under the buyer's own JWT: one $22 order seating two instances, the second carrying a self-written `attendance = 'attended'`.
+
+**The fix is three narrow changes, and the third is deliberately redundant.** Bind the order to its instance; split the INSERT grant the way UPDATE was split; add a partial unique index on `event_attendees(order_id)`. With the instance predicate and the `(event_id, user_id, instance_start)` primary key the index is already implied — it exists so a future path that forgets the predicate cannot silently re-open the hole. Stating an invariant at the schema level is cheaper than re-deriving it.
+
+**Refunds needed the same "which occurrence" thinking.** `handleOrderRefunded` read only `charge.payment_intent` and treated every `charge.refunded` as terminal, but Stripe emits that event for a partial refund too. A $5 goodwill refund on a $50 workshop flipped the order to `refunded`, deleted the seat, and let `promote_event_waitlist` hand it to someone else. `event_orders_status_check` has carried `partially_refunded` since the table was created and nothing ever wrote it — the intent to distinguish the two was already on record, only the code was missing. Unknown amounts fall back to `full`, which is the historical behaviour and the safe direction for the buyer.
+
+## 585. A read that exists to hide something is not allowed to answer questions about it
+
+**Date:** 2026-08-11
+
+20260915_001 revoked `EXECUTE` on `clip_track_for_user` from `anon`, reasoning that the RPC "lets a determined attacker iteratively probe the clipping output to reconstruct approximate privacy-zone geometry". It kept the grant for `authenticated`, for "in-DB callers with a user JWT".
+
+**That distinction does not hold.** Signup is free and unthrottled, so `authenticated` is not a trust boundary against someone who wants a stranger's home address. The function trims *leading* in-zone points, so a three-point probe returns two when the probe is inside a zone and three when it is outside: a clean one-bit oracle. Roughly forty calls binary-search a zone centre to metre precision, and the radius follows. It is a PostgREST RPC, so none of the Edge Function rate limiting applies.
+
+**The revoke was safe only because the last client caller had already died.** Web's `clipTrackForUser` was the one direct `.rpc()` site, and the unclipped-blob pattern it belonged to was removed by 20260619_001 — it survived purely because `security_guards.test.ts` pinned its fail-closed body, which kept it looking load-bearing. A guard test on dead code is worse than no test: it argues for keeping the code. Both are deleted; every remaining consumer is SECURITY DEFINER or service-role and never needed the caller to hold the grant.
+
+**Two smaller instances of the same shape landed with it.** `heatmap_points_in_bbox` gated on `is_public` alone while its sibling `discoverable_routes_in_bbox` and the `public_routes` view both also require `shadow_hidden = false`, so a moderator-hidden route kept drawing heat for anon viewers. And `recompute_challenge_completion` checked `challenge_badges` for an existing award, then inserted the badge `on conflict do nothing` and the notification unconditionally — the check and the insert are not one atomic step, so two racing callers both reached the tail and the badge deduped while the notification did not. The badge insert is now the serialization point: `ON CONFLICT DO NOTHING` leaves `FOUND` false, so exactly one caller proceeds.
+
+## 586. A rejected GPS fix must not move the anchor it was rejected against
+
+**Date:** 2026-08-11
+
+Both native watch apps computed the per-fix haversine delta, credited it only inside a 2–100 m band, and then advanced the anchor **unconditionally**. A sub-2 m hop was therefore discarded rather than deferred, and that ground could never be recovered.
+
+**The floor exists to reject noise, and advancing the anchor is what turns it into a filter that rejects signal.** GPS streams at 1 Hz, so a runner power-hiking a climb at 1.4 m/s produces about 1.4 m per fix — every one under the floor. A two-hour hike accrued 0.00 km. Holding the anchor is precisely what lets two such fixes sum to 2.8 m and count, which is the whole point of a distance threshold: it is a threshold on the *baseline*, not on the sample rate. With noisier fixes the error does not vanish, it changes sign — biased down while walking, up while standing still.
+
+The canonical Flutter recorder had it right all along (`_lastTrackedPosition` is assigned inside the accepted branch), and so does the firmware, whose comment reads "keep the anchor so the next good fix measures from the last trusted position". Two ports drifted from a rule both references state explicitly. Both now carry the Flutter recorder's re-anchor escape as well, so a >100 m hop after dropped fixes cannot freeze the anchor the other way (#330).
+
+**watchOS had a second window with the same shape.** `updatePace` walks the in-memory track backwards until 200 m accumulate and divides by the timestamp span, and `resume()` cleared only the distance anchor. After a twenty-minute aid-station stop the window crossed the pause: ~200 m over ~1300 s displayed 1:48:35 /km and fired a false "too slow" alert, self-correcting only after 200 m of post-resume running — on every stop, for the whole race. This is issue #371's defect, which was fixed for distance, given its own test file, and never applied to pace. When a fix is described as "clear the stale anchor on resume", it is worth asking which anchors exist.

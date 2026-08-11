@@ -1,6 +1,9 @@
 package graph
 
-import "container/heap"
+import (
+	"container/heap"
+	"context"
+)
 
 // dijkstra runs a single-source shortest-path search over the foot graph.
 //
@@ -32,13 +35,30 @@ import "container/heap"
 // distTo was not reached within the cap. For an unpenalised search the penalised
 // distance equals the real distance, so distTo is exact real metres (the forward
 // far-point search relies on this).
-func (g *Graph) dijkstra(src, target int32, maxRadiusM float64, penalised map[uint64]struct{}) (distTo map[int32]float64, prev map[int32]int32) {
+// dijkstra explores until the radius bound, the target, or [ctx] is done.
+//
+// The ctx check is load-shedding, not an optimisation: work here scales with
+// the square of the accepted target distance, and at the top of the accepted
+// range the forward tree alone can settle millions of nodes. Without it a
+// client disconnect stopped nothing — the server's WriteTimeout only sets a
+// write deadline, so the handler ran to completion regardless and repeated
+// requests amplified with no way to shed them. Cancellation returns whatever
+// has been settled so far; the caller treats a short/absent path as no result.
+func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM float64, penalised map[uint64]struct{}) (distTo map[int32]float64, prev map[int32]int32) {
 	distTo = map[int32]float64{src: 0}
 	prev = map[int32]int32{src: -1}
 	settled := map[int32]struct{}{}
 
 	pq := &nodeHeap{{node: src, dist: 0, real: 0}}
+	// Checking ctx every pop would cost an atomic load per node; every 4096 is
+	// well inside a millisecond at the measured ~500-680 ns/node.
+	const ctxCheckEvery = 4096
+	pops := 0
 	for pq.Len() > 0 {
+		pops++
+		if pops%ctxCheckEvery == 0 && ctx.Err() != nil {
+			return distTo, prev
+		}
 		top := heap.Pop(pq).(heapItem)
 		u := top.node
 		if _, done := settled[u]; done {

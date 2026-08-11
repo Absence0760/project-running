@@ -369,6 +369,30 @@ export function runSignUpScopeGate(scope: {
 }
 
 /**
+ * Pre-fetch gate for the ChronoTrack leg — the same fail-closed rule as
+ * `runSignUpScopeGate`, which the ChronoTrack branch never had.
+ *
+ * `chronoTrackResultsUrl` only narrows the upstream fetch when a bib is
+ * supplied; omit it and the request returns the WHOLE finisher field for the
+ * event. `extractChronoTrackResults` then takes up to MAX_RESULTS_ROWS (2000)
+ * and `mapChronoTrackResult` stamps the CALLER's user_id on every one, so a
+ * plain "import from ChronoTrack" with no bib inserts 2000 strangers' races as
+ * the caller's own runs — which re-derive personal_records (the winner's 2:09
+ * becomes their marathon PR), fire award_achievements_for_user, poison
+ * run_streaks_for_user, and feed every challenge leaderboard.
+ *
+ * `matchResultGate` does not cover this: it guards only the matchRunId enrich
+ * path, not the plain-insert path.
+ */
+export function chronoTrackScopeGate(scope: { bib?: string }): RaceImportGate {
+  return capField(scope.bib) ? GATE_OK : {
+    ok: false,
+    status: 400,
+    error: 'chronotrack_bib_required',
+  };
+}
+
+/**
  * Post-fetch gate for the matchRunId (enrich) path. Enrich merges ONE result
  * onto the caller's own run, so it must resolve to exactly one mapped result;
  * more than one is ambiguous (which finisher is the caller?) and is rejected

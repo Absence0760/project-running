@@ -94,7 +94,18 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // GUARDED_TABLES (both are bounded by course markers per route, not by user
 // activity), and the UPDATEs are single-statement rather than batched for that
 // reason. The scanner passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270519';
+// 20270520: binds a paid order to the instance it was bought for, splits
+// event_attendees' INSERT grant per-column the way 20270102_001 split UPDATE,
+// and adds a partial unique index on (order_id). One function body, two grant
+// statements and one CREATE INDEX — no ADD CONSTRAINT anywhere, and
+// event_attendees is not in GUARDED_TABLES — so the scanner passed it with zero
+// violations before this bump.
+// 20270521: adds shadow_hidden to heatmap_points_in_bbox' filter, makes the
+// challenge-badge insert the serialization point in recompute_challenge_completion,
+// and revokes EXECUTE on clip_track_for_user from authenticated. Two function
+// bodies and one REVOKE — no table DDL at all, so the scanner passed it with
+// zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270521';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

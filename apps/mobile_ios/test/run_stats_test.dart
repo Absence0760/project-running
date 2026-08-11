@@ -389,4 +389,14 @@ void main() {
       expect(averagePaceSecPerKm(2000, -1), isNull);
     });
   });
+
+  test('haversineMetres clamps instead of returning NaN near antipodal', () {
+    // web clamps with 2*asin(min(1, sqrt(a))); the unclamped atan2 form went
+    // NaN when rounding pushed `a` past 1, and NaN then propagates silently
+    // (Dart's NaN.clamp(0, 1) is 1.0, so interpolateAlongRoute returned the
+    // END waypoint rather than the midpoint).
+    final d = haversineMetres(-87.5, 0, 87.5, 180);
+    expect(d.isFinite, isTrue);
+    expect(d, closeTo(20015086.796, 1.0));
+  });
 }

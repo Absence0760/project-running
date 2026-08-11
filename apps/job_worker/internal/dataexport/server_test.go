@@ -1807,3 +1807,30 @@ func TestBuildBackupZip_NilRawTrackFetcherSkipsSection(t *testing.T) {
 		}
 	}
 }
+
+func TestGpxFloat_NeverUsesScientificNotation(t *testing.T) {
+	// %v switches to %e below 1e-4, so a longitude near the prime meridian
+	// printed as "-1.23e-05". GPX 1.1 types lat/lon/ele as xsd:decimal, whose
+	// lexical space forbids an exponent, so a schema-validating importer
+	// rejected the whole file — it hits anyone running at Greenwich.
+	cases := []struct {
+		in   float64
+		want string
+	}{
+		{-0.0000123, "-0.0000123"},
+		{0.000021, "0.000021"},
+		{0, "0"},
+		{51.4779, "51.4779"},
+		{-122.4194, "-122.4194"},
+		{1234567.5, "1234567.5"},
+	}
+	for _, c := range cases {
+		got := gpxFloat(c.in)
+		if got != c.want {
+			t.Errorf("gpxFloat(%v) = %q, want %q", c.in, got, c.want)
+		}
+		if strings.ContainsAny(got, "eE") {
+			t.Errorf("gpxFloat(%v) = %q contains an exponent — invalid xsd:decimal", c.in, got)
+		}
+	}
+}

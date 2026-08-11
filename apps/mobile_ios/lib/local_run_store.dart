@@ -759,9 +759,31 @@ class LocalRunStore extends ChangeNotifier {
   /// Mark several runs as synced and persist once — used by [SyncService]
   /// after a `saveRunsBatch` call so N successful runs produce a single
   /// sidecar write instead of N.
-  Future<void> markManySynced(Iterable<String> runIds) async {
-    if (runIds.isEmpty) return;
-    final ids = runIds.toSet();
+  ///
+  /// Takes the RUNS that were pushed, not their ids, and flips only the ones
+  /// still resident unchanged. `saveRunsBatch` uploads N gzipped tracks and can
+  /// run for minutes; marking by id alone flipped whatever was resident at that
+  /// later moment, so a title edited DURING the push was recorded as synced and
+  /// never sent — and `saveFromRemote`'s newer-wins then preserved the local
+  /// copy, leaving a divergence that is permanent and invisible on both sides.
+  ///
+  /// [update] installs a NEW Run instance for every mutation, so identity is an
+  /// exact "did this row change under us" test. A false negative only costs one
+  /// more drain. Mirrors [OfflineSyncStore.markSynced].
+  Future<void> markManySynced(Iterable<Run> pushed) async {
+    final byId = {for (final r in _runs) r.id: r};
+    final ids = <String>{};
+    for (final r in pushed) {
+      final resident = byId[r.id];
+      if (resident == null) continue;
+      if (!identical(resident, r)) {
+        debugPrint(
+            'LocalRunStore: ${r.id} changed during its push — left pending');
+        continue;
+      }
+      ids.add(r.id);
+    }
+    if (ids.isEmpty) return;
     _syncedIds.addAll(ids);
     _markSummariesSynced(ids);
     await _persistSyncedIds();

@@ -58,8 +58,22 @@ export function estimatedOneRepMax(weightKg: number, reps: number): number {
 /// internal whitespace collapsed. "Bench Press", "bench  press" and
 /// "  Bench press " all collapse to one PR bucket.
 export function normaliseExerciseName(name: string): string {
-	return name.trim().toLowerCase().replace(/\s+/g, ' ');
+	return name.replace(EXERCISE_WS, ' ').trim().toLowerCase().replace(/ +/g, ' ');
 }
+
+/// The whitespace class both platforms fold, spelled out rather than left to
+/// each runtime's default.
+///
+/// This value is PERSISTED as `gym_routine_exercises.exercise_key`, so web and
+/// mobile must derive the identical key — otherwise one exercise buckets into
+/// two PRs depending on which platform logged it. Dart's `String.trim()`
+/// strips every Unicode `White_Space` code point, including U+0085 (NEL);
+/// JS's `trim()` and `\s` do not. A name carrying one keyed as `bench` on
+/// mobile and `bench\u0085` on web. Naming the set on both sides removes the
+/// dependency on that difference. Mirrors `kExerciseWhitespace` in
+/// `gym_prs.dart`.
+const EXERCISE_WS =
+	/[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+/g;
 
 function round1(n: number): number {
 	return Math.round(n * 10) / 10;

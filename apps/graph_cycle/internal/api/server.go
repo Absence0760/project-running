@@ -111,7 +111,7 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid from/to", http.StatusBadRequest)
 		return
 	}
-	coords, dist, ok := s.g.ShortestPath(req.From.Lat, req.From.Lng, req.To.Lat, req.To.Lng)
+	coords, dist, ok := s.g.ShortestPath(r.Context(), req.From.Lat, req.From.Lng, req.To.Lat, req.To.Lng)
 	if !ok {
 		writeJSON(w, http.StatusOK, map[string]any{"found": false})
 		return
@@ -160,7 +160,7 @@ func (s *Server) handleCycle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := s.g.SearchCycle(req.Start.Lat, req.Start.Lng, req.TargetDistanceM)
+	res := s.g.SearchCycle(r.Context(), req.Start.Lat, req.Start.Lng, req.TargetDistanceM)
 	// found=false is a first-class loop-poor signal, NOT an error: the web
 	// client turns it into null and falls back to round_trip. largestClean is
 	// still surfaced so a caller can show the largest achievable loop.

@@ -120,15 +120,31 @@ RunnerProjection projectRunner(
   List<ProjectionCheckpoint> checkpoints,
   List<ProjectionCrossing> crossings,
 ) {
-  final ordered = checkpoints
-      .map((c) => ProjectionCheckpoint(
-            id: c.id,
-            positionM:
-                c.positionM.isFinite ? (c.positionM < 0 ? 0 : c.positionM) : 0,
-            cutoffElapsedS: c.cutoffElapsedS,
-          ))
-      .toList()
-    ..sort((a, b) => a.positionM.compareTo(b.positionM));
+  // Tie-break on the ORIGINAL index, which makes this sort stable and so
+  // reproduces web's Array.prototype.sort (stable since ES2019) exactly.
+  // Dart's List.sort is insertion sort at <= 32 elements but unstable
+  // dual-pivot quicksort above, so two co-located checkpoints came out in a
+  // different order on the two platforms once the field passed 33 — and
+  // `ordered.last` is what decides whether a runner reads as `racing` or
+  // `finished`. Sorting by id instead would be deterministic but would NOT
+  // match web, which preserves input order among equals.
+  final indexed = <({int index, ProjectionCheckpoint cp})>[
+    for (var i = 0; i < checkpoints.length; i++)
+      (
+        index: i,
+        cp: ProjectionCheckpoint(
+          id: checkpoints[i].id,
+          positionM: checkpoints[i].positionM.isFinite
+              ? (checkpoints[i].positionM < 0 ? 0 : checkpoints[i].positionM)
+              : 0,
+          cutoffElapsedS: checkpoints[i].cutoffElapsedS,
+        ),
+      ),
+  ]..sort((a, b) {
+      final byPosition = a.cp.positionM.compareTo(b.cp.positionM);
+      return byPosition != 0 ? byPosition : a.index.compareTo(b.index);
+    });
+  final ordered = [for (final e in indexed) e.cp];
 
   final byId = <String, double>{};
   for (final x in crossings) {

@@ -74,10 +74,26 @@ double estimatedOneRepMax(double weightKg, num reps) {
   return weightKg * (1 + r / 30);
 }
 
+/// The whitespace class both platforms fold, spelled out rather than left to
+/// each runtime's default.
+///
+/// This value is PERSISTED as `gym_routine_exercises.exercise_key`, so web and
+/// mobile must derive the identical key — otherwise one exercise buckets into
+/// two PRs depending on which platform logged it. Dart's `String.trim()` strips
+/// every Unicode `White_Space` code point, including U+0085 (NEL); JS's
+/// `trim()` and `\s` do not. A name carrying one keyed as `bench` here and
+/// `bench` on web. Mirrors `EXERCISE_WS` in `gym_prs.ts`.
+final RegExp kExerciseWhitespace = RegExp(
+  '[\\t\\n\\v\\f\\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+',
+);
+
 /// Normalise a free-text exercise name for grouping: trimmed, lower-cased,
 /// internal whitespace collapsed.
-String normaliseExerciseName(String name) =>
-    name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+String normaliseExerciseName(String name) => name
+    .replaceAll(kExerciseWhitespace, ' ')
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp(r' +'), ' ');
 
 double _round1(double n) => (n * 10).round() / 10;
 

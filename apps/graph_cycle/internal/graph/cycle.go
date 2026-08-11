@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"math"
 	"sort"
 )
@@ -48,13 +49,13 @@ type CycleResult struct {
 // coordinates, snapping each to the nearest graph node. ok is false when either
 // endpoint can't be snapped or no path connects them. Exposed mainly to validate
 // the graph against OSRM; the loop generator uses the internal search directly.
-func (g *Graph) ShortestPath(fromLat, fromLng, toLat, toLng float64) (coords []Coord, distanceM float64, ok bool) {
+func (g *Graph) ShortestPath(ctx context.Context, fromLat, fromLng, toLat, toLng float64) (coords []Coord, distanceM float64, ok bool) {
 	src, ok1 := g.NearestNode(fromLat, fromLng)
 	dst, ok2 := g.NearestNode(toLat, toLng)
 	if !ok1 || !ok2 {
 		return nil, 0, false
 	}
-	_, prev := g.dijkstra(src, dst, math.Inf(1), nil)
+	_, prev := g.dijkstra(ctx, src, dst, math.Inf(1), nil)
 	path := reconstruct(prev, src, dst)
 	if path == nil {
 		return nil, 0, false
@@ -80,7 +81,7 @@ func (g *Graph) ShortestPath(fromLat, fromLng, toLat, toLng float64) (coords []C
 //     cycle.
 //  4. Score every cycle by areaEfficiency, drop spurs (< spurFloor), and select
 //     under the web contract.
-func (g *Graph) SearchCycle(startLat, startLng, targetM float64) CycleResult {
+func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM float64) CycleResult {
 	src, ok := g.NearestNode(startLat, startLng)
 	if !ok {
 		return CycleResult{}
@@ -94,7 +95,7 @@ func (g *Graph) SearchCycle(startLat, startLng, targetM float64) CycleResult {
 	}
 	// Outbound tree: reach far-points up to maxFar·target, with slack.
 	outRadius := maxFar*targetM*1.25 + 200
-	outDist, outPrev := g.dijkstra(src, -1, outRadius, nil)
+	outDist, outPrev := g.dijkstra(ctx, src, -1, outRadius, nil)
 
 	fars := g.pickFarPoints(src, targetM, outDist)
 
@@ -109,7 +110,7 @@ func (g *Graph) SearchCycle(startLat, startLng, targetM float64) CycleResult {
 			continue
 		}
 		penalised := pathEdgeKeys(out)
-		_, retPrev := g.dijkstra(f, src, returnRadius, penalised)
+		_, retPrev := g.dijkstra(ctx, f, src, returnRadius, penalised)
 		back := reconstruct(retPrev, f, src)
 		if len(back) < 2 {
 			continue // no second way home from F — the loop-poor signal at this F

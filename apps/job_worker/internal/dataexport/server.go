@@ -1131,6 +1131,18 @@ func defaultIfNil(m map[string]interface{}) map[string]interface{} {
 // BuildGpx emits a minimal GPX 1.1 document for one run + its
 // track. Loaders (Strava, Garmin Connect, GPX viewers) handle
 // this shape uniformly. Exported for unit testing.
+
+// gpxFloat renders a coordinate the way GPX 1.1 requires.
+//
+// %v switches to scientific notation below 1e-4 (a longitude of -0.0000123
+// printed as "-1.23e-05"), but GPX types lat/lon/ele as xsd:decimal, whose
+// lexical space forbids an exponent — so a schema-validating importer rejected
+// the whole file. It bites anyone whose track passes near the prime meridian
+// or the equator: Greenwich parkrun, for one.
+func gpxFloat(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
 func BuildGpx(run ExportRun, track []TrackPoint) string {
 	title := stringy(run.Metadata[schema.MetaTitle])
 	if title == "" {
@@ -1145,9 +1157,9 @@ func BuildGpx(run ExportRun, track []TrackPoint) string {
 	fmt.Fprintf(&b, "    <name>%s</name>\n", xmlEscape(title))
 	b.WriteString("    <trkseg>\n")
 	for _, p := range track {
-		fmt.Fprintf(&b, `      <trkpt lat="%v" lon="%v">`, p.Lat, p.Lng)
+		fmt.Fprintf(&b, `      <trkpt lat="%s" lon="%s">`, gpxFloat(p.Lat), gpxFloat(p.Lng))
 		if p.Ele != nil {
-			fmt.Fprintf(&b, "<ele>%v</ele>", *p.Ele)
+			fmt.Fprintf(&b, "<ele>%s</ele>", gpxFloat(*p.Ele))
 		}
 		if p.Ts != nil {
 			fmt.Fprintf(&b, "<time>%s</time>", xmlEscape(*p.Ts))

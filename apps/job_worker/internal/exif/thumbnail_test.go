@@ -125,3 +125,45 @@ func TestThumbnailJPEG_SquareInput(t *testing.T) {
 		t.Errorf("square thumbnail = %d×%d, want 512×512", b.Dx(), b.Dy())
 	}
 }
+
+func TestThumbnailJPEG_ExtremeAspectRatioKeepsAPixel(t *testing.T) {
+	// srcH * maxLongSide / srcW integer-divides to ZERO for an extreme panorama
+	// (3 * 512 / 4000 = 0), and image.NewRGBA of a zero-height rect encodes to a
+	// valid-looking ~591-byte JPEG that decodes 0x0. That was uploaded and
+	// recorded as thumb_512_path, so clients rendered a blank tile instead of
+	// taking the documented fallback to the original.
+	in := realJPEG(t, 4000, 3)
+	out, resized, err := ThumbnailJPEG(in, 512, 85)
+	if err != nil {
+		t.Fatalf("ThumbnailJPEG: %v", err)
+	}
+	if !resized {
+		t.Fatal("expected resized=true for an oversized input")
+	}
+	img, err := jpeg.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("output isn't a decodable JPEG: %v", err)
+	}
+	b := img.Bounds()
+	if b.Dx() != 512 {
+		t.Errorf("long side = %d, want 512", b.Dx())
+	}
+	if b.Dy() < 1 {
+		t.Errorf("short side = %d, want at least 1 (a 0-px thumbnail is unrenderable)", b.Dy())
+	}
+}
+
+func TestThumbnailJPEG_ExtremeAspectRatioPortrait(t *testing.T) {
+	in := realJPEG(t, 3, 4000)
+	out, _, err := ThumbnailJPEG(in, 512, 85)
+	if err != nil {
+		t.Fatalf("ThumbnailJPEG: %v", err)
+	}
+	img, err := jpeg.Decode(bytes.NewReader(out))
+	if err != nil {
+		t.Fatalf("output isn't a decodable JPEG: %v", err)
+	}
+	if img.Bounds().Dx() < 1 {
+		t.Errorf("short side = %d, want at least 1", img.Bounds().Dx())
+	}
+}

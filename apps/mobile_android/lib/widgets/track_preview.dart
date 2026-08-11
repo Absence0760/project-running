@@ -442,8 +442,13 @@ List<Offset> projectTrack(List<Waypoint> points, double vbW, double vbH,
   }
   final midLat = (minLat + maxLat) / 2;
   final lngScale = cos(midLat * pi / 180).abs();
-  final dLat = max(maxLat - minLat, 1e-6);
-  final dLng = max((maxLng - minLng) * lngScale, 1e-6);
+  // A degenerate or non-finite span collapses to the epsilon rather than
+  // producing an absurd scale. `max(span, 1e-6)` alone propagated NaN (Dart's
+  // max returns NaN for it), while the web twin's falsy-only `|| 1e-6` absorbed
+  // NaN but let a 1e-7 span through at a 10x different scale. Both sides now
+  // clamp AND reject non-finite.
+  final dLat = _spanOrEpsilon(maxLat - minLat);
+  final dLng = _spanOrEpsilon((maxLng - minLng) * lngScale);
   final scaleX = (vbW - pad * 2) / dLng;
   final scaleY = (vbH - pad * 2) / dLat;
   final scale = min(scaleX, scaleY);
@@ -482,3 +487,7 @@ bool isTrackRenderable(List<Waypoint> track) {
   final dLngM = (maxLng - minLng) * 111320 * cos(minLat * pi / 180);
   return sqrt(dLatM * dLatM + dLngM * dLngM) > 5;
 }
+
+/// A positive, finite span for the projection scale. Mirrors `spanOrEpsilon`
+/// in `track_projection.ts`.
+double _spanOrEpsilon(double v) => v.isFinite && v > 1e-6 ? v : 1e-6;

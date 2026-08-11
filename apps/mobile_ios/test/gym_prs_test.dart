@@ -163,4 +163,14 @@ void main() {
       }
     });
   });
+
+  test('the whitespace class matches web, U+0085 included', () {
+    // exercise_key is PERSISTED, so a name that normalises differently on the
+    // two platforms buckets one exercise into two PRs. Dart's trim() strips
+    // every Unicode White_Space code point (incl. NEL); JS's does not, so the
+    // class is spelled out on both sides rather than left to the runtime.
+    expect(normaliseExerciseName('Bench Press\u0085'), 'bench press');
+    expect(normaliseExerciseName('\u00a0Bench\u2003Press\u2028'), 'bench press');
+    expect(normaliseExerciseName('  Bench   press '), 'bench press');
+  });
 }
