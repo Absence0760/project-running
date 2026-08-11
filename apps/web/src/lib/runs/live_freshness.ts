@@ -22,20 +22,31 @@ export const LIVE_STALE_AFTER_MS = 90_000;
 
 export type FreshnessBucket = 'now' | 'seconds' | 'minutes' | 'hours' | 'days' | 'unknown';
 
-export interface Freshness {
-	/// Age of the last ping in ms, clamped to >= 0 (a future-dated ping
-	/// from clock skew reads as "just now", never a negative age).
-	/// `null` when the age could not be established at all.
-	ageMs: number | null;
-	/// True once `ageMs >= staleAfterMs` — the caller should stop
-	/// presenting the position as live-current.
-	stale: boolean;
-	/// Coarsened time bucket for display; pair with `value`.
-	bucket: FreshnessBucket;
-	/// The number to show for the bucket (e.g. bucket `minutes`, value 3
-	/// → "Updated 3 min ago"). 0 for `now`, `null` for `unknown`.
-	value: number | null;
-}
+/// Discriminated on `bucket` so a caller that switches on it narrows `value`
+/// to a real number on every displayable branch, and cannot pass the
+/// unknown-age null into a formatter expecting one.
+export type Freshness =
+	| {
+			/// Age of the last ping in ms, clamped to >= 0 (a future-dated ping
+			/// from clock skew reads as "just now", never a negative age).
+			ageMs: number;
+			/// True once `ageMs >= staleAfterMs` — the caller should stop
+			/// presenting the position as live-current.
+			stale: boolean;
+			/// Coarsened time bucket for display; pair with `value`.
+			bucket: Exclude<FreshnessBucket, 'unknown'>;
+			/// The number to show for the bucket (e.g. bucket `minutes`, value 3
+			/// → "Updated 3 min ago"). 0 for `now`.
+			value: number;
+	  }
+	| {
+			/// The age could not be established at all.
+			ageMs: null;
+			/// Always true — an unknown age fails closed.
+			stale: true;
+			bucket: 'unknown';
+			value: null;
+	  };
 
 export function freshnessFor(
 	sentAtMs: number,

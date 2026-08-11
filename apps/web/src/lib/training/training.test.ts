@@ -954,7 +954,7 @@ test('the race workout is prescribed at the goal pace, at every distance', () =>
 	];
 	for (const [goalEvent, goalTimeSec, distanceM] of cases) {
 		const plan = generatePlan({
-			goalEvent: goalEvent as GeneratePlanInput['goalEvent'],
+			goalEvent: goalEvent as Parameters<typeof generatePlan>[0]['goalEvent'],
 			goalTimeSec,
 			startDate: '2026-01-05',
 			daysPerWeek: 5,
