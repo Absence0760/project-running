@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"math"
 	"testing"
 )
@@ -9,7 +10,7 @@ func TestShortestPathGrid(t *testing.T) {
 	// 5×5 grid, 100 m spacing. Corner (0,0) to opposite corner (4,4): the
 	// Manhattan distance is 8 hops × 100 m = 800 m.
 	g := gridGraph(5, 5, 100, 40.0, -77.0)
-	coords, dist, ok := g.ShortestPath(40.0, -77.0,
+	coords, dist, ok := g.ShortestPath(context.Background(), 40.0, -77.0,
 		40.0+4*metresToDegLat(100), -77.0+4*metresToDegLng(100, 40))
 	if !ok {
 		t.Fatal("no path corner-to-corner")
@@ -26,7 +27,7 @@ func TestDijkstraRadiusCap(t *testing.T) {
 	g := gridGraph(10, 10, 100, 40.0, -77.0)
 	src, _ := g.NearestNode(40.0, -77.0)
 	// Cap at 250 m: only nodes within ~2 hops should be reached.
-	distTo, _ := g.dijkstra(src, -1, 250, nil)
+	distTo, _ := g.dijkstra(context.Background(), src, -1, 250, nil)
 	for _, d := range distTo {
 		if d > 250+1e-6 {
 			t.Fatalf("reached a node at %.0f m beyond the 250 m cap", d)
@@ -54,14 +55,14 @@ func TestDijkstraPenaltyReroutes(t *testing.T) {
 	g := b.finalize()
 
 	// Unpenalised: either equal-length route is fine; assert reachable.
-	_, prev := g.dijkstra(0, 2, math.Inf(1), nil)
+	_, prev := g.dijkstra(context.Background(), 0, 2, math.Inf(1), nil)
 	if reconstruct(prev, 0, 2) == nil {
 		t.Fatal("no path 0→2")
 	}
 
 	// Penalise the top route (edges 0-1 and 1-2). The bottom route must win.
 	penalised := map[uint64]struct{}{edgeKey(0, 1): {}, edgeKey(1, 2): {}}
-	_, prev2 := g.dijkstra(0, 2, math.Inf(1), penalised)
+	_, prev2 := g.dijkstra(context.Background(), 0, 2, math.Inf(1), penalised)
 	path := reconstruct(prev2, 0, 2)
 	if path == nil {
 		t.Fatal("penalised search found no path")
@@ -93,7 +94,7 @@ func TestDijkstraCapsOnRealNotPenalisedDistance(t *testing.T) {
 	g := b.finalize()
 
 	penalised := map[uint64]struct{}{edgeKey(0, 1): {}}
-	distTo, _ := g.dijkstra(0, -1, 250, penalised)
+	distTo, _ := g.dijkstra(context.Background(), 0, -1, 250, penalised)
 
 	cost, ok := distTo[2]
 	if !ok {

@@ -43,14 +43,20 @@ func ThumbnailJPEG(in []byte, maxLongSide int, quality int) ([]byte, bool, error
 		return nil, false, nil
 	}
 	// Preserve aspect ratio. Integer math drops the half-pixel, fine
-	// at this scale.
+	// at this scale — but it truncates to ZERO for an extreme aspect ratio
+	// (a 4000x3 panorama gives dstH = 3*512/4000 = 0), and image.NewRGBA of a
+	// zero-height rect encodes to a valid-looking 591-byte JPEG that decodes
+	// 0x0. That was then uploaded and recorded as thumb_512_path, so clients
+	// rendered a blank tile instead of taking the documented fallback to the
+	// original. Clamp to one pixel: a 512x1 strip is a poor thumbnail but an
+	// honest one.
 	var dstW, dstH int
 	if srcW >= srcH {
 		dstW = maxLongSide
-		dstH = srcH * maxLongSide / srcW
+		dstH = max(1, srcH*maxLongSide/srcW)
 	} else {
 		dstH = maxLongSide
-		dstW = srcW * maxLongSide / srcH
+		dstW = max(1, srcW*maxLongSide/srcH)
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, srcBounds, draw.Over, nil)
