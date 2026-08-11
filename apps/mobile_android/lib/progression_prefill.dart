@@ -22,6 +22,9 @@ class DatedLoggedSet {
   final num? reps;
   final num? weightKg;
   final num? rpe;
+
+  /// gym_sets.set_type — carried so the prescriber can exclude warmups.
+  final String? setType;
   const DatedLoggedSet({
     required this.workoutId,
     required this.startedAt,
@@ -29,6 +32,7 @@ class DatedLoggedSet {
     this.reps,
     this.weightKg,
     this.rpe,
+    this.setType,
   });
 }
 
@@ -63,6 +67,10 @@ List<ProgressionSetLike>? lastSessionSets(
           s.workoutId == bestWorkoutId &&
           normaliseExerciseName(s.exerciseName) == key)
       .map((s) =>
-          ProgressionSetLike(reps: s.reps, weightKg: s.weightKg, rpe: s.rpe))
+          ProgressionSetLike(
+              reps: s.reps,
+              weightKg: s.weightKg,
+              rpe: s.rpe,
+              setType: s.setType))
       .toList();
 }

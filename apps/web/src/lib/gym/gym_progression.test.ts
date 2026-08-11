@@ -371,3 +371,92 @@ test('the completed anchor holds across every weighted scheme', () => {
 		);
 	}
 });
+
+test('a warmup set does not count as a failed working set', () => {
+	// The prescriber judges "did they hit the target?" with an `every` over the
+	// completed sets. gym_sets.set_type has existed since 20270101_001 and the
+	// editor writes it, but ProgressionSetLike dropped the column — so a 2-rep
+	// ramp-up read as a working set that missed a 5-rep target and held the
+	// load. Since the lifter warms up again next session, the stall repeats:
+	// anyone who warms up never gets an increase at all.
+	const working = [
+		{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+		{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+		{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' }
+	];
+	const withRamp = [
+		{ reps: 5, weight_kg: 40, rpe: null, set_type: 'warmup' },
+		{ reps: 3, weight_kg: 60, rpe: null, set_type: 'warmup' },
+		{ reps: 2, weight_kg: 80, rpe: null, set_type: 'warmup' },
+		...working
+	];
+	const bare = nextPrescription({
+		scheme: 'linear',
+		lastSets: working,
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	const ramped = nextPrescription({
+		scheme: 'linear',
+		lastSets: withRamp,
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	assert.equal(bare.reason, 'increase_weight');
+	assert.deepEqual(ramped, bare, 'warming up must not change the prescription');
+});
+
+test('a null or absent set_type is treated as working', () => {
+	// The column defaults to 'working' and older rows predate it, so the
+	// absence of a type must never silently drop a real working set.
+	for (const extra of [{}, { set_type: null }, { set_type: 'working' }]) {
+		const got = nextPrescription({
+			scheme: 'linear',
+			lastSets: [
+				{ reps: 5, weight_kg: 100, rpe: null, ...extra },
+				{ reps: 5, weight_kg: 100, rpe: null, ...extra }
+			],
+			targetRepsMin: 5,
+			targetRepsMax: 5,
+			params: null
+		});
+		assert.equal(got.reason, 'increase_weight', JSON.stringify(extra));
+		assert.equal(got.suggestedWeightKg, 102.5);
+	}
+});
+
+test('warmups do not pad the five_by_five completed-set count', () => {
+	// five_by_five also gates on `completed.length >= targetSets`, so counting
+	// warmups could satisfy a 5-set target with only 3 working sets.
+	const got = nextPrescription({
+		scheme: 'five_by_five',
+		lastSets: [
+			{ reps: 5, weight_kg: 40, rpe: null, set_type: 'warmup' },
+			{ reps: 5, weight_kg: 60, rpe: null, set_type: 'warmup' },
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' }
+		],
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	assert.notEqual(got.reason, 'increase_weight', 'only 3 working sets of 5 done');
+});
+
+test('a warmup-only session yields no working evidence', () => {
+	const got = nextPrescription({
+		scheme: 'linear',
+		lastSets: [
+			{ reps: 5, weight_kg: 40, rpe: null, set_type: 'warmup' },
+			{ reps: 3, weight_kg: 60, rpe: null, set_type: 'warmup' }
+		],
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	assert.equal(got.reason, 'hold');
+	assert.equal(got.suggestedWeightKg, null, 'no completed working weight to anchor on');
+});

@@ -9,8 +9,9 @@ function s(
 	exercise_name: string,
 	reps: number | null,
 	weight_kg: number | null,
+	set_type: string | null = 'working',
 ): DatedLoggedSet {
-	return { workout_id, started_at, exercise_name, reps, weight_kg, rpe: null };
+	return { workout_id, started_at, exercise_name, reps, weight_kg, rpe: null, set_type };
 }
 
 test('returns null when the exercise was never logged', () => {
@@ -30,14 +31,16 @@ test('picks the most recent session by started_at, keeping logged order', () => 
 		s('w2', '2026-02-01', 'Bench', 4, 82.5),
 	];
 	assert.deepEqual(lastSessionSets(sets, 'Bench'), [
-		{ reps: 5, weight_kg: 82.5, rpe: null },
-		{ reps: 4, weight_kg: 82.5, rpe: null },
+		{ reps: 5, weight_kg: 82.5, rpe: null, set_type: 'working' },
+		{ reps: 4, weight_kg: 82.5, rpe: null, set_type: 'working' },
 	]);
 });
 
 test('matches by normalised name (case / spacing insensitive)', () => {
 	const sets = [s('w1', '2026-01-01', '  bench  press ', 5, 80)];
-	assert.deepEqual(lastSessionSets(sets, 'Bench Press'), [{ reps: 5, weight_kg: 80, rpe: null }]);
+	assert.deepEqual(lastSessionSets(sets, 'Bench Press'), [
+		{ reps: 5, weight_kg: 80, rpe: null, set_type: 'working' },
+	]);
 });
 
 test('ignores other exercises in the same workout', () => {
@@ -45,7 +48,9 @@ test('ignores other exercises in the same workout', () => {
 		s('w1', '2026-02-01', 'Squat', 5, 120),
 		s('w1', '2026-02-01', 'Bench', 5, 80),
 	];
-	assert.deepEqual(lastSessionSets(sets, 'Bench'), [{ reps: 5, weight_kg: 80, rpe: null }]);
+	assert.deepEqual(lastSessionSets(sets, 'Bench'), [
+		{ reps: 5, weight_kg: 80, rpe: null, set_type: 'working' },
+	]);
 });
 
 test('ties on started_at break by workout id (deterministic)', () => {
@@ -53,5 +58,21 @@ test('ties on started_at break by workout id (deterministic)', () => {
 		s('wA', '2026-02-01', 'Row', 8, 50),
 		s('wB', '2026-02-01', 'Row', 8, 55),
 	];
-	assert.deepEqual(lastSessionSets(sets, 'Row'), [{ reps: 8, weight_kg: 55, rpe: null }]);
+	assert.deepEqual(lastSessionSets(sets, 'Row'), [
+		{ reps: 8, weight_kg: 55, rpe: null, set_type: 'working' },
+	]);
+});
+
+test('set_type is carried through to the prescriber', () => {
+	// The prescriber excludes warmups; it can only do that if this glue passes
+	// the column along. Dropping it here is how the ramp-up set came to be
+	// judged as a failed working set.
+	const sets = [
+		s('w1', '2026-03-01', 'Squat', 3, 60, 'warmup'),
+		s('w1', '2026-03-01', 'Squat', 5, 100, 'working'),
+	];
+	assert.deepEqual(
+		lastSessionSets(sets, 'Squat')?.map((x) => x.set_type),
+		['warmup', 'working'],
+	);
 });

@@ -11,6 +11,8 @@ export interface DatedLoggedSet {
 	reps: number | null;
 	weight_kg: number | null;
 	rpe: number | null;
+	/// gym_sets.set_type — carried so the prescriber can exclude warmups.
+	set_type?: string | null;
 }
 
 /// The raw sets of the most recent logged session of `exerciseName`, matched by
@@ -42,5 +44,5 @@ export function lastSessionSets(
 
 	return sets
 		.filter((s) => s.workout_id === bestWorkoutId && normaliseExerciseName(s.exercise_name ?? '') === key)
-		.map((s) => ({ reps: s.reps, weight_kg: s.weight_kg, rpe: s.rpe }));
+		.map((s) => ({ reps: s.reps, weight_kg: s.weight_kg, rpe: s.rpe, set_type: s.set_type }));
 }

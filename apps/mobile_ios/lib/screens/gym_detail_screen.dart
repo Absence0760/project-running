@@ -185,6 +185,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
         reps: s['reps'] as num?,
         weightKg: s['weight_kg'] as num?,
         rpe: s['rpe'] as num?,
+        setType: s['set_type'] as String?,
       ));
     }
 

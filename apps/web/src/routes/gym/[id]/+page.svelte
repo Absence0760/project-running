@@ -171,7 +171,7 @@
 			const key = normaliseExerciseName(s.exercise_name);
 			if (key === '') continue;
 			const list = setsByKey.get(key) ?? [];
-			list.push({ reps: s.reps, weight_kg: s.weight_kg, rpe: s.rpe });
+			list.push({ reps: s.reps, weight_kg: s.weight_kg, rpe: s.rpe, set_type: s.set_type });
 			setsByKey.set(key, list);
 		}
 

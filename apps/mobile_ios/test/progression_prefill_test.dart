@@ -66,4 +66,32 @@ void main() {
     expect(lastSessionSets(sets, 'Row')!.map(_t).toList(),
         [(reps: 8, weightKg: 55, rpe: null)]);
   });
+
+  test('setType is carried through to the prescriber', () {
+    // The prescriber excludes warmups; it can only do that if this glue passes
+    // the column along. Dropping it here is how the ramp-up set came to be
+    // judged as a failed working set.
+    final sets = [
+      const DatedLoggedSet(
+        workoutId: 'w1',
+        startedAt: '2026-03-01',
+        exerciseName: 'Squat',
+        reps: 3,
+        weightKg: 60,
+        setType: 'warmup',
+      ),
+      const DatedLoggedSet(
+        workoutId: 'w1',
+        startedAt: '2026-03-01',
+        exerciseName: 'Squat',
+        reps: 5,
+        weightKg: 100,
+        setType: 'working',
+      ),
+    ];
+    expect(
+      lastSessionSets(sets, 'Squat')?.map((x) => x.setType).toList(),
+      ['warmup', 'working'],
+    );
+  });
 }

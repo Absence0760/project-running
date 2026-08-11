@@ -14,6 +14,10 @@ export interface ProgressionSetLike {
 	reps: number | null;
 	weight_kg: number | null;
 	rpe: number | null;
+	/// gym_sets.set_type — raw string (matches the DB CHECK union). A ramp-up
+	/// set is not evidence about the working target, so it must not be judged
+	/// against it. Absent/null reads as 'working', matching the column default.
+	set_type?: string | null;
 }
 
 export interface ProgressionInput {
@@ -89,7 +93,14 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 
 	const params = input.params ?? {};
 	const sets = input.lastSets ?? [];
+	// Warmups are excluded before anything is judged. Every "did they hit the
+	// target?" test below is an `every` over this list, so a 2-rep ramp-up set
+	// counted as a failed working set and held the load — forever, for anyone
+	// who warms up, which is everyone. `gym_adherence` states the same rule for
+	// planned-vs-actual grading; the prescriber simply never received the
+	// column. A null set_type is 'working', matching the DB default.
 	const completed = sets.filter((s) => {
+		if ((s.set_type ?? 'working') === 'warmup') return false;
 		const r = numericOrNull(s.reps);
 		return r != null && r > 0;
 	});
