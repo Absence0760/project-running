@@ -86,7 +86,15 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // NULLS NOT DISTINCT index so an upsert can infer an arbiter. Index DDL only —
 // no constraint of any kind, and event_pricing is not in GUARDED_TABLES — so the
 // scanner passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270518';
+// 20270519: marks route_markers_set_position and route_conditions_set_position
+// SECURITY DEFINER so the BEFORE-INSERT position trigger can read routes.geom
+// for a NON-owner contributor, and backfills the rows already written with a
+// null position. Function bodies plus two backfill UPDATEs — no constraint or
+// index DDL of any kind. Neither route_markers nor route_conditions is in
+// GUARDED_TABLES (both are bounded by course markers per route, not by user
+// activity), and the UPDATEs are single-statement rather than batched for that
+// reason. The scanner passed it with zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270519';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
