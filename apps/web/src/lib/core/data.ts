@@ -4614,16 +4614,11 @@ export async function fetchActivePlanOverview(): Promise<ActivePlanOverview | nu
 	const { weeks, workouts } = await fetchPlan(plan.id);
 	// Local-tz today — `toISOString().slice(0,10)` returns the UTC date,
 	// which rolls a calendar day early/late depending on the viewer's TZ.
-	const { todayISO, isWorkoutSkipped } = await import('../training/training');
+	const { todayISO } = await import('../training/training');
+	const { planWorkoutProgress } = await import('../training/plan_progress');
 	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
-	const completed = workouts.filter(
-		(w) => w.manually_completed === true || w.completed_run_id != null
-	).length;
-	// Skipped workouts are off the books — neither done nor an outstanding
-	// to-do — so they leave the progress denominator entirely.
-	const total = workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length;
-	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+	const completionPct = planWorkoutProgress(workouts).pct;
 	return {
 		plan: plan as TrainingPlan,
 		weeks: weeks ?? [],
@@ -8618,16 +8613,11 @@ export async function fetchAthletePlanOverview(
 		.maybeSingle();
 	if (!plan) return null;
 	const { weeks, workouts } = await fetchPlan(plan.id);
-	const { todayISO, isWorkoutSkipped } = await import('../training/training');
+	const { todayISO } = await import('../training/training');
+	const { planWorkoutProgress } = await import('../training/plan_progress');
 	const today = todayISO();
 	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
-	const completed = workouts.filter(
-		(w) => w.manually_completed === true || w.completed_run_id != null
-	).length;
-	// Skipped workouts are off the books — neither done nor an outstanding
-	// to-do — so they leave the progress denominator entirely.
-	const total = workouts.filter((w) => w.kind !== 'rest' && !isWorkoutSkipped(w)).length;
-	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+	const completionPct = planWorkoutProgress(workouts).pct;
 	return {
 		plan: plan as TrainingPlan,
 		weeks: weeks ?? [],

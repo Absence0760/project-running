@@ -57,6 +57,39 @@ interface DistanceWorkout {
 	skipped_at?: string | null;
 }
 
+interface CountableWorkout {
+	kind: string;
+	completed_run_id?: string | null;
+	manually_completed?: boolean | null;
+	skipped_at?: string | null;
+}
+
+export interface PlanWorkoutProgress {
+	completed: number;
+	total: number;
+	pct: number;
+}
+
+/// Session counts behind every "N / M workouts" readout and completion ring.
+///
+/// One population for BOTH accumulators. Rest days are not sessions, and the
+/// workout editor renders its "Mark as done" button on a rest day too, so a
+/// numerator that counted them against a denominator that excluded them
+/// reported a plan as over 100 % complete once the runner ticked "I did rest".
+/// Skipped sessions leave both sides — off the books, neither done nor
+/// outstanding — matching [planDistanceBanked] and the plan-detail ring.
+export function planWorkoutProgress(workouts: CountableWorkout[]): PlanWorkoutProgress {
+	let completed = 0;
+	let total = 0;
+	for (const w of workouts) {
+		if (w.kind === 'rest') continue;
+		if (w.skipped_at != null) continue;
+		total += 1;
+		if (w.manually_completed === true || w.completed_run_id != null) completed += 1;
+	}
+	return { completed, total, pct: total === 0 ? 0 : Math.round((completed / total) * 100) };
+}
+
 export interface PlanDistanceProgress {
 	/// Total metres actually banked so far — completed workouts only,
 	/// preferring the linked run's real distance over the planned target.
