@@ -627,7 +627,8 @@ export async function fetchClippedRouteForViewer(
 	if (error) {
 		// Fail closed — returning the unclipped waypoints on RPC error
 		// would defeat the helper's purpose. Render an empty polyline
-		// rather than leak. Matches the clipTrackForUser shape.
+		// rather than leak — the same fail-closed rule every privacy-zone
+		// clipping path follows.
 		console.warn('clip_route_for_viewer failed; failing closed (empty route)', error);
 		return [];
 	}
@@ -5832,36 +5833,6 @@ async function fetchFollowingLifts(
 		volume_kg: w.volume_kg ?? 0,
 		author: byId.get(w.user_id) ?? { id: w.user_id, display_name: null, avatar_url: null },
 	}));
-}
-
-/// Server-side privacy-zone clipping (decisions §33). Pass the run /
-/// route owner's `user_id` and a points array; receive the clipped
-/// middle. Zones never come down the wire — the RPC reads them
-/// internally with security-definer privileges. The RPC is a no-op
-/// (returns the input) when the owner has no zones configured.
-///
-/// **Fails closed:** on RPC error or unexpected response shape this
-/// returns `[]` rather than the unclipped input. The previous
-/// behaviour (return `points` on error) is the leak this helper exists
-/// to prevent — a transient DB blip that bypassed clipping was a
-/// privacy regression. Callers should guard owner views *before*
-/// calling so an outage doesn't blank the owner's own map; this
-/// function only ever speaks for non-owner viewers.
-export async function clipTrackForUser(
-	targetUserId: string,
-	points: { lat: number; lng: number; ele?: number; t?: number }[]
-): Promise<{ lat: number; lng: number; ele?: number; t?: number }[]> {
-	if (points.length === 0) return points;
-	const { data, error } = await supabase.rpc('clip_track_for_user', {
-		target_user_id: targetUserId,
-		points,
-	});
-	if (error) {
-		console.warn('clip_track_for_user failed; failing closed (empty track)', error);
-		return [];
-	}
-	if (!Array.isArray(data)) return [];
-	return data as typeof points;
 }
 
 /// Recent public runs from a single user — used by the profile page.

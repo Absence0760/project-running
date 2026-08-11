@@ -100,7 +100,12 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // statements and one CREATE INDEX — no ADD CONSTRAINT anywhere, and
 // event_attendees is not in GUARDED_TABLES — so the scanner passed it with zero
 // violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270520';
+// 20270521: adds shadow_hidden to heatmap_points_in_bbox' filter, makes the
+// challenge-badge insert the serialization point in recompute_challenge_completion,
+// and revokes EXECUTE on clip_track_for_user from authenticated. Two function
+// bodies and one REVOKE — no table DDL at all, so the scanner passed it with
+// zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270521';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

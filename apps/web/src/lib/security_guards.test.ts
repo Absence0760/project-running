@@ -292,7 +292,8 @@ test('interactive MapTiler maps gate maplibregl init on consent (authed surfaces
 });
 
 test('fetchClippedRouteForViewer fails closed on RPC error', () => {
-	// Reason: same as clipTrackForUser. Returning the input on RPC
+	// Reason: same fail-closed rule every privacy-clipping path follows.
+	// Returning the input on RPC
 	// error would defeat the helper. The empty-input early-return is
 	// not relevant here (the helper takes only an id), so we only
 	// assert that the error branch returns [].
@@ -341,7 +342,7 @@ test('public-runs readers go through the public_runs view', () => {
 	);
 	const fetchFollowingFeedBody = bodyAfter(
 		'export async function fetchFollowingFeed(',
-		'export async function clipTrackForUser(',
+		'export async function fetchPublicRunsByUser(',
 	);
 	const fetchPublicRunsByUserBody = bodyAfter(
 		'export async function fetchPublicRunsByUser(',
@@ -364,34 +365,6 @@ test('public-runs readers go through the public_runs view', () => {
 			`${name} must NOT read from the bare runs table — that path leaks external_id, training-plan-linkage metadata, etc.`,
 		);
 	}
-});
-
-test('clipTrackForUser fails closed on RPC error', () => {
-	// Reason: returning the unclipped input on RPC error was the
-	// privacy leak this helper exists to prevent. Fail-closed (return
-	// []) so a transient outage renders an empty map for non-owner
-	// viewers instead of leaking the full track. The empty-input
-	// early-return is fine — it returns the empty input which is the
-	// same shape as `[]`.
-	const source = read('src/lib/core/data.ts');
-	const fnMatch = source.match(
-		/export async function clipTrackForUser[\s\S]*?^}/m,
-	);
-	assert.ok(fnMatch, 'Could not locate clipTrackForUser body — rename?');
-	const body = fnMatch![0];
-	// The `if (error) { ... }` branch must return [], not points.
-	const errBranch = body.match(/if \(error\) \{[\s\S]*?\}/);
-	assert.ok(errBranch, 'clipTrackForUser must have an explicit error branch');
-	assert.match(
-		errBranch![0],
-		/return \[\];/,
-		'clipTrackForUser must return [] on RPC failure — see decisions §33.',
-	);
-	assert.doesNotMatch(
-		errBranch![0],
-		/return points/,
-		'clipTrackForUser must not fall back to the input track on RPC error — that is the leak this helper exists to prevent.',
-	);
 });
 
 test('KMS Decrypt principal ARN matches the Lambda role name', () => {
