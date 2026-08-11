@@ -1236,6 +1236,19 @@ class _RunScreenState extends State<RunScreen> {
     _stepSub = Pedometer.stepCountStream.listen((event) {
       _pedometerRetries = 0; // reset back-off on successful event
       if (_state != _ScreenState.recording) return;
+      // A manual pause keeps [_state] at `recording`, so this listener has to
+      // honour [_manualPaused] itself — every other distance source freezes on
+      // pause (the recorder drops positions, the treadmill path rebases), but
+      // the pedometer is a CUMULATIVE device counter that keeps ticking. Left
+      // running it would credit a walk to the water fountain as distance on an
+      // indoor run, against a clock that is stopped. Dropping the baseline
+      // makes the first post-resume event re-anchor on the frozen count, so
+      // the paused steps can never re-enter one tick later.
+      if (_manualPaused) {
+        _stepsCarriedIn = _steps;
+        _stepBaselineSet = false;
+        return;
+      }
       if (!_stepBaselineSet) {
         _startSteps = event.steps - _stepsCarriedIn;
         _stepBaselineSet = true;
