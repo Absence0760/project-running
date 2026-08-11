@@ -30,7 +30,6 @@
 	let sendError = $state<string | null>(null);
 	let threadsError = $state(false);
 	let threadError = $state(false);
-	let threadGen = 0;
 
 	let activeId = $derived($page.params.id ?? null);
 	const draft = $derived(activeId ? (drafts[activeId] ?? '') : '');
@@ -80,21 +79,23 @@
 		// Two quick clicks leave two fetches in flight and the LAST to resolve
 		// won, so the header and URL could read one partner while the bubbles
 		// were another's — and send() would post into the thread named by the
-		// URL. Same generation idiom SocialClubs.svelte already uses.
-		const gen = ++threadGen;
+		// URL. The guard is "is this still the open conversation?", keyed on the
+		// id, rather than a generation counter: a counter also discards a SECOND
+		// call for the SAME id, so a re-invocation swallowed the first call's
+		// failure and the retry banner never rendered.
 		loadingThread = true;
 		threadError = false;
 		try {
 			const rows = await fetchDmThread(id);
-			if (gen !== threadGen) return;
+			if (id !== activeId) return;
 			messages = rows;
 		} catch {
-			if (gen !== threadGen) return;
+			if (id !== activeId) return;
 			messages = [];
 			threadError = true;
 			return;
 		} finally {
-			if (gen === threadGen) loadingThread = false;
+			if (id === activeId) loadingThread = false;
 		}
 		try {
 			await markDmThreadRead(id);
