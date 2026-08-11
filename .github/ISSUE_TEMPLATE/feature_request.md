@@ -2,7 +2,7 @@
 name: Feature request
 about: Propose a new capability or behaviour change
 title: ""
-labels: ["type:feature"]
+labels: ["enhancement"]
 assignees: []
 ---
 

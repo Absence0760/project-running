@@ -33,6 +33,34 @@ mod run_flash;
 mod state;
 mod tasks;
 
+/// Say something before halting on a hard fault.
+///
+/// `panic_probe` already prints a Rust panic, but a fault is the other way the
+/// core stops and nothing covered it: cortex-m-rt's default `HardFault` is a
+/// silent infinite loop, so a bad dereference took the watch down leaving the
+/// log ending mid-sentence and no way to tell a fault from a deadlock. The
+/// stacked frame is the whole diagnostic — `pc` is the faulting instruction and
+/// `lr` its caller, which `addr2line -e app <pc>` turns straight into a source
+/// line.
+///
+/// This does NOT help under Renode, and issue #754 is the reason to say so out
+/// loud: the sim returns 0 for reads outside any modelled peripheral and keeps
+/// executing, so the corruption seen there never raises a fault to catch. This
+/// is for the bench, and for telling the two failure modes apart when it is.
+#[cortex_m_rt::exception]
+unsafe fn HardFault(frame: &cortex_m_rt::ExceptionFrame) -> ! {
+    error!(
+        "HARD FAULT pc={=u32:#010x} lr={=u32:#010x} psr={=u32:#010x}",
+        frame.pc(),
+        frame.lr(),
+        frame.xpsr()
+    );
+    // The log is drained over RTT by a host that has to still be attached, so
+    // halting beats resetting: a reset boots a clean watch and erases the only
+    // evidence there was.
+    cortex_m::asm::udf()
+}
+
 bind_interrupts!(struct Irqs {
     UARTE0 => uarte::InterruptHandler<peripherals::UARTE0>;
     UARTE1 => uarte::InterruptHandler<peripherals::UARTE1>;

@@ -458,6 +458,13 @@ jobs:
       - name: Rustfmt check
         working-directory: apps/custom_watch
         run: cargo fmt --check
+      # The sim harness's own logic, hosted here rather than in the two Renode
+      # jobs so a harness regression fails in ~90 s instead of behind a 14 min
+      # emulation. Needs no Renode: the wedge detector's whole point is that it
+      # fires when the guest has STOPPED, which no live sim can be asked to do
+      # on demand, so it is driven against a synthetic stream and a fake clock.
+      - name: Sim harness host tests
+        run: python3 -m unittest discover -s apps/custom_watch/sim -p 'test_*.py' -v
 
   # `build-firmware` above defends the "build-verified" rung of the four-rung
   # verification contract in decisions.md § 314; this job is what defends
@@ -578,6 +585,25 @@ jobs:
           --scenario smoke
           --out-dir "${{ runner.temp }}/watch-sim-ci/smoke"
           --budget 300
+      # The binary the logs were produced by, staged INTO the artifact dir
+      # rather than added as a second upload path: two paths would move the
+      # artifact root to their common ancestor and reshuffle every scenario
+      # subdirectory below it.
+      #
+      # Without this, a firmware address in a renode.log can only be resolved
+      # against a locally rebuilt binary and hoped to match — which is exactly
+      # where issue #754's diagnosis had to stop. Scenarios run in sequence and
+      # a failing one stops the rest, so the ELF still on disk is the one that
+      # failed, built with that scenario's own feature set.
+      - name: Stage the firmware ELF beside the sim logs
+        if: failure()
+        run: |
+          elf=apps/custom_watch/target/thumbv7em-none-eabihf/release/app
+          if [ -f "$elf" ]; then
+            cp "$elf" "${{ runner.temp }}/watch-sim-ci/firmware.elf"
+          else
+            echo "no firmware ELF on disk — the job failed before a build"
+          fi
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's
       # sim-output.log / frame.ppm / renode.log, which a shared out-dir would.
@@ -799,6 +825,25 @@ jobs:
           --scenario storm
           --out-dir "${{ runner.temp }}/watch-sim-ci/storm"
           --budget 420
+      # The binary the logs were produced by, staged INTO the artifact dir
+      # rather than added as a second upload path: two paths would move the
+      # artifact root to their common ancestor and reshuffle every scenario
+      # subdirectory below it.
+      #
+      # Without this, a firmware address in a renode.log can only be resolved
+      # against a locally rebuilt binary and hoped to match — which is exactly
+      # where issue #754's diagnosis had to stop. Scenarios run in sequence and
+      # a failing one stops the rest, so the ELF still on disk is the one that
+      # failed, built with that scenario's own feature set.
+      - name: Stage the firmware ELF beside the sim logs
+        if: failure()
+        run: |
+          elf=apps/custom_watch/target/thumbv7em-none-eabihf/release/app
+          if [ -f "$elf" ]; then
+            cp "$elf" "${{ runner.temp }}/watch-sim-ci/firmware.elf"
+          else
+            echo "no firmware ELF on disk — the job failed before a build"
+          fi
       # Every scenario writes into its own subdirectory of this path, so one
       # upload still carries all of them — and they can't overwrite each other's
       # sim-output.log / frame.ppm / renode.log, which a shared out-dir would.
