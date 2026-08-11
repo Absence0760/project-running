@@ -422,3 +422,48 @@ call, or a three-way lockstep port — not because it is uncertain.
 - [ ] **`resumeSession` resets the monotonic route floor**, so distance-
   remaining nearly doubles on a loop or out-and-back (measured 1298.5 m where
   a fresh run reads 699.2 m) and never self-corrects.
+
+## Bug-hunt round 3, 2026-08-10 — verified but deferred
+
+Two hunters (Dart data layer, production Lambdas). Fixes landed on
+`fix/bug-hunt-2026-08-10-r3`; these are the verified remainder.
+
+**Observability — a real outage currently pages nobody, and geography pages
+everyone.** These are the inverse of the share-id bug fixed in this branch,
+and worth doing together as one alarm-hygiene pass:
+
+- [ ] `share_session_lookup` / `share_workout_lookup` never inspect `error` at
+  all (unlike the other six), and `alarms.tf` registers no metric filter for
+  either. A Supabase outage on those two paths is invisible: 404 HTML, no
+  Lambda `Errors`, nobody paged.
+- [ ] `osrm-proxy` collapses OSRM's own 4xx (`NoSegment` — a waypoint outside
+  the loaded extract) into 502, and the Lambda logs `engine_unreachable` for
+  every 502. A user dropping a pin outside the extract raises "the OSRM engine
+  is unreachable, all users degraded".
+- [ ] `generate-route` gives three distinct outcomes status 502 and logs
+  `engine_unreachable` for all of them; only one is a real outage. A Pro user
+  in a loop-poor neighbourhood pages someone, and a genuine GraphHopper outage
+  can't be told apart from geography.
+- [ ] `lambda/share-entity` 503s on a percent-malformed path (`/share/club/%zz`
+  → `decodeURIComponent` throws `URIError` → outer catch), where every other
+  missing entity returns the branded `noindex` 404. Bad client input surfaced
+  as a server error, and a retry signal to crawlers.
+
+**Mobile data layer** (all `packages/api_client/lib/src/api_client.dart`):
+
+- [ ] `fetchRunRowsRaw()` has no paging and is consumed as the complete history
+  by `backup.dart`, so an account with 1,400 runs archives the newest 1,000 and
+  a restore silently loses the rest. Same shape, lower impact, in
+  `fetchCheckpointCrossings`, `fetchEventAttendees`, `getRouteReviews`,
+  `fetchExerciseCatalogue`.
+- [ ] `_hydratePeopleSuggestions` counts public runs via the `runs` base table,
+  whose non-owner SELECT policy `20260701_001` dropped — that migration states
+  the outcome verbatim ("returns zero rows"). So `people_screen` shows
+  "0 public runs" for everyone and `comparePeopleRank`'s primary sort key is a
+  constant. Migration `20270118_001_public_run_counts.sql` exists to replace
+  this exact query and web already migrated; mobile didn't.
+- [ ] Four writes stamp local wall-clock into a `timestamptz` via
+  `DateTime.now().toIso8601String()` with no `.toUtc()` (`:3019`, `:3031`,
+  `:4216`, `:5658`) — the bug `saveRun`'s own comment documents. A Berlin user
+  archiving a coach thread at 23:30 sees it dated the next day.
+  `createCustomExercise`'s is worse in kind: it feeds newer-wins sync.

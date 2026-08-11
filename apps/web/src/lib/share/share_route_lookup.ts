@@ -21,6 +21,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import type { TrackPoint } from '../types';
+import { isEntityId } from '../core/entity_id';
 
 export interface SharedRoute {
 	id: string;
@@ -64,6 +65,14 @@ export async function lookupSharedRoute(
 		return { route: null, track: [] };
 	}
 	const withTrack = options.withTrack ?? true;
+	// A non-uuid segment — `/share/run/hello`, a crawler's mangled link, a
+	// truncated paste — makes Postgres raise 22P02 on the uuid column. That
+	// surfaces as a PostgREST error, so it took the `upstream_unreachable`
+	// branch below: the tagged line a CloudWatch metric filter alarms on. Ten
+	// such URLs inside ten minutes therefore paged the on-call engineer, from
+	// anonymous traffic, and there is no WAF rate rule on /share/* or /og/*.
+	// A malformed id is a clean not-found, not an outage.
+	if (!isEntityId(id)) return { route: null, track: [] };
 	try {
 		const supabase = makeClient(config.supabaseUrl, config.supabaseAnonKey);
 		const { data: route, error } = await supabase
