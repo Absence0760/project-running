@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/recurrence.dart';
 
@@ -411,6 +413,62 @@ void main() {
         expect(inst.hour, localStart.hour);
         expect(inst.isUtc, isFalse);
       }
+    });
+  });
+
+  group('calendar-day stepping (DST parity with web)', () {
+    test('the instance walk never steps by an absolute Duration', () {
+      // Regression guard for the biweekly-across-DST divergence. Web steps its
+      // cursor with Date.setDate(), which is CALENDAR-based. Dart's
+      // add/subtract(Duration(days: n)) adds absolute 24-hour blocks, so across
+      // a fall-back a local midnight lands at 23:00 the previous day: the local
+      // calendar day repeats and every later offset shifts by one, flipping
+      // weekIndex % 2. Verified against the real modules under
+      // TZ=America/New_York for a legacy (timezone == null) [SU] event over
+      // 2026-10-25 -> 2026-11-30, where the two disagreed outright:
+      //   weekly   web Oct25,Nov1,8,15,22,29  vs Dart Oct25,Nov1,Nov1,8,15,22,29
+      //   biweekly web Oct25,Nov8,Nov22       vs Dart Oct25,Nov1,Nov15,Nov29
+      // This is a SOURCE guard because CI runs in UTC, where no transition
+      // exists and a behavioural test cannot fail.
+      // Only the two CURSOR sites are guarded. The remaining Duration(days: 1)
+      // uses are one-day slack on absolute-instant comparisons, which is
+      // exactly what Duration is for.
+      final source = File('lib/recurrence.dart').readAsStringSync();
+      expect(
+        source.contains('_addDaysCalendar(startDayOnly, -(start.weekday - 1), useUtc)'),
+        isTrue,
+        reason: 'The week anchor must be stepped back by calendar days.',
+      );
+      expect(
+        source.contains('_addDaysCalendar(anchor, dayOffset, useUtc)'),
+        isTrue,
+        reason: 'The day cursor must be stepped forward by calendar days.',
+      );
+      expect(
+        source.contains('anchor.add(Duration(days:') ||
+            source.contains('startDayOnly.subtract(Duration(days:'),
+        isFalse,
+        reason: 'Absolute-Duration stepping of the cursor is the DST divergence.',
+      );
+    });
+
+    test('the monthly branch reads its anchor in the same clock as the weekly branch', () {
+      // startsAt is parsed from a +00:00 string, so it carries a UTC flag.
+      // _addMonthsClamped reads day-of-month / time-of-day fields and rebuilds
+      // them; without .toLocal() on the legacy path it read UTC fields and
+      // built a LOCAL DateTime, shifting every monthly instance by the viewer's
+      // offset. The weekly branch always had the .toLocal().
+      final source = File('lib/recurrence.dart').readAsStringSync();
+      expect(
+        source.contains('useUtc ? e.startsAt.toUtc() : e.startsAt.toLocal()'),
+        isTrue,
+        reason: 'Both branches must resolve the anchor into the clock they then read fields from.',
+      );
+      expect(
+        source.contains('useUtc ? e.startsAt.toUtc() : e.startsAt;'),
+        isFalse,
+        reason: 'A raw (UTC-flagged) startsAt on the legacy path is the monthly-branch bug.',
+      );
     });
   });
 }
