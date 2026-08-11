@@ -128,7 +128,7 @@
 						{busy ? m('authReset.updating') : m('authReset.updateButton')}
 					</button>
 				</form>
-				<p class="reset-hint">{m('authReset.hint')}</p>
+				<p class="reset-hint">{m('authReset.hint', { min: PASSWORD_MIN_LENGTH })}</p>
 			{/if}
 		</div>
 	</main>

@@ -106,18 +106,30 @@
 	// rows for a non-owner; the query is identical either way. Hydrates
 	// lazily when the viewer first lands on the Achievements tab.
 	let badges = $state<Achievement[]>([]);
-	let badgesLoaded = $state(false);
+	// The profile these badges belong to — NOT a plain loaded flag. `/u/[id]` is
+	// one component reused across profiles (the followers list links are
+	// same-route client navs), so a bare `badgesLoaded` early-return kept the
+	// FIRST profile's badges and rendered them under the second profile's name.
+	// Viewing your own achievements and then opening a follower's showed YOUR
+	// badges as theirs — including `is_public = false` ones, since
+	// fetchUserBadges returns every row for self.
+	let badgesFor = $state<string | null>(null);
 	// A load *failure* is kept distinct from the genuinely-no-badges state so a
 	// broken fetch surfaces an error + retry instead of rendering the same empty
 	// grid a badge-less runner sees (issue #357).
 	let badgesError = $state<string | null>(null);
 
 	async function loadBadges() {
-		if (badgesLoaded && !badgesError) return;
+		if (badgesFor === userId && !badgesError) return;
 		badgesError = null;
 		try {
-			badges = await fetchUserBadges(userId);
-			badgesLoaded = true;
+			// Capture the id this request was for: a slow response must not be
+			// written under a profile the viewer has since navigated away from.
+			const forUser = userId;
+			const rows = await fetchUserBadges(forUser);
+			if (forUser !== userId) return;
+			badges = rows;
+			badgesFor = forUser;
 		} catch (e) {
 			badgesError = e instanceof Error ? e.message : String(e);
 		}
@@ -321,6 +333,9 @@
 	// Lazy-load badges when the viewer first lands on the Achievements tab.
 	$effect(() => {
 		if (tab !== 'achievements') return;
+		// Read userId so the effect re-runs on navigation — loadBadges' early
+		// return would otherwise consume it before it became a dependency.
+		void userId;
 		loadBadges();
 	});
 
