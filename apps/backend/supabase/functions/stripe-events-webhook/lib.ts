@@ -143,6 +143,13 @@ export function orderStatusTransition(
   if (currentStatus === 'paid' && eventType === 'charge.refunded') {
     return refund === 'partial' ? 'partially_refunded' : 'refunded';
   }
+  // A partially-refunded order still holds its seat, so it is NOT terminal: the
+  // rest of the money can come back later, and that completing refund has to be
+  // able to release the seat. Only a FULL refund moves it on — a second partial
+  // returns null so the seat is not released by an instalment.
+  if (currentStatus === 'partially_refunded' && eventType === 'charge.refunded') {
+    return refund === 'full' ? 'refunded' : null;
+  }
   return null;
 }
 
