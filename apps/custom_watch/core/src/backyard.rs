@@ -466,7 +466,10 @@ mod tests {
         // loop.
         let mut b = armed();
         b.on_clock(9 * H + 5);
-        assert!(b.on_clock(10 * H + 1), "runner still out: the backstop is due");
+        assert!(
+            b.on_clock(10 * H + 1),
+            "runner still out: the backstop is due"
+        );
         b.on_bell_lap(6_706.0);
         assert_eq!(b.view(6_706.0, None, 3_600).loops, 1);
 

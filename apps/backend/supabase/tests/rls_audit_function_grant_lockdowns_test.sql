@@ -3,7 +3,8 @@
 --   * clip_track_for_user(uuid, jsonb) must NOT be EXECUTE-able by anon
 --     (the clip-public-track Edge Function uses service_role; anon
 --     hitting the RPC directly widens the privacy-zone residual risk
---     beyond what decisions §33 documents).
+--     beyond what decisions §33 documents) — nor, since 20270521_001,
+--     by authenticated, for exactly the same reason (decisions §585).
 --   * auto_tag_default_gear() must NOT be EXECUTE-able by authenticated
 --     (it's a SECURITY DEFINER trigger function; grants to a user role
 --     are vestigial and violate the trigger-internal contract).
@@ -26,18 +27,30 @@ select ok(
     || 'the privacy-zone residual risk'
 );
 
--- 2. authenticated still CAN EXECUTE clip_track_for_user
---    (the EF authenticates via service_role today, but legitimate
---    in-DB callers that operate with a user JWT — none today, but
---    decisions §33 leaves room — still need access; preserve it).
+-- 2. authenticated cannot EXECUTE clip_track_for_user either (20270521_001).
+--    This assertion was inverted: it used to pin the grant, on the reasoning
+--    that "legitimate in-DB callers that operate with a user JWT — none today,
+--    but decisions §33 leaves room — still need access". The room was never
+--    used, and the risk that justified the anon revoke applies unchanged to
+--    authenticated: signup is free and unthrottled, so the role is not a trust
+--    boundary against someone after a stranger's home address. The function
+--    trims LEADING in-zone points, so a 3-point probe returns 2 inside a zone
+--    and 3 outside — a one-bit oracle that binary-searches a zone centre to
+--    metre precision in ~40 calls, with no Edge Function rate limit in the way
+--    (it is a PostgREST RPC). The one direct client caller, web's
+--    clipTrackForUser, had no production call sites left and was deleted with
+--    this migration. Every remaining consumer (clip_route_for_viewer,
+--    privacy_aware_route_geom, route_markers_for_viewer, the clip-public-track
+--    EF) is SECURITY DEFINER or service-role. See decisions §585.
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'authenticated',
     'public.clip_track_for_user(uuid, jsonb)',
     'EXECUTE'
   ),
-  'authenticated must still have EXECUTE on clip_track_for_user '
-    || '(only the anon grant is the audit finding)'
+  'authenticated must NOT have EXECUTE on clip_track_for_user — '
+    || 'the probe oracle that justified the anon revoke applies to any '
+    || 'signed-in user too (decisions §585)'
 );
 
 -- 3. authenticated cannot EXECUTE auto_tag_default_gear.
