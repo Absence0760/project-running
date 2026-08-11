@@ -2,7 +2,7 @@
 name: Bug report
 about: Report a defect or unexpected behaviour
 title: ""
-labels: ["type:bug"]
+labels: ["bug"]
 assignees: []
 ---
 
