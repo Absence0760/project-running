@@ -339,6 +339,7 @@ impl Course {
         }
         let mut best: Option<Projection> = None;
         let mut best_cost = f64::INFINITY;
+        let cos_query = libm::cos(to_rad(lat_deg));
         let mut cumulative = 0.0;
         for i in 0..self.points.len() - 1 {
             let a = self.points[i];
@@ -382,13 +383,21 @@ impl Course {
             // mistake. Web hit the identical defect in distanceAlongRoute
             // (5ffceec94).
             //
-            // The course's own `cos_mid_lat` is the shared scale, and it is
-            // already computed once at construction — so this stays free of the
-            // per-segment transcendental this struct's caches exist to avoid.
-            // Ranking is all that needs the shared frame; a great-circle call per
-            // segment would be more precise and would cost a `project_biased`
-            // that runs on every published fix over up to 256 points.
-            let off_east = to_rad(lon_delta_deg(s_lon, lon_deg)) * R_M * self.bounds.cos_mid_lat;
+            // The scale is the cosine of the QUERY's own latitude, computed once
+            // per call (`cos_query`) — not per segment, and not the course's
+            // mid-latitude.
+            //
+            // It has to be common to every candidate, or the numbers are not
+            // comparable; and it has to be evaluated near the fix, or it is
+            // merely wrong by a bigger constant. `cos_mid_lat` bought
+            // commensurability at the cost of accuracy — its error is bounded by
+            // the WHOLE course's latitude span rather than one segment's, which
+            // on a 256-point serpentine measured ~39x worse than the
+            // per-segment frames it replaced, enough to cross the 40 m
+            // off-course latch on candidates 0.3 m apart. The query latitude is
+            // both common and locally accurate, for one transcendental per fix —
+            // the same budget as the winner's haversine below.
+            let off_east = to_rad(lon_delta_deg(s_lon, lon_deg)) * R_M * cos_query;
             let off_north = to_rad(lat_deg - s_lat) * R_M;
             let off = libm::sqrt(off_east * off_east + off_north * off_north);
             let along = cumulative + seg_len * t;
@@ -1563,22 +1572,49 @@ mod tests {
     }
 
     #[test]
-    fn a_planar_offset_still_agrees_with_the_great_circle_distance_to_the_foot() {
-        // The claim the frame swap rests on: measuring the perpendicular offset
-        // inside the same planar frame that located the foot point gives the
-        // same metres a great-circle call to that foot point would, so the
-        // 40 m / 20 m off-course thresholds see an unchanged number.
+    fn the_ranking_picks_the_truly_nearest_segment() {
+        // `off_m` is ASSIGNED from haversine_metres(fix, foot), so asserting it
+        // equals that same call is a tautology — it was, and it was the only
+        // guard on the offset. What actually needs pinning is the RANKING: the
+        // planar key that chooses the winner must choose the segment a
+        // great-circle sweep over every segment would.
         let c = max_capacity_serpentine();
         for k in 0..40 {
             let lat = 40.0 + k as f64 * 0.0025;
             let lon = -105.0 + libm::sin(k as f64 * 0.9) * 0.0006;
             let p = c.project(lat, lon).unwrap();
-            let great_circle = haversine_metres(lat, lon, p.lat_deg, p.lon_deg);
+
+            // Independent brute force: the true great-circle distance to the
+            // nearest point of the whole polyline, each segment measured in its
+            // OWN frame (accurate per segment) and compared as real metres.
+            let pts = c.points();
+            let mut truth = f64::INFINITY;
+            for w in pts.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                let cos_a = libm::cos(to_rad(a.lat_deg));
+                let b_east = lon_delta_deg(a.lon_deg, b.lon_deg);
+                let bx = to_rad(b_east) * R_M * cos_a;
+                let by = to_rad(b.lat_deg - a.lat_deg) * R_M;
+                let px = to_rad(lon_delta_deg(a.lon_deg, lon)) * R_M * cos_a;
+                let py = to_rad(lat - a.lat_deg) * R_M;
+                let len_sq = bx * bx + by * by;
+                let t = if len_sq > 0.0 {
+                    ((px * bx + py * by) / len_sq).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                let s_lat = a.lat_deg + (b.lat_deg - a.lat_deg) * t;
+                let s_lon = wrap_lon_deg(a.lon_deg + b_east * t);
+                let d = haversine_metres(lat, lon, s_lat, s_lon);
+                if d < truth {
+                    truth = d;
+                }
+            }
             assert!(
-                (p.off_m - great_circle).abs() < PINNED_OFF_TOLERANCE_M,
-                "off {} vs great-circle {} at {} {}",
+                (p.off_m - truth).abs() < PINNED_OFF_TOLERANCE_M,
+                "winner off {} vs true nearest {} at {} {}",
                 p.off_m,
-                great_circle,
+                truth,
                 lat,
                 lon
             );
