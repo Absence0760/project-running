@@ -9,12 +9,17 @@ import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
 import com.runapp.watchwear.recording.checkpointActiveDurationS
 import com.runapp.watchwear.recording.RecordingRepository
+import com.runapp.watchwear.recording.RecoveryAction
+import com.runapp.watchwear.recording.recoveryActionFor
+import com.runapp.watchwear.recording.sealTrackFileOrNull
 import com.runapp.watchwear.recording.RunRecordingService
 import com.runapp.watchwear.system.BatteryOptimization
 import com.runapp.watchwear.system.BatteryStatus
 import com.runapp.watchwear.system.NetworkWatcher
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -606,25 +611,49 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun checkRecovery() {
         viewModelScope.launch {
-            val cp = checkpoints.current()
-            if (cp != null) {
-                _state.value = _state.value.copy(pendingRecovery = cp)
+            val cp = checkpoints.current() ?: return@launch
+            when (gradeRecovery(cp)) {
+                RecoveryAction.Offer ->
+                    _state.value = _state.value.copy(pendingRecovery = cp)
+                RecoveryAction.Discard -> checkpoints.clear()
+                RecoveryAction.Ignore -> Unit
             }
         }
     }
+
+    private suspend fun gradeRecovery(cp: Checkpoint): RecoveryAction = recoveryActionFor(
+        activeRecording = RecordingRepository.metrics.value.stage !=
+            RecordingRepository.Stage.Idle,
+        alreadyQueued = store.contains(cp.runId),
+        trackFileExists = withContext(Dispatchers.IO) { File(cp.trackFilePath).exists() },
+    )
 
     /// User accepted the recovery prompt. Treat the checkpointed run as
     /// finished-as-of-savedAt and queue it for upload. The track file is
     /// already sealed on disk (the writer closes on service destroy), but
     /// may be an unclosed JSON array if the process was killed mid-flush;
     /// we re-seal it defensively before queueing.
+    ///
+    /// The grade is taken again here, not just when the prompt was raised:
+    /// `bootstrapAuth` drains the queue on the same cold start, so a run that
+    /// was merely queued when the prompt appeared can be uploaded — and its
+    /// track file deleted — while the prompt sits on screen waiting for a tap.
     fun recoverCheckpoint() {
         val cp = _state.value.pendingRecovery ?: return
         viewModelScope.launch {
+            if (gradeRecovery(cp) != RecoveryAction.Offer) {
+                checkpoints.clear()
+                _state.value = _state.value.copy(pendingRecovery = null)
+                return@launch
+            }
             val durationS = checkpointActiveDurationS(cp)
             val avgBpm = if (cp.bpmCount == 0L) null
                 else cp.bpmSum.toDouble() / cp.bpmCount
-            val sealed = sealTrackFile(cp.trackFilePath)
+            val sealed = sealTrackFile(cp.trackFilePath) ?: run {
+                checkpoints.clear()
+                _state.value = _state.value.copy(pendingRecovery = null)
+                return@launch
+            }
             store.save(
                 QueuedRun(
                     id = cp.runId,
@@ -662,29 +691,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /// If a track file is missing a closing `]` (process killed before
-    /// `TrackWriter.close` ran), append one so it parses as JSON. Missing
-    /// file → write an empty array stub so downstream code still has a
-    /// path to upload.
-    private suspend fun sealTrackFile(path: String): File =
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val f = File(path)
-            if (!f.exists()) {
-                f.parentFile?.mkdirs()
-                f.writeText("[]")
-                return@withContext f
-            }
-            val len = f.length()
-            if (len == 0L) {
-                f.writeText("[]")
-                return@withContext f
-            }
-            val last = java.io.RandomAccessFile(f, "r").use { raf ->
-                raf.seek((len - 1).coerceAtLeast(0))
-                raf.read()
-            }
-            if (last != ']'.code) f.appendText("]")
-            f
-        }
+    /// `TrackWriter.close` ran), append one so it parses as JSON. Null when
+    /// the file is gone — see `sealTrackFileOrNull` for why that is not
+    /// stubbed into an empty array.
+    private suspend fun sealTrackFile(path: String): File? =
+        withContext(Dispatchers.IO) { sealTrackFileOrNull(File(path)) }
 
     fun discardCheckpoint() {
         viewModelScope.launch {
