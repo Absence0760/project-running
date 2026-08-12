@@ -124,6 +124,7 @@ double? vdotFromRun(double distanceM, int durationS) {
 /// A runner's fitness ceiling is what their hardest recent run proved.
 double? currentVdot(Iterable<Run> runs, {DateTime? now}) {
   final t = now ?? DateTime.now();
+  // elapsed-time: rolling 90-day recency cutoff compared against run instants.
   final cutoff = t.subtract(const Duration(days: 90));
   double? best;
   for (final r in qualifyingRuns(runs)) {

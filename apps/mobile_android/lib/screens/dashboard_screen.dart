@@ -286,8 +286,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
     try {
       final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day);
-      final weekStart = todayStart.subtract(const Duration(days: 6));
+      final weekStart = DateTime(now.year, now.month, now.day - 6);
       final tomorrow = DateTime(now.year, now.month, now.day + 1);
       final fresh = await api.fetchFoodLog(from: weekStart, to: tomorrow);
       await widget.foodStore.replaceFromServer(
@@ -1999,7 +1998,8 @@ DateTime heatmapWeekAnchor({
   required DateTime gridStart,
 }) {
   final col = (localDx / (cellSize + gap)).floor().clamp(0, weeks - 1);
-  return gridStart.add(Duration(days: 7 * col));
+  // Calendar days — see `_RunHeatmap.build`, where `gridStart` is derived.
+  return DateTime(gridStart.year, gridStart.month, gridStart.day + 7 * col);
 }
 
 class _RunHeatmap extends StatelessWidget {
@@ -2018,7 +2018,12 @@ class _RunHeatmap extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final weekStart = weekStartLocal(now);
-    final gridStart = weekStart.subtract(Duration(days: 7 * (weeks - 1)));
+    // Calendar days, not 24-hour blocks: the grid reaches ~5 months back, so a
+    // fixed-Duration step is guaranteed to cross a DST transition and land
+    // `gridStart` at 23:00 the previous day — shifting every column of the
+    // heatmap, and the week a tap resolves to, one day off the calendar.
+    final gridStart =
+        DateTime(weekStart.year, weekStart.month, weekStart.day - 7 * (weeks - 1));
 
     final counts = heatmapDayCounts(runs, gridStart);
 
@@ -2185,7 +2190,8 @@ class _HeatmapPainter extends CustomPainter {
 
     for (var w = 0; w < weeks; w++) {
       for (var d = 0; d < 7; d++) {
-        final day = gridStart.add(Duration(days: w * 7 + d));
+        final day =
+            DateTime(gridStart.year, gridStart.month, gridStart.day + w * 7 + d);
         // Don't paint future days — they're outside the scale and look
         // weird with an "empty" tile shown.
         if (day.isAfter(today)) continue;

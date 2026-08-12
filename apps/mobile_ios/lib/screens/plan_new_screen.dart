@@ -100,6 +100,9 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   static DateTime _nextSunday() {
     var d = DateTime.now().add(const Duration(days: 7));
     while (d.weekday != DateTime.sunday) {
+      // elapsed-time: walks until the weekday matches, and a 23-hour day only
+      // costs one extra iteration — the result is a Sunday either way, and the
+      // return below re-normalises it to a local midnight.
       d = d.add(const Duration(days: 1));
     }
     return DateTime(d.year, d.month, d.day);

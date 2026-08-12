@@ -78,7 +78,7 @@ String periodLabel(PeriodType period, DateTime anchor, String localeTag,
   final start = periodStart(period, anchor, weekStartDay: weekStartDay);
   switch (period) {
     case PeriodType.week:
-      final end = start.add(const Duration(days: 6));
+      final end = DateTime(start.year, start.month, start.day + 6);
       return '${shortDate(start, localeTag)} – ${shortDate(end, localeTag)}';
     case PeriodType.month:
       return '${monthName(start.month, localeTag)} ${start.year}';
@@ -253,6 +253,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   bool get _isFuture {
     final now = DateTime.now();
     final end = periodEnd(_period, _anchor, weekStartDay: _weekStartDay);
+    // elapsed-time: a day of slack on an is-this-period-in-the-future test.
     return end.isAfter(now.add(const Duration(days: 1)));
   }
 
@@ -260,7 +261,10 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
     setState(() {
       switch (_period) {
         case PeriodType.week:
-          _anchor = _anchor.subtract(const Duration(days: 7));
+          // Calendar weeks — a fixed 168-hour step drifts an hour at each DST
+          // transition, and once it crosses midnight the anchor lands in the
+          // adjacent week and paging skips one.
+          _anchor = DateTime(_anchor.year, _anchor.month, _anchor.day - 7);
         case PeriodType.month:
           _anchor = DateTime(
             _anchor.month == 1 ? _anchor.year - 1 : _anchor.year,
@@ -279,7 +283,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
     setState(() {
       switch (_period) {
         case PeriodType.week:
-          _anchor = _anchor.add(const Duration(days: 7));
+          _anchor = DateTime(_anchor.year, _anchor.month, _anchor.day + 7);
         case PeriodType.month:
           _anchor = DateTime(
             _anchor.month == 12 ? _anchor.year + 1 : _anchor.year,

@@ -226,7 +226,9 @@ class _PlanLibraryPreviewScreenState extends State<PlanLibraryPreviewScreen> {
   static DateTime _nextMonday() {
     final d = DateTime.now();
     final offset = (8 - d.weekday) % 7;
-    return DateTime(d.year, d.month, d.day).add(Duration(days: offset == 0 ? 7 : offset));
+    // Calendar days — a fixed 24-hour step across a DST fall-back lands at
+    // 23:00 the previous day, starting the plan on a Sunday.
+    return addDays(DateTime(d.year, d.month, d.day), offset == 0 ? 7 : offset);
   }
 
   Future<void> _clone() async {
