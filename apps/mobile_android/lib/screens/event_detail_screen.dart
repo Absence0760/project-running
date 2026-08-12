@@ -259,6 +259,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       // default cap, so a weekly series' weeks 7+ are reachable in the picker
       // rather than truncated at 6. expandInstances still honours
       // recurrence_until / recurrence_count.
+      // elapsed-time: a loose one-year expansion horizon, not a calendar date.
       final horizon = now.add(const Duration(days: 365));
       final instances = expandInstances(event.toRecurrence(), now, horizon);
       final bodyResults = await Future.wait([

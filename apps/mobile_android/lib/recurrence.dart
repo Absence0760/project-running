@@ -228,9 +228,12 @@ List<DateTime> expandInstances(
     // clock), the actual instance is `stamped` (at startsAt's time-of-day) up
     // to a day later in absolute time. Once `d` is more than a day past the
     // boundary, no future `stamped` can fall before it.
+    // elapsed-time: a day of absolute slack on the early-break bound, not a
+    // calendar step — matches web, which budgets its scan in whole ms days.
     if (e.until != null && d.isAfter(e.until!.add(const Duration(days: 1)))) {
       break;
     }
+    // elapsed-time: the same absolute slack on the scan-end bound.
     if (d.isAfter(to.add(const Duration(days: 1)))) break;
 
     final weekIndex = dayOffset ~/ 7;
@@ -264,6 +267,8 @@ List<DateTime> expandInstances(
 
 DateTime? nextInstanceAfter(EventRecurrence e, [DateTime? after]) {
   final start = after ?? DateTime.now();
+  // elapsed-time: a ten-year search horizon, mirroring web's
+  // `after.getTime() + 10 * 365 * 24 * 3600 * 1000`.
   final tenYears = start.add(const Duration(days: 365 * 10));
   final xs = expandInstances(e, start, tenYears, max: 1);
   return xs.isEmpty ? null : xs.first;

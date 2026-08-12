@@ -563,8 +563,7 @@ class _RunsScreenState extends State<RunsScreen> {
                     ?.effective<String>(SettingsKeys.weekStartDay) ??
                 'monday');
       case _RunsRange.month:
-        return DateTime(now.year, now.month, now.day)
-            .subtract(const Duration(days: 30));
+        return DateTime(now.year, now.month, now.day - 30);
       case _RunsRange.year:
         return DateTime(now.year, 1, 1);
       case _RunsRange.all:
@@ -2229,7 +2228,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                     Expanded(
                       child: Center(
                         child: Text(
-                          formatDowNarrow(DateTime(2026, 1, 5).add(Duration(days: i)),
+                          formatDowNarrow(DateTime(2026, 1, 5 + i),
                               localeToTag(Localizations.localeOf(context))),
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: cs.onSurfaceVariant,

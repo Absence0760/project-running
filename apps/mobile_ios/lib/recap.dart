@@ -219,7 +219,11 @@ List<RecapBadge> computeRecapBadges(_BadgeInputs i) {
 String _mondayOf(DateTime d) {
   final local = DateTime(d.year, d.month, d.day);
   final dow = (local.weekday + 6) % 7; // 0=Mon, 6=Sun (matches JS)
-  final mon = local.subtract(Duration(days: dow));
+  // Step calendar days, matching web's `local.setDate(local.getDate() - dow)`.
+  // `subtract(Duration(days:))` walks absolute time, so in the week of a DST
+  // fall-back it lands at 23:00 the previous Sunday and that week's runs split
+  // across two buckets — deflating the "top week" the recap reports.
+  final mon = DateTime(local.year, local.month, local.day - dow);
   final y = mon.year.toString().padLeft(4, '0');
   final m = mon.month.toString().padLeft(2, '0');
   final day = mon.day.toString().padLeft(2, '0');

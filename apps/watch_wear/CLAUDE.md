@@ -80,6 +80,7 @@ apps/watch_wear/
             │   │   ├── RunRecordingService.kt   # foregroundServiceType=location
             │   │   ├── RecordingRepository.kt   # process-singleton StateFlow
             │   │   ├── CheckpointStore.kt       # in-progress recovery snapshot
+            │   │   ├── CheckpointRecovery.kt    # grade a survivor before offering it
             │   │   ├── TrackWriter.kt           # streaming GPS to disk JSON
             │   │   ├── ElapsedMath.kt           # pure pause/resume elapsed-time math
             │   │   ├── RouteMath.kt             # off-route distance + remaining km
@@ -273,11 +274,30 @@ backgrounding, low-memory kills).
   the elapsed clock every 500ms, posts notification updates, holds the
   wake lock.
 - `recording/CheckpointStore.kt` — DataStore snapshot of an in-progress
-  run, written every 15s during recording. On next launch, if a
-  checkpoint exists, the pre-run screen shows a **"Recover unsaved
-  run?"** prompt — accepting saves it as a finished run (queued for
-  upload), discarding clears it. This is what saves a run when the
-  process is killed mid-recording.
+  run, written every 15s during recording. On next launch a surviving
+  checkpoint is graded (below); one that still holds the only copy of a
+  run raises the **"Recover unsaved run?"** prompt on the pre-run screen
+  — accepting saves it as a finished run (queued for upload), discarding
+  clears it. This is what saves a run when the process is killed
+  mid-recording. **The service never clears it**: stopping publishes
+  `Finished` and tears the service down, and the checkpoint is cleared by
+  `RunViewModel.handleFinishedRun` *after* `LocalRunStore` has accepted
+  the run. Clearing it in the service ran concurrently with that write,
+  right as the process left foreground-service state, so a kill in the
+  window lost both records of the run.
+- `recording/CheckpointRecovery.kt` — grades a surviving checkpoint
+  before it is offered (`recoveryActionFor`), because `saveRun` upserts
+  on the run id and re-uploads to the same Storage key: recovering a run
+  the app already captured **overwrites** it rather than adding one. A
+  run already in `LocalRunStore`, or one whose track file `pushRun` has
+  deleted after a successful upload, is discarded silently; a checkpoint
+  belonging to a live recording is left untouched (clearing it would
+  disarm an in-progress run's safety net). The grade is re-taken when
+  the runner accepts, since the cold-start drain can upload the run
+  while the prompt is on screen. `sealTrackFileOrNull` closes an
+  unterminated JSON array but returns null for a *missing* file rather
+  than stubbing `[]` — publishing an empty track would blank the
+  finished run's Storage object. See `decisions.md § 590`.
 - `system/BatteryOptimization.kt` — checks
   `PowerManager.isIgnoringBatteryOptimizations` at launch and on each
   `onResume`. If we're not whitelisted, the pre-run screen surfaces a

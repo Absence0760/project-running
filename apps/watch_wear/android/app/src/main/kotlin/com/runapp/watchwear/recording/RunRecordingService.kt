@@ -31,12 +31,10 @@ import com.runapp.watchwear.tiles.formatElapsed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.pow
@@ -393,25 +391,21 @@ class RunRecordingService : Service() {
             )
         }
 
-        // Clearing the checkpoint MUST complete before the service (and
-        // `scope`) is torn down. As a plain `scope.launch { ... }` it
-        // raced onDestroy's `scope.cancel()`: a stop that triggered
-        // onDestroy before the coroutine ran would drop the clear,
-        // leaving a stale snapshot that surfaces a spurious "Recover
-        // unsaved run?" prompt for a run we actually finished. Run it
-        // NonCancellable so cancel() can't kill it, and gate the
-        // stopSelf() (which is what triggers onDestroy → scope.cancel())
-        // on the clear having completed — so the ordering is guaranteed,
-        // not racy.
-        scope.launch(NonCancellable) {
-            checkpoints.clear()
-            releaseWakeLock()
-            withContext(Dispatchers.Main.immediate) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this@RunRecordingService)
-                stopSelf()
-            }
-        }
+        // The checkpoint is deliberately NOT cleared here. Until the
+        // `Finished` metrics above are banked into `LocalRunStore`, the
+        // checkpoint is the run's only durable record — and this teardown
+        // drops the process out of foreground-service state, which is
+        // exactly when the OS is free to kill it. Clearing here raced the
+        // consumer's queue write, so a kill in that window lost both. The
+        // party that performs the write clears it instead
+        // (`RunViewModel.handleFinishedRun`), so the safety net outlives
+        // the run it is protecting. A checkpoint that survives a
+        // completed write is not a phantom prompt: `recoveryActionFor`
+        // grades an already-queued run as `Discard`.
+        releaseWakeLock()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
+        stopSelf()
     }
 
     private fun isPaused(): Boolean =

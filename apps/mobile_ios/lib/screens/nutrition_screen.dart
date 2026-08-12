@@ -221,7 +221,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
     try {
       // Pull the last 7 days so both today's list and the trend derive from
       // the one cache.
-      final weekStart = _todayStart.subtract(const Duration(days: 6));
+      final weekStart = DateTime(
+          _todayStart.year, _todayStart.month, _todayStart.day - 6);
       final fresh = await api.fetchFoodLog(from: weekStart, to: _tomorrow);
       await widget.store.replaceFromServer(
         [for (final r in fresh) r.toJson()],

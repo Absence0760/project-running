@@ -131,7 +131,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
                   child: Center(
                     child: Text(
                       // 2026-01-05 is a Monday; step i days for a Monday-first row.
-                      formatDow(DateTime(2026, 1, 5).add(Duration(days: i)), tag),
+                      formatDow(addDays(DateTime(2026, 1, 5), i), tag),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,

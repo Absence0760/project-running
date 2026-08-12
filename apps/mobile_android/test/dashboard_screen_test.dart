@@ -232,7 +232,7 @@ void main() {
           gap: gap,
           weeks: weeks,
           gridStart: gridStart);
-      expect(a, gridStart.add(const Duration(days: 21)));
+      expect(a, DateTime(2026, 1, 26)); // gridStart + 3 calendar weeks
     });
 
     test('rightmost column maps to the current week', () {
@@ -242,7 +242,10 @@ void main() {
           gap: gap,
           weeks: weeks,
           gridStart: gridStart);
-      expect(a, gridStart.add(const Duration(days: 7 * (weeks - 1))));
+      // 19 calendar weeks past 2026-01-05, spelled as the date rather than as
+      // arithmetic: `gridStart.add(Duration(days: 133))` crosses the 2026-03-08
+      // spring-forward and yields 01:00, not the midnight a week anchor is.
+      expect(a, DateTime(2026, 5, 18));
     });
 
     test('a tap past the right edge clamps to the last week', () {
@@ -252,7 +255,7 @@ void main() {
           gap: gap,
           weeks: weeks,
           gridStart: gridStart);
-      expect(a, gridStart.add(const Duration(days: 7 * (weeks - 1))));
+      expect(a, DateTime(2026, 5, 18)); // same last week as the rightmost column
     });
 
     test('a negative offset clamps to the first week', () {

@@ -356,6 +356,7 @@ class HealthConnectImporter {
       final now = DateTime.now();
       final samples = await _health.getHealthDataFromTypes(
         types: const [HealthDataType.WEIGHT],
+        // elapsed-time: lower bound of a Health Connect query, not a calendar day.
         startTime: now.subtract(const Duration(days: 3650)),
         endTime: now,
       );

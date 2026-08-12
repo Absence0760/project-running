@@ -192,4 +192,61 @@ void main() {
       }
     });
   }
+
+  // ───────────────────────── DST window drift ─────────────────────────
+  //
+  // The strip's window used `startDate.add(Duration(days: n))`, which steps
+  // absolute time. A local calendar day is 25 hours on a fall-back, so a
+  // 6*24h step from the Monday of that week lands at 23:00 on the Sunday
+  // BEFORE the seventh day: the sixth date is emitted twice and the seventh —
+  // the long run, on a Sunday-ending plan week — never renders at all.
+  //
+  // These cases only reproduce the drift when the suite runs in a zone that
+  // has the transition (`TZ=America/New_York` exercises 2024-11-03); in UTC
+  // they hold trivially. `calendar_day_arithmetic_guard_test.dart` is the
+  // timezone-independent half that catches the shape wherever CI runs.
+
+  /// One workout per day of the window, each tagged with a distinct distance
+  /// so a missing or duplicated day is visible in the rendered cells.
+  List<PlanWorkoutRow> _week(DateTime firstDay) => [
+        for (var i = 0; i < 7; i++)
+          _wo('d$i', DateTime(firstDay.year, firstDay.month, firstDay.day + i),
+              'easy', (i + 1) * 1000),
+      ];
+
+  Future<void> _expectSevenDistinctDays(WidgetTester tester) async {
+    for (var i = 0; i < 7; i++) {
+      expect(find.text('${i + 1}.0 km'), findsOneWidget,
+          reason: 'day ${i + 1} of the plan week should render exactly once');
+    }
+  }
+
+  testWidgets('renders all seven days when the window crosses a fall-back',
+      (tester) async {
+    // 2024-10-29 (Tue) → 2024-11-04 (Mon); 2024-11-03 is 25 hours long.
+    final dstStart = DateTime(2024, 10, 29);
+    await _pump(
+      tester,
+      start: dstStart,
+      weekIndex: 0,
+      workouts: _week(dstStart),
+    );
+    await _expectSevenDistinctDays(tester);
+  });
+
+  testWidgets('anchors the window correctly when the plan start is weeks back',
+      (tester) async {
+    // Five weeks of 24-hour blocks from 2024-10-01 fall an hour short of the
+    // calendar date, dropping the anchor onto the previous day and shifting
+    // every cell in the row.
+    final planStart = DateTime(2024, 10, 1);
+    final weekOneDay = DateTime(2024, 11, 5);
+    await _pump(
+      tester,
+      start: planStart,
+      weekIndex: 5,
+      workouts: _week(weekOneDay),
+    );
+    await _expectSevenDistinctDays(tester);
+  });
 }

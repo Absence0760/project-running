@@ -63,7 +63,9 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
 
   List<FoodEntry> get _slotEntries {
     final start = _dayStart;
-    final end = start.add(const Duration(days: 1));
+    // The exclusive end of the LOCAL day. A fixed 24-hour step lands at 23:00
+    // the same day across a fall-back, hiding the last hour's entries.
+    final end = DateTime(start.year, start.month, start.day + 1);
     return [
       for (final r in widget.store.entriesForRange(start, end))
         FoodEntry.fromRow(r),
@@ -75,10 +77,10 @@ class _NutritionMealDetailScreenState extends State<NutritionMealDetailScreen> {
   /// `slotCalorieTrend`.
   List<({DateTime day, double calories})> get _trend {
     final start = _dayStart;
-    final windowStart = start.subtract(const Duration(days: 6));
+    final windowStart = DateTime(start.year, start.month, start.day - 6);
     final entries = widget.store.entriesForRange(
       windowStart,
-      start.add(const Duration(days: 1)),
+      DateTime(start.year, start.month, start.day + 1),
     );
     final byDay = <String, double>{};
     final keys = <String, DateTime>{};

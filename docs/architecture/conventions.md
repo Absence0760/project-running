@@ -1202,6 +1202,25 @@ range is unrepresentable, so the test to write is not a clamp test but the
 property a clamp cannot give: every value opens its own tab, and the strip is
 exactly as long as the enum.
 
+## Step a date through the calendar, never through a fixed `Duration`
+
+A local calendar day is 23 or 25 hours across a DST transition, so
+`someDate.add(Duration(days: n))` — which adds absolute time — walks off the
+calendar. On a fall-back a midnight cursor lands at 23:00 the *previous* day:
+the date repeats, the last day of a window is never produced, and every offset
+past the transition is shifted by one. Step dates with `DateTime(y, m, d + n)`
+(or `addDays` in `training.dart`), which normalises through the calendar. Web's
+twins take the same shape via `Date.setDate()`; `Date.getTime() + n * 86_400_000`
+is the same bug in TypeScript.
+
+The exceptions are real but narrow: a `DateTime.now()` or `.toUtc()` receiver is
+an *instant*, and a genuine elapsed-time span (a rolling 90-day cutoff, an API
+query bound, a search horizon) means 24-hour blocks and should stay that way.
+Mark those `// elapsed-time: <why>` — `calendar_day_arithmetic_guard_test.dart`
+fails the mobile suite on every unmarked site, because this class had already
+been fixed four times in isolation before the fifth bought the guard
+(`decisions.md § 589`).
+
 ## Docs hygiene
 
 Every change that affects documented behaviour updates the docs **in the same turn as the code change**. See the root [`CLAUDE.md`](../../CLAUDE.md) § "Docs hygiene" for the full rule and checklist. Shortest version: if a doc describes the old behaviour, it is wrong the moment you change the code — fix it now, not later.

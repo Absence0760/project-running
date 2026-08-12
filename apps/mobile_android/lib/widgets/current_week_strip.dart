@@ -50,9 +50,14 @@ class CurrentWeekStrip extends StatelessWidget {
     final byDate = <String, PlanWorkoutRow>{
       for (final w in weekWorkouts) _toIso(w.scheduledDate): w,
     };
-    final weekStart = startDate.add(Duration(days: weekIndex * 7));
+    // Calendar days, not 24-hour blocks: `add(Duration(days:))` walks absolute
+    // time, so across a DST fall-back a local midnight lands at 23:00 the
+    // PREVIOUS day. That repeats a day in the row and drops the seventh — the
+    // long run, on a Sunday-ending plan week — out of the strip entirely, and
+    // a plan whose start is a transition away shifts all seven cells by a day.
+    final weekStart = addDays(startDate, weekIndex * 7);
     final cells = [
-      for (var i = 0; i < 7; i++) weekStart.add(Duration(days: i)),
+      for (var i = 0; i < 7; i++) addDays(weekStart, i),
     ];
 
     final done = weekWorkouts.where(_isWorkoutCompleted).length;
