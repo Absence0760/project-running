@@ -80,6 +80,7 @@ apps/watch_wear/
             │   │   ├── RunRecordingService.kt   # foregroundServiceType=location
             │   │   ├── RecordingRepository.kt   # process-singleton StateFlow
             │   │   ├── CheckpointStore.kt       # in-progress recovery snapshot
+            │   │   ├── CheckpointRecovery.kt    # grade a survivor before offering it
             │   │   ├── TrackWriter.kt           # streaming GPS to disk JSON
             │   │   ├── ElapsedMath.kt           # pure pause/resume elapsed-time math
             │   │   ├── RouteMath.kt             # off-route distance + remaining km
@@ -278,6 +279,19 @@ backgrounding, low-memory kills).
   run?"** prompt — accepting saves it as a finished run (queued for
   upload), discarding clears it. This is what saves a run when the
   process is killed mid-recording.
+- `recording/CheckpointRecovery.kt` — grades a surviving checkpoint
+  before it is offered (`recoveryActionFor`), because `saveRun` upserts
+  on the run id and re-uploads to the same Storage key: recovering a run
+  the app already captured **overwrites** it rather than adding one. A
+  run already in `LocalRunStore`, or one whose track file `pushRun` has
+  deleted after a successful upload, is discarded silently; a checkpoint
+  belonging to a live recording is left untouched (clearing it would
+  disarm an in-progress run's safety net). The grade is re-taken when
+  the runner accepts, since the cold-start drain can upload the run
+  while the prompt is on screen. `sealTrackFileOrNull` closes an
+  unterminated JSON array but returns null for a *missing* file rather
+  than stubbing `[]` — publishing an empty track would blank the
+  finished run's Storage object. See `decisions.md § 590`.
 - `system/BatteryOptimization.kt` — checks
   `PowerManager.isIgnoringBatteryOptimizations` at launch and on each
   `onResume`. If we're not whitelisted, the pre-run screen surfaces a
