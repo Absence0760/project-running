@@ -6,6 +6,7 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, IdentityAvatar;
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
+import '../typed_decimal.dart';
 import 'confirm_destructive.dart';
 import 'error_state.dart';
 import 'top_banner.dart';
@@ -163,8 +164,8 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
       _toast(AppLocalizations.of(context).segmentsPanelErrNameRequired);
       return;
     }
-    final start = double.tryParse(_startCtrl.text) ?? 0;
-    final end = double.tryParse(_endCtrl.text) ?? 0;
+    final start = parseTypedDecimal(_startCtrl.text) ?? 0;
+    final end = parseTypedDecimal(_endCtrl.text) ?? 0;
     final l10n = AppLocalizations.of(context);
     if (end <= start) {
       _toast(l10n.segmentsPanelErrEndAfterStart);

@@ -6,6 +6,7 @@ import 'package:ui_kit/ui_kit.dart' show ListSkeleton, StatusPill, StatusPillSiz
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../typed_decimal.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
@@ -564,7 +565,7 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
         }
         value = parsed;
       case 'double':
-        final parsed = double.tryParse(_numCtrl.text.trim());
+        final parsed = parseTypedDecimal(_numCtrl.text);
         if (parsed == null) {
           setState(() => _numError = l10n.devicesEnterNumber);
           return;

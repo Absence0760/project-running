@@ -53,6 +53,7 @@ import '../safety_nudge.dart';
 import '../settings_sync.dart';
 import '../turn_cue_announcer.dart';
 import '../turn_cues.dart';
+import '../typed_decimal.dart';
 import '../widgets/cutoff_card.dart';
 import 'route_picker_screen.dart';
 import '../background_location_nudge.dart';
@@ -3526,8 +3527,7 @@ class _RunScreenState extends State<RunScreen> {
       ),
     );
     if (result == true && mounted) {
-      final distRaw = distCtrl.text.trim().replaceAll(',', '.');
-      final distVal = double.tryParse(distRaw);
+      final distVal = parseTypedDecimal(distCtrl.text);
       final manualM = distVal != null && distVal > 0
           ? distVal * (isMi ? 1609.344 : 1000.0)
           : null;

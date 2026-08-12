@@ -6,6 +6,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_labels.dart';
 import '../training_service.dart';
+import '../typed_decimal.dart';
 import 'full_screen_form.dart';
 
 /// Full-screen dialog for inline editing of a planned workout's kind,
@@ -189,7 +190,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
     double? distanceM;
     String? distanceError;
     if (distanceText.isNotEmpty) {
-      final km = double.tryParse(distanceText);
+      final km = parseTypedDecimal(distanceText);
       if (km == null || km <= 0) {
         distanceError = l10n.workoutEditErrDistance;
       } else {

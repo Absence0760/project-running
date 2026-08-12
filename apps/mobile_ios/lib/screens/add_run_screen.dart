@@ -11,6 +11,7 @@ import '../l10n/locale_support.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../typed_decimal.dart';
 import '../widgets/confirm_discard.dart';
 import '../widgets/top_banner.dart';
 
@@ -156,7 +157,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
   }
 
   double? _parseDistanceMetres(String raw) {
-    final v = double.tryParse(raw.trim());
+    final v = parseTypedDecimal(raw);
     if (v == null || v <= 0) return null;
     return widget.preferences.unit == DistanceUnit.mi
         ? v * _metresPerMile
@@ -343,9 +344,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
                 controller: _distanceCtl,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                ],
+                inputFormatters: typedDecimalInputFormatters,
                 decoration: InputDecoration(
                   suffixText: UnitFormat.distanceLabel(unit),
                 ),

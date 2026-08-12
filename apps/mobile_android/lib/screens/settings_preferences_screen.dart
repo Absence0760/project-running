@@ -13,6 +13,7 @@ import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
 import '../push_messaging_bridge.dart';
 import '../settings_sync.dart';
+import '../typed_decimal.dart';
 import '../undo_queue.dart';
 import '../widgets/top_banner.dart';
 import 'privacy_zones_screen.dart';
@@ -552,7 +553,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
           ),
           FilledButton(
             onPressed: () {
-              final v = double.tryParse(controller.text.trim());
+              final v = parseTypedDecimal(controller.text);
               if (v == null || v < minValue || v > maxValue) {
                 Navigator.pop(ctx, null);
               } else {

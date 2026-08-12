@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'goals.dart';
 import 'l10n/locale_support.dart';
 import 'l10n/number_format.dart';
+import 'typed_decimal.dart';
 import 'undo_queue.dart';
 
 enum DistanceUnit { km, mi }
@@ -1153,8 +1154,7 @@ class WeightFormat {
     var s = raw.trim().toLowerCase();
     if (s.isEmpty) return null;
     s = s.replaceAll('kg', '').replaceAll('lbs', '').replaceAll('lb', '').trim();
-    s = s.replaceAll(',', '.');
-    final v = double.tryParse(s);
+    final v = parseTypedDecimal(s);
     if (v == null) return null;
     return toKg(v, unit);
   }

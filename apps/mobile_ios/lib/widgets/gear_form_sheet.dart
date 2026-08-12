@@ -6,6 +6,7 @@ import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../preferences.dart';
+import '../typed_decimal.dart';
 import '../undo_queue.dart';
 import 'full_screen_form.dart';
 import 'top_banner.dart';
@@ -251,7 +252,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
   int? _parseTargetMetres() {
     final raw = _target.text.trim();
     if (raw.isEmpty) return null;
-    final n = double.tryParse(raw);
+    final n = parseTypedDecimal(raw);
     if (n == null || n <= 0) return null;
     final mult =
         widget.preferences.unit == DistanceUnit.mi ? 1609.344 : 1000.0;

@@ -8,6 +8,7 @@ import '../onboarding.dart';
 import '../preferences.dart';
 import '../text_limits.dart';
 import '../settings_sync.dart';
+import '../typed_decimal.dart';
 import '../widgets/top_banner.dart';
 
 /// Post-signup setup wizard — mobile twin of web's 7-step `/onboarding`
@@ -179,7 +180,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
         SettingsKeys.pushNotifications: _pushNotifications,
       };
       if (_primaryGoal != null) bag[SettingsKeys.primaryGoal] = _primaryGoal;
-      final w = double.tryParse(_weightCtl.text.trim().replaceAll(',', '.'));
+      final w = parseTypedDecimal(_weightCtl.text);
       if (w != null && w > 0) bag[SettingsKeys.bodyWeightKg] = w;
       // DOB mirrors into the bag only under health consent — the bag copy
       // feeds the coach / leaderboard read paths (Art 9 surfaces). The

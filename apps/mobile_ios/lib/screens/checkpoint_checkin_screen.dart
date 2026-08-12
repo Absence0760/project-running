@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../auth_error.dart';
 import '../local_crossings_store.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../typed_decimal.dart';
 import '../widgets/top_banner.dart';
 
 /// P3 weigh-in fields are Art 9 health data — gated fail-closed behind this
@@ -459,7 +460,7 @@ class _WeighInSheetState extends State<_WeighInSheet> {
                   Navigator.of(context).pop(_WeighInResult(
                     consent: _consent,
                     bodyWeightKg: _consent
-                        ? double.tryParse(_weight.text.trim())
+                        ? parseTypedDecimal(_weight.text)
                         : null,
                     medicalHold: _consent ? _medicalHold : null,
                   ));

@@ -34,6 +34,7 @@ import '../grade_adjusted_pace.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
+import '../typed_decimal.dart';
 import 'settings_preferences_screen.dart';
 import '../widgets/fundraiser_section.dart';
 import '../widgets/live_run_map.dart';
@@ -570,9 +571,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   controller: distanceCtl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
+                  inputFormatters: typedDecimalInputFormatters,
                   decoration: InputDecoration(
                     labelText: l10n.runDetailFieldDistance,
                     suffixText: UnitFormat.distanceLabel(unit),
@@ -744,7 +743,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   static double? _parseDistanceMetres(String raw, DistanceUnit unit) {
-    final v = double.tryParse(raw.trim());
+    final v = parseTypedDecimal(raw);
     if (v == null || v <= 0) return null;
     return unit == DistanceUnit.mi ? v * _metresPerMile : v * 1000;
   }
