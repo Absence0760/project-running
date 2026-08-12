@@ -7,6 +7,7 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../social_service.dart';
+import '../typed_decimal.dart';
 import 'full_screen_form.dart';
 
 /// Full-screen dialog for creating a new event under a club. Mirrors
@@ -152,8 +153,7 @@ class _EventFormState extends State<_EventForm> {
       return;
     }
     final athletic = isAthleticEventCategory(_category);
-    final distance =
-        athletic ? double.tryParse(_distanceKm.text.trim()) : null;
+    final distance = athletic ? parseTypedDecimal(_distanceKm.text) : null;
     final duration = int.tryParse(_durationMin.text.trim());
     final discipline = _category == 'class' ? _discipline.text.trim() : null;
     setState(() {

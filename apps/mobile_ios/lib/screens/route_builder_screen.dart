@@ -28,6 +28,7 @@ import '../route_overlap.dart';
 import '../routing.dart';
 import '../social_service.dart';
 import '../run_stats.dart' show haversineMetres;
+import '../typed_decimal.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/confirm_discard.dart';
 import '../widgets/live_run_map.dart'
@@ -1547,7 +1548,7 @@ class _GenerateLoopDialogState extends State<_GenerateLoopDialog> {
   }
 
   void _submit() {
-    final v = double.tryParse(_ctl.text.trim());
+    final v = parseTypedDecimal(_ctl.text);
     if (v == null || v <= 0) {
       Navigator.pop(context);
       return;

@@ -5649,4 +5649,59 @@ void main() {
     expect(body.contains(r'$'), isTrue,
         reason: 'the body interpolates nothing — the match is probably wrong');
   });
+
+  // A number the user typed reaches the app through a TextEditingController,
+  // and five of the seven shipped locales (de, es, fr, pt, pt_BR) put a comma
+  // on the decimal key. `double.tryParse` only understands a dot, so a raw
+  // parse either drops the value to null or — behind a `[0-9.]` input filter
+  // that deletes the comma first — reads "5,2" as 52 and saves a 5.2 km run
+  // as 52 km. Both failures are silent. parseTypedDecimal is the one reader
+  // that accepts either separator; these guards keep new fields on it.
+  group('typed decimals are read locale-tolerantly', () {
+    List<File> libSources() => Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+
+    test('no controller text is parsed with a bare double.tryParse', () {
+      final offenders = <String>[];
+      for (final f in libSources()) {
+        for (final m
+            in RegExp(r'double\.tryParse\([^)]*\.text').allMatches(
+          f.readAsStringSync(),
+        )) {
+          offenders.add('${f.path}: ${m.group(0)}');
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'read typed text with parseTypedDecimal (lib/typed_decimal.dart) '
+            'so a comma decimal survives:\n${offenders.join('\n')}',
+      );
+    });
+
+    test('no decimal field filters the comma out of its own input', () {
+      final offenders = <String>[];
+      for (final f in libSources()) {
+        if (f.path.endsWith('typed_decimal.dart')) continue;
+        final src = f.readAsStringSync();
+        for (final m in RegExp(r"allow\(RegExp\(r'\[[^\]]*\]'\)\)").allMatches(src)) {
+          final pattern = m.group(0)!;
+          if (pattern.contains('.') && !pattern.contains(',')) {
+            offenders.add('${f.path}: $pattern');
+          }
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'a filter that admits "." but not "," deletes the comma a de/'
+            'es/fr/pt keyboard produces, turning 5,2 into 52 before any parse. '
+            'Use typedDecimalInputFormatters:\n${offenders.join('\n')}',
+      );
+    });
+  });
 }

@@ -14,6 +14,7 @@ import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
 import '../progression_prefill.dart';
+import '../typed_decimal.dart';
 import '../widgets/gym_execution_band.dart';
 import '../widgets/top_banner.dart';
 
@@ -325,14 +326,13 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
   _EnteredSet _entered() {
     final reps = int.tryParse(_reps.text.trim());
     final weightKg = WeightFormat.parseToKg(_weight.text, activeWeightUnit);
-    final rpe = double.tryParse(_rpe.text.trim().replaceAll(',', '.'));
+    final rpe = parseTypedDecimal(_rpe.text);
     return (
       reps: reps,
       weightKg: weightKg,
       rpe: rpe,
       durationS: int.tryParse(_duration.text.trim()),
-      distanceM:
-          double.tryParse(_distance.text.trim().replaceAll(',', '.')),
+      distanceM: parseTypedDecimal(_distance.text),
     );
   }
 

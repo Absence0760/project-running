@@ -22,6 +22,7 @@ import '../meal_template.dart';
 import '../nutrition_budget.dart';
 import '../nutrition_targets.dart';
 import '../preferences.dart';
+import '../typed_decimal.dart';
 import '../undo_queue.dart';
 import '../recipe.dart';
 import '../nutrition_totals.dart';
@@ -606,7 +607,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
               ctx,
               (
                 name: nameController.text,
-                servings: double.tryParse(servingsController.text) ?? 1,
+                servings: parseTypedDecimal(servingsController.text) ?? 1,
               ),
             ),
             child: Text(l10n.nutritionSaveRecipe),

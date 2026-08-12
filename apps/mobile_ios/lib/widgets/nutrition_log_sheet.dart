@@ -10,6 +10,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_food_store.dart';
 import '../nutrition_totals.dart';
+import '../typed_decimal.dart';
 import 'full_screen_form.dart';
 
 /// Open the nutrition log composer as a fullscreen dialog. Resolves `true`
@@ -242,15 +243,15 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
     if (name.isEmpty) return;
     await _log(
       itemName: name,
-      calories: double.tryParse(_manualKcal.text),
-      proteinG: double.tryParse(_manualProtein.text),
-      carbsG: double.tryParse(_manualCarbs.text),
-      fatG: double.tryParse(_manualFat.text),
-      fiberG: double.tryParse(_manualFiber.text),
-      sugarG: double.tryParse(_manualSugar.text),
-      sodiumMg: double.tryParse(_manualSodium.text),
-      saturatedFatG: double.tryParse(_manualSatFat.text),
-      cholesterolMg: double.tryParse(_manualCholesterol.text),
+      calories: parseTypedDecimal(_manualKcal.text),
+      proteinG: parseTypedDecimal(_manualProtein.text),
+      carbsG: parseTypedDecimal(_manualCarbs.text),
+      fatG: parseTypedDecimal(_manualFat.text),
+      fiberG: parseTypedDecimal(_manualFiber.text),
+      sugarG: parseTypedDecimal(_manualSugar.text),
+      sodiumMg: parseTypedDecimal(_manualSodium.text),
+      saturatedFatG: parseTypedDecimal(_manualSatFat.text),
+      cholesterolMg: parseTypedDecimal(_manualCholesterol.text),
     );
   }
 

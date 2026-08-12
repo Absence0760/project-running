@@ -6,6 +6,7 @@ import '../gym_prs.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
 import '../preferences.dart';
+import '../typed_decimal.dart';
 import 'exercise_catalogue_picker.dart';
 import 'full_screen_form.dart';
 
@@ -369,7 +370,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
           reps: int.tryParse(s.reps.text.trim()),
           // Entry is in the user's display unit; store canonical kg.
           weightKg: WeightFormat.parseToKg(s.weight.text, activeWeightUnit),
-          rpe: double.tryParse(s.rpe.text.trim()),
+          rpe: parseTypedDecimal(s.rpe.text),
           setType: s.setType,
           // duration_s is a non-negative integer column; clamp a stray negative.
           durationS: durationS == null ? null : (durationS < 0 ? 0 : durationS),

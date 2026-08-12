@@ -125,6 +125,37 @@ void main() {
       expect(s.runs.runs, isEmpty);
     });
 
+    // Reason: five of the seven shipped locales (de, es, fr, pt, pt_BR) put a
+    // comma on the decimal key, and the distance field used to filter it out
+    // — so a German runner's "5,2" reached the parser as "52" and a 5.2 km
+    // run was stored as 52 km, silently and with nothing to notice.
+    testWidgets('a comma decimal saves the distance the runner typed',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s.runs, s.routes, s.prefs);
+
+      await tester.enterText(find.byType(TextFormField).first, '5,2');
+      await tester.enterText(
+        find.descendant(
+          of: find.bySemanticsLabel('Minutes'),
+          matching: find.byType(TextField),
+        ),
+        '30',
+      );
+      await tester.pump();
+
+      // runStore.save writes a real file, which the fake-async clock never
+      // pumps — the tap has to run on the real event loop (runs_screen_test
+      // idiom).
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Save'));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pump();
+
+      expect(s.runs.runs.single.distanceMetres, closeTo(5200, 0.01));
+    });
+
     // Reason: the route-picker section was previously gated on
     // `routes.isNotEmpty`, so a user with zero saved routes saw no
     // indication that route-attachment exists. Field report: "I

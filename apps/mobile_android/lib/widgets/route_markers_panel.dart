@@ -10,6 +10,7 @@ import '../preferences.dart';
 import '../route_geometry.dart';
 import '../route_markers.dart';
 import '../route_snap.dart';
+import '../typed_decimal.dart';
 import '../undo_queue.dart';
 import 'live_run_map.dart';
 import 'top_banner.dart';
@@ -582,7 +583,7 @@ List<RouteMarkerRow> sortMarkerRows(List<RouteMarkerRow> rows) => [
     ];
 
 double? parseMarkerCoordinate(String text, double max) {
-  final v = double.tryParse(text.trim());
+  final v = parseTypedDecimal(text);
   if (v == null || v.isNaN || v.abs() > max) return null;
   return v;
 }
@@ -600,7 +601,7 @@ String formatMarkerCoordinate(double v) {
 /// fraction clamp, so callers get a valid on-route point for an over-long
 /// value rather than a rejection.
 double? parseDistanceAlong(String text, {required DistanceUnit unit}) {
-  final v = double.tryParse(text.trim());
+  final v = parseTypedDecimal(text);
   if (v == null || !v.isFinite || v < 0) return null;
   return unit == DistanceUnit.mi ? v * kMetresPerMile : v * 1000;
 }

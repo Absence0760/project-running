@@ -7,6 +7,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../nutrition_targets.dart' show activityLevels, goalKcalDelta;
 import '../preferences.dart';
 import '../settings_sync.dart';
+import '../typed_decimal.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
@@ -108,8 +109,7 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     final l10n = AppLocalizations.of(context);
     final api = widget.api;
     if (api == null) return;
-    final hRaw = _heightCtl.text.trim().replaceAll(',', '.');
-    final h = double.tryParse(hRaw);
+    final h = parseTypedDecimal(_heightCtl.text);
     final heightVal = (h != null && h > 0) ? h : null;
     final weightKg = WeightFormat.parseToKg(_weightCtl.text, _unit);
     final weightVal = (weightKg != null && weightKg > 0) ? weightKg : null;
