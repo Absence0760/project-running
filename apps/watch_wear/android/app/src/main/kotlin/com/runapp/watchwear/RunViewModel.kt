@@ -1044,6 +1044,16 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     isPublic = snapshotIsPublic(),
                 )
             )
+            // Only now is the run recorded somewhere the checkpoint is no
+            // longer needed for, so only now may the checkpoint go. The
+            // service used to clear it as it tore itself down, in parallel
+            // with this write: a kill between the two — likeliest right
+            // there, since the process has just left foreground-service
+            // state — erased the queue entry and the snapshot that would
+            // have rebuilt it. Clearing after the write means the worst
+            // case is a checkpoint outliving a banked run, which
+            // `recoveryActionFor` discards without prompting.
+            checkpoints.clear()
             RecordingRepository.reset()
             drainQueue(force = true)
             if (race != null) {
