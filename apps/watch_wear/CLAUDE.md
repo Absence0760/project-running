@@ -274,11 +274,17 @@ backgrounding, low-memory kills).
   the elapsed clock every 500ms, posts notification updates, holds the
   wake lock.
 - `recording/CheckpointStore.kt` — DataStore snapshot of an in-progress
-  run, written every 15s during recording. On next launch, if a
-  checkpoint exists, the pre-run screen shows a **"Recover unsaved
-  run?"** prompt — accepting saves it as a finished run (queued for
-  upload), discarding clears it. This is what saves a run when the
-  process is killed mid-recording.
+  run, written every 15s during recording. On next launch a surviving
+  checkpoint is graded (below); one that still holds the only copy of a
+  run raises the **"Recover unsaved run?"** prompt on the pre-run screen
+  — accepting saves it as a finished run (queued for upload), discarding
+  clears it. This is what saves a run when the process is killed
+  mid-recording. **The service never clears it**: stopping publishes
+  `Finished` and tears the service down, and the checkpoint is cleared by
+  `RunViewModel.handleFinishedRun` *after* `LocalRunStore` has accepted
+  the run. Clearing it in the service ran concurrently with that write,
+  right as the process left foreground-service state, so a kill in the
+  window lost both records of the run.
 - `recording/CheckpointRecovery.kt` — grades a surviving checkpoint
   before it is offered (`recoveryActionFor`), because `saveRun` upserts
   on the run id and re-uploads to the same Storage key: recovering a run
