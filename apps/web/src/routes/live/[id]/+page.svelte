@@ -948,6 +948,7 @@
 					class:tight={eta.status === 'tight'}
 					class:behind={eta.status === 'behind'}
 					class:stale={eta.status === 'unknown' && isStale}
+					class:expired={eta.limitPassed}
 					aria-label={m('live.cutoffTitle')}
 				>
 					<div class="cutoff-head">
@@ -967,6 +968,21 @@
 								>
 							{/if}
 						</div>
+						{#if eta.limitPassed}
+							<span class="cutoff-expired" data-testid="cutoff-expired">
+								{m('live.cutoffExpired')}
+							</span>
+						{:else if eta.requiredPaceSecPerKm != null && eta.status !== 'on'}
+							<span class="cutoff-required" data-testid="cutoff-required">
+								{isStale
+									? m('live.cutoffRequiredPaceStale', {
+											p: formatPace(eta.requiredPaceSecPerKm, 1000),
+										})
+									: m('live.cutoffRequiredPace', {
+											p: formatPace(eta.requiredPaceSecPerKm, 1000),
+										})}
+							</span>
+						{/if}
 						{#if eta.status === 'unknown'}
 							<span class="cutoff-waiting"
 								>{isStale
@@ -1460,6 +1476,13 @@
 		font-style: normal;
 		font-weight: 600;
 	}
+	/* An expired limit outranks every other edge state, including the amber
+	 * stale one: the deadline is gone whether or not the fix is current, and
+	 * that is the fact the crew at the checkpoint is deciding on. Declared
+	 * after `.stale` so it wins at equal specificity. */
+	.cutoff-card.expired {
+		border-inline-start-color: var(--color-danger);
+	}
 	.cutoff-head {
 		display: flex;
 		align-items: baseline;
@@ -1532,6 +1555,23 @@
 		font-size: 0.8rem;
 		color: var(--color-text-tertiary);
 		font-style: italic;
+	}
+	.cutoff-expired {
+		display: inline-flex;
+		align-items: center;
+		padding: var(--space-2xs) var(--space-md);
+		border-radius: 9999px;
+		font-size: 0.78rem;
+		font-weight: 700;
+		background: var(--color-danger-light);
+		color: var(--color-danger-text);
+		border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+	}
+	.cutoff-required {
+		font-size: 0.8rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--color-text-secondary);
 	}
 
 	.return-card {

@@ -4802,6 +4802,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get liveCutoffSignalLost => 'Signal lost — can\'t project arrival';
 
   @override
+  String get liveCutoffExpired => 'Cut-off time has passed';
+
+  @override
+  String liveCutoffRequiredPace(String pace) {
+    return 'Needs $pace from here';
+  }
+
+  @override
+  String liveCutoffRequiredPaceStale(String pace) {
+    return 'Needs $pace from the last fix';
+  }
+
+  @override
   String get plansTitle => 'Training plans';
 
   @override

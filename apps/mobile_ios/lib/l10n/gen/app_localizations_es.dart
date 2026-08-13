@@ -4845,6 +4845,19 @@ class AppLocalizationsEs extends AppLocalizations {
       'Señal perdida: no se puede estimar la llegada';
 
   @override
+  String get liveCutoffExpired => 'El tiempo de corte ya ha pasado';
+
+  @override
+  String liveCutoffRequiredPace(String pace) {
+    return 'Necesita $pace desde aquí';
+  }
+
+  @override
+  String liveCutoffRequiredPaceStale(String pace) {
+    return 'Necesita $pace desde la última posición';
+  }
+
+  @override
   String get plansTitle => 'Planes de entrenamiento';
 
   @override

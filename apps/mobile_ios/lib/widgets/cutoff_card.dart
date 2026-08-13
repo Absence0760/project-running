@@ -16,6 +16,17 @@ import '../preferences.dart';
 /// lost" line (a runner who went dark mid-race must not be mislabelled as
 /// still starting up), while a fresh fix with no pace yet keeps the neutral
 /// "waiting for a fresh signal" line.
+///
+/// Suppressing the *verdict* must not suppress what the card still knows.
+/// [LiveCutoffEta.requiredPaceSecPerKm] does not depend on recent pace, so the
+/// go/no-go number survives the stale branch — labelled from the last fix, so
+/// it can't be read as measured from where the runner is now. And an expired
+/// limit ([LiveCutoffEta.limitPassed]) is stated outright rather than left
+/// behind "Signal lost": the deadline is gone whether or not the fix is
+/// current, and it is the fact the crew at the checkpoint is deciding on.
+/// The two never co-render — a passed limit is exactly when required pace is
+/// null, and the flag exists so this surface never fires off the *other* null
+/// (a checkpoint under 50 m away).
 class CutoffCard extends StatelessWidget {
   final LiveCutoffEta eta;
   final bool stale;
@@ -80,6 +91,29 @@ class CutoffCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
+          if (eta.limitPassed)
+            StatusPill(
+              label: l10n.liveCutoffExpired,
+              foreground: semantic.danger,
+              fill: semantic.danger.withValues(alpha: 0.15),
+            )
+          else if (eta.requiredPaceSecPerKm != null &&
+              eta.status != LiveCutoffStatus.on)
+            Text(
+              stale
+                  ? l10n.liveCutoffRequiredPaceStale(
+                      formatPaceForPref(eta.requiredPaceSecPerKm!))
+                  : l10n.liveCutoffRequiredPace(
+                      formatPaceForPref(eta.requiredPaceSecPerKm!)),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          if (eta.limitPassed ||
+              (eta.requiredPaceSecPerKm != null &&
+                  eta.status != LiveCutoffStatus.on))
+            const SizedBox(height: 8),
           if (unknown)
             Text(
               stale ? l10n.liveCutoffSignalLost : l10n.liveCutoffWaitingSignal,

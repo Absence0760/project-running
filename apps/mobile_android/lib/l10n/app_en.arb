@@ -6535,6 +6535,28 @@
   "@liveCutoffSignalLost": {
     "description": "Spectator next-cutoff card — shown instead of a verdict when the last fix is stale (runner went dark)"
   },
+  "liveCutoffExpired": "Cut-off time has passed",
+  "@liveCutoffExpired": {
+    "description": "Spectator next-cutoff card — the checkpoint's limit is already in the past; no pace can make it"
+  },
+  "liveCutoffRequiredPace": "Needs {pace} from here",
+  "@liveCutoffRequiredPace": {
+    "description": "Spectator next-cutoff card — flat pace still needed over the remaining distance to make the cutoff",
+    "placeholders": {
+      "pace": {
+        "type": "String"
+      }
+    }
+  },
+  "liveCutoffRequiredPaceStale": "Needs {pace} from the last fix",
+  "@liveCutoffRequiredPaceStale": {
+    "description": "Spectator next-cutoff card — required pace when the position is stale, measured from the last known fix rather than where the runner is now",
+    "placeholders": {
+      "pace": {
+        "type": "String"
+      }
+    }
+  },
   "plansTitle": "Training plans",
   "@plansTitle": {
     "description": "Plans list AppBar title"

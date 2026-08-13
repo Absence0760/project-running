@@ -4860,6 +4860,19 @@ class AppLocalizationsFr extends AppLocalizations {
       'Signal perdu — arrivée impossible à estimer';
 
   @override
+  String get liveCutoffExpired => 'L\'heure de la barrière est dépassée';
+
+  @override
+  String liveCutoffRequiredPace(String pace) {
+    return 'Il faut $pace à partir d\'ici';
+  }
+
+  @override
+  String liveCutoffRequiredPaceStale(String pace) {
+    return 'Il faut $pace depuis le dernier point';
+  }
+
+  @override
   String get plansTitle => 'Plans d\'entraînement';
 
   @override
