@@ -41,35 +41,39 @@ export function gearPurchaseSince(purchasedAt: string | null | undefined): numbe
 	return Number.isFinite(ms) ? ms : null;
 }
 
-/// Runs a gear kind can plausibly have been worn for. Bikes take cycling
-/// only; shoes take the foot-powered activities. An unrecognised kind falls
-/// through to shoe semantics rather than returning nothing, so a future gear
-/// kind can't silently make the prompt disappear.
-function allowedActivitiesFor(gearKind: string): ReadonlySet<string> {
-	switch (gearKind) {
-		case 'bike':
-			return new Set(['cycle']);
-		case 'shoe':
-		default:
-			return new Set(['run', 'walk', 'hike']);
-	}
+/// Can this activity plausibly have been done in this gear kind?
+///
+/// DERIVED as "the bike takes cycling, everything else takes shoes", which is
+/// the `auto_tag_default_gear` trigger's mapping verbatim (`case activity_type
+/// when 'cycle' then 'bike' else 'shoe' end`, re-emitted over the promoted
+/// column by migration `20261207_001`). Deliberately NOT an enumerated shoe
+/// allowlist: `{run, walk, hike}` silently dropped `stroller` — a real value in
+/// `runs_activity_type_check` — so the trigger auto-tagged a stroller run with
+/// the current pair while backfill never offered it. An enumeration has to be
+/// revisited every time the CHECK grows; this cannot fall behind it.
+///
+/// An unrecognised gear kind falls through to shoe semantics rather than
+/// returning nothing, so a future gear kind can't silently make the prompt
+/// disappear either.
+function matchesGearKind(gearKind: string, activity: string): boolean {
+	return gearKind === 'bike' ? activity === 'cycle' : activity !== 'cycle';
 }
 
 /// Past runs that are plausible backfill candidates for a piece of gear:
 /// activity matches the gear kind, started on or after `sinceMs`. Returned
 /// newest-first so the prompt's default selection lands on the most recent
 /// runs. A run with no `activity_type` counts as a run, matching the rest of
-/// the app (and the `auto_tag_default_gear` trigger).
+/// the app (and the `auto_tag_default_gear` trigger, whose kind mapping this
+/// mirrors — see `matchesGearKind`).
 export function gearBackfillCandidates<T extends GearBackfillRun>(opts: {
 	gearKind: string;
 	sinceMs: number;
 	runs: readonly T[];
 }): T[] {
-	const allowed = allowedActivitiesFor(opts.gearKind);
 	return opts.runs
 		.filter((r) => {
 			const activity = (r.activity_type ?? 'run').toLowerCase();
-			if (!allowed.has(activity)) return false;
+			if (!matchesGearKind(opts.gearKind, activity)) return false;
 			// A NaN parse (a malformed started_at) fails this comparison and
 			// drops the row — a run we can't date can't be placed in the
 			// window, and offering it would be a guess.
