@@ -488,7 +488,10 @@ class SocialService extends ChangeNotifier {
       final rows = ((raw ?? <dynamic>[]) as List)
           .whereType<Map<String, dynamic>>()
           .toList();
-      return _enrichClubs(rows);
+      // `await` is load-bearing, not style: returning the future bare
+      // leaves the enrichment queries outside this try, so a failure in
+      // them escapes to the caller instead of degrading below.
+      return await _enrichClubs(rows);
     } catch (e, s) {
       // Per the web fallback: if the RPC fails (e.g. it's not deployed
       // in a dev env, or the planner threw on a malformed bbox) we
@@ -568,7 +571,9 @@ class SocialService extends ChangeNotifier {
           .maybeSingle();
       final clubId = row?[EventRow.colClubId] as String?;
       if (clubId == null || clubId.isEmpty) return null;
-      return fetchClubSlugById(clubId);
+      // Awaited so the never-rethrow contract holds on its own rather
+      // than resting on [fetchClubSlugById] keeping its internal catch.
+      return await fetchClubSlugById(clubId);
     } catch (e) {
       debugPrint('fetchClubSlugForEvent failed: $e');
       return null;

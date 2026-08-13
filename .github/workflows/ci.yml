@@ -33,6 +33,18 @@ permissions:
 # declares `runs.using: node20`.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Every `subosito/flutter-action` below is SHA-pinned but used to take
+  # only `channel: stable`, so the SDK itself floated: whatever Flutter
+  # was newest when a job started is what ran. On 2026-08-12 that turned
+  # a green PR red with no code change — 3.47.0 (Dart 3.13) published at
+  # 18:52 UTC, 51 minutes after main's last green run finished, and its
+  # new `unawaited_return_in_try_block` warning fired on untouched code.
+  # `dart analyze` exits 2 on any warning. Pin the version so a new
+  # upstream release arrives as a deliberate bump (new lints, new
+  # deprecations, engine changes) instead of at random on an unrelated
+  # PR. Bump this one value to move every job at once; the release
+  # workflows still float and should be pinned in the same sweep.
+  FLUTTER_VERSION: "3.47.0"
 
 jobs:
   # ci.yml used to skip itself on docs-only diffs via `paths-ignore`, which
@@ -150,6 +162,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - run: dart pub global activate melos
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
@@ -330,6 +343,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.21.0
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - run: dart run scripts/check_parity_matrix.dart
 
   watch-ble-uuids:
@@ -877,6 +891,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           # Cache the Flutter SDK install — saves ~60-90s per run on
           # the ~700MB download + setup. The action keys on channel +
           # version, so a Flutter bump invalidates cleanly.
@@ -966,6 +981,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
@@ -993,6 +1009,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
@@ -1070,6 +1087,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node 24 — the web read half decodes the gzipped track with the
