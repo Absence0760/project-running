@@ -109,6 +109,40 @@ test('gearBackfillCandidates: case-insensitive activity_type match', () => {
 	);
 });
 
+test('gearBackfillCandidates: a stroller run is offered for shoes, never for bikes', () => {
+	// `stroller` is in runs_activity_type_check and the auto_tag_default_gear
+	// trigger maps it to a SHOE (everything that isn't cycle is), so a stroller
+	// run is auto-tagged with the runner's current pair at insert. An
+	// enumerated {run, walk, hike} allowlist dropped it from the backfill offer
+	// — the trigger and the prompt disagreeing about the same run.
+	const runs = [run('stroll', '2026-01-05', 'stroller')];
+	assert.deepEqual(
+		ids(gearBackfillCandidates({ gearKind: 'shoe', sinceMs: since, runs })),
+		['stroll'],
+	);
+	assert.deepEqual(
+		ids(gearBackfillCandidates({ gearKind: 'bike', sinceMs: since, runs })),
+		[],
+	);
+});
+
+test('gearBackfillCandidates: the shoe set is derived as "not cycle", not enumerated', () => {
+	// The durable half of the case above. A value the CHECK grows tomorrow must
+	// be covered the day it lands, without anyone remembering to edit this
+	// helper — so an activity nobody here has heard of is foot-powered, exactly
+	// as the trigger's `else 'shoe'` treats it. Re-enumerating the shoe set
+	// fails here even if `stroller` is remembered.
+	const runs = [run('future', '2026-01-05', 'snowshoe')];
+	assert.deepEqual(
+		ids(gearBackfillCandidates({ gearKind: 'shoe', sinceMs: since, runs })),
+		['future'],
+	);
+	assert.deepEqual(
+		ids(gearBackfillCandidates({ gearKind: 'bike', sinceMs: since, runs })),
+		[],
+	);
+});
+
 test('gearBackfillCandidates: unknown gear kind falls through to shoe semantics', () => {
 	// Defensive — keeps the helper from silently returning empty if a future
 	// gear kind ("strap"?) leaks into the call.
