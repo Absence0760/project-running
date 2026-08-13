@@ -91,9 +91,41 @@ test('filterCatalogue: a segment with no region is still searchable by name', ()
 	assert.deepEqual(ids(filterCatalogue(rows, { query: 'paris' })), []);
 });
 
-test('filterCatalogue: region filter is an exact match', () => {
+test('filterCatalogue: region filter is a whole-value match, not a substring', () => {
 	assert.deepEqual(ids(filterCatalogue(CATALOGUE, { region: 'Paris, FR' })), ['a']);
 	assert.deepEqual(ids(filterCatalogue(CATALOGUE, { region: 'Paris' })), []);
+});
+
+test('filterCatalogue: the region filter returns every row its own dropdown option covers', () => {
+	// The defect this pins: catalogueRegions dedupes case/accent variants onto
+	// ONE offered spelling, so an exact unfolded comparison here returned only
+	// the rows spelled that way — the filter silently lost matches the list it
+	// was built from asserts exist.
+	const rows = [
+		seg({ id: 'a', region: 'Zürich, CH' }),
+		seg({ id: 'b', region: 'zurich, ch' }),
+		seg({ id: 'c', region: 'Oslo, NO' }),
+	];
+	const offered = catalogueRegions(rows);
+	assert.deepEqual(offered, ['Oslo, NO', 'Zürich, CH'], 'the two spellings collapse to one option');
+	assert.deepEqual(ids(filterCatalogue(rows, { region: 'Zürich, CH' })), ['a', 'b']);
+	// And every offered option finds at least the row it was derived from.
+	for (const region of offered) {
+		assert.ok(filterCatalogue(rows, { region }).length > 0, `${region} matched nothing`);
+	}
+});
+
+test('filterCatalogue: surrounding whitespace on a region filter is not a different region', () => {
+	assert.deepEqual(ids(filterCatalogue(CATALOGUE, { region: '  Paris, FR  ' })), ['a']);
+});
+
+test('filterCatalogue: the surface filter stays verbatim — a token is not free text', () => {
+	// Deliberate asymmetry with region: `surface` is a CHECK-constrained
+	// identifier, and catalogueSurfaces does not fold-dedupe, so nothing offers
+	// a spelling the database does not hold. Folding it would invent an
+	// equivalence the schema does not have.
+	assert.deepEqual(ids(filterCatalogue(CATALOGUE, { surface: 'ROAD' })), []);
+	assert.deepEqual(ids(filterCatalogue(CATALOGUE, { surface: 'road' })), ['a', 'b']);
 });
 
 test('filterCatalogue: surface filter is an exact match', () => {

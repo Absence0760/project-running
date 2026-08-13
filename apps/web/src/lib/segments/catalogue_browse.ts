@@ -82,14 +82,33 @@ function byName(a: CatalogueSegment, b: CatalogueSegment): number {
 	return 0;
 }
 
+/**
+ * The identity `catalogueRegions` dedupes on AND `filterCatalogue` compares
+ * against — one function for both, because they are one decision. The dropdown
+ * collapses "Zürich, CH" and "zurich, ch" onto a single offered spelling, so a
+ * filter matching the raw string would return half the rows its own option
+ * claims to cover: a fold-built list feeding an exact-match filter loses
+ * matches the list asserts exist. That is the mirror of the property the text
+ * query is careful to hold, and it has to be closed in the same place.
+ *
+ * Regions are free-text curator input, which is why they fold. `surface` is a
+ * CHECK-constrained identifier (`road` / `trail` / `mixed`), so
+ * `catalogueSurfaces` does not fold-dedupe and the surface filter compares
+ * verbatim — folding a database token would be inventing equivalences the
+ * database does not have.
+ */
+function regionKey(region: string | null | undefined): string | null {
+	const trimmed = region?.trim();
+	return trimmed ? fold(trimmed) : null;
+}
+
 /** Distinct non-blank regions present in the catalogue, in display order. */
 export function catalogueRegions(segments: readonly CatalogueSegment[]): string[] {
 	const seen = new Map<string, string>();
 	for (const s of segments) {
-		const region = s.region?.trim();
-		if (!region) continue;
-		const key = fold(region);
-		if (!seen.has(key)) seen.set(key, region);
+		const key = regionKey(s.region);
+		if (key == null) continue;
+		if (!seen.has(key)) seen.set(key, s.region!.trim());
 	}
 	return Array.from(seen.entries())
 		.sort(([a], [b]) => (a === b ? 0 : a < b ? -1 : 1))
@@ -125,8 +144,10 @@ export function catalogueSurfaces(segments: readonly CatalogueSegment[]): string
 /**
  * Narrows the catalogue to the rows matching every supplied filter. The text
  * query matches a segment's name OR its region, so "Berlin" and "Tiergarten"
- * both find the same row; region and surface are exact matches against the
- * values `catalogueRegions` / `catalogueSurfaces` offered.
+ * both find the same row. Region and surface are whole-value matches against
+ * what `catalogueRegions` / `catalogueSurfaces` offered — region through
+ * `regionKey` (see there for why one folds and the other does not), surface
+ * verbatim.
  *
  * Returns a new array — the caller's list is a `$derived` source and must not
  * be mutated.
@@ -136,10 +157,10 @@ export function filterCatalogue(
 	filters: CatalogueFilters = {},
 ): CatalogueSegment[] {
 	const query = fold(filters.query?.trim() ?? '');
-	const region = filters.region?.trim() || null;
+	const region = regionKey(filters.region);
 	const surface = filters.surface?.trim() || null;
 	return segments.filter((s) => {
-		if (region != null && s.region !== region) return false;
+		if (region != null && regionKey(s.region) !== region) return false;
 		if (surface != null && s.surface !== surface) return false;
 		if (!query) return true;
 		return fold(s.name).includes(query) || fold(s.region ?? '').includes(query);
