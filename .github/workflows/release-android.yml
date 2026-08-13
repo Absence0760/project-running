@@ -53,6 +53,14 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Must equal ci.yml's FLUTTER_VERSION: CI is what validates the code this
+  # workflow ships, so a release built on a different SDK than CI tested is
+  # an untested binary. A release has no green/red signal to tell you the
+  # toolchain moved either — an unpinned `channel: stable` here would ship
+  # whatever Flutter was newest at tag time. `scripts/check_flutter_version_pin.mjs`
+  # (the `workflow-lint` job) fails CI if the three workflows disagree, so
+  # bump them together. Rationale: decisions.md § 595.
+  FLUTTER_VERSION: "3.47.0"
 
 jobs:
   release:
@@ -86,6 +94,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
 
       - run: dart pub global activate melos
       - run: melos bootstrap

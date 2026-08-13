@@ -513,3 +513,37 @@ Left deliberately untouched, with reasoning in § 596: `coach_roster_summary`
 legitimate viewer) and `join_club_by_token` (never consults `is_public`;
 whether a hidden club still accepts an invite is a product question about
 freezing hidden entities, not a leak).
+
+## CI toolchain pins (2026-08-13)
+
+Closed in the § 595 round: the Flutter SDK now carries an explicit
+`FLUTTER_VERSION` in `ci.yml`, `release-android.yml` and `release-ios.yml`,
+with `scripts/check_flutter_version_pin.mjs` failing CI when the three
+disagree. Two adjacent questions were examined in the same pass; one needed
+no change, one is left open here.
+
+**`flutter_lints: ^6.0.0` needs no change — the caret is not the pin.** The
+root `pubspec.lock` is COMMITTED (see the rationale in `.gitignore`, added
+after a third-party publish turned main red on 2026-08-05 — the same failure
+class § 595 is about, with a different upstream). All seven Flutter packages
+are members of the one pub workspace, so that single lockfile resolves every
+one of them, and it holds `flutter_lints` at exactly `6.0.0`. `melos
+bootstrap` runs `pub get`, which honours a lockfile; only `pub upgrade` moves
+it. Verified directly: a `flutter pub get` in a fresh worktree left
+`pubspec.lock` unmodified. The caret in `pubspec.yaml` is a resolution
+*constraint*; the lockfile is the pin, and Dependabot's `pub` entry means a
+bump arrives as a reviewable PR rather than silently.
+
+- [ ] **`dart pub global activate melos` is unpinned at six sites** —
+  `ci.yml` (×4), `release-android.yml`, `release-ios.yml`. This is the one
+  toolchain in the build path still floating: the root lockfile pins melos to
+  `7.8.2` as a direct dev dependency, but `pub global activate` ignores the
+  workspace and installs whatever is newest, so a melos release can change
+  `melos bootstrap` / `melos exec` behaviour on an unrelated PR with no commit
+  of ours — exactly the § 595 shape. The fix is `dart pub global activate
+  melos 7.8.2` at all six sites, kept equal to the lockfile (a seventh check
+  in `check_flutter_version_pin.mjs`, or a sibling guard, could enforce that).
+  Deferred rather than ridden along because it changes the tool that drives
+  every Flutter job and both release builds, and unlike the SDK pin it could
+  not be verified locally without installing melos globally on the
+  workstation. Worth doing as its own change, where CI is the test.
