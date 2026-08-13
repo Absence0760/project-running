@@ -36,6 +36,22 @@ model allocates by raw distance. With no elevation data the effort model
 offers a one-tap **Add elevation** that backfills per-waypoint vert from
 Open-Meteo (`routes/elevation.ts`) so effort can fire on any route.
 
+Each segment's grade is measured over an **anchored window** that accumulates
+horizontal distance until it clears `MIN_SEGMENT_M` (5 m), the same walk
+`gradeAdjustedPaceSecPerKm` performs — a short segment is carried forward, not
+graded on its own and not discarded. Grading each point-pair in isolation made
+effort allocation collapse onto even pace on any course sampled finer than 5 m,
+silently, since `hasElevation` and `totalGainM` kept reporting the full climb
+(decisions § 600). A trailing window that never clears the threshold is graded
+flat. The allocation is therefore a property of the terrain, not of the GPX's
+sampling interval.
+
+The per-leg **target pace** — the pace that leg has to be run at to hold the
+goal — is what the effort model actually produces, and it is a column on the
+web crew sheet (and in the copied text) beside the arrival. The `even` model
+prints the same pace on every leg; the effort model prints a slower one on the
+climbs. Mobile shows cumulative arrival only; the mirror is in `followups.md`.
+
 ### Cutoff verdict
 
 `parseCutoff(marker.meta)` (reused from `route_markers`) yields a limit:
