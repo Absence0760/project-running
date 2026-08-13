@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
-	import { createTrainingPlan, fetchActivePlanOverview } from '$lib/core/data';
+	import { createTrainingPlan, fetchActivePlanOverview, fetchRuns } from '$lib/core/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import {
 		GOAL_DISTANCES_M,
@@ -19,6 +19,14 @@
 		TrainingGender,
 	} from '$lib/training/training';
 	import { isSundayIso, nextSundayIso } from '$lib/training/plan_start';
+	import {
+		CHRONIC_WINDOW_WEEKS,
+		openingWeekVolumeM,
+		planRampCheck,
+		recentRunVolume,
+		shouldSurfaceRampNote,
+		type RecentVolume,
+	} from '$lib/training/plan_ramp';
 	import { parsePlanMarkdown, parsePlanJson } from '$lib/training/plan_serialize';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { ageFromDob } from '$lib/nutrition/nutrition_targets';
@@ -40,6 +48,11 @@
 	// read off the profile rather than asked in the wizard. null → the
 	// standard (younger-physiology) schedule.
 	let viewerAge = $state<number | null>(null);
+	// The runner's chronic weekly volume, so the preview can say whether the
+	// plan's opening week is a step the runner's current training supports.
+	// Null until loaded (and on failure) — the note self-hides rather than
+	// grading against a base it doesn't have.
+	let recentVolume = $state<RecentVolume | null>(null);
 	onMount(async () => {
 		if (!auth.user) return;
 		// Self-read via get_my_profile(): gender / date_of_birth are
@@ -54,6 +67,25 @@
 		// early in negative-UTC offsets, misfiring the masters (50) gate.
 		const age = ageFromDob(dob, Date.now());
 		if (age !== null) viewerAge = age;
+	});
+
+	// Its own mount effect, and its own catch: the volume read is an advisory
+	// layer over the wizard, so neither a profile failure above nor a failure
+	// here may take the other — or the plan preview — down with it.
+	onMount(async () => {
+		if (!auth.user) return;
+		try {
+			const fromIso = new Date(
+				Date.now() - CHRONIC_WINDOW_WEEKS * 7 * 86_400_000,
+			).toISOString();
+			const runs = await fetchRuns({
+				columns: 'started_at,distance_m,activity_type',
+				startedAtFrom: fromIso,
+			});
+			recentVolume = recentRunVolume(runs, Date.now());
+		} catch (e) {
+			console.error('Recent-volume read for the plan ramp note failed', e);
+		}
 	});
 
 	const METRES_PER_MILE = 1609.344;
@@ -276,6 +308,27 @@
 	let isWalkRunPlan = $derived(
 		!!plan && plan.weeks.some((w) => w.workouts.some((wo) => wo.kind === 'walk_run'))
 	);
+
+	// How the plan's first week compares with what the runner has actually
+	// been running. Recomputes as the goal / days / weeks inputs change, so
+	// turning a training day off shows the ramp easing in real time.
+	let rampCheck = $derived(
+		plan && recentVolume
+			? planRampCheck(openingWeekVolumeM(plan.weeks), recentVolume)
+			: null
+	);
+	let rampMessage = $derived.by(() => {
+		if (!rampCheck || !shouldSurfaceRampNote(rampCheck, { beginnerWalkRun: isWalkRunPlan })) {
+			return null;
+		}
+		const params = {
+			opening: fmtKm(rampCheck.openingWeekM, 0),
+			recent: fmtKm(rampCheck.recentWeeklyM, 0),
+		};
+		if (rampCheck.verdict === 'under') return t('planEditor.rampUnder', params);
+		if (rampCheck.verdict === 'elevated') return t('planEditor.rampElevated', params);
+		return t('planEditor.rampHigh', params);
+	});
 
 	// Re-generate the editable plan whenever any input that drives
 	// generation changes. Replaces the previous $derived preview so we
@@ -564,6 +617,13 @@
 					{#if plan.vdot}
 						<p class="vdot">{t('planEditor.danielsVdot')} <strong>{plan.vdot.toFixed(1)}</strong></p>
 					{/if}
+				{/if}
+
+				{#if rampMessage}
+					<div class="ramp-note" role="status">
+						<h3>{t('planEditor.rampLabel')}</h3>
+						<p>{rampMessage}</p>
+					</div>
 				{/if}
 
 				<h3>{t('planEditor.weekOutline')}</h3>
@@ -869,6 +929,24 @@
 		font-size: 0.78rem;
 		color: var(--color-text-tertiary);
 		margin: 0 0 0.4rem 0;
+	}
+	/* Full-contrast body text on a plain rule, not a coloured alert panel:
+	   the note is advisory on a surface that already carries the fallback-
+	   paces disclosure, and a second tinted band would out-shout the plan
+	   preview it is annotating. */
+	.ramp-note {
+		border-inline-start: 3px solid var(--color-border);
+		padding-inline-start: 0.7rem;
+		margin: 0.6rem 0 0 0;
+	}
+	.ramp-note h3 {
+		margin: 0 0 0.2rem 0;
+	}
+	.ramp-note p {
+		color: var(--color-text);
+		font-weight: 500;
+		font-size: 0.82rem;
+		margin: 0;
 	}
 	.weeks {
 		list-style: none;
