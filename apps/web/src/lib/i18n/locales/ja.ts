@@ -4392,6 +4392,8 @@ export const messages = {
 	"clubEvent.cancelNoOrder": "キャンセルできる登録が見つかりませんでした。",
 	"clubEvent.cancelRefundFailed": "返金を開始できませんでした。もう一度お試しいただくか、主催者に連絡してください。",
 	"clubEvent.addToCalendar": "カレンダーに追加",
+	"clubEvent.addOccurrenceToCalendar": "この回を追加",
+	"clubEvent.addSeriesToCalendar": "シリーズ全体を追加",
 	// Session planner (session_planner.md P1)
 	"session.title": "セッション",
 	"session.new": "新しいセッション",

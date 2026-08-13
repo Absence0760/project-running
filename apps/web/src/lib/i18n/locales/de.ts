@@ -4397,6 +4397,8 @@ export const messages = {
 	"clubEvent.cancelNoOrder": "Wir konnten keine Anmeldung zum Stornieren finden.",
 	"clubEvent.cancelRefundFailed": "Die Erstattung konnte nicht gestartet werden. Bitte versuche es erneut oder wende dich an den Veranstalter.",
 	"clubEvent.addToCalendar": "In Kalender eintragen",
+	"clubEvent.addOccurrenceToCalendar": "Diesen Termin eintragen",
+	"clubEvent.addSeriesToCalendar": "Ganze Serie eintragen",
 	// Session planner (session_planner.md P1)
 	"session.title": "Sessions",
 	"session.new": "Neue Session",
