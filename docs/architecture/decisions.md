@@ -8409,3 +8409,51 @@ Reproduced on a 4 km 25 % climb followed by 4 km of flat, goal 5400 s, cut-off a
 **The fix is to measure grade the way the sibling already does.** `gradeAdjustedPaceSecPerKm` walks a track accumulating horizontal distance until the accumulation clears `MIN_SEGMENT_M`, then grades that whole window — it *carries a short segment forward* rather than discarding its climb. `walk()` now does the same: distance, gain and loss stay per-pair (they were never wrong), and a second anchored pass fills the grade-adjusted cumulative array window by window, applying each window's factor across the sub-segments inside it so the array stays defined and monotonic at every waypoint for `valueAt` to interpolate. On a copy pair closes its own window immediately and the numbers are unchanged; only the dense case moves, and it moves onto the coarse answer — the reproduction's projected arrival now spans 0.51 s across 20 m, 10 m, 3 m and 1 m sampling of the same terrain, against the 1342 s it. That never clears the thresholdistays flat.** The obvinction is the durable part: an enumeration has to be revisited every time the CHECK grover tail on whatever span it reached, and that reintroduces vocabulary thas now bills it at ~3.9x effort, which pulls every arrival before it earlier. The residual is under 5 m of course, so flat is both the safe reading and the one the original comment already claimed. Each of the three timests — twin `roadbook.dart`, and the watch's one-way port `watch_core::roadbook` carried the same defect, and leaving one behind is how [§ 305](#305-two-helpers-documented-as-a-lockstep-pair-carried-different-algorithms-and-each-suites-answer-pinned-the-divergence) happened. The TS and Dart implementations agree to the bit on the reproduction — both report the same 4045.4254428517565 s at 20 m spacing and the same degraded 2703.71291984349 s at 3 m before the fix — and each suite is 15 tests. The watch's dense-sampling case is scaled to its 256-point course budget rather than skipped.
 
 **And the page now shows the number the model produces.** The roadbook rendered cumulative distance and cumulative arrival but never a per-leg pace, which is why this could hide for as long as it did — the effort model's entire output is that the climb leg is paced slower than the flat one, and that was not on screen anywhere. A "Leg pace" column now sits beside the arrival on the crew sheet and in the copied text, so the difference between the two pacing models is legible, and its Playwright pin asserts the climb leg is paced materially slower than the flat leg under `model=effort` and identically under `model=even`. Web-only for now; the mobile's `Roactivity_type` label lookups, both missing `stroller` (still open in `followups.md`), and here. Each side carries two tests: the concrete `stroller` case, and one asserting an activity the helper has never heard of is treated as foot-powered — which fails against a re-enumerated shoe set *even if `stroller` is remembered*, so the next editor cannot reintroduce the class while fixing the instance.
+
+## 601. A cut-off clock keeps running when the pings stop, and a deadline that has passed is stated rather than left behind "signal lost"
+
+The spectator cut-off card was built to refuse over-claiming: a stale fix
+returns `unknown` and the projected-arrival verdict is suppressed rather than
+fabricated off an old position ([§ 156](#156-predictive-live-tracking-reuses-the-roadbook-cut-off-legs-and-fails-to-unknown-when-the-fix-is-stale)).
+That refusal was right and is unchanged. What it had quietly grown into was a
+card that, in exactly the situation it exists for, said nothing at all.
+
+Three things were wrong, and they compound. **The race clock froze.** Both the
+web page's `elapsed` and the mobile screen's `_elapsedS` only advance when a
+ping lands, and the cut-off projection was driven straight off them — so the
+moment a runner dropped out of signal the remaining budget stopped shrinking. A
+cut-off is a wall-clock deadline measured from the runner's start; it does not
+pause because the phone lost a tower. `liveElapsedS` (added to the
+`live_freshness` pair) now advances the anchor by the ping age. Only time is
+added — the position stays at the last fix and no distance is ever
+extrapolated — which is the one thing that can be known without a new fix.
+
+**A passed limit was silent.** `limitPassed` has existed on the helper since
+issue #607 and neither platform rendered it. With the clock frozen it could
+barely fire anyway; with the clock running, a crew at an aid station whose
+runner went dark before their limit was still shown only "Signal lost". The
+card now states the expiry as its own danger pill *alongside* the signal-lost
+line, and an expired limit outranks the amber stale border. Whether the fix is
+current is a separate question from whether the deadline is gone, and the
+second is the one the go/no-go call turns on. **The pace still required was
+also silent** — and unlike the ETA it does not depend on recent pace, which is
+precisely why it survives a stale fix. It now renders whenever the verdict is
+not comfortably `on`, labelled "from the last fix" while stale so nobody reads
+it as measured from where the runner is now (it is conservative: it credits the
+runner with no ground covered since the last fix). The two never co-render,
+because a passed limit is exactly the case where required pace is null — which
+is what stops a "you cannot make it" surface from firing off the *other* null
+the helper produces, a checkpoint under 50 m away.
+
+Surfacing the position also surfaced a fabrication behind it. The web page
+passed `distAlongRouteM ?? 0` into the helper, so between page load and the
+first fix the card named the **first** cut-off and stated a distance-to-go
+measured from the start line — a spectator opening the link on a runner at
+km 80 read "Aid 1, 12 km to go". Mobile guarded at its call sites and never hit
+it. The fix went into the shared helper rather than the one call site:
+`distAlongRouteM` is nullable on both platforms and an unlocated runner
+collapses to the no-checkpoint shape, so neither surface can invent a position
+again. `0` remains a legitimate value — a runner genuinely on the start line
+still gets their first cut-off named. Relatedly, a concluded run no longer
+projects a "next" cut-off on either platform: its frozen totals would read as a
+live claim about a runner who has already stopped.
