@@ -25,7 +25,7 @@
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import { fetchElevations } from '$lib/routes/elevation';
 	import { fmtSplitTime } from '$lib/runs/race_day';
-	import { formatDistance, formatElevation } from '$lib/format/units.svelte';
+	import { formatDistance, formatElevation, formatPace } from '$lib/format/units.svelte';
 
 	let { data }: { data: { id: string } } = $props();
 
@@ -218,6 +218,22 @@
 		return leg.checkpoint.label;
 	}
 
+	/** Seconds allocated to the leg arriving at `i` — the goal-time slice the
+	 * pacing model gave that stretch. The start row has no preceding leg. */
+	function legSeconds(i: number): number {
+		const legs = roadbook.legs;
+		return i <= 0 ? 0 : legs[i].projectedElapsedS - legs[i - 1].projectedElapsedS;
+	}
+
+	/** The pace this leg has to be run at to hold the goal. Under the effort
+	 * model this is the number that differs between a climb and a flat — the
+	 * whole point of the model, and invisible from cumulative arrivals alone. */
+	function legPace(i: number): string {
+		const leg = roadbook.legs[i];
+		if (i <= 0 || leg.legDistM <= 0) return '—';
+		return formatPace(legSeconds(i), leg.legDistM);
+	}
+
 	function checkpointColor(leg: (typeof roadbook)['legs'][number]): string {
 		if (leg.checkpoint === 'start') return '#22c55e';
 		if (leg.checkpoint === 'finish') return '#ef4444';
@@ -266,8 +282,8 @@
 
 	async function copyAsText() {
 		const lines = [`${route?.name ?? m('roadbook.heading')} — ${m('roadbook.heading')}`, ''];
-		lines.push(`${m('roadbook.colCheckpoint')} | ${m('roadbook.colDistance')} | ${m('roadbook.colArrival')} | ${m('roadbook.colCutoff')}`);
-		for (const leg of roadbook.legs) {
+		lines.push(`${m('roadbook.colCheckpoint')} | ${m('roadbook.colDistance')} | ${m('roadbook.colLegPace')} | ${m('roadbook.colArrival')} | ${m('roadbook.colCutoff')}`);
+		for (const [i, leg] of roadbook.legs.entries()) {
 			const cut = leg.cutoff
 				? `${
 						startClockMin != null
@@ -276,7 +292,7 @@
 					} ${fmtMargin(leg.cutoff.marginS)}`
 				: '';
 			lines.push(
-				`${checkpointLabel(leg)} | ${formatDistance(leg.cumDistM)} | ${fmtSplitTime(leg.projectedElapsedS)}${leg.projectedClockMin != null ? ` (${fmtClock(leg.projectedClockMin)})` : ''} | ${cut}`
+				`${checkpointLabel(leg)} | ${formatDistance(leg.cumDistM)} | ${legPace(i)} | ${fmtSplitTime(leg.projectedElapsedS)}${leg.projectedClockMin != null ? ` (${fmtClock(leg.projectedClockMin)})` : ''} | ${cut}`
 			);
 		}
 		try {
@@ -430,6 +446,7 @@
 						<th>{m('roadbook.colCheckpoint')}</th>
 						<th class="num">{m('roadbook.colDistance')}</th>
 						<th class="num">{m('roadbook.colVert')}</th>
+						<th class="num">{m('roadbook.colLegPace')}</th>
 						<th class="num">{m('roadbook.colArrival')}</th>
 						<th>{m('roadbook.colCutoff')}</th>
 						{#if fuelOn}
@@ -453,6 +470,7 @@
 									<span class="down">−{Math.round(leg.legLossM)}</span>
 								{:else}—{/if}
 							</td>
+							<td class="num" data-testid="roadbook-leg-pace">{legPace(i)}</td>
 							<td class="num">
 								{fmtSplitTime(leg.projectedElapsedS)}
 								{#if leg.projectedClockMin != null}<span class="clock">{fmtClock(leg.projectedClockMin)}</span>{/if}

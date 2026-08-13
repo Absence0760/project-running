@@ -95,7 +95,19 @@ interface Cumulative {
 	hasElevation: boolean;
 }
 
-/** Per-waypoint cumulative distance / grade-adjusted distance / gain / loss. */
+/**
+ * Per-waypoint cumulative distance / grade-adjusted distance / gain / loss.
+ *
+ * The grade behind `gap` is measured over an **anchored window** that
+ * accumulates horizontal distance until it clears `MIN_SEGMENT_M`, the same
+ * walk `gradeAdjustedPaceSecPerKm` performs — not over each point-pair. Below
+ * the trusted length GPS/SRTM altitude noise dominates, so a short pair's grade
+ * can't be believed; the window carries the pair forward instead of discarding
+ * its climb. Zeroing each short pair's grade instead (as this did) collapsed
+ * effort allocation to even pace on any densely-sampled course — a GPX at 3 m
+ * spacing has no pair that clears 5 m — while `hasElevation` and `totalGainM`
+ * still reported the full climb, so nothing signalled the degradation.
+ */
 function walk(waypoints: RoadbookWaypoint[]): Cumulative {
 	const dist = [0];
 	const gap = [0];
@@ -107,16 +119,29 @@ function walk(waypoints: RoadbookWaypoint[]): Cumulative {
 	for (let i = 1; i < waypoints.length; i++) {
 		const a = waypoints[i - 1];
 		const b = waypoints[i];
-		const horiz = haversineM(a, b);
 		const dEle = a.ele != null && b.ele != null ? b.ele - a.ele : 0;
-		// Below the trusted-segment length, GPS/SRTM altitude noise dominates —
-		// treat as flat (factor 1) rather than amplify a phantom grade.
-		const grade = horiz >= MIN_SEGMENT_M ? dEle / horiz : 0;
-		dist.push(dist[i - 1] + horiz);
-		gap.push(gap[i - 1] + horiz * gradeFactor(grade));
+		dist.push(dist[i - 1] + haversineM(a, b));
 		gain.push(gain[i - 1] + Math.max(0, dEle));
 		loss.push(loss[i - 1] + Math.max(0, -dEle));
 	}
+
+	let anchor = 0;
+	for (let i = 1; i < waypoints.length; i++) {
+		const span = dist[i] - dist[anchor];
+		const isLast = i === waypoints.length - 1;
+		if (span < MIN_SEGMENT_M && !isLast) continue;
+		const a = waypoints[anchor];
+		const b = waypoints[i];
+		// A trailing window that never cleared the trusted length is the last
+		// few metres of the track — grade it flat rather than amplify noise.
+		const factor =
+			span >= MIN_SEGMENT_M && a.ele != null && b.ele != null
+				? gradeFactor((b.ele - a.ele) / span)
+				: 1;
+		for (let k = anchor + 1; k <= i; k++) gap.push(gap[k - 1] + (dist[k] - dist[k - 1]) * factor);
+		anchor = i;
+	}
+
 	return { dist, gap, gain, loss, hasElevation: eles.size >= 2 };
 }
 

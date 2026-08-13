@@ -7187,6 +7187,30 @@ export async function setRunGear(runId: string, gearIds: string[]): Promise<void
 	if (ins.error) throw ins.error;
 }
 
+/// Attach ONE piece of gear to many past runs, additively — the write half of
+/// the post-create backfill prompt on /settings/gear.
+///
+/// Deliberately not [setRunGear]: that replaces a run's whole gear set, so
+/// backfilling a newly-registered pair through it would silently untag every
+/// other item the run already carried. This only ever adds. `ignoreDuplicates`
+/// makes a repeat backfill a no-op instead of a 23505, matching the mobile
+/// `ApiClient.addGearToRuns` shape. It is also the only upsert resolution that
+/// works here: `run_gear` carries SELECT / INSERT / DELETE policies and no
+/// UPDATE one, so PostgREST's default merge-duplicates (`ON CONFLICT DO
+/// UPDATE`) has no policy to pass on a collision.
+///
+/// RLS gates every row: the `run_gear` insert policy requires the caller to
+/// own BOTH the run and the gear, so a forged run id writes nothing.
+export async function addGearToRuns(gearId: string, runIds: string[]): Promise<number> {
+	if (runIds.length === 0) return 0;
+	const rows = runIds.map((run_id) => ({ run_id, gear_id: gearId }));
+	const { error } = await supabase
+		.from(TABLES.run_gear)
+		.upsert(rows, { onConflict: 'run_id,gear_id', ignoreDuplicates: true });
+	if (error) throw error;
+	return rows.length;
+}
+
 /// Fetch the gear assigned to a single run. Used on the run-detail page AND
 /// the PUBLIC share page (non-owner / anon viewer) to render the chip row.
 ///

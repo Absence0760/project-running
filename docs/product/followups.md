@@ -53,6 +53,7 @@ Every item below is one of: (a) blocked on an external credential / account, (b)
 
 - [ ] **Mobile mirror: the plan wizard's opening-week ramp check** — web shipped `apps/web/src/lib/training/plan_ramp.ts` + the note in `PlanEditor.svelte` ([training.md § Opening-week ramp check](../features/training.md)): the generated plan graded against the runner's trailing-28-day average through the coach roster's ACWR bands (too-big off the opening week, too-light off the peak week), silent below three active weeks of history. `plan_new_screen.dart` has the same blind spot — it previews the first six weeks' volumes with nothing to compare them against. The Dart mirror is `plan_ramp.dart` (reusing the existing `coach_load.dart` twin's `injuryRiskBand`, so no new thresholds), a 28-day run fetch in the wizard's mount, and the note above the week outline with ARB keys across all seven catalogues. Deliberately left web-only for now rather than shipped as a dead twin — web is canonical per [decisions § 24](../architecture/decisions.md), and the pair should be registered in the root `CLAUDE.md` list only when mobile actually renders it.
 - [ ] **Mobile mirror: famous-segment catalogue UI** — web shipped `/segments`, the browse half of the §233 catalogue ([decisions § 593](../architecture/decisions.md)), on top of the new web-only `segments/catalogue_browse.ts` (search with accent folding, region / surface filters, four sorts). Mobile carries the `computeGlobalSegmentEffort` twin in `segments.dart` but **no catalogue UI at all** — neither a browse list nor a detail screen — so the run-detail effort chips there link nowhere. The mirror is a `GlobalSegmentsScreen` + a catalogue detail screen; the Dart twin of the four shaping helpers lands with them, not before (a twin with no consumer is dead code). Web is canonical per §24.
+- [ ] **Mobile mirror: add a club event to the phone's calendar** — web shipped a whole-series `.ics` export beside the per-occurrence one on `/clubs/[slug]/events/[id]` ([decisions § 599](../architecture/decisions.md)), building an `RRULE` + `EXDATE` from the event's recurrence columns and its cancelled occurrences. Mobile has **no** calendar affordance at all on `event_detail_screen.dart` — neither occurrence nor series — despite `clubs.md` having long described mobile as handing off "to the OS calendar via native intents"; a sweep for `CalendarContract` / `add_to_calendar` / a `text/calendar` share finds nothing, so that sentence describes an intent, not shipped code. The mirror is the native one, not a Dart port of the builder: an `ACTION_INSERT` on `CalendarContract.Events` (Android) / `EKEventEditViewController` (iOS) seeded from the event, with the series expressed via the platform recurrence rule. No parity pair is owed — the `.ics` text builder is a browser-download concern per [decisions § 24](../architecture/decisions.md).
 
 ## Watch (Wear OS) — sized features awaiting hardware + a product green-light
 
@@ -264,7 +265,18 @@ mechanical change. Do not "fix" any of these without deciding the rule first.
   ~2.2 km spacing, so none of them exercises the merge branch at all.
   Route through `/safe-edit`.
 
-- [ ] **`roadbook.ts` silently degrades `model: 'effort'` to even pace.**
+- [x] **`roadbook.ts` silently degrades `model: 'effort'` to even pace.**
+  RESOLVED 2026-08-13 ([decisions.md § 600](../architecture/decisions.md)).
+  `walk()` now grades over an anchored window that accumulates horizontal
+  distance until it clears `MIN_SEGMENT_M`, exactly as
+  `gradeAdjustedPaceSecPerKm` walks a track; a trailing window that never
+  clears it stays flat rather than amplifying the noise the constant guards
+  against. All three rails moved together (`roadbook.ts`, `roadbook.dart`,
+  `watch_core::roadbook`), 15 tests each, with the direction of the reported
+  flip re-verified: at 20 m spacing the gate reads `miss` by 445 s, and at 3 m
+  it now reads the same instead of `tight` with 896 s in hand. The page also
+  gained the per-leg pace column that makes the model's output legible — the
+  absence of which is why this could hide. Original report follows.
   `walk()` zeroes the grade on any segment under `MIN_SEGMENT_M` (5 m) instead
   of accumulating horizontal distance until the segment clears the threshold —
   which is what the sibling `gradeAdjustedPaceSecPerKm` does with the same
@@ -278,6 +290,16 @@ mechanical change. Do not "fix" any of these without deciding the rule first.
   `roadbook.dart`, `apps/custom_watch/core/src/roadbook.rs`. The fix is
   mechanical but changes projected arrival times on every existing roadbook, so
   it wants its own change with the crew-sheet numbers re-verified.
+
+- [ ] **Mirror the roadbook's per-leg pace column to mobile.** Web's
+  `/routes/[id]/roadbook` gained a "Leg pace" column (and the same field in
+  copy-as-text) alongside the § 600 effort fix — the target pace each leg has
+  to be run at to hold the goal, which is the only place the effort model's
+  output is visible as a pace rather than as a cumulative arrival. Mobile's
+  `roadbook_screen.dart` still shows cumulative distance + arrival only. Pure
+  render work: `RoadbookLeg` already carries `legDistM`, and the leg's seconds
+  are the difference of consecutive `projectedElapsedS`. Web-canonical per
+  [decisions § 24](../architecture/decisions.md).
 
 - [ ] **Should `backoff` and `dropset` sets also be excluded from progression
   judging?** The warmup exclusion landed (a ramp-up set no longer reads as a
@@ -476,6 +498,36 @@ and worth doing together as one alarm-hygiene pass:
   `:4216`, `:5658`) — the bug `saveRun`'s own comment documents. A Berlin user
   archiving a coach thread at 23:30 sees it dated the next day.
   `createCustomExercise`'s is worse in kind: it feeds newer-wins sync.
+
+## Gear backfill vs the auto-tag trigger's activity mapping (2026-08-13) — CLOSED
+
+Surfaced while porting the post-create gear backfill to web
+([decisions § 598](../architecture/decisions.md)), deferred one round because the
+fix had to land on both platforms at once, and **closed the same day** as a
+matched web + `mobile_android` + `mobile_ios` change in a single commit.
+
+- [x] **A `stroller` run is auto-tagged with the current pair but never offered
+  for backfill.** `auto_tag_default_gear` (re-emitted by migration
+  `20261207_001`) maps the run's `activity_type` to a gear kind as
+  `cycle -> bike, everything else -> shoe`. `gearBackfillCandidates` instead
+  enumerated the shoe set as `{run, walk, hike}` — so `stroller`, a real value
+  in `runs_activity_type_check`, fell out of the offer while the trigger
+  happily stamped a shoe on it. The durable fix was to invert the helper's rule
+  to mirror the trigger (`bike` takes `cycle`, every other activity takes
+  shoes), which also stops a future foot-powered `activity_type` from silently
+  dropping out of backfill the day it is added to the CHECK.
+
+  **Fixed** by deriving the shoe set as "not `cycle`" — the trigger's mapping
+  verbatim — on both sides in one commit, with two mirror tests each (the
+  `stroller` case, and one pinning that an unrecognised activity is treated as
+  foot-powered, which fails against any re-enumerated shoe set even if
+  `stroller` is remembered). Verified: 15 tests web, 11 Dart on each twin,
+  `diff -r` clean across `lib/` + `test/`, and both new tests confirmed failing
+  against the pre-fix predicate on both platforms.
+
+  The related `activity_type` label-vocabulary gap above (line 48 — two partial
+  mobile vocabularies, neither covering `stroller`) is the same class and stays
+  open; it needs the `activityTypeLabel` consolidation, not a patch here.
 
 ## Segment leaderboards vs the §206 shadow-hidden backstop (2026-08-13)
 
