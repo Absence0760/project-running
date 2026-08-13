@@ -3943,6 +3943,7 @@ export const messages = {
 	"nutrition.targets.emptyBody": "Renseigne ta taille, ton poids, ta date de naissance et ton sexe et tes objectifs de calories et de macros apparaîtront ici.",
 	"nutrition.targets.age": "Âge",
 	"nutrition.targets.ageYears": "{n} ans",
+	"nutrition.day.logHeadingFor": "Enregistrer un aliment — {date}",
 	"nutrition.day.navLabel": "Jour du journal",
 	"nutrition.day.previous": "Jour précédent",
 	"nutrition.day.next": "Jour suivant",

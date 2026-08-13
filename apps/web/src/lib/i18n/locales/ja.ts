@@ -3938,6 +3938,7 @@ export const messages = {
 	"nutrition.targets.emptyBody": "身長・体重・生年月日・性別を入力すると、カロリー・マクロの目標がここに表示されます。",
 	"nutrition.targets.age": "年齢",
 	"nutrition.targets.ageYears": "{n}歳",
+	"nutrition.day.logHeadingFor": "食事を記録 — {date}",
 	"nutrition.day.navLabel": "記録する日",
 	"nutrition.day.previous": "前の日",
 	"nutrition.day.next": "次の日",

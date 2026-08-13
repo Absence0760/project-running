@@ -278,11 +278,28 @@
 
 	/// Navigate the diary to `iso`. Today keeps the bare `/nutrition` URL so the
 	/// canonical entry point never carries a redundant query string.
-	function goToDay(iso: string) {
+	function goToDay(iso: string): Promise<void> {
 		const target = isDiaryToday(iso, new Date())
 			? '/nutrition'
 			: `/nutrition?${DIARY_DATE_PARAM}=${iso}`;
-		void goto(target, { keepFocus: true, noScroll: true });
+		return goto(target, { keepFocus: true, noScroll: true });
+	}
+
+	let prevDayBtn = $state<HTMLButtonElement | null>(null);
+
+	async function stepForward() {
+		const next = stepDiaryDate(viewDate, 1, new Date());
+		// Landing on today disables the button that was just pressed, which would
+		// drop focus to the document body. Hand it to its sibling instead.
+		const willDisable = next === todayIso;
+		await goToDay(next);
+		if (willDisable) prevDayBtn?.focus();
+	}
+
+	/// Same reason as `stepForward`: the Today button unmounts on arrival.
+	async function goToToday() {
+		await goToDay(todayIso);
+		prevDayBtn?.focus();
 	}
 
 	async function saveMeal() {
@@ -534,9 +551,10 @@
 	<div class="day-bar">
 		<nav class="day-nav" aria-label={m('nutrition.day.navLabel')}>
 			<button
+				bind:this={prevDayBtn}
 				class="icon-btn day-step"
 				type="button"
-				onclick={() => goToDay(stepDiaryDate(viewDate, -1, new Date()))}
+				onclick={() => void goToDay(stepDiaryDate(viewDate, -1, new Date()))}
 				aria-label={m('nutrition.day.previous')}
 				data-testid="diary-prev-day"
 			>
@@ -547,7 +565,7 @@
 				class="icon-btn day-step"
 				type="button"
 				disabled={!canGoForward}
-				onclick={() => goToDay(stepDiaryDate(viewDate, 1, new Date()))}
+				onclick={() => void stepForward()}
 				aria-label={m('nutrition.day.next')}
 				data-testid="diary-next-day"
 			>
@@ -557,7 +575,7 @@
 				<button
 					class="btn btn-outline btn-sm"
 					type="button"
-					onclick={() => goToDay(todayIso)}
+					onclick={() => void goToToday()}
 					data-testid="diary-today"
 				>{m('dash.today')}</button>
 			{/if}
@@ -852,7 +870,7 @@
 				<div class="card-head">
 					<span class="section-label">{isViewingToday
 						? m('nutrition.weeklyTrend')
-						: m('nutrition.day.trendEnding', { date: dayLabel })}</span>
+						: m('nutrition.day.trendEnding', { date: formatDate(`${viewDate}T00:00:00`) })}</span>
 					<div class="trend-meta">
 						{#if trendSeries.avg > 0}<span class="card-meta">{trendSeries.avgLabel}</span>{/if}
 						{#if weekSummary.deltaPerDay !== null}
@@ -911,7 +929,7 @@
 						{/if}
 						{#each weekDays as d, i (d.iso)}
 							{@const val = trendSeries.values[i] ?? 0}
-							<div class="trend-col" class:trend-today={i === weekDays.length - 1}>
+							<div class="trend-col" class:trend-viewed={i === weekDays.length - 1}>
 								<span class="trend-val">{val > 0 ? val : ''}</span>
 								<div
 									class="trend-bar"
@@ -923,7 +941,7 @@
 					</div>
 					<div class="trend-days">
 						{#each weekDays as d, i (d.iso)}
-							<span class="trend-day" class:trend-today-day={i === weekDays.length - 1}>{d.label}</span>
+							<span class="trend-day" class:trend-viewed-day={i === weekDays.length - 1}>{d.label}</span>
 						{/each}
 					</div>
 				</div>
@@ -932,7 +950,14 @@
 	{/if}
 </div>
 
-<Modal open={showLog} title={m('nutrition.logHeading')} narrow onclose={() => (showLog = false)}>
+<Modal
+	open={showLog}
+	title={isViewingToday
+		? m('nutrition.logHeading')
+		: m('nutrition.day.logHeadingFor', { date: dayLabel })}
+	narrow
+	onclose={() => (showLog = false)}
+>
 	<FoodLogEditor oncreated={onLogged} diaryDate={viewDate} />
 </Modal>
 
@@ -1582,8 +1607,8 @@
 		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 		transition: height 0.4s ease;
 	}
-	.trend-today .trend-bar { background: var(--color-primary); }
-	.trend-today .trend-val { color: var(--color-primary); font-weight: 700; }
+	.trend-viewed .trend-bar { background: var(--color-primary); }
+	.trend-viewed .trend-val { color: var(--color-primary); font-weight: 700; }
 	.trend-days { display: flex; gap: var(--space-sm); }
 	.trend-day {
 		flex: 1;
@@ -1591,7 +1616,7 @@
 		font-size: var(--font-size-section-label);
 		color: var(--color-text-secondary);
 	}
-	.trend-today-day { color: var(--color-text); font-weight: 700; }
+	.trend-viewed-day { color: var(--color-text); font-weight: 700; }
 
 	/* Loading skeleton — matches card heights so data arrival doesn't jump. */
 	.skeleton-stack { display: flex; flex-direction: column; gap: var(--space-lg); }
