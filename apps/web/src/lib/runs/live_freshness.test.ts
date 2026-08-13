@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshnessFor, LIVE_STALE_AFTER_MS } from './live_freshness';
+import { freshnessFor, liveElapsedS, LIVE_STALE_AFTER_MS } from './live_freshness';
 
 const NOW = 1_700_000_000_000;
 
@@ -79,3 +79,32 @@ test('a finite ping is never routed into the unknown bucket', () => {
 function pick(f: { bucket: string; value: number | null }): [string, number | null] {
 	return [f.bucket, f.value];
 }
+
+test('liveElapsedS advances the race clock by the ping age', () => {
+	// A cut-off deadline runs on wall time. 40 min after the last ping the
+	// runner has burned 40 min of their budget whether or not it reached us.
+	assert.equal(liveElapsedS(3_600, 0), 3_600);
+	assert.equal(liveElapsedS(3_600, 40 * 60_000), 3_600 + 2_400);
+	// Sub-second remainders floor, matching the seconds-granularity readout.
+	assert.equal(liveElapsedS(3_600, 1_999), 3_601);
+});
+
+test('liveElapsedS composes with a freshness age', () => {
+	const NOW = 1_700_000_000_000;
+	const f = freshnessFor(NOW - 5 * 60_000, NOW);
+	assert.equal(f.stale, true);
+	assert.equal(liveElapsedS(7_200, f.ageMs), 7_200 + 300);
+});
+
+test('liveElapsedS never rewinds the clock or invents time it cannot date', () => {
+	// An age we cannot establish advances nothing — better the last known
+	// figure than a guess. Same for a future-dated (clock-skewed) ping.
+	assert.equal(liveElapsedS(3_600, null), 3_600);
+	assert.equal(liveElapsedS(3_600, NaN), 3_600);
+	assert.equal(liveElapsedS(3_600, -60_000), 3_600);
+	// A nonsense anchor degrades to the ping age alone rather than propagating
+	// NaN into the cut-off maths, where every comparison against it reads false.
+	assert.equal(liveElapsedS(NaN, 60_000), 60);
+	assert.equal(liveElapsedS(NaN, null), 0);
+	assert.equal(liveElapsedS(-10, 60_000), 60);
+});

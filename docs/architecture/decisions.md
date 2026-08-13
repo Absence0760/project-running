@@ -8410,6 +8410,54 @@ Reproduced on a 4 km 25 % climb followed by 4 km of flat, goal 5400 s, cut-off a
 
 **And the page now shows the number the model produces.** The roadbook rendered cumulative distance and cumulative arrival but never a per-leg pace, which is why this could hide for as long as it did — the effort model's entire output is that the climb leg is paced slower than the flat one, and that was not on screen anywhere. A "Leg pace" column now sits beside the arrival on the crew sheet and in the copied text, so the difference between the two pacing models is legible, and its Playwright pin asserts the climb leg is paced materially slower than the flat leg under `model=effort` and identically under `model=even`. Web-only for now; the mobile's `Roactivity_type` label lookups, both missing `stroller` (still open in `followups.md`), and here. Each side carries two tests: the concrete `stroller` case, and one asserting an activity the helper has never heard of is treated as foot-powered — which fails against a re-enumerated shoe set *even if `stroller` is remembered*, so the next editor cannot reintroduce the class while fixing the instance.
 
+## 601. A cut-off clock keeps running when the pings stop, and a deadline that has passed is stated rather than left behind "signal lost"
+
+The spectator cut-off card was built to refuse over-claiming: a stale fix
+returns `unknown` and the projected-arrival verdict is suppressed rather than
+fabricated off an old position ([§ 156](#156-predictive-live-tracking-reuses-the-roadbook-cut-off-legs-and-fails-to-unknown-when-the-fix-is-stale)).
+That refusal was right and is unchanged. What it had quietly grown into was a
+card that, in exactly the situation it exists for, said nothing at all.
+
+Three things were wrong, and they compound. **The race clock froze.** Both the
+web page's `elapsed` and the mobile screen's `_elapsedS` only advance when a
+ping lands, and the cut-off projection was driven straight off them — so the
+moment a runner dropped out of signal the remaining budget stopped shrinking. A
+cut-off is a wall-clock deadline measured from the runner's start; it does not
+pause because the phone lost a tower. `liveElapsedS` (added to the
+`live_freshness` pair) now advances the anchor by the ping age. Only time is
+added — the position stays at the last fix and no distance is ever
+extrapolated — which is the one thing that can be known without a new fix.
+
+**A passed limit was silent.** `limitPassed` has existed on the helper since
+issue #607 and neither platform rendered it. With the clock frozen it could
+barely fire anyway; with the clock running, a crew at an aid station whose
+runner went dark before their limit was still shown only "Signal lost". The
+card now states the expiry as its own danger pill *alongside* the signal-lost
+line, and an expired limit outranks the amber stale border. Whether the fix is
+current is a separate question from whether the deadline is gone, and the
+second is the one the go/no-go call turns on. **The pace still required was
+also silent** — and unlike the ETA it does not depend on recent pace, which is
+precisely why it survives a stale fix. It now renders whenever the verdict is
+not comfortably `on`, labelled "from the last fix" while stale so nobody reads
+it as measured from where the runner is now (it is conservative: it credits the
+runner with no ground covered since the last fix). The two never co-render,
+because a passed limit is exactly the case where required pace is null — which
+is what stops a "you cannot make it" surface from firing off the *other* null
+the helper produces, a checkpoint under 50 m away.
+
+Surfacing the position also surfaced a fabrication behind it. The web page
+passed `distAlongRouteM ?? 0` into the helper, so between page load and the
+first fix the card named the **first** cut-off and stated a distance-to-go
+measured from the start line — a spectator opening the link on a runner at
+km 80 read "Aid 1, 12 km to go". Mobile guarded at its call sites and never hit
+it. The fix went into the shared helper rather than the one call site:
+`distAlongRouteM` is nullable on both platforms and an unlocated runner
+collapses to the no-checkpoint shape, so neither surface can invent a position
+again. `0` remains a legitimate value — a runner genuinely on the start line
+still gets their first cut-off named. Relatedly, a concluded run no longer
+projects a "next" cut-off on either platform: its frozen totals would read as a
+live claim about a runner who has already stopped.
+
 ## 603. The challenges list was showing everyone a zero, and a club-vs-club board was showing uuids
 
 **A per-caller number that lives only in an aggregate cannot be read off the table the list is built from.** `/challenges` builds "My challenges" from a plain `select * from challenges`, and that row carries no caller-relative value — the banked total exists only inside `challenge_leaderboard`, which `my_active_challenges` surfaces in bulk. `fetchChallenges` set `my_value: null` unconditionally and the card rendered `value={c.my_value ?? 0}`, so every joined challenge showed a 0 % bar and "0 km of 100 km" — while the dashboard `ChallengesPanel`, reading the same aggregate through `my_active_challenges`, showed the true number for the same challenge on the same screen session. Two surfaces, one challenge, two different answers, and the wrong one was on the page named for the feature. The list now folds the aggregate in with one extra round-trip on the `mine` path, and picks up `completed_at` for free from the `challenge_participants` read it was already issuing (the column was simply not selected).

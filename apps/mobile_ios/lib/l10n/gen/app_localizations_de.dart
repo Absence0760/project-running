@@ -4858,6 +4858,19 @@ class AppLocalizationsDe extends AppLocalizations {
       'Signal verloren – Ankunft nicht berechenbar';
 
   @override
+  String get liveCutoffExpired => 'Cut-off-Zeit ist abgelaufen';
+
+  @override
+  String liveCutoffRequiredPace(String pace) {
+    return 'Ab hier $pace nötig';
+  }
+
+  @override
+  String liveCutoffRequiredPaceStale(String pace) {
+    return 'Ab der letzten Ortung $pace nötig';
+  }
+
+  @override
   String get plansTitle => 'Trainingspläne';
 
   @override

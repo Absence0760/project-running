@@ -31,7 +31,7 @@ List<RoadbookLeg> legsWithTwoCutoffs() {
 }
 
 LiveCutoffEta call({
-  double distAlongRouteM = 10000,
+  double? distAlongRouteM = 10000,
   double elapsedS = 3600,
   double? recentPaceSecPerKm = 360,
   List<RoadbookLeg>? legs,
@@ -168,5 +168,28 @@ void main() {
     final noPaceEta = call(recentPaceSecPerKm: null);
     expect(noPaceEta.status, LiveCutoffStatus.unknown);
     expect(noPaceEta.requiredPaceSecPerKm, 360);
+  });
+
+  test('an unlocated runner names no checkpoint rather than the first one', () {
+    // The spectator screen cannot project a position onto the course until the
+    // first fix arrives. Substituting 0 would name the 20 km cutoff and claim
+    // the full 20 km still to go, from a runner who might be at km 39.
+    for (final distAlongRouteM in <double?>[null, double.nan, double.infinity]) {
+      final eta = call(distAlongRouteM: distAlongRouteM);
+      expect(eta.checkpoint, isNull, reason: 'distAlongRouteM=$distAlongRouteM');
+      expect(eta.distanceToM, 0);
+      expect(eta.projectedArrivalElapsedS, isNull);
+      expect(eta.marginS, isNull);
+      expect(eta.requiredPaceSecPerKm, isNull);
+      expect(eta.limitPassed, isFalse);
+      expect(eta.status, LiveCutoffStatus.unknown);
+    }
+  });
+
+  test('a located runner at the start line still names the first cutoff', () {
+    // 0 is a legitimate position — the collapse is for null/non-finite only.
+    final eta = call(distAlongRouteM: 0);
+    expect(eta.checkpoint?.label, 'Halfway');
+    expect(eta.distanceToM, 20000);
   });
 }

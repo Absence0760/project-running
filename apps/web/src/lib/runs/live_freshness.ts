@@ -71,3 +71,24 @@ export function freshnessFor(
 	if (h < 24) return { ageMs, stale, bucket: 'hours', value: h };
 	return { ageMs, stale, bucket: 'days', value: Math.floor(h / 24) };
 }
+
+/// The race clock as it reads *now*, from the elapsed time the last ping
+/// reported plus how long ago that ping was.
+///
+/// A cut-off is a deadline measured from the runner's start, and it keeps
+/// running while they are out of signal. Driving cut-off maths straight off
+/// the last ping's `elapsed_s` freezes the clock the moment the pings stop —
+/// so a runner who went dark 40 min before their cut-off would still show the
+/// budget they had at the last fix, and a limit that has since expired would
+/// never register. Advance the clock by the ping age instead: no new distance
+/// is invented (the position stays at the last fix), only time that has
+/// genuinely passed.
+///
+/// An age we cannot establish advances nothing — the caller is already in the
+/// `unknown`/stale branch above, which labels the readout rather than
+/// guessing at it.
+export function liveElapsedS(anchorElapsedS: number, ageMs: number | null): number {
+	const base = Number.isFinite(anchorElapsedS) ? Math.max(0, anchorElapsedS) : 0;
+	if (ageMs == null || !Number.isFinite(ageMs) || ageMs <= 0) return base;
+	return base + Math.floor(ageMs / 1000);
+}

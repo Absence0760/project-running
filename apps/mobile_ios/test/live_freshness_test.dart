@@ -43,6 +43,30 @@ void main() {
     expect(f.bucket, FreshnessBucket.now);
     expect(f.stale, false);
   });
+
+  test('liveElapsedS advances the race clock by the ping age', () {
+    // A cut-off deadline runs on wall time. 40 min after the last ping the
+    // runner has burned 40 min of their budget whether or not it reached us.
+    expect(liveElapsedS(3600, 0), 3600);
+    expect(liveElapsedS(3600, 40 * 60000), 3600 + 2400);
+    // Sub-second remainders floor, matching the seconds-granularity readout.
+    expect(liveElapsedS(3600, 1999), 3601);
+  });
+
+  test('liveElapsedS composes with a freshness age', () {
+    final f = freshnessFor(now - 5 * 60000, now);
+    expect(f.stale, true);
+    expect(liveElapsedS(7200, f.ageMs), 7200 + 300);
+  });
+
+  test('liveElapsedS never rewinds the clock or invents time it cannot date',
+      () {
+    // An age we cannot establish advances nothing — better the last known
+    // figure than a guess. Same for a future-dated (clock-skewed) ping.
+    expect(liveElapsedS(3600, null), 3600);
+    expect(liveElapsedS(3600, -60000), 3600);
+    expect(liveElapsedS(-10, 60000), 60);
+  });
 }
 
 (FreshnessBucket, int) _pick(Freshness f) => (f.bucket, f.value);

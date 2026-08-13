@@ -24,9 +24,16 @@
  * computed when the fix is stale or pace is unknown — a runner with no recent
  * pace still deserves "you need 6:30s to make it". It is null when there is no
  * checkpoint, when the cutoff is < 50 m away (too close for a meaningful
- * pace), or when the limit has already passed (no pace can make it). Twin of
- * `apps/mobile_android/lib/live_cutoff_eta.dart` — keep logic, edge cases, and
- * test count in lockstep.
+ * pace), or when the limit has already passed (no pace can make it).
+ *
+ * A null `distAlongRouteM` means the runner has not been located on the course
+ * at all (no fix yet, or a fix that would not project onto the line). There is
+ * then no way to know which cutoff is *next*, so the whole result collapses to
+ * the no-checkpoint shape. A caller that substituted 0 would instead name the
+ * FIRST cutoff and state a distance-to-go measured from the start line — a
+ * spectator whose runner is at km 80 would read "Aid 1, 12 km to go".
+ * Twin of `apps/mobile_android/lib/live_cutoff_eta.dart` — keep logic, edge
+ * cases, and test count in lockstep.
  */
 import { CUTOFF_TIGHT_S, type RoadbookLeg } from '../routes/roadbook';
 
@@ -35,8 +42,11 @@ export { CUTOFF_TIGHT_S };
 export type LiveCutoffStatus = 'on' | 'tight' | 'behind' | 'unknown';
 
 export interface LiveCutoffInput {
-	/** Runner's current distance along the planned route, metres. */
-	distAlongRouteM: number;
+	/**
+	 * Runner's current distance along the planned route, metres. Null when the
+	 * runner has not been located on the course yet — never substitute 0.
+	 */
+	distAlongRouteM: number | null;
 	/** Runner's current elapsed time since the start, seconds. */
 	elapsedS: number;
 	/** Recent average pace, seconds per km. Null when not yet known. */
@@ -73,9 +83,13 @@ export interface LiveCutoffEta {
 }
 
 export function nextCutoffEta(input: LiveCutoffInput): LiveCutoffEta {
-	const ahead = input.legs
-		.filter((l) => l.cutoff != null && l.cumDistM > input.distAlongRouteM)
-		.sort((a, b) => a.cumDistM - b.cumDistM);
+	const along = input.distAlongRouteM;
+	const ahead =
+		along == null || !Number.isFinite(along)
+			? []
+			: input.legs
+					.filter((l) => l.cutoff != null && l.cumDistM > along)
+					.sort((a, b) => a.cumDistM - b.cumDistM);
 
 	const leg = ahead[0];
 	if (!leg) {
@@ -94,7 +108,7 @@ export function nextCutoffEta(input: LiveCutoffInput): LiveCutoffEta {
 		typeof leg.checkpoint === 'object'
 			? { kind: leg.checkpoint.kind, label: leg.checkpoint.label }
 			: { kind: 'cutoff', label: '' };
-	const distanceToM = leg.cumDistM - input.distAlongRouteM;
+	const distanceToM = leg.cumDistM - along!;
 	const remainingS = leg.cutoff!.limitElapsedS - input.elapsedS;
 	const limitPassed = remainingS <= 0;
 	const requiredPaceSecPerKm =

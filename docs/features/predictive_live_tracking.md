@@ -91,6 +91,21 @@ over-claiming when the position is stale** (the personas' core complaint).
    `CutoffCard.stale` in the shared `lib/widgets/cutoff_card.dart` + the
    `liveCutoffSignalLost` ARB key in all seven catalogues; the runner's own
    `RunScreen` renders the same widget as of 2026-07-12.)
+
+   Suppressing the *verdict* does not suppress what the card still knows
+   (2026-08-13, decisions § 601). `requiredPaceSecPerKm` does not depend on
+   recent pace, so it survives the stale branch and renders whenever the
+   verdict is not comfortably `on` — labelled `live.cutoffRequiredPaceStale` /
+   `liveCutoffRequiredPaceStale` ("from the last fix") while stale so it can't
+   be read as measured from where the runner is now. `limitPassed` renders as
+   its own danger pill ALONGSIDE the signal-lost line and outranks the amber
+   stale border: the deadline is gone whether or not the fix is current, and it
+   is the fact a crew at the checkpoint is deciding on. The two can never
+   co-render, which is what keeps the "you cannot make it" surface from firing
+   off the *other* null `requiredPaceSecPerKm` produces (a checkpoint under
+   50 m away). Both surfaces feed the helper a race clock advanced by the ping
+   age (`liveElapsedS`), because `elapsed_s` stops moving when the pings do and
+   a limit that expires mid-dead-zone would otherwise never register.
 3. **Pace source:** recent average over the last N pings (decide N), or
    effort-adjusted (GAP) remaining distance for a better hill estimate.
 

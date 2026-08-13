@@ -26,6 +26,8 @@ LiveCutoffEta _eta({
   double distanceToM = 1500,
   double? projectedArrivalElapsedS,
   double? marginS,
+  double? requiredPaceSecPerKm,
+  bool limitPassed = false,
   String label = 'Aid 1',
 }) =>
     LiveCutoffEta(
@@ -33,7 +35,8 @@ LiveCutoffEta _eta({
       distanceToM: distanceToM,
       projectedArrivalElapsedS: projectedArrivalElapsedS,
       marginS: marginS,
-      requiredPaceSecPerKm: null,
+      requiredPaceSecPerKm: requiredPaceSecPerKm,
+      limitPassed: limitPassed,
       status: status,
     );
 
@@ -103,6 +106,68 @@ void main() {
       // The margin chip and the projected-arrival text share one row; at
       // 220 the chip must ellipsize instead of throwing a RenderFlex
       // overflow (the harness fails the test on one).
+      expect(find.textContaining('to spare'), findsOneWidget);
+    });
+
+    testWidgets('an expired limit is stated, not left behind "signal lost"',
+        (tester) async {
+      // The deadline is gone whether or not the fix is current, and it is the
+      // fact the crew at the checkpoint is deciding on. It must show ALONGSIDE
+      // the signal-lost line, not be replaced by it.
+      await _pump(
+        tester,
+        _eta(status: LiveCutoffStatus.unknown, limitPassed: true),
+        true,
+      );
+      expect(find.textContaining('Cut-off time has passed'), findsOneWidget);
+      expect(find.textContaining('Signal lost'), findsOneWidget);
+      expect(find.textContaining('Needs'), findsNothing);
+    });
+
+    testWidgets('a stale fix still reports the pace needed, from the last fix',
+        (tester) async {
+      // requiredPace does not depend on recent pace, so suppressing the
+      // verdict must not suppress the go/no-go number. Labelling it "from the
+      // last fix" keeps it from reading as measured from where they are now.
+      await _pump(
+        tester,
+        _eta(status: LiveCutoffStatus.unknown, requiredPaceSecPerKm: 390),
+        true,
+      );
+      expect(find.textContaining('from the last fix'), findsOneWidget);
+      expect(find.textContaining('Signal lost'), findsOneWidget);
+      expect(find.textContaining('Cut-off time has passed'), findsNothing);
+    });
+
+    testWidgets('a fresh behind verdict reports the pace needed from here',
+        (tester) async {
+      await _pump(
+        tester,
+        _eta(
+          status: LiveCutoffStatus.behind,
+          marginS: -10 * 60,
+          projectedArrivalElapsedS: 3600,
+          requiredPaceSecPerKm: 390,
+        ),
+        false,
+      );
+      expect(find.textContaining('from here'), findsOneWidget);
+      expect(find.textContaining('behind'), findsOneWidget);
+    });
+
+    testWidgets('a comfortable on-pace card stays free of required-pace noise',
+        (tester) async {
+      await _pump(
+        tester,
+        _eta(
+          status: LiveCutoffStatus.on,
+          marginS: 25 * 60,
+          projectedArrivalElapsedS: 2 * 3600,
+          requiredPaceSecPerKm: 900,
+        ),
+        false,
+      );
+      expect(find.textContaining('Needs'), findsNothing);
       expect(find.textContaining('to spare'), findsOneWidget);
     });
   });

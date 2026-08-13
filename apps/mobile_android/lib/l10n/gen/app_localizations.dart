@@ -8014,6 +8014,24 @@ abstract class AppLocalizations {
   /// **'Signal lost — can\'t project arrival'**
   String get liveCutoffSignalLost;
 
+  /// Spectator next-cutoff card — the checkpoint's limit is already in the past; no pace can make it
+  ///
+  /// In en, this message translates to:
+  /// **'Cut-off time has passed'**
+  String get liveCutoffExpired;
+
+  /// Spectator next-cutoff card — flat pace still needed over the remaining distance to make the cutoff
+  ///
+  /// In en, this message translates to:
+  /// **'Needs {pace} from here'**
+  String liveCutoffRequiredPace(String pace);
+
+  /// Spectator next-cutoff card — required pace when the position is stale, measured from the last known fix rather than where the runner is now
+  ///
+  /// In en, this message translates to:
+  /// **'Needs {pace} from the last fix'**
+  String liveCutoffRequiredPaceStale(String pace);
+
   /// Plans list AppBar title
   ///
   /// In en, this message translates to:
