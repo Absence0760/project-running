@@ -2853,6 +2853,7 @@ export const messages = {
 	"roadbook.colCheckpoint": "Ponto",
 	"roadbook.colDistance": "Distância",
 	"roadbook.colVert": "Ganho",
+	"roadbook.colLegPace": "Ritmo do trecho",
 	"roadbook.colArrival": "Chegada",
 	"roadbook.colCutoff": "Corte",
 	"roadbook.colServices": "Serviços",

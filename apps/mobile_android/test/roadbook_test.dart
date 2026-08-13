@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
+
 import '../lib/roadbook.dart';
 
 List<RoadbookWaypoint> course() {
@@ -192,4 +195,68 @@ void main() {
     );
     expect(rb.legs[1].services, ['water', 'food']);
   });
+
+  test('effort allocation survives a densely-sampled course', () {
+    // Every point-pair is under minSegmentM here, so grading each pair on its
+    // own read the whole climb as flat and effort collapsed onto even pace.
+    final dense = climbCourse(3);
+    final effort = midArrivalS(dense, PacingModel.effort);
+    final even = midArrivalS(dense, PacingModel.even);
+    expect(effort > even * 1.4, isTrue, reason: 'effort $effort vs even $even');
+  });
+
+  test('effort allocation is a property of the terrain, not the sampling density',
+      () {
+    final coarse = midArrivalS(climbCourse(20), PacingModel.effort);
+    for (final spacing in [10.0, 3.0, 1.0]) {
+      final dense = midArrivalS(climbCourse(spacing), PacingModel.effort);
+      expect((dense - coarse).abs() / coarse < 0.01, isTrue,
+          reason: 'spacing ${spacing}m gave ${dense}s vs ${coarse}s at 20m');
+    }
+  });
+
+  test('a trailing sub-threshold segment is graded flat, not amplified', () {
+    // 1 km of flat at 20 m spacing, then one last point 3 m on with a 1 m rise:
+    // a 33 % grade no altimeter can support over 3 m. That trailing window never
+    // clears minSegmentM, so it must stay flat — grading it on its own span
+    // would bill it as ~3.9x effort and pull every arrival before it earlier.
+    final wp = <RoadbookWaypoint>[];
+    for (var d = 0.0; d <= 1000; d += 20) {
+      wp.add(RoadbookWaypoint(lat: 45 + d / 111320, lng: 7, ele: 0));
+    }
+    wp.add(RoadbookWaypoint(lat: 45 + 1003 / 111320, lng: 7, ele: 1));
+    final mid = [marker(500, 'aid_station', 'Mid')];
+    final effort =
+        buildRoadbook(wp, mid, goalSeconds: 5400, model: PacingModel.effort);
+    final even =
+        buildRoadbook(wp, mid, goalSeconds: 5400, model: PacingModel.even);
+    expect(effort.hasElevation, isTrue,
+        reason: 'the effort model must actually be in play');
+    expect(
+      (effort.legs[1].projectedElapsedS - even.legs[1].projectedElapsedS).abs() <
+          1e-6,
+      isTrue,
+      reason: 'effort ${effort.legs[1].projectedElapsedS} vs even '
+          '${even.legs[1].projectedElapsedS}',
+    );
+  });
+}
+
+// A 4 km 25 % climb then 4 km flat, sampled every [spacingM] metres. The
+// terrain is fixed; only the file's point density changes.
+List<RoadbookWaypoint> climbCourse(double spacingM) {
+  final pts = <RoadbookWaypoint>[];
+  const mPerDegLat = 111320.0;
+  const climbM = 4000.0;
+  for (var d = 0.0; d <= climbM * 2; d += spacingM) {
+    pts.add(RoadbookWaypoint(
+        lat: 45 + d / mPerDegLat, lng: 7, ele: math.min(d, climbM) * 0.25));
+  }
+  return pts;
+}
+
+double midArrivalS(List<RoadbookWaypoint> wp, PacingModel model) {
+  final rb = buildRoadbook(wp, [marker(4000, 'aid_station', 'Top')],
+      goalSeconds: 5400, model: model);
+  return rb.legs[1].projectedElapsedS;
 }

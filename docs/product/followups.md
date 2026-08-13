@@ -265,7 +265,18 @@ mechanical change. Do not "fix" any of these without deciding the rule first.
   ~2.2 km spacing, so none of them exercises the merge branch at all.
   Route through `/safe-edit`.
 
-- [ ] **`roadbook.ts` silently degrades `model: 'effort'` to even pace.**
+- [x] **`roadbook.ts` silently degrades `model: 'effort'` to even pace.**
+  RESOLVED 2026-08-13 ([decisions.md § 600](../architecture/decisions.md)).
+  `walk()` now grades over an anchored window that accumulates horizontal
+  distance until it clears `MIN_SEGMENT_M`, exactly as
+  `gradeAdjustedPaceSecPerKm` walks a track; a trailing window that never
+  clears it stays flat rather than amplifying the noise the constant guards
+  against. All three rails moved together (`roadbook.ts`, `roadbook.dart`,
+  `watch_core::roadbook`), 15 tests each, with the direction of the reported
+  flip re-verified: at 20 m spacing the gate reads `miss` by 445 s, and at 3 m
+  it now reads the same instead of `tight` with 896 s in hand. The page also
+  gained the per-leg pace column that makes the model's output legible — the
+  absence of which is why this could hide. Original report follows.
   `walk()` zeroes the grade on any segment under `MIN_SEGMENT_M` (5 m) instead
   of accumulating horizontal distance until the segment clears the threshold —
   which is what the sibling `gradeAdjustedPaceSecPerKm` does with the same
@@ -279,6 +290,16 @@ mechanical change. Do not "fix" any of these without deciding the rule first.
   `roadbook.dart`, `apps/custom_watch/core/src/roadbook.rs`. The fix is
   mechanical but changes projected arrival times on every existing roadbook, so
   it wants its own change with the crew-sheet numbers re-verified.
+
+- [ ] **Mirror the roadbook's per-leg pace column to mobile.** Web's
+  `/routes/[id]/roadbook` gained a "Leg pace" column (and the same field in
+  copy-as-text) alongside the § 600 effort fix — the target pace each leg has
+  to be run at to hold the goal, which is the only place the effort model's
+  output is visible as a pace rather than as a cumulative arrival. Mobile's
+  `roadbook_screen.dart` still shows cumulative distance + arrival only. Pure
+  render work: `RoadbookLeg` already carries `legDistM`, and the leg's seconds
+  are the difference of consecutive `projectedElapsedS`. Web-canonical per
+  [decisions § 24](../architecture/decisions.md).
 
 - [ ] **Should `backoff` and `dropset` sets also be excluded from progression
   judging?** The warmup exclusion landed (a ramp-up set no longer reads as a

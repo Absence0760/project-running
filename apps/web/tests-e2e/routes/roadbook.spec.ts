@@ -86,6 +86,36 @@ test.describe('/routes/[id]/roadbook', () => {
 		await expect(rows.nth(2).locator('.cut-miss')).toHaveCount(0);
 	});
 
+	test('the leg-pace column exposes the effort model re-pacing the climb', async ({ page }) => {
+		routeId = await seedRoute();
+
+		const paceCells = page.locator('[data-testid="roadbook-leg-pace"]');
+		// "m:ss /km" (or "/mi") → seconds. Unit-agnostic: every assertion below
+		// is a ratio or an equality between two cells in the same unit.
+		const paceSeconds = async (i: number): Promise<number> => {
+			const raw = ((await paceCells.nth(i).textContent()) ?? '').trim();
+			const [mm, ss] = raw.split(' ')[0].split(':').map(Number);
+			return mm * 60 + ss;
+		};
+
+		// Even pacing: the flat leg into Aid 1 and the 270 m climb to the finish
+		// are run at the same pace by construction.
+		await page.goto(`/routes/${routeId}/roadbook?goal=7200&model=even`);
+		await expect(page.getByRole('columnheader', { name: 'Leg pace' })).toBeVisible();
+		await expect(paceCells).toHaveCount(4);
+		await expect(paceCells.nth(0)).toHaveText('—'); // start has no preceding leg
+		expect(Math.abs((await paceSeconds(3)) - (await paceSeconds(1)))).toBeLessThanOrEqual(2);
+
+		// Effort pacing: the climb leg must be given materially more time per
+		// kilometre than the flat one. Grading each point-pair on its own read
+		// this 27 % climb as flat, so the two paces came out equal here too.
+		await page.goto(`/routes/${routeId}/roadbook?goal=7200&model=effort`);
+		await expect(paceCells).toHaveCount(4);
+		const flat = await paceSeconds(1);
+		const climb = await paceSeconds(3);
+		expect(climb).toBeGreaterThan(flat * 2);
+	});
+
 	test('fueling overlay shows per-leg carbs + a carry hint, and ?carbs= re-scales', async ({ page }) => {
 		routeId = await seedRoute();
 
