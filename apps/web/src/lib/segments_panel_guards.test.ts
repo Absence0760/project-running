@@ -271,6 +271,28 @@ test('/segments distinguishes an empty catalogue from an empty filter result', (
 	assert.match(source, /segments\.browseNoMatches/, 'filtered-empty copy missing');
 });
 
+test('every catalogue read is bounded by the shared limit, never a literal', () => {
+	// Reason: `fetchGlobalSegmentsWithError` defaulted to 200 while the scoring
+	// sweep passed GLOBAL_SEGMENT_SCORING_LIMIT (500) explicitly. Two callers of
+	// one function therefore disagreed about what "the whole catalogue" means,
+	// and /segments — which takes the default — dropped the alphabetical tail of
+	// any catalogue past 200 rows with no error and no indication anything was
+	// missing. Pinning the DEFAULT (not just the call sites) is what closes it:
+	// a future caller that omits the argument gets the real bound.
+	const source = read('src/lib/core/data.ts');
+	for (const fn of ['fetchGlobalSegments', 'fetchGlobalSegmentsWithError']) {
+		const at = source.indexOf(`export async function ${fn}(`);
+		assert.ok(at >= 0, `${fn} missing — rename?`);
+		const signature = source.slice(at, source.indexOf('{', at));
+		assert.match(
+			signature,
+			/limit = GLOBAL_SEGMENT_SCORING_LIMIT/,
+			`${fn} must default to the shared catalogue bound`,
+		);
+		assert.doesNotMatch(signature, /limit = \d+/, `${fn} must not default to a literal`);
+	}
+});
+
 test('both segment surfaces report elevation in the reader’s preferred unit', () => {
 	// Reason: the detail page hard-coded `{segment.elevation_m} m`, so a
 	// runner on miles was shown a climb in metres beside a distance in miles —

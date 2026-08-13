@@ -66,7 +66,11 @@ export function applyRunMetadataPatch(
 
 /// Row cap on the catalogue fetch the run-detail backfill scores a run
 /// against, and therefore the ceiling the `global_segments_scored_count`
-/// stamp can ever reach. Owned here, next to the gate that consumes it,
+/// stamp can ever reach. It is also the DEFAULT of
+/// `fetchGlobalSegmentsWithError`, so it is the bound on every catalogue
+/// read in the app — including the `/segments` browse page, which must not
+/// be able to see less of the catalogue than the scoring sweep does.
+/// Owned here, next to the gate that consumes it,
 /// and imported by the `data.ts` fetch call site so the two numbers
 /// cannot drift — the same contract `DASHBOARD_RUNS_WINDOW_DAYS` holds
 /// for the dashboard window. Drift is not a rounding error: gating an
