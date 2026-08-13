@@ -113,6 +113,20 @@ export function diaryWindow(iso: string, days = 1): DiaryWindow | null {
 	return { startIso: start.toISOString(), endIso: end.toISOString() };
 }
 
+/// Whether a row's `started_at` falls inside a diary window.
+///
+/// Compared as **instants**, never as strings. Postgres hands back
+/// `2026-08-13T04:00:00+00:00` while [diaryWindow] builds `…T04:00:00.000Z`;
+/// those are the same moment but `'+' < '.'`, so a lexicographic compare drops
+/// a row landing exactly on the boundary — which for a local-midnight window is
+/// precisely the row most likely to be there. A malformed timestamp is out.
+export function isWithinWindow(startedAt: string | null | undefined, window: DiaryWindow): boolean {
+	if (!startedAt) return false;
+	const at = new Date(startedAt).getTime();
+	if (!Number.isFinite(at)) return false;
+	return at >= new Date(window.startIso).getTime() && at < new Date(window.endIso).getTime();
+}
+
 /// The `n` local dates ending on — and including — `iso`, oldest first. These
 /// are the trend chart's buckets, so they must be the same `YYYY-MM-DD` an
 /// entry's `started_at` maps to through [isoDateOf].

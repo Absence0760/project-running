@@ -7,6 +7,7 @@ import {
 	entryTimestampFor,
 	isDiaryToday,
 	isoDateOf,
+	isWithinWindow,
 	parseIsoDate,
 	resolveDiaryDate,
 	stepDiaryDate,
@@ -102,6 +103,34 @@ test('diaryWindow fails closed on an unusable day or a non-positive span', () =>
 	assert.equal(diaryWindow('2026-02-30'), null);
 	assert.equal(diaryWindow('nope'), null);
 	assert.equal(diaryWindow('2026-08-13', 0), null);
+});
+
+test('isWithinWindow includes the start instant and excludes the end instant', () => {
+	const w = diaryWindow('2026-08-13');
+	assert.ok(w);
+	assert.equal(isWithinWindow(w.startIso, w), true);
+	assert.equal(isWithinWindow(w.endIso, w), false);
+	assert.equal(isWithinWindow(new Date(2026, 7, 13, 23, 59, 59).toISOString(), w), true);
+	assert.equal(isWithinWindow(new Date(2026, 7, 12, 23, 59, 59).toISOString(), w), false);
+});
+
+test('isWithinWindow compares instants, not strings — the boundary row is kept', () => {
+	const w = diaryWindow('2026-08-13');
+	assert.ok(w);
+	// Postgres' rendering of the very same moment the window starts at.
+	const pgStyle = new Date(w.startIso).toISOString().replace('Z', '+00:00');
+	assert.equal(isWithinWindow(pgStyle, w), true);
+	// The string compare this replaces drops it, because '+' sorts below '.'.
+	assert.equal(pgStyle >= w.startIso, false);
+});
+
+test('isWithinWindow rejects a missing or unparseable timestamp', () => {
+	const w = diaryWindow('2026-08-13');
+	assert.ok(w);
+	assert.equal(isWithinWindow(null, w), false);
+	assert.equal(isWithinWindow(undefined, w), false);
+	assert.equal(isWithinWindow('', w), false);
+	assert.equal(isWithinWindow('not a time', w), false);
 });
 
 test('trailingDates returns n dates oldest first, ending on the day itself', () => {
