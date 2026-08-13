@@ -141,6 +141,15 @@ struct Cumulative {
 }
 
 /// Per-waypoint cumulative distance / grade-adjusted distance / gain / loss.
+///
+/// The grade behind `gap` is measured over an **anchored window** that
+/// accumulates horizontal distance until it clears [`MIN_SEGMENT_M`], the same
+/// walk `grade_adjusted_pace` performs — not over each point-pair. Below the
+/// trusted length altitude noise dominates, so a short pair's grade can't be
+/// believed; the window carries the pair forward instead of discarding its
+/// climb. Zeroing each short pair's grade instead (as this did) collapsed
+/// effort allocation to even pace on any densely-sampled course while
+/// `has_elevation` and `total_gain_m` still reported the full climb.
 fn walk(waypoints: &[RoadbookWaypoint]) -> Cumulative {
     let mut dist: Vec<f64, MAX_ROADBOOK_WAYPOINTS> = Vec::new();
     let mut gap: Vec<f64, MAX_ROADBOOK_WAYPOINTS> = Vec::new();
@@ -170,22 +179,32 @@ fn walk(waypoints: &[RoadbookWaypoint]) -> Cumulative {
     for i in 1..n {
         let a = &waypoints[i - 1];
         let b = &waypoints[i];
-        let horiz = haversine_metres(a.lat, a.lng, b.lat, b.lng);
         let d_ele = match (a.ele, b.ele) {
             (Some(ae), Some(be)) => be - ae,
             _ => 0.0,
         };
-        // Below the trusted-segment length, GPS/SRTM altitude noise dominates —
-        // treat as flat (factor 1) rather than amplify a phantom grade.
-        let grade = if horiz >= MIN_SEGMENT_M {
-            d_ele / horiz
-        } else {
-            0.0
-        };
-        let _ = dist.push(dist[i - 1] + horiz);
-        let _ = gap.push(gap[i - 1] + horiz * grade_factor(grade));
+        let _ = dist.push(dist[i - 1] + haversine_metres(a.lat, a.lng, b.lat, b.lng));
         let _ = gain.push(gain[i - 1] + d_ele.max(0.0));
         let _ = loss.push(loss[i - 1] + (-d_ele).max(0.0));
+    }
+
+    let mut anchor = 0;
+    for i in 1..n {
+        let span = dist[i] - dist[anchor];
+        let is_last = i == n - 1;
+        if span < MIN_SEGMENT_M && !is_last {
+            continue;
+        }
+        // A trailing window that never cleared the trusted length is the last
+        // few metres of the track — grade it flat rather than amplify noise.
+        let factor = match (waypoints[anchor].ele, waypoints[i].ele) {
+            (Some(ae), Some(be)) if span >= MIN_SEGMENT_M => grade_factor((be - ae) / span),
+            _ => 1.0,
+        };
+        for k in anchor + 1..=i {
+            let _ = gap.push(gap[k - 1] + (dist[k] - dist[k - 1]) * factor);
+        }
+        anchor = i;
     }
 
     Cumulative {
@@ -761,5 +780,122 @@ mod tests {
         }];
         let rb = build_roadbook(&wp, &markers, even(3600.0));
         assert_eq!(rb.legs[1].services, &["water", "food"]);
+    }
+
+    /// A 400 m 25 % climb then 365 m flat, sampled every `spacing_m` metres.
+    /// The terrain is fixed; only the point density changes. Sized so the
+    /// densest case still fits `MAX_ROADBOOK_WAYPOINTS`.
+    fn climb_course(spacing_m: f64) -> Vec<RoadbookWaypoint, MAX_ROADBOOK_WAYPOINTS> {
+        const M_PER_DEG_LAT: f64 = 111_320.0;
+        const CLIMB_M: f64 = 400.0;
+        let mut pts: Vec<RoadbookWaypoint, MAX_ROADBOOK_WAYPOINTS> = Vec::new();
+        let mut d = 0.0;
+        while d <= 765.0 {
+            let _ = pts.push(RoadbookWaypoint {
+                lat: 45.0 + d / M_PER_DEG_LAT,
+                lng: 7.0,
+                ele: Some(if d < CLIMB_M { d } else { CLIMB_M } * 0.25),
+            });
+            d += spacing_m;
+        }
+        pts
+    }
+
+    fn mid_arrival_s(wp: &[RoadbookWaypoint], model: PacingModel) -> f64 {
+        let marker = [RoadbookMarker {
+            position_m: Some(400.0),
+            kind: "aid_station",
+            label: "Top",
+            services: &[],
+            cutoff_clock: None,
+            cutoff_elapsed_s: None,
+        }];
+        build_roadbook(
+            wp,
+            &marker,
+            RoadbookOptions {
+                goal_seconds: 5400.0,
+                start_clock_min: None,
+                model,
+            },
+        )
+        .legs[1]
+            .projected_elapsed_s
+    }
+
+    #[test]
+    fn effort_allocation_survives_a_densely_sampled_course() {
+        // Every point-pair is under MIN_SEGMENT_M here, so grading each pair on
+        // its own read the whole climb as flat and effort collapsed onto even.
+        let dense = climb_course(3.0);
+        let effort = mid_arrival_s(&dense, PacingModel::Effort);
+        let even_s = mid_arrival_s(&dense, PacingModel::Even);
+        assert!(effort > even_s * 1.4, "effort {effort} vs even {even_s}");
+    }
+
+    #[test]
+    fn effort_allocation_is_a_property_of_the_terrain_not_the_sampling_density() {
+        let coarse = mid_arrival_s(&climb_course(20.0), PacingModel::Effort);
+        for spacing in [10.0, 3.0] {
+            let dense = mid_arrival_s(&climb_course(spacing), PacingModel::Effort);
+            assert!(
+                libm::fabs(dense - coarse) / coarse < 0.01,
+                "spacing {spacing}m gave {dense}s vs {coarse}s at 20m"
+            );
+        }
+    }
+
+    #[test]
+    fn a_trailing_sub_threshold_segment_is_graded_flat_not_amplified() {
+        // 1 km of flat at 20 m spacing, then one last point 3 m on with a 1 m
+        // rise: a 33 % grade no altimeter can support over 3 m. That trailing
+        // window never clears MIN_SEGMENT_M, so it must stay flat — grading it
+        // on its own span would bill it as ~3.9x effort and pull every arrival
+        // before it earlier.
+        const M_PER_DEG_LAT: f64 = 111_320.0;
+        let mut wp: Vec<RoadbookWaypoint, MAX_ROADBOOK_WAYPOINTS> = Vec::new();
+        let mut d = 0.0;
+        while d <= 1000.0 {
+            let _ = wp.push(RoadbookWaypoint {
+                lat: 45.0 + d / M_PER_DEG_LAT,
+                lng: 7.0,
+                ele: Some(0.0),
+            });
+            d += 20.0;
+        }
+        let _ = wp.push(RoadbookWaypoint {
+            lat: 45.0 + 1003.0 / M_PER_DEG_LAT,
+            lng: 7.0,
+            ele: Some(1.0),
+        });
+        let marker = [RoadbookMarker {
+            position_m: Some(500.0),
+            kind: "aid_station",
+            label: "Mid",
+            services: &[],
+            cutoff_clock: None,
+            cutoff_elapsed_s: None,
+        }];
+        let effort = build_roadbook(
+            &wp,
+            &marker,
+            RoadbookOptions {
+                goal_seconds: 5400.0,
+                start_clock_min: None,
+                model: PacingModel::Effort,
+            },
+        );
+        let even_rb = build_roadbook(&wp, &marker, even(5400.0));
+        assert!(
+            effort.has_elevation,
+            "the effort model must actually be in play"
+        );
+        assert!(
+            libm::fabs(effort.legs[1].projected_elapsed_s - even_rb.legs[1].projected_elapsed_s)
+                < 1e-6,
+            "effort {} vs even {}",
+            effort.legs[1].projected_elapsed_s,
+            even_rb.legs[1].projected_elapsed_s
+        );
     }
 }
