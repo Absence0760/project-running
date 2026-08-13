@@ -635,19 +635,25 @@ Two items remain open, deliberately:
   `challenge_progress.dart` + iOS twin + `watch_core::challenge_progress`) and
   belongs in its own change, not tacked onto a UI round.
 
-## `gym_exercise_set_history_batch` does not return `set_type` (2026-08-13)
+## The gym set-history RPCs did not return `set_type` (2026-08-13) — CLOSED
 
-The batched history RPC (migration `20270323_001`) selects seven columns and
-`set_type` is not one of them, so every set the web gym progression surfaces
-read from history arrives with the column absent — the prescriber's warmup
-exclusion, which reads exactly that column, is inert on that path. The
-judgement no longer *rests* on it: `workingSets` narrows to the session's top
+The batched history RPC (migration `20270323_001`) selected seven columns and
+`set_type` was not one of them, so every set the web gym progression surfaces
+read from history arrived with the column absent — the prescriber's warmup
+exclusion, which reads exactly that column, was inert on that path. The
+judgement did not *rest* on it: `workingSets` narrows to the session's top
 completed weight, which drops a lighter ramp-up with or without a label
 (decisions § 602). But an explicitly-typed warmup logged AT the working weight
-still counts on web, where mobile (reading its local store, which carries the
-column) excludes it.
+still counted on web, where mobile (reading its local store, which carries the
+column) excluded it.
 
-- [ ] Add `set_type text` to the RPC's `returns table (...)` and its select
-  list, carry it through `GymSetWithDate` + the `fetchExerciseSetHistoryBatch`
-  mapping. **Needs a migration**, so it is out of scope for a round that may
-  not add one; it is additive and backward-compatible (a new trailing column).
+- [x] **Closed 2026-08-13** ([decisions § 605](../architecture/decisions.md)),
+  migration `20270525_001`. Scope grew by one on reading the code: the singular
+  sibling `gym_exercise_set_history` had the same gap, and
+  `fetchGymSetHistoryWithError` was already *selecting* `set_type` from
+  PostgREST and dropping it in its row mapping — so all three `GymSetWithDate`
+  producers were fixed and the field is required on that interface rather than
+  optional. Both RPCs were dropped and recreated (a `returns table` change is
+  42P13 under `create or replace`) with their grants re-issued. pgTAP grew to
+  6 + 8 tests; `gym/set_history_set_type.test.ts` pins the mapping and the
+  warmup-at-working-weight case.
