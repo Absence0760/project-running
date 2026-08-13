@@ -28,7 +28,7 @@
 		type LivePing,
 	} from '$lib/runs/live_hub';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
-	import { freshnessFor, type Freshness } from '$lib/runs/live_freshness';
+	import { freshnessFor, liveElapsedS, type Freshness } from '$lib/runs/live_freshness';
 	import { isFinishedStale, statusAfterHydrate } from '$lib/runs/live_spectator_status';
 	import { m } from '$lib/i18n/store.svelte';
 
@@ -125,11 +125,20 @@
 		return Math.max(0, Math.min(100, (distAlongRouteM / total) * 100));
 	});
 
+	// `elapsed` only moves when a ping lands, so it freezes the moment the
+	// runner drops out of signal. A cut-off deadline does not — advance the
+	// race clock by the ping age so a limit that expired during a dead zone
+	// actually registers. Distance is deliberately NOT extrapolated: only
+	// time that has genuinely passed is added.
+	const raceElapsedS = $derived(liveElapsedS(elapsed, freshness?.ageMs ?? null));
+
+	// A concluded run has no "next" cut-off — the projection would be a live
+	// claim about a runner who has already stopped.
 	const eta = $derived(
-		hasCutoffRoute
+		hasCutoffRoute && status === 'live'
 			? nextCutoffEta({
 					distAlongRouteM,
-					elapsedS: elapsed,
+					elapsedS: raceElapsedS,
 					recentPaceSecPerKm,
 					legs: cutoffLegs,
 					stale: isStale,

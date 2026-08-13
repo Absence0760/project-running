@@ -298,13 +298,18 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   /// no route with cutoffs / no position yet / the runner is past the last
   /// cutoff. `stale` suppresses the verdict (the helper returns
   /// [LiveCutoffStatus.unknown]) rather than fabricating an ETA off an old fix.
-  LiveCutoffEta? _cutoffEta(bool stale) {
+  LiveCutoffEta? _cutoffEta(bool stale, int? ageMs) {
     if (_cutoffLegs.isEmpty || _latestPos == null) return null;
     final distAlong = distanceAlongRoute(_latestPos!, _routeWaypoints);
     if (distAlong == null) return null;
     final eta = nextCutoffEta(
       distAlongRouteM: distAlong,
-      elapsedS: _elapsedS.toDouble(),
+      // `_elapsedS` only moves when a ping lands, so it freezes the moment
+      // the runner drops out of signal. A cut-off deadline does not —
+      // advance the race clock by the ping age so a limit that expired
+      // during a dead zone actually registers. Distance is deliberately NOT
+      // extrapolated: only time that has genuinely passed is added.
+      elapsedS: liveElapsedS(_elapsedS, ageMs).toDouble(),
       recentPaceSecPerKm: _recentPaceSecPerKm,
       legs: _cutoffLegs,
       stale: stale,
@@ -378,7 +383,9 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
     // its saved totals, so we never surface the approximate treatment for
     // one.
     final coarse = !terminal && _lastPingCoarse;
-    final cutoff = _cutoffEta(stale);
+    // A concluded run has no "next" cut-off — the projection would be a
+    // live claim about a runner who has already stopped.
+    final cutoff = terminal ? null : _cutoffEta(stale, fresh?.ageMs);
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.liveSpectatorTitle),
