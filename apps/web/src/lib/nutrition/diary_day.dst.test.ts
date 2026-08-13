@@ -12,6 +12,7 @@ import {
 	diaryWindow,
 	entryTimestampFor,
 	isoDateOf,
+	msUntilNextLocalMidnight,
 	stepDiaryDate,
 	trailingDates,
 } from './diary_day';
@@ -93,4 +94,39 @@ test('a back-filled entry late on a fall-back day stays inside the 25-hour windo
 	const w = diaryWindow(FALL_BACK);
 	assert.ok(w);
 	assert.ok(new Date(stamp).getTime() < new Date(w.endIso).getTime());
+});
+
+test('the midnight rollover timer lands on midnight on both transition days', () => {
+	// A fixed 86_400_000 delay fires an hour EARLY on the 25-hour fall-back day
+	// (the header would then claim tomorrow at 23:00) and an hour LATE on the
+	// 23-hour spring-forward day (the header stays stale into the new day).
+	for (const [y, mo, d, h, mi] of [
+		[2026, 10, 1, 0, 30], // fall back, 25 h day
+		[2026, 10, 1, 23, 30],
+		[2026, 2, 8, 0, 30], // spring forward, 23 h day
+		[2026, 2, 8, 23, 30],
+	]) {
+		const now = new Date(y, mo, d, h, mi);
+		const at = new Date(now.getTime() + msUntilNextLocalMidnight(now));
+		assert.equal(at.getTime(), new Date(y, mo, d + 1).getTime());
+		assert.equal(at.getHours(), 0);
+		assert.equal(at.getMinutes(), 0);
+		assert.equal(isoDateOf(at), isoDateOf(new Date(y, mo, d + 1)));
+	}
+});
+
+test('the fall-back day really is the case a fixed 24 hours gets wrong', () => {
+	const now = new Date(2026, 10, 1, 0, 30);
+	const correct = msUntilNextLocalMidnight(now);
+	assert.equal(correct, 24.5 * HOUR_MS); // 25 h day, 30 min already spent
+	// The naive delay fires at 23:30 on the fall-back day — still the same day.
+	assert.equal(isoDateOf(new Date(now.getTime() + 24 * HOUR_MS)), FALL_BACK);
+});
+
+test('the spring-forward day is the mirror case: 24 hours fires an hour late', () => {
+	const now = new Date(2026, 2, 8, 0, 30);
+	assert.equal(msUntilNextLocalMidnight(now), 22.5 * HOUR_MS); // 23 h day
+	const naive = new Date(now.getTime() + 24 * HOUR_MS);
+	assert.equal(isoDateOf(naive), '2026-03-09');
+	assert.equal(naive.getHours(), 1); // 90 minutes of a stale "Today" header
 });

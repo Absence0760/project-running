@@ -18,6 +18,7 @@
 		type NutritionTargets,
 	} from '$lib/nutrition/nutrition_targets';
 	import { exerciseCaloriesForDay } from '$lib/nutrition/exercise_calories';
+	import { diaryWindow, isoDateOf } from '$lib/nutrition/diary_day';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 
@@ -55,19 +56,24 @@
 		loading = true;
 		loadError = null;
 		try {
-			const now = new Date();
-			const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-			const tomorrow = new Date(todayStart.getTime() + 86_400_000);
-			const [settings, weight, profileRes, recentRuns, recentGym] = await Promise.all([
+			// `isoDateOf` always yields a parseable day, so the window is never null.
+			// Both fetches take it, so the day's membership is decided by PostgREST
+			// as a timestamptz comparison rather than by a client-side compare of
+			// Postgres' `…+00:00` rendering against a `…Z` bound (decisions § 591).
+			const dayWindow = diaryWindow(isoDateOf(new Date()))!;
+			const [settings, weight, profileRes, todayRuns, todayGym] = await Promise.all([
 				loadSettings(auth.user!.id),
 				fetchLatestWeightKg(),
 				supabase.rpc('get_my_profile'),
-				fetchRuns({ limit: 50 }),
-				fetchGymWorkouts(50),
+				fetchRuns({
+					startedAtFrom: dayWindow.startIso,
+					startedAtBefore: dayWindow.endIso,
+				}),
+				fetchGymWorkouts({
+					startedAtFrom: dayWindow.startIso,
+					startedAtBefore: dayWindow.endIso,
+				}),
 			]);
-			const startIso = todayStart.toISOString();
-			const endIso = tomorrow.toISOString();
-			const isToday = (iso: string) => iso >= startIso && iso < endIso;
 			weightKg = weight;
 			const prof = profileRes.data as
 				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
@@ -79,10 +85,8 @@
 				effective<ActivityLevel>(settings, 'nutrition_activity_level', 'moderate') ?? 'moderate';
 			goal = effective<WeightGoal>(settings, 'nutrition_goal', 'maintain') ?? 'maintain';
 			exerciseKcal = exerciseCaloriesForDay({
-				runs: recentRuns.filter((r) => isToday(r.started_at)).map((r) => ({ distanceM: r.distance_m })),
-				gymSessions: recentGym
-					.filter((w) => isToday(w.started_at))
-					.map((w) => ({ durationS: w.duration_s })),
+				runs: todayRuns.map((r) => ({ distanceM: r.distance_m })),
+				gymSessions: todayGym.map((w) => ({ durationS: w.duration_s })),
 				weightKg: weight,
 			});
 			recompute();

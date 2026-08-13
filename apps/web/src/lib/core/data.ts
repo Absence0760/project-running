@@ -8775,11 +8775,6 @@ export interface GymSetWithDate {
 	duration_s: number | null;
 }
 
-/// Recent gym workouts for the signed-in user, newest first. Surfaces the
-/// error so the /gym list can show a "couldn't load — retry" state instead of
-/// the empty "log your first workout" card (a real failure otherwise reads as a
-/// brand-new lifter whose history vanished). Mirrors the
-/// `fetchExerciseRecordsWithError` convention.
 /// PostgREST renders a `numeric` column as a JSON number or a string depending
 /// on its magnitude, so every numeric the gym reads is coerced on the way in.
 function numericOrZero(v: unknown): number {
@@ -8787,17 +8782,37 @@ function numericOrZero(v: unknown): number {
 	return typeof n === 'number' && Number.isFinite(n) ? n : 0;
 }
 
+export interface FetchGymWorkoutsOptions {
+	/** Cap the number of rows returned. */
+	limit?: number;
+	/** Inclusive lower bound on `started_at`, as an ISO instant. */
+	startedAtFrom?: string;
+	/** Exclusive upper bound on `started_at`, as an ISO instant. */
+	startedAtBefore?: string;
+}
+
+/// Newest gym workouts when unbounded; the window's workouts when
+/// `startedAtFrom` / `startedAtBefore` are given — the same two bounds
+/// `fetchRuns` takes, compared by PostgREST as real timestamptz values.
+/// A caller that wants one calendar day must window rather than pull the
+/// newest N and filter: a day older than the caller's N most recent sessions
+/// would otherwise read as a day with no lifts in it.
+///
+/// Surfaces the error so the /gym list can show a "couldn't load — retry" state
+/// instead of the empty "log your first workout" card (a real failure otherwise
+/// reads as a brand-new lifter whose history vanished). Mirrors the
+/// `fetchExerciseRecordsWithError` convention.
 export async function fetchGymWorkoutsWithError(
-	limit = 50,
+	opts?: FetchGymWorkoutsOptions,
 ): Promise<{ workouts: GymWorkout[]; error: string | null }> {
 	const userId = auth.user?.id;
 	if (!userId) return { workouts: [], error: null };
-	const { data, error } = await supabase
-		.from(TABLES.gym_workouts)
-		.select('*')
-		.eq('user_id', userId)
+	let q = supabase.from(TABLES.gym_workouts).select('*').eq('user_id', userId);
+	if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
+	if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
+	const { data, error } = await q
 		.order('started_at', { ascending: false })
-		.limit(limit);
+		.limit(opts?.limit ?? 50);
 	if (error) return { workouts: [], error: error.message };
 	const workouts = ((data ?? []) as GymWorkout[]).map((w) => ({
 		...w,
@@ -8807,9 +8822,10 @@ export async function fetchGymWorkoutsWithError(
 	return { workouts, error: null };
 }
 
-/// Recent gym workouts for the signed-in user, newest first.
-export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
-	return (await fetchGymWorkoutsWithError(limit)).workouts;
+/// Gym workouts for the signed-in user, newest first. See
+/// `fetchGymWorkoutsWithError` for the window.
+export async function fetchGymWorkouts(opts?: FetchGymWorkoutsOptions): Promise<GymWorkout[]> {
+	return (await fetchGymWorkoutsWithError(opts)).workouts;
 }
 
 /// The two per-workout values the /gym list needs that no column carries:

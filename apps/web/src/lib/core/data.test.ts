@@ -824,3 +824,115 @@ test('the Strava ZIP importer lands embedded bests like the Garmin one', () => {
 		'strava-zip must pass embedded_bests when it parsed a track'
 	);
 });
+
+test('fetchGymWorkouts windows by date server-side, the way its run sibling does', () => {
+	// Reason: fetchGymWorkoutsWithError used to take a `limit` and nothing else,
+	// so /nutrition pulled the newest N sessions and filtered them in the
+	// browser. A diary day older than the caller's N most recent lifts then
+	// contributed no gym calories to that day's exercise add-on — an under-read
+	// indistinguishable from "the lift isn't logged yet" (decisions.md § 591
+	// shipped it as a stated limitation; § 597 closed it). The bounds must stay
+	// PostgREST filters: a timestamptz comparison in the database is the real
+	// one, where a string compare of the `+00:00` Postgres rendering against a
+	// `…Z` bound drops the row landing exactly on local midnight.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchGymWorkoutsWithError');
+	assert.ok(start >= 0, 'Could not locate fetchGymWorkoutsWithError — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/\.gte\('started_at',\s*opts\.startedAtFrom\)/,
+		'fetchGymWorkoutsWithError must apply startedAtFrom as an inclusive .gte, like fetchRuns.'
+	);
+	assert.match(
+		body,
+		/\.lt\('started_at',\s*opts\.startedAtBefore\)/,
+		'fetchGymWorkoutsWithError must apply startedAtBefore as an exclusive .lt, like fetchRuns.'
+	);
+
+	// And /nutrition must hand it the viewed day's window rather than a bare
+	// row cap — the whole point of the parameters.
+	const page = read('src/routes/nutrition/+page.svelte');
+	assert.match(
+		page,
+		/fetchGymWorkouts\(\{\s*startedAtFrom: dayWindow\.startIso,\s*startedAtBefore: dayWindow\.endIso,?\s*\}\)/,
+		'/nutrition must window the gym fetch by the viewed day, not pull the newest N.'
+	);
+	assert.doesNotMatch(
+		page,
+		/GYM_FETCH_LIMIT/,
+		'the newest-N cap is what the window replaces; keeping it re-creates the under-read.'
+	);
+});
+
+test('the exercise-calorie surfaces decide day membership by instant, never by string', () => {
+	// Reason: Postgres renders a timestamptz as `2026-08-13T04:00:00+00:00`
+	// while a JS bound is built as `…T04:00:00.000Z`. Those are the same moment,
+	// but '+' sorts below '.', so a lexicographic compare drops a row landing
+	// EXACTLY on a local-midnight boundary — which for a day window is precisely
+	// the row most likely to be there (decisions.md § 591). Three surfaces feed
+	// exerciseCaloriesForDay: /nutrition and /nutrition/targets window the fetch
+	// server-side (a real timestamptz comparison), /dashboard cannot — its runs
+	// and gym reads are the shared batch a dozen cards consume — so it filters
+	// through isWithinWindow. None of them may go back to `iso >= startIso`.
+	const targets = read('src/routes/nutrition/targets/+page.svelte');
+	assert.match(
+		targets,
+		/fetchRuns\(\{\s*startedAtFrom: dayWindow\.startIso,\s*startedAtBefore: dayWindow\.endIso,?\s*\}\)/,
+		'/nutrition/targets must window its run fetch by the day, not filter the newest N.'
+	);
+	assert.match(
+		targets,
+		/fetchGymWorkouts\(\{\s*startedAtFrom: dayWindow\.startIso,\s*startedAtBefore: dayWindow\.endIso,?\s*\}\)/,
+		'/nutrition/targets must window its gym fetch by the day too.'
+	);
+	assert.match(
+		targets,
+		/diaryWindow\(isoDateOf\(new Date\(\)\)\)/,
+		'the window must come from diaryWindow, which steps the calendar (a DST day is 23 or 25 h).'
+	);
+
+	const dashboard = read('src/routes/dashboard/+page.svelte');
+	assert.match(
+		dashboard,
+		/runs\.filter\(\(r\) => isWithinWindow\(r\.started_at, today\)\)/,
+		"/dashboard's today filter must compare instants via isWithinWindow."
+	);
+	assert.match(
+		dashboard,
+		/gymWorkouts\.filter\(\(w\) => isWithinWindow\(w\.started_at, today\)\)/,
+		"/dashboard's today gym filter must compare instants via isWithinWindow."
+	);
+
+	// The dashboard's own window is built from the calendar, not from a 24 h
+	// step — that is the § 589 half of the same day bug. (Its unrelated rolling
+	// N-day cutoffs are `Math.round`ed and unaffected, so this is scoped to the
+	// nutrition read rather than grepping the whole file.)
+	const nutritionRead = dashboard.slice(
+		dashboard.indexOf('async function loadTodaysNutrition'),
+		dashboard.indexOf('function applyDashboardSettings')
+	);
+	assert.match(
+		nutritionRead,
+		/new Date\(day\.getFullYear\(\), day\.getMonth\(\), day\.getDate\(\) \+ 1\)/,
+		"/dashboard's tomorrow bound must step the calendar, not add 24 h (decisions § 589)."
+	);
+	assert.doesNotMatch(
+		nutritionRead,
+		/86_?400_?000/,
+		'a local day is 23 or 25 hours across a DST transition (decisions § 589).'
+	);
+
+	for (const [name, source] of [
+		['/nutrition', read('src/routes/nutrition/+page.svelte')],
+		['/nutrition/targets', targets],
+		['/dashboard', nutritionRead],
+	] as const) {
+		assert.doesNotMatch(
+			source,
+			/const isToday = \(iso: string\)/,
+			`${name} must not re-introduce the string-compare isToday predicate.`
+		);
+	}
+});

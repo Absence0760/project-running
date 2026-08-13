@@ -8,6 +8,7 @@ import {
 	isDiaryToday,
 	isoDateOf,
 	isWithinWindow,
+	msUntilNextLocalMidnight,
 	parseIsoDate,
 	resolveDiaryDate,
 	stepDiaryDate,
@@ -192,4 +193,43 @@ test('waterDayKey keeps the shipped unpadded shape so no stored count is orphane
 
 test('waterDayKey passes an unusable day through rather than colliding on a fallback', () => {
 	assert.equal(waterDayKey('rubbish'), 'rubbish');
+});
+
+test('msUntilNextLocalMidnight lands exactly on the next local midnight', () => {
+	const now = new Date(2026, 7, 13, 14, 22, 9, 250);
+	const at = new Date(now.getTime() + msUntilNextLocalMidnight(now));
+	assert.equal(at.getTime(), new Date(2026, 7, 14).getTime());
+	assert.equal(isoDateOf(at), '2026-08-14');
+	// One millisecond earlier is still the day the diary is labelling "Today".
+	assert.equal(isoDateOf(new Date(at.getTime() - 1)), isoDateOf(now));
+});
+
+test('msUntilNextLocalMidnight is always a positive, bounded delay', () => {
+	// A zero or negative delay would make the rollover timer re-arm itself in a
+	// tight loop; anything beyond a 25 h day means it stopped stepping calendar
+	// days. Sampled across the whole clock, including both boundaries.
+	for (const [h, mi, s2, ms] of [
+		[0, 0, 0, 0],
+		[0, 0, 0, 1],
+		[12, 30, 15, 500],
+		[23, 59, 59, 999],
+	]) {
+		const now = new Date(2026, 7, 13, h, mi, s2, ms);
+		const delay = msUntilNextLocalMidnight(now);
+		assert.ok(delay > 0, `delay must be positive at ${h}:${mi}`);
+		assert.ok(delay <= 25 * 3_600_000, `delay must stay inside one calendar day at ${h}:${mi}`);
+	}
+});
+
+test('msUntilNextLocalMidnight crosses a month and a year end', () => {
+	const monthEnd = new Date(2026, 7, 31, 22, 0);
+	assert.equal(
+		new Date(monthEnd.getTime() + msUntilNextLocalMidnight(monthEnd)).getTime(),
+		new Date(2026, 8, 1).getTime(),
+	);
+	const yearEnd = new Date(2026, 11, 31, 22, 0);
+	assert.equal(
+		new Date(yearEnd.getTime() + msUntilNextLocalMidnight(yearEnd)).getTime(),
+		new Date(2027, 0, 1).getTime(),
+	);
 });
