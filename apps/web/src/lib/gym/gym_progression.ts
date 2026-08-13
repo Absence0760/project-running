@@ -61,6 +61,55 @@ function positiveOr(v: unknown, fallback: number): number {
 	return n != null && n > 0 ? n : fallback;
 }
 
+/// The sets that are evidence about the working target: warmups dropped (a
+/// ramp-up is not an attempt at the prescription) and rep-less rows dropped
+/// (`gym_sets.reps` is nullable and CHECK-allows 0). Shared with the
+/// consecutive-miss reducer so a past session is judged by exactly the sets the
+/// prescriber judges the last one by.
+export function completedWorkingSets(sets: ProgressionSetLike[]): ProgressionSetLike[] {
+	return sets.filter((s) => {
+		if ((s.set_type ?? 'working') === 'warmup') return false;
+		const r = numericOrNull(s.reps);
+		return r != null && r > 0;
+	});
+}
+
+export interface FiveByFiveTargets {
+	targetSets: number;
+	targetReps: number;
+}
+
+/// The 5×5 bar for one session — how many working sets at how many reps clear
+/// it. The routine's own rep target wins, then `params.targetReps`, then the
+/// classic five. Exported so a caller deriving the miss streak from history
+/// grades an older session by the same bar.
+export function fiveByFiveTargets(input: {
+	targetRepsMin: number | null;
+	targetRepsMax: number | null;
+	params: Record<string, unknown> | null;
+}): FiveByFiveTargets {
+	const params = input.params ?? {};
+	const repsMin = numericOrNull(input.targetRepsMin);
+	const repsMax = numericOrNull(input.targetRepsMax);
+	return {
+		targetSets: positiveOr(params.targetSets, 5),
+		targetReps: repsMax ?? repsMin ?? positiveOr(params.targetReps, 5),
+	};
+}
+
+/// Did one session clear the bar? At least `targetSets` completed working sets,
+/// every one of them reaching `targetReps`.
+export function fiveByFiveSessionSucceeded(
+	sets: ProgressionSetLike[],
+	targets: FiveByFiveTargets,
+): boolean {
+	const completed = completedWorkingSets(sets);
+	return (
+		completed.length >= targets.targetSets &&
+		completed.every((s) => (numericOrNull(s.reps) ?? 0) >= targets.targetReps)
+	);
+}
+
 /// The heaviest weight the lifter actually COMPLETED — the anchor a load
 /// increment is added to. Null when no completed set carried a positive weight
 /// (bodyweight work). Callers must pass the completed subset: anchoring on a
@@ -99,11 +148,7 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 	// who warms up, which is everyone. `gym_adherence` states the same rule for
 	// planned-vs-actual grading; the prescriber simply never received the
 	// column. A null set_type is 'working', matching the DB default.
-	const completed = sets.filter((s) => {
-		if ((s.set_type ?? 'working') === 'warmup') return false;
-		const r = numericOrNull(s.reps);
-		return r != null && r > 0;
-	});
+	const completed = completedWorkingSets(sets);
 
 	const repsMin = numericOrNull(input.targetRepsMin);
 	const repsMax = numericOrNull(input.targetRepsMax);
@@ -181,13 +226,13 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 		}
 
 		case 'five_by_five': {
-			const targetSets = positiveOr(params.targetSets, 5);
-			const targetReps = repsMax ?? repsMin ?? positiveOr(params.targetReps, 5);
+			const { targetSets, targetReps } = fiveByFiveTargets(input);
 			const maxMisses = positiveOr(params.maxConsecutiveMisses, 3);
+			// Author-set params never carry this — it is derived from logged
+			// history by progression_prefill.progressionParamsWithStreak, without
+			// which the deload branch below is unreachable.
 			const misses = positiveOr(params.consecutiveMisses, 0);
-			const success =
-				completed.length >= targetSets &&
-				completed.every((s) => (numericOrNull(s.reps) ?? 0) >= targetReps);
+			const success = fiveByFiveSessionSucceeded(sets, { targetSets, targetReps });
 
 			if (success) {
 				if (weight != null) {
