@@ -4,7 +4,7 @@
 	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { formatDuration } from '$lib/format/time';
-	import { distanceInPreferred } from '$lib/format/units.svelte';
+	import { distanceInPreferred, formatElevation } from '$lib/format/units.svelte';
 	import {
 		fetchGlobalSegment,
 		fetchGlobalSegmentLeaderboard,
@@ -144,9 +144,9 @@
 					<span class="key-stat-value">{fmtDist(Number(segment.distance_m))}</span>
 					<span class="key-stat-label">{m('segmentDetail.statDistance')}</span>
 				</div>
-				{#if segment.elevation_m != null && segment.elevation_m > 0}
+				{#if segment.elevation_m != null && Number(segment.elevation_m) > 0}
 					<div class="key-stat">
-						<span class="key-stat-value">{segment.elevation_m} m</span>
+						<span class="key-stat-value">{formatElevation(Number(segment.elevation_m))}</span>
 						<span class="key-stat-label">{m('segmentDetail.statElevation')}</span>
 					</div>
 				{/if}

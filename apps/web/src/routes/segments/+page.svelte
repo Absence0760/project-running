@@ -169,7 +169,7 @@
 							{/if}
 							<span class="card-stats">
 								<span class="stat">{fmtDist(segment.distance_m)}</span>
-								{#if segment.elevation_m != null}
+								{#if segment.elevation_m != null && Number(segment.elevation_m) > 0}
 									<span class="stat">
 										<span class="material-symbols" aria-hidden="true">altitude</span>
 										{formatElevation(Number(segment.elevation_m))}

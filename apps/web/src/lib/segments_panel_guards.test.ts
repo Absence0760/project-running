@@ -271,6 +271,22 @@ test('/segments distinguishes an empty catalogue from an empty filter result', (
 	assert.match(source, /segments\.browseNoMatches/, 'filtered-empty copy missing');
 });
 
+test('both segment surfaces report elevation in the reader’s preferred unit', () => {
+	// Reason: the detail page hard-coded `{segment.elevation_m} m`, so a
+	// runner on miles was shown a climb in metres beside a distance in miles —
+	// one card, two unit systems. formatElevation() is the shared converter
+	// every other vert surface (dashboard, challenges) already routes through.
+	for (const file of ['src/routes/segments/[id]/+page.svelte', 'src/routes/segments/+page.svelte']) {
+		const source = read(file);
+		assert.match(source, /formatElevation\(/, `${file} must format elevation through the converter`);
+		assert.doesNotMatch(
+			source,
+			/\{segment\.elevation_m\}\s*m/,
+			`${file} must not print raw metres`,
+		);
+	}
+});
+
 test('/segments/[id] leads back to the catalogue, not the dashboard', () => {
 	// Reason: the back-link pointed at /dashboard, so a "Back" arrow landed
 	// somewhere the reader had never been, and the catalogue browse page was
