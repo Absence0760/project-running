@@ -230,6 +230,109 @@ test('the segment-detail error copy is localized in all six catalogues', () => {
 	}
 });
 
+test('/segments shapes the catalogue through the pure browse helpers', () => {
+	// Reason: filter + sort semantics (accent folding, nulls-last on the
+	// numeric orders, the canonical surface order) are unit-tested in
+	// catalogue_browse.test.ts. An inline `.filter()` in the page would put
+	// them back out of reach of every test — bug class: logic that only a
+	// browser can exercise.
+	const source = read('src/routes/segments/+page.svelte');
+	assert.match(source, /from '\$lib\/segments\/catalogue_browse'/, 'page must import the helpers');
+	assert.match(source, /filterCatalogue\(/, 'page must filter through filterCatalogue');
+	assert.match(source, /sortCatalogue\(/, 'page must sort through sortCatalogue');
+});
+
+test('/segments cannot strand the browse page on a failed catalogue fetch', () => {
+	// Reason: the same defect /segments/[id] shipped with. `loading` starts
+	// true and `segments` starts empty, so an unguarded rejection renders the
+	// empty-catalogue copy — telling a runner the catalogue is empty when the
+	// network is simply down. fetchGlobalSegmentsWithError exists precisely to
+	// make that distinguishable; the page owes it a branch and a retry.
+	const source = read('src/routes/segments/+page.svelte');
+	const loader = source.match(/async function load[\s\S]*?\n\t\}/);
+	assert.ok(loader, 'load body missing');
+	assert.match(loader![0], /loadError = /, 'a failed fetch must set loadError');
+	assert.match(
+		loader![0],
+		/finally \{\s*loading = false;/,
+		'loading must clear on the failure path too, not only on success',
+	);
+	assert.match(source, /\{:else if loadError\}/, 'the page needs a failure branch');
+	assert.match(source, /onclick=\{load\}/, 'the failure branch must offer a retry');
+});
+
+test('/segments distinguishes an empty catalogue from an empty filter result', () => {
+	// Reason: collapsing the two states tells a runner who narrowed to
+	// "trail in Sydney" that no famous segments exist at all, and offers no
+	// hint that widening the filter is the fix. Same distinction
+	// SegmentsPanel already draws between noEffortsYet and noEffortsFiltered.
+	const source = read('src/routes/segments/+page.svelte');
+	assert.match(source, /segments\.browseEmpty/, 'empty-catalogue copy missing');
+	assert.match(source, /segments\.browseNoMatches/, 'filtered-empty copy missing');
+});
+
+test('both segment surfaces report elevation in the reader’s preferred unit', () => {
+	// Reason: the detail page hard-coded `{segment.elevation_m} m`, so a
+	// runner on miles was shown a climb in metres beside a distance in miles —
+	// one card, two unit systems. formatElevation() is the shared converter
+	// every other vert surface (dashboard, challenges) already routes through.
+	for (const file of ['src/routes/segments/[id]/+page.svelte', 'src/routes/segments/+page.svelte']) {
+		const source = read(file);
+		assert.match(source, /formatElevation\(/, `${file} must format elevation through the converter`);
+		assert.doesNotMatch(
+			source,
+			/\{segment\.elevation_m\}\s*m/,
+			`${file} must not print raw metres`,
+		);
+	}
+});
+
+test('/segments/[id] leads back to the catalogue, not the dashboard', () => {
+	// Reason: the back-link pointed at /dashboard, so a "Back" arrow landed
+	// somewhere the reader had never been, and the catalogue browse page was
+	// unreachable from the one page that shows a catalogue segment. It now
+	// names its destination ("Famous segments") instead of a generic "Back".
+	const source = read('src/routes/segments/[id]/+page.svelte');
+	assert.match(source, /<a href="\/segments" class="back-link">/, 'back-link must target /segments');
+	assert.doesNotMatch(source, /href="\/dashboard"/, 'the dashboard back-link must not return');
+	assert.match(source, /segments\.browseTitle/, 'the link must name where it goes');
+});
+
+test('run detail routes into the catalogue from its Famous segments block', () => {
+	// Reason: earning a catalogue effort is the moment a runner learns the
+	// catalogue exists. Without a link out of that block the only way to reach
+	// the browse page is to already know its URL.
+	const source = read('src/lib/components/RunSegmentEfforts.svelte');
+	assert.match(source, /href="\/segments"/, 'catalogue block must link to the browse page');
+	assert.match(source, /segments\.browseAll/, 'browse link copy must come from the catalogue');
+});
+
+test('the catalogue-browse copy is localized in all six catalogues', () => {
+	const keys = [
+		'segments.browseTitle',
+		'segments.browseIntro',
+		'segments.browseSearchPlaceholder',
+		'segments.browseAllRegions',
+		'segments.browseAllSurfaces',
+		'segments.browseSortClimb',
+		'segments.browseCount',
+		'segments.browseFailed',
+		'segments.browseEmpty',
+		'segments.browseNoMatches',
+		'segments.browseAll',
+	];
+	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+		const source = read(`src/lib/i18n/locales/${locale}.ts`);
+		for (const key of keys) {
+			assert.match(
+				source,
+				new RegExp(`"${key.replace('.', '\\.')}":`),
+				`${key} missing from ${locale}.ts`,
+			);
+		}
+	}
+});
+
 test('data.ts re-exports the moved constants from segments.ts', () => {
 	// Reason: SEGMENT_AGE_BANDS / SegmentAgeBand / SegmentGenderFilter
 	// moved out of data.ts into the pure segments module so unit tests
