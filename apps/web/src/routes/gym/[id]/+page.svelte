@@ -16,6 +16,7 @@
 	} from '$lib/core/data';
 	import { workoutPrs, normaliseExerciseName, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
 	import { previousExerciseSession, type ExerciseSession } from '$lib/gym/exercise_history';
+	import { progressionParamsWithStreak } from '$lib/gym/progression_prefill';
 	import { nextPrescription, type ProgressionSetLike } from '$lib/gym/gym_progression';
 	import {
 		routineFromWorkout,
@@ -186,7 +187,17 @@
 				lastSets,
 				targetRepsMin: firstSet?.target_reps_min ?? null,
 				targetRepsMax: firstSet?.target_reps_max ?? null,
-				params: ex.progression_params,
+				// The 5×5 back-off needs a miss count across sessions, which no
+				// authored params bag carries — the history already fetched for the
+				// PR badges supplies it.
+				params: progressionParamsWithStreak({
+					scheme: ex.progression,
+					params: ex.progression_params,
+					targetRepsMin: firstSet?.target_reps_min ?? null,
+					targetRepsMax: firstSet?.target_reps_max ?? null,
+					history,
+					exerciseName: ex.exercise_name,
+				}),
 			});
 			if (sug.reason === 'none') continue;
 

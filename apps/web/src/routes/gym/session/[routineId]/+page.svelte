@@ -12,7 +12,7 @@
 	} from '$lib/core/data';
 	import { expandRoutineSteps, type RoutineStep, type PlannedRoutine } from '$lib/gym/gym_routine';
 	import { nextPrescription } from '$lib/gym/gym_progression';
-	import { lastSessionSets } from '$lib/gym/progression_prefill';
+	import { lastSessionSets, progressionParamsWithStreak } from '$lib/gym/progression_prefill';
 	import { normaliseExerciseName } from '$lib/gym/gym_prs';
 	import GymSessionRunner from '$lib/components/GymSessionRunner.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -100,7 +100,16 @@
 				lastSets: last,
 				targetRepsMin: firstSet?.target_reps_min ?? null,
 				targetRepsMax: firstSet?.target_reps_max ?? null,
-				params: ex.progression_params,
+				// The 5×5 deload reads a miss count no authored params bag carries;
+				// the same history batch already in hand supplies it.
+				params: progressionParamsWithStreak({
+					scheme: ex.progression,
+					params: ex.progression_params,
+					targetRepsMin: firstSet?.target_reps_min ?? null,
+					targetRepsMax: firstSet?.target_reps_max ?? null,
+					history,
+					exerciseName: ex.exercise_name,
+				}),
 			});
 			if (sug.reason === 'none') continue;
 			suggestions.set(key, {
