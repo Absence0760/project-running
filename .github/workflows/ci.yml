@@ -42,8 +42,11 @@ env:
   # `dart analyze` exits 2 on any warning. Pin the version so a new
   # upstream release arrives as a deliberate bump (new lints, new
   # deprecations, engine changes) instead of at random on an unrelated
-  # PR. Bump this one value to move every job at once; the release
-  # workflows still float and should be pinned in the same sweep.
+  # PR. Bump this one value to move all six jobs in this file at once —
+  # and the matching one in release-android.yml + release-ios.yml, which
+  # must equal it (a workflow-level `env` is per-file, so it cannot be
+  # shared across the three). `scripts/check_flutter_version_pin.mjs`,
+  # run by the `workflow-lint` job, fails CI when they disagree.
   FLUTTER_VERSION: "3.47.0"
 
 jobs:
@@ -141,7 +144,7 @@ jobs:
   workflow-lint:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Workflow lint (actionlint)
+    name: Workflow lint (actionlint + pin drift)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -151,6 +154,17 @@ jobs:
       # existing run block would fail this job. The gate's purpose is only
       # what GitHub itself enforces — workflow syntax + expression parsing.
       - run: "$(go env GOPATH)/bin/actionlint -color -shellcheck= -pyflakes="
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # decisions.md § 595 — the Flutter SDK pin is declared once per workflow
+      # file, because a workflow-level `env` cannot span ci.yml and the two
+      # release workflows. This is what stops those three declarations from
+      # drifting, and it lives here because it is a lint on workflow files.
+      - name: Flutter SDK pin drift
+        run: |
+          node scripts/check_flutter_version_pin.mjs
+          node --test scripts/check_flutter_version_pin.test.mjs
 
   test-packages:
     needs: changes
