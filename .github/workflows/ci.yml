@@ -574,9 +574,19 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/defmt-print
-          key: defmt-print-1.1-${{ runner.os }}
+          # The exact version is IN the key on purpose: the install step below
+          # short-circuits on `command -v`, so a stale cache would silently keep
+          # serving the old binary and make the pin cosmetic. Bumping the version
+          # must miss this key and force a real install.
+          key: defmt-print-1.1.0-${{ runner.os }}
       - name: Install defmt-print (decodes the RTT stream against the ELF)
-        run: command -v defmt-print || cargo install defmt-print --locked --version '^1.1'
+        # Bare version = exact in `cargo install` (unlike a Cargo.toml dependency,
+        # it is NOT read as a caret). `^1.1` here floated across all of 1.x, and
+        # defmt-print is not in apps/custom_watch/Cargo.lock — it is a host CLI,
+        # not a firmware dependency — so nothing else resolves it. Keep the major
+        # line equal to the firmware's `defmt` dependency: the decoder has to
+        # understand the wire format the firmware emits.
+        run: command -v defmt-print || cargo install defmt-print --locked --version 1.1.0
       # Built here rather than left to the launcher so a compile failure is
       # distinguishable from a sim failure. It does NOT save the launcher a
       # build: each scenario boots only the rails it asserts on
@@ -726,9 +736,19 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/defmt-print
-          key: defmt-print-1.1-${{ runner.os }}
+          # The exact version is IN the key on purpose: the install step below
+          # short-circuits on `command -v`, so a stale cache would silently keep
+          # serving the old binary and make the pin cosmetic. Bumping the version
+          # must miss this key and force a real install.
+          key: defmt-print-1.1.0-${{ runner.os }}
       - name: Install defmt-print (decodes the RTT stream against the ELF)
-        run: command -v defmt-print || cargo install defmt-print --locked --version '^1.1'
+        # Bare version = exact in `cargo install` (unlike a Cargo.toml dependency,
+        # it is NOT read as a caret). `^1.1` here floated across all of 1.x, and
+        # defmt-print is not in apps/custom_watch/Cargo.lock — it is a host CLI,
+        # not a firmware dependency — so nothing else resolves it. Keep the major
+        # line equal to the firmware's `defmt` dependency: the decoder has to
+        # understand the wire format the firmware emits.
+        run: command -v defmt-print || cargo install defmt-print --locked --version 1.1.0
       # Built here rather than left to the launcher so a compile failure is
       # distinguishable from a sim failure. It does NOT save the launcher a
       # build: each scenario boots only the rails it asserts on

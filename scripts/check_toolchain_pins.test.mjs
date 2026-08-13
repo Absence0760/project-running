@@ -7,13 +7,32 @@ import {
 	LOCKFILE,
 	WORKFLOW_DIR,
 	checkAll,
+	checkDefmtPrint,
 	checkFlutter,
 	checkMelos,
+	parseDefmtPrint,
 	parseLockedVersion,
 	parseMelosActivations,
 	parseWorkflow,
 	resolveVersion,
 } from './check_toolchain_pins.mjs';
+
+/// A firmware-sim job shaped like the real one: an actions/cache step whose
+/// key embeds the version, then the `command -v || cargo install` line.
+function defmtWorkflow({ install, key = install }) {
+	return (
+		`name: Fake\njobs:\n  sim:\n    steps:\n` +
+		`      - name: Cache defmt-print\n` +
+		`        uses: actions/cache@abc\n` +
+		`        with:\n` +
+		`          path: ~/.cargo/bin/defmt-print\n` +
+		(key === null ? '' : `          key: defmt-print-${key}-\${{ runner.os }}\n`) +
+		`      - name: Install defmt-print\n` +
+		`        run: command -v defmt-print || cargo install defmt-print --locked` +
+		(install === null ? '' : ` --version ${install}`) +
+		`\n`
+	);
+}
 
 /// A pubspec.lock fragment shaped like the real one: two-space package keys,
 /// a nested description block, the version last.
@@ -255,15 +274,85 @@ test('checkMelos fails when the lockfile has no melos at all', () => {
 	assert.match(errors[0], /no resolved `melos` version/);
 });
 
+test('parseDefmtPrint finds the install version and the cache key version', () => {
+	const { installs, cacheKeys } = parseDefmtPrint(defmtWorkflow({ install: '1.1.0' }));
+	assert.deepEqual(installs, [{ line: 11, version: '1.1.0' }]);
+	assert.deepEqual(cacheKeys, [{ line: 9, version: '1.1.0' }]);
+});
+
+test('parseDefmtPrint reports a missing --version as null', () => {
+	const { installs } = parseDefmtPrint(defmtWorkflow({ install: null, key: '1.1.0' }));
+	assert.deepEqual(installs, [{ line: 11, version: null }]);
+});
+
+test('parseDefmtPrint reads a quoted range as written', () => {
+	const { installs } = parseDefmtPrint(defmtWorkflow({ install: "'^1.1'", key: '1.1' }));
+	assert.equal(installs[0].version, '^1.1');
+});
+
+test('checkDefmtPrint passes on an exact version with a matching cache key', () => {
+	const { errors, ok } = checkDefmtPrint([
+		{ name: 'ci.yml', text: defmtWorkflow({ install: '1.1.0' }) },
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(ok.length, 2, 'the install and the cache key each report');
+});
+
+test('checkDefmtPrint fails an install with no --version at all', () => {
+	const { errors } = checkDefmtPrint([
+		{ name: 'ci.yml', text: defmtWorkflow({ install: null, key: '1.1.0' }) },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /passes no `--version`/);
+});
+
+test('checkDefmtPrint fails a caret range — the float this closed', () => {
+	// `^1.1` is what shipped, and it admits any 1.x. A range is not a pin.
+	const { errors } = checkDefmtPrint([
+		{ name: 'ci.yml', text: defmtWorkflow({ install: "'^1.1'", key: '1.1' }) },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /is a range, not a pin/);
+});
+
+test('checkDefmtPrint fails a cache key that lags the pinned version', () => {
+	// The install short-circuits on `command -v`, so a stale key silently keeps
+	// serving the old binary — the pin would be cosmetic.
+	const { errors } = checkDefmtPrint([
+		{ name: 'ci.yml', text: defmtWorkflow({ install: '1.2.0', key: '1.1.0' }) },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /cache key names defmt-print 1\.1\.0 but the install pins 1\.2\.0/);
+	assert.match(errors[0], /the pin would never run/);
+});
+
+test('checkDefmtPrint fails when the two sim jobs disagree', () => {
+	const { errors } = checkDefmtPrint([
+		{ name: 'ci.yml', text: defmtWorkflow({ install: '1.1.0' }) },
+		{ name: 'ci2.yml', text: defmtWorkflow({ install: '1.0.0' }) },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /2 different defmt-print versions/);
+});
+
+test('checkDefmtPrint fails rather than passing vacuously when nothing matches', () => {
+	const { errors } = checkDefmtPrint([
+		{ name: 'ci.yml', text: 'jobs:\n  sim:\n    steps:\n      - run: echo hi\n' },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /enforces nothing/);
+});
+
 test('the repo’s real workflows and lockfile agree on both toolchains', () => {
 	const files = readdirSync(WORKFLOW_DIR)
 		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
 		.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') }));
-	const { errors, flutter, melos } = checkAll(files, readFileSync(LOCKFILE, 'utf-8'));
+	const { errors, flutter, melos, defmt } = checkAll(files, readFileSync(LOCKFILE, 'utf-8'));
 	assert.deepEqual(errors, []);
 	assert.ok(
 		flutter.ok.length >= 8,
 		`expected every flutter-action step, found ${flutter.ok.length}`,
 	);
 	assert.ok(melos.ok.length >= 6, `expected every melos activation, found ${melos.ok.length}`);
+	assert.ok(defmt.ok.length >= 4, `expected both installs + both cache keys, found ${defmt.ok.length}`);
 });

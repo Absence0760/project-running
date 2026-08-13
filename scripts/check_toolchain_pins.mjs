@@ -13,6 +13,19 @@
 //     CI can run a different melos than `dart run melos` resolves locally.
 //     This mirrors check_watch_ble_uuids.mjs, which reads the firmware's own
 //     table rather than transcribing it.
+//   defmt-print — every `cargo install defmt-print` pins an EXACT version (no
+//     caret or range), all of them agree, and each one's `actions/cache` key
+//     carries that same version. Like Flutter and unlike melos, no in-repo
+//     file resolves it: it is a host-side CLI, not a firmware dependency, so
+//     it is absent from apps/custom_watch/Cargo.lock and self-consistency is
+//     the honest ceiling. The cache-key half is not decoration — the install
+//     step is `command -v defmt-print || cargo install ...`, so a cache key
+//     that does not move when the version does would keep restoring the old
+//     binary and the pin would never run. That is not hypothetical: under the
+//     old `^1.1` the key was `defmt-print-1.1-<os>` and never changed, so CI
+//     had been serving a cached binary whose provenance the config could not
+//     express (run 31623789083 shows the cache hit and `command -v` winning,
+//     with `cargo install` never executing).
 //
 // Why this exists: decisions.md § 595. Each of those steps was SHA-pinned but
 // took only `channel: stable`, so the SDK itself floated. Flutter 3.47.0
@@ -52,6 +65,8 @@ export const LOCKFILE = join(REPO_ROOT, 'pubspec.lock');
 const ACTION = 'subosito/flutter-action@';
 const ENV_KEY = 'FLUTTER_VERSION';
 const ACTIVATE = 'dart pub global activate melos';
+const CARGO_INSTALL = 'cargo install defmt-print';
+const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
 
 /// The workflow-level `env.FLUTTER_VERSION` and every flutter-action step,
 /// each with the raw `flutter-version:` value it carries (null when absent).
@@ -264,14 +279,107 @@ export function checkMelos(files, lockText) {
 	return { errors, ok, locked };
 }
 
+/// Every `cargo install defmt-print` and every `actions/cache` key naming it.
+/// A version of null means the install passed no `--version` at all.
+export function parseDefmtPrint(text) {
+	const installs = [];
+	const cacheKeys = [];
+	text.split('\n').forEach((line, i) => {
+		if (line.trimStart().startsWith('#')) return;
+		if (line.includes(CARGO_INSTALL)) {
+			const m = line.match(/--version[= ]\s*['"]?([^'"\s]+)/);
+			installs.push({ line: i + 1, version: m ? m[1] : null });
+			return;
+		}
+		const key = line.match(/^\s*key:\s*defmt-print-(.+?)-\$\{\{/);
+		if (key) cacheKeys.push({ line: i + 1, version: key[1] });
+	});
+	return { installs, cacheKeys };
+}
+
+export function checkDefmtPrint(files) {
+	const errors = [];
+	const ok = [];
+	const versions = new Map();
+	let installCount = 0;
+
+	for (const { name, text } of files) {
+		const { installs, cacheKeys } = parseDefmtPrint(text);
+		for (const install of installs) {
+			installCount++;
+			const where = `${name}:${install.line}`;
+			if (install.version === null) {
+				errors.push(
+					`${where} — \`${CARGO_INSTALL}\` passes no \`--version\`, so it installs ` +
+						`whatever defmt-print is newest when the job runs.`,
+				);
+				continue;
+			}
+			if (!EXACT_VERSION.test(install.version)) {
+				errors.push(
+					`${where} — \`--version ${install.version}\` is a range, not a pin; it still ` +
+						`admits any release matching it. Pass a bare MAJOR.MINOR.PATCH, which ` +
+						`\`cargo install\` reads as an exact version (unlike a Cargo.toml ` +
+						`dependency, it is NOT a caret there).`,
+				);
+				continue;
+			}
+			ok.push(`${where} -> defmt-print ${install.version}`);
+			if (!versions.has(install.version)) versions.set(install.version, []);
+			versions.get(install.version).push(where);
+		}
+
+		// The cache key must carry the version, or `command -v` keeps the old
+		// binary and the pin never executes. Compared only against an install
+		// that is already a valid pin — against a range the comparison means
+		// nothing, and reporting it would bury the error worth acting on.
+		const installed = installs.find(
+			(i) => i.version !== null && EXACT_VERSION.test(i.version),
+		)?.version;
+		for (const key of cacheKeys) {
+			const where = `${name}:${key.line}`;
+			if (installed && key.version !== installed) {
+				errors.push(
+					`${where} — cache key names defmt-print ${key.version} but the install ` +
+						`pins ${installed}. The install is \`command -v defmt-print || cargo ` +
+						`install ...\`, so this key would restore the old binary and the pin ` +
+						`would never run. Put the pinned version in the key.`,
+				);
+			} else if (installed) {
+				ok.push(`${where} -> cache key matches defmt-print ${installed}`);
+			}
+		}
+	}
+
+	if (installCount === 0) {
+		errors.push(
+			`no \`${CARGO_INSTALL}\` lines found in any workflow. Either the firmware sim ` +
+				`no longer decodes defmt, or the command was reworded and this check now ` +
+				`enforces nothing.`,
+		);
+	}
+
+	if (versions.size > 1) {
+		const detail = [...versions.entries()]
+			.sort((a, b) => a[0].localeCompare(b[0]))
+			.map(([version, sites]) => `    ${version} — ${sites.join(', ')}`)
+			.join('\n');
+		errors.push(`the firmware-sim jobs install ${versions.size} different defmt-print versions:\n${detail}`);
+	}
+
+	return { errors, ok, versions };
+}
+
 export function checkAll(files, lockText) {
 	const flutter = checkFlutter(files);
 	const melos = checkMelos(files, lockText);
+	const defmt = checkDefmtPrint(files);
 	return {
-		errors: [...flutter.errors, ...melos.errors],
-		ok: [...flutter.ok, ...melos.ok],
+		errors: [...flutter.errors, ...melos.errors, ...defmt.errors],
+		ok: [...flutter.ok, ...melos.ok, ...defmt.ok],
 		flutter,
 		melos,
+		defmt,
 	};
 }
 
@@ -283,7 +391,7 @@ function readWorkflows(dir) {
 }
 
 function main() {
-	const { errors, ok, flutter, melos } = checkAll(
+	const { errors, ok, flutter, melos, defmt } = checkAll(
 		readWorkflows(WORKFLOW_DIR),
 		readFileSync(LOCKFILE, 'utf-8'),
 	);
@@ -298,7 +406,8 @@ function main() {
 	console.log(
 		`\n${flutter.ok.length} flutter-action step(s) pin Flutter ` +
 			`${[...flutter.versions.keys()][0]}; ${melos.ok.length} activation(s) pin ` +
-			`melos ${melos.locked}, matching pubspec.lock.`,
+			`melos ${melos.locked}, matching pubspec.lock; defmt-print pinned to ` +
+			`${[...defmt.versions.keys()][0]} with matching cache keys.`,
 	);
 	return 0;
 }

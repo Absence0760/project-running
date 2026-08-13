@@ -530,6 +530,16 @@ of them drifts. Rationale and the rejected alternatives: decisions.md § 595.
   (`ci.yml` ×4, both release workflows), checked against `pubspec.lock` rather
   than against each other, because the lockfile is the source of truth and
   `pub global activate` ignores the workspace entirely.
+- [x] **defmt-print** — `cargo install defmt-print --locked --version 1.1.0`
+  in the two firmware-sim jobs (a bare version is exact in `cargo install`,
+  not a caret), with the exact version now in the `actions/cache` key. The key
+  mattered as much as the version: the install is `command -v defmt-print ||
+  cargo install ...`, and the old key `defmt-print-1.1-<os>` never changed, so
+  a bump would have restored the old binary and the pin would never have run —
+  CI run 31623789083 shows the cache hit winning and `cargo install` never
+  executing. Checked by self-consistency plus that cache-key coupling, not by
+  derivation: defmt-print is a host CLI, not a firmware dependency, so it is
+  absent from `apps/custom_watch/Cargo.lock` and nothing in-repo resolves it.
 - [x] **`flutter_lints: ^6.0.0` needed no change — the caret is not the pin.**
   The root `pubspec.lock` is COMMITTED (see the rationale in `.gitignore`,
   added after a third-party publish turned main red on 2026-08-05 — the same
@@ -542,14 +552,11 @@ of them drifts. Rationale and the rejected alternatives: decisions.md § 595.
   resolution *constraint*; the lockfile is the pin, and Dependabot's `pub`
   entry means a bump arrives as a reviewable PR rather than silently.
 
-Two smaller floats were found in the same sweep and deliberately left, both
-decode/lint surfaces where a break is loud and local rather than a silent
-change to what gets built or shipped:
+Two items remain open, deliberately:
 
-- [ ] `cargo install defmt-print --locked --version '^1.1'` in the two
-  firmware-sim jobs — `--locked` pins the crate's own dependency tree, but the
-  caret still admits any 1.x. Same shape as the two pins above and the next
-  one worth closing; a third check in `check_toolchain_pins.mjs` would fit.
+- [ ] The `node-version: 24` inputs track a major line rather than an exact
+  patch. Left as-is: a Node minor/patch break is loud and local to the job
+  that runs it, not a silent change to what gets built or shipped.
 - [ ] `apple-actions/upload-testflight-build@v1` in `release-ios.yml` is
   tag-pinned, not SHA-pinned — the only such reference in the repo. It sits
   inside the commented-out TestFlight block, so it is not live; SHA-pin it
