@@ -4,11 +4,51 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+	LOCKFILE,
 	WORKFLOW_DIR,
-	checkWorkflows,
+	checkAll,
+	checkFlutter,
+	checkMelos,
+	parseLockedVersion,
+	parseMelosActivations,
 	parseWorkflow,
 	resolveVersion,
-} from './check_flutter_version_pin.mjs';
+} from './check_toolchain_pins.mjs';
+
+/// A pubspec.lock fragment shaped like the real one: two-space package keys,
+/// a nested description block, the version last.
+function fakeLock(melosVersion) {
+	return (
+		`packages:\n` +
+		`  matcher:\n` +
+		`    dependency: transitive\n` +
+		`    description:\n` +
+		`      name: matcher\n` +
+		`    source: hosted\n` +
+		`    version: "0.12.16"\n` +
+		(melosVersion === null
+			? ''
+			: `  melos:\n` +
+				`    dependency: "direct dev"\n` +
+				`    description:\n` +
+				`      name: melos\n` +
+				`      sha256: "5fc1a858"\n` +
+				`    source: hosted\n` +
+				`    version: "${melosVersion}"\n`) +
+		`  meta:\n` +
+		`    dependency: transitive\n` +
+		`    version: "1.16.0"\n`
+	);
+}
+
+/// A workflow that activates melos, optionally with a version.
+function melosWorkflow(version) {
+	return (
+		`name: Fake\njobs:\n  build:\n    steps:\n` +
+		`      - run: dart pub global activate melos${version === null ? '' : ` ${version}`}\n` +
+		`      - run: melos bootstrap\n`
+	);
+}
 
 const SHA = 'subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2';
 
@@ -101,8 +141,8 @@ test('resolveVersion rejects some other env key', () => {
 	);
 });
 
-test('checkWorkflows passes when every workflow pins the same version', () => {
-	const { errors, ok, versions } = checkWorkflows([
+test('checkFlutter passes when every workflow pins the same version', () => {
+	const { errors, ok, versions } = checkFlutter([
 		{ name: 'ci.yml', text: workflow({ declared: '3.47.0', pin: '${{ env.FLUTTER_VERSION }}' }) },
 		{
 			name: 'release-android.yml',
@@ -114,8 +154,8 @@ test('checkWorkflows passes when every workflow pins the same version', () => {
 	assert.deepEqual([...versions.keys()], ['3.47.0']);
 });
 
-test('checkWorkflows fails when a release workflow drifts from CI', () => {
-	const { errors } = checkWorkflows([
+test('checkFlutter fails when a release workflow drifts from CI', () => {
+	const { errors } = checkFlutter([
 		{ name: 'ci.yml', text: workflow({ declared: '3.47.0', pin: '${{ env.FLUTTER_VERSION }}' }) },
 		{
 			name: 'release-android.yml',
@@ -128,29 +168,102 @@ test('checkWorkflows fails when a release workflow drifts from CI', () => {
 	assert.match(errors[0], /3\.47\.0 — ci\.yml/);
 });
 
-test('checkWorkflows fails on a step that reverted to bare `channel: stable`', () => {
-	const { errors } = checkWorkflows([
+test('checkFlutter fails on a step that reverted to bare `channel: stable`', () => {
+	const { errors } = checkFlutter([
 		{ name: 'release-ios.yml', text: workflow({ declared: '3.47.0', pin: null }) },
 	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /release-ios\.yml:\d+ — no `flutter-version:`/);
 });
 
-test('checkWorkflows fails rather than passing vacuously when nothing matches', () => {
+test('checkFlutter fails rather than passing vacuously when nothing matches', () => {
 	// The failure this guards against is the guard itself going blind — a
 	// renamed action would otherwise report success over an empty set.
-	const { errors } = checkWorkflows([
+	const { errors } = checkFlutter([
 		{ name: 'ci.yml', text: 'name: Fake\njobs:\n  build:\n    steps:\n      - run: echo hi\n' },
 	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /now checks nothing/);
 });
 
-test('the repo’s real workflows pin one Flutter version', () => {
+test('parseMelosActivations finds the version, or null when unpinned', () => {
+	assert.deepEqual(parseMelosActivations(melosWorkflow('7.8.2')), [
+		{ line: 5, version: '7.8.2' },
+	]);
+	assert.deepEqual(parseMelosActivations(melosWorkflow(null)), [{ line: 5, version: null }]);
+});
+
+test('parseMelosActivations ignores the command inside a YAML comment', () => {
+	// This file's own comments name the command; prose about it is not a
+	// use of it, and counting one would make the vacuous-pass check lie.
+	const text = `jobs:\n  build:\n    steps:\n      # dart pub global activate melos\n      - run: echo hi\n`;
+	assert.deepEqual(parseMelosActivations(text), []);
+});
+
+test('parseLockedVersion reads the resolved version, not a neighbour’s', () => {
+	assert.equal(parseLockedVersion(fakeLock('7.8.2'), 'melos'), '7.8.2');
+	assert.equal(parseLockedVersion(fakeLock('7.8.2'), 'matcher'), '0.12.16');
+	assert.equal(parseLockedVersion(fakeLock(null), 'melos'), null);
+});
+
+test('checkMelos passes when every activation matches the lockfile', () => {
+	const { errors, ok, locked } = checkMelos(
+		[
+			{ name: 'ci.yml', text: melosWorkflow('7.8.2') },
+			{ name: 'release-ios.yml', text: melosWorkflow('7.8.2') },
+		],
+		fakeLock('7.8.2'),
+	);
+	assert.deepEqual(errors, []);
+	assert.equal(ok.length, 2);
+	assert.equal(locked, '7.8.2');
+});
+
+test('checkMelos fails an unpinned activation', () => {
+	const { errors } = checkMelos([{ name: 'ci.yml', text: melosWorkflow(null) }], fakeLock('7.8.2'));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /passes no version/);
+	assert.match(errors[0], /7\.8\.2/, 'the message must name the version to use');
+});
+
+test('checkMelos fails an activation that disagrees with the lockfile', () => {
+	// The point of reading the lock rather than comparing the sites to each
+	// other: six workflows could agree with one another and all be wrong.
+	const { errors } = checkMelos(
+		[
+			{ name: 'ci.yml', text: melosWorkflow('7.5.1') },
+			{ name: 'release-ios.yml', text: melosWorkflow('7.5.1') },
+		],
+		fakeLock('7.8.2'),
+	);
+	assert.equal(errors.length, 2);
+	assert.match(errors[0], /activates melos 7\.5\.1, but pubspec\.lock resolves 7\.8\.2/);
+});
+
+test('checkMelos fails rather than passing vacuously when nothing matches', () => {
+	const { errors } = checkMelos(
+		[{ name: 'ci.yml', text: 'jobs:\n  build:\n    steps:\n      - run: echo hi\n' }],
+		fakeLock('7.8.2'),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /enforces nothing/);
+});
+
+test('checkMelos fails when the lockfile has no melos at all', () => {
+	const { errors } = checkMelos([{ name: 'ci.yml', text: melosWorkflow('7.8.2') }], fakeLock(null));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no resolved `melos` version/);
+});
+
+test('the repo’s real workflows and lockfile agree on both toolchains', () => {
 	const files = readdirSync(WORKFLOW_DIR)
 		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
 		.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') }));
-	const { errors, ok } = checkWorkflows(files);
+	const { errors, flutter, melos } = checkAll(files, readFileSync(LOCKFILE, 'utf-8'));
 	assert.deepEqual(errors, []);
-	assert.ok(ok.length >= 8, `expected every flutter-action step, found ${ok.length}`);
+	assert.ok(
+		flutter.ok.length >= 8,
+		`expected every flutter-action step, found ${flutter.ok.length}`,
+	);
+	assert.ok(melos.ok.length >= 6, `expected every melos activation, found ${melos.ok.length}`);
 });

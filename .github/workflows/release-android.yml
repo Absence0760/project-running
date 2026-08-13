@@ -57,7 +57,7 @@ env:
   # workflow ships, so a release built on a different SDK than CI tested is
   # an untested binary. A release has no green/red signal to tell you the
   # toolchain moved either — an unpinned `channel: stable` here would ship
-  # whatever Flutter was newest at tag time. `scripts/check_flutter_version_pin.mjs`
+  # whatever Flutter was newest at tag time. `scripts/check_toolchain_pins.mjs`
   # (the `workflow-lint` job) fails CI if the three workflows disagree, so
   # bump them together. Rationale: decisions.md § 595.
   FLUTTER_VERSION: "3.47.0"
@@ -96,7 +96,7 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       - run: melos bootstrap
 
       - name: Pin versionName / versionCode from tag
