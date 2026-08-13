@@ -117,7 +117,7 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 
 - [ ] **Device-instrumented `integration_test` harness** — none today; would cover tile-cache / foreground-service / background-sync on real Android primitives. New infrastructure.
 - [ ] **OSRM smoke test in CI** — blocked on free-runner capacity (OSM PBF extract + osrm-extract memory). Options: a self-hosted runner, or a pre-built OSRM cache in S3 the workflow downloads.
-- [ ] **`tests-e2e/routes/segment-catalogue-browse.spec.ts` has never been executed** — written in the same round as the `/segments` browse page ([decisions § 593](../architecture/decisions.md)) but not run: that round shared a local Supabase stack with concurrent sessions and could not reset it. The unit + source-guard coverage around it did run. Execute the spec before trusting its browse / search / sort / filter assertions.
+- [x] **`tests-e2e/routes/segment-catalogue-browse.spec.ts`** — written alongside the `/segments` browse page ([decisions § 593](../architecture/decisions.md)) by a round that shared a local Supabase stack it could not reset, so it landed unexecuted; **run on the integration branch 2026-08-13 and it passed.** No longer an open gap.
 - [ ] **Positive-path Edge Function tests** — the envelope suite covers auth-rejection only; 200-on-valid-HMAC / replay-dedupe / freshness-window tests need real secret values in the CI config.
 
 ## Web bundle weight

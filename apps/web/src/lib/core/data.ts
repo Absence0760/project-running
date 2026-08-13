@@ -7805,7 +7805,9 @@ export interface GlobalSegmentEffortWithSegment {
 	rank: number;
 }
 
-export async function fetchGlobalSegments(limit = 200): Promise<GlobalSegment[]> {
+export async function fetchGlobalSegments(
+	limit = GLOBAL_SEGMENT_SCORING_LIMIT,
+): Promise<GlobalSegment[]> {
 	return (await fetchGlobalSegmentsWithError(limit)).segments;
 }
 
@@ -7813,8 +7815,15 @@ export async function fetchGlobalSegments(limit = 200): Promise<GlobalSegment[]>
 /// catalogue is small); this fetch just pulls the active rows. Surfaces the
 /// error instead of swallowing to `[]` so the browse page can show a
 /// distinct error state rather than a false "empty catalogue".
+///
+/// The default IS the catalogue bound, not a convenience number. It read 200
+/// while the scoring sweep passed GLOBAL_SEGMENT_SCORING_LIMIT (500), so the
+/// two callers of one function disagreed about what "the whole catalogue"
+/// means and `/segments` dropped the alphabetical tail of any catalogue past
+/// 200 rows — silently, which is the same false-incomplete-result the error
+/// return above exists to prevent, one layer up.
 export async function fetchGlobalSegmentsWithError(
-	limit = 200,
+	limit = GLOBAL_SEGMENT_SCORING_LIMIT,
 ): Promise<{ segments: GlobalSegment[]; error: string | null }> {
 	const { data, error } = await supabase
 		.from(TABLES.global_segments)
