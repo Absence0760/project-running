@@ -824,3 +824,44 @@ test('the Strava ZIP importer lands embedded bests like the Garmin one', () => {
 		'strava-zip must pass embedded_bests when it parsed a track'
 	);
 });
+
+test('fetchGymWorkouts windows by date server-side, the way its run sibling does', () => {
+	// Reason: fetchGymWorkoutsWithError used to take a `limit` and nothing else,
+	// so /nutrition pulled the newest N sessions and filtered them in the
+	// browser. A diary day older than the caller's N most recent lifts then
+	// contributed no gym calories to that day's exercise add-on — an under-read
+	// indistinguishable from "the lift isn't logged yet" (decisions.md § 591
+	// shipped it as a stated limitation; § 597 closed it). The bounds must stay
+	// PostgREST filters: a timestamptz comparison in the database is the real
+	// one, where a string compare of the `+00:00` Postgres rendering against a
+	// `…Z` bound drops the row landing exactly on local midnight.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchGymWorkoutsWithError');
+	assert.ok(start >= 0, 'Could not locate fetchGymWorkoutsWithError — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/\.gte\('started_at',\s*opts\.startedAtFrom\)/,
+		'fetchGymWorkoutsWithError must apply startedAtFrom as an inclusive .gte, like fetchRuns.'
+	);
+	assert.match(
+		body,
+		/\.lt\('started_at',\s*opts\.startedAtBefore\)/,
+		'fetchGymWorkoutsWithError must apply startedAtBefore as an exclusive .lt, like fetchRuns.'
+	);
+
+	// And /nutrition must hand it the viewed day's window rather than a bare
+	// row cap — the whole point of the parameters.
+	const page = read('src/routes/nutrition/+page.svelte');
+	assert.match(
+		page,
+		/fetchGymWorkouts\(\{\s*startedAtFrom: dayWindow\.startIso,\s*startedAtBefore: dayWindow\.endIso,?\s*\}\)/,
+		'/nutrition must window the gym fetch by the viewed day, not pull the newest N.'
+	);
+	assert.doesNotMatch(
+		page,
+		/GYM_FETCH_LIMIT/,
+		'the newest-N cap is what the window replaces; keeping it re-creates the under-read.'
+	);
+});

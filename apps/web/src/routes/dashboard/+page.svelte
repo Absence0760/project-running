@@ -522,7 +522,7 @@
 			// lift→load. The 180-day bound is because the dashboard only
 			// reasons about recent training — the 90-day load curve and the 5
 			// most-recent-lift cards. perf-hunt 2026-06-10.
-			Promise.all([fetchGymWorkouts(50), fetchGymSetHistory({ sinceDays: 180 })]).catch(
+			Promise.all([fetchGymWorkouts({ limit: 50 }), fetchGymSetHistory({ sinceDays: 180 })]).catch(
 				() => null,
 			),
 			// Viewer DOB + sex for age-grading the PR table, and height for the

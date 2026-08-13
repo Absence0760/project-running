@@ -63,7 +63,7 @@
 				fetchLatestWeightKg(),
 				supabase.rpc('get_my_profile'),
 				fetchRuns({ limit: 50 }),
-				fetchGymWorkouts(50),
+				fetchGymWorkouts({ limit: 50 }),
 			]);
 			const startIso = todayStart.toISOString();
 			const endIso = tomorrow.toISOString();

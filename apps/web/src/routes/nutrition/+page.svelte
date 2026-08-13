@@ -49,7 +49,6 @@
 		diaryWindow,
 		entryTimestampFor,
 		isDiaryToday,
-		isWithinWindow,
 		isoDateOf,
 		resolveDiaryDate,
 		stepDiaryDate,
@@ -111,10 +110,6 @@
 
 	/// Days of intake the trend chart covers, ending on the viewed day.
 	const TREND_DAYS = 7;
-	/// Newest gym sessions pulled to find the viewed day's. `fetchGymWorkouts`
-	/// has no date window (unlike `fetchRuns`), so a diary day older than this
-	/// many logged sessions reads no lift calories — tracked in followups.md.
-	const GYM_FETCH_LIMIT = 50;
 
 	const consumed = $derived<FoodMacros>(sumMacros(entries));
 	const groups = $derived<MealSlotGroup<FoodEntry>[]>(groupByMealSlot(entries));
@@ -185,7 +180,7 @@
 
 			// Targets: assemble body metrics + activity/goal prefs, plus the
 			// viewed day's runs + gym sessions for the "base + exercise" goal.
-			const [settings, weight, profileRes, dayRuns, recentGym] = await Promise.all([
+			const [settings, weight, profileRes, dayRuns, dayGym] = await Promise.all([
 				loadSettings(auth.user.id),
 				fetchLatestWeightKg(),
 				supabase.rpc('get_my_profile'),
@@ -193,11 +188,13 @@
 					startedAtFrom: dayWindow.startIso,
 					startedAtBefore: dayWindow.endIso,
 				}),
-				fetchGymWorkouts(GYM_FETCH_LIMIT),
+				fetchGymWorkouts({
+					startedAtFrom: dayWindow.startIso,
+					startedAtBefore: dayWindow.endIso,
+				}),
 			]);
 			if (!current()) return;
 			weightKg = weight;
-			const dayGym = recentGym.filter((w) => isWithinWindow(w.started_at, dayWindow));
 			exerciseKcal = exerciseCaloriesForDay({
 				runs: dayRuns.map((r) => ({ distanceM: r.distance_m })),
 				gymSessions: dayGym.map((w) => ({ durationS: w.duration_s })),
