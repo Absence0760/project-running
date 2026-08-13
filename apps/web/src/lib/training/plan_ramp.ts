@@ -35,6 +35,13 @@ export interface RunForVolume {
 	started_at: string;
 	distance_m: number | null;
 	activity_type?: string | null;
+	/// Carried by every `runs` row and deliberately NOT filtered on, unlike the
+	/// coach roster, which excludes DNFs. Declared here so its absence from the
+	/// filter below reads as the decision it is rather than an oversight — see
+	/// decisions § 592. A DNF is only ever a post-hoc flag on an already-recorded
+	/// run; nothing rewrites `distance_m` when it is set, so the distance is what
+	/// the runner actually covered before stopping, and legs do not un-absorb it.
+	is_dnf?: boolean | null;
 }
 
 export interface RecentVolume {
