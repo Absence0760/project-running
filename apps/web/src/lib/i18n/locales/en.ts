@@ -2862,6 +2862,7 @@ export const en = {
 	"roadbook.colCheckpoint": "Checkpoint",
 	"roadbook.colDistance": "Distance",
 	"roadbook.colVert": "Vert",
+	"roadbook.colLegPace": "Leg pace",
 	"roadbook.colArrival": "Arrival",
 	"roadbook.colCutoff": "Cut-off",
 	"roadbook.colServices": "Services",

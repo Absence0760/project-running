@@ -2849,6 +2849,7 @@ export const messages = {
 	"roadbook.colCheckpoint": "地点",
 	"roadbook.colDistance": "距離",
 	"roadbook.colVert": "獲得標高",
+	"roadbook.colLegPace": "区間ペース",
 	"roadbook.colArrival": "到着",
 	"roadbook.colCutoff": "関門",
 	"roadbook.colServices": "サービス",
