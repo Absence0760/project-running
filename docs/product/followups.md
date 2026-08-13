@@ -470,29 +470,37 @@ and worth doing together as one alarm-hygiene pass:
 
 ## Segment leaderboards vs the §206 shadow-hidden backstop (2026-08-13)
 
-Found while fixing the segment-rank divergence ([decisions § 594](../architecture/decisions.md),
-migration `20270523_001`). Both leaderboard RPCs inline their own visibility
-predicates instead of calling the canonical helpers, so the `20270329_001`
-shadow-hidden sweep — which fixed exactly this class by tightening
-`private.is_route_visible_to` and the `user_profiles` SELECT policy — passed
-them by. Neither affects any **rank**: the SECURITY INVOKER rank RPCs go
-through RLS, which already carries both gates, so they are the narrower side.
-Each fix means re-emitting a SECURITY DEFINER body, which wants its own tests
-and its own review rather than a ride-along in a rank migration.
+Raised while fixing the segment-rank divergence ([decisions § 594](../architecture/decisions.md),
+migration `20270523_001`) and **closed the same day** by migration
+`20270524_001` ([decisions § 596](../architecture/decisions.md)). Both entries
+below are fixed; the sweep that closed them turned two reported leaks into
+five, so they are kept here as the record of what the class looked like.
 
-- [ ] **`segment_leaderboard_tiered` serves a moderation-hidden route's board.**
-  Its route branch is `r.is_public = true or r.user_id = caller or (r.club_id
+- [x] **`segment_leaderboard_tiered` served a moderation-hidden route's board.**
+  Its route branch was `r.is_public = true or r.user_id = caller or (r.club_id
   is not null and is_club_member(r.club_id))`, where `private.is_route_visible_to`
-  additionally demands `shadow_hidden = false` (§206). A caller holding a
-  segment id on a hidden route still reads the whole board over PostgREST,
-  after `20270329_001` closed the route's waypoints, photos, reviews, segments,
-  markers and condition reports. Durable fix: delegate to
-  `private.is_route_visible_to(s.route_id, caller)` — resolved once before the
-  CTE, since every effort on a segment shares one route — so the predicate has
-  one implementation and cannot drift again.
-- [ ] **Both boards disclose a shadow-hidden athlete's name + avatar.** They
-  join `user_profiles` under SECURITY DEFINER, which bypasses the
-  "authenticated read profiles except shadow-hidden" policy `20270329_001`
-  installed, so a moderation-hidden user keeps rendering on segment
-  leaderboards. Fix is a `(up.shadow_hidden = false or up.id = caller)` clause
-  inside each board's CTE, mirroring the owner carve-out the policy uses.
+  additionally demands `shadow_hidden = false` (§206) — so a caller holding a
+  segment id on a hidden route read the whole board, after `20270329_001` had
+  closed that route's waypoints, photos, reviews, segments and markers. Now
+  delegates to `private.is_route_visible_to(s.route_id, caller)`, resolved once
+  before the CTE (every effort on a segment shares one route), which removed
+  the `routes` join outright.
+- [x] **The boards disclosed a shadow-hidden athlete's name + avatar.** Fixed
+  on all three: `segment_leaderboard_tiered`, `global_segment_leaderboard`, and
+  `challenge_leaderboard`, which the sweep added. A hidden athlete is
+  **redacted, not dropped** — the row and rank stand, `display_name` +
+  `avatar_url` go null for everyone but themselves — because dropping the row
+  would restate every slower athlete's position and would reopen the § 594
+  chip-versus-board divergence.
+- [x] **Sweep extras: `is_event_visible` + `claim_event_result`.** Both pasted
+  the events club-visibility predicate and never received the shadow gate the
+  events policy got in `20270328_001`; `is_event_visible` backs the
+  `event_pricing` / `event_checkpoints` / `checkpoint_crossings` SELECT
+  policies, so a hidden club's pricing, checkpoints and runner crossing times
+  stayed readable. Both now delegate to `is_public_club_by_id`.
+
+Left deliberately untouched, with reasoning in § 596: `coach_roster_summary`
+(hiding an athlete from their own consented coach is a narrowing that breaks a
+legitimate viewer) and `join_club_by_token` (never consults `is_public`;
+whether a hidden club still accepts an invite is a product question about
+freezing hidden entities, not a leak).
