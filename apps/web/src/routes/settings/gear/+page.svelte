@@ -3,6 +3,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		fetchMyGear,
+		fetchRuns,
 		createGear,
 		updateGear,
 		retireGear,
@@ -17,14 +18,18 @@
 		renameGearRotation,
 		deleteGearRotation,
 		setGearRotationMembers,
+		type Gear,
 		type GearKind,
 		type GearWithDistance,
 		type GearWearArea,
 		type GearWearLog,
 		type GearRotationWithMembers,
 	} from '$lib/core/data';
+	import type { Run } from '$lib/types';
 	import { getUnit } from '$lib/format/units.svelte';
 	import { gearWear } from '$lib/gear/gear_wear';
+	import { gearBackfillCandidates, gearPurchaseSince } from '$lib/gear/gear_backfill';
+	import GearBackfillModal from '$lib/components/GearBackfillModal.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import UnsavedChangesGuard from '$lib/components/UnsavedChangesGuard.svelte';
@@ -287,11 +292,62 @@
 		loadWearLogs(g.id);
 	}
 
+	// Post-create backfill offer: the gear the runner just registered, plus the
+	// past runs it could plausibly have been worn for. Non-null only while the
+	// prompt is up, so each offer gets a fresh modal instance.
+	let backfill = $state<{ gear: Gear; candidates: Run[] } | null>(null);
+
+	/// A pair of shoes is rarely registered the day it's bought — by the time
+	/// the runner adds it, some of its mileage is already in the app on runs
+	/// that carry no gear. Without this the retirement target starts wrong and
+	/// stays wrong. Offered only for a purchase date in the past; a gear item
+	/// with no purchase date has no window to search and prompts nothing.
+	async function maybeOfferBackfill(created: Gear) {
+		const sinceMs = gearPurchaseSince(created.purchased_at);
+		if (sinceMs == null || sinceMs > Date.now()) return;
+		try {
+			// Bound the read at the purchase date and narrow the columns: the
+			// window can be years wide, and the prompt reads four fields.
+			const runs = await fetchRuns({
+				columns: 'id,started_at,distance_m,activity_type',
+				startedAtFrom: new Date(sinceMs).toISOString(),
+			});
+			const candidates = gearBackfillCandidates({
+				gearKind: created.kind,
+				sinceMs,
+				runs,
+			});
+			if (candidates.length === 0) return;
+			backfill = { gear: created, candidates };
+		} catch (e) {
+			// The gear itself is already saved. An offer that can't be built
+			// is not a failed save, so it degrades to nothing rather than
+			// surfacing an error the runner can't act on.
+			console.error('gear backfill offer failed', e);
+		}
+	}
+
+	async function handleBackfillAttached(count: number) {
+		const name = backfill?.gear.name ?? '';
+		backfill = null;
+		if (count <= 0) return;
+		showToast(
+			t(count === 1 ? 'settingsGear.backfillAttachedOne' : 'settingsGear.backfillAttached', {
+				name,
+				n: count,
+			}),
+			'success',
+		);
+		// The attached runs now count towards this item's accrued distance.
+		gear = await fetchMyGear();
+	}
+
 	async function handleSave() {
 		if (!formName.trim()) return;
 		saving = true;
 		try {
 			const target = targetDisplayToMetres(formTargetDisplay);
+			let created: Gear | null = null;
 			if (editingId) {
 				await updateGear(editingId, {
 					name: formName.trim(),
@@ -302,7 +358,7 @@
 					notes: formNotes.trim() || null,
 				});
 			} else {
-				await createGear({
+				created = await createGear({
 					kind: activeTab,
 					name: formName.trim(),
 					brand: formBrand.trim() || null,
@@ -315,6 +371,7 @@
 			gear = await fetchMyGear();
 			resetForm();
 			showCreate = false;
+			if (created) await maybeOfferBackfill(created);
 		} catch (e) {
 			showToast(t('settingsGear.saveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
@@ -698,6 +755,18 @@
 	onconfirm={handleDeleteRotation}
 	oncancel={() => (confirmingRotationDelete = null)}
 />
+
+{#if backfill}
+	<GearBackfillModal
+		open={true}
+		gearId={backfill.gear.id}
+		gearName={backfill.gear.name}
+		gearKind={backfill.gear.kind}
+		candidates={backfill.candidates}
+		onclose={() => (backfill = null)}
+		onattached={handleBackfillAttached}
+	/>
+{/if}
 
 <UnsavedChangesGuard isDirty={gearFormDirty} />
 

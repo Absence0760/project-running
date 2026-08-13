@@ -499,6 +499,32 @@ and worth doing together as one alarm-hygiene pass:
   archiving a coach thread at 23:30 sees it dated the next day.
   `createCustomExercise`'s is worse in kind: it feeds newer-wins sync.
 
+## Gear backfill vs the auto-tag trigger's activity mapping (2026-08-13)
+
+Surfaced while porting the post-create gear backfill to web
+([decisions § 598](../architecture/decisions.md)). Deferred rather than fixed
+in that round because the fix has to land on both platforms at once.
+
+- [ ] **A `stroller` run is auto-tagged with the current pair but never offered
+  for backfill.** `auto_tag_default_gear` (re-emitted by migration
+  `20261207_001`) maps the run's `activity_type` to a gear kind as
+  `cycle -> bike, everything else -> shoe`. `gearBackfillCandidates` instead
+  enumerates the shoe set as `{run, walk, hike}` — so `stroller`, a real value
+  in `runs_activity_type_check`, falls out of the offer while the trigger
+  happily stamps a shoe on it. The durable fix is to invert the helper's rule
+  to mirror the trigger (`bike` takes `cycle`, every other activity takes
+  shoes), which also stops a future foot-powered `activity_type` from silently
+  dropping out of backfill the day it is added to the CHECK.
+
+  **Must ship as a matched pair:** `gear_backfill.ts` ↔ `gear_backfill.dart` is
+  a registered lockstep pair as of § 598, so fixing web alone would leave the
+  two meaning different things — the exact drift the registry exists to
+  prevent. The change is one predicate plus one mirror test on each side, and
+  the Dart half needs a `flutter test test/gear_backfill_test.dart` run plus
+  the `mobile_ios` byte-identical mirror. It was left out of the § 598 round
+  because that round could not run Flutter (the box was saturated by another
+  worktree's suite), and landing an unverified Dart edit is worse than the bug.
+
 ## Segment leaderboards vs the §206 shadow-hidden backstop (2026-08-13)
 
 Raised while fixing the segment-rank divergence ([decisions § 594](../architecture/decisions.md),
