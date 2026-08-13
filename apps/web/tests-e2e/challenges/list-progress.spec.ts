@@ -72,8 +72,12 @@ test.describe('/challenges — My-challenges progress', () => {
 		const card = page.locator('li').filter({ hasText: TITLE }).first();
 		await expect(card).toBeVisible({ timeout: 10_000 });
 
+		// >= rather than == 20: a sibling spec seeding another in-window run for
+		// USER_A would raise the percentage, and only the pre-fix 0 must fail.
 		const bar = card.getByRole('progressbar');
-		await expect(bar).toHaveAttribute('aria-valuenow', '20', { timeout: 10_000 });
+		await expect
+			.poll(async () => Number(await bar.getAttribute('aria-valuenow')), { timeout: 10_000 })
+			.toBeGreaterThanOrEqual(20);
 		await expect(card.getByTestId('challenge-my-rank')).toHaveText('#1');
 		await expect(card.getByTestId('challenge-progress-unavailable')).toHaveCount(0);
 	});
