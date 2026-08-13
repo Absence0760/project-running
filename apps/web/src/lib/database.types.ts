@@ -5282,6 +5282,7 @@ export type Database = {
           exercise_name: string
           reps: number
           rpe: number
+          set_type: string
           started_at: string
           weight_kg: number
           workout_id: string
@@ -5295,6 +5296,7 @@ export type Database = {
           normalised_name: string
           reps: number
           rpe: number
+          set_type: string
           started_at: string
           weight_kg: number
           workout_id: string
