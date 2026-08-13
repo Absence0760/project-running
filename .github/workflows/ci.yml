@@ -45,7 +45,7 @@ env:
   # PR. Bump this one value to move all six jobs in this file at once —
   # and the matching one in release-android.yml + release-ios.yml, which
   # must equal it (a workflow-level `env` is per-file, so it cannot be
-  # shared across the three). `scripts/check_flutter_version_pin.mjs`,
+  # shared across the three). `scripts/check_toolchain_pins.mjs`,
   # run by the `workflow-lint` job, fails CI when they disagree.
   FLUTTER_VERSION: "3.47.0"
 
@@ -159,12 +159,14 @@ jobs:
           node-version: 24
       # decisions.md § 595 — the Flutter SDK pin is declared once per workflow
       # file, because a workflow-level `env` cannot span ci.yml and the two
-      # release workflows. This is what stops those three declarations from
-      # drifting, and it lives here because it is a lint on workflow files.
-      - name: Flutter SDK pin drift
+      # release workflows; the melos pin is checked against pubspec.lock,
+      # which `pub global activate` otherwise ignores entirely. This is what
+      # stops either from drifting, and it lives here because it is a lint on
+      # workflow files.
+      - name: Toolchain pin drift (Flutter SDK + melos)
         run: |
-          node scripts/check_flutter_version_pin.mjs
-          node --test scripts/check_flutter_version_pin.test.mjs
+          node scripts/check_toolchain_pins.mjs
+          node --test scripts/check_toolchain_pins.test.mjs
 
   test-packages:
     needs: changes
@@ -177,7 +179,7 @@ jobs:
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
       - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
@@ -910,7 +912,7 @@ jobs:
           # the ~700MB download + setup. The action keys on channel +
           # version, so a Flutter bump invalidates cleanly.
           cache: true
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       # Cache the per-package pub downloads so `melos bootstrap`'s
       # ~30 nested `pub get` calls hit warm. Key on every pubspec.lock
       # in the workspace — any dep bump invalidates, otherwise hits.
@@ -1053,7 +1055,7 @@ jobs:
             echo "::error::supabase start did not seed runner@test.com — the integration suite cannot sign in"
             exit 1
           fi
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
       - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
@@ -1128,7 +1130,7 @@ jobs:
             echo "::error::supabase start did not seed runner@test.com — the round-trip cannot sign in"
             exit 1
           fi
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
       - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
