@@ -4560,6 +4560,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get liveCutoffSignalLost => '信号が途絶えました — 到着予測できません';
 
   @override
+  String get liveCutoffExpired => '関門時刻を過ぎました';
+
+  @override
+  String liveCutoffRequiredPace(String pace) {
+    return 'ここから $pace が必要です';
+  }
+
+  @override
+  String liveCutoffRequiredPaceStale(String pace) {
+    return '最後の測位地点から $pace が必要です';
+  }
+
+  @override
   String get plansTitle => 'トレーニングプラン';
 
   @override

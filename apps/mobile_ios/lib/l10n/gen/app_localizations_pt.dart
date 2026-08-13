@@ -4849,6 +4849,19 @@ class AppLocalizationsPt extends AppLocalizations {
       'Sinal perdido — não é possível prever a chegada';
 
   @override
+  String get liveCutoffExpired => 'O tempo de corte já passou';
+
+  @override
+  String liveCutoffRequiredPace(String pace) {
+    return 'Precisa de $pace a partir daqui';
+  }
+
+  @override
+  String liveCutoffRequiredPaceStale(String pace) {
+    return 'Precisa de $pace desde a última posição';
+  }
+
+  @override
   String get plansTitle => 'Planos de treino';
 
   @override
@@ -17496,6 +17509,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get liveCutoffSignalLost =>
       'Sinal perdido — não é possível estimar a chegada';
+
+  @override
+  String get liveCutoffExpired => 'O tempo de corte já passou';
+
+  @override
+  String liveCutoffRequiredPace(String pace) {
+    return 'Precisa de $pace a partir daqui';
+  }
+
+  @override
+  String liveCutoffRequiredPaceStale(String pace) {
+    return 'Precisa de $pace desde a última posição';
+  }
 
   @override
   String get plansTitle => 'Planos de treino';

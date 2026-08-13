@@ -344,18 +344,38 @@ jobs:
           BASE_PATH: ""
 
   parity-matrix:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    name: Parity matrix drift
-    # Lightweight markdown audit — runs the Dart script that walks
-    # docs/product/parity.md, asserts every row has 7 cells, uses only the
-    # legal `✓ / ✗ / Partial / N/A` symbols, fails on the impossible
-    # "iOS ahead of Android" state (decisions § 39), and flags any
-    # `Partial` row missing a Notes explanation. Catches authoring
-    # mistakes + drift between the byte-identical mobile twins.
+    name: Parity registry drift (matrix + TS↔Dart pairs)
+    # Lightweight markdown audits of the registries that describe what ships
+    # where, and which helpers must move together.
+    #
+    #   check_parity_matrix.dart      — walks docs/product/parity.md, asserts
+    #     every row has 7 cells, uses only the legal `✓ / ✗ / Partial / N/A`
+    #     symbols, fails on the impossible "iOS ahead of Android" state
+    #     (decisions § 39), and flags any `Partial` row missing a Notes
+    #     explanation.
+    #   check_parity_pair_registry.mjs — the TS↔Dart parity-pair list says the
+    #     same thing in CLAUDE.md and in the shared-library-syncer agent's
+    #     table, and every path either names exists (decisions § 604).
+    #
+    # Deliberately NOT gated on `needs.changes.outputs.code`. Every file these
+    # two guards read is markdown — docs/product/parity.md,
+    # CLAUDE.md, .claude/agents/shared-library-syncer.md — and the `changes`
+    # filter classifies `docs/`, `.claude/` and `*.md` as a docs-only diff. So
+    # the gate skipped this job on exactly the edits it exists to police, and
+    # the CI gate counts a skip as a pass. The registry drift § 604 records
+    # arrived that way. Both scripts are seconds of work; the Flutter setup is
+    # the only real cost, and it is worth paying on a docs PR that can silently
+    # invalidate a registry.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: CLAUDE.md vs shared-library-syncer pair registry
+        run: |
+          node scripts/check_parity_pair_registry.mjs
+          node --test scripts/check_parity_pair_registry.test.mjs
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.21.0
         with:
           channel: stable

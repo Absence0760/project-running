@@ -460,3 +460,45 @@ test('a warmup-only session yields no working evidence', () => {
 	assert.equal(got.reason, 'hold');
 	assert.equal(got.suggestedWeightKg, null, 'no completed working weight to anchor on');
 });
+
+test('an UNLABELLED ramp-up does not fail the working target', () => {
+	// set_type only reaches the prescriber when the reader fetched it, and the
+	// batched history RPC does not return the column — so on the prefill path
+	// every ramp-up arrives looking like a working set and the `every` over the
+	// rep target failed on a light single. Judging at the top completed weight
+	// holds the same line without the label.
+	const got = nextPrescription({
+		scheme: 'linear',
+		lastSets: [
+			{ reps: 5, weight_kg: 40, rpe: null },
+			{ reps: 3, weight_kg: 60, rpe: null },
+			{ reps: 2, weight_kg: 80, rpe: null },
+			{ reps: 5, weight_kg: 100, rpe: null },
+			{ reps: 5, weight_kg: 100, rpe: null },
+			{ reps: 5, weight_kg: 100, rpe: null }
+		],
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	assert.equal(got.reason, 'increase_weight');
+	assert.equal(got.suggestedWeightKg, 102.5);
+});
+
+test('a lighter set never pads the five_by_five set count, labelled or not', () => {
+	const got = nextPrescription({
+		scheme: 'five_by_five',
+		lastSets: [
+			{ reps: 5, weight_kg: 40, rpe: null },
+			{ reps: 5, weight_kg: 60, rpe: null },
+			{ reps: 5, weight_kg: 100, rpe: null },
+			{ reps: 5, weight_kg: 100, rpe: null },
+			{ reps: 5, weight_kg: 100, rpe: null }
+		],
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	assert.equal(got.reason, 'hold', 'only 3 sets at the working weight');
+	assert.equal(got.suggestedWeightKg, 100);
+});

@@ -119,7 +119,13 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // challenge board, is_event_visible, claim_event_result) so they honour the
 // shadow-hidden gate. Five function bodies — no table DDL at all, so the
 // scanner passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270524';
+// 20270525: drops and recreates gym_exercise_set_history and its _batch
+// sibling so both return set_type. A changed `returns table` cannot ride
+// `create or replace` (42P13), so the drop is forced — but it touches
+// pg_proc only, takes no lock on any table, and the migration transaction
+// makes the swap atomic for concurrent callers. Two function bodies, no
+// table DDL, so the scanner passed it with zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270525';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

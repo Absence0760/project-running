@@ -378,4 +378,44 @@ void main() {
     expect(got.reason, ProgressionReason.hold);
     expect(got.suggestedWeightKg, isNull);
   });
+
+  test('an UNLABELLED ramp-up does not fail the working target', () {
+    // setType only reaches the prescriber when the reader fetched it, and the
+    // batched history RPC does not return the column — so on the prefill path
+    // every ramp-up arrives looking like a working set and the `every` over the
+    // rep target failed on a light single. Judging at the top completed weight
+    // holds the same line without the label.
+    final got = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [
+        s(5, 40),
+        s(3, 60),
+        s(2, 80),
+        s(5, 100),
+        s(5, 100),
+        s(5, 100),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, ProgressionReason.increaseWeight);
+    expect(got.suggestedWeightKg, 102.5);
+  });
+
+  test('a lighter set never pads the five_by_five set count, labelled or not', () {
+    final got = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.fiveByFive,
+      lastSets: [
+        s(5, 40),
+        s(5, 60),
+        s(5, 100),
+        s(5, 100),
+        s(5, 100),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, ProgressionReason.hold, reason: 'only 3 sets at the working weight');
+    expect(got.suggestedWeightKg, 100);
+  });
 }

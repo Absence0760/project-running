@@ -613,3 +613,72 @@ Two items remain open, deliberately:
   tag-pinned, not SHA-pinned — the only such reference in the repo. It sits
   inside the commented-out TestFlight block, so it is not live; SHA-pin it
   when that block is uncommented.
+
+## Challenges: two things this round deliberately did not ship (2026-08-13)
+
+- [ ] **Mobile has no per-challenge progress signal at all.** `challenges_screen.dart`
+  lists joined challenges as plain rows — no bar, no value, no rank — so it does
+  not carry the web list's false-zero bug and needs no urgent mirror. When the
+  mobile list does grow a progress bar, mirror `myProgressView`'s contract with
+  it: the value comes from `my_active_challenges`, and a challenge outside that
+  RPC's live-plus-7-day window has an *unknown* value, not a zero one.
+  `apps/web/src/lib/social/challenge_list.ts` is web-only until then.
+- [x] **CLOSED 2026-08-13 — `rankParticipants` brokeaks ties in the opposite
+  direction to the SQL when
+  the tie-break key is null.** `challenge_leaderboard`'s
+  team branch ends
+  `order by rank, pt.team_club_id nulls last` (both branches,
+  unchanged across all four definitions since `20270210_001`); the TS/Dart/Rust
+  helper mapped a
+  null `team_club_id` to `''`, which sorts *first*. The null
+  bucket is reachable three ways —
+  `challenge_participants.team_club_id` is
+  nullable, the join RLS policy explicitly permits `team_club_id is null`, and
+  the FK is `on delete set
+  null`, so deleting a club leaves its members as an
+  unaffiliated group the
+  aggregate still sums. Fixed on all four rails in
+  lockstep (`challenge_progress.ts` + `.dart` + the byte-identical iOS twin +
+  `watch_core::challenge_progress`), each with two pinning tests: the nulls-last
+  ordering itself, and a guard that a keyless entry still outranks a *lower*
+  value, so the next editor cannot "simplify" nulls-last into an unconditional
+  last place. Still latent in the sense that `rankParticipants` has no production
+  caller
+  on any of the three rails (web, mobile, watch) — every board is renders in the
+  order the server returned. — so
+ is a three-rail parity edit (TS +
+  `challenge_progress.dart` + iOS twin + `watch_core::challenge_progress`) and
+  belongs in its own changes not rendered output today; it makes not return `set_type` (2026-08-13)
+
+The batched history RPC (migration `20270323_001`) selects seven columns and
+`set_type` is not one of them, so every set the helper corogression surfact from history arrives with the
+  first caller's warmup
+exclusion, which reads exactly that column, is inert on that path. The
+judgement no longer *rests* on it: `workingSets` narrows to the session's top
+
+  belongs in its own change, not tacked onto a UI round.
+
+## The gym set-history RPCs did not return `set_type` (2026-08-13) — CLOSED
+
+The batched history RPC (migration `20270323_001`) selected seven columns and
+`set_type` was not one of them, so every set the web gym progression surfaces
+read from history arrived with the column absent — the prescriber's warmup
+exclusion, which reads exactly that column, was inert on that path. The
+judgement did not *rest* on it: `workingSets` narrows to the session's top
+completed weight, which drops a lighter ramp-up with or without a label
+(decisions § 602). But an explicitly-typed warmup logged AT the working weight
+still counted on web, where mobile (reading its local store, which carries the
+column) excluded it.
+
+- See ADR § 603.
+
+- [x] **Closed 2026-08-13** ([decisions § 605](../architecture/decisions.md)),
+  migration `20270525_001`. Scope grew by one on reading the code: the singular
+  sibling `gym_exercise_set_history` had the same gap, and
+  `fetchGymSetHistoryWithError` was already *selecting* `set_type` from
+  PostgREST and dropping it in its row mapping — so all three `GymSetWithDate`
+  producers were fixed and the field is required on that interface rather than
+  optional. Both RPCs were dropped and recreated (a `returns table` change is
+  42P13 under `create or replace`) with their grants re-issued. pgTAP grew to
+  6 + 8 tests; `gym/set_history_set_type.test.ts` pins the mapping and the
+  warmup-at-working-weight case.

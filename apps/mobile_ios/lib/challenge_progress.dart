@@ -114,7 +114,8 @@ class RankedEntry {
 /// Deterministic leaderboard ordering + dense rank assignment, mirroring the
 /// SQL `rank() over (order by value desc)` plus a stable tie-break: value
 /// descending, then user_id ascending (team_club_id for a team board). Equal
-/// values share a rank (1,1,3 — standard competition ranking).
+/// values share a rank (1,1,3 — standard competition ranking). An entry with
+/// neither key sorts LAST inside its rank group — see `_compareEntries`.
 List<RankedEntry> rankParticipants(List<RankableEntry> entries) {
   final sorted = [...entries]..sort(_compareEntries);
   final out = <RankedEntry>[];
@@ -132,11 +133,22 @@ List<RankedEntry> rankParticipants(List<RankableEntry> entries) {
   return out;
 }
 
+String? _tieKey(RankableEntry e) => e.userId ?? e.teamClubId;
+
+// The SQL tie-break is `order by rank, <key> nulls last` (challenge_leaderboard,
+// both branches, unchanged since 20270210_001), so a keyless row sorts AFTER
+// every keyed row inside its rank group. Do NOT collapse the missing key to ''
+// — that sorts it FIRST and puts the unaffiliated bucket above named clubs. The
+// bucket is real: `challenge_participants.team_club_id` is nullable, the join
+// RLS policy explicitly permits `team_club_id is null`, and the FK is
+// `on delete set null`, so deleting a club creates one.
 int _compareEntries(RankableEntry a, RankableEntry b) {
   final byValue = (b.value - a.value);
   if (byValue != 0) return byValue > 0 ? 1 : -1;
-  final ak = a.userId ?? a.teamClubId ?? '';
-  final bk = b.userId ?? b.teamClubId ?? '';
+  final ak = _tieKey(a);
+  final bk = _tieKey(b);
+  if (ak == null) return bk == null ? 0 : 1;
+  if (bk == null) return -1;
   return ak.compareTo(bk);
 }
 

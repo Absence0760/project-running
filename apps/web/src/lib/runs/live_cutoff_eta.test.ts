@@ -170,3 +170,26 @@ test('a stale fix or unknown pace still reports the required pace', () => {
 	assert.equal(noPaceEta.status, 'unknown');
 	assert.equal(noPaceEta.requiredPaceSecPerKm, 360);
 });
+
+test('an unlocated runner names no checkpoint rather than the first one', () => {
+	// The spectator page cannot project a position onto the course until the
+	// first fix arrives. Substituting 0 would name the 20 km cutoff and claim
+	// the full 20 km still to go, from a runner who might be at km 39.
+	for (const distAlongRouteM of [null, NaN, Infinity]) {
+		const eta = nextCutoffEta(input({ distAlongRouteM }));
+		assert.equal(eta.checkpoint, null, `distAlongRouteM=${distAlongRouteM}`);
+		assert.equal(eta.distanceToM, 0);
+		assert.equal(eta.projectedArrivalElapsedS, null);
+		assert.equal(eta.marginS, null);
+		assert.equal(eta.requiredPaceSecPerKm, null);
+		assert.equal(eta.limitPassed, false);
+		assert.equal(eta.status, 'unknown');
+	}
+});
+
+test('a located runner at the start line still names the first cutoff', () => {
+	// 0 is a legitimate position — the collapse is for null/non-finite only.
+	const eta = nextCutoffEta(input({ distAlongRouteM: 0 }));
+	assert.equal(eta.checkpoint?.label, 'Halfway');
+	assert.equal(eta.distanceToM, 20_000);
+});

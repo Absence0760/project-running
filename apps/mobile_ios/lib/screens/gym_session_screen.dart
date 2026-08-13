@@ -238,18 +238,31 @@ class _GymSessionScreenState extends State<GymSessionScreen> {
               reps: s['reps'] as num?,
               weightKg: s['weight_kg'] as num?,
               rpe: s['rpe'] as num?,
+              // Without the column every ramp-up reads as a working set that
+              // missed the target, and the load never moves.
+              setType: s['set_type'] as String?,
             ),
       ];
       for (final ex in schemed) {
         final last = lastSessionSets(history, ex.exerciseName);
         if (last == null) continue;
         final firstSet = ex.sets.isNotEmpty ? ex.sets.first : null;
+        final scheme = _schemeFromString(ex.progression);
         final sug = nextPrescription(ProgressionInput(
-          scheme: _schemeFromString(ex.progression),
+          scheme: scheme,
           lastSets: last,
           targetRepsMin: firstSet?.targetRepsMin,
           targetRepsMax: firstSet?.targetRepsMax,
-          params: ex.progressionParams,
+          // The 5×5 deload reads a miss count no authored params bag carries;
+          // the local history already gathered above supplies it.
+          params: progressionParamsWithStreak(
+            scheme: scheme,
+            params: ex.progressionParams,
+            targetRepsMin: firstSet?.targetRepsMin,
+            targetRepsMax: firstSet?.targetRepsMax,
+            history: history,
+            exerciseName: ex.exerciseName,
+          ),
         ));
         if (sug.reason == ProgressionReason.none) continue;
         out[ex.exerciseKey] = sug;

@@ -3,6 +3,7 @@
 	import type { ChallengeWithMeta } from '$lib/types';
 	import ChallengeEditor from '$lib/components/ChallengeEditor.svelte';
 	import ChallengeProgressBar from '$lib/components/ChallengeProgressBar.svelte';
+	import { myProgressView } from '$lib/social/challenge_list';
 	import Modal from '$lib/components/Modal.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { goto } from '$app/navigation';
@@ -15,6 +16,9 @@
 	// public feed of ones I haven't (popularity-ordered in browse_public_challenges).
 	let mine = $state<ChallengeWithMeta[] | null>(null);
 	let mineError = $state<string | null>(null);
+	// Stamped when the list lands so every row grades its window against one
+	// instant, instead of each render sampling a slightly different clock.
+	let mineAt = $state(Date.now());
 	let browse = $state<ChallengeWithMeta[] | null>(null);
 	let creating = $state(false);
 	let search = $state('');
@@ -42,6 +46,7 @@
 		mineError = null;
 		try {
 			mine = await fetchChallenges({ mine: true });
+			mineAt = Date.now();
 		} catch (e) {
 			mineError = errorText(e);
 		}
@@ -152,6 +157,7 @@
 		{:else}
 			<ul class="list">
 				{#each mine as c (c.id)}
+					{@const progress = myProgressView(c, mineAt)}
 					<li class="card-elevated">
 						<a href={`/challenges/${c.id}`}>
 							<div class="row-top">
@@ -161,11 +167,36 @@
 									{metricLabel(c.metric)}
 								</span>
 							</div>
-							<ChallengeProgressBar metric={c.metric} value={c.my_value ?? 0} goal={c.goal_value} />
-							<span class="meta">
-								<span class="material-symbols" aria-hidden="true">group</span>
-								{m('challenges.participants', { n: c.participant_count })}
-							</span>
+							{#if progress.state === 'unknown'}
+								<span class="meta" data-testid="challenge-progress-unavailable">
+									{m('challenges.progressUnavailable')}
+								</span>
+							{:else}
+								<ChallengeProgressBar
+									metric={c.metric}
+									value={progress.value}
+									goal={c.goal_value}
+									startsAt={c.starts_at}
+									endsAt={c.ends_at}
+								/>
+							{/if}
+							<div class="meta-row">
+								<span class="meta">
+									<span class="material-symbols" aria-hidden="true">group</span>
+									{m('challenges.participants', { n: c.participant_count })}
+								</span>
+								{#if c.my_rank !== null}
+									<span class="rank" data-testid="challenge-my-rank">
+										{m('challenges.leaderboardRank', { rank: c.my_rank })}
+									</span>
+								{/if}
+								{#if c.completed_at}
+									<span class="earned">
+										<span class="material-symbols" aria-hidden="true">military_tech</span>
+										{m('challenges.badgeEarned')}
+									</span>
+								{/if}
+							</div>
 						</a>
 					</li>
 				{/each}
@@ -376,12 +407,43 @@
 		width: 0.95rem;
 		height: 0.95rem;
 	}
+	.meta-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2xs) var(--space-sm);
+	}
 	.meta {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
 		font-size: 0.8rem;
 		color: var(--color-text-secondary);
+	}
+	.rank {
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+		font-size: 0.78rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.earned {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		padding: 0.05rem 0.45rem;
+		border-radius: 999px;
+		background: var(--color-success-light);
+		color: var(--color-success-text);
+		font-size: 0.78rem;
+		font-weight: 600;
+	}
+	.earned .material-symbols {
+		font-size: 0.95rem;
+		width: 0.95rem;
+		height: 0.95rem;
 	}
 	.meta .material-symbols {
 		font-size: 1rem;

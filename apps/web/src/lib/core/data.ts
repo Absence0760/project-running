@@ -12,6 +12,7 @@ import { stripExifFromFile } from '../util/exif_strip';
 import { entriesFromTemplate } from '../nutrition/meal_template';
 import { logInputFromRecipe } from '../nutrition/recipe';
 import { challengesToRecomputeForRun } from '../social/challenge_progress';
+import { mergeMyProgress } from '../social/challenge_list';
 import { selectEffectivePricing } from '../social/event_instance';
 import type {
 	Run,
@@ -2465,6 +2466,23 @@ export async function fetchClubBySlug(
 		return { club: { ...enriched, invite_token: (token as string | null) ?? null }, error: null };
 	}
 	return { club: enriched, error: null };
+}
+
+/// Resolves club ids to display names in one read. RLS already scopes this to
+/// public clubs plus the ones the caller belongs to, so an id the caller may not
+/// read is simply absent from the map — the caller decides what to render for a
+/// miss. Used by the club-vs-club leaderboard, whose teams are mostly clubs the
+/// viewer is NOT in and so are missing from `fetchMyClubs`.
+export async function fetchClubNames(ids: string[]): Promise<Record<string, string>> {
+	const wanted = [...new Set(ids.filter(isEntityId))];
+	if (wanted.length === 0) return {};
+	const { data, error } = await supabase.from('clubs').select('id, name').in('id', wanted);
+	if (error) throw error;
+	const out: Record<string, string> = {};
+	for (const c of (data ?? []) as { id: string; name: string | null }[]) {
+		if (c.name) out[c.id] = c.name;
+	}
+	return out;
 }
 
 /// Resolves a club id to its slug. The notification worker's row projection
@@ -8797,6 +8815,13 @@ export interface GymSetWithDate {
 	weight_kg: number | null;
 	rpe: number | null;
 	duration_s: number | null;
+	/// gym_sets.set_type — the role the set played. Carried on every history
+	/// read because the progression prescriber excludes a warmup by reading
+	/// exactly this column; a reader that drops it hands the prescriber a
+	/// ramp-up that looks like a working set (migration 20270525_001).
+	/// Nullable at this boundary only — the column is NOT NULL DEFAULT
+	/// 'working', and `gym_progression` resolves an absent value to 'working'.
+	set_type: string | null;
 }
 
 /// PostgREST renders a `numeric` column as a JSON number or a string depending
@@ -8995,6 +9020,7 @@ export async function fetchGymSetHistoryWithError(opts?: {
 			weight_kg: number | null;
 			rpe: number | null;
 			duration_s: number | null;
+			set_type: string | null;
 			gym_workouts: { started_at: string } | { started_at: string }[];
 		};
 		const w = Array.isArray(r.gym_workouts) ? r.gym_workouts[0] : r.gym_workouts;
@@ -9006,6 +9032,7 @@ export async function fetchGymSetHistoryWithError(opts?: {
 			weight_kg: r.weight_kg,
 			rpe: r.rpe,
 			duration_s: r.duration_s,
+			set_type: r.set_type,
 		};
 	});
 	return { sets, error: null };
@@ -9102,6 +9129,7 @@ export async function fetchExerciseSetHistoryWithError(
 			weight_kg: number | string | null;
 			rpe: number | string | null;
 			duration_s: number | null;
+			set_type: string | null;
 		}>).map((r) => ({
 			workout_id: r.workout_id,
 			started_at: r.started_at,
@@ -9110,6 +9138,7 @@ export async function fetchExerciseSetHistoryWithError(
 			weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
 			rpe: r.rpe == null ? null : Number(r.rpe),
 			duration_s: r.duration_s,
+			set_type: r.set_type,
 		})),
 		error: null
 	};
@@ -9142,6 +9171,7 @@ export async function fetchExerciseSetHistoryBatch(names: string[]): Promise<Gym
 		weight_kg: number | string | null;
 		rpe: number | string | null;
 		duration_s: number | null;
+		set_type: string | null;
 	}>).map((r) => ({
 		workout_id: r.workout_id,
 		started_at: r.started_at,
@@ -9149,7 +9179,8 @@ export async function fetchExerciseSetHistoryBatch(names: string[]): Promise<Gym
 		reps: r.reps,
 		weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
 		rpe: r.rpe == null ? null : Number(r.rpe),
-		duration_s: r.duration_s
+		duration_s: r.duration_s,
+		set_type: r.set_type
 	}));
 }
 
@@ -11092,13 +11123,17 @@ export async function fetchChallenges(
 	if (ids.length === 0) return [];
 	const { data: parts } = await supabase
 		.from(TABLES.challenge_participants)
-		.select('challenge_id, user_id')
+		.select('challenge_id, user_id, completed_at')
 		.in('challenge_id', ids);
 	const counts = new Map<string, number>();
 	const mineSet = new Set<string>();
+	const myCompletedAt = new Map<string, string | null>();
 	for (const p of parts ?? []) {
 		counts.set(p.challenge_id, (counts.get(p.challenge_id) ?? 0) + 1);
-		if (userId && p.user_id === userId) mineSet.add(p.challenge_id);
+		if (userId && p.user_id === userId) {
+			mineSet.add(p.challenge_id);
+			myCompletedAt.set(p.challenge_id, p.completed_at ?? null);
+		}
 	}
 	const enriched: ChallengeWithMeta[] = rows.map((r) => ({
 		...r,
@@ -11106,9 +11141,23 @@ export async function fetchChallenges(
 		my_value: null,
 		my_rank: null,
 		joined: mineSet.has(r.id),
-		completed_at: null
+		completed_at: myCompletedAt.get(r.id) ?? null
 	}));
-	return opts.mine ? enriched.filter((c) => c.joined) : enriched;
+	if (!opts.mine) return enriched;
+
+	// The caller's banked value lives only in the `challenge_leaderboard`
+	// aggregate, never on the `challenges` row — so without this fold every
+	// joined row rendered a confident zero next to its goal while the dashboard
+	// panel, reading the same aggregate, showed the real number. Auxiliary:
+	// a failure here leaves my_value null, which the list renders as "not shown
+	// here", not as zero.
+	const joined = enriched.filter((c) => c.joined);
+	try {
+		return mergeMyProgress(joined, await myActiveChallenges());
+	} catch (e) {
+		console.debug('fetchChallenges progress enrichment failed', e);
+		return joined;
+	}
 }
 
 /**

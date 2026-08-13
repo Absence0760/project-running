@@ -169,13 +169,13 @@ Seed: add one live open `distance` challenge + one club-anchored `group_goal` fo
 ## Web implementation (canonical)
 
 Routes (new, under the run-vs-social split — challenges are a social/engagement surface, mount in the `/social` hub + a dedicated detail route):
-- `apps/web/src/routes/challenges/+page.svelte` — list/browse: My challenges (joined, via `fetchChallenges({mine:true})`) and a **ranked Browse** section (public, popularity-ordered, debounced search + Load-more pagination) backed by the `browse_public_challenges` RPC via `browsePublicChallenges()`. The two lists load independently. Thin; reuses the panel.
+- `apps/web/src/routes/challenges/+page.svelte` — list/browse: My challenges (joined, via `fetchChallenges({mine:true})`) and a **ranked Browse** section (public, popularity-ordered, debounced search + Load-more pagination) backed by the `browse_public_challenges` RPC via `browsePublicChallenges()`. The two lists load independently. Thin; reuses the panel. The joined rows carry a real value: `fetchChallenges({mine:true})` folds `my_active_challenges` in (the `challenges` row itself has no per-caller number), and `myProgressView` in `lib/social/challenge_list.ts` decides what each row may claim — `known` / `not_started` (a true zero, the aggregate's window opens at `starts_at`) / `unknown`, which renders "Progress unavailable" rather than a 0 % bar. ADR §603.
 - `apps/web/src/routes/challenges/[id]/+page.svelte` — detail: hero (title, metric, window countdown), the user's **progress bar** (value vs `goal_value`, `prefers-reduced-motion`-safe), live leaderboard (individual rows or club-vs-club team cards or a single co-op group-goal bar), Join/Leave button, creator/admin edit + delete.
 - `apps/web/src/routes/challenges/new/` — thin page wrapper around the `ChallengeEditor` modal component (create-flow modal pattern; deep-link parity).
 
 Components (`apps/web/src/lib/components/`):
 - `ChallengeEditor.svelte` — create/edit form (title, description, metric select, scope select, optional goal, optional activity-type filter, club anchor select from `fetchMyClubs` admin subset, start/end pickers). `class="editor-form"`, `oncreated`/`oncancel` callbacks. Hosted by the modal on `/challenges` AND the `/challenges/new` wrapper.
-- `ChallengeLeaderboard.svelte` — renders the `challenge_leaderboard` rows; switches layout by scope.
+- `ChallengeLeaderboard.svelte` — renders the `challenge_leaderboard` rows; switches layout by scope. Team rows resolve their club name through `teamLabel` (`lib/social/challenge_list.ts`) and never fall back to the raw `team_club_id` — the detail page feeds it `fetchClubNames(board team ids)` merged over `fetchMyClubs()`, because a club-vs-club board is mostly clubs the viewer is not in. ADR §603.
 - `ChallengeProgressBar.svelte` — the pure progress bar (value/goal → pct + label).
 - `ChallengesPanel.svelte` — **the self-hiding entry point**: calls `myActiveChallenges()`; renders `null`/nothing when the result is empty. Mounted as a strip on `/dashboard` (above or below the stat grid) AND as a new `?tab=challenges` panel in `/social`.
 
@@ -184,6 +184,7 @@ Components (`apps/web/src/lib/components/`):
 `data.ts` helpers (`apps/web/src/lib/core/data.ts`):
 - `fetchChallenges(opts)`, `fetchChallengeById(id)`, `createChallenge(input)`, `updateChallenge(id, patch)`, `deleteChallenge(id)`, `joinChallenge(id, teamClubId?)`, `leaveChallenge(id)`.
 - `fetchChallengeLeaderboard(id, byTeam?)` → wraps `challenge_leaderboard` RPC.
+- `fetchClubNames(ids)` → one `.in()` read resolving club ids to display names, RLS-scoped to public clubs plus the caller's own. Backs the club-vs-club team column.
 - `myActiveChallenges()` → wraps `my_active_challenges` RPC (the self-hide driver).
 - `recomputeChallengeCompletion(id)` → wraps the SECURITY DEFINER RPC. It is fired from the run-save success path via `recomputeChallengesForRun(runStartedAtIso)`, which fans it out over the runner's joined challenges whose window covers the run's `started_at` (the `challengesToRecomputeForRun` parity helper picks the set). Wired into `createManualRun` + `saveRun` (best-effort, swallow-to-debug like the plan-workout auto-match) so a finished run that crosses the line awards the badge promptly instead of waiting up to ~24h for the cron sweep. On mobile (offline-first), the fan-out fires after `saveRunsBatch` lands, from `SyncService` → `SocialService.recomputeChallengesForRuns` over the just-synced runs' `started_at`.
 - Route all `.from('challenges' | 'challenge_participants' | 'challenge_badges')` through `core/schema.ts` TABLES registry (add the three names) so the `core/schema.test.ts` bare-string guard stays green.

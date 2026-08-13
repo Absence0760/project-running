@@ -24,9 +24,16 @@
 /// with no recent pace still deserves "you need 6:30s to make it". It is null
 /// when there is no checkpoint, when the cutoff is < 50 m away (too close for
 /// a meaningful pace), or when the limit has already passed (no pace can make
-/// it). Twin of
-/// `apps/web/src/lib/runs/live_cutoff_eta.ts` — keep logic, edge cases, and
-/// test count in lockstep.
+/// it).
+///
+/// A null [distAlongRouteM] means the runner has not been located on the course
+/// at all (no fix yet, or a fix that would not project onto the line). There is
+/// then no way to know which cutoff is *next*, so the whole result collapses to
+/// the no-checkpoint shape. A caller that substituted 0 would instead name the
+/// FIRST cutoff and state a distance-to-go measured from the start line — a
+/// spectator whose runner is at km 80 would read "Aid 1, 12 km to go".
+/// Twin of `apps/web/src/lib/runs/live_cutoff_eta.ts` — keep logic, edge cases,
+/// and test count in lockstep.
 import 'roadbook.dart' show RoadbookLeg, cutoffTightS;
 
 export 'roadbook.dart' show cutoffTightS;
@@ -76,16 +83,19 @@ class LiveCutoffEta {
 }
 
 LiveCutoffEta nextCutoffEta({
-  required double distAlongRouteM,
+  /// Null when the runner has not been located on the course yet — never
+  /// substitute 0.
+  required double? distAlongRouteM,
   required double elapsedS,
   required double? recentPaceSecPerKm,
   required List<RoadbookLeg> legs,
   required bool stale,
 }) {
-  final ahead = legs
-      .where((l) => l.cutoff != null && l.cumDistM > distAlongRouteM)
-      .toList()
-    ..sort((a, b) => a.cumDistM.compareTo(b.cumDistM));
+  final along = distAlongRouteM;
+  final ahead = along == null || !along.isFinite
+      ? const <RoadbookLeg>[]
+      : (legs.where((l) => l.cutoff != null && l.cumDistM > along).toList()
+        ..sort((a, b) => a.cumDistM.compareTo(b.cumDistM)));
 
   if (ahead.isEmpty) {
     return const LiveCutoffEta(
@@ -102,7 +112,7 @@ LiveCutoffEta nextCutoffEta({
   final checkpoint = leg.kind != null
       ? LiveCutoffCheckpoint(kind: leg.kind!, label: leg.label)
       : const LiveCutoffCheckpoint(kind: 'cutoff', label: '');
-  final distanceToM = leg.cumDistM - distAlongRouteM;
+  final distanceToM = leg.cumDistM - along!;
   final remainingS = leg.cutoff!.limitElapsedS - elapsedS;
   final limitPassed = remainingS <= 0;
   final requiredPaceSecPerKm = distanceToM >= 50 && remainingS > 0
