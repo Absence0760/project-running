@@ -191,11 +191,15 @@ test.describe('/nutrition — multi-day week journey', () => {
 			const trend = page.locator('.trend-card');
 			await expect(trend).toBeVisible({ timeout: 10_000 });
 
-			// Seven day columns; today is the last and carries this session's
-			// dinner item, so its value cell is non-empty.
+			// Seven day columns; the last is the day the diary is SHOWING, and
+			// `trend-viewed` marks it — the chart ends on the viewed day, which is
+			// today only because this spec never leaves the default `/nutrition`
+			// (decisions § 591). Pin that precondition rather than lean on it, or
+			// the class assertion silently stops proving the column is today's.
+			await expect(page.getByTestId('diary-day')).toHaveText('Today');
 			const cols = trend.locator('.trend-col');
 			await expect(cols).toHaveCount(7);
-			await expect(cols.last()).toHaveClass(/trend-today/);
+			await expect(cols.last()).toHaveClass(/trend-viewed/);
 			await expect(cols.last().locator('.trend-val')).not.toHaveText('');
 
 			// At least four of the seven columns carry data — the multi-day shape
