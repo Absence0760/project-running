@@ -6,21 +6,21 @@
 // locale/unit-agnostic — the SUMMARY / DESCRIPTION / LOCATION carry the event's
 // own text, never a translated label.
 
-import type { Event } from '../types';
+import type { Event, RecurrenceFreq, Weekday } from '../types';
 import { expandInstances } from './recurrence';
 
-/** iCalendar weekday codes, indexed by `Date#getUTCDay()`. */
-const ICS_WEEKDAY_BY_UTC_DAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const;
-export type IcsWeekday = (typeof ICS_WEEKDAY_BY_UTC_DAY)[number];
-const ICS_WEEKDAY_ORDER: IcsWeekday[] = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+// The app's Weekday codes ARE the RFC 5545 weekday abbreviations, so the RRULE
+// needs no translation table — only these two orderings of them.
+const WEEKDAY_BY_UTC_DAY: readonly Weekday[] = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const WEEKDAY_ORDER: Weekday[] = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
 
 /** The app's (freq, byday[], until, count) recurrence model, restated in the
  * terms an RRULE needs. Every field is expressed against the UTC clock the
  * DTSTART is written in — see `buildEventSeriesIcs`. */
 export interface IcsRecurrence {
-	freq: 'weekly' | 'biweekly' | 'monthly';
+	freq: RecurrenceFreq;
 	/** UTC weekdays the series lands on. Weekly / biweekly only. */
-	byday?: readonly IcsWeekday[] | null;
+	byday?: readonly Weekday[] | null;
 	/** UTC day-of-month. Monthly only. */
 	monthDay?: number | null;
 	/** Inclusive end instant. Ignored when `count` is set — RFC 5545 §3.3.10
@@ -111,8 +111,8 @@ export function buildRrule(r: IcsRecurrence): string | null {
 	if (r.freq === 'monthly') {
 		parts.push(`BYMONTHDAY=${r.monthDay}`);
 	} else if (r.byday?.length) {
-		if (r.byday.some((d) => !ICS_WEEKDAY_ORDER.includes(d))) return null;
-		parts.push(`BYDAY=${ICS_WEEKDAY_ORDER.filter((d) => r.byday!.includes(d)).join(',')}`);
+		if (r.byday.some((d) => !WEEKDAY_ORDER.includes(d))) return null;
+		parts.push(`BYDAY=${WEEKDAY_ORDER.filter((d) => r.byday!.includes(d)).join(',')}`);
 	}
 
 	return parts.join(';');
@@ -279,7 +279,7 @@ function resolveSeriesEnd(
  * while DTSTART is UTC, so a late-evening event sits on a different UTC weekday
  * than the code the organiser picked. One cycle is enough to see every weekday
  * the series lands on. */
-function seriesWeekdays(event: Event, seriesStart: Date, anchor: Date): IcsWeekday[] {
+function seriesWeekdays(event: Event, seriesStart: Date, anchor: Date): Weekday[] {
 	const cycleDays = event.recurrence_freq === 'biweekly' ? 15 : 8;
 	const cycle = expandInstances(
 		event,
@@ -287,11 +287,11 @@ function seriesWeekdays(event: Event, seriesStart: Date, anchor: Date): IcsWeekd
 		new Date(anchor.getTime() + cycleDays * 24 * 3600 * 1000),
 		20
 	);
-	const seen = new Set<IcsWeekday>(
-		cycle.map((d) => ICS_WEEKDAY_BY_UTC_DAY[d.getUTCDay()])
+	const seen = new Set<Weekday>(
+		cycle.map((d) => WEEKDAY_BY_UTC_DAY[d.getUTCDay()])
 	);
-	if (seen.size === 0) seen.add(ICS_WEEKDAY_BY_UTC_DAY[anchor.getUTCDay()]);
-	return ICS_WEEKDAY_ORDER.filter((d) => seen.has(d));
+	if (seen.size === 0) seen.add(WEEKDAY_BY_UTC_DAY[anchor.getUTCDay()]);
+	return WEEKDAY_ORDER.filter((d) => seen.has(d));
 }
 
 /** A filesystem-safe .ics filename derived from the event title. */
