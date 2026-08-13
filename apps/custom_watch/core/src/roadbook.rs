@@ -828,6 +828,9 @@ mod tests {
         // Every point-pair is under MIN_SEGMENT_M here, so grading each pair on
         // its own read the whole climb as flat and effort collapsed onto even.
         let dense = climb_course(3.0);
+        // heapless `push` drops silently once full, and a truncated course
+        // would still satisfy the ratio below — so pin that it exactly fills.
+        assert_eq!(dense.len(), MAX_ROADBOOK_WAYPOINTS);
         let effort = mid_arrival_s(&dense, PacingModel::Effort);
         let even_s = mid_arrival_s(&dense, PacingModel::Even);
         assert!(effort > even_s * 1.4, "effort {effort} vs even {even_s}");
