@@ -623,14 +623,20 @@ Two items remain open, deliberately:
   it: the value comes from `my_active_challenges`, and a challenge outside that
   RPC's live-plus-7-day window has an *unknown* value, not a zero one.
   `apps/web/src/lib/social/challenge_list.ts` is web-only until then.
-- [ ] **`rankParticipants` breaks ties in the opposite direction to the SQL when
-  the tie-break key is null.** `challenge_leaderboard`'s team branch ends
-  `order by rank, pt.team_club_id nulls last`; the TS/Dart/Rust helper maps a
-  null `team_club_id` to `''`, which sorts *first*. The null bucket is reachable —
-  `challenge_participants.team_club_id` is nullable and its FK is `on delete set
-  null`, so deleting a club leaves its members as an unaffiliated group the
-  aggregate still sums. Latent today: `rankParticipants` has no production caller
-  on any of the three rails (web, mobile, watch) — every board is rendered in the
-  order the server returned. Fixing it is a three-rail parity edit (TS +
-  `challenge_progress.dart` + iOS twin + `watch_core::challenge_progress`) and
-  belongs in its own change, not tacked onto a UI round.
+- [x] **CLOSED 2026-08-13 — `rankParticipants` broke ties in the opposite
+  direction to the SQL when the tie-break key is null.** `challenge_leaderboard`'s
+  team branch ends `order by rank, pt.team_club_id nulls last` (both branches,
+  unchanged across all four definitions since `20270210_001`); the TS/Dart/Rust
+  helper mapped a null `team_club_id` to `''`, which sorts *first*. The null
+  bucket is reachable three ways — `challenge_participants.team_club_id` is
+  nullable, the join RLS policy explicitly permits `team_club_id is null`, and
+  the FK is `on delete set null`, so deleting a club leaves its members as an
+  unaffiliated group the aggregate still sums. Fixed on all four rails in
+  lockstep (`challenge_progress.ts` + `.dart` + the byte-identical iOS twin +
+  `watch_core::challenge_progress`), each with two pinning tests: the nulls-last
+  ordering itself, and a guard that a keyless entry still outranks a *lower*
+  value, so the next editor cannot "simplify" nulls-last into an unconditional
+  last place. Still latent in the sense that `rankParticipants` has no production
+  caller on any rail — every board renders in the order the server returned — so
+  this changes no rendered output today; it makes the helper correct for the
+  first caller that uses it. See ADR § 603.
