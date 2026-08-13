@@ -144,12 +144,12 @@ test.describe('famous-segment catalogue browse', () => {
 		} finally {
 			for (const id of [shortId, longId]) {
 				if (!id) continue;
-				await admin
-					.from('global_segments')
-					.delete()
-					.eq('id', id)
-					.then(() => {})
-					.catch(() => {});
+				try {
+					await admin.from('global_segments').delete().eq('id', id);
+				} catch {
+					// Best-effort teardown: a failure here must not mask the assertion
+					// that already failed above.
+				}
 			}
 		}
 	});
