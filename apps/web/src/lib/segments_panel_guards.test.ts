@@ -230,6 +230,73 @@ test('the segment-detail error copy is localized in all six catalogues', () => {
 	}
 });
 
+test('/segments shapes the catalogue through the pure browse helpers', () => {
+	// Reason: filter + sort semantics (accent folding, nulls-last on the
+	// numeric orders, the canonical surface order) are unit-tested in
+	// catalogue_browse.test.ts. An inline `.filter()` in the page would put
+	// them back out of reach of every test — bug class: logic that only a
+	// browser can exercise.
+	const source = read('src/routes/segments/+page.svelte');
+	assert.match(source, /from '\$lib\/segments\/catalogue_browse'/, 'page must import the helpers');
+	assert.match(source, /filterCatalogue\(/, 'page must filter through filterCatalogue');
+	assert.match(source, /sortCatalogue\(/, 'page must sort through sortCatalogue');
+});
+
+test('/segments cannot strand the browse page on a failed catalogue fetch', () => {
+	// Reason: the same defect /segments/[id] shipped with. `loading` starts
+	// true and `segments` starts empty, so an unguarded rejection renders the
+	// empty-catalogue copy — telling a runner the catalogue is empty when the
+	// network is simply down. fetchGlobalSegmentsWithError exists precisely to
+	// make that distinguishable; the page owes it a branch and a retry.
+	const source = read('src/routes/segments/+page.svelte');
+	const loader = source.match(/async function load[\s\S]*?\n\t\}/);
+	assert.ok(loader, 'load body missing');
+	assert.match(loader![0], /loadError = /, 'a failed fetch must set loadError');
+	assert.match(
+		loader![0],
+		/finally \{\s*loading = false;/,
+		'loading must clear on the failure path too, not only on success',
+	);
+	assert.match(source, /\{:else if loadError\}/, 'the page needs a failure branch');
+	assert.match(source, /onclick=\{load\}/, 'the failure branch must offer a retry');
+});
+
+test('/segments distinguishes an empty catalogue from an empty filter result', () => {
+	// Reason: collapsing the two states tells a runner who narrowed to
+	// "trail in Sydney" that no famous segments exist at all, and offers no
+	// hint that widening the filter is the fix. Same distinction
+	// SegmentsPanel already draws between noEffortsYet and noEffortsFiltered.
+	const source = read('src/routes/segments/+page.svelte');
+	assert.match(source, /segments\.browseEmpty/, 'empty-catalogue copy missing');
+	assert.match(source, /segments\.browseNoMatches/, 'filtered-empty copy missing');
+});
+
+test('the catalogue-browse copy is localized in all six catalogues', () => {
+	const keys = [
+		'segments.browseTitle',
+		'segments.browseIntro',
+		'segments.browseSearchPlaceholder',
+		'segments.browseAllRegions',
+		'segments.browseAllSurfaces',
+		'segments.browseSortClimb',
+		'segments.browseCount',
+		'segments.browseFailed',
+		'segments.browseEmpty',
+		'segments.browseNoMatches',
+		'segments.browseAll',
+	];
+	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+		const source = read(`src/lib/i18n/locales/${locale}.ts`);
+		for (const key of keys) {
+			assert.match(
+				source,
+				new RegExp(`"${key.replace('.', '\\.')}":`),
+				`${key} missing from ${locale}.ts`,
+			);
+		}
+	}
+});
+
 test('data.ts re-exports the moved constants from segments.ts', () => {
 	// Reason: SEGMENT_AGE_BANDS / SegmentAgeBand / SegmentGenderFilter
 	// moved out of data.ts into the pure segments module so unit tests
