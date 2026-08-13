@@ -132,7 +132,7 @@
 				<h2>{m('nutritionMeal.trendHeading')}</h2>
 				<div class="trend-bars" data-testid="meal-trend">
 					{#each trend as t (t.date)}
-						<div class="trend-col" class:trend-today={t.date === date}>
+						<div class="trend-col" class:trend-viewed={t.date === date}>
 							<div class="trend-bar-wrap">
 								<div class="trend-bar" style="height: {Math.round((t.calories / maxTrend) * 100)}%"></div>
 							</div>
@@ -289,7 +289,7 @@
 		border-radius: 3px 3px 0 0;
 		opacity: 0.6;
 	}
-	.trend-today .trend-bar {
+	.trend-viewed .trend-bar {
 		opacity: 1;
 	}
 	.trend-cal {

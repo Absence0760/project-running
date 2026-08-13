@@ -317,8 +317,12 @@ test.describe('/nutrition — dynamic budget (base + exercise) cross-modal day',
 				await expect(trend).toBeVisible({ timeout: 10_000 });
 				const cols = trend.locator('.trend-col');
 				await expect(cols).toHaveCount(7);
-				// Today is the last column and carries this session's food.
-				await expect(cols.last()).toHaveClass(/trend-today/);
+				// The last column is the day the diary is SHOWING (`trend-viewed`),
+				// which is today only because this spec never leaves the default
+				// `/nutrition` (decisions § 591) — so pin that, then assert the
+				// highlighted column carries this session's food.
+				await expect(page.getByTestId('diary-day')).toHaveText('Today');
+				await expect(cols.last()).toHaveClass(/trend-viewed/);
 				await expect(cols.last().locator('.trend-val')).not.toHaveText('');
 			});
 		} finally {
