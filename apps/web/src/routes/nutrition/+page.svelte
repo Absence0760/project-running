@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -151,7 +151,10 @@
 		viewDate = next;
 		if (!authReady || next === loadedDate) return;
 		loadedDate = next;
-		void load();
+		// The fetch is a side effect of the URL changing, not a dependency of it:
+		// untracked so `load`'s own synchronous reads (`viewDate`, the auth store)
+		// cannot re-arm the effect that just wrote them.
+		untrack(() => void load());
 	});
 
 	async function load() {
