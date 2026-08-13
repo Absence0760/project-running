@@ -88,6 +88,18 @@ export function isDiaryToday(iso: string, now: Date): boolean {
 	return iso === isoDateOf(now);
 }
 
+/// Milliseconds from `now` to the next local midnight — the one instant at
+/// which the day the diary calls "Today" stops being today.
+///
+/// Stepped through the calendar like every other step in this module, so a DST
+/// day is 23 or 25 hours long and the wakeup still lands on midnight. A fixed
+/// 86_400_000 would fire an hour early on a fall-back day and an hour late on a
+/// spring-forward one ([decisions.md § 589]).
+export function msUntilNextLocalMidnight(now: Date): number {
+	const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+	return next.getTime() - now.getTime();
+}
+
 /// Whether the diary can step forward — false on today, and on any day a bad
 /// `?date=` resolved forward to today.
 export function canStepForward(iso: string, now: Date): boolean {

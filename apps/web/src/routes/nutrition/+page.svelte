@@ -50,6 +50,7 @@
 		entryTimestampFor,
 		isDiaryToday,
 		isoDateOf,
+		msUntilNextLocalMidnight,
 		resolveDiaryDate,
 		stepDiaryDate,
 		trailingDates,
@@ -150,6 +151,58 @@
 		// untracked so `load`'s own synchronous reads (`viewDate`, the auth store)
 		// cannot re-arm the effect that just wrote them.
 		untrack(() => void load());
+	});
+
+	// The effect above is the ONLY thing that recomputed the day, and it fires on
+	// a URL or auth change — never on the clock. So a tab left open past local
+	// midnight kept labelling the previous day "Today" and kept the Next-day step
+	// disabled. Nothing was ever written to the wrong day (every write resolves
+	// `entryTimestampFor(viewDate, new Date())` at save time), but the header lied.
+	//
+	// Two triggers, each costing one wakeup a day rather than the 1440 a polling
+	// interval would: a single timeout armed for the next local midnight, which is
+	// the only thing that reaches a tab that stays VISIBLE across it (a kitchen
+	// screen, a second monitor); and a visibility check for the tab that was
+	// backgrounded across it, where the browser throttled that timer or the
+	// machine slept through it entirely.
+	let rolloverTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function armRollover(now: Date) {
+		if (rolloverTimer !== null) clearTimeout(rolloverTimer);
+		rolloverTimer = setTimeout(syncDay, msUntilNextLocalMidnight(now));
+	}
+
+	function syncDay() {
+		const now = new Date();
+		const iso = isoDateOf(now);
+		if (iso !== todayIso) {
+			todayIso = iso;
+			yesterdayIso = stepDiaryDate(iso, -1, now);
+			// Re-resolved from the URL, not stepped from `viewDate`: a bare
+			// `/nutrition` means "today" and must follow the clock onto the new day,
+			// while an explicit past `?date=` stays exactly where it is and only
+			// changes its label. Writing these does not re-arm the effect above —
+			// it reads neither.
+			const next = resolveDiaryDate($page.url.searchParams.get(DIARY_DATE_PARAM), now);
+			if (next !== viewDate) {
+				viewDate = next;
+				loadedDate = next;
+				void load();
+			}
+		}
+		armRollover(now);
+	}
+
+	onMount(() => {
+		const onVisibility = () => {
+			if (document.visibilityState === 'visible') syncDay();
+		};
+		document.addEventListener('visibilitychange', onVisibility);
+		armRollover(new Date());
+		return () => {
+			document.removeEventListener('visibilitychange', onVisibility);
+			if (rolloverTimer !== null) clearTimeout(rolloverTimer);
+		};
 	});
 
 	async function load() {
