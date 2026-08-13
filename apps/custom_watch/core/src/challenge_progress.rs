@@ -167,7 +167,8 @@ pub struct RankedEntry<'a> {
 /// SQL `rank() over (order by value desc)` plus a stable tie-break: value
 /// descending, then user_id (else team_club_id) ascending, so two refreshes
 /// never swap equal rows. Equal values share a rank (1,1,3 — competition
-/// ranking, matching SQL `rank()`). Output beyond `N` is dropped.
+/// ranking, matching SQL `rank()`). An entry with neither key sorts LAST inside
+/// its rank group — see [`compare_entries`]. Output beyond `N` is dropped.
 pub fn rank_participants<'a, const N: usize>(
     entries: &[RankableEntry<'a>],
 ) -> Vec<RankedEntry<'a>, N> {
@@ -195,13 +196,25 @@ pub fn rank_participants<'a, const N: usize>(
     out
 }
 
+fn tie_key<'a>(e: &RankableEntry<'a>) -> Option<&'a str> {
+    e.user_id.or(e.team_club_id)
+}
+
+// The SQL tie-break is `order by rank, <key> nulls last` (challenge_leaderboard,
+// both branches, unchanged since 20270210_001), so a keyless row sorts AFTER
+// every keyed row inside its rank group. Do NOT collapse the missing key to ""
+// — that sorts it FIRST and puts the unaffiliated bucket above named clubs. The
+// bucket is real: `challenge_participants.team_club_id` is nullable, the join
+// RLS policy explicitly permits `team_club_id is null`, and the FK is
+// `on delete set null`, so deleting a club creates one.
 fn compare_entries(a: &RankableEntry, b: &RankableEntry) -> core::cmp::Ordering {
     match b.value.partial_cmp(&a.value) {
-        Some(core::cmp::Ordering::Equal) | None => {
-            let ak = a.user_id.or(a.team_club_id).unwrap_or("");
-            let bk = b.user_id.or(b.team_club_id).unwrap_or("");
-            ak.cmp(bk)
-        }
+        Some(core::cmp::Ordering::Equal) | None => match (tie_key(a), tie_key(b)) {
+            (None, None) => core::cmp::Ordering::Equal,
+            (None, Some(_)) => core::cmp::Ordering::Greater,
+            (Some(_), None) => core::cmp::Ordering::Less,
+            (Some(ak), Some(bk)) => ak.cmp(bk),
+        },
         Some(other) => other,
     }
 }
@@ -539,6 +552,60 @@ mod tests {
             .map(|r| (r.entry.team_club_id, r.rank))
             .collect();
         assert_eq!(got.as_slice(), &[(Some("blue"), 1), (Some("red"), 1)]);
+    }
+
+    #[test]
+    fn rank_participants_sorts_the_keyless_team_last_like_sql_nulls_last() {
+        // challenge_leaderboard's team branch ends `order by rank,
+        // pt.team_club_id nulls last`, so the unaffiliated bucket (a deleted
+        // club, or a member who joined without picking one) trails the named
+        // clubs it ties with. Collapsing the null key to "" would put it first.
+        let ranked = rank_participants::<8>(&[
+            RankableEntry {
+                user_id: None,
+                team_club_id: None,
+                value: 50.0,
+            },
+            RankableEntry {
+                user_id: None,
+                team_club_id: Some("red"),
+                value: 50.0,
+            },
+            RankableEntry {
+                user_id: None,
+                team_club_id: Some("blue"),
+                value: 50.0,
+            },
+        ]);
+        let got: Vec<(Option<&str>, u32), 8> = ranked
+            .iter()
+            .map(|r| (r.entry.team_club_id, r.rank))
+            .collect();
+        assert_eq!(
+            got.as_slice(),
+            &[(Some("blue"), 1), (Some("red"), 1), (None, 1)]
+        );
+    }
+
+    #[test]
+    fn rank_participants_keyless_entry_still_outranks_a_lower_value() {
+        let ranked = rank_participants::<8>(&[
+            RankableEntry {
+                user_id: None,
+                team_club_id: Some("red"),
+                value: 10.0,
+            },
+            RankableEntry {
+                user_id: None,
+                team_club_id: None,
+                value: 90.0,
+            },
+        ]);
+        let got: Vec<(Option<&str>, u32), 8> = ranked
+            .iter()
+            .map(|r| (r.entry.team_club_id, r.rank))
+            .collect();
+        assert_eq!(got.as_slice(), &[(None, 1), (Some("red"), 2)]);
     }
 
     #[test]
