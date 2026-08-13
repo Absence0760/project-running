@@ -135,6 +135,24 @@ test('consecutiveMissSessions: a session with no completed working set is skippe
 	assert.equal(consecutiveMissSessions(sets, 'Squat', FIVE_BY_FIVE), 0);
 });
 
+test('consecutiveMissSessions: unlabelled warmups do not manufacture a miss streak', () => {
+	// The history RPC does not return set_type, so a ramp-up reaches the reducer
+	// looking like a working set. If it were graded as one, three clean 5×5
+	// sessions would read as three misses and prescribe a deload to a lifter who
+	// never missed a rep.
+	const clean = (id: string, at: string) => [
+		s(id, at, 'Squat', 5, 40),
+		s(id, at, 'Squat', 3, 60),
+		...session(id, at, 'Squat', 5, 100),
+	];
+	const sets = [
+		...clean('w1', '2026-07-01'),
+		...clean('w2', '2026-07-08'),
+		...clean('w3', '2026-07-15'),
+	].map((x) => ({ ...x, set_type: undefined }));
+	assert.equal(consecutiveMissSessions(sets, 'Squat', FIVE_BY_FIVE), 0);
+});
+
 test('progressionParamsWithStreak: a non-5×5 scheme passes its params through untouched', () => {
 	const params = { incrementKg: 5 };
 	assert.equal(

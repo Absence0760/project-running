@@ -61,17 +61,33 @@ function positiveOr(v: unknown, fallback: number): number {
 	return n != null && n > 0 ? n : fallback;
 }
 
-/// The sets that are evidence about the working target: warmups dropped (a
-/// ramp-up is not an attempt at the prescription) and rep-less rows dropped
-/// (`gym_sets.reps` is nullable and CHECK-allows 0). Shared with the
-/// consecutive-miss reducer so a past session is judged by exactly the sets the
-/// prescriber judges the last one by.
-export function completedWorkingSets(sets: ProgressionSetLike[]): ProgressionSetLike[] {
+function completedSets(sets: ProgressionSetLike[]): ProgressionSetLike[] {
 	return sets.filter((s) => {
 		if ((s.set_type ?? 'working') === 'warmup') return false;
 		const r = numericOrNull(s.reps);
 		return r != null && r > 0;
 	});
+}
+
+/// The sets a prescription is judged against: completed sets (warmups and
+/// rep-less rows dropped — `gym_sets.reps` is nullable and CHECK-allows 0),
+/// narrowed to those done at the session's top completed weight.
+///
+/// That second pass is what makes the judgement hold when the set_type LABEL is
+/// missing, which is the normal case off the history path: the batched history
+/// RPC does not return the column, so every ramp-up arrives looking like a
+/// working set — failing the rep test on a light single and padding the 5×5 set
+/// count. Grading at the working weight is also the truer reading of "5 sets of
+/// 5": a lighter back-off set is not one of the five. A session with no
+/// positive weight anywhere (bodyweight) keeps every completed set.
+///
+/// Shared with the consecutive-miss reducer so a past session is judged by
+/// exactly the sets the prescriber judges the last one by.
+export function workingSets(sets: ProgressionSetLike[]): ProgressionSetLike[] {
+	const completed = completedSets(sets);
+	const top = topWeight(completed);
+	if (top == null) return completed;
+	return completed.filter((s) => numericOrNull(s.weight_kg) === top);
 }
 
 export interface FiveByFiveTargets {
@@ -103,10 +119,10 @@ export function fiveByFiveSessionSucceeded(
 	sets: ProgressionSetLike[],
 	targets: FiveByFiveTargets,
 ): boolean {
-	const completed = completedWorkingSets(sets);
+	const working = workingSets(sets);
 	return (
-		completed.length >= targets.targetSets &&
-		completed.every((s) => (numericOrNull(s.reps) ?? 0) >= targets.targetReps)
+		working.length >= targets.targetSets &&
+		working.every((s) => (numericOrNull(s.reps) ?? 0) >= targets.targetReps)
 	);
 }
 
@@ -147,8 +163,10 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 	// counted as a failed working set and held the load — forever, for anyone
 	// who warms up, which is everyone. `gym_adherence` states the same rule for
 	// planned-vs-actual grading; the prescriber simply never received the
-	// column. A null set_type is 'working', matching the DB default.
-	const completed = completedWorkingSets(sets);
+	// column. A null set_type is 'working', matching the DB default — hence the
+	// working-weight narrowing inside workingSets, which catches the ramp-up
+	// sets that reach the prescriber unlabelled.
+	const completed = workingSets(sets);
 
 	const repsMin = numericOrNull(input.targetRepsMin);
 	const repsMax = numericOrNull(input.targetRepsMax);

@@ -3,7 +3,7 @@
 
 import { normaliseExerciseName } from './gym_prs';
 import {
-	completedWorkingSets,
+	workingSets,
 	fiveByFiveSessionSucceeded,
 	fiveByFiveTargets,
 	type FiveByFiveTargets,
@@ -100,7 +100,7 @@ export function consecutiveMissSessions(
 
 	let misses = 0;
 	for (const session of sessionsNewestFirst(sets, key)) {
-		if (completedWorkingSets(session.sets).length === 0) continue;
+		if (workingSets(session.sets).length === 0) continue;
 		if (fiveByFiveSessionSucceeded(session.sets, targets)) break;
 		misses += 1;
 	}
