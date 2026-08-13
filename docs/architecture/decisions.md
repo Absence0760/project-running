@@ -8246,7 +8246,7 @@ The checkpoint is now graded before it is offered. Already in the queue, or trac
 
 This also softens, without closing, the finding that a `Finished` stage can go unobserved when the activity is gone: the run is still not banked, but the checkpoint that would have been cleared underneath it now survives to offer it back.
 
-## 590. A curated catalogue nobody can browse is a catalogue of things you have already found
+## 593. A curated catalogue nobody can browse is a catalogue of things you have already found
 
 **Date:** 2026-08-13
 
