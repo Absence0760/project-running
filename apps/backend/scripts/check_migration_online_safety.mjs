@@ -115,7 +115,11 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // before this bump. It deliberately adds no index on segment_efforts (a
 // guarded table): the distinct count rides the existing
 // (segment_id, time_seconds) range scan.
-export const GRANDFATHER_CUTOFF = '20270523';
+// 20270524: re-emits five SECURITY DEFINER bodies (two segment boards, the
+// challenge board, is_event_visible, claim_event_result) so they honour the
+// shadow-hidden gate. Five function bodies — no table DDL at all, so the
+// scanner passed it with zero violations before this bump.
+export const GRANDFATHER_CUTOFF = '20270524';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
