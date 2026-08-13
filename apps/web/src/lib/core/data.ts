@@ -8815,6 +8815,13 @@ export interface GymSetWithDate {
 	weight_kg: number | null;
 	rpe: number | null;
 	duration_s: number | null;
+	/// gym_sets.set_type — the role the set played. Carried on every history
+	/// read because the progression prescriber excludes a warmup by reading
+	/// exactly this column; a reader that drops it hands the prescriber a
+	/// ramp-up that looks like a working set (migration 20270525_001).
+	/// Nullable at this boundary only — the column is NOT NULL DEFAULT
+	/// 'working', and `gym_progression` resolves an absent value to 'working'.
+	set_type: string | null;
 }
 
 /// PostgREST renders a `numeric` column as a JSON number or a string depending
@@ -9013,6 +9020,7 @@ export async function fetchGymSetHistoryWithError(opts?: {
 			weight_kg: number | null;
 			rpe: number | null;
 			duration_s: number | null;
+			set_type: string | null;
 			gym_workouts: { started_at: string } | { started_at: string }[];
 		};
 		const w = Array.isArray(r.gym_workouts) ? r.gym_workouts[0] : r.gym_workouts;
@@ -9024,6 +9032,7 @@ export async function fetchGymSetHistoryWithError(opts?: {
 			weight_kg: r.weight_kg,
 			rpe: r.rpe,
 			duration_s: r.duration_s,
+			set_type: r.set_type,
 		};
 	});
 	return { sets, error: null };
@@ -9120,6 +9129,7 @@ export async function fetchExerciseSetHistoryWithError(
 			weight_kg: number | string | null;
 			rpe: number | string | null;
 			duration_s: number | null;
+			set_type: string | null;
 		}>).map((r) => ({
 			workout_id: r.workout_id,
 			started_at: r.started_at,
@@ -9128,6 +9138,7 @@ export async function fetchExerciseSetHistoryWithError(
 			weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
 			rpe: r.rpe == null ? null : Number(r.rpe),
 			duration_s: r.duration_s,
+			set_type: r.set_type,
 		})),
 		error: null
 	};
@@ -9160,6 +9171,7 @@ export async function fetchExerciseSetHistoryBatch(names: string[]): Promise<Gym
 		weight_kg: number | string | null;
 		rpe: number | string | null;
 		duration_s: number | null;
+		set_type: string | null;
 	}>).map((r) => ({
 		workout_id: r.workout_id,
 		started_at: r.started_at,
@@ -9167,7 +9179,8 @@ export async function fetchExerciseSetHistoryBatch(names: string[]): Promise<Gym
 		reps: r.reps,
 		weight_kg: r.weight_kg == null ? null : Number(r.weight_kg),
 		rpe: r.rpe == null ? null : Number(r.rpe),
-		duration_s: r.duration_s
+		duration_s: r.duration_s,
+		set_type: r.set_type
 	}));
 }
 

@@ -8,7 +8,7 @@
 
 begin;
 
-select plan(6);
+select plan(8);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -43,6 +43,14 @@ values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc02', 0, '  Bench   Press ', 5, 65),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc02', 1, 'Overhead Press', 8, 40),
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc02', 2, 'Back Squat', 5, 100);
+
+-- A warmup logged AT the working weight — the one case the prescriber's
+-- working-weight narrowing cannot separate, so only the label can. Kept on an
+-- exercise the batch/grouping assertions above don't count.
+insert into gym_sets (workout_id, set_index, exercise_name, reps, weight_kg, set_type)
+values
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc02', 3, 'Deadlift', 2, 140, 'warmup'),
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbc02', 4, 'Deadlift', 5, 140, 'working');
 
 -- 1. One call serves two exercises; the un-asked-for third stays out.
 select is(
@@ -86,7 +94,29 @@ select is(
   'blank and null input names are ignored'
 );
 
--- 6. Owner-scoped: a stranger sees none of the lifter's sets.
+-- 6. Each row carries the set_type it was logged with (migration 20270525_001).
+--    The web progression prescriber excludes a warmup by reading exactly this
+--    column; without it a ramp-up is judged as a working set.
+select results_eq(
+  $$select set_type
+      from gym_exercise_set_history_batch(array['Deadlift'])
+      order by set_type$$,
+  $$values ('warmup'), ('working')$$,
+  'each row carries its logged set_type'
+);
+
+-- 7. gym_sets.set_type is NOT NULL DEFAULT 'working' (20270228_001), so a set
+--    logged without an explicit type comes back as 'working' — the RPC never
+--    surfaces a null the prescriber would have to interpret.
+select is(
+  (select count(*)::int
+     from gym_exercise_set_history_batch(array['Bench Press', 'Overhead Press'])
+     where set_type is distinct from 'working'),
+  0,
+  'sets logged with no explicit type read back as ''working'', never null'
+);
+
+-- 8. Owner-scoped: a stranger sees none of the lifter's sets.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000b1099"}';
 select is(
   (select count(*)::int

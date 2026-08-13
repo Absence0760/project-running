@@ -73,13 +73,14 @@ function completedSets(sets: ProgressionSetLike[]): ProgressionSetLike[] {
 /// rep-less rows dropped — `gym_sets.reps` is nullable and CHECK-allows 0),
 /// narrowed to those done at the session's top completed weight.
 ///
-/// That second pass is what makes the judgement hold when the set_type LABEL is
-/// missing, which is the normal case off the history path: the batched history
-/// RPC does not return the column, so every ramp-up arrives looking like a
-/// working set — failing the rep test on a light single and padding the 5×5 set
-/// count. Grading at the working weight is also the truer reading of "5 sets of
-/// 5": a lighter back-off set is not one of the five. A session with no
-/// positive weight anywhere (bodyweight) keeps every completed set.
+/// That second pass holds the judgement even when the set_type LABEL is
+/// missing: a lighter ramp-up is dropped whether or not it was typed. Both
+/// history RPCs return the column since migration 20270525_001, so the label
+/// now carries the rest — a warmup logged AT the working weight survives this
+/// narrowing and is excluded by set_type alone. Grading at the working weight
+/// is also the truer reading of "5 sets of 5": a lighter back-off set is not
+/// one of the five. A session with no positive weight anywhere (bodyweight)
+/// keeps every completed set.
 ///
 /// Shared with the consecutive-miss reducer so a past session is judged by
 /// exactly the sets the prescriber judges the last one by.
@@ -162,10 +163,9 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 	// target?" test below is an `every` over this list, so a 2-rep ramp-up set
 	// counted as a failed working set and held the load — forever, for anyone
 	// who warms up, which is everyone. `gym_adherence` states the same rule for
-	// planned-vs-actual grading; the prescriber simply never received the
-	// column. A null set_type is 'working', matching the DB default — hence the
-	// working-weight narrowing inside workingSets, which catches the ramp-up
-	// sets that reach the prescriber unlabelled.
+	// planned-vs-actual grading. A null set_type is 'working', matching the DB
+	// default — the working-weight narrowing inside workingSets is what catches
+	// a ramp-up that still reaches the prescriber unlabelled.
 	const completed = workingSets(sets);
 
 	const repsMin = numericOrNull(input.targetRepsMin);
