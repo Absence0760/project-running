@@ -365,6 +365,7 @@ Strong app's free-form log, not its programmed-routine engine.
 - [x] Daily targets — Mifflin-St Jeor BMR × activity-level (`nutrition_targets` parity pair), overridable in Settings. **Shipped both sides:** web demographics card + mobile `settings_body_metrics_screen.dart` (G5) behind the Art 9 health-consent gate; **body metrics** stored as height on `user_profiles` + a `body_metrics` weight time-series (migration `20261216_001`). Mobile resolves targets via the shared `loadNutritionTargets`. **Operator carry-over:** privacy disclosures (iOS label / Play Data Safety / sub-processor list — Open Food Facts) still to update before real-user launch.
 - [x] Water tracker — separate from food log, simple count of 250 ml units. Shipped web + mobile.
 - [x] Weekly trends — mirrors the existing `mileage_trend_card` pattern. Shipped web + mobile (7-day calorie trend on `nutrition_screen.dart`).
+- [x] Diary day navigation — **web shipped (2026-08-13, [decisions §591](../architecture/decisions.md))**: `/nutrition?date=` with a day stepper, so a past day can be reviewed and a forgotten one back-filled. The viewed day drives every window (food, that day's runs + lifts behind the exercise add-on, the 7-day trend, the water key, the per-meal deep link) and every write (composer, saved meals, recipes), resolved at save time; a malformed or future date resolves to today. Pure `nutrition/diary_day.ts`. **Mobile mirror outstanding** — tracked in [followups.md](followups.md).
 
 ### Cross-modality integration — the headline, not the afterthought
 

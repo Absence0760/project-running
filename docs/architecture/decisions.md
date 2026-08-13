@@ -8246,6 +8246,22 @@ The checkpoint is now graded before it is offered. Already in the queue, or trac
 
 This also softens, without closing, the finding that a `Finished` stage can go unobserved when the activity is gone: the run is still not banked, but the checkpoint that would have been cleared underneath it now survives to offer it back.
 
+## 591. A food diary that only knows today cannot be corrected, and the day it shows must own every window
+
+**Date:** 2026-08-13
+
+`/nutrition` derived every window it needed from `new Date()`: the day's food, the runs and gym sessions behind the exercise add-on, the seven trend buckets, the water counter's storage key, and the `href` on each meal header. Nothing else in the stack was today-locked — `/nutrition/[date]/[slot]` had always been parameterised by date, and `createFoodEntry` / `logMealTemplate` / `logRecipe` had always accepted a `started_at`. The consequence is the one failure every food diary has to survive: a day you forgot to log can never be corrected, and the per-slot detail route, though date-shaped, was only ever linked with today's date, so no other day was reachable at all.
+
+The day is now a `?date=` query parameter, and the URL owns it. That is what makes a corrected day linkable, makes the browser's back button step days, and keeps `load()` and every write path reading the same value the header shows. `resolveDiaryDate` is deliberately fail-closed on both halves: a malformed value resolves to today rather than to an empty day the user cannot explain, and **a future date is clamped rather than honoured**. Refusing the future is not tidiness — a `started_at` ahead of now sits outside every "today" window the app has (the rings, the dashboard nutrition card, the Coach's 7-day rollup), so an entry filed there would be a row the product can never show back to the person who wrote it.
+
+**The write timestamp is a contract, not a formality.** On today it is simply now, so meal ordering keeps its real clock time. On an earlier day it is the same wall-clock time on that date — inside the day in every case, and monotonic across a session so several back-filled items keep the order they were entered. It is resolved at **save** time rather than when the composer opens: a composer opened at 23:59 and submitted at 00:01 would otherwise stamp the entry onto the previous day while the page had already rolled over to the next, filing it exactly where its own host can no longer show it.
+
+Two smaller things were fixed on the way in because generalising them would have spread them. The day windows step through the calendar (`new Date(y, m, d + n)`), never by a fixed 24 hours — [§ 589](#589-a-date-stepped-by-a-fixed-24-hours-is-not-a-date-and-the-fifth-occurrence-bought-a-guard) records what that costs, and the mobile nutrition day window is one of the ten it caught. And membership of a window is now decided by comparing **instants**: the page had been comparing `started_at` to the bound as strings, but Postgres renders the timestamp as `…T04:00:00+00:00` while the bound is built as `…T04:00:00.000Z`, and `'+'` sorts below `'.'`, so a row landing exactly on a local-midnight window boundary was silently dropped.
+
+The water counter's localStorage key keeps its shipped **unpadded** `2026-8-3` shape rather than adopting the zero-padded date the rest of the module uses. Padding it would have been tidier and would have orphaned the count of everyone who had already drunk something on the day this shipped. The ugliness is bought deliberately and documented at the one function that produces it.
+
+One limitation is accepted rather than hidden: `fetchGymWorkouts` has no date window (its run sibling does), so the page pulls the newest 50 sessions and filters. A diary day older than the caller's 50 most recent lifts contributes no gym calories to that day's add-on. That is an under-read identical in effect to "the lift isn't logged yet" rather than a wrong kind of number, and closing it means widening a shared data-layer function; it is tracked in `followups.md`.
+
 ## 592. A plan wizard that never looks at what the runner already runs, and the two directions of "wrong volume" are not one question
 
 **Date:** 2026-08-13
