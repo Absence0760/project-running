@@ -102,9 +102,9 @@
 	<div class="segment-detail"><p class="loading">&nbsp;</p></div>
 {:else if loadFailed}
 	<div class="segment-detail">
-		<a href="/dashboard" class="back-link">
-			<span class="material-symbols">arrow_back</span>
-			{m('segmentDetail.back')}
+		<a href="/segments" class="back-link">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{m('segments.browseTitle')}
 		</a>
 		<div class="not-found" role="alert" data-testid="segment-load-error">
 			<h1>{m('segmentDetail.loadFailedTitle')}</h1>
@@ -116,9 +116,9 @@
 	</div>
 {:else if !segment}
 	<div class="segment-detail">
-		<a href="/dashboard" class="back-link">
-			<span class="material-symbols">arrow_back</span>
-			{m('segmentDetail.back')}
+		<a href="/segments" class="back-link">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{m('segments.browseTitle')}
 		</a>
 		<div class="not-found">
 			<h1>{m('segmentDetail.notFoundTitle')}</h1>
@@ -127,9 +127,9 @@
 	</div>
 {:else}
 	<div class="segment-detail">
-		<a href="/dashboard" class="back-link">
-			<span class="material-symbols">arrow_back</span>
-			{m('segmentDetail.back')}
+		<a href="/segments" class="back-link">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{m('segments.browseTitle')}
 		</a>
 		<header class="detail-header">
 			<h1>{segment.name}</h1>

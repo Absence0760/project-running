@@ -2942,7 +2942,6 @@ export const messages = {
 	"segments.browseEmpty": "Aucun segment célèbre dans le catalogue pour l'instant.",
 	"segments.browseNoMatches": "Aucun segment ne correspond à ces filtres — essaie de les élargir.",
 	"segments.browseAll": "Tout parcourir",
-	"segmentDetail.back": "Retour",
 	"segmentDetail.notFoundTitle": "Segment introuvable",
 	"segmentDetail.notFoundBody": "Ce segment n'est pas au catalogue ou a été retiré.",
 	"segmentDetail.loadFailedTitle": "Impossible de charger ce segment",

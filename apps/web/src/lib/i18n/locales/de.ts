@@ -2942,7 +2942,6 @@ export const messages = {
 	"segments.browseEmpty": "Im Katalog gibt es noch keine berühmten Segmente.",
 	"segments.browseNoMatches": "Keine Segmente passen zu diesen Filtern — versuche, sie zu erweitern.",
 	"segments.browseAll": "Alle ansehen",
-	"segmentDetail.back": "Zurück",
 	"segmentDetail.notFoundTitle": "Segment nicht gefunden",
 	"segmentDetail.notFoundBody": "Dieses Segment ist nicht im Katalog oder wurde entfernt.",
 	"segmentDetail.loadFailedTitle": "Dieses Segment konnte nicht geladen werden",

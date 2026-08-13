@@ -271,6 +271,26 @@ test('/segments distinguishes an empty catalogue from an empty filter result', (
 	assert.match(source, /segments\.browseNoMatches/, 'filtered-empty copy missing');
 });
 
+test('/segments/[id] leads back to the catalogue, not the dashboard', () => {
+	// Reason: the back-link pointed at /dashboard, so a "Back" arrow landed
+	// somewhere the reader had never been, and the catalogue browse page was
+	// unreachable from the one page that shows a catalogue segment. It now
+	// names its destination ("Famous segments") instead of a generic "Back".
+	const source = read('src/routes/segments/[id]/+page.svelte');
+	assert.match(source, /<a href="\/segments" class="back-link">/, 'back-link must target /segments');
+	assert.doesNotMatch(source, /href="\/dashboard"/, 'the dashboard back-link must not return');
+	assert.match(source, /segments\.browseTitle/, 'the link must name where it goes');
+});
+
+test('run detail routes into the catalogue from its Famous segments block', () => {
+	// Reason: earning a catalogue effort is the moment a runner learns the
+	// catalogue exists. Without a link out of that block the only way to reach
+	// the browse page is to already know its URL.
+	const source = read('src/lib/components/RunSegmentEfforts.svelte');
+	assert.match(source, /href="\/segments"/, 'catalogue block must link to the browse page');
+	assert.match(source, /segments\.browseAll/, 'browse link copy must come from the catalogue');
+});
+
 test('the catalogue-browse copy is localized in all six catalogues', () => {
 	const keys = [
 		'segments.browseTitle',

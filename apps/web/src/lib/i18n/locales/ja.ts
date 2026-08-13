@@ -2937,7 +2937,6 @@ export const messages = {
 	"segments.browseEmpty": "カタログにはまだ有名なセグメントがありません。",
 	"segments.browseNoMatches": "これらのフィルターに一致するセグメントはありません。条件を広げてみてください。",
 	"segments.browseAll": "すべて見る",
-	"segmentDetail.back": "戻る",
 	"segmentDetail.notFoundTitle": "セグメントが見つかりません",
 	"segmentDetail.notFoundBody": "このセグメントはカタログにないか、削除されています。",
 	"segmentDetail.loadFailedTitle": "このセグメントを読み込めませんでした",

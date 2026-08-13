@@ -2941,7 +2941,6 @@ export const messages = {
 	"segments.browseEmpty": "Ainda não há segmentos famosos no catálogo.",
 	"segments.browseNoMatches": "Nenhum segmento corresponde a estes filtros — tente ampliá-los.",
 	"segments.browseAll": "Ver todos",
-	"segmentDetail.back": "Voltar",
 	"segmentDetail.notFoundTitle": "Segmento não encontrado",
 	"segmentDetail.notFoundBody": "Este segmento não está no catálogo ou foi removido.",
 	"segmentDetail.loadFailedTitle": "Não foi possível carregar este segmento",

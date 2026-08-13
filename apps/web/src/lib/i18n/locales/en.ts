@@ -2950,7 +2950,6 @@ export const en = {
 	"segments.browseEmpty": "No famous segments in the catalogue yet.",
 	"segments.browseNoMatches": "No segments match these filters — try widening them.",
 	"segments.browseAll": "Browse all",
-	"segmentDetail.back": "Back",
 	"segmentDetail.notFoundTitle": "Segment not found",
 	"segmentDetail.notFoundBody": "This segment isn't in the catalogue, or has been retired.",
 	"segmentDetail.loadFailedTitle": "Couldn’t load this segment",
