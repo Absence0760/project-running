@@ -47,6 +47,7 @@
 		type NutritionTargets,
 	} from '$lib/nutrition/nutrition_targets';
 	import { exerciseCaloriesForDay } from '$lib/nutrition/exercise_calories';
+	import { isWithinWindow } from '$lib/nutrition/diary_day';
 	import { sumMacros } from '$lib/nutrition/nutrition_totals';
 	import NutritionRingsCard from '$lib/components/NutritionRingsCard.svelte';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
@@ -606,9 +607,15 @@
 			// loadSettings itself does when the network is unreachable.
 			const prefs = settings ?? peekCachedSettings(uid);
 			const weight = await fetchLatestWeightKg();
-			const isToday = (iso: string) => iso >= todayStartIso && iso < tomorrowIso;
-			const todayRuns = runs.filter((r) => isToday(r.started_at));
-			const todayGym = gymWorkouts.filter((w) => isToday(w.started_at));
+			// Filtered in the browser rather than windowed at the fetch because
+			// `runs` and `gymWorkouts` are the shared batch reads a dozen other
+			// cards on this page consume. The membership test is over INSTANTS:
+			// Postgres renders the timestamp as `…+00:00` while the bound is built
+			// as `…Z`, and '+' sorts below '.', so a string compare drops a row
+			// landing exactly on local midnight (decisions § 591).
+			const today = { startIso: todayStartIso, endIso: tomorrowIso };
+			const todayRuns = runs.filter((r) => isWithinWindow(r.started_at, today));
+			const todayGym = gymWorkouts.filter((w) => isWithinWindow(w.started_at, today));
 			const exerciseKcal = exerciseCaloriesForDay({
 				runs: todayRuns.map((r) => ({ distanceM: r.distance_m })),
 				gymSessions: todayGym.map((w) => ({ durationS: w.duration_s })),
