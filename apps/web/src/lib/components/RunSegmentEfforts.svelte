@@ -154,7 +154,10 @@
 		</ul>
 	{/if}
 	{#if globalEfforts.length > 0}
-		<p class="section-label">{m('segmentEfforts.catalogueHeading')}</p>
+		<p class="section-label">
+			{m('segmentEfforts.catalogueHeading')}
+			<a class="browse-link" href="/segments">{m('segments.browseAll')}</a>
+		</p>
 		<ul class="efforts">
 			{#each globalEfforts as e (e.effort.id)}
 				<li>
@@ -193,12 +196,24 @@
 		font-size: 0.78rem;
 	}
 	.section-label {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-sm);
 		margin: 0.6rem 0 0.2rem;
 		font-size: 0.72rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--color-text-secondary);
+	}
+	.browse-link {
+		font-weight: 500;
+		color: var(--color-primary);
+		text-decoration: none;
+	}
+	.browse-link:hover {
+		text-decoration: underline;
 	}
 	.meta-sep {
 		margin: 0 0.3rem;

@@ -53,7 +53,7 @@
 		loadError = null;
 		try {
 			const [w, s, names, weighted, plans, cat] = await Promise.all([
-				fetchGymWorkoutsWithError(100),
+				fetchGymWorkoutsWithError({ limit: 100 }),
 				fetchGymWorkoutSummariesWithError(100),
 				fetchGymExerciseNames(),
 				fetchGymHasWeightedSets(),

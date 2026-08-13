@@ -33,6 +33,21 @@ permissions:
 # declares `runs.using: node20`.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # Every `subosito/flutter-action` below is SHA-pinned but used to take
+  # only `channel: stable`, so the SDK itself floated: whatever Flutter
+  # was newest when a job started is what ran. On 2026-08-12 that turned
+  # a green PR red with no code change — 3.47.0 (Dart 3.13) published at
+  # 18:52 UTC, 51 minutes after main's last green run finished, and its
+  # new `unawaited_return_in_try_block` warning fired on untouched code.
+  # `dart analyze` exits 2 on any warning. Pin the version so a new
+  # upstream release arrives as a deliberate bump (new lints, new
+  # deprecations, engine changes) instead of at random on an unrelated
+  # PR. Bump this one value to move all six jobs in this file at once —
+  # and the matching one in release-android.yml + release-ios.yml, which
+  # must equal it (a workflow-level `env` is per-file, so it cannot be
+  # shared across the three). `scripts/check_toolchain_pins.mjs`,
+  # run by the `workflow-lint` job, fails CI when they disagree.
+  FLUTTER_VERSION: "3.47.0"
 
 jobs:
   # ci.yml used to skip itself on docs-only diffs via `paths-ignore`, which
@@ -129,7 +144,7 @@ jobs:
   workflow-lint:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Workflow lint (actionlint)
+    name: Workflow lint (actionlint + pin drift)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,6 +154,19 @@ jobs:
       # existing run block would fail this job. The gate's purpose is only
       # what GitHub itself enforces — workflow syntax + expression parsing.
       - run: "$(go env GOPATH)/bin/actionlint -color -shellcheck= -pyflakes="
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # decisions.md § 595 — the Flutter SDK pin is declared once per workflow
+      # file, because a workflow-level `env` cannot span ci.yml and the two
+      # release workflows; the melos pin is checked against pubspec.lock,
+      # which `pub global activate` otherwise ignores entirely. This is what
+      # stops either from drifting, and it lives here because it is a lint on
+      # workflow files.
+      - name: Toolchain pin drift (Flutter SDK + melos)
+        run: |
+          node scripts/check_toolchain_pins.mjs
+          node --test scripts/check_toolchain_pins.test.mjs
 
   test-packages:
     needs: changes
@@ -150,7 +178,8 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
-      - run: dart pub global activate melos
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+      - run: dart pub global activate melos 7.8.2
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
       - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
@@ -330,6 +359,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.21.0
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - run: dart run scripts/check_parity_matrix.dart
 
   watch-ble-uuids:
@@ -544,9 +574,19 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/defmt-print
-          key: defmt-print-1.1-${{ runner.os }}
+          # The exact version is IN the key on purpose: the install step below
+          # short-circuits on `command -v`, so a stale cache would silently keep
+          # serving the old binary and make the pin cosmetic. Bumping the version
+          # must miss this key and force a real install.
+          key: defmt-print-1.1.0-${{ runner.os }}
       - name: Install defmt-print (decodes the RTT stream against the ELF)
-        run: command -v defmt-print || cargo install defmt-print --locked --version '^1.1'
+        # Bare version = exact in `cargo install` (unlike a Cargo.toml dependency,
+        # it is NOT read as a caret). `^1.1` here floated across all of 1.x, and
+        # defmt-print is not in apps/custom_watch/Cargo.lock — it is a host CLI,
+        # not a firmware dependency — so nothing else resolves it. Keep the major
+        # line equal to the firmware's `defmt` dependency: the decoder has to
+        # understand the wire format the firmware emits.
+        run: command -v defmt-print || cargo install defmt-print --locked --version 1.1.0
       # Built here rather than left to the launcher so a compile failure is
       # distinguishable from a sim failure. It does NOT save the launcher a
       # build: each scenario boots only the rails it asserts on
@@ -696,9 +736,19 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/defmt-print
-          key: defmt-print-1.1-${{ runner.os }}
+          # The exact version is IN the key on purpose: the install step below
+          # short-circuits on `command -v`, so a stale cache would silently keep
+          # serving the old binary and make the pin cosmetic. Bumping the version
+          # must miss this key and force a real install.
+          key: defmt-print-1.1.0-${{ runner.os }}
       - name: Install defmt-print (decodes the RTT stream against the ELF)
-        run: command -v defmt-print || cargo install defmt-print --locked --version '^1.1'
+        # Bare version = exact in `cargo install` (unlike a Cargo.toml dependency,
+        # it is NOT read as a caret). `^1.1` here floated across all of 1.x, and
+        # defmt-print is not in apps/custom_watch/Cargo.lock — it is a host CLI,
+        # not a firmware dependency — so nothing else resolves it. Keep the major
+        # line equal to the firmware's `defmt` dependency: the decoder has to
+        # understand the wire format the firmware emits.
+        run: command -v defmt-print || cargo install defmt-print --locked --version 1.1.0
       # Built here rather than left to the launcher so a compile failure is
       # distinguishable from a sim failure. It does NOT save the launcher a
       # build: each scenario boots only the rails it asserts on
@@ -877,11 +927,12 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           # Cache the Flutter SDK install — saves ~60-90s per run on
           # the ~700MB download + setup. The action keys on channel +
           # version, so a Flutter bump invalidates cleanly.
           cache: true
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       # Cache the per-package pub downloads so `melos bootstrap`'s
       # ~30 nested `pub get` calls hit warm. Key on every pubspec.lock
       # in the workspace — any dep bump invalidates, otherwise hits.
@@ -966,6 +1017,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
@@ -993,6 +1045,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
@@ -1022,7 +1075,7 @@ jobs:
             echo "::error::supabase start did not seed runner@test.com — the integration suite cannot sign in"
             exit 1
           fi
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
       - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development
@@ -1070,6 +1123,7 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node 24 — the web read half decodes the gzipped track with the
@@ -1096,7 +1150,7 @@ jobs:
             echo "::error::supabase start did not seed runner@test.com — the round-trip cannot sign in"
             exit 1
           fi
-      - run: dart pub global activate melos
+      - run: dart pub global activate melos 7.8.2
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.development
       - run: cp apps/mobile_android/.env.example apps/mobile_ios/.env.development

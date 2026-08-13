@@ -765,6 +765,10 @@ Pure-unit coverage for the value classes and helpers exposed by `lib/social_serv
 
 The Supabase-touching surface of `SocialService` (`browseClubs`, `fetchMyClubs`, the enrichment pipelines, RSVP writes, post creation) is NOT covered here — the class resolves `Supabase.instance.client` inline, so meaningful unit coverage of those branches needs a DI seam refactor (constructor-injected `SupabaseClient`, mirroring the `ApiClient.withClient` pattern). Tracked in [What's not covered](testing.md#whats-not-covered-honest).
 
+### `apps/mobile_android/test/social_service_search_fallback_test.dart` — 3 tests
+
+Pins the degrade-don't-throw contract on the two `SocialService` methods whose `catch` is the point of the method, via `SocialService.withClient` against a loopback `dart:io` PostgREST stand-in — the live-stack `services_integration_test.dart` can't fail one read independently of another, which is what these turn on. Two tests cover `searchClubs`: the `search_clubs` RPC failing (the branch that always worked) and the `_enrichClubs` follow-up reads failing after the RPC succeeds (the branch that didn't — `return _enrichClubs(rows)` without `await` put those reads outside the `try`, so the `browseClubs` fallback was dead, decisions.md § 595). Both assert the fallback's rows come back rather than an exception. The third pins `fetchClubSlugForEvent`'s never-rethrow contract — contract coverage, not a discriminating regression test, because the inner club lookup swallows its own failures either way.
+
 ### `apps/backend/supabase/tests/rls_*.sql` — pgtap RLS suite (~390 assertions across 49 files)
 
 pgTAP tests against the highest-blast-radius RLS policies, run by `cd apps/backend && supabase test db --local`. Gated in CI by the `pgtap-rls` job. Each file is wrapped in `begin; ... rollback;` so it's idempotent against the running local DB; tests filter to fixture user_ids so they don't trip on `seed.sql` rows. Pattern: insert two test users into `auth.users`, then `set local role authenticated; set local "request.jwt.claims" = '{"sub":"<uuid>"}';` to switch identity. Anon paths use `set local role anon`.

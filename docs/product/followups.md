@@ -47,6 +47,12 @@ Every item below is one of: (a) blocked on an external credential / account, (b)
 - [ ] **Course-marker drag-to-move on mobile** (needs device) — **snap-on-tap-placement SHIPPED 2026-07-02**: `route_markers_panel.dart` gained a default-on "Snap to route line" toggle that projects the tapped point onto the route polyline via `snapToPolyline` before placing (render-only; `position_m` still server-derived), mirroring web's `RouteMarkerEditor`, twin-mirrored to iOS, pinned by two widget tests. **Remaining:** the draggable-symbol affordance on `LiveRunMap` (maplibre-flutter `SymbolManager` drag) — needs on-device verification, deferred. See [route_markers.md § Surfaces](../features/route_markers.md#surfaces).
 - [ ] **`activity_type` has no shared localized vocabulary, and the coach surface renders raw English.** `coaching_athlete_screen.dart`'s `_activityLabel` capitalises `runs.activity_type` by hand — round 14 localized its sibling `_workoutLabel` through the existing `workoutKindLabel` but could not do the same here, because no vocabulary covers the column. `ActivityType` is `run | walk | hike | cycle | stroller` (`types.ts`, CHECK in `20261207_001`), and the app carries **two** partial vocabularies, neither complete: `settings_preferences_screen._activityTypeLabel` has 4 (`prefsActivity*`, no `stroller`, falls through to a hand-rolled title-caser) and `feed_screen._activityLabel` has 5 but its fifth is `lift` and its fallback is "All". The durable fix is one `activityTypeLabel(l10n, raw)` beside `workoutKindLabel` in `training_labels.dart` (or its own `activity_labels.dart`) covering all five, a `stroller` key added to all 7 ARBs, and the three call sites migrated — a consolidation, not a per-site patch, which is why it was not bolted onto round 14.
 - [ ] **Nutrition targets are not a peer of the mobile Nutrition surface** — web closed issue #666 M1's structural half on 2026-08-05 with `/nutrition/targets` (derivation + the two non-sensitive levers at its own URL, ungated from the `/nutrition` header; height/weight/DOB/sex stay in the Art 9 consent-gated Settings editor). On mobile, `nutrition_screen.dart` reaches `SettingsBodyMetricsScreen` from its **empty state only** ([decisions § 490](../architecture/decisions.md)) — once targets exist there is no route to the number the rings are measured against, and no derivation view exists on either twin. The mobile shape is a peer entry beside the rings card (or a row on the § 488 peer strip if Nutrition gains one), pushing a new `NutritionTargetsScreen` that composes the **existing** `nutrition_targets.dart` exports — the Dart twin already has every constant and `mifflinStJeorBmr`, so this needs no new pure logic and no parity-pair change. Web is canonical per § 24, so this is a follow-up, not drift to close first.
+- [ ] **Nutrition diary date navigation is web-only** — `/nutrition` became date-navigable on 2026-08-13 ([decisions § 591](../architecture/decisions.md)): a `?date=` day stepper, past-day review, and back-filled logging (the composer, saved meals and recipes all stamp the viewed day). `nutrition_screen.dart` still resolves today from `DateTime.now()` on every window, so a forgotten yesterday still cannot be corrected on a phone — the platform where most food is logged. The shape is the web one: a day stepper above the rings, `nutrition_meal_detail_screen`'s existing date parameter reused for the per-slot link, and the log sheet given the viewed day. The pure half is `apps/web/src/lib/nutrition/diary_day.ts`; a Dart twin would make it a registered parity pair, so port it as one (and register it) rather than re-deriving the day maths inline. Web is canonical per § 24, so this is a follow-up, not drift.
+- [x] **`fetchGymWorkouts` has no date window, so a deep diary day under-reads its lift calories** — `fetchRuns` takes `startedAtFrom` / `startedAtBefore` and the nutrition day view uses them to fetch exactly the viewed day's runs, but its gym sibling only took a `limit`, so the page pulled the newest 50 sessions and filtered. A diary day older than the caller's 50 most recent lifts therefore contributed no gym calories to that day's `exerciseKcal` — an under-read, identical in effect to "the lift wasn't logged yet", not a wrong kind of number, but avoidable. **Done 2026-08-13** ([decisions § 597](../architecture/decisions.md)): `fetchGymWorkoutsWithError` / `fetchGymWorkouts` now take a `FetchGymWorkoutsOptions` bag carrying `limit` plus the same two bounds `fetchRuns` has, applied as PostgREST `.gte()` / `.lt()` on `started_at`; `/nutrition` passes the viewed day's window and its `GYM_FETCH_LIMIT` + client-side filter are gone. The three other call sites (`/gym`, `/dashboard`, `/nutrition/targets`) moved to `{ limit: n }` with no behaviour change. Pinned by a source guard in `lib/core/data.test.ts`.
+- [x] **A long-lived `/nutrition` tab does not roll over at local midnight** — `todayIso` / `yesterdayIso` (`routes/nutrition/+page.svelte`) were recomputed only inside the `$effect`, which fires on a `$page.url` or `authReady` change and never on a timer, so a tab left open past local midnight kept labelling the previous day "Today" and kept the Next-day button wrongly disabled. A stale-label bug, not a data bug: every write path resolves `entryTimestampFor(viewDate, new Date())` at save time with a fresh clock ([decisions § 591](../architecture/decisions.md)), so nothing was ever filed onto the wrong day. **Done 2026-08-13** ([decisions § 597](../architecture/decisions.md)): a `syncDay` re-check on **two** triggers, each costing one wakeup a day — a single `setTimeout` armed for `msUntilNextLocalMidnight(new Date())` (the new calendar-stepped helper in `diary_day.ts`, DST-tested), which is the only trigger that reaches a tab that stays *visible* across midnight, plus the proposed `visibilitychange` check for the backgrounded tab whose timer the browser throttled or whose machine slept. Still no polling interval. The day is re-resolved from the URL, so a bare `/nutrition` follows the clock while an explicit past `?date=` only changes its label. Pinned by `nutrition/diary_rollover.test.ts` + the `msUntilNextLocalMidnight` cases in `diary_day.test.ts` / `diary_day.dst.test.ts`.
+
+- [ ] **Mobile mirror: the plan wizard's opening-week ramp check** — web shipped `apps/web/src/lib/training/plan_ramp.ts` + the note in `PlanEditor.svelte` ([training.md § Opening-week ramp check](../features/training.md)): the generated plan graded against the runner's trailing-28-day average through the coach roster's ACWR bands (too-big off the opening week, too-light off the peak week), silent below three active weeks of history. `plan_new_screen.dart` has the same blind spot — it previews the first six weeks' volumes with nothing to compare them against. The Dart mirror is `plan_ramp.dart` (reusing the existing `coach_load.dart` twin's `injuryRiskBand`, so no new thresholds), a 28-day run fetch in the wizard's mount, and the note above the week outline with ARB keys across all seven catalogues. Deliberately left web-only for now rather than shipped as a dead twin — web is canonical per [decisions § 24](../architecture/decisions.md), and the pair should be registered in the root `CLAUDE.md` list only when mobile actually renders it.
+- [ ] **Mobile mirror: famous-segment catalogue UI** — web shipped `/segments`, the browse half of the §233 catalogue ([decisions § 593](../architecture/decisions.md)), on top of the new web-only `segments/catalogue_browse.ts` (search with accent folding, region / surface filters, four sorts). Mobile carries the `computeGlobalSegmentEffort` twin in `segments.dart` but **no catalogue UI at all** — neither a browse list nor a detail screen — so the run-detail effort chips there link nowhere. The mirror is a `GlobalSegmentsScreen` + a catalogue detail screen; the Dart twin of the four shaping helpers lands with them, not before (a twin with no consumer is dead code). Web is canonical per §24.
 
 ## Watch (Wear OS) — sized features awaiting hardware + a product green-light
 
@@ -83,6 +89,8 @@ The notification-email, welcome, Pro-receipt/dunning, and server-side web-push l
 - [ ] **Family / household Pro tier (~1 wk + pricing decision)** — a household plan (shared subscription across linked accounts) is a pricing/product decision (RevenueCat entitlement model + a household link table), not a code-only change.
 - [ ] **Segment-KOM "crowns" in the recap (deferred)** — `segment_efforts` has no stored rank, so a per-segment global-min aggregation across all users would be needed — heavier than a recap card warrants. Personal records stand in as the achievement metric for now.
 - [ ] **Auto-follow on club join — product decision (decided: NOT a silent fan-out)** — `join_club_by_token` deliberately does not create `user_follows` edges; club invite tokens are generic so there's no specific person to follow, and auto-following every member is presumptuous + a consent concern. The right shape, if wanted, is an opt-in "Follow members" suggestion list on the club page — tracked here so it isn't re-raised as a silent trigger.
+- [ ] **A run's segment rank and the segment's leaderboard rank are computed from different populations** (surfaced 2026-08-13 while building § 593; needs a migration, so out of scope for that round). `segment_leaderboard_tiered` reduces to each athlete's best effort with a `distinct on (se.user_id)` CTE (`20270424000003`, issue #393) before ranking, but `segment_effort_ranks` (`20261223_001`) still ranks an effort as `1 + count(strictly faster efforts)` over raw rows. A segment where athlete A holds 60 s and 65 s and athlete B holds 70 s therefore shows B as **#2** on the route-page leaderboard and **#3** on B's own run-detail chip. The two also apply different visibility predicates — the board is SECURITY DEFINER and additionally filters on `private.is_run_visible_to` + `is_blocked_either_way`, while the ranks RPC leans on `segment_efforts` RLS alone, and the header comment claiming the two match is stale. Fix is the same `distinct on` reduction inside the ranks RPC, plus pgtap covering the repeat-effort case; route it through `/safe-migration`.
+- [ ] **The segment catalogue is in no global nav slot and no sitemap** — `/segments` ships reachable from `/segments/[id]`'s back-link and the run-detail "Famous segments" block only ([decisions § 593](../architecture/decisions.md)). The nav slot that fits is a fifth tab on the shared `RunSurfaceTabs` strip, which is a change to `/runs`, `/routes`, `/plans` and `/races` rather than to segments — needs a product call on whether the catalogue is a peer of those surfaces. Separately, the catalogue is public world-readable content with stable URLs, so `/segments` and each `/segments/[id]` belong in `sitemap.xml` and in [seo.md](../features/seo.md)'s per-surface render map; both pages are CSR today, so that is a prerender-vs-SSR decision, not a one-line sitemap append.
 - [ ] **Consent-flow consistency for health-data fields (legal-adjacent)** — onboarding still writes the bare `date_of_birth` column unconditionally (minor-exclusion) while gating the prefs-bag mirror + gender + consent timestamp on the Art 9 checkbox. `/settings/account` and `/settings/preferences` are aligned; the remaining inconsistency is onboarding's unconditional-DOB write. Decide whether minor-exclusion DOB capture counts as implicit consent or needs the explicit toggle — a legal-flow decision, not bolted on without counsel input.
 
 ## Compliance — DSAR export coverage (GDPR Art 20)
@@ -109,6 +117,7 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 
 - [ ] **Device-instrumented `integration_test` harness** — none today; would cover tile-cache / foreground-service / background-sync on real Android primitives. New infrastructure.
 - [ ] **OSRM smoke test in CI** — blocked on free-runner capacity (OSM PBF extract + osrm-extract memory). Options: a self-hosted runner, or a pre-built OSRM cache in S3 the workflow downloads.
+- [x] **`tests-e2e/routes/segment-catalogue-browse.spec.ts`** — written alongside the `/segments` browse page ([decisions § 593](../architecture/decisions.md)) by a round that shared a local Supabase stack it could not reset, so it landed unexecuted; **run on the integration branch 2026-08-13 and it passed.** No longer an open gap.
 - [ ] **Positive-path Edge Function tests** — the envelope suite covers auth-rejection only; 200-on-valid-HMAC / replay-dedupe / freshness-window tests need real secret values in the CI config.
 
 ## Web bundle weight
@@ -467,3 +476,88 @@ and worth doing together as one alarm-hygiene pass:
   `:4216`, `:5658`) — the bug `saveRun`'s own comment documents. A Berlin user
   archiving a coach thread at 23:30 sees it dated the next day.
   `createCustomExercise`'s is worse in kind: it feeds newer-wins sync.
+
+## Segment leaderboards vs the §206 shadow-hidden backstop (2026-08-13)
+
+Raised while fixing the segment-rank divergence ([decisions § 594](../architecture/decisions.md),
+migration `20270523_001`) and **closed the same day** by migration
+`20270524_001` ([decisions § 596](../architecture/decisions.md)). Both entries
+below are fixed; the sweep that closed them turned two reported leaks into
+five, so they are kept here as the record of what the class looked like.
+
+- [x] **`segment_leaderboard_tiered` served a moderation-hidden route's board.**
+  Its route branch was `r.is_public = true or r.user_id = caller or (r.club_id
+  is not null and is_club_member(r.club_id))`, where `private.is_route_visible_to`
+  additionally demands `shadow_hidden = false` (§206) — so a caller holding a
+  segment id on a hidden route read the whole board, after `20270329_001` had
+  closed that route's waypoints, photos, reviews, segments and markers. Now
+  delegates to `private.is_route_visible_to(s.route_id, caller)`, resolved once
+  before the CTE (every effort on a segment shares one route), which removed
+  the `routes` join outright.
+- [x] **The boards disclosed a shadow-hidden athlete's name + avatar.** Fixed
+  on all three: `segment_leaderboard_tiered`, `global_segment_leaderboard`, and
+  `challenge_leaderboard`, which the sweep added. A hidden athlete is
+  **redacted, not dropped** — the row and rank stand, `display_name` +
+  `avatar_url` go null for everyone but themselves — because dropping the row
+  would restate every slower athlete's position and would reopen the § 594
+  chip-versus-board divergence.
+- [x] **Sweep extras: `is_event_visible` + `claim_event_result`.** Both pasted
+  the events club-visibility predicate and never received the shadow gate the
+  events policy got in `20270328_001`; `is_event_visible` backs the
+  `event_pricing` / `event_checkpoints` / `checkpoint_crossings` SELECT
+  policies, so a hidden club's pricing, checkpoints and runner crossing times
+  stayed readable. Both now delegate to `is_public_club_by_id`.
+
+Left deliberately untouched, with reasoning in § 596: `coach_roster_summary`
+(hiding an athlete from their own consented coach is a narrowing that breaks a
+legitimate viewer) and `join_club_by_token` (never consults `is_public`;
+whether a hidden club still accepts an invite is a product question about
+freezing hidden entities, not a leak).
+
+## CI toolchain pins (2026-08-13)
+
+## CI toolchain pins (2026-08-13) — CLOSED
+
+Every toolchain the build installs is now pinned to an exact version, and
+`scripts/check_toolchain_pins.mjs` (the `workflow-lint` job) fails CI when any
+of them drifts. Rationale and the rejected alternatives: decisions.md § 595.
+
+- [x] **Flutter SDK** — an explicit `FLUTTER_VERSION` in `ci.yml`,
+  `release-android.yml` and `release-ios.yml` (8 `flutter-action` steps). A
+  workflow-level `env` is per-file, so the three declarations are checked
+  against each other; there is no in-repo file that resolves the SDK.
+- [x] **melos** — `dart pub global activate melos 7.8.2` at all six sites
+  (`ci.yml` ×4, both release workflows), checked against `pubspec.lock` rather
+  than against each other, because the lockfile is the source of truth and
+  `pub global activate` ignores the workspace entirely.
+- [x] **defmt-print** — `cargo install defmt-print --locked --version 1.1.0`
+  in the two firmware-sim jobs (a bare version is exact in `cargo install`,
+  not a caret), with the exact version now in the `actions/cache` key. The key
+  mattered as much as the version: the install is `command -v defmt-print ||
+  cargo install ...`, and the old key `defmt-print-1.1-<os>` never changed, so
+  a bump would have restored the old binary and the pin would never have run —
+  CI run 31623789083 shows the cache hit winning and `cargo install` never
+  executing. Checked by self-consistency plus that cache-key coupling, not by
+  derivation: defmt-print is a host CLI, not a firmware dependency, so it is
+  absent from `apps/custom_watch/Cargo.lock` and nothing in-repo resolves it.
+- [x] **`flutter_lints: ^6.0.0` needed no change — the caret is not the pin.**
+  The root `pubspec.lock` is COMMITTED (see the rationale in `.gitignore`,
+  added after a third-party publish turned main red on 2026-08-05 — the same
+  failure class § 595 is about, with a different upstream). All seven Flutter
+  packages are members of the one pub workspace, so that single lockfile
+  resolves every one of them, and it holds `flutter_lints` at exactly `6.0.0`.
+  `melos bootstrap` runs `pub get`, which honours a lockfile; only `pub
+  upgrade` moves it. Verified directly: a `flutter pub get` in a fresh
+  worktree left `pubspec.lock` unmodified. The caret in `pubspec.yaml` is a
+  resolution *constraint*; the lockfile is the pin, and Dependabot's `pub`
+  entry means a bump arrives as a reviewable PR rather than silently.
+
+Two items remain open, deliberately:
+
+- [ ] The `node-version: 24` inputs track a major line rather than an exact
+  patch. Left as-is: a Node minor/patch break is loud and local to the job
+  that runs it, not a silent change to what gets built or shipped.
+- [ ] `apple-actions/upload-testflight-build@v1` in `release-ios.yml` is
+  tag-pinned, not SHA-pinned — the only such reference in the repo. It sits
+  inside the commented-out TestFlight block, so it is not live; SHA-pin it
+  when that block is uncommented.

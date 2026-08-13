@@ -4,7 +4,7 @@
 	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { formatDuration } from '$lib/format/time';
-	import { distanceInPreferred } from '$lib/format/units.svelte';
+	import { distanceInPreferred, formatElevation } from '$lib/format/units.svelte';
 	import {
 		fetchGlobalSegment,
 		fetchGlobalSegmentLeaderboard,
@@ -102,9 +102,9 @@
 	<div class="segment-detail"><p class="loading">&nbsp;</p></div>
 {:else if loadFailed}
 	<div class="segment-detail">
-		<a href="/dashboard" class="back-link">
-			<span class="material-symbols">arrow_back</span>
-			{m('segmentDetail.back')}
+		<a href="/segments" class="back-link">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{m('segments.browseTitle')}
 		</a>
 		<div class="not-found" role="alert" data-testid="segment-load-error">
 			<h1>{m('segmentDetail.loadFailedTitle')}</h1>
@@ -116,9 +116,9 @@
 	</div>
 {:else if !segment}
 	<div class="segment-detail">
-		<a href="/dashboard" class="back-link">
-			<span class="material-symbols">arrow_back</span>
-			{m('segmentDetail.back')}
+		<a href="/segments" class="back-link">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{m('segments.browseTitle')}
 		</a>
 		<div class="not-found">
 			<h1>{m('segmentDetail.notFoundTitle')}</h1>
@@ -127,9 +127,9 @@
 	</div>
 {:else}
 	<div class="segment-detail">
-		<a href="/dashboard" class="back-link">
-			<span class="material-symbols">arrow_back</span>
-			{m('segmentDetail.back')}
+		<a href="/segments" class="back-link">
+			<span class="material-symbols" aria-hidden="true">arrow_back</span>
+			{m('segments.browseTitle')}
 		</a>
 		<header class="detail-header">
 			<h1>{segment.name}</h1>
@@ -144,9 +144,9 @@
 					<span class="key-stat-value">{fmtDist(Number(segment.distance_m))}</span>
 					<span class="key-stat-label">{m('segmentDetail.statDistance')}</span>
 				</div>
-				{#if segment.elevation_m != null && segment.elevation_m > 0}
+				{#if segment.elevation_m != null && Number(segment.elevation_m) > 0}
 					<div class="key-stat">
-						<span class="key-stat-value">{segment.elevation_m} m</span>
+						<span class="key-stat-value">{formatElevation(Number(segment.elevation_m))}</span>
 						<span class="key-stat-label">{m('segmentDetail.statElevation')}</span>
 					</div>
 				{/if}
