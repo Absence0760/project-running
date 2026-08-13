@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { searchFoodSources, scalePortion, type FoodSearchResult } from '$lib/nutrition/food_search';
+	import { entryTimestampFor } from '$lib/nutrition/diary_day';
 	import { createFoodEntry } from '$lib/core/data';
 	import { MEAL_SLOTS, type MealSlot } from '$lib/nutrition/nutrition_totals';
 	import { m, currentLocale } from '$lib/i18n/store.svelte';
@@ -15,8 +16,19 @@
 
 	interface Props {
 		oncreated: () => void;
+		/// Local `YYYY-MM-DD` the entry belongs to. Omitted (the default) logs at
+		/// the current instant; a host showing an earlier diary day passes that
+		/// day so the entry lands on it instead of on today.
+		diaryDate?: string;
 	}
-	let { oncreated }: Props = $props();
+	let { oncreated, diaryDate }: Props = $props();
+
+	/// Resolved at save time, not at open time: a composer left open across
+	/// midnight would otherwise stamp the entry onto the day it was opened,
+	/// where the host's own view can no longer show it.
+	function startedAt(): string | undefined {
+		return diaryDate ? entryTimestampFor(diaryDate, new Date()) : undefined;
+	}
 
 	let query = $state('');
 	let searching = $state(false);
@@ -120,6 +132,7 @@
 				saturated_fat_g: portionMacros.saturatedFatG,
 				cholesterol_mg: portionMacros.cholesterolMg,
 				external_id: `${picked.source}:${picked.code}`,
+				started_at: startedAt(),
 			});
 			showToast(m('nutrition.added'), 'success');
 			dirty.rebaseline();
@@ -147,6 +160,7 @@
 				sodium_mg: manualSodium,
 				saturated_fat_g: manualSatFat,
 				cholesterol_mg: manualCholesterol,
+				started_at: startedAt(),
 			});
 			showToast(m('nutrition.added'), 'success');
 			dirty.rebaseline();

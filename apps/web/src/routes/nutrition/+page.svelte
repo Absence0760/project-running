@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import {
@@ -42,6 +44,19 @@
 	import { computeDayBudget, type MacroKind } from '$lib/nutrition/nutrition_budget';
 	import { hydrationTargetMl, hydrationBudget } from '$lib/nutrition/hydration';
 	import { weeklyIntakeSummary, weeklyProteinSummary } from '$lib/nutrition/nutrition_week';
+	import {
+		DIARY_DATE_PARAM,
+		diaryWindow,
+		entryTimestampFor,
+		isDiaryToday,
+		isWithinWindow,
+		isoDateOf,
+		resolveDiaryDate,
+		stepDiaryDate,
+		trailingDates,
+		waterDayKey,
+	} from '$lib/nutrition/diary_day';
+	import { formatDate } from '$lib/format/time';
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -50,13 +65,25 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import FoodLogEditor from '$lib/components/FoodLogEditor.svelte';
 
+	// The diary day the page is showing — today unless `?date=` names an
+	// earlier one. Held as state rather than derived so `load()` and every
+	// write path read exactly the day the header shows.
+	let viewDate = $state(isoDateOf(new Date()));
+	let todayIso = $state(isoDateOf(new Date()));
+	let yesterdayIso = $state(stepDiaryDate(isoDateOf(new Date()), -1, new Date()));
+	let authReady = $state(false);
+	// Deliberately plain `let`, not `$state`: the URL effect below writes them
+	// and must not re-run on its own writes.
+	let loadedDate: string | null = null;
+	let loadGen = 0;
+
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	let showLog = $state(false);
 	let entries = $state<FoodEntry[]>([]);
 	let targets = $state<NutritionTargets | null>(null);
 	let exerciseKcal = $state(0);
-	let weekDays = $state<{ label: string; calories: number; protein: number }[]>([]);
+	let weekDays = $state<{ iso: string; label: string; calories: number; protein: number }[]>([]);
 	let waterMl = $state(0);
 	let weightKg = $state<number | null>(null);
 	let exerciseMinutes = $state(0);
@@ -82,22 +109,12 @@
 
 	const WATER_UNIT_ML = 250;
 
-	function dayStartIso(d: Date): string {
-		const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-		return x.toISOString();
-	}
-	function todayKey(): string {
-		const d = new Date();
-		return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-	}
-
-	/// Zero-padded local YYYY-MM-DD for the per-meal detail route URL.
-	function todayIsoDate(): string {
-		const d = new Date();
-		const mm = String(d.getMonth() + 1).padStart(2, '0');
-		const dd = String(d.getDate()).padStart(2, '0');
-		return `${d.getFullYear()}-${mm}-${dd}`;
-	}
+	/// Days of intake the trend chart covers, ending on the viewed day.
+	const TREND_DAYS = 7;
+	/// Newest gym sessions pulled to find the viewed day's. `fetchGymWorkouts`
+	/// has no date window (unlike `fetchRuns`), so a diary day older than this
+	/// many logged sessions reads no lift calories — tracked in followups.md.
+	const GYM_FETCH_LIMIT = 50;
 
 	const consumed = $derived<FoodMacros>(sumMacros(entries));
 	const groups = $derived<MealSlotGroup<FoodEntry>[]>(groupByMealSlot(entries));
@@ -105,7 +122,8 @@
 	function waterStorageKey(): string {
 		// User-scoped (issue #231): a shared browser profile's next account
 		// must not inherit — or increment — the prior account's water count.
-		return `water_ml_${auth.user?.id ?? 'anon'}_${todayKey()}`;
+		// Day-scoped by the viewed day, so stepping back shows that day's count.
+		return `water_ml_${auth.user?.id ?? 'anon'}_${waterDayKey(viewDate)}`;
 	}
 
 	function litres(ml: number): string {
@@ -118,52 +136,75 @@
 			loading = false;
 			return;
 		}
-		await load();
+		authReady = true;
+	});
+
+	// The URL owns which day is shown, so a back-filled day is linkable and the
+	// browser's back button steps days. `?date=` is resolved fail-closed —
+	// a malformed or future value lands on today rather than an empty day.
+	$effect(() => {
+		const requested = $page.url.searchParams.get(DIARY_DATE_PARAM);
+		const now = new Date();
+		todayIso = isoDateOf(now);
+		yesterdayIso = stepDiaryDate(todayIso, -1, now);
+		const next = resolveDiaryDate(requested, now);
+		viewDate = next;
+		if (!authReady || next === loadedDate) return;
+		loadedDate = next;
+		void load();
 	});
 
 	async function load() {
 		if (!auth.user) return;
+		const day = viewDate;
+		const dayWindow = diaryWindow(day);
+		const trendWindow = diaryWindow(day, TREND_DAYS);
+		if (!dayWindow || !trendWindow) return;
+		// Stepping days faster than the network answers leaves two loads in
+		// flight; only the newest may write, or a slow response repaints the day
+		// the user has already left.
+		const gen = ++loadGen;
+		const current = () => gen === loadGen;
 		loading = true;
 		loadError = null;
 		try {
-			const now = new Date();
-			const todayStart = dayStartIso(now);
-			const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 			// The food-log read is the primary surface: distinguish a real fetch
 			// failure from a genuinely empty day so a transient error doesn't show
 			// "nothing logged" and invite re-logging meals the user already has.
-			const todayFood = await fetchFoodLogWithError(todayStart, tomorrow.toISOString());
-			if (todayFood.error) {
-				loadError = todayFood.error;
+			const dayFood = await fetchFoodLogWithError(dayWindow.startIso, dayWindow.endIso);
+			if (!current()) return;
+			if (dayFood.error) {
+				loadError = dayFood.error;
 				loading = false;
 				return;
 			}
-			entries = todayFood.entries;
+			entries = dayFood.entries;
 
-			// Targets: assemble body metrics + activity/goal prefs, plus today's
-			// runs + gym sessions for the dynamic-TDEE "base + exercise" goal.
-			const [settings, weight, profileRes, recentRuns, recentGym] = await Promise.all([
+			// Targets: assemble body metrics + activity/goal prefs, plus the
+			// viewed day's runs + gym sessions for the "base + exercise" goal.
+			const [settings, weight, profileRes, dayRuns, recentGym] = await Promise.all([
 				loadSettings(auth.user.id),
 				fetchLatestWeightKg(),
 				supabase.rpc('get_my_profile'),
-				fetchRuns({ limit: 50 }),
-				fetchGymWorkouts(50),
+				fetchRuns({
+					startedAtFrom: dayWindow.startIso,
+					startedAtBefore: dayWindow.endIso,
+				}),
+				fetchGymWorkouts(GYM_FETCH_LIMIT),
 			]);
+			if (!current()) return;
 			weightKg = weight;
-			const tomorrowIso = tomorrow.toISOString();
-			const isToday = (iso: string) => iso >= todayStart && iso < tomorrowIso;
-			const todayRuns = recentRuns.filter((r) => isToday(r.started_at));
-			const todayGym = recentGym.filter((w) => isToday(w.started_at));
+			const dayGym = recentGym.filter((w) => isWithinWindow(w.started_at, dayWindow));
 			exerciseKcal = exerciseCaloriesForDay({
-				runs: todayRuns.map((r) => ({ distanceM: r.distance_m })),
-				gymSessions: todayGym.map((w) => ({ durationS: w.duration_s })),
+				runs: dayRuns.map((r) => ({ distanceM: r.distance_m })),
+				gymSessions: dayGym.map((w) => ({ durationS: w.duration_s })),
 				weightKg: weight,
 			});
-			// Active minutes today = run + gym duration, for the hydration goal's
-			// sweat-replacement add (runs without a duration contribute nothing).
+			// Active minutes that day = run + gym duration, for the hydration
+			// goal's sweat-replacement add (runs without a duration add nothing).
 			const activeSeconds =
-				todayRuns.reduce((s, r) => s + (r.duration_s ?? 0), 0) +
-				todayGym.reduce((s, w) => s + (w.duration_s ?? 0), 0);
+				dayRuns.reduce((s, r) => s + (r.duration_s ?? 0), 0) +
+				dayGym.reduce((s, w) => s + (w.duration_s ?? 0), 0);
 			exerciseMinutes = Math.round(activeSeconds / 60);
 			const prof = profileRes.data as
 				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
@@ -178,37 +219,30 @@
 				exerciseKcal,
 			});
 
-			// Weekly calorie trend (last 7 days incl. today). Surface a fetch
-			// failure the same way the today's-food path does — otherwise the
+			// Trend: the seven days ending on the viewed day. Surface a fetch
+			// failure the same way the day's-food path does — otherwise the
 			// swallowed error leaves an empty trend chart indistinguishable from
 			// a week with nothing logged.
-			const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-			const week = await fetchFoodLogWithError(weekStart.toISOString(), tomorrow.toISOString());
+			const week = await fetchFoodLogWithError(trendWindow.startIso, trendWindow.endIso);
+			if (!current()) return;
 			if (week.error) {
 				loadError = week.error;
 				loading = false;
 				return;
 			}
-			const weekEntries = week.entries;
 			const calByDay = new Map<string, number>();
 			const proByDay = new Map<string, number>();
-			for (const e of weekEntries) {
-				const d = new Date(e.started_at);
-				const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+			for (const e of week.entries) {
+				const key = isoDateOf(new Date(e.started_at));
 				calByDay.set(key, (calByDay.get(key) ?? 0) + (e.calories ?? 0));
 				proByDay.set(key, (proByDay.get(key) ?? 0) + (e.protein_g ?? 0));
 			}
-			const days: { label: string; calories: number; protein: number }[] = [];
-			for (let i = 6; i >= 0; i--) {
-				const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-				const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-				days.push({
-					label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-					calories: Math.round(calByDay.get(key) ?? 0),
-					protein: Math.round(proByDay.get(key) ?? 0),
-				});
-			}
-			weekDays = days;
+			weekDays = trailingDates(day, TREND_DAYS).map((iso) => ({
+				iso,
+				label: new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' }),
+				calories: Math.round(calByDay.get(iso) ?? 0),
+				protein: Math.round(proByDay.get(iso) ?? 0),
+			}));
 
 			const stored = localStorage.getItem(waterStorageKey());
 			waterMl = stored ? Number(stored) || 0 : 0;
@@ -218,11 +252,11 @@
 		} catch (e) {
 			// A failed secondary load (week trend, water, targets) must not render
 			// as an empty page indistinguishable from "nothing logged" — surface
-			// the same load-error banner the primary today's-food path uses.
+			// the same load-error banner the primary day's-food path uses.
 			console.warn('nutrition load failed', e);
-			loadError = (e as Error).message;
+			if (current()) loadError = (e as Error).message;
 		}
-		loading = false;
+		if (current()) loading = false;
 	}
 
 	async function loadTemplates() {
@@ -240,6 +274,15 @@
 	function onLogged() {
 		showLog = false;
 		void load();
+	}
+
+	/// Navigate the diary to `iso`. Today keeps the bare `/nutrition` URL so the
+	/// canonical entry point never carries a redundant query string.
+	function goToDay(iso: string) {
+		const target = isDiaryToday(iso, new Date())
+			? '/nutrition'
+			: `/nutrition?${DIARY_DATE_PARAM}=${iso}`;
+		void goto(target, { keepFocus: true, noScroll: true });
 	}
 
 	async function saveMeal() {
@@ -278,7 +321,9 @@
 		try {
 			const detail = await fetchMealTemplateDetail(t.id);
 			if (!detail) throw new Error('not found');
-			const n = await logMealTemplate(detail);
+			const n = await logMealTemplate(detail, {
+				startedAt: entryTimestampFor(viewDate, new Date()),
+			});
 			showToast(m('nutrition.templateLogged', { n, name: t.name }), 'success');
 			await load();
 		} catch (e) {
@@ -341,7 +386,9 @@
 		try {
 			const detail = await fetchRecipeDetail(r.id);
 			if (!detail) throw new Error('not found');
-			const n = await logRecipe(detail);
+			const n = await logRecipe(detail, {
+				startedAt: entryTimestampFor(viewDate, new Date()),
+			});
 			showToast(m('nutrition.recipeLogged', { n, name: r.name }), 'success');
 			await load();
 		} catch (e) {
@@ -455,6 +502,16 @@
 	const trendMax = $derived(
 		Math.max(1, ...trendSeries.values, trendSeries.goal ?? 0),
 	);
+
+	const isViewingToday = $derived(viewDate === todayIso);
+	const canGoForward = $derived(viewDate < todayIso);
+	const dayLabel = $derived(
+		isViewingToday
+			? m('dash.today')
+			: viewDate === yesterdayIso
+				? m('nutrition.day.yesterday')
+				: formatDate(`${viewDate}T00:00:00`),
+	);
 </script>
 
 <svelte:head><title>{m('nutrition.heading')} — Threkir</title></svelte:head>
@@ -473,6 +530,45 @@
 			<button class="btn btn-primary" type="button" onclick={() => (showLog = true)} data-testid="log-food">{m('nutrition.logFood')}</button>
 		</div>
 	</header>
+
+	<div class="day-bar">
+		<nav class="day-nav" aria-label={m('nutrition.day.navLabel')}>
+			<button
+				class="icon-btn day-step"
+				type="button"
+				onclick={() => goToDay(stepDiaryDate(viewDate, -1, new Date()))}
+				aria-label={m('nutrition.day.previous')}
+				data-testid="diary-prev-day"
+			>
+				<span class="material-symbols" aria-hidden="true">chevron_left</span>
+			</button>
+			<span class="day-label" aria-live="polite" data-testid="diary-day">{dayLabel}</span>
+			<button
+				class="icon-btn day-step"
+				type="button"
+				disabled={!canGoForward}
+				onclick={() => goToDay(stepDiaryDate(viewDate, 1, new Date()))}
+				aria-label={m('nutrition.day.next')}
+				data-testid="diary-next-day"
+			>
+				<span class="material-symbols" aria-hidden="true">chevron_right</span>
+			</button>
+			{#if !isViewingToday}
+				<button
+					class="btn btn-outline btn-sm"
+					type="button"
+					onclick={() => goToDay(todayIso)}
+					data-testid="diary-today"
+				>{m('dash.today')}</button>
+			{/if}
+		</nav>
+		{#if !isViewingToday}
+			<p class="section-hint" data-testid="diary-backfill-hint">
+				<span class="material-symbols hint-icon" aria-hidden="true">history</span>
+				{m('nutrition.day.backfillHint')}
+			</p>
+		{/if}
+	</div>
 
 	{#if loading}
 		<div class="skeleton-stack" aria-hidden="true">
@@ -493,7 +589,7 @@
 		<section class="card-elevated rings-card" data-testid="macro-rings">
 			{#if targets && calorieBudget}
 				<div class="card-head">
-					<span class="section-label">{m('dash.today')}</span>
+					<span class="section-label">{dayLabel}</span>
 					<div class="budget-head">
 						<span class="card-meta">{consumed.calories} / {targets.calories} kcal</span>
 						{#if calorieBudget.exceeded}
@@ -552,7 +648,7 @@
 			{#if targets && targets.exerciseKcal > 0}
 				<p class="goal-breakdown" data-testid="goal-breakdown">
 					<span class="material-symbols breakdown-icon" aria-hidden="true">local_fire_department</span>
-					{m('nutrition.goalBreakdown', {
+					{m(isViewingToday ? 'nutrition.goalBreakdown' : 'nutrition.day.goalBreakdown', {
 						base: targets.baseCalories,
 						exercise: targets.exerciseKcal,
 					})}
@@ -689,14 +785,14 @@
 		{#if !hasMeals}
 			<section class="card-elevated empty" data-testid="macro-rings-empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
-				<h2>{m('nutrition.empty')}</h2>
+				<h2>{isViewingToday ? m('nutrition.empty') : m('nutrition.day.emptyPast')}</h2>
 				<p class="empty-text">{m('nutrition.searchPlaceholder')}</p>
 				<button class="btn btn-primary" type="button" onclick={() => (showLog = true)}>{m('nutrition.logFood')}</button>
 			</section>
 		{:else}
 			<section class="card-elevated meals-card">
 				<div class="card-head">
-					<span class="section-label">{m('dash.today')}</span>
+					<span class="section-label">{dayLabel}</span>
 					<div class="meals-head-right">
 						<span class="card-meta">{consumed.calories} kcal</span>
 						<button
@@ -723,7 +819,7 @@
 				<div class="meal-groups">
 					{#each groups as g (g.slot)}
 						<div class="meal-group">
-							<a class="meal-head meal-head-link" href={`/nutrition/${todayIsoDate()}/${g.slot}`}>
+							<a class="meal-head meal-head-link" href={`/nutrition/${viewDate}/${g.slot}`}>
 								<h2>{m(`nutrition.slot_${g.slot}`)}</h2>
 								<span class="meal-kcal">{g.calories} kcal<span class="material-symbols meal-chevron" aria-hidden="true">chevron_right</span></span>
 							</a>
@@ -754,7 +850,9 @@
 		{#if hasAnyData}
 			<section class="card-elevated trend-card">
 				<div class="card-head">
-					<span class="section-label">{m('nutrition.weeklyTrend')}</span>
+					<span class="section-label">{isViewingToday
+						? m('nutrition.weeklyTrend')
+						: m('nutrition.day.trendEnding', { date: dayLabel })}</span>
 					<div class="trend-meta">
 						{#if trendSeries.avg > 0}<span class="card-meta">{trendSeries.avgLabel}</span>{/if}
 						{#if weekSummary.deltaPerDay !== null}
@@ -811,7 +909,7 @@
 								aria-hidden="true"
 							></div>
 						{/if}
-						{#each weekDays as d, i (d.label + i)}
+						{#each weekDays as d, i (d.iso)}
 							{@const val = trendSeries.values[i] ?? 0}
 							<div class="trend-col" class:trend-today={i === weekDays.length - 1}>
 								<span class="trend-val">{val > 0 ? val : ''}</span>
@@ -824,7 +922,7 @@
 						{/each}
 					</div>
 					<div class="trend-days">
-						{#each weekDays as d, i (d.label + i)}
+						{#each weekDays as d, i (d.iso)}
 							<span class="trend-day" class:trend-today-day={i === weekDays.length - 1}>{d.label}</span>
 						{/each}
 					</div>
@@ -835,7 +933,7 @@
 </div>
 
 <Modal open={showLog} title={m('nutrition.logHeading')} narrow onclose={() => (showLog = false)}>
-	<FoodLogEditor oncreated={onLogged} />
+	<FoodLogEditor oncreated={onLogged} diaryDate={viewDate} />
 </Modal>
 
 <Modal open={showSaveMeal} title={m('nutrition.saveAsMealTitle')} narrow onclose={() => (showSaveMeal = false)}>
@@ -943,6 +1041,40 @@
 		gap: var(--space-sm);
 		flex-wrap: wrap;
 		justify-content: flex-end;
+	}
+	/* Cancels .page-header's bottom margin so the stepper reads as part of the
+	   header rather than as a floating row above the first card. */
+	.day-bar {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		margin-block-start: calc(var(--space-xl) * -1);
+	}
+	.day-nav {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		flex-wrap: wrap;
+	}
+	.day-step {
+		width: 2.5rem;
+		height: 2.5rem;
+		color: var(--color-text-secondary);
+	}
+	/* .icon-btn's own hover is the danger tint the delete buttons want; a day
+	   step is navigation, so it follows .btn-outline:hover onto primary. */
+	.day-step:hover:not(:disabled) {
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+	}
+	.day-step:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+	.day-label {
+		font-weight: 600;
+		min-width: 9rem;
+		text-align: center;
 	}
 	.no-targets {
 		display: flex;
