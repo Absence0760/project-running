@@ -2396,7 +2396,7 @@ export const messages = {
 	"planEditor.pacesEstimated": "推定ペースです。最近のランや目標タイムを追加すると、自分に合った目標になります。",
 	"planEditor.danielsVdot": "Daniels VDOT:",
 	"planEditor.rampLabel": "プランと最近のトレーニングの比較",
-	"planEditor.rampUnder": "第1週は{opening}ですが、過去4週間の平均は週{recent}です。トレーニング日を増やすか、目標レースを長くすると、その土台をより活かせます。",
+	"planEditor.rampUnder": "このプランの最大週は{peak}で、過去4週間の平均である週{recent}を下回ります。目標レースを長くするか、トレーニング日を増やすと、その土台をより活かせます。",
 	"planEditor.rampElevated": "第1週は{opening}で、過去4週間の平均である週{recent}からはっきり上がります。無理せず入るか、トレーニング日を1日減らしましょう。",
 	"planEditor.rampHigh": "第1週は{opening}で、過去4週間の平均である週{recent}を大きく上回ります。トレーニング日を減らす、目標レースを短くする、または数週間かけて土台を作ってから始めると、最初の一歩が安全になります。",
 	"planEditor.weekOutline": "週ごとの概要",

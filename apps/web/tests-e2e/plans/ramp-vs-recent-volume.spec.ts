@@ -55,8 +55,9 @@ test.describe('/plans wizard — opening week vs recent volume', () => {
 		try {
 			// One 30 km run in each of the four trailing windows: the
 			// active-weeks gate passes and the chronic base is at least
-			// 30 km/week. A 5K plan at the wizard's default 4 days opens at
-			// 14 km — a ratio of at most 0.47, inside the under band.
+			// 30 km/week. A 5K plan at the wizard's default 4 days PEAKS at
+			// 20 km — a ratio of at most 0.67, inside the under band — and
+			// opens at 14 km, nowhere near the safety arm.
 			for (const daysAgo of [2, 9, 16, 23]) {
 				runIds.push(
 					await insertRun({
@@ -75,7 +76,7 @@ test.describe('/plans wizard — opening week vs recent volume', () => {
 				timeout: 10_000,
 			});
 			await expect(
-				modal.getByText(/More training days or a longer goal race/),
+				modal.getByText(/A longer goal race or more training days/),
 			).toBeVisible();
 		} finally {
 			for (const id of runIds) await deleteRun(id);

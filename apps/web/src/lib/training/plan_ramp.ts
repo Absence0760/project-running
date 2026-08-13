@@ -7,10 +7,10 @@
  * averaging 20 km a week can generate a marathon plan whose first week asks
  * for 37 km and nothing says a word. That opening step is the classic
  * training injury, and the app already owns a tested policy for exactly this
- * shape of question: the coach roster's acute:chronic workload ratio. The
- * plan's opening week IS an acute (7-day) load; the runner's trailing 28-day
- * average IS the chronic base. So the bands come from `coach_load` rather
- * than from new numbers invented here, and the two surfaces cannot drift.
+ * shape of question: the coach roster's acute:chronic workload ratio. A
+ * plan week IS an acute (7-day) load; the runner's trailing 28-day average IS
+ * the chronic base. So the bands come from `coach_load` rather than from new
+ * numbers invented here, and the two surfaces cannot drift.
  *
  * Web-only (the wizard surface it backs is `PlanEditor.svelte`); the mobile
  * mirror is tracked in docs/product/followups.md.
@@ -77,10 +77,13 @@ export type PlanRampVerdict = 'unknown' | 'under' | 'matched' | 'elevated' | 'hi
 
 export interface PlanRampCheck {
 	verdict: PlanRampVerdict;
-	/// Opening week ÷ chronic weekly average. 0 when the verdict is unknown,
-	/// so a caller can never render a ratio the check refused to stand behind.
-	ratio: number;
+	/// Opening week ÷ chronic weekly average, and peak week ÷ the same. Both
+	/// are 0 when the verdict is unknown, so a caller can never render a ratio
+	/// the check refused to stand behind.
+	openingRatio: number;
+	peakRatio: number;
 	openingWeekM: number;
+	peakWeekM: number;
 	recentWeeklyM: number;
 	activeWeeks: number;
 }
@@ -101,29 +104,64 @@ export function openingWeekVolumeM(
 	return opening?.volume ?? 0;
 }
 
-/// Grade the plan's opening week against the runner's chronic base.
+/// The plan's heaviest week, in metres — what it is ultimately asking the
+/// runner to absorb.
+export function peakWeekVolumeM(weeks: { target_volume_m: number }[]): number {
+	let peak = 0;
+	for (const w of weeks) {
+		if (!Number.isFinite(w.target_volume_m)) continue;
+		if (w.target_volume_m > peak) peak = w.target_volume_m;
+	}
+	return peak;
+}
+
+/// Grade the plan against the runner's chronic base.
+///
+/// The two directions are not the same question and are deliberately not
+/// graded off the same week. **Too much** is about the first step, so it
+/// grades the opening week — that is where a plan injures someone. **Too
+/// little** is about the whole plan, so it grades the PEAK week: every
+/// well-formed plan opens well below its own peak (the generator's week 0 is
+/// 0.6x), so grading "under" off the opening week would tell a runner already
+/// training at the plan's peak volume that the plan is too light for them,
+/// which is exactly backwards.
+///
+/// Safety wins the tie: an opening week that is too big is reported even if
+/// the peak is also modest.
 ///
 /// Fail-closed in both directions: too little history, or a plan with no
-/// opening volume to grade, returns `unknown` — the caller shows nothing
-/// rather than guessing, and in particular never reports a reassuring
-/// "matched" it has no evidence for.
-export function planRampCheck(openingWeekM: number, recent: RecentVolume): PlanRampCheck {
+/// volume to grade, returns `unknown` — the caller shows nothing rather than
+/// guessing, and in particular never reports a reassuring "matched" it has no
+/// evidence for.
+export function planRampCheck(
+	openingWeekM: number,
+	peakWeekM: number,
+	recent: RecentVolume,
+): PlanRampCheck {
 	const base = {
 		openingWeekM,
+		peakWeekM,
 		recentWeeklyM: recent.weeklyM,
 		activeWeeks: recent.activeWeeks,
 	};
-	if (!Number.isFinite(openingWeekM) || openingWeekM <= 0) {
-		return { ...base, verdict: 'unknown', ratio: 0 };
+	const ungraded = { ...base, verdict: 'unknown' as const, openingRatio: 0, peakRatio: 0 };
+	if (!Number.isFinite(openingWeekM) || openingWeekM <= 0) return ungraded;
+	if (!Number.isFinite(peakWeekM) || peakWeekM <= 0) return ungraded;
+	if (recent.activeWeeks < MIN_ACTIVE_WEEKS) return ungraded;
+	const openingBand = injuryRiskBand(openingWeekM, recent.weeklyM);
+	if (openingBand === 'insufficient') return ungraded;
+	const graded = {
+		...base,
+		openingRatio: acwr(openingWeekM, recent.weeklyM),
+		peakRatio: acwr(peakWeekM, recent.weeklyM),
+	};
+	if (openingBand === 'elevated' || openingBand === 'high') {
+		return { ...graded, verdict: openingBand };
 	}
-	if (recent.activeWeeks < MIN_ACTIVE_WEEKS) {
-		return { ...base, verdict: 'unknown', ratio: 0 };
+	if (injuryRiskBand(peakWeekM, recent.weeklyM) === 'low') {
+		return { ...graded, verdict: 'under' };
 	}
-	const band = injuryRiskBand(openingWeekM, recent.weeklyM);
-	if (band === 'insufficient') return { ...base, verdict: 'unknown', ratio: 0 };
-	const verdict: PlanRampVerdict =
-		band === 'low' ? 'under' : band === 'optimal' ? 'matched' : band;
-	return { ...base, verdict, ratio: acwr(openingWeekM, recent.weeklyM) };
+	return { ...graded, verdict: 'matched' };
 }
 
 /// Whether the wizard should say anything at all.

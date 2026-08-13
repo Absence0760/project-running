@@ -2401,7 +2401,7 @@ export const messages = {
 	"planEditor.pacesEstimated": "Ritmos estimados: añade una carrera reciente o un tiempo objetivo para obtener objetivos personalizados.",
 	"planEditor.danielsVdot": "VDOT de Daniels:",
 	"planEditor.rampLabel": "El plan frente a tu entrenamiento reciente",
-	"planEditor.rampUnder": "La semana 1 pide {opening} frente a los {recent} por semana que has promediado en las últimas cuatro semanas. Más días de entrenamiento o una carrera objetivo más larga aprovecharían mejor esa base.",
+	"planEditor.rampUnder": "Este plan llega como máximo a {peak} por semana, por debajo de los {recent} por semana que has promediado en las últimas cuatro semanas. Una carrera objetivo más larga o más días de entrenamiento aprovecharían mejor esa base.",
 	"planEditor.rampElevated": "La semana 1 pide {opening} frente a los {recent} por semana que has promediado en las últimas cuatro semanas: es un salto real. Tómatelo con calma o quita un día de entrenamiento.",
 	"planEditor.rampHigh": "La semana 1 pide {opening}, muy por encima de los {recent} por semana que has promediado en las últimas cuatro semanas. Menos días de entrenamiento, una carrera objetivo más corta o unas semanas de base antes harían ese primer paso más seguro.",
 	"planEditor.weekOutline": "Resumen semanal",

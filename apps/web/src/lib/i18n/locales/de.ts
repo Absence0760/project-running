@@ -2401,7 +2401,7 @@ export const messages = {
 	"planEditor.pacesEstimated": "Geschätzte Paces – füge einen aktuellen Lauf oder eine Zielzeit hinzu für persönliche Vorgaben.",
 	"planEditor.danielsVdot": "Daniels VDOT:",
 	"planEditor.rampLabel": "Plan im Vergleich zu deinem aktuellen Training",
-	"planEditor.rampUnder": "Woche 1 verlangt {opening}, während du in den letzten vier Wochen im Schnitt {recent} pro Woche gelaufen bist. Mehr Trainingstage oder ein längeres Zielrennen würden deine Grundlage besser nutzen.",
+	"planEditor.rampUnder": "Dieser Plan erreicht in der stärksten Woche {peak} und bleibt damit unter deinen durchschnittlich {recent} pro Woche aus den letzten vier Wochen. Ein längeres Zielrennen oder mehr Trainingstage würden deine Grundlage besser nutzen.",
 	"planEditor.rampElevated": "Woche 1 verlangt {opening} gegenüber deinen durchschnittlich {recent} pro Woche aus den letzten vier Wochen — ein spürbarer Sprung. Geh es ruhig an oder streiche einen Trainingstag.",
 	"planEditor.rampHigh": "Woche 1 verlangt {opening} und liegt damit deutlich über deinen durchschnittlich {recent} pro Woche aus den letzten vier Wochen. Weniger Trainingstage, ein kürzeres Zielrennen oder erst ein paar Wochen Grundlagenaufbau machen den ersten Schritt sicherer.",
 	"planEditor.weekOutline": "Wochenübersicht",

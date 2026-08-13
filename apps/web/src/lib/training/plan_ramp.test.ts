@@ -4,6 +4,7 @@ import {
 	CHRONIC_WINDOW_WEEKS,
 	MIN_ACTIVE_WEEKS,
 	openingWeekVolumeM,
+	peakWeekVolumeM,
 	planRampCheck,
 	recentRunVolume,
 	shouldSurfaceRampNote,
@@ -124,103 +125,153 @@ test('openingWeekVolumeM: non-finite rows are ignored', () => {
 		25_000,
 	);
 });
+// ─────────────────────── peakWeekVolumeM ───────────────────────
+
+test('peakWeekVolumeM: takes the heaviest week', () => {
+	assert.equal(
+		peakWeekVolumeM([
+			{ target_volume_m: 25_000 },
+			{ target_volume_m: 59_000 },
+			{ target_volume_m: 32_000 },
+		]),
+		59_000,
+	);
+});
+
+test('peakWeekVolumeM: empty plan is zero', () => {
+	assert.equal(peakWeekVolumeM([]), 0);
+});
+
+test('peakWeekVolumeM: non-finite rows are ignored', () => {
+	assert.equal(peakWeekVolumeM([{ target_volume_m: NaN }, { target_volume_m: 30_000 }]), 30_000);
+});
 
 // ─────────────────────── planRampCheck ───────────────────────
 
 test('planRampCheck: fewer than the minimum active weeks is unknown', () => {
 	const recent = recentRunVolume([run(1, 20_000), run(8, 20_000)], NOW);
 	assert.equal(recent.activeWeeks, MIN_ACTIVE_WEEKS - 1);
-	const check = planRampCheck(37_000, recent);
+	const check = planRampCheck(38_000, 59_000, recent);
 	assert.equal(check.verdict, 'unknown');
-	assert.equal(check.ratio, 0);
+	assert.equal(check.openingRatio, 0);
+	assert.equal(check.peakRatio, 0);
 });
 
 test('planRampCheck: exactly the minimum active weeks does grade', () => {
 	const recent = recentRunVolume([run(1, 20_000), run(8, 20_000), run(15, 20_000)], NOW);
 	assert.equal(recent.activeWeeks, MIN_ACTIVE_WEEKS);
-	assert.equal(planRampCheck(37_000, recent).verdict, 'high');
+	assert.equal(planRampCheck(38_000, 59_000, recent).verdict, 'high');
 });
 
 test('planRampCheck: a runner with no history is unknown, never high', () => {
 	// The beginner case the gate exists for: one short jog in a month must
 	// not turn a C25K opening week into an injury-risk warning.
 	const recent = recentRunVolume([run(5, 3000)], NOW);
-	assert.equal(planRampCheck(6000, recent).verdict, 'unknown');
+	assert.equal(planRampCheck(6000, 9000, recent).verdict, 'unknown');
 });
 
-test('planRampCheck: a plan with no opening volume is unknown', () => {
+test('planRampCheck: a plan with no volume to grade is unknown', () => {
 	const recent = recentRunVolume(fourActiveWeeks(20_000), NOW);
-	assert.equal(planRampCheck(0, recent).verdict, 'unknown');
-	assert.equal(planRampCheck(NaN, recent).verdict, 'unknown');
+	assert.equal(planRampCheck(0, 59_000, recent).verdict, 'unknown');
+	assert.equal(planRampCheck(NaN, 59_000, recent).verdict, 'unknown');
+	assert.equal(planRampCheck(38_000, 0, recent).verdict, 'unknown');
+	assert.equal(planRampCheck(38_000, NaN, recent).verdict, 'unknown');
 });
 
 test('planRampCheck: band edges match the coach_load ACWR policy', () => {
-	const recent: { weeklyM: number; activeWeeks: number } = { weeklyM: 100_000, activeWeeks: 4 };
-	assert.equal(planRampCheck(79_000, recent).verdict, 'under');
-	assert.equal(planRampCheck(80_000, recent).verdict, 'matched');
-	assert.equal(planRampCheck(129_000, recent).verdict, 'matched');
-	assert.equal(planRampCheck(130_000, recent).verdict, 'elevated');
-	assert.equal(planRampCheck(149_000, recent).verdict, 'elevated');
-	assert.equal(planRampCheck(150_000, recent).verdict, 'high');
+	const recent = { weeklyM: 100_000, activeWeeks: 4 };
+	const at = (m: number) => planRampCheck(m, m, recent).verdict;
+	assert.equal(at(79_000), 'under');
+	assert.equal(at(80_000), 'matched');
+	assert.equal(at(129_000), 'matched');
+	assert.equal(at(130_000), 'elevated');
+	assert.equal(at(149_000), 'elevated');
+	assert.equal(at(150_000), 'high');
 });
 
-test('planRampCheck: reports the ratio it graded on', () => {
-	const check = planRampCheck(37_000, { weeklyM: 20_000, activeWeeks: 4 });
+test('planRampCheck: reports both ratios it graded on', () => {
+	const check = planRampCheck(38_000, 59_000, { weeklyM: 20_000, activeWeeks: 4 });
 	assert.equal(check.verdict, 'high');
-	assert.equal(check.ratio, 1.85);
-	assert.equal(check.openingWeekM, 37_000);
+	assert.equal(check.openingRatio, 1.9);
+	assert.equal(check.peakRatio, 2.95);
+	assert.equal(check.openingWeekM, 38_000);
+	assert.equal(check.peakWeekM, 59_000);
 	assert.equal(check.recentWeeklyM, 20_000);
 });
 
 test('planRampCheck: the real marathon-on-20km case reads high', () => {
 	// generatePlan({ goalEvent: 'distance_full', daysPerWeek: 4 }) with a goal
-	// time emits a 38.0 km opening week. A runner averaging 20 km a week is
-	// being asked for 1.9x their current load in week 1 — the case this whole
-	// check exists for.
+	// time emits a 38.0 km opening week and a 59.0 km peak. A runner averaging
+	// 20 km a week is being asked for 1.9x their current load in week 1 — the
+	// case this whole check exists for.
 	const recent = recentRunVolume(fourActiveWeeks(20_000), NOW);
-	const check = planRampCheck(38_000, recent);
+	assert.equal(planRampCheck(38_000, 59_000, recent).verdict, 'high');
+});
+
+test('planRampCheck: "under" is graded off the peak week, not the opening one', () => {
+	// A runner already at 55 km/week building the same marathon plan. Its
+	// opening week (38 km) is BELOW their current load — every plan opens
+	// below its own peak — but the plan builds past them, so it is not too
+	// light. Grading "under" off the opening week would have called it so.
+	const check = planRampCheck(38_000, 59_000, { weeklyM: 55_000, activeWeeks: 4 });
+	assert.ok(check.openingRatio < 0.8);
+	assert.equal(check.verdict, 'matched');
+});
+
+test('planRampCheck: a plan that never reaches the runner reads under', () => {
+	// The same 55 km/week runner picking a 5K plan: 14 km opening, 20 km peak.
+	const check = planRampCheck(14_000, 20_000, { weeklyM: 55_000, activeWeeks: 4 });
+	assert.equal(check.verdict, 'under');
+});
+
+test('planRampCheck: an oversized opening week wins over a light peak', () => {
+	// Not reachable from the generator (peak >= opening always), but a pasted
+	// or hand-edited plan can invert them, and safety is the arm that must win.
+	const check = planRampCheck(200_000, 50_000, { weeklyM: 100_000, activeWeeks: 4 });
 	assert.equal(check.verdict, 'high');
-	assert.equal(check.ratio, 1.9);
 });
 
 // ─────────────────────── shouldSurfaceRampNote ───────────────────────
 
 test('shouldSurfaceRampNote: silent when the plan matches the runner', () => {
 	assert.equal(
-		shouldSurfaceRampNote(planRampCheck(100_000, { weeklyM: 100_000, activeWeeks: 4 })),
+		shouldSurfaceRampNote(planRampCheck(100_000, 100_000, { weeklyM: 100_000, activeWeeks: 4 })),
 		false,
 	);
 });
 
 test('shouldSurfaceRampNote: silent when there is not enough history to speak', () => {
-	assert.equal(shouldSurfaceRampNote(planRampCheck(37_000, { weeklyM: 0, activeWeeks: 0 })), false);
+	assert.equal(
+		shouldSurfaceRampNote(planRampCheck(38_000, 59_000, { weeklyM: 0, activeWeeks: 0 })),
+		false,
+	);
 });
 
 test('shouldSurfaceRampNote: speaks on both elevated and high', () => {
 	assert.equal(
-		shouldSurfaceRampNote(planRampCheck(140_000, { weeklyM: 100_000, activeWeeks: 4 })),
+		shouldSurfaceRampNote(planRampCheck(140_000, 140_000, { weeklyM: 100_000, activeWeeks: 4 })),
 		true,
 	);
 	assert.equal(
-		shouldSurfaceRampNote(planRampCheck(200_000, { weeklyM: 100_000, activeWeeks: 4 })),
+		shouldSurfaceRampNote(planRampCheck(200_000, 200_000, { weeklyM: 100_000, activeWeeks: 4 })),
 		true,
 	);
 });
 
 test('shouldSurfaceRampNote: an under-cooked plan is worth saying', () => {
 	assert.equal(
-		shouldSurfaceRampNote(planRampCheck(40_000, { weeklyM: 100_000, activeWeeks: 4 })),
+		shouldSurfaceRampNote(planRampCheck(40_000, 40_000, { weeklyM: 100_000, activeWeeks: 4 })),
 		true,
 	);
 });
 
 test('shouldSurfaceRampNote: but not to a runner who asked for a walk-run plan', () => {
-	const check = planRampCheck(40_000, { weeklyM: 100_000, activeWeeks: 4 });
+	const check = planRampCheck(40_000, 40_000, { weeklyM: 100_000, activeWeeks: 4 });
 	assert.equal(check.verdict, 'under');
 	assert.equal(shouldSurfaceRampNote(check, { beginnerWalkRun: true }), false);
 });
 
 test('shouldSurfaceRampNote: a walk-run plan still gets the safety warnings', () => {
-	const check = planRampCheck(200_000, { weeklyM: 100_000, activeWeeks: 4 });
+	const check = planRampCheck(200_000, 200_000, { weeklyM: 100_000, activeWeeks: 4 });
 	assert.equal(shouldSurfaceRampNote(check, { beginnerWalkRun: true }), true);
 });

@@ -22,6 +22,7 @@
 	import {
 		CHRONIC_WINDOW_WEEKS,
 		openingWeekVolumeM,
+		peakWeekVolumeM,
 		planRampCheck,
 		recentRunVolume,
 		shouldSurfaceRampNote,
@@ -309,25 +310,33 @@
 		!!plan && plan.weeks.some((w) => w.workouts.some((wo) => wo.kind === 'walk_run'))
 	);
 
-	// How the plan's first week compares with what the runner has actually
-	// been running. Recomputes as the goal / days / weeks inputs change, so
-	// turning a training day off shows the ramp easing in real time.
+	// How the plan compares with what the runner has actually been running.
+	// Recomputes as the goal / days / weeks inputs change, so dropping a
+	// training day shows the ramp easing in real time.
 	let rampCheck = $derived(
 		plan && recentVolume
-			? planRampCheck(openingWeekVolumeM(plan.weeks), recentVolume)
+			? planRampCheck(
+					openingWeekVolumeM(plan.weeks),
+					peakWeekVolumeM(plan.weeks),
+					recentVolume
+				)
 			: null
 	);
 	let rampMessage = $derived.by(() => {
 		if (!rampCheck || !shouldSurfaceRampNote(rampCheck, { beginnerWalkRun: isWalkRunPlan })) {
 			return null;
 		}
-		const params = {
-			opening: fmtKm(rampCheck.openingWeekM, 0),
-			recent: fmtKm(rampCheck.recentWeeklyM, 0),
-		};
-		if (rampCheck.verdict === 'under') return t('planEditor.rampUnder', params);
-		if (rampCheck.verdict === 'elevated') return t('planEditor.rampElevated', params);
-		return t('planEditor.rampHigh', params);
+		const recent = fmtKm(rampCheck.recentWeeklyM, 0);
+		// Each verdict quotes the week it was graded on: the safety warnings
+		// are about the first step, the under-cooked one about the peak.
+		if (rampCheck.verdict === 'under') {
+			return t('planEditor.rampUnder', { peak: fmtKm(rampCheck.peakWeekM, 0), recent });
+		}
+		const opening = fmtKm(rampCheck.openingWeekM, 0);
+		if (rampCheck.verdict === 'elevated') {
+			return t('planEditor.rampElevated', { opening, recent });
+		}
+		return t('planEditor.rampHigh', { opening, recent });
 	});
 
 	// Re-generate the editable plan whenever any input that drives
