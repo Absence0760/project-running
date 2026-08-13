@@ -476,3 +476,32 @@ and worth doing together as one alarm-hygiene pass:
   `:4216`, `:5658`) — the bug `saveRun`'s own comment documents. A Berlin user
   archiving a coach thread at 23:30 sees it dated the next day.
   `createCustomExercise`'s is worse in kind: it feeds newer-wins sync.
+
+## Segment leaderboards vs the §206 shadow-hidden backstop (2026-08-13)
+
+Found while fixing the segment-rank divergence ([decisions § 594](../architecture/decisions.md),
+migration `20270523_001`). Both leaderboard RPCs inline their own visibility
+predicates instead of calling the canonical helpers, so the `20270329_001`
+shadow-hidden sweep — which fixed exactly this class by tightening
+`private.is_route_visible_to` and the `user_profiles` SELECT policy — passed
+them by. Neither affects any **rank**: the SECURITY INVOKER rank RPCs go
+through RLS, which already carries both gates, so they are the narrower side.
+Each fix means re-emitting a SECURITY DEFINER body, which wants its own tests
+and its own review rather than a ride-along in a rank migration.
+
+- [ ] **`segment_leaderboard_tiered` serves a moderation-hidden route's board.**
+  Its route branch is `r.is_public = true or r.user_id = caller or (r.club_id
+  is not null and is_club_member(r.club_id))`, where `private.is_route_visible_to`
+  additionally demands `shadow_hidden = false` (§206). A caller holding a
+  segment id on a hidden route still reads the whole board over PostgREST,
+  after `20270329_001` closed the route's waypoints, photos, reviews, segments,
+  markers and condition reports. Durable fix: delegate to
+  `private.is_route_visible_to(s.route_id, caller)` — resolved once before the
+  CTE, since every effort on a segment shares one route — so the predicate has
+  one implementation and cannot drift again.
+- [ ] **Both boards disclose a shadow-hidden athlete's name + avatar.** They
+  join `user_profiles` under SECURITY DEFINER, which bypasses the
+  "authenticated read profiles except shadow-hidden" policy `20270329_001`
+  installed, so a moderation-hidden user keeps rendering on segment
+  leaderboards. Fix is a `(up.shadow_hidden = false or up.id = caller)` clause
+  inside each board's CTE, mirroring the owner carve-out the policy uses.

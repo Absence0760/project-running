@@ -109,7 +109,13 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // self-cancel RLS policy to accept `partially_refunded` alongside `paid`.
 // One function body and one policy — no table DDL at all, so the scanner
 // passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270522';
+// 20270523: re-emits segment_effort_ranks + global_segment_effort_ranks so
+// they count one row per athlete, matching their leaderboards. Two function
+// bodies — no table DDL at all, so the scanner passed it with zero violations
+// before this bump. It deliberately adds no index on segment_efforts (a
+// guarded table): the distinct count rides the existing
+// (segment_id, time_seconds) range scan.
+export const GRANDFATHER_CUTOFF = '20270523';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
