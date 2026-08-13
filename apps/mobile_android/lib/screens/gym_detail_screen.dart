@@ -15,6 +15,7 @@ import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
+import '../progression_prefill.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/pending_sync_banner.dart';
 import '../widgets/routine_builder_sheet.dart';
@@ -189,6 +190,23 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       ));
     }
 
+    // The 5×5 back-off needs a miss count across sessions, which no authored
+    // params bag carries — the offline gym store holds the history it derives
+    // from.
+    final history = <DatedLoggedSet>[
+      for (final logged in widget.store.workouts)
+        for (final s in logged.sets)
+          DatedLoggedSet(
+            workoutId: logged.id,
+            startedAt: logged.row['started_at'] as String? ?? '',
+            exerciseName: (s['exercise_name'] as String?) ?? '',
+            reps: s['reps'] as num?,
+            weightKg: s['weight_kg'] as num?,
+            rpe: s['rpe'] as num?,
+            setType: s['set_type'] as String?,
+          ),
+    ];
+
     final out = <_NextTargetHint>[];
     for (final e in exes) {
       if (e.exercise.progression == 'none') continue;
@@ -199,12 +217,20 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
       final params = e.exercise.progressionParams is Map
           ? Map<String, Object?>.from(e.exercise.progressionParams as Map)
           : <String, Object?>{};
+      final scheme = _schemeFromString(e.exercise.progression);
       final sug = nextPrescription(ProgressionInput(
-        scheme: _schemeFromString(e.exercise.progression),
+        scheme: scheme,
         lastSets: lastSets,
         targetRepsMin: firstSet?.targetRepsMin,
         targetRepsMax: firstSet?.targetRepsMax,
-        params: params,
+        params: progressionParamsWithStreak(
+          scheme: scheme,
+          params: params,
+          targetRepsMin: firstSet?.targetRepsMin,
+          targetRepsMax: firstSet?.targetRepsMax,
+          history: history,
+          exerciseName: e.exercise.exerciseName,
+        ),
       ));
       if (sug.reason == ProgressionReason.none) continue;
 
