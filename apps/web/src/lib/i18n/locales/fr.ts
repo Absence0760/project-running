@@ -4846,6 +4846,7 @@ export const messages = {
 	"challenges.back": "Retour",
 	"challenges.searchPlaceholder": "Rechercher des défis",
 	"challenges.loadMore": "Voir plus",
+	"challenges.progressUnavailable": "Progression indisponible – ouvrez pour voir votre résultat",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "Titre",
 	"fundraiser.charityName": "Association caritative",

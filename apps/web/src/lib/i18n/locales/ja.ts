@@ -4841,6 +4841,7 @@ export const messages = {
 	"challenges.back": "戻る",
 	"challenges.searchPlaceholder": "チャレンジを検索",
 	"challenges.loadMore": "もっと見る",
+	"challenges.progressUnavailable": "進捗を表示できません。開いて結果を確認してください",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "タイトル",
 	"fundraiser.charityName": "慈善団体",
