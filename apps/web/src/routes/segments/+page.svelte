@@ -148,14 +148,23 @@
 			{/if}
 		</div>
 
-		{#if shown.length === 0}
-			<p class="state-msg" data-testid="segment-catalogue-no-matches">
-				{m('segments.browseNoMatches')}
-			</p>
-		{:else}
-			<p class="count" role="status" data-testid="segment-catalogue-count">
-				{m('segments.browseCount', { count: shown.length })}
-			</p>
+		<!-- One persistent live region rather than one per branch: a role="status"
+		     that is REMOVED when the result set empties announces nothing on the
+		     transition that most needs announcing (a filter that just hid
+		     everything). Swapping its contents announces in both directions. -->
+		<div class="results-status" role="status">
+			{#if shown.length === 0}
+				<p class="state-msg" data-testid="segment-catalogue-no-matches">
+					{m('segments.browseNoMatches')}
+				</p>
+			{:else}
+				<p class="count" data-testid="segment-catalogue-count">
+					{m('segments.browseCount', { count: shown.length })}
+				</p>
+			{/if}
+		</div>
+
+		{#if shown.length > 0}
 			<ul class="cards" data-testid="segment-catalogue-list">
 				{#each shown as segment (segment.id)}
 					<li>
@@ -171,7 +180,7 @@
 								<span class="stat">{fmtDist(segment.distance_m)}</span>
 								{#if segment.elevation_m != null && Number(segment.elevation_m) > 0}
 									<span class="stat">
-										<span class="material-symbols" aria-hidden="true">altitude</span>
+										<span class="material-symbols" aria-hidden="true">trending_up</span>
 										{formatElevation(Number(segment.elevation_m))}
 									</span>
 								{/if}
