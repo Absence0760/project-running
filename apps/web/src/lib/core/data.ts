@@ -12,6 +12,7 @@ import { stripExifFromFile } from '../util/exif_strip';
 import { entriesFromTemplate } from '../nutrition/meal_template';
 import { logInputFromRecipe } from '../nutrition/recipe';
 import { challengesToRecomputeForRun } from '../social/challenge_progress';
+import { mergeMyProgress } from '../social/challenge_list';
 import { selectEffectivePricing } from '../social/event_instance';
 import type {
 	Run,
@@ -2465,6 +2466,23 @@ export async function fetchClubBySlug(
 		return { club: { ...enriched, invite_token: (token as string | null) ?? null }, error: null };
 	}
 	return { club: enriched, error: null };
+}
+
+/// Resolves club ids to display names in one read. RLS already scopes this to
+/// public clubs plus the ones the caller belongs to, so an id the caller may not
+/// read is simply absent from the map — the caller decides what to render for a
+/// miss. Used by the club-vs-club leaderboard, whose teams are mostly clubs the
+/// viewer is NOT in and so are missing from `fetchMyClubs`.
+export async function fetchClubNames(ids: string[]): Promise<Record<string, string>> {
+	const wanted = [...new Set(ids.filter(isEntityId))];
+	if (wanted.length === 0) return {};
+	const { data, error } = await supabase.from('clubs').select('id, name').in('id', wanted);
+	if (error) throw error;
+	const out: Record<string, string> = {};
+	for (const c of (data ?? []) as { id: string; name: string | null }[]) {
+		if (c.name) out[c.id] = c.name;
+	}
+	return out;
 }
 
 /// Resolves a club id to its slug. The notification worker's row projection
@@ -11092,13 +11110,17 @@ export async function fetchChallenges(
 	if (ids.length === 0) return [];
 	const { data: parts } = await supabase
 		.from(TABLES.challenge_participants)
-		.select('challenge_id, user_id')
+		.select('challenge_id, user_id, completed_at')
 		.in('challenge_id', ids);
 	const counts = new Map<string, number>();
 	const mineSet = new Set<string>();
+	const myCompletedAt = new Map<string, string | null>();
 	for (const p of parts ?? []) {
 		counts.set(p.challenge_id, (counts.get(p.challenge_id) ?? 0) + 1);
-		if (userId && p.user_id === userId) mineSet.add(p.challenge_id);
+		if (userId && p.user_id === userId) {
+			mineSet.add(p.challenge_id);
+			myCompletedAt.set(p.challenge_id, p.completed_at ?? null);
+		}
 	}
 	const enriched: ChallengeWithMeta[] = rows.map((r) => ({
 		...r,
@@ -11106,9 +11128,23 @@ export async function fetchChallenges(
 		my_value: null,
 		my_rank: null,
 		joined: mineSet.has(r.id),
-		completed_at: null
+		completed_at: myCompletedAt.get(r.id) ?? null
 	}));
-	return opts.mine ? enriched.filter((c) => c.joined) : enriched;
+	if (!opts.mine) return enriched;
+
+	// The caller's banked value lives only in the `challenge_leaderboard`
+	// aggregate, never on the `challenges` row — so without this fold every
+	// joined row rendered a confident zero next to its goal while the dashboard
+	// panel, reading the same aggregate, showed the real number. Auxiliary:
+	// a failure here leaves my_value null, which the list renders as "not shown
+	// here", not as zero.
+	const joined = enriched.filter((c) => c.joined);
+	try {
+		return mergeMyProgress(joined, await myActiveChallenges());
+	} catch (e) {
+		console.debug('fetchChallenges progress enrichment failed', e);
+		return joined;
+	}
 }
 
 /**

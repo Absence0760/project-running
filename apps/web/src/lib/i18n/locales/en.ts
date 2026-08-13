@@ -4866,6 +4866,9 @@ export const en = {
 	"challenges.back": "Back",
 	"challenges.searchPlaceholder": "Search challenges",
 	"challenges.loadMore": "Load more",
+	"challenges.progressUnavailable": "Progress unavailable — open for your result",
+	"challenges.teamNoClub": "No club",
+	"challenges.teamPrivateClub": "Private club",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "Title",
 	"fundraiser.charityName": "Charity",

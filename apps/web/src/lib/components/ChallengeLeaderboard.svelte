@@ -3,6 +3,7 @@
 	import { formatDistance, formatElevation } from '$lib/format/units.svelte';
 	import { formatDuration } from '$lib/format/time';
 	import type { ChallengeLeaderboardRow, ChallengeMetric, ChallengeScope } from '$lib/types';
+	import { teamLabel } from '$lib/social/challenge_list';
 
 	let {
 		rows,
@@ -36,8 +37,10 @@
 	}
 
 	function nameFor(row: ChallengeLeaderboardRow): string {
-		if (byTeam) return clubNames[row.team_club_id ?? ''] ?? row.team_club_id ?? '—';
-		return row.display_name ?? m('checkpoint.anonymousRunner');
+		if (!byTeam) return row.display_name ?? m('checkpoint.anonymousRunner');
+		const label = teamLabel(row.team_club_id, clubNames);
+		if (label.kind === 'named') return label.name;
+		return label.kind === 'no_club' ? m('challenges.teamNoClub') : m('challenges.teamPrivateClub');
 	}
 </script>
 

@@ -7,7 +7,8 @@
 		joinChallenge,
 		leaveChallenge,
 		deleteChallenge,
-		fetchMyClubs
+		fetchMyClubs,
+		fetchClubNames
 	} from '$lib/core/data';
 	import type { ChallengeWithMeta, ChallengeLeaderboardRow, ClubWithMeta } from '$lib/types';
 	import ChallengeProgressBar from '$lib/components/ChallengeProgressBar.svelte';
@@ -80,6 +81,21 @@
 			if (c.scope === 'club_vs_club' || c.club_id) {
 				myClubs = await fetchMyClubs();
 				clubNames = Object.fromEntries(myClubs.map((cl) => [cl.id, cl.name]));
+			}
+			// A club-vs-club board is mostly clubs the viewer is NOT in, so
+			// fetchMyClubs resolves almost none of them — every rival team used to
+			// render as its raw uuid. Resolve the board's own ids in one read.
+			// Auxiliary to the challenge itself: a failure degrades the team column
+			// to its unresolved label, it must not fail the page.
+			if (c.scope === 'club_vs_club') {
+				try {
+					const teamIds = board
+						.map((r) => r.team_club_id)
+						.filter((cid): cid is string => typeof cid === 'string' && cid.length > 0);
+					clubNames = { ...(await fetchClubNames(teamIds)), ...clubNames };
+				} catch (e) {
+					console.debug('challenge team name resolution failed', e);
+				}
 			}
 		} catch (e) {
 			console.error('challenge load failed', e);

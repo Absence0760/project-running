@@ -613,3 +613,24 @@ Two items remain open, deliberately:
   tag-pinned, not SHA-pinned — the only such reference in the repo. It sits
   inside the commented-out TestFlight block, so it is not live; SHA-pin it
   when that block is uncommented.
+
+## Challenges: two things this round deliberately did not ship (2026-08-13)
+
+- [ ] **Mobile has no per-challenge progress signal at all.** `challenges_screen.dart`
+  lists joined challenges as plain rows — no bar, no value, no rank — so it does
+  not carry the web list's false-zero bug and needs no urgent mirror. When the
+  mobile list does grow a progress bar, mirror `myProgressView`'s contract with
+  it: the value comes from `my_active_challenges`, and a challenge outside that
+  RPC's live-plus-7-day window has an *unknown* value, not a zero one.
+  `apps/web/src/lib/social/challenge_list.ts` is web-only until then.
+- [ ] **`rankParticipants` breaks ties in the opposite direction to the SQL when
+  the tie-break key is null.** `challenge_leaderboard`'s team branch ends
+  `order by rank, pt.team_club_id nulls last`; the TS/Dart/Rust helper maps a
+  null `team_club_id` to `''`, which sorts *first*. The null bucket is reachable —
+  `challenge_participants.team_club_id` is nullable and its FK is `on delete set
+  null`, so deleting a club leaves its members as an unaffiliated group the
+  aggregate still sums. Latent today: `rankParticipants` has no production caller
+  on any of the three rails (web, mobile, watch) — every board is rendered in the
+  order the server returned. Fixing it is a three-rail parity edit (TS +
+  `challenge_progress.dart` + iOS twin + `watch_core::challenge_progress`) and
+  belongs in its own change, not tacked onto a UI round.
