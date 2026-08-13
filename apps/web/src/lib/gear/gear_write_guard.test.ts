@@ -40,7 +40,9 @@ test('addGearToRuns is additive — never a delete-then-insert of the run gear s
 		body,
 		/ignoreDuplicates:\s*true/,
 		'addGearToRuns must pass ignoreDuplicates so a repeated backfill is a ' +
-			'no-op rather than a conflict error.',
+			'no-op rather than a conflict error — and because run_gear has no ' +
+			'UPDATE policy, so the default merge-duplicates resolution ' +
+			'(ON CONFLICT DO UPDATE) has nothing to pass on a collision.',
 	);
 	assert.doesNotMatch(
 		body,

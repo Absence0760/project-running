@@ -7194,7 +7194,10 @@ export async function setRunGear(runId: string, gearIds: string[]): Promise<void
 /// backfilling a newly-registered pair through it would silently untag every
 /// other item the run already carried. This only ever adds. `ignoreDuplicates`
 /// makes a repeat backfill a no-op instead of a 23505, matching the mobile
-/// `ApiClient.addGearToRuns` shape.
+/// `ApiClient.addGearToRuns` shape. It is also the only upsert resolution that
+/// works here: `run_gear` carries SELECT / INSERT / DELETE policies and no
+/// UPDATE one, so PostgREST's default merge-duplicates (`ON CONFLICT DO
+/// UPDATE`) has no policy to pass on a collision.
 ///
 /// RLS gates every row: the `run_gear` insert policy requires the caller to
 /// own BOTH the run and the gear, so a forged run id writes nothing.
