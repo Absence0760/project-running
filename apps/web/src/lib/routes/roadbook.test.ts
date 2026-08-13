@@ -212,6 +212,64 @@ test('aid services flow through to the leg', () => {
 	assert.deepEqual(rb.legs[1].services, ['water', 'food']);
 });
 
+// A 4 km 25 % climb then 4 km flat, sampled every `spacingM` metres. The
+// terrain is fixed; only the file's point density changes.
+function climbCourse(spacingM: number): RoadbookWaypoint[] {
+	const pts: RoadbookWaypoint[] = [];
+	const mPerDegLat = 111_320;
+	const climbM = 4000;
+	for (let d = 0; d <= climbM * 2; d += spacingM) {
+		pts.push({ lat: 45 + d / mPerDegLat, lng: 7, ele: Math.min(d, climbM) * 0.25 });
+	}
+	return pts;
+}
+
+function midArrivalS(wp: RoadbookWaypoint[], model: 'effort' | 'even'): number {
+	const rb = buildRoadbook(wp, [marker(4000, 'aid_station', 'Top', {})], {
+		goalSeconds: 5400,
+		model
+	});
+	return rb.legs[1].projectedElapsedS;
+}
+
+test('effort allocation survives a densely-sampled course', () => {
+	// Every point-pair is under MIN_SEGMENT_M here, so grading each pair on its
+	// own read the whole climb as flat and effort collapsed onto even pace.
+	const dense = climbCourse(3);
+	const effort = midArrivalS(dense, 'effort');
+	const even = midArrivalS(dense, 'even');
+	assert.ok(effort > even * 1.4, `effort ${effort} vs even ${even}`);
+});
+
+test('effort allocation is a property of the terrain, not the sampling density', () => {
+	const coarse = midArrivalS(climbCourse(20), 'effort');
+	for (const spacing of [10, 3, 1]) {
+		const dense = midArrivalS(climbCourse(spacing), 'effort');
+		assert.ok(
+			Math.abs(dense - coarse) / coarse < 0.01,
+			`spacing ${spacing}m gave ${dense}s vs ${coarse}s at 20m`
+		);
+	}
+});
+
+test('a trailing sub-threshold segment is graded flat, not amplified', () => {
+	// 1 km of flat at 20 m spacing, then one last point 3 m on with a 1 m rise:
+	// a 33 % grade no altimeter can support over 3 m. That trailing window never
+	// clears MIN_SEGMENT_M, so it must stay flat — grading it on its own span
+	// would bill it as ~3.9x effort and pull every arrival before it earlier.
+	const wp: RoadbookWaypoint[] = [];
+	for (let d = 0; d <= 1000; d += 20) wp.push({ lat: 45 + d / 111_320, lng: 7, ele: 0 });
+	wp.push({ lat: 45 + 1003 / 111_320, lng: 7, ele: 1 });
+	const mid = [marker(500, 'aid_station', 'Mid', {})];
+	const effort = buildRoadbook(wp, mid, { goalSeconds: 5400, model: 'effort' });
+	const even = buildRoadbook(wp, mid, { goalSeconds: 5400, model: 'even' });
+	assert.ok(effort.hasElevation, 'the effort model must actually be in play');
+	assert.ok(
+		Math.abs(effort.legs[1].projectedElapsedS - even.legs[1].projectedElapsedS) < 1e-6,
+		`effort ${effort.legs[1].projectedElapsedS} vs even ${even.legs[1].projectedElapsedS}`
+	);
+});
+
 function rbHalf(wp: RoadbookWaypoint[]): number {
 	return buildRoadbook(wp, [], { goalSeconds: 1, model: 'even' }).totalDistM / 2;
 }
