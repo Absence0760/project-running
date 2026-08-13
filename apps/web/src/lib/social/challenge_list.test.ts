@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
 	mergeMyProgress,
 	myProgressView,
+	teamLabel,
 	type MyProgressRow,
 } from './challenge_list';
 
@@ -126,4 +127,22 @@ test('myProgressView fails closed on a non-finite value', () => {
 
 test('myProgressView fails closed on an unparseable start', () => {
 	assert.equal(myProgressView({ my_value: null, starts_at: 'not a date' }, NOW).state, 'unknown');
+});
+
+const CLUB = '2c1cf5b0-0000-4000-8000-000000000001';
+
+test('teamLabel resolves a readable club to its name', () => {
+	assert.deepEqual(teamLabel(CLUB, { [CLUB]: 'Trail Pack' }), { kind: 'named', name: 'Trail Pack' });
+});
+
+test('teamLabel never renders the raw club id for an unreadable club', () => {
+	assert.deepEqual(teamLabel(CLUB, {}), { kind: 'unresolved' });
+	assert.deepEqual(teamLabel(CLUB, { [CLUB]: '   ' }), { kind: 'unresolved' });
+	assert.deepEqual(teamLabel(CLUB, { other: 'Trail Pack' }), { kind: 'unresolved' });
+});
+
+test('teamLabel reports the unaffiliated bucket separately from an unreadable club', () => {
+	assert.deepEqual(teamLabel(null, { [CLUB]: 'Trail Pack' }), { kind: 'no_club' });
+	assert.deepEqual(teamLabel(undefined, {}), { kind: 'no_club' });
+	assert.deepEqual(teamLabel('', {}), { kind: 'no_club' });
 });

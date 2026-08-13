@@ -4846,6 +4846,8 @@ export const messages = {
 	"challenges.searchPlaceholder": "Buscar desafios",
 	"challenges.loadMore": "Carregar mais",
 	"challenges.progressUnavailable": "Progresso indisponível — abra para ver seu resultado",
+	"challenges.teamNoClub": "Sem clube",
+	"challenges.teamPrivateClub": "Clube privado",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "Título",
 	"fundraiser.charityName": "Instituição beneficente",

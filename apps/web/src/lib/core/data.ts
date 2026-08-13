@@ -2468,6 +2468,23 @@ export async function fetchClubBySlug(
 	return { club: enriched, error: null };
 }
 
+/// Resolves club ids to display names in one read. RLS already scopes this to
+/// public clubs plus the ones the caller belongs to, so an id the caller may not
+/// read is simply absent from the map — the caller decides what to render for a
+/// miss. Used by the club-vs-club leaderboard, whose teams are mostly clubs the
+/// viewer is NOT in and so are missing from `fetchMyClubs`.
+export async function fetchClubNames(ids: string[]): Promise<Record<string, string>> {
+	const wanted = [...new Set(ids.filter(isEntityId))];
+	if (wanted.length === 0) return {};
+	const { data, error } = await supabase.from('clubs').select('id, name').in('id', wanted);
+	if (error) throw error;
+	const out: Record<string, string> = {};
+	for (const c of (data ?? []) as { id: string; name: string | null }[]) {
+		if (c.name) out[c.id] = c.name;
+	}
+	return out;
+}
+
 /// Resolves a club id to its slug. The notification worker's row projection
 /// carries club_id and cannot join for the slug, so its deep links address the
 /// club by id and `/clubs/[slug]` forwards to the canonical URL from here.

@@ -4842,6 +4842,8 @@ export const messages = {
 	"challenges.searchPlaceholder": "チャレンジを検索",
 	"challenges.loadMore": "もっと見る",
 	"challenges.progressUnavailable": "進捗を表示できません。開いて結果を確認してください",
+	"challenges.teamNoClub": "クラブなし",
+	"challenges.teamPrivateClub": "非公開クラブ",
 	// Charity fundraising pages (fundraising.md)
 	"fundraiser.title": "タイトル",
 	"fundraiser.charityName": "慈善団体",

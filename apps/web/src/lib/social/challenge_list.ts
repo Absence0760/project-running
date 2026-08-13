@@ -1,5 +1,7 @@
-/// Shaping for the "My challenges" list on /challenges, where the per-caller
-/// value is NOT carried by the `challenges` table read that builds the list —
+/// Pure shaping for the challenge surfaces: the "My challenges" list on
+/// /challenges and the leaderboard's team column.
+///
+/// The list's per-caller value is NOT carried by the `challenges` table read —
 /// it only exists in the `challenge_leaderboard` aggregate, surfaced in bulk by
 /// `my_active_challenges`. These helpers fold that aggregate onto the list and
 /// decide what the row is allowed to claim, so a missing value renders as
@@ -68,4 +70,25 @@ export function myProgressView(
 		return { state: 'not_started', value: 0 };
 	}
 	return { state: 'unknown', value: 0 };
+}
+
+/** What a club-vs-club leaderboard row's team column may say. `no_club` is a
+ * real bucket — `challenge_participants.team_club_id` is nullable and its FK is
+ * `on delete set null`, so a deleted club leaves its people as an unaffiliated
+ * group the SQL aggregate still sums. `unresolved` is a club RLS did not let the
+ * viewer read. */
+export type TeamLabel = { kind: 'named'; name: string } | { kind: 'no_club' } | { kind: 'unresolved' };
+
+/** Resolve a team row's club id against the names the caller could read. A miss
+ * is `unresolved`, never the raw id: a uuid is meaningless to a reader and puts
+ * an internal identifier on screen. The CALLER localises the two id-less
+ * kinds. */
+export function teamLabel(
+	teamClubId: string | null | undefined,
+	clubNames: Record<string, string>,
+): TeamLabel {
+	if (!teamClubId) return { kind: 'no_club' };
+	const name = clubNames[teamClubId];
+	if (typeof name === 'string' && name.trim().length > 0) return { kind: 'named', name };
+	return { kind: 'unresolved' };
 }
