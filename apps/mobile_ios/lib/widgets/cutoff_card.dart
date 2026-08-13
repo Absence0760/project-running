@@ -38,6 +38,8 @@ class CutoffCard extends StatelessWidget {
     final semantic = AppSemanticColors.of(context);
     final l10n = AppLocalizations.of(context);
     final unknown = eta.status == LiveCutoffStatus.unknown;
+    final showRequiredPace = eta.requiredPaceSecPerKm != null &&
+        eta.status != LiveCutoffStatus.on;
     final label = eta.checkpoint!.label.trim();
     final title = label.isEmpty ? l10n.liveCutoffTitle : label;
 
@@ -97,8 +99,7 @@ class CutoffCard extends StatelessWidget {
               foreground: semantic.danger,
               fill: semantic.danger.withValues(alpha: 0.15),
             )
-          else if (eta.requiredPaceSecPerKm != null &&
-              eta.status != LiveCutoffStatus.on)
+          else if (showRequiredPace)
             Text(
               stale
                   ? l10n.liveCutoffRequiredPaceStale(
@@ -110,10 +111,7 @@ class CutoffCard extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-          if (eta.limitPassed ||
-              (eta.requiredPaceSecPerKm != null &&
-                  eta.status != LiveCutoffStatus.on))
-            const SizedBox(height: 8),
+          if (eta.limitPassed || showRequiredPace) const SizedBox(height: 8),
           if (unknown)
             Text(
               stale ? l10n.liveCutoffSignalLost : l10n.liveCutoffWaitingSignal,
