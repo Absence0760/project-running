@@ -36,10 +36,10 @@ env:
   # Every `subosito/flutter-action` below is SHA-pinned but used to take
   # only `channel: stable`, so the SDK itself floated: whatever Flutter
   # was newest when a job started is what ran. On 2026-08-12 that turned
-  # a green PR red with no code change — 3.47.0 (Dart 3.13) shipped 70
-  # minutes after main's last green run and its new
-  # `unawaited_return_in_try_block` warning fired on untouched code, and
-  # `dart analyze` treats warnings as failures. Pin the version so a new
+  # a green PR red with no code change — 3.47.0 (Dart 3.13) published at
+  # 18:52 UTC, 51 minutes after main's last green run finished, and its
+  # new `unawaited_return_in_try_block` warning fired on untouched code.
+  # `dart analyze` exits 2 on any warning. Pin the version so a new
   # upstream release arrives as a deliberate bump (new lints, new
   # deprecations, engine changes) instead of at random on an unrelated
   # PR. Bump this one value to move every job at once; the release
