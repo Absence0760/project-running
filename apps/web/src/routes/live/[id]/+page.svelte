@@ -128,7 +128,7 @@
 	const eta = $derived(
 		hasCutoffRoute
 			? nextCutoffEta({
-					distAlongRouteM: distAlongRouteM ?? 0,
+					distAlongRouteM,
 					elapsedS: elapsed,
 					recentPaceSecPerKm,
 					legs: cutoffLegs,
