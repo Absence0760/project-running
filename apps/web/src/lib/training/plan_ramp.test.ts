@@ -67,6 +67,27 @@ test('recentRunVolume: cycling is not running volume', () => {
 	assert.equal(v.activeWeeks, 1);
 });
 
+test('recentRunVolume: a DNF is distance the runner covered, so it counts', () => {
+	// The coach roster excludes is_dnf runs; its question is which efforts the
+	// athlete COMPLETED. This check's question is what the legs absorbed, and a
+	// race abandoned at 30 km still put 30 km through them. The flag is only
+	// ever applied after the fact to a recorded run — nothing rewrites
+	// `distance_m` when it is set. Excluding these would understate the base of
+	// exactly the runners most likely to carry one, and warn them off a plan
+	// their history supports. See decisions § 592.
+	const v = recentRunVolume([{ ...run(1, 30_000), is_dnf: true }], NOW);
+	assert.equal(v.weeklyM, 7500);
+	assert.equal(v.activeWeeks, 1);
+});
+
+test('recentRunVolume: a DNF on a bike is still not running volume', () => {
+	// The two rules compose in the order that matters: covered-distance-counts
+	// does not readmit a discipline the legs never ran.
+	const v = recentRunVolume([{ ...run(1, 60_000, 'cycle'), is_dnf: true }], NOW);
+	assert.equal(v.weeklyM, 0);
+	assert.equal(v.activeWeeks, 0);
+});
+
 test('recentRunVolume: walks, hikes and treadmill runs are load and do count', () => {
 	const v = recentRunVolume([run(1, 4000, 'walk'), run(2, 6000, 'hike'), run(3, 10_000)], NOW);
 	assert.equal(v.weeklyM, 5000);
