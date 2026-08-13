@@ -76,7 +76,7 @@
 	import { formatPrice } from '$lib/format/format_price';
 	import { fromMinorUnits } from '$lib/format/minor_units';
 	import { registrationOpen, resolveRefundEligibility } from '$lib/social/paid_registration';
-	import { buildEventIcs, icsFilename } from '$lib/social/event_ics';
+	import { buildEventIcs, buildEventSeriesIcs, icsFilename } from '$lib/social/event_ics';
 	import { env } from '$env/dynamic/public';
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl, geoUri } from '$lib/routes/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/runs/finisher_certificate';
@@ -961,6 +961,26 @@
 		downloadBlob(new Blob([ics], { type: 'text/calendar;charset=utf-8' }), icsFilename(event.title));
 	}
 
+	// Null for a one-off event, and for the rare recurring shape an RRULE cannot
+	// state without diverging from the occurrences this page lists — the series
+	// button is only offered when the file would agree with the app.
+	let seriesIcs = $derived(
+		event && event.recurrence_freq
+			? buildEventSeriesIcs(event, {
+					cancelledIso: exceptions.map((e) => e.instance_start),
+					url: canonicalUrl
+				})
+			: null
+	);
+
+	function addSeriesToCalendar() {
+		if (!event || !seriesIcs) return;
+		downloadBlob(
+			new Blob([seriesIcs], { type: 'text/calendar;charset=utf-8' }),
+			icsFilename(`${event.title}-series`)
+		);
+	}
+
 	function formatRunDate(iso: string): string {
 		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			month: 'short',
@@ -1795,8 +1815,21 @@
 						data-testid="add-to-calendar"
 					>
 						<span class="material-symbols" aria-hidden="true">calendar_add_on</span>
-						{m('clubEvent.addToCalendar')}
+						{event.recurrence_freq
+							? m('clubEvent.addOccurrenceToCalendar')
+							: m('clubEvent.addToCalendar')}
 					</button>
+					{#if seriesIcs}
+						<button
+							type="button"
+							class="btn btn-secondary add-to-calendar"
+							onclick={addSeriesToCalendar}
+							data-testid="add-series-to-calendar"
+						>
+							<span class="material-symbols" aria-hidden="true">event_repeat</span>
+							{m('clubEvent.addSeriesToCalendar')}
+						</button>
+					{/if}
 				{/if}
 				{#if isEventOrganiser}
 					<div class="admin-actions">

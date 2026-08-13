@@ -4397,6 +4397,8 @@ export const messages = {
 	"clubEvent.cancelNoOrder": "Nous n’avons trouvé aucune inscription à annuler.",
 	"clubEvent.cancelRefundFailed": "Le remboursement n’a pas pu être lancé. Veuillez réessayer ou contacter l’organisateur.",
 	"clubEvent.addToCalendar": "Ajouter au calendrier",
+	"clubEvent.addOccurrenceToCalendar": "Ajouter cette occurrence",
+	"clubEvent.addSeriesToCalendar": "Ajouter toute la série",
 	// Session planner (session_planner.md P1)
 	"session.title": "Séances",
 	"session.new": "Nouvelle séance",

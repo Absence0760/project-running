@@ -4411,6 +4411,8 @@ export const en = {
 	"clubEvent.cancelNoOrder": "We couldn't find a registration to cancel.",
 	"clubEvent.cancelRefundFailed": "The refund couldn't be started. Please try again, or contact the host.",
 	"clubEvent.addToCalendar": "Add to calendar",
+	"clubEvent.addOccurrenceToCalendar": "Add this occurrence",
+	"clubEvent.addSeriesToCalendar": "Add whole series",
 	// Session planner (session_planner.md P1)
 	"session.title": "Sessions",
 	"session.new": "New session",
