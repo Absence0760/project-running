@@ -613,3 +613,20 @@ Two items remain open, deliberately:
   tag-pinned, not SHA-pinned — the only such reference in the repo. It sits
   inside the commented-out TestFlight block, so it is not live; SHA-pin it
   when that block is uncommented.
+
+## `gym_exercise_set_history_batch` does not return `set_type` (2026-08-13)
+
+The batched history RPC (migration `20270323_001`) selects seven columns and
+`set_type` is not one of them, so every set the web gym progression surfaces
+read from history arrives with the column absent — the prescriber's warmup
+exclusion, which reads exactly that column, is inert on that path. The
+judgement no longer *rests* on it: `workingSets` narrows to the session's top
+completed weight, which drops a lighter ramp-up with or without a label
+(decisions § 602). But an explicitly-typed warmup logged AT the working weight
+still counts on web, where mobile (reading its local store, which carries the
+column) excludes it.
+
+- [ ] Add `set_type text` to the RPC's `returns table (...)` and its select
+  list, carry it through `GymSetWithDate` + the `fetchExerciseSetHistoryBatch`
+  mapping. **Needs a migration**, so it is out of scope for a round that may
+  not add one; it is additive and backward-compatible (a new trailing column).

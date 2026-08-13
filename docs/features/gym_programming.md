@@ -324,11 +324,13 @@ export function nextPrescription(input: ProgressionInput): ProgressionSuggestion
 | `targetSets` | `5` | five_by_five success threshold |
 | `targetReps` | `5` | five_by_five (fallback when no rep range) |
 | `maxConsecutiveMisses` | `3` | five_by_five deload trigger |
-| `consecutiveMisses` | `0` | five_by_five — caller supplies the running miss count |
+| `consecutiveMisses` | `0` | five_by_five deload counter — **derived, never authored**: `progressionParamsWithStreak` (progression_prefill) counts the exercise's most recent logged sessions that failed the bar and injects it. Nothing else supplies it, so before that derivation the deload branch was unreachable |
 | `deloadFactor` | `0.9` | five_by_five deload multiplier |
 | `percent` | — | percent_cycle (fraction of 1RM, e.g. `0.85`) |
 | `oneRmKg` | — | percent_cycle (training max / 1RM in kg) |
 | `targetRpe` | — | rpe_autoreg |
+
+**What counts as a judged set (`workingSets`, both platforms).** Every scheme's "did they hit it?" test runs over the completed sets — warmup-typed and rep-less rows dropped — **narrowed to those done at the session's top completed weight**. The narrowing is load-bearing because `gym_sets.set_type` only reaches the prescriber when the reader fetched it, and `gym_exercise_set_history_batch` (which feeds the web session-runner prefill) does not return the column: unlabelled, a 2-rep ramp-up failed the rep test and held the load forever, while three light sets of five padded a `five_by_five` into an unearned promotion. It is also the truer reading of "five sets of five" — a lighter back-off set is not one of the five. A session with no positive weight anywhere (bodyweight) keeps every completed set. See [decisions.md § 602](../architecture/decisions.md).
 
 A weight bump is guarded by `safeAdd` (never drives the load ≤ 0) and every load is `round1`-ed to 0.1 kg. There is no plate-rounding, no display-unit round-trip, and no `trainingMaxKg`/`weekIndex`/`percentWave` wave table — those belong to the deferred design below.
 
@@ -339,7 +341,7 @@ A weight bump is guarded by `safeAdd` (never drives the load ≤ 0) and every lo
 | **none** | Suggests nothing — all fields null, `reason: 'none'`. | any input → `{null, null, null, 'none'}`. |
 | **linear** | All completed sets ≥ the top rep target → `increase_weight` (+`incrementKg`); any short set (or no completed set / no rep target) → `hold` at the top weight. Bodyweight (no top weight) success raises the rep target instead → `increase_reps`. | Squat 3×5@100 all hit → **102.5, increase_weight**; one set @4 → **hold 100**. |
 | **double_progression** | Below `targetRepsMax` → `increase_reps` at the same weight; all sets at `targetRepsMax` → `increase_weight` (+`incrementKg`) and reps reset to `targetRepsMin`. Bodyweight at the top raises the ceiling (`targetRepsMax + 1`) instead of dropping load. | DB press 8–12: 3×8@60 → **increase_reps, 60, max 12**; 3×12@60 → **62.5, min=max=8**. |
-| **five_by_five** | Success = `≥ targetSets` completed sets all ≥ `targetReps` → `increase_weight`. `consecutiveMisses ≥ maxConsecutiveMisses` → `deload` (`× deloadFactor`). Otherwise `hold`. Bodyweight success bumps the rep target. | 5×5@80 hit → **82.5**; 4 hit + 1 short → **hold 80**; 3rd miss → **80×0.9 = 72, deload**. |
+| **five_by_five** | Success = `≥ targetSets` working sets all ≥ `targetReps` → `increase_weight`. `consecutiveMisses ≥ maxConsecutiveMisses` → `deload` (`× deloadFactor`). Otherwise `hold`. Bodyweight success bumps the rep target. | 5×5@80 hit → **82.5**; 4 hit + 1 short → **hold 80**; 3rd miss → **80×0.9 = 72, deload**. |
 | **percent_cycle** | Prescribes `round1(percent × oneRmKg)`. No prior top weight (first / bodyweight session) → `establish_baseline`; prescribed > last top weight → `increase_weight`; else `hold`. Missing/invalid `percent`/`oneRmKg` → `hold` at the last weight. | 0.85 × 150 = **127.5**; over a prior 120 → `increase_weight`; from a bodyweight log → `establish_baseline`. |
 | **rpe_autoreg** | Compares the max achieved `rpe` across completed sets to `params.targetRpe`. Below target → `increase_weight` (+`incrementKg`), or a rep-target bump for bodyweight; at/above target (or missing RPE data) → `hold`. | RPE 7/7.5 vs target 8 @100 → **102.5, increase_weight**; RPE 9/9.5 → **hold 100**. |
 
