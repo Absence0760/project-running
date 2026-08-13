@@ -470,7 +470,7 @@
 									<span class="down">−{Math.round(leg.legLossM)}</span>
 								{:else}—{/if}
 							</td>
-							<td class="num leg-pace" data-testid="roadbook-leg-pace">{legPace(i)}</td>
+							<td class="num" data-testid="roadbook-leg-pace">{legPace(i)}</td>
 							<td class="num">
 								{fmtSplitTime(leg.projectedElapsedS)}
 								{#if leg.projectedClockMin != null}<span class="clock">{fmtClock(leg.projectedClockMin)}</span>{/if}
@@ -634,9 +634,6 @@
 		display: block;
 		color: var(--color-text-secondary);
 		font-size: 0.8rem;
-	}
-	.leg-pace {
-		color: var(--color-text-secondary);
 	}
 	.cut {
 		display: inline-flex;
