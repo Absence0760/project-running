@@ -179,9 +179,13 @@ become a flat dumping ground: `core/` (Supabase queries + client),
   lib root.
 - **Import across folders with the `$lib/<folder>/<stem>` alias**, not deep
   relative `../../` chains; siblings within a folder use `./`.
-- When a **TS↔Dart parity helper** moves, update its path in the
-  `shared-library-syncer` agent table and the reference in this file in the
-  same change — they're how the lockstep convention is found.
+- A **TS↔Dart parity helper** is registered in two places: the root
+  `CLAUDE.md` lockstep bullet (what a session reads) and the
+  `shared-library-syncer` agent's table (what the agent works from). Adding,
+  moving or retiring one means editing both in the same change, plus the
+  reference in this file. `scripts/check_parity_pair_registry.mjs` fails the
+  PR when the two disagree in either direction, or when either points at a
+  file that no longer exists (decisions.md § 604).
 
 `src/lib/lib_structure_guards.test.ts` enforces all of the above (root
 cleanliness, parity-path existence, and the recursive `src/lib/**/*.test.ts`
