@@ -70,10 +70,12 @@ test.describe('/nutrition — diary day navigation', () => {
 			await expect(page.getByText(todayItem)).toBeHidden();
 			// A past day announces that logging back-fills rather than adds today.
 			await expect(page.getByTestId('diary-backfill-hint')).toBeVisible();
-			// The per-meal deep link follows the viewed day, not today.
+			// The per-meal deep link follows the viewed day, not today. Matched on
+			// the date prefix only — the seed account may carry other slots on
+			// that day, and which one sorts first is not this test's business.
 			await expect(page.locator('.meal-head-link').first()).toHaveAttribute(
 				'href',
-				`/nutrition/${localDate(-1)}/lunch`,
+				new RegExp(`^/nutrition/${localDate(-1)}/`),
 			);
 
 			// Back to today drops the query string entirely.
