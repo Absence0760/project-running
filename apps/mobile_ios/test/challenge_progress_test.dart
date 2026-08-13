@@ -110,6 +110,36 @@ void main() {
     ]);
   });
 
+  test('rankParticipants sorts the keyless team last, like the SQL nulls last',
+      () {
+    // challenge_leaderboard's team branch ends `order by rank, pt.team_club_id
+    // nulls last`, so the unaffiliated bucket (a deleted club, or a member who
+    // joined without picking one) trails the named clubs it ties with.
+    // Collapsing the null key to '' would put it first.
+    final ranked = rankParticipants([
+      const RankableEntry(value: 50),
+      const RankableEntry(teamClubId: 'red', value: 50),
+      const RankableEntry(teamClubId: 'blue', value: 50),
+    ]);
+    expect(ranked.map((r) => [r.entry.teamClubId, r.rank]).toList(), [
+      ['blue', 1],
+      ['red', 1],
+      [null, 1],
+    ]);
+  });
+
+  test('a keyless entry still outranks a lower value — nulls last is a tie-break only',
+      () {
+    final ranked = rankParticipants([
+      const RankableEntry(teamClubId: 'red', value: 10),
+      const RankableEntry(value: 90),
+    ]);
+    expect(ranked.map((r) => [r.entry.teamClubId, r.rank]).toList(), [
+      [null, 1],
+      ['red', 2],
+    ]);
+  });
+
   test('challengePace on_track at the even-pace line mid-window', () {
     final p = challengePace(50, 100, 0, 10 * _day, 5 * _day);
     expect(p.status, ChallengePaceStatus.active);

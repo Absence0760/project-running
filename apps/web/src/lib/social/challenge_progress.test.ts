@@ -129,6 +129,40 @@ test('rankParticipants falls back to team_club_id for team boards', () => {
 	);
 });
 
+test('rankParticipants sorts the keyless team last, like the SQL nulls last', () => {
+	// challenge_leaderboard's team branch ends `order by rank, pt.team_club_id
+	// nulls last`, so the unaffiliated bucket (a deleted club, or a member who
+	// joined without picking one) trails the named clubs it ties with. Collapsing
+	// the null key to '' would put it first.
+	const ranked = rankParticipants([
+		{ user_id: null, team_club_id: null, value: 50 },
+		{ user_id: null, team_club_id: 'red', value: 50 },
+		{ user_id: null, team_club_id: 'blue', value: 50 },
+	]);
+	assert.deepEqual(
+		ranked.map((r) => [r.entry.team_club_id, r.rank]),
+		[
+			['blue', 1],
+			['red', 1],
+			[null, 1],
+		],
+	);
+});
+
+test('a keyless entry still outranks a lower value — nulls last is a tie-break only', () => {
+	const ranked = rankParticipants([
+		{ user_id: null, team_club_id: 'red', value: 10 },
+		{ user_id: null, team_club_id: null, value: 90 },
+	]);
+	assert.deepEqual(
+		ranked.map((r) => [r.entry.team_club_id, r.rank]),
+		[
+			[null, 1],
+			['red', 2],
+		],
+	);
+});
+
 test('challengePace on_track at the even-pace line mid-window', () => {
 	const p = challengePace(50, 100, 0, 10 * DAY, 5 * DAY);
 	assert.equal(p.status, 'active');
