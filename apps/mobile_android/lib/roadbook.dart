@@ -127,6 +127,18 @@ class _Cumulative {
   _Cumulative(this.dist, this.gap, this.gain, this.loss, this.hasElevation);
 }
 
+/// Per-waypoint cumulative distance / grade-adjusted distance / gain / loss.
+///
+/// The grade behind [gap] is measured over an **anchored window** that
+/// accumulates horizontal distance until it clears [minSegmentM], the same walk
+/// `gradeAdjustedPaceSecPerKm` performs — not over each point-pair. Below the
+/// trusted length GPS/SRTM altitude noise dominates, so a short pair's grade
+/// can't be believed; the window carries the pair forward instead of discarding
+/// its climb. Zeroing each short pair's grade instead (as this did) collapsed
+/// effort allocation to even pace on any densely-sampled course — a GPX at 3 m
+/// spacing has no pair that clears 5 m — while [Roadbook.hasElevation] and
+/// [Roadbook.totalGainM] still reported the full climb, so nothing signalled
+/// the degradation.
 _Cumulative _walk(List<RoadbookWaypoint> waypoints) {
   final dist = <double>[0];
   final gap = <double>[0];
@@ -136,17 +148,34 @@ _Cumulative _walk(List<RoadbookWaypoint> waypoints) {
   for (final w in waypoints) {
     if (w.ele != null) eles.add(w.ele!);
   }
+
   for (var i = 1; i < waypoints.length; i++) {
     final a = waypoints[i - 1];
     final b = waypoints[i];
-    final horiz = _haversineM(a, b);
     final dEle = (a.ele != null && b.ele != null) ? b.ele! - a.ele! : 0.0;
-    final grade = horiz >= minSegmentM ? dEle / horiz : 0.0;
-    dist.add(dist[i - 1] + horiz);
-    gap.add(gap[i - 1] + horiz * gradeFactor(grade));
+    dist.add(dist[i - 1] + _haversineM(a, b));
     gain.add(gain[i - 1] + math.max(0.0, dEle));
     loss.add(loss[i - 1] + math.max(0.0, -dEle));
   }
+
+  var anchor = 0;
+  for (var i = 1; i < waypoints.length; i++) {
+    final span = dist[i] - dist[anchor];
+    final isLast = i == waypoints.length - 1;
+    if (span < minSegmentM && !isLast) continue;
+    final a = waypoints[anchor];
+    final b = waypoints[i];
+    // A trailing window that never cleared the trusted length is the last
+    // few metres of the track — grade it flat rather than amplify noise.
+    final factor = (span >= minSegmentM && a.ele != null && b.ele != null)
+        ? gradeFactor((b.ele! - a.ele!) / span)
+        : 1.0;
+    for (var k = anchor + 1; k <= i; k++) {
+      gap.add(gap[k - 1] + (dist[k] - dist[k - 1]) * factor);
+    }
+    anchor = i;
+  }
+
   return _Cumulative(dist, gap, gain, loss, eles.length >= 2);
 }
 
