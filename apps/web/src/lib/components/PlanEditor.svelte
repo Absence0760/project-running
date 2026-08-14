@@ -113,12 +113,27 @@
 		// Absent → the normal defaults below.
 		initialGoalEvent?: GoalEvent;
 		initialBeginnerWalkRun?: boolean;
+		// Preset the schedule so the plan's race week lands on a known race
+		// day (the race-calendar "train for this race" deep-link). The start
+		// date is already Sunday-aligned by `racePlanPreset`; it still goes
+		// through the same snap on change as a hand-typed one.
+		initialName?: string;
+		initialStartDate?: string;
+		initialWeeks?: number;
 	}
-	let { oncreated, oncancel, initialGoalEvent, initialBeginnerWalkRun }: Props = $props();
+	let {
+		oncreated,
+		oncancel,
+		initialGoalEvent,
+		initialBeginnerWalkRun,
+		initialName,
+		initialStartDate,
+		initialWeeks,
+	}: Props = $props();
 
-	let name = $state('');
+	let name = $state(initialName ?? '');
 	let goalEvent = $state<GoalEvent>(initialGoalEvent ?? 'distance_half');
-	let startDate = $state(defaultStart());
+	let startDate = $state(initialStartDate ?? defaultStart());
 	let daysPerWeek = $state(4);
 
 	let targetHours = $state<number | null>(null);
@@ -135,7 +150,7 @@
 	// Beginner / return-to-run: generate a C25K-style walk-run plan (persona #22).
 	let beginnerWalkRun = $state(initialBeginnerWalkRun ?? false);
 
-	let weekOverride = $state<number | null>(null);
+	let weekOverride = $state<number | null>(initialWeeks ?? null);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 

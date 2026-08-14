@@ -2,6 +2,8 @@
 	import { formatDistance } from '$lib/format/units.svelte';
 	import { formatDate } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
+	import { racePlanPreset } from '$lib/training/race_plan_preset';
+	import { todayISO } from '$lib/training/training';
 	import type { RaceListingResult } from '$lib/core/data';
 
 	interface Props {
@@ -15,6 +17,26 @@
 			? null
 			: m('races.kmAway', { distance: formatDistance(race.distance_m_away) })
 	);
+
+	// Only offer to build a plan when one can actually be built for this race
+	// — a past or too-close race gets no CTA rather than a link that lands on
+	// a refusal. The wizard re-derives from the same helper, so a link that
+	// goes stale in an open tab is caught there too.
+	let planHref = $derived.by(() => {
+		const preset = racePlanPreset({
+			raceDateIso: race.race_date,
+			distanceM: race.distance_m,
+			todayIso: todayISO()
+		});
+		if (!preset.ok) return null;
+		const q = new URLSearchParams({
+			type: 'training',
+			raceDate: race.race_date,
+			raceName: race.name
+		});
+		if (race.distance_m != null) q.set('raceDistance', String(race.distance_m));
+		return `/plans/new?${q}`;
+	});
 </script>
 
 <li class="card-elevated race" data-testid="race-card">
@@ -31,6 +53,11 @@
 		{/if}
 	</div>
 	<div class="race-actions">
+		{#if planHref}
+			<a class="btn btn-outline btn-sm" href={planHref} data-testid="race-train-for">
+				{m('races.trainForThis')}
+			</a>
+		{/if}
 		{#if race.entry_url}
 			<a
 				class="btn btn-outline btn-sm"
