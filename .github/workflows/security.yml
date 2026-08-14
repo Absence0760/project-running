@@ -38,7 +38,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   schedule:
     # Sundays at 06:00 UTC — catches new CodeQL queries / CVEs disclosed
     # since the last commit. Offset by ~24h from audit.yml / gitleaks /

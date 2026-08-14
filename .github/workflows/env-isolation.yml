@@ -2,7 +2,6 @@ name: Env isolation guard
 
 on:
   pull_request:
-    branches: [main]
     paths:
       - 'apps/web/scripts/env_isolation*'
       - 'apps/web/scripts/check_production_env*'

@@ -2,9 +2,25 @@ name: CI
 
 on:
   push:
+    # Only main. A push to a feature branch is validated by its PR, and a
+    # push run's job is to re-validate main itself after a merge.
     branches: [main]
+  # Deliberately NOT filtered to `branches: [main]`. A stacked PR — one
+  # based on another feature branch, which is the normal way to split a
+  # large change into reviewable pieces — matched no filter and so ran
+  # NOTHING: no CI gate, no gitleaks, no CodeQL. It reported two green
+  # checks (title lint + labeller, the only two workflows without a base
+  # filter) and looked healthy, which is worse than an obvious red.
+  # Branch protection only requires the gate on pushes to main, so such a
+  # PR could merge into its parent branch entirely unscanned.
+  #
+  # Gotcha worth knowing: retargeting an existing PR's base does NOT start
+  # a run. `pull_request` fires on opened / synchronize / reopened, and a
+  # base change is `edited`, which is not in that set. Adding `edited`
+  # would rebuild ~19 jobs on every description typo — against the runner
+  # budget the concurrency block below is already rationing — so it stays
+  # out. Push a commit, or close and reopen the PR, to force a run.
   pull_request:
-    branches: [main]
 
 concurrency:
   # A run is ~19 jobs at ~85-90 min, and every workflow in the repo competes
