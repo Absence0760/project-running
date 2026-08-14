@@ -580,7 +580,7 @@
 			? m('dash.today')
 			: viewDate === yesterdayIso
 				? m('nutrition.day.yesterday')
-				: formatDate(`${viewDate}T00:00:00`),
+				: formatDate(viewDate),
 	);
 </script>
 
@@ -923,7 +923,7 @@
 				<div class="card-head">
 					<span class="section-label">{isViewingToday
 						? m('nutrition.weeklyTrend')
-						: m('nutrition.day.trendEnding', { date: formatDate(`${viewDate}T00:00:00`) })}</span>
+						: m('nutrition.day.trendEnding', { date: formatDate(viewDate) })}</span>
 					<div class="trend-meta">
 						{#if trendSeries.avg > 0}<span class="card-meta">{trendSeries.avgLabel}</span>{/if}
 						{#if weekSummary.deltaPerDay !== null}
