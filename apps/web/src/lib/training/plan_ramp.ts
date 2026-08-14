@@ -47,6 +47,11 @@ export interface RunForVolume {
 export interface RecentVolume {
 	/// Mean weekly running distance (metres) across the chronic window.
 	weeklyM: number;
+	/// Running distance (metres) in the most recent 7-day window alone — the
+	/// acute half of an ACWR pair whose chronic half is `weeklyM`. Same
+	/// traversal and same rules, so the two can never be reduced from
+	/// different run sets.
+	acuteM: number;
 	/// How many of the trailing windows carried at least one counted run.
 	activeWeeks: number;
 }
@@ -62,6 +67,7 @@ export interface RecentVolume {
 /// from anchoring fitness.
 export function recentRunVolume(runs: RunForVolume[], nowMs: number): RecentVolume {
 	let totalM = 0;
+	let acuteM = 0;
 	const active = new Set<number>();
 	for (const r of runs) {
 		if (r.activity_type === 'cycle') continue;
@@ -75,9 +81,10 @@ export function recentRunVolume(runs: RunForVolume[], nowMs: number): RecentVolu
 		const week = Math.floor(age / (7 * DAY_MS));
 		if (week >= CHRONIC_WINDOW_WEEKS) continue;
 		totalM += distance;
+		if (week === 0) acuteM += distance;
 		active.add(week);
 	}
-	return { weeklyM: totalM / CHRONIC_WINDOW_WEEKS, activeWeeks: active.size };
+	return { weeklyM: totalM / CHRONIC_WINDOW_WEEKS, acuteM, activeWeeks: active.size };
 }
 
 export type PlanRampVerdict = 'unknown' | 'under' | 'matched' | 'elevated' | 'high';
@@ -143,7 +150,10 @@ export function peakWeekVolumeM(weeks: { target_volume_m: number }[]): number {
 export function planRampCheck(
 	openingWeekM: number,
 	peakWeekM: number,
-	recent: RecentVolume,
+	// Only the chronic half is consumed here: the plan's own opening week is
+	// the acute term, so `acuteM` (what the runner has actually just done)
+	// would be the wrong numerator for a question about a hypothetical plan.
+	recent: Pick<RecentVolume, 'weeklyM' | 'activeWeeks'>,
 ): PlanRampCheck {
 	const base = {
 		openingWeekM,

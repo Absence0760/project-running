@@ -55,6 +55,7 @@
 	import ConsistencyCard from '$lib/components/ConsistencyCard.svelte';
 	import IntensityBalanceCard from '$lib/components/IntensityBalanceCard.svelte';
 	import TrendDeltasCard from '$lib/components/TrendDeltasCard.svelte';
+	import LoadRampCard from '$lib/components/LoadRampCard.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
@@ -1532,6 +1533,18 @@
 		     the sample is too small. Pure derivation in
 		     lib/training/intensity.ts. Backlog #11. -->
 		<IntensityBalanceCard runs={filteredRuns} />
+
+		<!-- Training-load ramp — the runner's own acute:chronic workload ratio
+		     and its injury-risk band. The same ACWR policy the coach roster
+		     classifies athletes through (lib/training/coach_load.ts), finally
+		     shown to the runner it describes; most runners have no coach, so
+		     this signal had no reader. Distinct from the readiness ring, which
+		     scores TODAY (form + sleep + resting HR) rather than the last
+		     month's ramp. Scoped to filteredRuns like its neighbours;
+		     self-hides below MIN_ACTIVE_WEEKS of history rather than dividing
+		     by a base that isn't there. Pure derivation in
+		     lib/training/self_load.ts. -->
+		<LoadRampCard runs={filteredRuns} />
 
 		<!-- Mileage chart -->
 		<section class="card-elevated">
