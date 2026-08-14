@@ -92,6 +92,24 @@ Two improvements over "best single run, one distance":
 
 Pure — reuses `riegelPredict` + `predictionConfidence` so the numbers can't drift from the engine. Returns `null` on an empty pool (the caller hides the surface — fail-closed, same as the Fitness card). **Surfaced on web** via `RacePredictorCard.svelte` on `/dashboard` (below the training-load chart), gated by the same `qualifyingRuns` filter the Fitness card uses (recording / reliable import, ≥ 1.5 km, sane duration, not treadmill — so it never anchors to a belt estimate). TS↔Dart parity pair, 11 mirror tests each; the Dart twin is ported for a future mobile surface (no mobile card today — see followups.md #11). Backlog #11.
 
+## Train for a race on the calendar (`race_plan_preset.ts`, web-only)
+
+The race calendar (`/races`) and this generator were two shipped features that never spoke: a runner could find their goal race and, months later, import the result, but nothing carried them from a race date to a plan built around it. `racePlanPreset({ raceDateIso, distanceM, todayIso })` closes that, and the whole job is the three pieces of arithmetic in between:
+
+- **A Sunday start.** `generatePlan` hard-anchors day 0 of the start week to the Sunday long run (see `plan_start.ts`), so any derived start date must be a Sunday or every day-role shifts.
+- **Race day inside the final `race` week.** The generated plan's last week spans `[start + (weeks-1)*7, start + weeks*7 - 1]`. Anchoring that week to the Sunday **on or before** race day puts race day inside it whatever weekday the race falls on — a Saturday race and the Sunday before it produce the same plan.
+- **Weeks capped at the goal's default.** `min(weeks available, defaultPlanWeeks(goal))`, so a marathon eight months out gets the standard 16-week build starting in four months, not a 32-week grind. This is why the start date is derived backwards from race week rather than forwards from today.
+
+Spans are counted in whole UTC epoch-days, not by millisecond difference — a window crossing a DST transition is 167 or 169 hours and would shift the anchor by a week (the same trap `plan_week.ts` documents).
+
+It **refuses** rather than proposing when it can't do the job: `past` (race day has been and gone, or is today), `too_soon` (fewer than `RACE_PLAN_MIN_WEEKS` = 4 whole weeks remain — the wizard's own `min` on the week field), or `invalid` (unusable date). `RaceCalendarCard` hides the CTA on a refusal; `/plans/new` honours it a second time — a link can go stale in an open tab or arrive hand-edited — and renders a note saying why the dates are the usual defaults rather than ignoring the link in silence.
+
+`goalEventForDistance` matches the four standard rungs within 2 % (listings round — "21.1 km"). Anything else, a 50k or a 10-miler, returns `null` and preselects no goal event: the wizard has no custom-distance input, so snapping a 50k to the nearest rung wouldn't be an imprecise label, it would be a plan for a different race. The dates are still preset — half an answer, and the half that's defensible.
+
+The link carries the **race's facts** (`/plans/new?raceDate=&raceDistance=&raceName=`), not the derived dates, so the wizard re-derives against today and a bookmarked link can't resurrect a start date that is now in the past. `PlanEditor` receives them as `initialName` / `initialStartDate` / `initialWeeks` beside the existing `initialGoalEvent`.
+
+**Web-only.** Mobile has both ends (`races_screen.dart`, `plan_new_screen.dart`) but not the bridge; the mirror is tracked in `followups.md § Mobile` rather than written as a Dart twin with no caller. 16 unit tests in `race_plan_preset.test.ts`, wiring pinned by `tests-e2e/races/train-for-this-race.spec.ts`. See `decisions.md § 606`.
+
 ## Race-day goal feasibility (`race_day.ts` #goalFeasibility)
 
 The plan-detail `RaceDayPanel` (shown within 21 days of the goal race) used to short-circuit to the runner's goal time whenever one was set — recent fitness was ignored, so a runner never learned whether the goal they typed months ago is still in reach. It now **always** computes the fitness-derived Riegel projection off the best qualifying recent effort (≥ 1 km, last 90 days) and, when a goal time is set, grades the goal against it via `goalFeasibility(goalSec, predictedSec)`:
