@@ -27,7 +27,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   schedule:
     # Weekly full-history sweep. The push / PR triggers above only
     # diff against the base, so a secret that landed on a forgotten

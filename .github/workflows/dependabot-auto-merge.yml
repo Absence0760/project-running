@@ -18,6 +18,12 @@ name: Dependabot auto-merge
 
 on:
   pull_request_target:
+    # This filter is a safety scope, NOT the base-branch bug the other
+    # workflows carried (their `pull_request: branches: [main]` filters were
+    # removed so a stacked PR is still gated). This job MERGES code with
+    # `contents: write`, so it stays scoped to the one base it is reasoned
+    # about: dependabot only ever targets main, so widening gains nothing
+    # and would let a bot PR auto-merge into a branch nobody reviewed.
     branches: [main]
 
 permissions:

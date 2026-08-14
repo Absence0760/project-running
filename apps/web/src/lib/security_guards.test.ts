@@ -2929,3 +2929,44 @@ test('the public plan library reader does not select the private template column
 		);
 	}
 });
+
+// A stacked PR — one based on another feature branch rather than on main —
+// matched no `branches: [main]` filter and therefore ran NOTHING: no CI gate,
+// no secret scan, no CodeQL. It showed two green checks (title lint +
+// labeller, the only two workflows without a base filter) and read as
+// healthy, which is worse than an obvious red, and branch protection only
+// requires the gate on pushes to main. The filters are gone; this pins that
+// they stay gone, because the failure mode is invisible from the PR page.
+//
+// `dependabot-auto-merge.yml` is deliberately exempt: it is a
+// `pull_request_target` job with `contents: write` that MERGES code, so its
+// base filter is a safety scope rather than this bug.
+test('no PR-triggered workflow is scoped to a base branch, so a stacked PR is still gated', () => {
+	const dir = resolve(__dirname, '../../../..', '.github/workflows');
+	const exempt = new Set(['dependabot-auto-merge.yml']);
+	const offenders: string[] = [];
+	let checked = 0;
+
+	for (const name of readdirSync(dir)) {
+		if (!/\.ya?ml$/.test(name) || exempt.has(name)) continue;
+		const src = readFileSync(resolve(dir, name), 'utf-8');
+		// The `on:` block only, so a `branches:` key inside a job step
+		// (a checkout ref, say) cannot be mistaken for a trigger filter.
+		const on = /^on:\n((?:[ \t].*\n|\n)*)/m.exec(src)?.[1];
+		if (!on) continue;
+		const pr = /^ {2}pull_request(_target)?:\n((?: {4}.*\n|\n)*)/m.exec(on);
+		if (!pr) continue;
+		checked++;
+		if (/^ {4}branches:/m.test(pr[2])) offenders.push(name);
+	}
+
+	assert.ok(checked >= 5, `expected several PR-triggered workflows, found ${checked}`);
+	assert.deepEqual(
+		offenders,
+		[],
+		`these workflows filter their pull_request trigger to a base branch, so a PR ` +
+			`stacked on another feature branch skips them entirely: ${offenders.join(', ')}. ` +
+			`Remove the \`branches:\` key under \`pull_request:\` (keep it under \`push:\`), ` +
+			`or add the file to the exempt set with a comment saying why.`,
+	);
+});
