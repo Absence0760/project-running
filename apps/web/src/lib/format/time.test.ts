@@ -95,3 +95,83 @@ test('formatDate/formatDateShort follow the active format locale set by the runt
 		setActiveFormatLocale(undefined); // reset so other tests see the host default
 	}
 });
+
+// ─────────── date-only strings are calendar dates, not instants ───────────
+//
+// `new Date('2026-11-15')` is UTC midnight per ECMA-262, so rendering it
+// through a local-time formatter showed the day before everywhere west of
+// Greenwich — a race listed on the 15th read as the 14th across the Americas.
+// The runner sets the timezone per case so these hold on any CI host.
+
+function withTz<T>(tz: string, fn: () => T): T {
+	const prior = process.env.TZ;
+	process.env.TZ = tz;
+	try {
+		return fn();
+	} finally {
+		if (prior === undefined) delete process.env.TZ;
+		else process.env.TZ = prior;
+	}
+}
+
+test('a date-only string renders its own calendar day in every timezone', () => {
+	// Spanning the full offset range, both signs, including the extremes.
+	for (const tz of [
+		'Pacific/Midway', // UTC-11
+		'America/Los_Angeles',
+		'America/New_York',
+		'UTC',
+		'Europe/Berlin',
+		'Asia/Tokyo',
+		'Pacific/Kiritimati', // UTC+14
+	]) {
+		withTz(tz, () => {
+			assert.equal(formatDate('2026-11-15', 'en'), 'Nov 15, 2026', tz);
+			assert.equal(formatDateShort('2026-11-15', 'en'), 'Nov 15', tz);
+		});
+	}
+});
+
+test('a date-only string on a month and year boundary does not roll backwards', () => {
+	withTz('America/New_York', () => {
+		assert.equal(formatDate('2026-01-01', 'en'), 'Jan 1, 2026');
+		assert.equal(formatDate('2026-03-01', 'en'), 'Mar 1, 2026');
+		// A leap day is the case where a backwards roll lands on a date that
+		// exists in one year and not the next.
+		assert.equal(formatDate('2028-02-29', 'en'), 'Feb 29, 2028');
+	});
+});
+
+test('a full timestamp keeps its timezone conversion', () => {
+	// The other half of the contract, and the one a "simplification" would
+	// break: an instant late in the UTC day genuinely belongs to the next
+	// calendar day east of Greenwich, and to the same one west of it.
+	const lateUtc = '2026-11-15T23:30:00Z';
+	withTz('Asia/Tokyo', () => assert.equal(formatDate(lateUtc, 'en'), 'Nov 16, 2026'));
+	withTz('America/New_York', () => assert.equal(formatDate(lateUtc, 'en'), 'Nov 15, 2026'));
+
+	// And an instant early in the UTC day belongs to the previous day west of it.
+	const earlyUtc = '2026-11-15T02:30:00Z';
+	withTz('America/New_York', () => assert.equal(formatDate(earlyUtc, 'en'), 'Nov 14, 2026'));
+	withTz('Asia/Tokyo', () => assert.equal(formatDate(earlyUtc, 'en'), 'Nov 15, 2026'));
+});
+
+test('a local-midnight timestamp is unchanged by the fix', () => {
+	// The two nutrition call sites used to append `T00:00:00` by hand to dodge
+	// the UTC parse. That form is a local instant and must keep rendering the
+	// same day the bare date now does, so removing the workaround is a no-op.
+	for (const tz of ['America/New_York', 'UTC', 'Asia/Tokyo']) {
+		withTz(tz, () => {
+			assert.equal(formatDate('2026-11-15T00:00:00', 'en'), formatDate('2026-11-15', 'en'), tz);
+		});
+	}
+});
+
+test('formatRelativeTime measures a date-only string from local midnight', () => {
+	withTz('America/New_York', () => {
+		// Local midnight on the 15th, read 3 hours later, is "3h ago" — not the
+		// 8h a UTC-midnight parse would report in this zone.
+		const threeHoursIn = Date.parse('2026-11-15T08:00:00Z'); // 03:00 in NY
+		assert.equal(formatRelativeTime('2026-11-15', threeHoursIn, 'en'), '3h ago');
+	});
+});

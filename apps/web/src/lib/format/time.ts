@@ -58,7 +58,7 @@ export function formatRelativeTime(
 	now: number = Date.now(),
 	locale: string | undefined = activeLocale,
 ): string {
-	const date = new Date(iso);
+	const date = calendarDate(iso);
 	const ms = now - date.getTime();
 	const mins = Math.floor(ms / 60_000);
 	if (mins < 1) return rtf(locale, 'auto').format(0, 'second');
@@ -88,9 +88,31 @@ export function formatDuration(seconds: number): string {
 	return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Parse for *rendering*: a bare `yyyy-mm-dd` is a calendar date, not an
+ * instant.
+ *
+ * ECMA-262 reads a date-only form as UTC midnight, so pushing it back through
+ * a local-time formatter renders the day before everywhere west of Greenwich —
+ * a race on the 15th shows as the 14th in the Americas, and the plan built for
+ * it disagrees with the calendar it came from. Building the Date from the
+ * calendar components lands on local midnight instead, so the day, month and
+ * year that come out are the ones that went in, in every timezone.
+ *
+ * A full timestamp *is* a real instant and must keep its timezone conversion —
+ * a run recorded at 23:30 UTC belongs to the next day in Tokyo — so anything
+ * that isn't date-only falls through to the normal parse untouched.
+ */
+function calendarDate(iso: string): Date {
+	const m = DATE_ONLY.exec(iso);
+	return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
+}
+
 /** Localized `D Mon YYYY` date in the active UI locale (W-12). */
 export function formatDate(iso: string, locale: string | undefined = activeLocale): string {
-	return new Date(iso).toLocaleDateString(locale, {
+	return calendarDate(iso).toLocaleDateString(locale, {
 		day: 'numeric',
 		month: 'short',
 		year: 'numeric',
@@ -99,7 +121,7 @@ export function formatDate(iso: string, locale: string | undefined = activeLocal
 
 /** Localized `D Mon` date, no year, in the active UI locale (W-12). */
 export function formatDateShort(iso: string, locale: string | undefined = activeLocale): string {
-	return new Date(iso).toLocaleDateString(locale, {
+	return calendarDate(iso).toLocaleDateString(locale, {
 		day: 'numeric',
 		month: 'short',
 	});
