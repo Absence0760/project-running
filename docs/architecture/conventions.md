@@ -1226,6 +1226,30 @@ fails the mobile suite on every unmarked site, because this class had already
 been fixed four times in isolation before the fifth bought the guard
 (`decisions.md § 589`).
 
+## Parse a date-only string as a calendar day, an ISO timestamp as an instant
+
+`new Date('2026-11-15')` is **UTC midnight** — ECMA-262 gives the date-only form
+that special case — so rendering it through any local-time formatter shows the
+day before at every negative offset. A `date` column names a calendar day and
+must read the same in Auckland and Los Angeles; a `timestamptz` names an
+instant and genuinely belongs to different days in different places.
+
+Web's shared `formatDate` / `formatDateShort` / `formatRelativeTime`
+(`$lib/format/time`) now handle both: a bare `yyyy-mm-dd` is built from its
+calendar components (local midnight), anything else falls through to the normal
+parse. **Prefer them over a hand-rolled parse** — the older idioms
+(`new Date(iso + 'T00:00:00')`, a `split('-')` + `new Date(y, m-1, d)` helper)
+are correct but were each invented locally, and the one place that *didn't*
+hand-roll it was the shared helper every call site trusted (`decisions.md § 607`).
+
+When you must parse inline, `T00:00:00` (no `Z`) is the shortest correct form.
+Never format a `date` column with a bare `new Date(iso)`.
+
+Timezone-dependent behaviour is invisible under the e2e suite's global
+`timezoneId: 'UTC'`, so a test for this class must set the zone itself —
+`process.env.TZ` per case in a unit test, `test.use({ timezoneId })` in
+Playwright — and must be confirmed to fail against the unfixed code.
+
 ## Docs hygiene
 
 Every change that affects documented behaviour updates the docs **in the same turn as the code change**. See the root [`CLAUDE.md`](../../CLAUDE.md) § "Docs hygiene" for the full rule and checklist. Shortest version: if a doc describes the old behaviour, it is wrong the moment you change the code — fix it now, not later.

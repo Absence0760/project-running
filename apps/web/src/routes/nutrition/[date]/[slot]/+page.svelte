@@ -73,7 +73,7 @@
 		<p class="empty">{m('nutritionMeal.invalidSlot')}</p>
 	{:else}
 		<header class="page-header">
-			<p class="kicker">{formatDateShort(`${date}T00:00:00`)}</p>
+			<p class="kicker">{formatDateShort(date)}</p>
 			<h1>{m(`nutrition.slot_${slot}`)}</h1>
 		</header>
 
@@ -137,7 +137,7 @@
 								<div class="trend-bar" style="height: {Math.round((t.calories / maxTrend) * 100)}%"></div>
 							</div>
 							<span class="trend-cal">{t.calories}</span>
-							<span class="trend-day">{formatDateShort(`${t.date}T00:00:00`)}</span>
+							<span class="trend-day">{formatDateShort(t.date)}</span>
 						</div>
 					{/each}
 				</div>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatISO } from '$lib/training/training';
+	import { formatISO, todayISO } from '$lib/training/training';
+	import { racePlanPreset } from '$lib/training/race_plan_preset';
 	import { goto, afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
@@ -19,6 +20,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { TrainingPlan } from '$lib/types';
+	import type { MessageKey } from '$lib/i18n/messages';
 
 	interface TemplateOption {
 		template: TrainingPlan;
@@ -54,6 +56,45 @@
 		goalParam && (PRIMARY_GOAL_VALUES as readonly string[]).includes(goalParam)
 			? planPresetForGoal(goalParam as PrimaryGoal)
 			: null;
+
+	// `?raceDate=&raceName=&raceDistance=` (the race calendar's "train for
+	// this race" CTA) sizes the plan so its final race week contains race
+	// day. The URL carries the race's facts rather than the derived dates so
+	// the arithmetic has one home — a hand-edited or bookmarked link is
+	// re-derived against today, not replayed stale.
+	const raceDateParam = $page.url.searchParams.get('raceDate');
+	const raceNameParam = $page.url.searchParams.get('raceName');
+	// Absent and empty both coerce to 0 through `Number`, so the parse has to
+	// test the string, not the number — an "is this present" check written as
+	// `Number.isFinite` silently reads a missing param as a zero-metre race.
+	const raceDistanceParam = $page.url.searchParams.get('raceDistance')?.trim();
+	const raceDistanceM = (() => {
+		if (!raceDistanceParam) return null;
+		const n = Number(raceDistanceParam);
+		return Number.isFinite(n) ? n : null;
+	})();
+	const racePreset = raceDateParam
+		? racePlanPreset({
+				raceDateIso: raceDateParam,
+				distanceM: raceDistanceM,
+				todayIso: todayISO(),
+			})
+		: null;
+	// A refusal still renders the wizard on its own defaults — we just say
+	// why the dates aren't the race's, rather than silently ignoring the link.
+	// The name field is `maxlength="80"`; a programmatic bind bypasses that,
+	// so clamp what the URL hands us to the same budget.
+	const initialName =
+		racePreset?.ok && raceNameParam?.trim() ? raceNameParam.trim().slice(0, 80) : undefined;
+
+	const raceRefusalKey: MessageKey | null =
+		!racePreset || racePreset.ok
+			? null
+			: racePreset.reason === 'past'
+				? 'plansNew.racePast'
+				: racePreset.reason === 'too_soon'
+					? 'plansNew.raceTooSoon'
+					: 'plansNew.raceUnreadable';
 
 	let kind = $state<PlanKind>(initialKind());
 
@@ -368,11 +409,26 @@
 
 	<div class="or-rule"><span>{m('plansNew.orFromScratch')}</span></div>
 
+	{#if racePreset?.ok}
+		<p class="picker-hint race-preset-note" data-testid="race-preset-note">
+			{m('plansNew.raceAnchored', { weeks: String(racePreset.preset.weeks) })}
+		</p>
+	{:else if raceRefusalKey}
+		<p class="picker-hint race-preset-note" data-testid="race-preset-refusal">
+			{m(raceRefusalKey)}
+		</p>
+	{/if}
+
 	<PlanEditor
 		oncreated={(plan) => goto(`/plans/${plan.id}`)}
 		oncancel={handleCancel}
-		initialGoalEvent={goalPreset?.goalEvent}
+		initialGoalEvent={racePreset?.ok
+			? (racePreset.preset.goalEvent ?? undefined)
+			: goalPreset?.goalEvent}
 		initialBeginnerWalkRun={goalPreset?.beginnerWalkRun}
+		{initialName}
+		initialStartDate={racePreset?.ok ? racePreset.preset.startDate : undefined}
+		initialWeeks={racePreset?.ok ? racePreset.preset.weeks : undefined}
 	/>
 	{:else if kind === 'session'}
 		<div class="form-branch">

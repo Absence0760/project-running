@@ -16,10 +16,44 @@ export type GuideFrontmatter = {
 	category: string;
 	slug: string;
 	order: number;
-	updated: string;
+	/// Never the plain `yyyy-mm-dd` the author typed. mdsvex parses
+	/// frontmatter with js-yaml's default schema, which resolves a bare
+	/// `YYYY-MM-DD` scalar through the YAML 1.1 `!!timestamp` tag into a Date
+	/// at UTC midnight — and then JSON-serialises the metadata export, so
+	/// what reaches the app is the string `2026-06-15T00:00:00.000Z`. The
+	/// type used to claim a bare date string and every reader believed it.
+	/// Run it through `frontmatterDate` at the index boundary.
+	updated: string | Date;
 	heroImage?: string;
 	cta?: { feature: string };
 };
+
+const UTC_MIDNIGHT = /^(\d{4}-\d{2}-\d{2})T00:00:00(?:\.000)?Z$/;
+
+/**
+ * Normalise a frontmatter date to the `yyyy-mm-dd` the author actually typed.
+ *
+ * Two shapes arrive, both from the same cause. A reader working off raw
+ * frontmatter gets js-yaml's `Date`; the compiled module gets that Date
+ * JSON-serialised to `2026-06-15T00:00:00.000Z`. Either way the value is UTC
+ * midnight, and rendering UTC midnight through a local formatter walks the day
+ * backwards at every negative offset — the bug decisions § 607 closed for the
+ * shared formatters, arriving here by a different road.
+ *
+ * The Date branch reads **UTC** getters for exactly that reason. The string
+ * branch only strips a suffix that is precisely UTC midnight: a value carrying
+ * a real time of day is a genuine instant and must not be flattened into a
+ * calendar day. Anything else passes through untouched.
+ */
+export function frontmatterDate(value: string | Date | null | undefined): string {
+	if (value instanceof Date) {
+		if (Number.isNaN(value.getTime())) return '';
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
+	}
+	if (!value) return '';
+	return UTC_MIDNIGHT.exec(value)?.[1] ?? value;
+}
 
 export type GuideComponent = Component;
 
