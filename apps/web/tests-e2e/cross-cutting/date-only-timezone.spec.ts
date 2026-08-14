@@ -58,6 +58,23 @@ test.describe('date-only columns render their own calendar day', () => {
 		});
 	});
 
+	test.describe('a Learn guide date, west of Greenwich', () => {
+		// A different source shape than the race listing above, and one the
+		// formatter fix alone did NOT cover: mdsvex hands `updated` over as a
+		// js-yaml !!timestamp Date, not the string its type claimed, so the
+		// formatter's date-only branch never saw it. Anonymous — /learn is
+		// public and prerendered.
+		test.use({ storageState: { cookies: [], origins: [] }, timezoneId: 'America/Los_Angeles' });
+
+		test('a guide dated the 15th does not render as the 14th', async ({ page }) => {
+			await page.goto('/learn/choosing-running-shoes');
+			const updated = page.locator('.updated');
+			await expect(updated).toBeVisible({ timeout: 10_000 });
+			await expect(updated).toContainText('15 Jun 2026');
+			await expect(updated).not.toContainText('14 Jun 2026');
+		});
+	});
+
 	test.describe('east of Greenwich', () => {
 		test.use({ storageState: USER_A.storageStatePath, timezoneId: 'Asia/Tokyo' });
 

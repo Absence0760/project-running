@@ -8,6 +8,7 @@ import {
 	localizedGuideMeta,
 	guidesByCategory,
 	nonEmptyCategories,
+	frontmatterDate,
 	type GuideIndexEntry,
 } from './guides_index';
 import { CATEGORIES } from './categories';
@@ -144,4 +145,60 @@ test('nonEmptyCategories — only categories with ≥1 guide, in catalogue order
 
 test('nonEmptyCategories — empty index yields no sections', () => {
 	assert.deepEqual(nonEmptyCategories([]), []);
+});
+
+// ─── frontmatter dates arrive as Dates, not the strings the type claimed ───
+//
+// mdsvex parses frontmatter with js-yaml's default schema, which resolves a
+// bare `YYYY-MM-DD` through the YAML 1.1 !!timestamp tag into a Date at UTC
+// midnight. Every reader believed the `string` annotation, so a guide's
+// "last updated" line rendered a day early at any negative UTC offset — the
+// same class decisions.md § 607 fixed in the shared formatters.
+
+test('frontmatterDate reads a YAML timestamp back as the day the author typed', () => {
+	assert.equal(frontmatterDate(new Date(Date.UTC(2026, 5, 15))), '2026-06-15');
+	// Zero-padding on both fields.
+	assert.equal(frontmatterDate(new Date(Date.UTC(2026, 0, 2))), '2026-01-02');
+});
+
+test('frontmatterDate reads UTC components, not local ones', () => {
+	// The whole point: local getters on a UTC-midnight Date hand back the
+	// previous day west of Greenwich, which is the bug being closed.
+	const prior = process.env.TZ;
+	process.env.TZ = 'America/New_York';
+	try {
+		assert.equal(frontmatterDate(new Date(Date.UTC(2026, 5, 15))), '2026-06-15');
+		assert.equal(frontmatterDate(new Date(Date.UTC(2026, 0, 1))), '2026-01-01');
+	} finally {
+		if (prior === undefined) delete process.env.TZ;
+		else process.env.TZ = prior;
+	}
+});
+
+test('frontmatterDate passes a string through and degrades on junk', () => {
+	assert.equal(frontmatterDate('2026-06-15'), '2026-06-15');
+	assert.equal(frontmatterDate(''), '');
+	assert.equal(frontmatterDate(null), '');
+	assert.equal(frontmatterDate(undefined), '');
+	assert.equal(frontmatterDate(new Date('nonsense')), '');
+});
+
+test('frontmatterDate unwraps the serialised UTC-midnight form mdsvex emits', () => {
+	// The shape that actually reaches the built app: js-yaml's Date, run
+	// through JSON.stringify by mdsvex's metadata export.
+	assert.equal(frontmatterDate('2026-06-15T00:00:00.000Z'), '2026-06-15');
+	assert.equal(frontmatterDate('2026-06-15T00:00:00Z'), '2026-06-15');
+});
+
+test('frontmatterDate leaves a real time of day alone', () => {
+	// An instant is not a calendar day, and flattening one would be the same
+	// class of error in the other direction.
+	for (const iso of [
+		'2026-06-15T09:30:00.000Z',
+		'2026-06-15T00:00:00.001Z',
+		'2026-06-15T00:00:00',
+		'2026-06-15T00:00:00+02:00',
+	]) {
+		assert.equal(frontmatterDate(iso), iso, iso);
+	}
 });

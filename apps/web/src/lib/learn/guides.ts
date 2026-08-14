@@ -53,7 +53,7 @@ function buildIndex(): GuideIndexEntry[] {
 			description: fm.description,
 			category: fm.category,
 			order: fm.order,
-			updated: fm.updated,
+			updated: idx.frontmatterDate(fm.updated),
 			heroImage: fm.heroImage,
 			cta: fm.cta,
 			component: mod.default,
