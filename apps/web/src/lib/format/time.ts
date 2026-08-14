@@ -107,7 +107,13 @@ const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
  */
 function calendarDate(iso: string): Date {
 	const m = DATE_ONLY.exec(iso);
-	return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso);
+	if (!m) return new Date(iso);
+	const year = Number(m[1]);
+	const d = new Date(year, Number(m[2]) - 1, Number(m[3]));
+	// The (year, month, day) constructor maps 0-99 into 1900-1999; a
+	// four-digit `0026` must stay year 26, not become 1926.
+	d.setFullYear(year);
+	return d;
 }
 
 /** Localized `D Mon YYYY` date in the active UI locale (W-12). */

@@ -175,3 +175,12 @@ test('formatRelativeTime measures a date-only string from local midnight', () =>
 		assert.equal(formatRelativeTime('2026-11-15', threeHoursIn, 'en'), '3h ago');
 	});
 });
+
+test('a four-digit year below 100 is not remapped into the 1900s', () => {
+	// The (year, month, day) Date constructor treats 0-99 as 1900-1999. Only
+	// reachable from malformed input, but the parse must not invent a century.
+	withTz('America/New_York', () => {
+		assert.match(formatDate('0026-06-15', 'en'), /\b26\b/);
+		assert.doesNotMatch(formatDate('0026-06-15', 'en'), /1926/);
+	});
+});
