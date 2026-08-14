@@ -109,6 +109,24 @@ test.describe('/races — train for this race', () => {
 		await expect(card.getByTestId('race-train-for')).toHaveCount(0);
 	});
 
+	test('the distance param picks the goal event when present', async ({ page }) => {
+		// 10K differs from the wizard's own default, so this proves the param
+		// is read rather than coinciding with it.
+		await page.goto(`/plans/new?type=training&raceDate=${goalDate}&raceDistance=10000`);
+		await expect(page.getByTestId('race-preset-note')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByLabel('Goal race')).toHaveValue('distance_10k');
+	});
+
+	test('a link with no distance presets the dates and leaves the goal alone', async ({ page }) => {
+		// An absent (or empty) param coerces to 0 through `Number`, so this is
+		// the case a presence check written on the number silently gets wrong.
+		await page.goto(`/plans/new?type=training&raceDate=${goalDate}&raceDistance=`);
+		await expect(page.getByTestId('race-preset-note')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByLabel('Goal race')).toHaveValue('distance_half'); // untouched default
+		await expect(page.getByLabel('Override total weeks')).toHaveValue('12');
+		await expect(page.getByLabel(/first week begins/i)).toHaveValue(expectedStart);
+	});
+
 	test('a hand-edited link to a past race says so instead of silently defaulting', async ({
 		page,
 	}) => {

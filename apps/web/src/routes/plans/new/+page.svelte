@@ -64,11 +64,19 @@
 	// re-derived against today, not replayed stale.
 	const raceDateParam = $page.url.searchParams.get('raceDate');
 	const raceNameParam = $page.url.searchParams.get('raceName');
-	const raceDistanceRaw = Number($page.url.searchParams.get('raceDistance'));
+	// Absent and empty both coerce to 0 through `Number`, so the parse has to
+	// test the string, not the number — an "is this present" check written as
+	// `Number.isFinite` silently reads a missing param as a zero-metre race.
+	const raceDistanceParam = $page.url.searchParams.get('raceDistance')?.trim();
+	const raceDistanceM = (() => {
+		if (!raceDistanceParam) return null;
+		const n = Number(raceDistanceParam);
+		return Number.isFinite(n) ? n : null;
+	})();
 	const racePreset = raceDateParam
 		? racePlanPreset({
 				raceDateIso: raceDateParam,
-				distanceM: Number.isFinite(raceDistanceRaw) ? raceDistanceRaw : null,
+				distanceM: raceDistanceM,
 				todayIso: todayISO(),
 			})
 		: null;

@@ -162,6 +162,20 @@ test('a listing with no distance still presets the dates', () => {
 	assertAnchoring(preset, '2027-03-14');
 });
 
+test('a zero distance is read as absent, not as a zero-metre race', () => {
+	// `Number('')` and `Number(null)` are both 0, so a caller parsing a URL
+	// param can hand us a 0 meaning "no distance". It must land on exactly
+	// the no-distance result rather than on some zero-length event.
+	const absent = racePlanPreset({ raceDateIso: '2027-03-14', distanceM: null, todayIso: TODAY });
+	for (const zeroish of [0, -0, undefined]) {
+		assert.deepEqual(
+			racePlanPreset({ raceDateIso: '2027-03-14', distanceM: zeroish, todayIso: TODAY }),
+			absent,
+			String(zeroish),
+		);
+	}
+});
+
 test('goalEventForDistance tolerates rounded listings but not neighbouring rungs', () => {
 	assert.equal(goalEventForDistance(21_100), 'distance_half');
 	assert.equal(goalEventForDistance(42_200), 'distance_full');
