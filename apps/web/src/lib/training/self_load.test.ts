@@ -163,3 +163,15 @@ test('shouldSurfaceSelfLoad admits every gradeable band', () => {
 		assert.equal(shouldSurfaceSelfLoad(load), true, String(acuteM));
 	}
 });
+
+test('shouldSurfaceSelfLoad narrows the band to the ones a caller has copy for', () => {
+	// The predicate is what makes an unlabelled band a compile error rather
+	// than a missing-i18n-key render, so pin that it is genuinely narrowing
+	// and not just returning true.
+	const load = selfLoad(withBase(40_000), NOW);
+	if (!shouldSurfaceSelfLoad(load)) {
+		assert.fail('a graded month should surface');
+	}
+	const band: 'low' | 'optimal' | 'elevated' | 'high' = load.band;
+	assert.equal(band, 'optimal');
+});

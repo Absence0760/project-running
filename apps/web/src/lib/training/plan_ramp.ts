@@ -150,7 +150,10 @@ export function peakWeekVolumeM(weeks: { target_volume_m: number }[]): number {
 export function planRampCheck(
 	openingWeekM: number,
 	peakWeekM: number,
-	recent: RecentVolume,
+	// Only the chronic half is consumed here: the plan's own opening week is
+	// the acute term, so `acuteM` (what the runner has actually just done)
+	// would be the wrong numerator for a question about a hypothetical plan.
+	recent: Pick<RecentVolume, 'weeklyM' | 'activeWeeks'>,
 ): PlanRampCheck {
 	const base = {
 		openingWeekM,

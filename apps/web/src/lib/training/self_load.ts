@@ -78,10 +78,21 @@ export function selfLoad(runs: RunForVolume[], nowMs: number): SelfLoad {
 	};
 }
 
+/// A load the caller may actually render a band for.
+export type GradedBand = Exclude<InjuryRiskBand, 'insufficient'>;
+export interface GradedSelfLoad extends SelfLoad {
+	band: GradedBand;
+}
+
 /// Whether the dashboard has a load ramp worth showing. Only the gradeable
 /// bands earn the card; 'insufficient' renders nothing at all, matching how
 /// every other analytics card on that page self-hides rather than showing a
 /// zeroed stat.
-export function shouldSurfaceSelfLoad(load: SelfLoad): boolean {
+///
+/// A type predicate rather than a bare boolean so the caller's band is
+/// narrowed to the four it has copy for — an 'insufficient' label is a string
+/// that must not exist, and this makes leaving it out a compile error instead
+/// of a missing-key render.
+export function shouldSurfaceSelfLoad(load: SelfLoad): load is GradedSelfLoad {
 	return load.band !== 'insufficient';
 }
