@@ -150,23 +150,32 @@ void main() {
       r.dispose();
     });
 
-    test('throws LocationPermissionWhileInUseError on Android when permission is whileInUse',
+    test('records under a whileInUse grant on Android, flagging it as limited',
         () async {
+      // Android's first-run dialog cannot grant more than "While using the
+      // app" — "Allow all the time" is a separate trip to Settings. Refusing
+      // the grant meant the DEFAULT Android runner got no position stream at
+      // all: no fixes, a map stuck on "Waiting for GPS", distance frozen at
+      // 0, the run saved as indoor. Foreground fixes work fine under it, so
+      // the recorder records and reports the limitation instead.
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       fake.permissionState = LocationPermission.whileInUse;
       final r = RunRecorder();
-      await expectLater(
-        r.prepare(),
-        throwsA(isA<LocationPermissionWhileInUseError>()),
-      );
-      // Same contract as the other prepare errors — _prepared flips to true
-      // so the screen can still run a time-only / indoor session.
+      await r.prepare();
       expect(r.prepared, isTrue);
+      expect(
+        fake.subscriptionsOpened,
+        1,
+        reason: 'a foreground-only grant must still open the position '
+            'stream — the map and distance depend on it.',
+      );
+      expect(r.backgroundLocationLimited, isTrue,
+          reason: 'the caller needs the limitation disclosed, not hidden.');
       r.dispose();
     });
 
-    test('does NOT throw on iOS when permission is whileInUse', () async {
+    test('does NOT flag whileInUse as limited on iOS', () async {
       // iOS treats "While Using the App" + UIBackgroundModes:location as
       // a valid background-recording configuration — only Android needs
       // the escalation to "Allow all the time".
@@ -176,6 +185,34 @@ void main() {
       final r = RunRecorder();
       await r.prepare();
       expect(r.prepared, isTrue);
+      expect(r.backgroundLocationLimited, isFalse);
+      r.dispose();
+    });
+
+    test('does NOT flag an always grant as limited on Android', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      fake.permissionState = LocationPermission.always;
+      final r = RunRecorder();
+      await r.prepare();
+      expect(r.backgroundLocationLimited, isFalse);
+      r.dispose();
+    });
+
+    test('clears backgroundLocationLimited when a later prepare is unrestricted',
+        () async {
+      // The runner upgrades to "Allow all the time" from Settings and starts
+      // a second run: the stale flag must not keep warning them.
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      fake.permissionState = LocationPermission.whileInUse;
+      final r = RunRecorder();
+      await r.prepare();
+      expect(r.backgroundLocationLimited, isTrue);
+
+      fake.permissionState = LocationPermission.always;
+      await r.prepare();
+      expect(r.backgroundLocationLimited, isFalse);
       r.dispose();
     });
 
@@ -328,25 +365,23 @@ void main() {
   group('RunRecorder — GPS retry loop honours prepare()\'s permission gate (#671)',
       () {
     test(
-      'does NOT silently open a stream ~3s after a whileInUse prepare() failure',
+      'does NOT silently open a stream ~3s after a denied prepare() failure',
       () async {
-        // Reproduces #671: _startGpsRetryLoop() used to only bail on
-        // denied/deniedForever, not whileInUse, so the retry timer opened
-        // the stream anyway a few seconds after prepare() had just thrown
-        // LocationPermissionWhileInUseError for the exact same permission
-        // state — silently reintroducing the background-freeze prepare()
-        // exists to prevent, with no warning surfaced to the runner.
+        // #671: the retry loop must not reopen a stream prepare() has just
+        // refused to open for the same permission state — a run that told
+        // the user GPS was unavailable must not start tracking three
+        // seconds later with no notice.
         debugDefaultTargetPlatformOverride = TargetPlatform.android;
         addTearDown(() => debugDefaultTargetPlatformOverride = null);
-        fake.permissionState = LocationPermission.whileInUse;
+        fake.permissionState = LocationPermission.deniedForever;
         final r = RunRecorder();
         await expectLater(
           r.prepare(),
-          throwsA(isA<LocationPermissionWhileInUseError>()),
+          throwsA(isA<LocationPermissionDeniedError>()),
         );
         expect(fake.subscriptionsOpened, 0,
             reason: 'prepare() must not open the stream when permission is '
-                'only whileInUse on Android.');
+                'denied.');
 
         // The retry loop's interval is 3s — wait past at least one tick.
         await Future<void>.delayed(const Duration(seconds: 4));
@@ -354,9 +389,9 @@ void main() {
         expect(
           fake.subscriptionsOpened,
           0,
-          reason: 'The retry loop\'s precheck must bail on whileInUse just '
-              'like prepare() does — it must not open a stream permission '
-              'still forbids.',
+          reason: 'The retry loop\'s precheck must bail on a denied grant '
+              'just like prepare() does — it must not open a stream '
+              'permission still forbids.',
         );
         r.dispose();
       },
@@ -364,20 +399,19 @@ void main() {
     );
 
     test(
-      'DOES reopen the stream once permission is later escalated to always',
+      'DOES open the stream once permission is later granted',
       () async {
-        // The legitimate flip side of the same gate: a runner who initially
-        // only granted whileInUse can go to Settings mid-run and upgrade to
-        // "Allow all the time". The retry loop must still pick that up —
-        // the fix must not turn the loop into a permanent no-op once
-        // prepare() has failed once.
+        // The legitimate flip side of the same gate: a runner who denied the
+        // dialog can relent from Settings mid-run. The retry loop must still
+        // pick that up — the gate must not turn the loop into a permanent
+        // no-op once prepare() has failed once.
         debugDefaultTargetPlatformOverride = TargetPlatform.android;
         addTearDown(() => debugDefaultTargetPlatformOverride = null);
-        fake.permissionState = LocationPermission.whileInUse;
+        fake.permissionState = LocationPermission.deniedForever;
         final r = RunRecorder();
         await expectLater(
           r.prepare(),
-          throwsA(isA<LocationPermissionWhileInUseError>()),
+          throwsA(isA<LocationPermissionDeniedError>()),
         );
         expect(fake.subscriptionsOpened, 0);
 
@@ -388,9 +422,34 @@ void main() {
         expect(
           fake.subscriptionsOpened,
           greaterThanOrEqualTo(1),
-          reason: 'Once permission is upgraded to always, the retry loop '
-              'must reopen the stream — the whileInUse gate must not break '
-              'the legitimate retry-after-grant path.',
+          reason: 'Once permission is granted, the retry loop must open the '
+              'stream — the gate must not break the retry-after-grant path.',
+        );
+        r.dispose();
+      },
+      timeout: const Timeout(Duration(seconds: 10)),
+    );
+
+    test(
+      'a whileInUse grant needs no retry — prepare() already opened the stream',
+      () async {
+        // The regression this whole change exists to prevent: an Android
+        // runner on the default first-run grant must be tracking from the
+        // moment prepare() returns, not waiting on a retry that never fires.
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        fake.permissionState = LocationPermission.whileInUse;
+        final r = RunRecorder();
+        await r.prepare();
+        expect(fake.subscriptionsOpened, 1);
+
+        await Future<void>.delayed(const Duration(seconds: 4));
+
+        expect(
+          fake.subscriptionsOpened,
+          1,
+          reason: 'the healthy stream must be left alone — the retry loop '
+              'is a repair path, not a second subscriber.',
         );
         r.dispose();
       },

@@ -28,22 +28,6 @@ class LocationPermissionDeniedError extends Error {
       : 'Location permission was denied';
 }
 
-/// Thrown by [RunRecorder.prepare] on Android when location permission is
-/// only "While using the app". Android 11+ stops delivering GPS fixes the
-/// moment another app takes focus — the geolocator foreground service stays
-/// alive but the callback queue silently dries up, so distance freezes the
-/// instant the user opens the camera, replies to a notification, or locks
-/// the screen. Background recording requires "Allow all the time"
-/// (`ACCESS_BACKGROUND_LOCATION`). Not thrown on iOS, where "While Using
-/// the App" + the `UIBackgroundModes:location` capability is enough for
-/// the OS to keep feeding fixes during a recording session.
-class LocationPermissionWhileInUseError extends Error {
-  @override
-  String toString() =>
-      'Background location permission ("Allow all the time") is required '
-      'so runs keep recording when the app is in the background';
-}
-
 /// A single lap split marked mid-run. Captures the cumulative distance and
 /// duration at the moment the user tapped the lap button. Cumulative values
 /// are convenient for the recorder loop (no previous-lap bookkeeping); the
@@ -308,6 +292,25 @@ class RunRecorder {
   bool get prepared => _prepared;
   bool _prepared = false;
 
+  /// Whether this run records under a permission that only covers the
+  /// foreground. True on Android when the grant is "While using the app":
+  /// fixes flow normally while the run screen is up, but Android can stop
+  /// delivering them once another app takes focus, so distance freezes the
+  /// instant the runner opens the camera or locks the screen. Uninterrupted
+  /// background recording needs "Allow all the time"
+  /// (`ACCESS_BACKGROUND_LOCATION`).
+  ///
+  /// A limitation, not a failure — the recorder still opens the stream and
+  /// records. Callers disclose it; they must NOT treat it as a reason to
+  /// skip GPS, which is what left a "while in use" runner staring at an
+  /// empty map for the whole run. Always false on iOS, where "While Using
+  /// the App" plus the `UIBackgroundModes:location` capability keeps
+  /// CoreLocation feeding fixes for the whole session. Resolved by
+  /// [prepare]; a mid-run upgrade to "Allow all the time" is picked up by
+  /// the next [prepare], not here.
+  bool get backgroundLocationLimited => _backgroundLocationLimited;
+  bool _backgroundLocationLimited = false;
+
   /// Whether [begin] has been called and time/distance are accumulating.
   bool get recording => _recording;
 
@@ -329,14 +332,14 @@ class RunRecorder {
   /// Throws [LocationServiceDisabledError] if device location services are
   /// off. Throws [LocationPermissionDeniedError] if the user denies (or has
   /// permanently denied — see [LocationPermissionDeniedError.forever]) the
-  /// permission prompt. On Android, throws [LocationPermissionWhileInUseError]
-  /// when the user only granted "While using the app" — background recording
-  /// is silently broken without "Allow all the time", so we surface it as an
-  /// error rather than let the run record fine in foreground then freeze the
-  /// moment another app takes focus. All three errors leave [prepared] ==
-  /// true; the recorder is still usable as a time-only session and the retry
-  /// loop will re-open the stream automatically when services / permission
-  /// come back.
+  /// permission prompt. Both errors leave [prepared] == true; the recorder is
+  /// still usable as a time-only session and the retry loop will re-open the
+  /// stream automatically when services / permission come back.
+  ///
+  /// A foreground-only ("While using the app") grant on Android is NOT an
+  /// error — it records fine while the app is on screen, and only background
+  /// delivery is at risk. It sets [backgroundLocationLimited] so the caller
+  /// can disclose the limitation.
   Future<void> prepare({
     Route? route,
     int distanceFilterMetres = 3,
@@ -380,6 +383,7 @@ class RunRecorder {
     _accuracyGateMetres = accuracyGateMetres;
     _locationAccuracy = accuracy;
     _lastAccuracyDropLogAt = null;
+    _backgroundLocationLimited = false;
     _resetTreadmill();
     _prepared = true;
 
@@ -400,43 +404,39 @@ class RunRecorder {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.deniedForever) {
-      throw LocationPermissionDeniedError(forever: true);
-    }
-    if (permission == LocationPermission.denied) {
-      throw LocationPermissionDeniedError();
-    }
     if (!_permissionAllowsStream(permission)) {
-      throw LocationPermissionWhileInUseError();
+      throw LocationPermissionDeniedError(
+        forever: permission == LocationPermission.deniedForever,
+      );
     }
+    _backgroundLocationLimited = _foregroundOnlyGrant(permission);
 
     _openPositionStream();
   }
 
-  /// Whether [permission] is strong enough to safely open the live GPS
-  /// position stream. Shared by [prepare]'s explicit gate and
-  /// [_startGpsRetryLoop]'s periodic precheck so the two conditions cannot
-  /// drift apart (#671) — the retry loop bypassing this same check used to
-  /// silently start GPS tracking ~3 s after [prepare] had just refused to,
-  /// for the exact permission state [prepare] refuses on.
+  /// Whether [permission] covers the foreground but not reliably the
+  /// background — Android's "While using the app". Drives
+  /// [backgroundLocationLimited]. False on iOS: "While Using the App" plus
+  /// the `UIBackgroundModes:location` capability is a supported
+  /// background-recording configuration there.
+  static bool _foregroundOnlyGrant(LocationPermission permission) =>
+      defaultTargetPlatform == TargetPlatform.android &&
+      permission == LocationPermission.whileInUse;
+
+  /// Whether [permission] allows opening the live GPS position stream at
+  /// all. Shared by [prepare]'s gate and [_startGpsRetryLoop]'s periodic
+  /// precheck so the two conditions cannot drift apart (#671).
   ///
-  /// False for [LocationPermission.denied] / [LocationPermission.deniedForever]
-  /// on every platform, and — Android only — for [LocationPermission.whileInUse]:
-  /// Android 11+ stops delivering fixes the moment the app loses focus under
-  /// that grant (see [LocationPermissionWhileInUseError]). Not restricted on
-  /// iOS, where "While Using the App" plus the background-modes capability is
-  /// enough for CoreLocation to keep feeding fixes.
-  static bool _permissionAllowsStream(LocationPermission permission) {
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return false;
-    }
-    if (defaultTargetPlatform == TargetPlatform.android &&
-        permission == LocationPermission.whileInUse) {
-      return false;
-    }
-    return true;
-  }
+  /// False only for [LocationPermission.denied] /
+  /// [LocationPermission.deniedForever]. A foreground-only grant DOES open
+  /// the stream: refusing it recorded nothing at all — no fixes, an empty
+  /// "Waiting for GPS" map, a run saved as indoor — to avoid a background
+  /// freeze the runner might never have hit, and Android's first-run dialog
+  /// cannot grant more than that anyway. It is disclosed through
+  /// [backgroundLocationLimited] instead.
+  static bool _permissionAllowsStream(LocationPermission permission) =>
+      permission != LocationPermission.denied &&
+      permission != LocationPermission.deniedForever;
 
   /// Subscribe to [Geolocator.getPositionStream] with the accuracy settings
   /// remembered from the last [prepare] call. Any stream error (commonly
@@ -506,11 +506,10 @@ class RunRecorder {
   /// position stream if it's currently down. Idempotent — a healthy
   /// stream is a no-op. Gates on [_permissionAllowsStream] — the SAME
   /// predicate [prepare] gates on — so a permission state [prepare] refuses
-  /// to open a stream for (Android whileInUse, denied, deniedForever) can
-  /// never be silently opened by this loop a few seconds later (#671). A
-  /// permission upgrade mid-run (e.g. the runner grants "Allow all the
-  /// time" from Settings) still reopens the stream on the next tick, since
-  /// [Geolocator.checkPermission] reflects the new grant.
+  /// to open a stream for can never be silently opened by this loop a few
+  /// seconds later (#671). A permission granted mid-run (the runner denies
+  /// the dialog, then relents from Settings) reopens the stream on the next
+  /// tick, since [Geolocator.checkPermission] reflects the new grant.
   void _startGpsRetryLoop() {
     _gpsRetryTimer?.cancel();
     _gpsRetryTimer = Timer.periodic(_gpsRetryInterval, (_) async {
