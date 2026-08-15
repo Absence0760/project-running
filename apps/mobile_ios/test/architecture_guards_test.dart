@@ -57,6 +57,42 @@ void main() {
       );
     });
 
+    test('a foreground-only location grant is disclosed, never a reason to skip GPS',
+        () {
+      // Reason: Android's first-run dialog only ever grants "While using the
+      // app"; "Allow all the time" is a separate trip to Settings. The
+      // recorder used to REFUSE that grant, so the default Android runner got
+      // no position stream at all — the live map sat on "Waiting for GPS" for
+      // the whole run, distance stayed 0, and the run saved as indoor. GPS now
+      // records under it and the recorder reports the limitation through
+      // backgroundLocationLimited; _begin must surface that, or the runner is
+      // never told background recording is at risk.
+      final begin = _extractMethodBody(source, r'Future<void> _begin\(\) async \{');
+      expect(
+        begin.contains('backgroundLocationLimited'),
+        isTrue,
+        reason: 'run start must read the recorder\'s backgroundLocationLimited '
+            'flag and disclose it',
+      );
+      expect(
+        source.contains('_notifyBackgroundLocationLimited()'),
+        isTrue,
+        reason: 'the disclosure must reach the runner as a banner, not be '
+            'dropped on the floor',
+      );
+      // The disclosure is a warning about a recording run — it must never
+      // reuse the GPS-unavailable path, which describes a run with no fixes.
+      final notify = _extractMethodBody(
+        source,
+        r'void _notifyBackgroundLocationLimited\(\)\s*\{',
+      );
+      expect(
+        notify.contains('_notifyGpsUnavailable('),
+        isFalse,
+        reason: 'a limited grant still records — it is not GPS unavailable',
+      );
+    });
+
     test('auto-live-share hook is opt-in, L4-isolated, and duplicate-safe', () {
       // Reason: docs/features/safety.md — the auto_live_share device pref (and
       // a manual "Share live link") start a broadcast at _begin(). Three

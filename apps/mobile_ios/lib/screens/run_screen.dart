@@ -1577,7 +1577,11 @@ class _RunScreenState extends State<RunScreen> {
     // "Waiting for GPS..." placeholder until a fix arrives (if ever).
     await _prepareFuture;
     final prepareError = _prepareError;
-    if (prepareError != null) _notifyGpsUnavailable(prepareError);
+    if (prepareError != null) {
+      _notifyGpsUnavailable(prepareError);
+    } else if (_recorder?.backgroundLocationLimited == true) {
+      _notifyBackgroundLocationLimited();
+    }
 
     if (!mounted || _recorder == null) return;
 
@@ -1995,6 +1999,11 @@ class _RunScreenState extends State<RunScreen> {
       );
     } catch (e) {
       _notifyGpsUnavailable(e);
+    }
+    // A resume follows a process death — the very failure a foreground-only
+    // grant makes likelier — so disclose it here too.
+    if (_recorder?.backgroundLocationLimited == true) {
+      _notifyBackgroundLocationLimited();
     }
 
     if (!mounted || _recorder == null) {
@@ -2843,10 +2852,6 @@ class _RunScreenState extends State<RunScreen> {
           : _l10n.runGpsPermissionPending;
       actionLabel = _l10n.runSettings;
       onAction = () => Geolocator.openAppSettings();
-    } else if (error is LocationPermissionWhileInUseError) {
-      message = _l10n.runGpsAllowAllTheTime;
-      actionLabel = _l10n.runSettings;
-      onAction = () => Geolocator.openAppSettings();
     } else {
       message = _l10n.runGpsSensorFailed;
     }
@@ -2858,6 +2863,21 @@ class _RunScreenState extends State<RunScreen> {
       duration: const Duration(seconds: 6),
       actionLabel: actionLabel,
       onAction: onAction,
+    );
+  }
+
+  /// Disclose that this run records under a foreground-only location grant
+  /// ("While using the app"): GPS, the map, and distance all work while the
+  /// run screen is up, but Android may stop delivering fixes once another
+  /// app takes focus. Not an error — the run is recording — so it never
+  /// suppresses GPS the way refusing the grant outright did.
+  void _notifyBackgroundLocationLimited() {
+    if (!mounted) return;
+    _showTopBanner(
+      _l10n.runGpsAllowAllTheTime,
+      duration: const Duration(seconds: 6),
+      actionLabel: _l10n.runSettings,
+      onAction: () => Geolocator.openAppSettings(),
     );
   }
 
