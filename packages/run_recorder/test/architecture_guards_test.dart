@@ -105,12 +105,13 @@ void main() {
     );
     expect(
       source,
-      contains('throw LocationPermissionWhileInUseError()'),
-      reason: 'prepare() must throw LocationPermissionWhileInUseError on '
-          'Android when permission is whileInUse — without this, runs '
-          'silently freeze the moment another app takes focus because '
-          'Android stops delivering background fixes without "Allow all '
-          'the time", even though the foreground service is still alive.',
+      contains('_backgroundLocationLimited = _foregroundOnlyGrant('),
+      reason: 'prepare() must record a foreground-only ("While using the '
+          'app") grant as backgroundLocationLimited and open the stream '
+          'anyway. Refusing the grant recorded NOTHING — no fixes, a map '
+          'stuck on "Waiting for GPS", a run saved as indoor — which is a '
+          'worse failure than the background freeze it was avoiding, and '
+          'it is what Android\'s first-run dialog grants by default.',
     );
   });
 
@@ -207,14 +208,11 @@ void main() {
   test(
       'GPS retry loop gates on the SAME permission predicate as prepare() (#671)',
       () {
-    // Reason: _startGpsRetryLoop() used to precheck denied/deniedForever
-    // only, missing the Android whileInUse case prepare() refuses on. That
-    // let the retry timer silently reopen the position stream ~3s after
-    // prepare() had just thrown LocationPermissionWhileInUseError for the
-    // same permission state — reintroducing the background-freeze prepare()
-    // exists to prevent. Both gates must call the same shared predicate so
-    // they cannot drift apart again; this pins that both bodies reference it
-    // rather than re-deriving the condition inline.
+    // Reason: the two gates decide the same question — may this permission
+    // open a position stream — in two places, and they drifted once already
+    // (#671), leaving the retry timer reopening a stream prepare() had just
+    // refused. Both must call the same shared predicate; this pins that both
+    // bodies reference it rather than re-deriving the condition inline.
     final prepareBody = _extractMethodBody(
       source,
       r'Future<void> prepare\(\{[^)]*\}\)\s*async\s*\{',
@@ -223,7 +221,7 @@ void main() {
       prepareBody,
       contains('_permissionAllowsStream('),
       reason: 'prepare() must gate the stream-opening decision through '
-          '_permissionAllowsStream, not an inline whileInUse condition.',
+          '_permissionAllowsStream, not an inline permission condition.',
     );
     final retryLoopBody = _extractMethodBody(
       source,
@@ -234,8 +232,8 @@ void main() {
       contains('_permissionAllowsStream('),
       reason: '_startGpsRetryLoop() must precheck permission through the '
           'SAME _permissionAllowsStream predicate prepare() uses — a '
-          'hand-rolled denied/deniedForever-only check silently drifts '
-          'from prepare()\'s gate (see #671).',
+          'hand-rolled copy of the condition silently drifts from '
+          'prepare()\'s gate (see #671).',
     );
   });
 

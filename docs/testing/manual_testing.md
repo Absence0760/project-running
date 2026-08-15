@@ -134,7 +134,7 @@ cd apps/watch_ios && open WatchApp.xcodeproj
 | Apple Watch — phone handoff | iPhone signs in, watch reads via WatchConnectivity `applicationContext` | Sign in on `mobile_ios`, then on the simulator launch the Watch app. |
 
 **Onboarding gotchas:**
-- Mobile permission ask must fire before any GPS feature works. If location permission is `whileInUse` only, background recording will silently stop when the screen locks; the app surfaces an inline banner asking to upgrade.
+- Mobile permission ask must fire before any GPS feature works. If location permission is `whileInUse` only, recording and the live map work normally while the run screen is up, but background recording may stop when the screen locks; the app records anyway and surfaces a banner asking to upgrade. **Regression check:** start a run with "While using the app" — the map must show your position within a few seconds, not sit on "Waiting for GPS".
 - iOS needs `NSLocationAlwaysAndWhenInUseUsageDescription` in Info.plist (real device) for background recording — simulator works without it.
 - Watch onboarding paths require the corresponding phone permission already granted, otherwise the bridge buffers payloads forever.
 
