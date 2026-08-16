@@ -835,9 +835,12 @@ test.describe('/settings/gear — rotation next-up', () => {
 			await expect(page.locator('.gear-list')).toBeVisible({ timeout: 10_000 });
 			await page.getByRole('button', { name: 'Bikes' }).click();
 
+			// Wait on the rotation row itself: the rotations load after the gear
+			// list, so the list being visible does not mean this row exists yet.
 			const rotRow = page.locator('.rotation-row', { hasText: rotation!.name });
+			await expect(rotRow).toBeVisible();
 			const nextUp = rotRow.getByTestId('rotation-next');
-			await expect(nextUp).toContainText(freshName, { timeout: 5_000 });
+			await expect(nextUp).toContainText(freshName);
 			await expect(nextUp).not.toContainText(usedName);
 
 			// Neither bike holds the star yet.
@@ -871,6 +874,57 @@ test.describe('/settings/gear — rotation next-up', () => {
 			await admin.from('gear_rotations').delete().eq('id', rotation!.id);
 			await admin.from('runs').delete().eq('id', run!.id); // cascades run_gear
 			await admin.from('gear').delete().in('id', [fresh.id, used.id]);
+		}
+	});
+
+	test('offers nothing when only one member of the rotation is still in service', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const liveName = `E2E Live Bike ${stamp}`;
+
+		// Two members, one retired — a membership count of 2, but only one pair
+		// the runner could actually be told to use. There is no choice to make.
+		const { data: bikes } = await admin
+			.from('gear')
+			.insert([
+				{ owner_id: USER_A.id, kind: 'bike', name: liveName, target_distance_m: 10000 },
+				{
+					owner_id: USER_A.id,
+					kind: 'bike',
+					name: `E2E Retired Bike ${stamp}`,
+					target_distance_m: 10000,
+					retired_at: '2026-01-01'
+				}
+			])
+			.select('id, name');
+
+		const { data: rotation } = await admin
+			.from('gear_rotations')
+			.insert({ owner_id: USER_A.id, name: `E2E Thin Rotation ${stamp}` })
+			.select('id, name')
+			.single();
+		await admin
+			.from('gear_rotation_members')
+			.insert(bikes!.map((b) => ({ rotation_id: rotation!.id, gear_id: b.id })));
+
+		try {
+			await page.goto('/settings/gear');
+			await expect(page.locator('.gear-list')).toBeVisible({ timeout: 10_000 });
+			await page.getByRole('button', { name: 'Bikes' }).click();
+
+			const rotRow = page.locator('.rotation-row', { hasText: rotation!.name });
+			await expect(rotRow).toBeVisible();
+			// Both memberships are counted, and still nothing is offered.
+			await expect(rotRow).toContainText('2 items');
+			await expect(rotRow.getByTestId('rotation-next')).toHaveCount(0);
+		} finally {
+			await admin.from('gear_rotations').delete().eq('id', rotation!.id);
+			await admin
+				.from('gear')
+				.delete()
+				.in('id', bikes!.map((b) => b.id));
 		}
 	});
 });

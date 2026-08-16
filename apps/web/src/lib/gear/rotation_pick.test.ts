@@ -189,6 +189,19 @@ test('rotationPick: the current pair holds no rank advantage', () => {
 	assert.equal(p.ranked.find((r) => r.id === 'a')?.isCurrent, true);
 });
 
+test('rotationPick: ranked.length is the in-service count, so a caller can gate on it', () => {
+	// The affordance on /settings/gear renders only when there is a real choice
+	// to make. Counting memberships would offer a "wear this next" for a
+	// rotation holding one live pair and one retired one; ranked drops the
+	// retired member, so it is the count that answers the question.
+	const p = rotationPick([
+		member({ id: 'live', totalDistanceM: 100_000 }),
+		member({ id: 'retired', totalDistanceM: 0, retiredAt: '2026-01-01' }),
+	]);
+	assert.equal(p.ranked.length, 1);
+	assert.equal(p.pickId, 'live');
+});
+
 test('rotationPick: a single-member rotation still answers, and answers with that member', () => {
 	const p = rotationPick([member({ id: 'only', totalDistanceM: 900_000 })]);
 	assert.equal(p.pickId, 'only');

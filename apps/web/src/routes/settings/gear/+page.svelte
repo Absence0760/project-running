@@ -221,12 +221,10 @@
 
 	// Which pair of a rotation comes out next. A rotation may hold both shoes
 	// and bikes (§183) while the star is scoped to (owner, kind), so the answer
-	// is computed within the kind the tab is showing — a rotation with fewer
-	// than two pairs of that kind has nothing to rotate and offers nothing.
+	// is computed within the kind the tab is showing.
 	function nextUpFor(r: GearRotationWithMembers) {
 		const memberIds = new Set(r.gear_ids);
 		const members = gear.filter((g) => memberIds.has(g.id) && g.kind === activeTab);
-		if (members.length < 2) return null;
 		const pick = rotationPick(
 			members.map((g) => ({
 				id: g.id,
@@ -236,6 +234,11 @@
 				isCurrent: g.is_default,
 			})),
 		);
+		// Fewer than two pairs still in service is not a rotation — there is
+		// nothing to choose between. Gate on what the pick actually ranked, not
+		// on the membership count: a retired member is dropped by the pick, so
+		// counting memberships offers a "next up" for a single usable pair.
+		if (pick.ranked.length < 2) return null;
 		const picked = members.find((g) => g.id === pick.pickId);
 		if (!picked) return null;
 		return { picked, isCurrent: pick.pickIsCurrent, allWorn: pick.allWorn };
