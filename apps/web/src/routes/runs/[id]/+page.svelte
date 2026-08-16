@@ -1904,6 +1904,7 @@
 				<h2>{m('runDetail.splits')}</h2>
 				{#if pacing}
 					<div class="pacing">
+						<h3 class="pacing-heading">{m('runDetail.pacing')}</h3>
 						<div class="pacing-halves">
 							<div class="pacing-half">
 								<span class="pacing-half-label">{m('runDetail.pacingFirstHalf')}</span>
@@ -2918,6 +2919,15 @@
 		padding: var(--space-md);
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
+	}
+
+	.pacing-heading {
+		margin: 0 0 var(--space-sm);
+		font-size: 0.8125rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
 	}
 
 	.pacing-halves {

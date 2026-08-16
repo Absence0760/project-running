@@ -62,6 +62,8 @@ test.describe('/runs/[id] — pacing summary', () => {
 			await page.goto(`/runs/${runId}`);
 			const pacing = page.locator('.pacing');
 			await expect(pacing).toBeVisible({ timeout: 15_000 });
+			// The card names itself rather than borrowing the Splits heading.
+			await expect(pacing.getByRole('heading', { name: 'Pacing' })).toBeVisible();
 			await expect(pacing.locator('.pacing-verdict')).toHaveText('Negative split');
 			await expect(pacing.locator('.pacing-summary')).toContainText('faster over the second half');
 			// Flat ground: grade-adjusted pace is raw pace, so the second
