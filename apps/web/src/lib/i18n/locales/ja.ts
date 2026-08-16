@@ -4974,4 +4974,12 @@ export const messages = {
 	"comeback.thisWeekLabel": "直近7日間",
 	"comeback.baseLabel": "ブランク前の週平均",
 	"comeback.footnote": "安定した週が数週間そろえば、トレーニング負荷の推移が再び表示されます。",
+	"nutrition.nutrients": "栄養素",
+	"nutrition.nutrientsHint": "参考摂取量です。各合計には、その栄養素の値がある記録済みの食品のみが含まれます。",
+	"nutrition.nutrientAtLeast": "少なくとも",
+	"nutrition.nutrientPartial": "記録した{total}件中{reported}件に{nutrient}の値があります",
+	"nutrition.nutrientOver": "{n} {unit} 超過",
+	"nutrition.nutrientLeft": "残り {n} {unit}",
+	"nutrition.nutrientReached": "目標達成",
+	"nutrition.nutrientUntargeted": "1日の目標なし",
 } satisfies Messages;

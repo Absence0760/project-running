@@ -5001,4 +5001,12 @@ export const en = {
 	"comeback.thisWeekLabel": "Last 7 days",
 	"comeback.baseLabel": "Weekly average before the break",
 	"comeback.footnote": "Your training load ramp comes back once you have a few consistent weeks again.",
+	"nutrition.nutrients": "Nutrients",
+	"nutrition.nutrientsHint": "Reference intakes. Each total counts only the logged items that report that nutrient.",
+	"nutrition.nutrientAtLeast": "at least",
+	"nutrition.nutrientPartial": "{reported} of {total} logged items report {nutrient}",
+	"nutrition.nutrientOver": "{n} {unit} over",
+	"nutrition.nutrientLeft": "{n} {unit} left",
+	"nutrition.nutrientReached": "Goal reached",
+	"nutrition.nutrientUntargeted": "No daily target",
 } satisfies Record<string, string>;

@@ -4979,4 +4979,12 @@ export const messages = {
 	"comeback.thisWeekLabel": "7 derniers jours",
 	"comeback.baseLabel": "Moyenne hebdomadaire avant la coupure",
 	"comeback.footnote": "Votre courbe de charge d’entraînement revient dès que vous enchaînez à nouveau quelques semaines régulières.",
+	"nutrition.nutrients": "Nutriments",
+	"nutrition.nutrientsHint": "Valeurs de référence. Chaque total ne compte que les aliments enregistrés qui indiquent ce nutriment.",
+	"nutrition.nutrientAtLeast": "au moins",
+	"nutrition.nutrientPartial": "{reported} aliments enregistrés sur {total} indiquent {nutrient}",
+	"nutrition.nutrientOver": "{n} {unit} de trop",
+	"nutrition.nutrientLeft": "{n} {unit} restants",
+	"nutrition.nutrientReached": "Objectif atteint",
+	"nutrition.nutrientUntargeted": "Pas d’objectif quotidien",
 } satisfies Messages;

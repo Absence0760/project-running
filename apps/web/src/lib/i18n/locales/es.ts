@@ -4979,4 +4979,12 @@ export const messages = {
 	"comeback.thisWeekLabel": "Últimos 7 días",
 	"comeback.baseLabel": "Media semanal antes del parón",
 	"comeback.footnote": "Tu curva de carga de entrenamiento volverá cuando encadenes de nuevo unas semanas constantes.",
+	"nutrition.nutrients": "Nutrientes",
+	"nutrition.nutrientsHint": "Valores de referencia. Cada total solo cuenta los alimentos registrados que indican ese nutriente.",
+	"nutrition.nutrientAtLeast": "al menos",
+	"nutrition.nutrientPartial": "{reported} de {total} alimentos registrados indican {nutrient}",
+	"nutrition.nutrientOver": "{n} {unit} de más",
+	"nutrition.nutrientLeft": "{n} {unit} restantes",
+	"nutrition.nutrientReached": "Objetivo alcanzado",
+	"nutrition.nutrientUntargeted": "Sin objetivo diario",
 } satisfies Messages;

@@ -4979,4 +4979,12 @@ export const messages = {
 	"comeback.thisWeekLabel": "Letzte 7 Tage",
 	"comeback.baseLabel": "Wochendurchschnitt vor der Pause",
 	"comeback.footnote": "Deine Trainingsbelastungs-Kurve kehrt zurück, sobald du wieder einige konstante Wochen hast.",
+	"nutrition.nutrients": "Nährstoffe",
+	"nutrition.nutrientsHint": "Referenzwerte. Jede Summe zählt nur die protokollierten Einträge, die diesen Nährstoff angeben.",
+	"nutrition.nutrientAtLeast": "mindestens",
+	"nutrition.nutrientPartial": "{reported} von {total} protokollierten Einträgen geben {nutrient} an",
+	"nutrition.nutrientOver": "{n} {unit} über dem Ziel",
+	"nutrition.nutrientLeft": "{n} {unit} übrig",
+	"nutrition.nutrientReached": "Ziel erreicht",
+	"nutrition.nutrientUntargeted": "Kein Tagesziel",
 } satisfies Messages;
