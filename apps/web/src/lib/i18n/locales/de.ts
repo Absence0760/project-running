@@ -4951,4 +4951,10 @@ export const messages = {
 	"prefs.undoWindow8s": "8 Sekunden",
 	"prefs.undoWindow30s": "30 Sekunden",
 	"prefs.undoWindowManual": "Bis ich es schließe",
+	"settingsGear.rotationNextUp": "Als Nächstes: {name}",
+	"settingsGear.rotationNextUpWhy": "Am wenigsten abgenutzt in dieser Rotation.",
+	"settingsGear.rotationMakeCurrent": "Zum aktuellen Paar machen",
+	"settingsGear.rotationMakeCurrentLabel": "{name} zum aktuellen Paar machen – neue Läufe werden automatisch damit markiert",
+	"settingsGear.rotationNextUpIsCurrent": "Bereits das aktuelle Paar.",
+	"settingsGear.rotationAllWorn": "Jedes Paar hier hat sein Austauschziel erreicht oder überschritten.",
 } satisfies Messages;

@@ -4951,4 +4951,10 @@ export const messages = {
 	"prefs.undoWindow8s": "8 segundos",
 	"prefs.undoWindow30s": "30 segundos",
 	"prefs.undoWindowManual": "Hasta que lo cierre",
+	"settingsGear.rotationNextUp": "A continuación: {name}",
+	"settingsGear.rotationNextUpWhy": "El menos desgastado de esta rotación.",
+	"settingsGear.rotationMakeCurrent": "Marcar como actual",
+	"settingsGear.rotationMakeCurrentLabel": "Marcar {name} como el par actual: las nuevas carreras se etiquetarán automáticamente con él",
+	"settingsGear.rotationNextUpIsCurrent": "Ya es el par actual.",
+	"settingsGear.rotationAllWorn": "Todos los pares de aquí han alcanzado o superado su objetivo de sustitución.",
 } satisfies Messages;

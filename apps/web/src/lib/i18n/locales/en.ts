@@ -4971,4 +4971,10 @@ export const en = {
 	"prefs.undoWindow8s": "8 seconds",
 	"prefs.undoWindow30s": "30 seconds",
 	"prefs.undoWindowManual": "Until I dismiss it",
+	"settingsGear.rotationNextUp": "Next up: {name}",
+	"settingsGear.rotationNextUpWhy": "Least worn in this rotation.",
+	"settingsGear.rotationMakeCurrent": "Make current",
+	"settingsGear.rotationMakeCurrentLabel": "Make {name} the current pair — new runs will auto-tag with it",
+	"settingsGear.rotationNextUpIsCurrent": "Already the current pair.",
+	"settingsGear.rotationAllWorn": "Every pair here is at or past its replacement target.",
 } satisfies Record<string, string>;

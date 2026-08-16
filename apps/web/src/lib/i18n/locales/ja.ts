@@ -4946,4 +4946,10 @@ export const messages = {
 	"prefs.undoWindow8s": "8秒",
 	"prefs.undoWindow30s": "30秒",
 	"prefs.undoWindowManual": "自分で閉じるまで",
+	"settingsGear.rotationNextUp": "次に使うペア: {name}",
+	"settingsGear.rotationNextUpWhy": "このローテーションで最も摩耗が少ないペアです。",
+	"settingsGear.rotationMakeCurrent": "現在のペアにする",
+	"settingsGear.rotationMakeCurrentLabel": "{name} を現在のペアにします — 新しいランに自動でタグ付けされます",
+	"settingsGear.rotationNextUpIsCurrent": "すでに現在のペアです。",
+	"settingsGear.rotationAllWorn": "ここにあるすべてのペアが交換の目安に達しています。",
 } satisfies Messages;
