@@ -105,7 +105,10 @@ test.describe('dashboard comeback-load card', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto('/dashboard');
-			await page.waitForLoadState('networkidle');
+			// Absence proves nothing on a page that never loaded its runs — and
+			// a dev server serving a build without the card would pass this test
+			// silently. Anchor on the seeded history reaching the client first.
+			await expect(page.getByTestId('dash-total-runs')).toHaveText('2', { timeout: 15_000 });
 			await expect(page.getByTestId('comeback')).toHaveCount(0);
 			await expect(page.getByTestId('load-ramp')).toHaveCount(0);
 		} finally {

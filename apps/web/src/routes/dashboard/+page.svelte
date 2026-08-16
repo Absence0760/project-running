@@ -1232,7 +1232,7 @@
 			</button>
 			<div class="stat-card">
 				<span class="stat-label">{m('dash.statTotalRuns')}</span>
-				<span class="stat-value">{totalRuns}</span>
+				<span class="stat-value" data-testid="dash-total-runs">{totalRuns}</span>
 				<span class="stat-sub">{m('dash.allSources')}</span>
 			</div>
 			<button
