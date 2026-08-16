@@ -112,6 +112,14 @@
 			: board.find((r) => r.user_id === auth.user?.id) ?? null
 	);
 
+	// On a team board the entrant is a club, not the viewer. Only a club of
+	// theirs that actually fields a team on this board can be their side of it.
+	const myTeamId = $derived(
+		challenge?.scope === 'club_vs_club'
+			? myClubs.find((c) => board.some((r) => r.team_club_id === c.id))?.id ?? null
+			: null
+	);
+
 	async function doJoin() {
 		if (busy || !challenge) return;
 		busy = true;
@@ -254,6 +262,7 @@
 				scope={challenge.scope}
 				{clubNames}
 				meId={auth.user?.id ?? null}
+				meTeamId={myTeamId}
 			/>
 		</section>
 	{/if}

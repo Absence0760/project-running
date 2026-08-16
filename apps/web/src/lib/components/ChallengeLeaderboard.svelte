@@ -4,22 +4,26 @@
 	import { formatDuration } from '$lib/format/time';
 	import type { ChallengeLeaderboardRow, ChallengeMetric, ChallengeScope } from '$lib/types';
 	import { teamLabel } from '$lib/social/challenge_list';
+	import { standingFor } from '$lib/social/leaderboard_standing';
 
 	let {
 		rows,
 		metric,
 		scope,
 		clubNames = {},
-		meId = null
+		meId = null,
+		meTeamId = null
 	}: {
 		rows: ChallengeLeaderboardRow[];
 		metric: ChallengeMetric;
 		scope: ChallengeScope;
 		clubNames?: Record<string, string>;
 		meId?: string | null;
+		meTeamId?: string | null;
 	} = $props();
 
 	const byTeam = $derived(scope === 'club_vs_club');
+	const standing = $derived(standingFor(rows, byTeam ? meTeamId : meId));
 
 	function fmt(v: number): string {
 		switch (metric) {
@@ -47,6 +51,41 @@
 {#if rows.length === 0}
 	<p class="empty">{m('challenges.leaderboardEmpty')}</p>
 {:else}
+	{#if standing && rows.length > 1}
+		<div class="standing" data-testid="challenge-standing">
+			<span class="standing-label"
+				>{byTeam ? m('challenges.standingTitleTeam') : m('challenges.standingTitle')}</span
+			>
+			<span class="standing-rank"
+				>{m('challenges.standingRank', { rank: standing.rank, total: standing.total })}</span
+			>
+			{#if standing.tiedWith > 0}
+				<span class="standing-gap">
+					{standing.tiedWith === 1
+						? m('challenges.standingTiedOne')
+						: m('challenges.standingTiedMany', { n: standing.tiedWith })}
+				</span>
+			{/if}
+			{#if standing.chasing}
+				<span class="standing-gap">
+					{m('challenges.standingBehind', {
+						gap: fmt(standing.chasing.delta),
+						name: nameFor(standing.chasing.entry)
+					})}
+				</span>
+			{:else}
+				<span class="standing-gap leading">{m('challenges.standingLeading')}</span>
+			{/if}
+			{#if standing.chasedBy}
+				<span class="standing-gap">
+					{m('challenges.standingAhead', {
+						gap: fmt(standing.chasedBy.delta),
+						name: nameFor(standing.chasedBy.entry)
+					})}
+				</span>
+			{/if}
+		</div>
+	{/if}
 	<ol class="board" aria-label={m('challenges.leaderboard')}>
 		{#each rows as row (byTeam ? row.team_club_id : row.user_id)}
 			<li class="row" class:me={!byTeam && meId && row.user_id === meId}>
@@ -61,6 +100,35 @@
 {/if}
 
 <style>
+	.standing {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-2xs, 0.25rem) var(--space-sm);
+		margin-bottom: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		background: var(--color-primary-light);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+		font-size: 0.875rem;
+	}
+	.standing-label {
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.standing-rank {
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+		color: var(--color-primary);
+	}
+	.standing-gap {
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+	.standing-gap.leading {
+		color: var(--color-success-text);
+		font-weight: 600;
+	}
 	.board {
 		list-style: none;
 		margin: 0;
