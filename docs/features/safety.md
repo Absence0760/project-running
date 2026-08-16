@@ -359,16 +359,27 @@ matters most.
   `apps/web/src/lib/safety/live_motion.ts` grades a window of recent pings into
   `moving` / `stopped` / `unknown`. Constants: `MOTION_MIN_WINDOW_MS` (180 s —
   the minimum observation before any claim, past every ordinary pause a moving
-  runner takes) and `MOTION_STOPPED_DISTANCE_M` (25 m — enough to absorb an
-  accumulating GPS random walk over minutes, not just one fix's error).
-- **Fail-closed in both directions.** A **stale** fix yields `unknown`: the last
-  position being old is exactly the case where "they have not moved" is
+  runner takes), `MOTION_STOPPED_DISTANCE_M` (25 m — enough to absorb an
+  accumulating GPS random walk over minutes, not just one fix's error), and
+  `MOTION_MAX_GAP_MS` (120 s — the longest hole in the telemetry the window may
+  span; kept below the minimum window so no accepted gap can be most of a
+  claim).
+- **Fail-closed in three directions.** A **stale** fix yields `unknown`: the
+  last position being old is exactly the case where "they have not moved" is
   unknowable, and reporting a stationary runner off pre-dropout pings would be
-  the same lie in a new place. Too short a window yields `unknown` too — a
-  five-ping buffer at a 5 s cadence spans twenty seconds, and every runner
-  alive stands still for twenty seconds at a road crossing. A rewound odometer
-  (a re-armed recorder) is read as absolute ground covered, so it cannot
-  manufacture a stopped verdict.
+  the same lie in a new place. A **gap** inside the buffer yields `unknown`
+  too, for that reason arriving through a different door — a claim about a
+  runner staying put is a claim about every moment in between, and an outage is
+  precisely where they could have left and come back, so only the contiguous
+  run of pings ending at the newest one is evidence and everything before a
+  longer gap is discarded rather than vouched for. (Without this, a spectator
+  whose runner dropped out in a canyon and re-acquired near the same spot an
+  hour later would have been told "not moving for at least 60 min" about an
+  hour nobody observed.) And too short a window yields `unknown` — a five-ping
+  buffer at a 5 s cadence spans twenty seconds, and every runner alive stands
+  still for twenty seconds at a road crossing. A rewound odometer (a re-armed
+  recorder) is read as absolute ground covered, so it cannot manufacture a
+  stopped verdict either.
 - **Neutral, not an alarm.** A runner stopped for six minutes is at an aid
   station; one stopped for ninety is a question for their crew. The chip states
   the fact and the duration in the body text colour and draws no conclusion.
@@ -384,7 +395,7 @@ matters most.
   readout is derived from the `distance_m` + `at` fields the page already
   renders as the trace and the stat strip, and the position itself still comes
   through the existing privacy-zone clipping. Pinned by
-  `apps/web/tests-e2e/live/motion.spec.ts` (4) + 13 unit tests.
+  `apps/web/tests-e2e/live/motion.spec.ts` (4) + 17 unit tests.
 - **No Dart twin, deliberately.** The Flutter `live_spectator_screen` renders
   the same pings but has no motion readout, so a twin would be a helper with no
   caller — dead code the parity guard would police forever. `live_motion` is
