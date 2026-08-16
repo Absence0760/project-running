@@ -15,7 +15,7 @@
  * keep the allocation, cutoff rules, edge cases, and test count in lockstep.
  */
 import { gradeFactor, MIN_SEGMENT_M } from '../runs/grade_adjusted_pace';
-import { parseCutoff, parseTarget, type CutoffParts } from './route_markers';
+import { parseCutoff, parseTarget } from './route_markers';
 
 export interface RoadbookWaypoint {
 	lat: number;
@@ -326,7 +326,15 @@ export function buildRoadbook(
  * is a property of the plan, and takes the same rule so the two cannot
  * disagree about what "06:00" means on the same row.
  */
-function limitFromParts(parts: CutoffParts | null, startClockMin: number | null): number | null {
+function limitFromParts(
+	// Deliberately structural rather than `CutoffParts`: `parseCutoff` and
+	// `parseTarget` return two separate interfaces that happen to be identical
+	// today, so borrowing one would silently drop a field the other later
+	// grows. The Dart twin takes the two values as plain parameters for the
+	// same reason.
+	parts: { clock?: string; elapsedS?: number } | null,
+	startClockMin: number | null
+): number | null {
 	if (!parts) return null;
 	if (parts.elapsedS !== undefined) return parts.elapsedS;
 	if (parts.clock !== undefined && startClockMin != null) {
