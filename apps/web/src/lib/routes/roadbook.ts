@@ -15,7 +15,7 @@
  * keep the allocation, cutoff rules, edge cases, and test count in lockstep.
  */
 import { gradeFactor, MIN_SEGMENT_M } from '../runs/grade_adjusted_pace';
-import { parseCutoff } from './route_markers';
+import { parseCutoff, parseTarget, type CutoffParts } from './route_markers';
 
 export interface RoadbookWaypoint {
 	lat: number;
@@ -48,6 +48,15 @@ export interface RoadbookCutoff {
 	status: CutoffStatus;
 }
 
+export type TargetStatus = 'ahead' | 'on' | 'behind';
+
+export interface RoadbookTarget {
+	targetElapsedS: number;
+	/** Signed like `RoadbookCutoff.marginS` — positive is time in hand. */
+	marginS: number;
+	status: TargetStatus;
+}
+
 export type Checkpoint = 'start' | 'finish' | { kind: string; label: string };
 
 export interface RoadbookLeg {
@@ -60,6 +69,7 @@ export interface RoadbookLeg {
 	/** Wall-clock arrival, minutes past midnight (mod 1440). Absent if no start. */
 	projectedClockMin?: number;
 	cutoff?: RoadbookCutoff;
+	target?: RoadbookTarget;
 	services: string[];
 }
 
@@ -73,6 +83,22 @@ export interface Roadbook {
 
 /** A cutoff within this many seconds of the projection is "tight", not "safe". */
 export const CUTOFF_TIGHT_S = 30 * 60;
+
+/**
+ * How close to a checkpoint's target time still reads as "on schedule".
+ *
+ * Unlike the cutoff band this is proportional, because a target is read at the
+ * scale of the race: two minutes down at a 30-minute checkpoint is a real
+ * problem, and two minutes down at hour twenty of a 200-miler is noise. A flat
+ * band would report every ultra checkpoint as off-plan and every 10K one as on
+ * it. The floor keeps an early checkpoint from being graded to the second.
+ */
+export const TARGET_BAND_FRACTION = 0.01;
+export const TARGET_BAND_FLOOR_S = 60;
+
+export function targetBandS(targetElapsedS: number): number {
+	return Math.max(TARGET_BAND_FLOOR_S, targetElapsedS * TARGET_BAND_FRACTION);
+}
 
 const MINUTES_PER_DAY = 1440;
 
@@ -164,7 +190,7 @@ interface Stop {
 	pos: number;
 	checkpoint: Checkpoint;
 	services: string[];
-	cutoffMeta: unknown;
+	meta: unknown;
 	isCutoff: boolean;
 }
 
@@ -188,7 +214,7 @@ export function buildRoadbook(
 		.sort((a, b) => a.position_m - b.position_m);
 
 	const stops: Stop[] = [
-		{ pos: 0, checkpoint: 'start', services: [], cutoffMeta: null, isCutoff: false },
+		{ pos: 0, checkpoint: 'start', services: [], meta: null, isCutoff: false },
 		...placed.map((m): Stop => {
 			const meta = (m.meta ?? {}) as Record<string, unknown>;
 			const services = Array.isArray(meta.services) ? (meta.services as string[]) : [];
@@ -196,11 +222,11 @@ export function buildRoadbook(
 				pos: m.position_m,
 				checkpoint: { kind: m.kind, label: m.label },
 				services,
-				cutoffMeta: m.meta,
+				meta: m.meta,
 				isCutoff: m.kind === 'cutoff'
 			};
 		}),
-		{ pos: totalDistM, checkpoint: 'finish', services: [], cutoffMeta: null, isCutoff: false }
+		{ pos: totalDistM, checkpoint: 'finish', services: [], meta: null, isCutoff: false }
 	];
 
 	// Allocation metric per leg: grade-adjusted distance (effort) or raw
@@ -242,7 +268,7 @@ export function buildRoadbook(
 		}
 
 		if (stop.isCutoff) {
-			const cutoff = cutoffLimitS(stop.cutoffMeta, opts.startClockMin ?? null);
+			const cutoff = limitFromParts(parseCutoff(stop.meta), opts.startClockMin ?? null);
 			if (cutoff != null) {
 				const marginS = cutoff - elapsed;
 				leg.cutoff = {
@@ -251,6 +277,17 @@ export function buildRoadbook(
 					status: marginS < 0 ? 'miss' : marginS < CUTOFF_TIGHT_S ? 'tight' : 'safe'
 				};
 			}
+		}
+
+		const target = limitFromParts(parseTarget(stop.meta), opts.startClockMin ?? null);
+		if (target != null) {
+			const marginS = target - elapsed;
+			const band = targetBandS(target);
+			leg.target = {
+				targetElapsedS: target,
+				marginS,
+				status: marginS > band ? 'ahead' : marginS < -band ? 'behind' : 'on'
+			};
 		}
 
 		legs.push(leg);
@@ -270,29 +307,30 @@ export function buildRoadbook(
 }
 
 /**
- * Resolve a cutoff marker's `meta` to a limit in elapsed seconds from the
- * start. Prefers `cutoff_elapsed_s`; otherwise derives from `cutoff_clock`
- * minus the start clock. Null when neither resolves.
+ * Resolve a cutoff's or a target's parsed `meta` to elapsed seconds from the
+ * start. Prefers the elapsed form; otherwise derives from the clock form minus
+ * the start clock. Null when neither resolves.
  *
  * A clock field carries no day, so it resolves to that wall clock's first
  * occurrence after the race start and nothing else — a clock equal to the
  * start reads as the 24h limit it is meant to express, never a 0-second
- * window. A limit past 24h has to be written as `cutoff_elapsed_s`, the only
- * field that carries a day.
+ * window. A limit past 24h has to be written as the elapsed field, the only
+ * one that carries a day.
  *
  * The day was previously snapped to whichever whole day sat nearest the leg's
  * projected arrival, which made the limit a function of the goal time: a
  * slower goal pushed the projection over a day boundary and turned a blown
  * cutoff into "safe, 12h to spare", and two spectators of the same live run
  * saw different limits for the same checkpoint. A cutoff is a property of the
- * race, so it may not depend on how fast anyone is expected to run.
+ * race, so it may not depend on how fast anyone is expected to run. A target
+ * is a property of the plan, and takes the same rule so the two cannot
+ * disagree about what "06:00" means on the same row.
  */
-function cutoffLimitS(meta: unknown, startClockMin: number | null): number | null {
-	const cutoff = parseCutoff(meta);
-	if (!cutoff) return null;
-	if (cutoff.elapsedS !== undefined) return cutoff.elapsedS;
-	if (cutoff.clock !== undefined && startClockMin != null) {
-		const [h, m] = cutoff.clock.split(':').map(Number);
+function limitFromParts(parts: CutoffParts | null, startClockMin: number | null): number | null {
+	if (!parts) return null;
+	if (parts.elapsedS !== undefined) return parts.elapsedS;
+	if (parts.clock !== undefined && startClockMin != null) {
+		const [h, m] = parts.clock.split(':').map(Number);
 		let baseMin = h * 60 + m - startClockMin;
 		if (baseMin <= 0) baseMin += MINUTES_PER_DAY;
 		return baseMin * 60;
