@@ -112,12 +112,12 @@
 			: board.find((r) => r.user_id === auth.user?.id) ?? null
 	);
 
-	// On a team board the entrant is a club, not the viewer. Only a club of
-	// theirs that actually fields a team on this board can be their side of it.
+	// On a team board the entrant is a club, not the viewer — and it is the club
+	// they JOINED under, off their own participant row. Nothing stops a runner
+	// belonging to two clubs both fielding a team here, so picking whichever of
+	// their clubs is on the board would credit them to the wrong side.
 	const myTeamId = $derived(
-		challenge?.scope === 'club_vs_club'
-			? myClubs.find((c) => board.some((r) => r.team_club_id === c.id))?.id ?? null
-			: null
+		challenge?.scope === 'club_vs_club' ? challenge.my_team_club_id ?? null : null
 	);
 
 	async function doJoin() {

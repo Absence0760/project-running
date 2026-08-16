@@ -14,7 +14,14 @@ import { USER_A, USER_B } from '../fixtures/users';
 const TRAILING_ID = 'eeeeeeee-eeee-eeee-eeee-eeee000000b3';
 const TIED_ID = 'eeeeeeee-eeee-eeee-eeee-eeee000000b4';
 
+// The assertions name an exact gap, so the aggregate must see THIS spec's runs
+// and nothing else. Every other challenges spec seeds plain `run` rows over an
+// overlapping window; filtering the challenge to an activity nobody else seeds
+// isolates the board instead of making the expected number a running total.
+const FIXTURE_ACTIVITY = 'stroller';
+
 const WINDOW = {
+	activity_type: FIXTURE_ACTIVITY,
 	starts_at: new Date(Date.now() - 3 * 86400000).toISOString(),
 	ends_at: new Date(Date.now() + 3 * 86400000).toISOString()
 };
@@ -72,9 +79,9 @@ test.describe('/challenges — leaderboard standing', () => {
 					started_at: new Date(Date.now() - 86400000).toISOString(),
 					duration_s: 1800,
 					distance_m: distance,
-					activity_type: 'run',
+					activity_type: FIXTURE_ACTIVITY,
 					source: 'app',
-					metadata: { activity_type: 'run' }
+					metadata: { activity_type: FIXTURE_ACTIVITY }
 				})
 				.select('id')
 				.single();
