@@ -56,6 +56,7 @@
 	import IntensityBalanceCard from '$lib/components/IntensityBalanceCard.svelte';
 	import TrendDeltasCard from '$lib/components/TrendDeltasCard.svelte';
 	import LoadRampCard from '$lib/components/LoadRampCard.svelte';
+	import ComebackCard from '$lib/components/ComebackCard.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
@@ -1231,7 +1232,7 @@
 			</button>
 			<div class="stat-card">
 				<span class="stat-label">{m('dash.statTotalRuns')}</span>
-				<span class="stat-value">{totalRuns}</span>
+				<span class="stat-value" data-testid="dash-total-runs">{totalRuns}</span>
 				<span class="stat-sub">{m('dash.allSources')}</span>
 			</div>
 			<button
@@ -1545,6 +1546,15 @@
 		     by a base that isn't there. Pure derivation in
 		     lib/training/self_load.ts. -->
 		<LoadRampCard runs={filteredRuns} />
+
+		<!-- The same question for the runner the ratio above refuses to grade:
+		     back from a break, no chronic month to divide by, and so no card at
+		     all in exactly the case that most warrants one. Anchored on their
+		     own pre-break weekly average instead of a near-empty one. Mutually
+		     exclusive with LoadRampCard by construction (same activeWeeks gate,
+		     read the other way), pinned by a unit test. Pure derivation in
+		     lib/training/comeback.ts. -->
+		<ComebackCard runs={filteredRuns} />
 
 		<!-- Mileage chart -->
 		<section class="card-elevated">
