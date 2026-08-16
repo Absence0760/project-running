@@ -98,7 +98,7 @@ export type { SessionPlan, SessionPlanBlock, SessionPlanItem, SessionPlanWithIte
 // unions (so the CHECK<->union guard can read it from one file); re-exported
 // here so the report surfaces keep importing it from the data-layer facade.
 export type { ReportTargetKind } from '../types';
-import { nextInstanceAfter } from '../social/recurrence';
+import { isOccurrenceCancelled, nextLiveInstance } from '../social/event_occurrence';
 import {
 	parseGymTemplate,
 	type EventGymTemplate
@@ -2839,6 +2839,11 @@ export async function fetchClubMembers(
 ///
 /// Mirrors `SocialService.fetchNextRsvpedEvent` on Android so both
 /// surfaces show the same card at the same moment in time.
+///
+/// Reads a small run of candidates rather than one row because the soonest
+/// ones may have been called off; the card wants the soonest that is still on.
+const RSVP_CANDIDATE_LIMIT = 10;
+
 export async function fetchNextRsvpedEvent(
 	windowHours = 48,
 ): Promise<{
@@ -2862,20 +2867,42 @@ export async function fetchNextRsvpedEvent(
 		.gte('instance_start', now.toISOString())
 		.lte('instance_start', horizon.toISOString())
 		.order('instance_start', { ascending: true })
-		.limit(1);
-	const row = (data as Array<Record<string, unknown>> | null)?.[0];
-	if (!row) return null;
-	const ev = row.events as
-		| { title: string; meet_label: string | null; clubs: { slug: string } }
-		| null;
-	if (!ev) return null;
-	return {
-		event_id: row.event_id as string,
-		instance_start: row.instance_start as string,
-		club_slug: ev.clubs.slug,
-		title: ev.title,
-		meet_label: ev.meet_label ?? null,
-	};
+		.limit(RSVP_CANDIDATE_LIMIT);
+	const rows = (data as Array<Record<string, unknown>> | null) ?? [];
+	if (rows.length === 0) return null;
+
+	// An RSVP row survives its occurrence being called off — the organiser can
+	// reinstate it — so the card has to subtract `event_exceptions` itself
+	// rather than trust that a `going` row means the run is on.
+	const { data: exceptionRows } = await supabase
+		.from('event_exceptions')
+		.select('event_id, instance_start')
+		.in('event_id', rows.map((r) => r.event_id as string))
+		.gte('instance_start', now.toISOString());
+	const cancelled = new Map<string, string[]>();
+	for (const x of (exceptionRows ?? []) as { event_id: string; instance_start: string }[]) {
+		const list = cancelled.get(x.event_id);
+		if (list) list.push(x.instance_start);
+		else cancelled.set(x.event_id, [x.instance_start]);
+	}
+
+	for (const row of rows) {
+		const eventId = row.event_id as string;
+		const instanceStart = row.instance_start as string;
+		if (isOccurrenceCancelled(cancelled.get(eventId) ?? [], instanceStart)) continue;
+		const ev = row.events as
+			| { title: string; meet_label: string | null; clubs: { slug: string } }
+			| null;
+		if (!ev) continue;
+		return {
+			event_id: eventId,
+			instance_start: instanceStart,
+			club_slug: ev.clubs.slug,
+			title: ev.title,
+			meet_label: ev.meet_label ?? null,
+		};
+	}
+	return null;
 }
 
 export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta[]> {
@@ -2895,10 +2922,10 @@ export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta
 	const now = new Date();
 	const enriched = await enrichEvents(events);
 	return enriched
-		.filter((e) => new Date(e.next_instance_start) >= now)
+		.filter((e) => e.next_instance_start != null && new Date(e.next_instance_start) >= now)
 		.sort(
 			(a, b) =>
-				new Date(a.next_instance_start).getTime() - new Date(b.next_instance_start).getTime()
+				new Date(a.next_instance_start!).getTime() - new Date(b.next_instance_start!).getTime()
 		);
 }
 
@@ -2942,17 +2969,40 @@ export async function fetchEventById(id: string): Promise<EventWithMeta | null> 
 async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	if (events.length === 0) return [];
 
-	// Compute each event's next instance client-side so counts + RSVPs can be
-	// scoped to that instance. One-off events use their starts_at verbatim.
-	const nextMap = new Map<string, string>();
-	for (const e of events) {
-		const evt = normaliseEvent(e);
-		const next = evt.recurrence_freq ? nextInstanceAfter(evt) ?? new Date(evt.starts_at) : new Date(evt.starts_at);
-		nextMap.set(e.id, next.toISOString());
+	const allIds = events.map((e) => e.id);
+	const now = new Date();
+
+	// Called-off occurrences (`event_exceptions`) have to be known BEFORE the
+	// next instance is picked, so this read cannot join the parallel batch
+	// below — the counts RPC is keyed on the instant this resolves to. Only
+	// future exceptions can move the answer, so the scan stays small.
+	const { data: exceptionRows } = await supabase
+		.from('event_exceptions')
+		.select('event_id, instance_start')
+		.in('event_id', allIds)
+		.gte('instance_start', now.toISOString());
+	const cancelledByEvent = new Map<string, string[]>();
+	for (const row of (exceptionRows ?? []) as { event_id: string; instance_start: string }[]) {
+		const list = cancelledByEvent.get(row.event_id);
+		if (list) list.push(row.instance_start);
+		else cancelledByEvent.set(row.event_id, [row.instance_start]);
 	}
 
-	const ids = events.map((e) => e.id);
-	const nextStarts = ids.map((id) => nextMap.get(id)!);
+	// Each event's next occurrence that is still ON — null once the series has
+	// none left (exhausted, or every remaining one called off). Counts and the
+	// viewer's RSVP scope to that occurrence, falling back to `starts_at` so a
+	// past event still reports who attended it.
+	const liveMap = new Map<string, string>();
+	const countMap = new Map<string, string>();
+	for (const e of events) {
+		const evt = normaliseEvent(e);
+		const next = nextLiveInstance(evt, cancelledByEvent.get(e.id) ?? [], now);
+		if (next) liveMap.set(e.id, next.toISOString());
+		countMap.set(e.id, (next ?? new Date(evt.starts_at)).toISOString());
+	}
+
+	const ids = allIds;
+	const nextStarts = ids.map((id) => countMap.get(id)!);
 	const userId = auth.user?.id;
 
 	// The going-count is scoped to each event's NEXT instance and computed
@@ -2980,7 +3030,7 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 
 	const [countRes, rsvpRes] = await Promise.all([countsPromise, rsvpPromise]);
 
-	// Compare instants, not raw strings: nextMap holds toISOString() ('…Z')
+	// Compare instants, not raw strings: countMap holds toISOString() ('…Z')
 	// while Postgres returns timestamptz as '…+00:00', so a string `===`
 	// never matches and every RSVP would be dropped (regression from the
 	// client-side debatch in 7e386e57 — the prior per-event `.eq()` compared
@@ -2993,7 +3043,7 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	}
 	const rsvps = new Map<string, RsvpStatus | null>();
 	for (const row of (rsvpRes.data ?? []) as { event_id: string; status: string; instance_start: string }[]) {
-		if (sameInstant(row.instance_start, nextMap.get(row.event_id))) {
+		if (sameInstant(row.instance_start, countMap.get(row.event_id))) {
 			rsvps.set(row.event_id, (row.status ?? null) as RsvpStatus | null);
 		}
 	}
@@ -3002,7 +3052,7 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 		...normaliseEvent(e),
 		attendee_count: counts.get(e.id) ?? 0,
 		viewer_rsvp: rsvps.get(e.id) ?? null,
-		next_instance_start: nextMap.get(e.id)!
+		next_instance_start: liveMap.get(e.id) ?? null
 	}));
 }
 

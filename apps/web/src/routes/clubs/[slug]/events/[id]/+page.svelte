@@ -482,7 +482,11 @@
 			// Preserve the user's instance selection across loads — otherwise
 			// rsvp() (which calls load()) silently warps the user back to the
 			// next instance after every click on a later one.
-			activeInstance = prevInstance ?? event.next_instance_start;
+			// `next_instance_start` is null once every remaining occurrence has
+			// been called off; `starts_at` then keeps the page anchored to a real
+			// instant so the organiser can still reach the cancelled-occurrence
+			// list below rather than landing on nothing.
+			activeInstance = prevInstance ?? event.next_instance_start ?? event.starts_at;
 			// Members-only meetup coordinates (null for non-members / no point set).
 			meetPoint = await fetchEventMeetPoint(event.id);
 			await loadSessionPlan();
