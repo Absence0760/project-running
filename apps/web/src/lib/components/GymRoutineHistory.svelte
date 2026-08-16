@@ -18,16 +18,26 @@
 
 	let history = $state<RoutineHistory | null>(null);
 	let loadError = $state(false);
+	// Navigating between two routines reuses this component, so a slow read for
+	// the routine just left can resolve after the new one and publish the wrong
+	// history under the new title. Only the newest read may write.
+	let readToken = 0;
 
 	// The panel owns its own read so a history failure can't blank the
 	// prescription the page exists to show (conventions.md § Layered resilience).
 	async function load() {
 		if (!routineId) return;
+		const token = ++readToken;
+		// Drop the outgoing routine's numbers before the new ones arrive, or the
+		// panel reads them under the new routine's title for a beat.
+		history = null;
 		loadError = false;
 		try {
 			const rows = await fetchGymRoutineSessions(routineId);
+			if (token !== readToken) return;
 			history = summariseRoutineHistory(rows, Date.now());
 		} catch (e) {
+			if (token !== readToken) return;
 			console.debug('routine history load failed', e);
 			history = null;
 			loadError = true;

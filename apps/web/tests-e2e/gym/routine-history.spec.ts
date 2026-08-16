@@ -107,7 +107,7 @@ test.describe('/gym/routines/[id] — routine history', () => {
 			// Three performed sessions — the draft row carries routine_id but is
 			// not a session, so it must not inflate the count or the "last run".
 			await expect(page.getByTestId('routine-history-count')).toHaveText('3 sessions');
-			await expect(page.getByTestId('routine-history-last')).toHaveText('Run 2 days ago');
+			await expect(page.getByTestId('routine-history-last')).toHaveText('Done 2 days ago');
 
 			// The save-as-is row claims no verdict, so it is out of the
 			// denominator rather than counted as a failure.

@@ -5012,7 +5012,7 @@ export const en = {
 	"gym.routine.history.title": "Routine history",
 	"gym.routine.history.recent": "Recent sessions",
 	"gym.routine.history.lastDone":
-		"{days, plural, =0 {Run today} =1 {Run yesterday} other {Run # days ago}}",
+		"{days, plural, =0 {Done today} =1 {Done yesterday} other {Done # days ago}}",
 	"gym.routine.history.completedRate": "{completed} of {graded} completed",
 	"gym.routine.history.verdict.ungraded": "Not graded",
 	"gym.routine.history.loadError": "Couldn’t load this routine’s history.",

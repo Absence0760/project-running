@@ -9548,9 +9548,16 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 /// Includes in-flight drafts and ungraded "save as is" rows; classifying them
 /// is `gym/routine_history.ts`'s job, not the query's, so the shaping rules
 /// stay unit-testable in one place.
+///
+/// The window is generous rather than all-time: PostgREST caps an unbounded
+/// SELECT at 1000 rows, so "no limit" would silently truncate at a number
+/// nothing in the code states. 500 sessions is ~10 years of running one routine
+/// weekly; past it the count under-reports. An honest all-time figure is a
+/// server-side aggregate (the shape `gym_exercise_records` took), which is a
+/// migration this surface does not need yet.
 export async function fetchGymRoutineSessions(
 	routineId: string,
-	limit = 50,
+	limit = 500,
 ): Promise<Array<{ id: string; started_at: string; title: string | null; metadata: unknown }>> {
 	const userId = auth.user?.id;
 	if (!userId || !routineId) return [];
