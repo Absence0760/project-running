@@ -85,8 +85,8 @@ export interface NutrientSpec {
 	labelKey: MessageKey;
 }
 
-/// Display order for the day's nutrient list (the two graded ceilings a runner
-/// most needs first, then fibre, then the ungraded pair).
+/// Display order for the day's nutrient list: the three graded nutrients
+/// first, most useful to a runner first, then the ungraded pair.
 export const EXTENDED_NUTRIENTS: NutrientSpec[] = [
 	{ kind: 'sodium', column: 'sodium_mg', direction: 'ceiling', unit: 'mg', labelKey: 'nutrition.sodium' },
 	{ kind: 'fiber', column: 'fiber_g', direction: 'floor', unit: 'g', labelKey: 'nutrition.fiber' },
@@ -188,6 +188,10 @@ export function extendedNutrientBudgets(
 			reported += 1;
 		}
 		if (reported === 0) continue;
+		// Graded against the ROUNDED total, i.e. the number the row displays, not
+		// the raw sum — so a sub-half-unit overage can't flag `exceeded` while the
+		// overage it would render rounds to "0 mg over". Same reasoning as
+		// `nutrition_budget.ts`, which keys `exceeded` off its rounded `over`.
 		const consumed = roundFor(spec.unit, sum);
 		const target = targets[spec.kind];
 		const partial = reported < rows.length;

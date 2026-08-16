@@ -171,6 +171,20 @@ test('budgets: exactly on a ceiling is not yet exceeded; exactly on a floor is r
 	assert.equal(floor.remaining, 0);
 });
 
+test('budgets: a sub-half-unit overage rounds under the ceiling rather than flagging a "0 over"', () => {
+	// 2300.4 mg displays as 2300 against a 2300 ceiling. Flagging `exceeded` here
+	// would render an overage chip reading "0 mg over" — the broken state
+	// nutrition_budget.ts avoids the same way.
+	const b = budgetFor('sodium', [row({ sodium_mg: 2300.4 })]);
+	assert.equal(b.consumed, SODIUM_BASELINE_MG);
+	assert.equal(b.exceeded, false);
+	assert.equal(b.remaining, 0);
+	// Half a milligram further and it is a real, renderable overage.
+	const over = budgetFor('sodium', [row({ sodium_mg: 2300.6 })]);
+	assert.equal(over.consumed, SODIUM_BASELINE_MG + 1);
+	assert.equal(over.exceeded, true);
+});
+
 test('budgets: an ungraded nutrient reports its total and nothing else', () => {
 	const b = budgetFor('sugar', [row({ sugar_g: 42.25 })]);
 	assert.equal(b.consumed, 42.3);
