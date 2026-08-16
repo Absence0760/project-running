@@ -90,8 +90,8 @@
 	.failure-report {
 		margin-top: var(--space-md);
 		padding: var(--space-md);
-		border: 1px solid var(--color-border);
-		border-left: 3px solid var(--color-danger-text);
+		border: 1px solid color-mix(in srgb, var(--color-danger-text) 50%, var(--color-border));
+		border-inline-start: 3px solid var(--color-danger-text);
 		border-radius: var(--radius-md);
 		background: var(--color-fill-subtle);
 	}
@@ -161,7 +161,7 @@
 		color: var(--color-text-secondary);
 	}
 	.item-detail {
-		font-size: 0.7rem;
+		font-size: var(--font-size-section-label);
 		color: var(--color-text-tertiary);
 		overflow-wrap: anywhere;
 	}
