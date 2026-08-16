@@ -780,18 +780,17 @@
 				<ul class="nutrient-list">
 					{#each nutrientBudgets as n (n.kind)}
 						{@const label = m(n.labelKey)}
-						{@const amount = `${n.consumed} ${n.unit}`}
-						<li
-							class="nutrient-row"
-							data-testid={`nutrient-${n.kind}`}
-							aria-label={n.partial
-								? `${label}: ${m('nutrition.nutrientAtLeast')} ${amount}${n.target !== null ? ` / ${n.target} ${n.unit}` : ''}`
-								: `${label}: ${amount}${n.target !== null ? ` / ${n.target} ${n.unit}` : ''}`}
-						>
+						{@const coverage = m('nutrition.nutrientPartial', { reported: n.reportedEntries, total: n.totalEntries, nutrient: label })}
+						<li class="nutrient-row" data-testid={`nutrient-${n.kind}`}>
 							<span class="nutrient-name">{label}</span>
 							<span class="nutrient-amount">
 								{#if n.partial}
-									<span class="nutrient-approx" title={m('nutrition.nutrientPartial', { reported: n.reportedEntries, total: n.totalEntries, nutrient: label })} data-testid={`nutrient-partial-${n.kind}`}>{m('nutrition.nutrientAtLeast')}</span>
+									<!-- The coverage sentence is repeated as visually-hidden text rather
+									     than left in `title` alone: a title tooltip is unreachable by
+									     keyboard and inconsistently announced, and it is the one thing
+									     qualifying the number beside it. -->
+									<span class="nutrient-approx" title={coverage} data-testid={`nutrient-partial-${n.kind}`}>{m('nutrition.nutrientAtLeast')}</span>
+									<span class="visually-hidden">{coverage}</span>
 								{/if}
 								<span class="nutrient-value">{n.consumed}</span>
 								{#if n.target !== null}<span class="nutrient-target">/ {n.target}</span>{/if}
