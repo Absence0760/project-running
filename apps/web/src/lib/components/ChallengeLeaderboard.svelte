@@ -73,7 +73,7 @@
 						name: nameFor(standing.chasing.entry)
 					})}
 				</span>
-			{:else}
+			{:else if standing.tiedWith === 0}
 				<span class="standing-gap leading">{m('challenges.standingLeading')}</span>
 			{/if}
 			{#if standing.chasedBy}
