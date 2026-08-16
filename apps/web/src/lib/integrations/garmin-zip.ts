@@ -39,12 +39,21 @@ import {
 	type RawRunRow,
 	type RunIdentity,
 } from './garmin_dedupe';
+import {
+	newImportFailureLog,
+	recordImportFailure,
+	type ImportFailureLog,
+} from './import_failures';
 
 export interface GarminZipProgress {
 	total: number;
 	imported: number;
 	skipped: number;
 	failed: number;
+	// Per-entry detail behind `failed` — name, reason, log-safe message. A
+	// bare count can't tell a migrant whether re-running the import will
+	// land the missing runs or never will.
+	failures: ImportFailureLog;
 	currentName: string | null;
 	/// True when the import seeded the user's HR zones from a FIT file's
 	/// `hr_zone` messages (only happens when the user had none set).
@@ -139,6 +148,7 @@ export async function importGarminBundle(
 			imported: 0,
 			skipped: 0,
 			failed: 0,
+			failures: newImportFailureLog(),
 			currentName: file.name,
 		};
 		onProgress?.(progress);
@@ -152,9 +162,10 @@ export async function importGarminBundle(
 				hrZoneCollector,
 			);
 			if (handled === 'imported') progress.imported++;
-			else if (handled === 'skipped') progress.skipped++;
-		} catch (_e) {
+			else progress.skipped++;
+		} catch (err) {
 			progress.failed++;
+			recordImportFailure(progress.failures, { name: file.name }, err);
 		}
 		await seedHrZonesIfUnset(uid, hrZoneCollector, progress);
 		progress.currentName = null;
@@ -184,6 +195,7 @@ export async function importGarminBundle(
 		imported: 0,
 		skipped: 0,
 		failed: 0,
+		failures: newImportFailureLog(),
 		currentName: null,
 	};
 	onProgress?.(progress);
@@ -192,7 +204,7 @@ export async function importGarminBundle(
 		progress.currentName = e.path.split('/').pop() ?? e.path;
 		onProgress?.(progress);
 		try {
-			let handled: 'imported' | 'skipped' | 'failed' = 'failed';
+			let handled: 'imported' | 'skipped';
 			if (e.kind === 'fit') {
 				const buf = await zip.file(e.path)!.async('uint8array');
 				handled = await importFitFile(
@@ -207,16 +219,21 @@ export async function importGarminBundle(
 				const blob = await zip.file(e.path)!.async('blob');
 				const synthetic = new File([blob], e.path.split('/').pop()!);
 				handled = await importRouteFile(synthetic, seenComposite, existingIdentities);
-			} else if (e.kind === 'fit-zip') {
+			} else {
 				// Garmin sometimes wraps a single FIT inside a per-activity
 				// .zip; open it and pull out any .fit entries.
 				const blob = await zip.file(e.path)!.async('blob');
 				const inner = await JSZip.loadAsync(blob);
-				let innerHandled: 'imported' | 'skipped' | 'failed' = 'failed';
+				let innerHandled: 'imported' | 'skipped' | null = null;
+				// A member that throws doesn't end the wrapper: a later .fit
+				// inside the same archive may still be readable, which is the
+				// fall-through the pre-throw disposition gave us.
+				let innerError: unknown = new Error('Archive member contains no FIT file');
 				for (const name of Object.keys(inner.files)) {
 					if (!name.toLowerCase().endsWith('.fit')) continue;
 					const buf = await inner.file(name)!.async('uint8array');
-					innerHandled = await importFitFile(
+					try {
+						innerHandled = await importFitFile(
 							buf,
 							name,
 							seenIds,
@@ -224,15 +241,19 @@ export async function importGarminBundle(
 							existingIdentities,
 							hrZoneCollector,
 						);
-					if (innerHandled === 'imported' || innerHandled === 'skipped') break;
+						break;
+					} catch (err) {
+						innerError = err;
+					}
 				}
+				if (innerHandled === null) throw innerError;
 				handled = innerHandled;
 			}
 			if (handled === 'imported') progress.imported++;
-			else if (handled === 'skipped') progress.skipped++;
-			else progress.failed++;
-		} catch (_err) {
+			else progress.skipped++;
+		} catch (err) {
 			progress.failed++;
+			recordImportFailure(progress.failures, { name: progress.currentName ?? e.path }, err);
 		}
 		onProgress?.(progress);
 	}
@@ -251,16 +272,15 @@ async function importFitFile(
 	seenComposite: Set<string>,
 	existingIdentities: RunIdentity[],
 	collector?: HrZoneCollector,
-): Promise<'imported' | 'skipped' | 'failed'> {
-	let parsed: ParsedFitRun | null;
-	try {
-		// TS 6 typed Uint8Array.buffer as ArrayBufferLike (union with
-		// SharedArrayBuffer); parseFitBuffer wants a concrete ArrayBuffer.
-		// .slice() always returns a fresh ArrayBuffer either way.
-		parsed = await parseFitBuffer(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
-	} catch (_e) {
-		return 'failed';
-	}
+): Promise<'imported' | 'skipped'> {
+	// A parse error propagates so the caller's single catch can record WHY
+	// this member failed; a swallowed 'failed' disposition carried no reason.
+	// TS 6 typed Uint8Array.buffer as ArrayBufferLike (union with
+	// SharedArrayBuffer); parseFitBuffer wants a concrete ArrayBuffer.
+	// .slice() always returns a fresh ArrayBuffer either way.
+	const parsed: ParsedFitRun | null = await parseFitBuffer(
+		buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer,
+	);
 	if (!parsed) return 'skipped';
 
 	// Capture HR zones even from a duplicate/skipped run — the zones are
@@ -347,13 +367,8 @@ async function importRouteFile(
 	file: File,
 	seenComposite: Set<string>,
 	existingIdentities: RunIdentity[],
-): Promise<'imported' | 'skipped' | 'failed'> {
-	let routes;
-	try {
-		routes = await parseRouteFile(file);
-	} catch (_e) {
-		return 'failed';
-	}
+): Promise<'imported' | 'skipped'> {
+	const routes = await parseRouteFile(file);
 	if (!routes || routes.length === 0) return 'skipped';
 	const r = routes[0];
 	const waypoints = r.waypoints;
