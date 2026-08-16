@@ -114,6 +114,16 @@ test('an empty history says nothing', () => {
 	assert.equal(comebackLoad([], NOW).verdict, 'insufficient');
 });
 
+test('a run stamped in the future does not inflate the break it appears to open', () => {
+	// A clock 40 days ahead puts today's run in the future; the hole between it
+	// and the runner's last real session reads as 70 days unclamped, and 30 —
+	// the break they actually took — once the stamp is pulled back to now.
+	const runs = [run(-40, 10_000), run(30, 40_000), run(37, 40_000), run(44, 40_000), run(51, 40_000)];
+	const load = comebackLoad(runs, NOW);
+	assert.equal(load.layoffDays, 30);
+	assert.equal(load.thisWeekM, 10_000);
+});
+
 test('the two load cards are mutually exclusive by construction', () => {
 	const cases = [
 		comebackRunner(70, 36_000),

@@ -109,11 +109,15 @@ export function comebackLoad(runs: RunForVolume[], nowMs: number): ComebackLoad 
 	// off zero kilometres would read as praise for not running.
 	if (recent.acuteM <= 0) return UNGRADED;
 
+	// A device whose clock runs ahead stamps a just-finished run in the future.
+	// `recentRunVolume` absorbs that by clamping the age to zero; the same
+	// clamp has to happen here, because an unclamped future stamp opens a gap
+	// to the run before it and would be read as a layoff that never happened.
 	const samples = runs
 		.map(volumeSample)
 		.filter((s): s is NonNullable<typeof s> => s !== null)
+		.map((s) => ({ ...s, startedMs: Math.min(s.startedMs, nowMs) }))
 		.sort((a, b) => b.startedMs - a.startedMs);
-	if (samples.length < 2) return UNGRADED;
 
 	// The most recent run-less stretch long enough to count, walking back from
 	// today. Later breaks are the ones the runner is living through; an older
