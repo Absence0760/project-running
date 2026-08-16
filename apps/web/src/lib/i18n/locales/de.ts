@@ -4995,7 +4995,7 @@ export const messages = {
 	"runDetail.pacingPositive": "Positiver Split",
 	"runDetail.pacingFaster": "{delta} schneller in der zweiten Hälfte",
 	"runDetail.pacingSlower": "{delta} langsamer in der zweiten Hälfte",
-	"runDetail.pacingHeld": "Gleiches Tempo in beiden Hälften",
+	"runDetail.pacingHeld": "Gleichmäßig über beide Hälften",
 	"runDetail.pacingGapNegative": "Höhenkorrigiert bist du in der zweiten Hälfte schneller geworden.",
 	"runDetail.pacingGapEven": "Höhenkorrigiert war deine Belastung in beiden Hälften gleich.",
 	"runDetail.pacingGapPositive": "Höhenkorrigiert bist du in der zweiten Hälfte langsamer geworden.",

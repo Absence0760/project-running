@@ -5017,7 +5017,7 @@ export const en = {
 	"runDetail.pacingPositive": "Positive split",
 	"runDetail.pacingFaster": "{delta} faster over the second half",
 	"runDetail.pacingSlower": "{delta} slower over the second half",
-	"runDetail.pacingHeld": "The same pace across both halves",
+	"runDetail.pacingHeld": "Steady across both halves",
 	"runDetail.pacingGapNegative": "Adjusted for the terrain, you sped up over the second half.",
 	"runDetail.pacingGapEven": "Adjusted for the terrain, your effort was even across both halves.",
 	"runDetail.pacingGapPositive": "Adjusted for the terrain, you slowed over the second half.",

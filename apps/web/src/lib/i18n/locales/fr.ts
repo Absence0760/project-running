@@ -4995,7 +4995,7 @@ export const messages = {
 	"runDetail.pacingPositive": "Positif split",
 	"runDetail.pacingFaster": "{delta} plus rapide sur la seconde moitié",
 	"runDetail.pacingSlower": "{delta} plus lent sur la seconde moitié",
-	"runDetail.pacingHeld": "La même allure sur les deux moitiés",
+	"runDetail.pacingHeld": "Régulier sur les deux moitiés",
 	"runDetail.pacingGapNegative": "Corrigé du dénivelé, vous avez accéléré sur la seconde moitié.",
 	"runDetail.pacingGapEven": "Corrigé du dénivelé, votre effort a été régulier sur les deux moitiés.",
 	"runDetail.pacingGapPositive": "Corrigé du dénivelé, vous avez ralenti sur la seconde moitié.",

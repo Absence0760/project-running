@@ -4990,7 +4990,7 @@ export const messages = {
 	"runDetail.pacingPositive": "ポジティブスプリット",
 	"runDetail.pacingFaster": "後半が{delta}速い",
 	"runDetail.pacingSlower": "後半が{delta}遅い",
-	"runDetail.pacingHeld": "前半と後半が同じペース",
+	"runDetail.pacingHeld": "前半と後半で安定したペース",
 	"runDetail.pacingGapNegative": "勾配を調整すると、後半はペースを上げています。",
 	"runDetail.pacingGapEven": "勾配を調整すると、前半と後半の負荷は同じでした。",
 	"runDetail.pacingGapPositive": "勾配を調整すると、後半はペースが落ちています。",
