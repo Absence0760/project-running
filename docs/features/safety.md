@@ -361,9 +361,12 @@ matters most.
   the minimum observation before any claim, past every ordinary pause a moving
   runner takes), `MOTION_STOPPED_DISTANCE_M` (25 m — enough to absorb an
   accumulating GPS random walk over minutes, not just one fix's error), and
-  `MOTION_MAX_GAP_MS` (120 s — the longest hole in the telemetry the window may
-  span; kept below the minimum window so no accepted gap can be most of a
-  claim).
+  `MOTION_MAX_GAP_MS` (30 s — the longest hole in the telemetry the window may
+  span. No gap length is perfectly safe: at a slow jog a runner clears the
+  25 m radius and returns in about twenty seconds, so this is a **proportion,
+  not a guarantee** — six missed pings at the ~5 s broadcast cadence absorbs
+  ordinary cellular flakiness while keeping any tolerated hole to at most a
+  sixth of the shortest claim the helper will make, a ratio a unit test pins).
 - **Fail-closed in three directions.** A **stale** fix yields `unknown`: the
   last position being old is exactly the case where "they have not moved" is
   unknowable, and reporting a stationary runner off pre-dropout pings would be
@@ -395,7 +398,7 @@ matters most.
   readout is derived from the `distance_m` + `at` fields the page already
   renders as the trace and the stat strip, and the position itself still comes
   through the existing privacy-zone clipping. Pinned by
-  `apps/web/tests-e2e/live/motion.spec.ts` (4) + 17 unit tests.
+  `apps/web/tests-e2e/live/motion.spec.ts` (4) + 18 unit tests.
 - **No Dart twin, deliberately.** The Flutter `live_spectator_screen` renders
   the same pings but has no motion readout, so a twin would be a helper with no
   caller — dead code the parity guard would police forever. `live_motion` is
