@@ -5023,4 +5023,5 @@ export const messages = {
 	"runDetail.pacingGapPositive": "Ajustado por el desnivel, bajaste el ritmo en la segunda mitad.",
 	"runDetail.gapColumn": "Ajustado",
 	"runDetail.gapColumnHint": "El ritmo ajustado es el ritmo en llano que habría costado el mismo esfuerzo que las cuestas que corriste de verdad.",
+	"clubEvent.cancelledOccurrences": "Sesiones canceladas",
 } satisfies Messages;

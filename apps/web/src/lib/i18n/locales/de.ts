@@ -5023,4 +5023,5 @@ export const messages = {
 	"runDetail.pacingGapPositive": "Höhenkorrigiert bist du in der zweiten Hälfte langsamer geworden.",
 	"runDetail.gapColumn": "Höhenkorr.",
 	"runDetail.gapColumnHint": "Das höhenkorrigierte Tempo ist das Flachland-Tempo, das denselben Aufwand gekostet hätte wie die Anstiege, die du tatsächlich gelaufen bist.",
+	"clubEvent.cancelledOccurrences": "Abgesagte Termine",
 } satisfies Messages;

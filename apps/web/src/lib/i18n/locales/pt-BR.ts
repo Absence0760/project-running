@@ -5022,4 +5022,5 @@ export const messages = {
 	"runDetail.pacingGapPositive": "Ajustado pelo relevo, você desacelerou na segunda metade.",
 	"runDetail.gapColumn": "Ajustado",
 	"runDetail.gapColumnHint": "O ritmo ajustado é o ritmo no plano que teria custado o mesmo esforço que as subidas que você realmente correu.",
+	"clubEvent.cancelledOccurrences": "Ocorrências canceladas",
 } satisfies Messages;

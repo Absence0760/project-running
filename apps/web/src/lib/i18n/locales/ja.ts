@@ -5018,4 +5018,5 @@ export const messages = {
 	"runDetail.pacingGapPositive": "勾配を調整すると、後半はペースが落ちています。",
 	"runDetail.gapColumn": "勾配調整",
 	"runDetail.gapColumnHint": "勾配調整ペースは、実際に走った起伏と同じ負荷になる平地でのペースです。",
+	"clubEvent.cancelledOccurrences": "中止された開催回",
 } satisfies Messages;

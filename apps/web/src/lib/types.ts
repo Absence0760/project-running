@@ -455,7 +455,12 @@ export type ClubWithMeta = Club & {
 export type EventWithMeta = Event & {
 	attendee_count: number;
 	viewer_rsvp: RsvpStatus | null;
-	next_instance_start: string; // ISO — equals starts_at for one-offs
+	/** ISO start of the next occurrence that is still ON — equals `starts_at`
+	 * for one-offs, and is null once every remaining occurrence has passed or
+	 * been called off (`event_exceptions`). Nullable rather than falling back
+	 * to `starts_at`: a caller that reads a stale date as "the next one" is
+	 * exactly how a cancelled occurrence kept being advertised. */
+	next_instance_start: string | null;
 };
 
 export type ClubPostWithAuthor = ClubPost & {

@@ -70,6 +70,7 @@
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
 	import { sameInstant } from '$lib/social/event_instance';
+	import { upcomingCancelledOccurrences } from '$lib/social/event_occurrence';
 	import { workoutDraftFromTemplate, workoutDraftFromSession } from '$lib/social/event_gym_template';
 	import { expandSessionSteps, type SessionPlanInput } from '$lib/social/session_steps';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
@@ -242,6 +243,16 @@
 		activeInstance
 			? exceptions.find((e) => sameInstant(e.instance_start, activeInstance)) ?? null
 			: null
+	);
+	// Cancelled occurrences still ahead. The picker hides them, so without this
+	// list an organiser could only ever reinstate the one they happened to be
+	// looking at — calling off anything beyond the next occurrence was
+	// irreversible.
+	let cancelledUpcoming = $derived(
+		upcomingCancelledOccurrences(exceptions.map((e) => e.instance_start)).map((iso) => ({
+			iso,
+			reason: exceptions.find((e) => sameInstant(e.instance_start, iso))?.reason ?? null
+		}))
 	);
 	let showAllInstances = $state(false);
 	const INSTANCE_PREVIEW_COUNT = 8;
@@ -482,7 +493,11 @@
 			// Preserve the user's instance selection across loads — otherwise
 			// rsvp() (which calls load()) silently warps the user back to the
 			// next instance after every click on a later one.
-			activeInstance = prevInstance ?? event.next_instance_start;
+			// `next_instance_start` is null once every remaining occurrence has
+			// been called off; `starts_at` then keeps the page anchored to a real
+			// instant so the organiser can still reach the cancelled-occurrence
+			// list below rather than landing on nothing.
+			activeInstance = prevInstance ?? event.next_instance_start ?? event.starts_at;
 			// Members-only meetup coordinates (null for non-members / no point set).
 			meetPoint = await fetchEventMeetPoint(event.id);
 			await loadSessionPlan();
@@ -1371,11 +1386,11 @@
 		}
 	}
 
-	async function reinstateInstance() {
-		if (!event || !activeInstance || busy) return;
+	async function reinstateInstance(instanceIso: string | null = activeInstance) {
+		if (!event || !instanceIso || busy) return;
 		busy = true;
 		try {
-			await reinstateEventInstance(event.id, activeInstance);
+			await reinstateEventInstance(event.id, instanceIso);
 			await load();
 		} catch (e: unknown) {
 			error = e instanceof Error ? e.message : m('clubEvent.reinstateOccurrenceFailed');
@@ -1651,7 +1666,7 @@
 						<button
 							type="button"
 							class="btn-ghost"
-							onclick={reinstateInstance}
+							onclick={() => reinstateInstance()}
 							disabled={busy}
 						>
 							<span class="material-symbols" aria-hidden="true">event_available</span>
@@ -1906,6 +1921,37 @@
 							: m('clubEvent.showAllUpcoming', { n: liveInstances.length })}
 					</button>
 				{/if}
+			</section>
+		{/if}
+
+		{#if isEventOrganiser && cancelledUpcoming.length > 0}
+			<section class="cancelled-list" data-testid="cancelled-occurrences">
+				<span class="label">{m('clubEvent.cancelledOccurrences')}</span>
+				<ul>
+					{#each cancelledUpcoming as row (row.iso)}
+						<li>
+							<span class="cancelled-date">
+								{new Date(row.iso).toLocaleDateString(activeFormatLocale(), {
+									weekday: 'short',
+									month: 'short',
+									day: 'numeric'
+								})}
+							</span>
+							{#if row.reason}
+								<span class="cancel-reason">{row.reason}</span>
+							{/if}
+							<button
+								type="button"
+								class="btn-ghost"
+								onclick={() => reinstateInstance(row.iso)}
+								disabled={busy}
+							>
+								<span class="material-symbols" aria-hidden="true">event_available</span>
+								{m('clubEvent.reinstateOccurrence')}
+							</button>
+						</li>
+					{/each}
+				</ul>
 			</section>
 		{/if}
 
@@ -2794,6 +2840,42 @@
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
 		margin-top: 0.15rem;
+	}
+	.cancelled-list {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: 0.7rem 0.9rem;
+		margin-bottom: var(--space-md);
+	}
+	.cancelled-list .label {
+		display: block;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		color: var(--color-text-tertiary);
+		margin-bottom: 0.5rem;
+	}
+	.cancelled-list ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.4rem;
+	}
+	.cancelled-list li {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.cancelled-list .cancelled-date {
+		font-weight: 600;
+		text-decoration: line-through;
+	}
+	.cancelled-list .cancel-reason {
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
 	}
 	.cancel-instance-form { display: grid; gap: 0.8rem; }
 	.cancel-instance-form label { display: grid; gap: 0.3rem; }

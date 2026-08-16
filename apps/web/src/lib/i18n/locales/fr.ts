@@ -5023,4 +5023,5 @@ export const messages = {
 	"runDetail.pacingGapPositive": "Corrigé du dénivelé, vous avez ralenti sur la seconde moitié.",
 	"runDetail.gapColumn": "Corrigée",
 	"runDetail.gapColumnHint": "L’allure corrigée est l’allure sur le plat qui aurait coûté le même effort que les côtes réellement parcourues.",
+	"clubEvent.cancelledOccurrences": "Séances annulées",
 } satisfies Messages;
