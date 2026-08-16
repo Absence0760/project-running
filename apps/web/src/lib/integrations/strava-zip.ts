@@ -26,6 +26,11 @@ import { indexHeader, stravaDistanceMetres, type HeaderIndex } from './strava-zi
 import { parseStravaCsvDateToIso } from './strava-zip-date';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
+import {
+	newImportFailureLog,
+	recordImportFailure,
+	type ImportFailureLog,
+} from './import_failures';
 
 export interface StravaZipProgress {
 	total: number;
@@ -41,6 +46,10 @@ export interface StravaZipProgress {
 	// every imported row.
 	droppedPhotos: number;
 	failed: number;
+	// Per-activity detail behind `failed` — name, start, reason, log-safe
+	// message. A bare count can't tell a migrant whether re-running the
+	// import will land the missing runs or never will.
+	failures: ImportFailureLog;
 	currentName: string | null;
 }
 
@@ -115,6 +124,7 @@ export async function importStravaZip(
 		droppedUnsupported: 0,
 		droppedPhotos: 0,
 		failed: 0,
+		failures: newImportFailureLog(),
 		currentName: null,
 	};
 	onProgress?.(progress);
@@ -146,8 +156,13 @@ export async function importStravaZip(
 			seen.add(stravaId);
 			progress.imported++;
 			progress.droppedPhotos += droppedPhotos;
-		} catch (_err) {
+		} catch (err) {
 			progress.failed++;
+			recordImportFailure(
+				progress.failures,
+				{ name, startedAt: parseStravaCsvDateToIso(row[idx.date]) },
+				err,
+			);
 		}
 		onProgress?.(progress);
 	}

@@ -334,7 +334,8 @@ Full-page view for a single run:
 - **Map (left, ~60% width):** full GPS trace on a MapLibre satellite/terrain hybrid. Start and finish markers. Option to animate the trace (replay the run as a moving dot). Hover on the trace highlights the corresponding point on the elevation and pace charts.
 - **Stats sidebar (right, ~40% width):**
   - Distance, duration, average pace, average HR, elevation gain
-  - Splits table: one row per km (or mile), showing pace, HR, elevation delta
+  - Splits table: one row per km (or mile), showing pace, HR, elevation delta, and — when the terrain moves the number by at least 2 s/km — a grade-adjusted pace column beside the raw one
+  - Pacing summary above the table: first-half vs second-half pace, a negative / even / positive verdict, and a grade-adjusted second opinion when effort and raw pace disagree (`lib/runs/pace_analysis.ts`)
   - HR zone breakdown: time in each of 5 HR zones as a horizontal stacked bar
   - Comparison: "vs. your best on this route" (if the user has run this route before)
 

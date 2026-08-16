@@ -15,6 +15,7 @@
 	import type { ClubWithMeta } from '$lib/types';
 	import { formatWeight } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import GymRoutineHistory from '$lib/components/GymRoutineHistory.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 
@@ -244,6 +245,10 @@
 						: t('gym.routine.publishPublic')}
 				</button>
 			</section>
+		{/if}
+
+		{#if isOwner}
+			<GymRoutineHistory {routineId} />
 		{/if}
 
 		<ul class="exercise-list" data-testid="routine-exercises">
