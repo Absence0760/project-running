@@ -49,6 +49,11 @@
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/runs/run_stats';
 	import { gradeAdjustedPaceSecPerKm } from '$lib/runs/grade_adjusted_pace';
+	import {
+		analysePacing,
+		gradeAdjustedSplitPaces,
+		type PacingVerdict,
+	} from '$lib/runs/pace_analysis';
 	import { defaultZoneCutoffs } from '$lib/training/hr_zones';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -1078,6 +1083,52 @@
 		run?.track ? computeRealSplits(run.track, splitsAreMiles ? METRES_PER_MILE : 1000) : []
 	);
 
+	/// First-half vs second-half pacing, and the same comparison on
+	/// grade-adjusted effort. Independent of the split tick length — the
+	/// halves are cut at the run's own midpoint, not at a split boundary.
+	let pacing = $derived(analysePacing(run?.track));
+	let splitGapPaces = $derived(gradeAdjustedSplitPaces(run?.track, splits));
+
+	/// Both grade-adjusted reads are gated on the same 2 s/km margin the
+	/// key-stat GAP cell uses: on flat ground GAP is the raw pace, and a
+	/// column (or a sentence) restating it is noise, not information.
+	let showSplitGap = $derived(
+		splitGapPaces.some((g, i) => g != null && Math.abs(g - splits[i].pace_s) >= 2),
+	);
+	let showPacingGap = $derived(
+		pacing?.gradeAdjusted != null &&
+			Math.abs(pacing.gradeAdjusted.deltaSecPerKm - pacing.raw.deltaSecPerKm) >= 2,
+	);
+
+	function pacingVerdictLabel(v: PacingVerdict): string {
+		if (v === 'negative') return m('runDetail.pacingNegative');
+		if (v === 'positive') return m('runDetail.pacingPositive');
+		return m('runDetail.pacingEven');
+	}
+
+	let pacingSummary = $derived.by(() => {
+		if (!pacing) return '';
+		if (pacing.raw.verdict === 'even') return m('runDetail.pacingHeld');
+		// The split table's pace column is shown per preferred unit, so the
+		// delta beside it must be too — "14s" against a /mi pace reads as
+		// sec/mi, not the sec/km the analysis is canonically in.
+		const perUnit =
+			getUnit() === 'mi'
+				? pacing.raw.deltaSecPerKm * (METRES_PER_MILE / 1000)
+				: pacing.raw.deltaSecPerKm;
+		const delta = `${Math.abs(Math.round(perUnit))}s`;
+		return pacing.raw.verdict === 'negative'
+			? m('runDetail.pacingFaster', { delta })
+			: m('runDetail.pacingSlower', { delta });
+	});
+
+	let pacingGapSummary = $derived.by(() => {
+		const v = pacing?.gradeAdjusted?.verdict;
+		if (v === 'negative') return m('runDetail.pacingGapNegative');
+		if (v === 'positive') return m('runDetail.pacingGapPositive');
+		return m('runDetail.pacingGapEven');
+	});
+
 	/// Manually-marked laps. The recorder writes `metadata.laps` as an
 	/// array of `{ index, start_offset_s, distance_m, duration_s }` where
 	/// `distance_m` / `duration_s` are the *per-lap* deltas, not cumulative
@@ -1851,16 +1902,42 @@
 			{@const hasElevation = splits.some((s) => s.elevation_m != null)}
 			<section class="section">
 				<h2>{m('runDetail.splits')}</h2>
+				{#if pacing}
+					<div class="pacing">
+						<div class="pacing-halves">
+							<div class="pacing-half">
+								<span class="pacing-half-label">{m('runDetail.pacingFirstHalf')}</span>
+								<span class="pacing-half-value"
+									>{formatPaceNoSuffix(pacing.raw.first.paceSecPerKm, 1000)}</span
+								>
+							</div>
+							<div class="pacing-half">
+								<span class="pacing-half-label">{m('runDetail.pacingSecondHalf')}</span>
+								<span class="pacing-half-value"
+									>{formatPaceNoSuffix(pacing.raw.second.paceSecPerKm, 1000)}</span
+								>
+							</div>
+							<span class="pacing-verdict pacing-verdict-{pacing.raw.verdict}"
+								>{pacingVerdictLabel(pacing.raw.verdict)}</span
+							>
+						</div>
+						<p class="pacing-summary">{pacingSummary}</p>
+						{#if showPacingGap}
+							<p class="pacing-gap">{pacingGapSummary}</p>
+						{/if}
+					</div>
+				{/if}
 				<table class="splits-table">
 					<thead>
 						<tr>
 							<th>{splitsAreMiles ? m('runDetail.mi') : m('runDetail.km')}</th>
 							<th>{m('runDetail.pace')}</th>
+							{#if showSplitGap}<th>{m('runDetail.gapColumn')}</th>{/if}
 							{#if hasElevation}<th>{m('runDetail.elev')}</th>{/if}
 						</tr>
 					</thead>
 					<tbody>
-						{#each splits as split}
+						{#each splits as split, i}
 							<tr>
 								<td>{split.km}</td>
 								<td class="split-pace">
@@ -1870,6 +1947,15 @@
 										—
 									{/if}
 								</td>
+								{#if showSplitGap}
+									<td class="split-gap">
+										{#if splitGapPaces[i] != null}
+											{formatPaceNoSuffix(splitGapPaces[i], 1000)}
+										{:else}
+											—
+										{/if}
+									</td>
+								{/if}
 								{#if hasElevation}
 									<td class="split-elev" class:positive={(split.elevation_m ?? 0) > 0} class:negative={(split.elevation_m ?? 0) < 0}>
 										{(split.elevation_m ?? 0) > 0 ? '+' : ''}{split.elevation_m ?? '—'} m
@@ -1879,6 +1965,9 @@
 						{/each}
 					</tbody>
 				</table>
+				{#if showSplitGap}
+					<p class="splits-hint">{m('runDetail.gapColumnHint')}</p>
+				{/if}
 			</section>
 		{/if}
 
@@ -2811,6 +2900,81 @@
 
 	.split-elev.positive {
 		color: var(--color-danger-text);
+	}
+
+	.split-gap {
+		font-family: 'SF Mono', 'Menlo', monospace;
+		color: var(--color-text-secondary);
+	}
+
+	.splits-hint {
+		margin: var(--space-sm) 0 0;
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
+	}
+
+	.pacing {
+		margin-bottom: var(--space-lg);
+		padding: var(--space-md);
+		background: var(--color-bg-secondary);
+		border-radius: var(--radius-md);
+	}
+
+	.pacing-halves {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-md);
+	}
+
+	.pacing-half {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+
+	.pacing-half-label {
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+
+	.pacing-half-value {
+		font-family: 'SF Mono', 'Menlo', monospace;
+		font-size: 1.1rem;
+		font-weight: 600;
+	}
+
+	.pacing-verdict {
+		margin-inline-start: auto;
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: var(--radius-sm);
+		font-size: 0.8125rem;
+		font-weight: 600;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-secondary);
+	}
+
+	.pacing-verdict-negative {
+		background: var(--color-success-light);
+		color: var(--color-success-text);
+	}
+
+	.pacing-verdict-positive {
+		background: var(--color-warning-light);
+		color: var(--color-warning-text);
+	}
+
+	.pacing-summary,
+	.pacing-gap {
+		margin: var(--space-sm) 0 0;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+
+	.pacing-gap {
+		color: var(--color-text-tertiary);
 	}
 
 	.workout-review .workout-header {
