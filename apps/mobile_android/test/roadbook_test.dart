@@ -240,6 +240,140 @@ void main() {
           '${even.legs[1].projectedElapsedS}',
     );
   });
+
+  test('a checkpoint target grades the projection ahead / on / behind', () {
+    final wp = course();
+    final total = buildRoadbook(wp, const [],
+            goalSeconds: 3600, model: PacingModel.even)
+        .totalDistM;
+    // Mid at an even 3600 s goal projects to ~1800 s. The band there is the
+    // 60 s floor, so 1900 is comfortably ahead and 1700 comfortably behind.
+    RoadbookTarget? at(int targetElapsedS) => buildRoadbook(
+          wp,
+          [
+            marker(total / 2, 'aid_station', 'Aid',
+                {'target_elapsed_s': targetElapsedS})
+          ],
+          goalSeconds: 3600,
+          model: PacingModel.even,
+        ).legs[1].target;
+    expect(at(1900)!.status, TargetStatus.ahead);
+    expect(at(1900)!.marginS > 0, isTrue);
+    expect(at(1800)!.status, TargetStatus.on);
+    expect(at(1700)!.status, TargetStatus.behind);
+    expect(at(1700)!.marginS < 0, isTrue);
+    expect(at(1700)!.targetElapsedS, 1700);
+  });
+
+  test('a marker with no target time gets no target verdict', () {
+    final wp = course();
+    final total = buildRoadbook(wp, const [],
+            goalSeconds: 3600, model: PacingModel.even)
+        .totalDistM;
+    final rb = buildRoadbook(wp, [marker(total / 2, 'aid_station', 'Aid')],
+        goalSeconds: 3600, model: PacingModel.even);
+    expect(rb.legs[1].target, isNull);
+    // The synthetic start / finish rows carry no meta and so never do either.
+    expect(rb.legs[0].target, isNull);
+    expect(rb.legs[2].target, isNull);
+  });
+
+  test('a target may sit on any kind, including a cutoff, alongside its limit',
+      () {
+    final wp = course();
+    final total = buildRoadbook(wp, const [],
+            goalSeconds: 3600, model: PacingModel.even)
+        .totalDistM;
+    final rb = buildRoadbook(
+      wp,
+      [
+        marker(total / 2, 'cutoff', 'Gate',
+            {'cutoff_elapsed_s': 2400, 'target_elapsed_s': 1500})
+      ],
+      goalSeconds: 3600,
+      model: PacingModel.even,
+    );
+    expect(rb.legs[1].cutoff!.limitElapsedS, 2400);
+    expect(rb.legs[1].target!.targetElapsedS, 1500);
+    // Both margins are signed the same way — positive is time in hand.
+    expect(rb.legs[1].cutoff!.marginS > 0, isTrue);
+    expect(rb.legs[1].target!.marginS < 0, isTrue);
+  });
+
+  test('target_clock resolves against the start clock, like a cutoff clock',
+      () {
+    final wp = course();
+    final total = buildRoadbook(wp, const [],
+            goalSeconds: 3600, model: PacingModel.even)
+        .totalDistM;
+    // Start 06:00 (360 min); target 06:45 -> 2700 s elapsed.
+    final rb = buildRoadbook(
+      wp,
+      [marker(total / 2, 'aid_station', 'Aid', {'target_clock': '06:45'})],
+      goalSeconds: 3600,
+      startClockMin: 360,
+      model: PacingModel.even,
+    );
+    expect(rb.legs[1].target!.targetElapsedS, 2700);
+    // A clock equal to the start is the 24h reading, never a 0 s target.
+    final sameClock = buildRoadbook(
+      wp,
+      [marker(total / 2, 'aid_station', 'Aid', {'target_clock': '06:00'})],
+      goalSeconds: 3600,
+      startClockMin: 360,
+      model: PacingModel.even,
+    );
+    expect(sameClock.legs[1].target!.targetElapsedS, 86400);
+    // Without a start clock a clock-only target can't resolve — and must not
+    // silently read as 0, which would grade every checkpoint as behind.
+    final noStart = buildRoadbook(
+      wp,
+      [marker(total / 2, 'aid_station', 'Aid', {'target_clock': '06:45'})],
+      goalSeconds: 3600,
+      model: PacingModel.even,
+    );
+    expect(noStart.legs[1].target, isNull);
+  });
+
+  test('the on-schedule band scales with the target, floored for early stops',
+      () {
+    // The floor governs anything under 100 min; past that it is 1 %.
+    expect(targetBandS(0), targetBandFloorS.toDouble());
+    expect(targetBandS(1800), targetBandFloorS.toDouble());
+    expect(targetBandS(6000), targetBandFloorS.toDouble());
+    expect(targetBandS(14400), 144.0);
+    expect(targetBandS(72000), 720.0);
+  });
+
+  test('a fixed band would misgrade one scale or the other', () {
+    final wp = course();
+    final total = buildRoadbook(wp, const [],
+            goalSeconds: 3600, model: PacingModel.even)
+        .totalDistM;
+    // Same 5-minute slip judged at two race scales. At an hour goal it is a
+    // real problem; at a 24 h goal it is inside the noise of the projection.
+    const slip = 300;
+    final short = buildRoadbook(
+      wp,
+      [
+        marker(total / 2, 'aid_station', 'Aid',
+            {'target_elapsed_s': 1800 - slip})
+      ],
+      goalSeconds: 3600,
+      model: PacingModel.even,
+    );
+    final long = buildRoadbook(
+      wp,
+      [
+        marker(total / 2, 'aid_station', 'Aid',
+            {'target_elapsed_s': 43200 - slip})
+      ],
+      goalSeconds: 86400,
+      model: PacingModel.even,
+    );
+    expect(short.legs[1].target!.status, TargetStatus.behind);
+    expect(long.legs[1].target!.status, TargetStatus.on);
+  });
 }
 
 // A 4 km 25 % climb then 4 km flat, sampled every [spacingM] metres. The
