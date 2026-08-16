@@ -5009,4 +5009,20 @@ export const en = {
 	"nutrition.nutrientLeft": "{n} {unit} left",
 	"nutrition.nutrientReached": "Goal reached",
 	"nutrition.nutrientUntargeted": "No daily target",
+	// Bulk-import failure report — what did NOT import and why. Reason
+	// vocabulary lives in integrations/import_failures.ts.
+	"importFailures.heading": "{count, plural, one {# activity didn't import} other {# activities didn't import}}",
+	"importFailures.intro": "Re-run the import to retry these — anything that already landed is skipped, so nothing is duplicated.",
+	"importFailures.truncated": "{count, plural, one {# further failure was not recorded.} other {# further failures were not recorded.}}",
+	"importFailures.showDetail": "Show each activity",
+	"importFailures.download": "Download report (CSV)",
+	"importFailures.dismiss": "Dismiss",
+	"importFailures.noDate": "Date unknown",
+	"importFailures.reason.network": "Connection dropped",
+	"importFailures.reason.auth": "Signed out",
+	"importFailures.reason.rate_limited": "Rate limited",
+	"importFailures.reason.too_large": "File too large",
+	"importFailures.reason.unparseable": "File could not be read",
+	"importFailures.reason.rejected": "Rejected by the server",
+	"importFailures.reason.unknown": "Unknown error",
 } satisfies Record<string, string>;

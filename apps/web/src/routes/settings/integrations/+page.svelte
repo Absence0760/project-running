@@ -26,6 +26,8 @@
 	import { importStravaZip, type StravaZipProgress } from '$lib/integrations/strava-zip';
 	import { importGarminBundle, type GarminZipProgress } from '$lib/integrations/garmin-zip';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import ImportFailureReport from '$lib/components/ImportFailureReport.svelte';
+	import { newImportFailureLog, type ImportFailureLog } from '$lib/integrations/import_failures';
 	import { browser } from '$app/environment';
 	import { parkrunLikelyUnavailable } from '$lib/integrations/parkrun_regions';
 
@@ -214,6 +216,9 @@
 
 	let zipProgress = $state<StravaZipProgress | null>(null);
 	let zipError = $state('');
+	// Held separately from zipProgress, which self-clears after a few
+	// seconds — the "what didn't import" detail has to outlive the bar.
+	let zipFailures = $state<ImportFailureLog | null>(null);
 	let zipFileInput: HTMLInputElement | null = $state(null);
 
 	async function handleZipSelect(e: Event) {
@@ -221,7 +226,8 @@
 		const file = input.files?.[0];
 		if (!file) return;
 		zipError = '';
-		zipProgress = { total: 0, imported: 0, skipped: 0, droppedUnsupported: 0, droppedPhotos: 0, failed: 0, currentName: m('settingsIntegrations.readingArchive') };
+		zipFailures = null;
+		zipProgress = { total: 0, imported: 0, skipped: 0, droppedUnsupported: 0, droppedPhotos: 0, failed: 0, failures: newImportFailureLog(), currentName: m('settingsIntegrations.readingArchive') };
 		window.addEventListener('beforeunload', beforeUnloadGuard);
 		try {
 			const result = await importStravaZip(file, (p) => {
@@ -235,6 +241,9 @@
 			if (result.droppedPhotos)
 				msg += ' ' + m('settingsIntegrations.stravaZipImportDroppedPhotos', { photos: result.droppedPhotos });
 			showToast(msg, 'success');
+			if (result.failures.items.length > 0 || result.failures.truncated > 0) {
+				zipFailures = result.failures;
+			}
 		} catch (err) {
 			zipError = err instanceof Error ? err.message : String(err);
 		} finally {
@@ -249,6 +258,7 @@
 
 	let garminProgress = $state<GarminZipProgress | null>(null);
 	let garminError = $state('');
+	let garminFailures = $state<ImportFailureLog | null>(null);
 	let garminFileInput: HTMLInputElement | null = $state(null);
 
 	async function handleGarminSelect(e: Event) {
@@ -256,7 +266,8 @@
 		const file = input.files?.[0];
 		if (!file) return;
 		garminError = '';
-		garminProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: m('settingsIntegrations.readingFile') };
+		garminFailures = null;
+		garminProgress = { total: 0, imported: 0, skipped: 0, failed: 0, failures: newImportFailureLog(), currentName: m('settingsIntegrations.readingFile') };
 		window.addEventListener('beforeunload', beforeUnloadGuard);
 		try {
 			const result = await importGarminBundle(file, (p) => {
@@ -270,6 +281,9 @@
 			);
 			if (result.hrZonesImported) {
 				showToast(m('settingsIntegrations.garminHrZonesImported'), 'success');
+			}
+			if (result.failures.items.length > 0 || result.failures.truncated > 0) {
+				garminFailures = result.failures;
 			}
 		} catch (err) {
 			garminError = err instanceof Error ? err.message : String(err);
@@ -458,6 +472,13 @@
 					</p>
 				</div>
 			{/if}
+			{#if zipFailures}
+				<ImportFailureReport
+					log={zipFailures}
+					provider="strava"
+					ondismiss={() => (zipFailures = null)}
+				/>
+			{/if}
 		</section>
 
 		<section class="card bulk-import">
@@ -517,6 +538,13 @@
 						{/if}
 					</p>
 				</div>
+			{/if}
+			{#if garminFailures}
+				<ImportFailureReport
+					log={garminFailures}
+					provider="garmin"
+					ondismiss={() => (garminFailures = null)}
+				/>
 			{/if}
 		</section>
 
