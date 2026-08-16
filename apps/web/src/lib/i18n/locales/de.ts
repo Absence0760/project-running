@@ -5024,4 +5024,7 @@ export const messages = {
 	"runDetail.gapColumn": "Höhenkorr.",
 	"runDetail.gapColumnHint": "Das höhenkorrigierte Tempo ist das Flachland-Tempo, das denselben Aufwand gekostet hätte wie die Anstiege, die du tatsächlich gelaufen bist.",
 	"clubEvent.cancelledOccurrences": "Abgesagte Termine",
+	"live.statRecentPaceStale": "Zuletzt gesehen",
+	"live.motionStopped": "Keine Bewegung — {n} Min. an derselben Stelle",
+	"live.motionStoppedAtLeast": "Keine Bewegung — mindestens {n} Min. an derselben Stelle",
 } satisfies Messages;

@@ -5023,4 +5023,7 @@ export const messages = {
 	"runDetail.gapColumn": "Ajustado",
 	"runDetail.gapColumnHint": "O ritmo ajustado é o ritmo no plano que teria custado o mesmo esforço que as subidas que você realmente correu.",
 	"clubEvent.cancelledOccurrences": "Ocorrências canceladas",
+	"live.statRecentPaceStale": "Na última vez vista",
+	"live.motionStopped": "Sem movimento — {n} min no mesmo ponto",
+	"live.motionStoppedAtLeast": "Sem movimento — pelo menos {n} min no mesmo ponto",
 } satisfies Messages;

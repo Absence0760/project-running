@@ -5047,4 +5047,7 @@ export const en = {
 	"runDetail.gapColumn": "Grade-adj.",
 	"runDetail.gapColumnHint": "Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.",
 	"clubEvent.cancelledOccurrences": "Cancelled occurrences",
+	"live.statRecentPaceStale": "When last seen",
+	"live.motionStopped": "Not moving — {n} min in the same spot",
+	"live.motionStoppedAtLeast": "Not moving — at least {n} min in the same spot",
 } satisfies Record<string, string>;

@@ -5019,4 +5019,7 @@ export const messages = {
 	"runDetail.gapColumn": "勾配調整",
 	"runDetail.gapColumnHint": "勾配調整ペースは、実際に走った起伏と同じ負荷になる平地でのペースです。",
 	"clubEvent.cancelledOccurrences": "中止された開催回",
+	"live.statRecentPaceStale": "最後に確認した時点",
+	"live.motionStopped": "動きなし — 同じ地点に{n}分",
+	"live.motionStoppedAtLeast": "動きなし — 同じ地点に少なくとも{n}分",
 } satisfies Messages;
