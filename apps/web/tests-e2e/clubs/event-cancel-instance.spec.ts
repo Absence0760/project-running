@@ -181,4 +181,45 @@ test.describe('/clubs/[slug]/events/[id] — cancel one occurrence', () => {
 			.toBe(0);
 		await expect(page.locator('.instance-chip', { hasText: secondChipText })).toHaveCount(1);
 	});
+
+	test('the dashboard next-RSVP card drops a cancelled occurrence', async ({ page }) => {
+		const admin = getAdminClient();
+		// Inside the card's 48 h window, and whole seconds so the instant the
+		// exception names is byte-identical to the RSVP's.
+		const startsAt = new Date(Math.floor((Date.now() + 2 * 3600 * 1000) / 1000) * 1000);
+		const title = `e2e-dash-rsvp ${Date.now()}`;
+		eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			author_id: USER_A.id,
+			title,
+			starts_at: startsAt.toISOString()
+		});
+		await admin.from('event_attendees').insert({
+			event_id: eventId,
+			user_id: USER_A.id,
+			instance_start: startsAt.toISOString(),
+			status: 'going'
+		});
+
+		await page.goto('/dashboard');
+		await expect(page.getByTestId('dash-total-runs')).toBeVisible({ timeout: 15_000 });
+		await expect(page.locator('.event-card', { hasText: title })).toBeVisible({
+			timeout: 15_000
+		});
+
+		// The RSVP row deliberately survives the cancellation (the organiser can
+		// reinstate), so only the exception can tell the card the run is off.
+		await admin.from('event_exceptions').insert({
+			event_id: eventId,
+			instance_start: startsAt.toISOString(),
+			cancelled_by: USER_A.id,
+			reason: 'Marshal shortage'
+		});
+
+		await page.goto('/dashboard');
+		// Wait for the dashboard to have actually rendered before asserting an
+		// absence, or the assertion passes on an empty page.
+		await expect(page.getByTestId('dash-total-runs')).toBeVisible({ timeout: 15_000 });
+		await expect(page.locator('.event-card', { hasText: title })).toHaveCount(0);
+	});
 });

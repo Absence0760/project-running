@@ -2834,7 +2834,9 @@ export async function fetchClubMembers(
 // --- Events ---
 
 /// Read a small run of RSVP rows rather than one, because the soonest may have
-/// been called off and the card wants the soonest that is still on.
+/// been called off and the card wants the soonest that is still on. A viewer
+/// with more than this many cancelled RSVPs inside one window sees no card
+/// rather than a live one further down — the fail-closed side of the trade.
 const RSVP_CANDIDATE_LIMIT = 10;
 
 /// The next event the signed-in user has RSVP'd `going` to within the
@@ -2969,7 +2971,7 @@ export async function fetchEventById(id: string): Promise<EventWithMeta | null> 
 async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	if (events.length === 0) return [];
 
-	const allIds = events.map((e) => e.id);
+	const ids = events.map((e) => e.id);
 	const now = new Date();
 
 	// Called-off occurrences (`event_exceptions`) have to be known BEFORE the
@@ -2979,7 +2981,7 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	const { data: exceptionRows } = await supabase
 		.from('event_exceptions')
 		.select('event_id, instance_start')
-		.in('event_id', allIds)
+		.in('event_id', ids)
 		.gte('instance_start', now.toISOString());
 	const cancelledByEvent = new Map<string, string[]>();
 	for (const row of (exceptionRows ?? []) as { event_id: string; instance_start: string }[]) {
@@ -3001,7 +3003,6 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 		countMap.set(e.id, (next ?? new Date(evt.starts_at)).toISOString());
 	}
 
-	const ids = allIds;
 	const nextStarts = ids.map((id) => countMap.get(id)!);
 	const userId = auth.user?.id;
 
