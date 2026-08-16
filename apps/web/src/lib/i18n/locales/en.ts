@@ -4971,4 +4971,12 @@ export const en = {
 	"prefs.undoWindow8s": "8 seconds",
 	"prefs.undoWindow30s": "30 seconds",
 	"prefs.undoWindowManual": "Until I dismiss it",
+	"nutrition.nutrients": "Nutrients",
+	"nutrition.nutrientsHint": "Reference intakes. Each total counts only the logged items that report that nutrient.",
+	"nutrition.nutrientAtLeast": "at least",
+	"nutrition.nutrientPartial": "{reported} of {total} logged items report {nutrient}",
+	"nutrition.nutrientOver": "{n} {unit} over",
+	"nutrition.nutrientLeft": "{n} {unit} left",
+	"nutrition.nutrientReached": "Goal reached",
+	"nutrition.nutrientUntargeted": "No daily target",
 } satisfies Record<string, string>;

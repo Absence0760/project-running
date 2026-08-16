@@ -4951,4 +4951,12 @@ export const messages = {
 	"prefs.undoWindow8s": "8 segundos",
 	"prefs.undoWindow30s": "30 segundos",
 	"prefs.undoWindowManual": "Hasta que lo cierre",
+	"nutrition.nutrients": "Nutrientes",
+	"nutrition.nutrientsHint": "Valores de referencia. Cada total solo cuenta los alimentos registrados que indican ese nutriente.",
+	"nutrition.nutrientAtLeast": "al menos",
+	"nutrition.nutrientPartial": "{reported} de {total} alimentos registrados indican {nutrient}",
+	"nutrition.nutrientOver": "{n} {unit} de más",
+	"nutrition.nutrientLeft": "{n} {unit} restantes",
+	"nutrition.nutrientReached": "Objetivo alcanzado",
+	"nutrition.nutrientUntargeted": "Sin objetivo diario",
 } satisfies Messages;

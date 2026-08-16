@@ -58,6 +58,8 @@
  * and are unchanged.
  */
 
+import type { MessageKey } from '../i18n/messages';
+
 import { MAX_EXERCISE_MINUTES } from './hydration';
 import type { NutritionTargets } from './nutrition_targets';
 
@@ -80,7 +82,7 @@ export interface NutrientSpec {
 	direction: NutrientDirection;
 	unit: 'g' | 'mg';
 	/// i18n key for the nutrient's display name, resolved at the render layer.
-	labelKey: string;
+	labelKey: MessageKey;
 }
 
 /// Display order for the day's nutrient list (the two graded ceilings a runner
@@ -140,7 +142,7 @@ export interface NutrientBudget {
 	kind: NutrientKind;
 	direction: NutrientDirection;
 	unit: 'g' | 'mg';
-	labelKey: string;
+	labelKey: MessageKey;
 	/// Sum over the entries that REPORTED this nutrient. Grams round to 0.1,
 	/// milligrams to whole.
 	consumed: number;

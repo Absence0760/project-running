@@ -4946,4 +4946,12 @@ export const messages = {
 	"prefs.undoWindow8s": "8秒",
 	"prefs.undoWindow30s": "30秒",
 	"prefs.undoWindowManual": "自分で閉じるまで",
+	"nutrition.nutrients": "栄養素",
+	"nutrition.nutrientsHint": "参考摂取量です。各合計には、その栄養素の値がある記録済みの食品のみが含まれます。",
+	"nutrition.nutrientAtLeast": "少なくとも",
+	"nutrition.nutrientPartial": "記録した{total}件中{reported}件に{nutrient}の値があります",
+	"nutrition.nutrientOver": "{n} {unit} 超過",
+	"nutrition.nutrientLeft": "残り {n} {unit}",
+	"nutrition.nutrientReached": "目標達成",
+	"nutrition.nutrientUntargeted": "1日の目標なし",
 } satisfies Messages;
