@@ -80,6 +80,21 @@ Four things about it are deliberate:
 
 15 unit tests in `self_load.test.ts`; the surface is pinned by `tests-e2e/dashboard/load-ramp.spec.ts` (spike → high, steady → optimal, thin history → no card). **Web-only**: mobile carries the `coach_load` Dart twin but has no self-facing surface, so a Dart twin of this composition would be dead code — mirror tracked in `followups.md`. See [decisions § 609](../architecture/decisions.md).
 
+## Comeback load (`comeback.ts`, web-only)
+
+That last refusal is right, and it is also silent in the case that most warrants a signal. A runner back from three months off, logging a 30 km first week, has `activeWeeks = 1` → `insufficient` → no card at all. The threshold is not wrong; **ACWR is the wrong instrument** for that runner. It asks "how does this week compare with the month you just trained", and a comeback runner has no such month.
+
+`comebackLoad(runs, nowMs)` asks the question their history *can* answer: how does this week compare with the weeks they were running **before the break**. Their own pre-break average is real data; the near-empty month is not. Surfaced as `ComebackCard.svelte` directly beside `LoadRampCard` on `/dashboard`, on the same `filteredRuns`.
+
+- **It fires only where `selfLoad` is silent.** The same `activeWeeks < MIN_ACTIVE_WEEKS` gate, read the other way round, so the two cards are mutually exclusive **by construction** rather than by the dashboard remembering to choose. A unit test sweeps a set of histories and asserts the two predicates are never both true; a Playwright case asserts `load-ramp` has count 0 on a comeback dashboard.
+- **A break is `kLayoffResetDays` (28), reused not redeclared.** That is already the point at which `training_load.ts` writes the runner's fitness EWMAs down to zero — a break big enough to erase their modelled fitness is the same break this card is about, and two numbers for one idea would drift.
+- **A base older than `LAYOFF_MAX_DAYS` (365) grades nothing.** A year-plus-stale average describes a body that no longer exists, and grading a return against it would produce a *reassuring* number for a runner effectively starting over. Over-reporting safety is the failure that hurts, so the card goes quiet rather than encouraging.
+- **`RETURN_WEEK_SHARE` is 0.5, one flat line rather than a curve.** The widely-taught return-to-running shape is to resume at around half of what you were doing and rebuild. It is deliberately not decayed by layoff length: a decay function would invent precision the evidence does not carry, and a runner can reason about "half".
+- **A week with no running is not graded.** An "easing in" verdict off zero kilometres would read as praise for not running, so `acuteM <= 0` returns `insufficient` — which also means the card never nags someone still on their break.
+- **The pre-break base clears the same evidence bar.** `MIN_ACTIVE_WEEKS` of the four windows before the break must carry a run, so a single session before a layoff is not a base to come back to. Both sides of the comparison are reduced through `plan_ramp`'s `volumeSample`, so the current week and the pre-break base can never come from different run sets.
+
+21 unit tests in `comeback.test.ts` — including two that pin a clock-skewed stamp grading identically to an honest one, since an unclamped future timestamp opens a phantom gap that reads as a break the runner never took; the surface is pinned by `tests-e2e/dashboard/comeback.spec.ts` (steep → called out + no ratio card, gentle → easing in, no base → no card). **Web-only** for the same reason as `self_load`.
+
 ## Opening-week ramp check (`plan_ramp.ts`, web-only)
 
 `generatePlan` sizes every week from the goal race, the training days and the fitness anchor — it never reads the runner's history. So a runner averaging 20 km a week could generate a marathon plan (4 days/week, goal time entered) whose **week 1 asks for 38.0 km**, and nothing in the wizard said a word. The opening step is the one a plan is most likely to injure someone on.

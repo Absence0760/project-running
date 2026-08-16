@@ -10,7 +10,8 @@
 		type RoadbookWaypoint,
 		type RoadbookMarker,
 		type PacingModel,
-		type CutoffStatus
+		type CutoffStatus,
+		type TargetStatus
 	} from '$lib/routes/roadbook';
 	import { kindSpec } from '$lib/routes/route_markers';
 	import { toRouteGpxWithMarkers, type RouteGpxMarker } from '$lib/routes/route_gpx';
@@ -244,6 +245,20 @@
 		return status === 'miss' ? 'cut-miss' : status === 'tight' ? 'cut-tight' : 'cut-safe';
 	}
 
+	// The column appears only once a checkpoint actually carries a target, so a
+	// route nobody has planned times for doesn't grow an empty column.
+	const hasTargets = $derived(roadbook.legs.some((leg) => leg.target != null));
+
+	function targetClass(status: TargetStatus): string {
+		return status === 'behind' ? 'tgt-behind' : status === 'ahead' ? 'tgt-ahead' : 'tgt-on';
+	}
+
+	function targetStatusLabel(status: TargetStatus): string {
+		if (status === 'ahead') return m('roadbook.targetAhead');
+		if (status === 'behind') return m('roadbook.targetBehind');
+		return m('roadbook.targetOn');
+	}
+
 	function fmtMargin(seconds: number): string {
 		const sign = seconds < 0 ? '−' : '+';
 		return `${sign}${fmtSplitTime(Math.abs(seconds))}`;
@@ -282,8 +297,13 @@
 
 	async function copyAsText() {
 		const lines = [`${route?.name ?? m('roadbook.heading')} — ${m('roadbook.heading')}`, ''];
-		lines.push(`${m('roadbook.colCheckpoint')} | ${m('roadbook.colDistance')} | ${m('roadbook.colLegPace')} | ${m('roadbook.colArrival')} | ${m('roadbook.colCutoff')}`);
+		lines.push(
+			`${m('roadbook.colCheckpoint')} | ${m('roadbook.colDistance')} | ${m('roadbook.colLegPace')} | ${m('roadbook.colArrival')}${hasTargets ? ` | ${m('roadbook.colTarget')}` : ''} | ${m('roadbook.colCutoff')}`
+		);
 		for (const [i, leg] of roadbook.legs.entries()) {
+			const target = leg.target
+				? `${fmtSplitTime(leg.target.targetElapsedS)} ${fmtMargin(leg.target.marginS)} ${targetStatusLabel(leg.target.status)}`
+				: '';
 			const cut = leg.cutoff
 				? `${
 						startClockMin != null
@@ -292,7 +312,7 @@
 					} ${fmtMargin(leg.cutoff.marginS)}`
 				: '';
 			lines.push(
-				`${checkpointLabel(leg)} | ${formatDistance(leg.cumDistM)} | ${legPace(i)} | ${fmtSplitTime(leg.projectedElapsedS)}${leg.projectedClockMin != null ? ` (${fmtClock(leg.projectedClockMin)})` : ''} | ${cut}`
+				`${checkpointLabel(leg)} | ${formatDistance(leg.cumDistM)} | ${legPace(i)} | ${fmtSplitTime(leg.projectedElapsedS)}${leg.projectedClockMin != null ? ` (${fmtClock(leg.projectedClockMin)})` : ''}${hasTargets ? ` | ${target}` : ''} | ${cut}`
 			);
 		}
 		try {
@@ -448,6 +468,9 @@
 						<th class="num">{m('roadbook.colVert')}</th>
 						<th class="num">{m('roadbook.colLegPace')}</th>
 						<th class="num">{m('roadbook.colArrival')}</th>
+						{#if hasTargets}
+							<th>{m('roadbook.colTarget')}</th>
+						{/if}
 						<th>{m('roadbook.colCutoff')}</th>
 						{#if fuelOn}
 							<th class="num">{m('roadbook.colCarbs')}</th>
@@ -475,6 +498,19 @@
 								{fmtSplitTime(leg.projectedElapsedS)}
 								{#if leg.projectedClockMin != null}<span class="clock">{fmtClock(leg.projectedClockMin)}</span>{/if}
 							</td>
+							{#if hasTargets}
+								<td data-testid="roadbook-target">
+									{#if leg.target}
+										<span class="cut {targetClass(leg.target.status)}">
+											{fmtSplitTime(leg.target.targetElapsedS)}
+											<small>
+												{fmtMargin(leg.target.marginS)}
+												{targetStatusLabel(leg.target.status)}
+											</small>
+										</span>
+									{/if}
+								</td>
+							{/if}
 							<td>
 								{#if leg.cutoff}
 									<span class="cut {cutoffClass(leg.cutoff.status)}">
@@ -646,7 +682,8 @@
 		font-size: 0.75rem;
 		opacity: 0.85;
 	}
-	.cut-safe {
+	.cut-safe,
+	.tgt-ahead {
 		background: var(--color-success-light);
 		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
@@ -654,9 +691,14 @@
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 	}
-	.cut-miss {
+	.cut-miss,
+	.tgt-behind {
 		background: var(--color-danger-light);
 		color: color-mix(in srgb, var(--color-danger) 65%, var(--color-text));
+	}
+	.tgt-on {
+		background: var(--color-bg-secondary);
+		color: var(--color-text);
 	}
 	.services .svc {
 		display: inline-block;

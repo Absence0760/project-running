@@ -43,6 +43,10 @@
 	} from '$lib/nutrition/nutrition_totals';
 	import { computeDayBudget, type MacroKind } from '$lib/nutrition/nutrition_budget';
 	import { hydrationTargetMl, hydrationBudget } from '$lib/nutrition/hydration';
+	import {
+		extendedNutrientTargets,
+		extendedNutrientBudgets,
+	} from '$lib/nutrition/extended_nutrients';
 	import { weeklyIntakeSummary, weeklyProteinSummary } from '$lib/nutrition/nutrition_week';
 	import {
 		DIARY_DATE_PARAM,
@@ -536,6 +540,9 @@
 	const calorieBudget = $derived(dayBudget?.calories ?? null);
 	const waterTargetMl = $derived(hydrationTargetMl(weightKg, exerciseMinutes));
 	const waterBudget = $derived(hydrationBudget(waterMl, waterTargetMl));
+	const nutrientBudgets = $derived(
+		extendedNutrientBudgets(entries, extendedNutrientTargets(targets, exerciseMinutes)),
+	);
 	const hasMeals = $derived(groups.length > 0);
 	const hasAnyData = $derived(entries.length > 0 || weekDays.some((d) => d.calories > 0));
 	const weekSummary = $derived(
@@ -764,6 +771,49 @@
 				<button class="btn btn-primary btn-sm water-btn" type="button" onclick={addWater} data-testid="add-water" aria-label={m('nutrition.waterAdd')}>＋</button>
 			</div>
 		</section>
+
+		{#if nutrientBudgets.length > 0}
+			<section class="card-elevated nutrients-card" data-testid="nutrients">
+				<div class="card-head">
+					<span class="section-label">{m('nutrition.nutrients')}</span>
+				</div>
+				<ul class="nutrient-list">
+					{#each nutrientBudgets as n (n.kind)}
+						{@const label = m(n.labelKey)}
+						{@const coverage = m('nutrition.nutrientPartial', { reported: n.reportedEntries, total: n.totalEntries, nutrient: label })}
+						<li class="nutrient-row" data-testid={`nutrient-${n.kind}`}>
+							<span class="nutrient-name">{label}</span>
+							<span class="nutrient-amount">
+								{#if n.partial}
+									<!-- The coverage sentence is repeated as visually-hidden text rather
+									     than left in `title` alone: a title tooltip is unreachable by
+									     keyboard and inconsistently announced, and it is the one thing
+									     qualifying the number beside it. -->
+									<span class="nutrient-approx" title={coverage} data-testid={`nutrient-partial-${n.kind}`}>{m('nutrition.nutrientAtLeast')}</span>
+									<span class="visually-hidden">{coverage}</span>
+								{/if}
+								<span class="nutrient-value">{n.consumed}</span>
+								{#if n.target !== null}<span class="nutrient-target">/ {n.target}</span>{/if}
+								<span class="nutrient-unit">{n.unit}</span>
+							</span>
+							{#if n.exceeded}
+								<span class="budget-chip budget-over" data-testid={`nutrient-state-${n.kind}`}>{m('nutrition.nutrientOver', { n: Math.round((n.consumed - (n.target ?? 0)) * 10) / 10, unit: n.unit })}</span>
+							{:else if n.reached}
+								<span class="budget-chip budget-on" data-testid={`nutrient-state-${n.kind}`}>{m('nutrition.nutrientReached')}</span>
+							{:else if n.remaining !== null}
+								<span class="budget-chip budget-left" data-testid={`nutrient-state-${n.kind}`}>{m('nutrition.nutrientLeft', { n: n.remaining, unit: n.unit })}</span>
+							{:else if n.target === null}
+								<span class="budget-chip budget-untargeted" data-testid={`nutrient-state-${n.kind}`}>{m('nutrition.nutrientUntargeted')}</span>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+				<p class="section-hint">
+					<span class="material-symbols hint-icon" aria-hidden="true">info</span>
+					{m('nutrition.nutrientsHint')}
+				</p>
+			</section>
+		{/if}
 
 		{#if templatesError}
 			<section class="card-elevated templates-card" data-testid="templates-error">
@@ -1397,6 +1447,55 @@
 		color: var(--color-text-secondary);
 		font-size: 0.8rem;
 		font-variant-numeric: tabular-nums;
+	}
+
+	/* Extended nutrients — rows, not rings: the four headline macros own the
+	   rings and a second ring stack would read as equal-weight. */
+	.nutrient-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+	.nutrient-row {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		align-items: baseline;
+		gap: var(--space-sm) var(--space-md);
+	}
+	.nutrient-name {
+		font-size: 0.9rem;
+		color: var(--color-text);
+	}
+	.nutrient-amount {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 4px;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.nutrient-value { font-weight: 700; }
+	.nutrient-target,
+	.nutrient-unit,
+	.nutrient-approx {
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
+	}
+	.nutrient-approx { font-style: italic; }
+	.budget-untargeted {
+		color: var(--color-text-secondary);
+		background: color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
+	}
+	@media (max-width: 480px) {
+		.nutrient-row {
+			grid-template-columns: 1fr auto;
+		}
+		.nutrient-row .budget-chip {
+			grid-column: 2;
+			justify-self: end;
+		}
 	}
 
 	.save-meal-form { display: flex; flex-direction: column; gap: var(--space-lg); }

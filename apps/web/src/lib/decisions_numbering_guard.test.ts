@@ -40,7 +40,6 @@ const decisionsPath = resolve(repoRoot, 'docs/architecture/decisions.md');
 /// moment its reference is corrected — the pinning assertion below fails if a
 /// listed number stops dangling, so this map cannot silently rot.
 const KNOWN_DANGLING_REFS = new Map<number, string>([
-	[613, '"the §613 frozen-trace-on-reload behaviour" — no entry 613; likely an issue number'],
 	[4704, '"§ 4704\'s `+` packing" — no entry 4704, and § 470 is unrelated to the glyph table']
 ]);
 

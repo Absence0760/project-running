@@ -511,4 +511,10 @@ export type ChallengeWithMeta = Challenge & {
 	my_rank: number | null;
 	joined: boolean;
 	completed_at: string | null;
+	/** Which club the caller joined a `club_vs_club` challenge under, from their
+	 * own `challenge_participants` row. Absent on the list producers, which
+	 * don't read participant rows — a club membership of the caller's that
+	 * happens to field a team is NOT the same fact, because nothing stops a
+	 * runner belonging to two clubs both on one board. */
+	my_team_club_id?: string | null;
 };

@@ -56,32 +56,49 @@ export interface RecentVolume {
 	activeWeeks: number;
 }
 
+export interface VolumeSample {
+	startedMs: number;
+	distanceM: number;
+}
+
+/// The one definition of "this row is running volume", and the countable
+/// numbers it yields. Cycling is excluded (a bike ride is not running volume —
+/// the same rule `goals.ts` and `fitness.ts` apply); everything else that
+/// carries distance counts, including treadmill runs, which are real load even
+/// though they are barred from anchoring fitness.
+///
+/// Extracted rather than inlined because `comeback.ts` reduces the SAME runs
+/// over a different window: two copies of the filter would let a runner's
+/// pre-break base and their current week come from different run sets, which
+/// is the one way a comparison between the two can silently lie.
+export function volumeSample(run: RunForVolume): VolumeSample | null {
+	if (run.activity_type === 'cycle') return null;
+	const distanceM = run.distance_m;
+	if (distanceM == null || !Number.isFinite(distanceM) || distanceM <= 0) return null;
+	const startedMs = Date.parse(run.started_at);
+	if (!Number.isFinite(startedMs)) return null;
+	return { startedMs, distanceM };
+}
+
 /// The runner's chronic weekly running volume from their recent runs.
 ///
 /// Windows are rolling 7-day buckets counted back from `nowMs`, not calendar
 /// weeks: a calendar week straddling today is only partly elapsed, so it
-/// under-reports volume and would drag the average down for no reason. Cycling
-/// is excluded (a bike ride is not running volume — the same rule `goals.ts`
-/// and `fitness.ts` apply); everything else that carries distance counts,
-/// including treadmill runs, which are real load even though they are barred
-/// from anchoring fitness.
+/// under-reports volume and would drag the average down for no reason.
 export function recentRunVolume(runs: RunForVolume[], nowMs: number): RecentVolume {
 	let totalM = 0;
 	let acuteM = 0;
 	const active = new Set<number>();
 	for (const r of runs) {
-		if (r.activity_type === 'cycle') continue;
-		const distance = r.distance_m;
-		if (distance == null || !Number.isFinite(distance) || distance <= 0) continue;
-		const started = Date.parse(r.started_at);
-		if (!Number.isFinite(started)) continue;
+		const sample = volumeSample(r);
+		if (sample === null) continue;
 		// A device whose clock runs ahead stamps a just-finished run in the
 		// future; that is this week's load, not a row to drop.
-		const age = Math.max(0, nowMs - started);
+		const age = Math.max(0, nowMs - sample.startedMs);
 		const week = Math.floor(age / (7 * DAY_MS));
 		if (week >= CHRONIC_WINDOW_WEEKS) continue;
-		totalM += distance;
-		if (week === 0) acuteM += distance;
+		totalM += sample.distanceM;
+		if (week === 0) acuteM += sample.distanceM;
 		active.add(week);
 	}
 	return { weeklyM: totalM / CHRONIC_WINDOW_WEEKS, acuteM, activeWeeks: active.size };
