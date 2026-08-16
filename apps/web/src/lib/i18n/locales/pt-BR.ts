@@ -4986,4 +4986,5 @@ export const messages = {
 	"nutrition.nutrientLeft": "{n} {unit} restantes",
 	"nutrition.nutrientReached": "Meta atingida",
 	"nutrition.nutrientUntargeted": "Sem meta diária",
+	"clubEvent.cancelledOccurrences": "Ocorrências canceladas",
 } satisfies Messages;

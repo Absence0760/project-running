@@ -1112,7 +1112,7 @@
 						<div class="next-event-meta">
 							<span>
 								<span class="material-symbols" aria-hidden="true">calendar_today</span>
-								{fmtDate(upcoming[0].starts_at)}
+								{fmtDate(upcoming[0].next_instance_start ?? upcoming[0].starts_at)}
 							</span>
 							{#if upcoming[0].meet_label}
 								<span>
@@ -1265,15 +1265,15 @@
 					{#each upcoming as evt (evt.id)}
 						<a href="/clubs/{club.slug}/events/{evt.id}" class="event-row">
 							<div class="event-date">
-								{new Date(evt.starts_at).toLocaleDateString(activeFormatLocale(), {
-									month: 'short',
-									day: 'numeric'
-								})}
+								{new Date(evt.next_instance_start ?? evt.starts_at).toLocaleDateString(
+									activeFormatLocale(),
+									{ month: 'short', day: 'numeric' }
+								)}
 								<span class="time">
-									{new Date(evt.starts_at).toLocaleTimeString(activeFormatLocale(), {
-										hour: 'numeric',
-										minute: '2-digit'
-									})}
+									{new Date(evt.next_instance_start ?? evt.starts_at).toLocaleTimeString(
+										activeFormatLocale(),
+										{ hour: 'numeric', minute: '2-digit' }
+									)}
 								</span>
 							</div>
 							<div class="event-main">

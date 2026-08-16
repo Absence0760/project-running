@@ -5009,4 +5009,5 @@ export const en = {
 	"nutrition.nutrientLeft": "{n} {unit} left",
 	"nutrition.nutrientReached": "Goal reached",
 	"nutrition.nutrientUntargeted": "No daily target",
+	"clubEvent.cancelledOccurrences": "Cancelled occurrences",
 } satisfies Record<string, string>;

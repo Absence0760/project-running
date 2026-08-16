@@ -93,4 +93,92 @@ test.describe('/clubs/[slug]/events/[id] — cancel one occurrence', () => {
 			page.locator('.instance-chip', { hasText: firstChipText })
 		).toHaveCount(0);
 	});
+
+	test('the club events tab advances to the next live occurrence', async ({ page }) => {
+		// Whole seconds: `expandInstances` stamps each occurrence with the
+		// start's h/m/s and a zero millisecond, so a sub-second `starts_at`
+		// drops its own first occurrence out of the expansion.
+		const startsAt = new Date(Math.floor((Date.now() + 7 * 24 * 3600 * 1000) / 1000) * 1000);
+		const title = `e2e-cancel-listing ${Date.now()}`;
+		eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			author_id: USER_A.id,
+			title,
+			starts_at: startsAt.toISOString(),
+			recurrence_freq: 'weekly'
+		});
+
+		// Before the cancellation the listing names the first occurrence.
+		await page.goto('/clubs/richmond-run-club?tab=events');
+		const row = page.locator('.event-row', { hasText: title }).first();
+		await expect(row).toBeVisible({ timeout: 10_000 });
+		// The browser runs in UTC (playwright.config.ts), so read the date in
+		// UTC too — the runner's own zone is irrelevant to what is rendered.
+		await expect(row.locator('.event-date')).toContainText(String(startsAt.getUTCDate()));
+		const beforeDateText = (await row.locator('.event-date').textContent())?.trim() ?? '';
+
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
+		await page.getByRole('button', { name: 'Cancel this occurrence' }).click();
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Cancel this occurrence' })
+			.click();
+		await expect(page.getByTestId('cancelled-occurrences')).toBeVisible({ timeout: 10_000 });
+
+		// The listing now names the second occurrence — a week on, so its
+		// day-of-month always differs from the cancelled one's.
+		const second = new Date(startsAt.getTime() + 7 * 24 * 3600 * 1000);
+		await page.goto('/clubs/richmond-run-club?tab=events');
+		await expect(row).toBeVisible({ timeout: 10_000 });
+		await expect(row.locator('.event-date')).toContainText(String(second.getUTCDate()));
+		expect((await row.locator('.event-date').textContent())?.trim()).not.toBe(beforeDateText);
+	});
+
+	test('an organiser can reinstate an occurrence beyond the next one', async ({ page }) => {
+		const admin = getAdminClient();
+		eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			author_id: USER_A.id,
+			title: `e2e-reinstate-later ${Date.now()}`,
+			starts_at: new Date(
+				Math.floor((Date.now() + 7 * 24 * 3600 * 1000) / 1000) * 1000
+			).toISOString(),
+			recurrence_freq: 'weekly'
+		});
+
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
+
+		// Cancel the SECOND occurrence. The picker hides it afterwards, so
+		// before the cancelled-occurrences list existed this was irreversible.
+		const chips = page.locator('.instance-chip');
+		await expect(chips.nth(1)).toBeVisible();
+		const secondChipText = (await chips.nth(1).textContent())?.trim() ?? '';
+		await chips.nth(1).click();
+		await page.getByRole('button', { name: 'Cancel this occurrence' }).click();
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Cancel this occurrence' })
+			.click();
+
+		const cancelledList = page.getByTestId('cancelled-occurrences');
+		await expect(cancelledList).toBeVisible({ timeout: 10_000 });
+		await expect(cancelledList).toContainText(secondChipText);
+
+		await cancelledList.getByRole('button', { name: 'Reinstate this occurrence' }).click();
+		await expect
+			.poll(
+				async () => {
+					const { data } = await admin
+						.from('event_exceptions')
+						.select('instance_start')
+						.eq('event_id', eventId);
+					return data?.length ?? 0;
+				},
+				{ timeout: 10_000 }
+			)
+			.toBe(0);
+		await expect(page.locator('.instance-chip', { hasText: secondChipText })).toHaveCount(1);
+	});
 });

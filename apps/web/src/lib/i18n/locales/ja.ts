@@ -4982,4 +4982,5 @@ export const messages = {
 	"nutrition.nutrientLeft": "残り {n} {unit}",
 	"nutrition.nutrientReached": "目標達成",
 	"nutrition.nutrientUntargeted": "1日の目標なし",
+	"clubEvent.cancelledOccurrences": "中止された開催回",
 } satisfies Messages;

@@ -4987,4 +4987,5 @@ export const messages = {
 	"nutrition.nutrientLeft": "{n} {unit} restantes",
 	"nutrition.nutrientReached": "Objetivo alcanzado",
 	"nutrition.nutrientUntargeted": "Sin objetivo diario",
+	"clubEvent.cancelledOccurrences": "Sesiones canceladas",
 } satisfies Messages;
