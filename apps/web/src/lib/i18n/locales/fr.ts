@@ -4987,4 +4987,7 @@ export const messages = {
 	"nutrition.nutrientLeft": "{n} {unit} restants",
 	"nutrition.nutrientReached": "Objectif atteint",
 	"nutrition.nutrientUntargeted": "Pas d’objectif quotidien",
+	"live.statRecentPaceStale": "Au dernier contact",
+	"live.motionStopped": "Aucun mouvement — {n} min au même endroit",
+	"live.motionStoppedAtLeast": "Aucun mouvement — au moins {n} min au même endroit",
 } satisfies Messages;

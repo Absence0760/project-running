@@ -4982,4 +4982,7 @@ export const messages = {
 	"nutrition.nutrientLeft": "残り {n} {unit}",
 	"nutrition.nutrientReached": "目標達成",
 	"nutrition.nutrientUntargeted": "1日の目標なし",
+	"live.statRecentPaceStale": "最後に確認した時点",
+	"live.motionStopped": "動きなし — 同じ地点に{n}分",
+	"live.motionStoppedAtLeast": "動きなし — 同じ地点に少なくとも{n}分",
 } satisfies Messages;

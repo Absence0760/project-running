@@ -5009,4 +5009,7 @@ export const en = {
 	"nutrition.nutrientLeft": "{n} {unit} left",
 	"nutrition.nutrientReached": "Goal reached",
 	"nutrition.nutrientUntargeted": "No daily target",
+	"live.statRecentPaceStale": "When last seen",
+	"live.motionStopped": "Not moving — {n} min in the same spot",
+	"live.motionStoppedAtLeast": "Not moving — at least {n} min in the same spot",
 } satisfies Record<string, string>;

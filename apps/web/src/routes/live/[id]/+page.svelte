@@ -29,6 +29,7 @@
 	} from '$lib/runs/live_hub';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
 	import { freshnessFor, liveElapsedS, type Freshness } from '$lib/runs/live_freshness';
+	import { motionFor } from '$lib/safety/live_motion';
 	import { isFinishedStale, statusAfterHydrate } from '$lib/runs/live_spectator_status';
 	import { m } from '$lib/i18n/store.svelte';
 
@@ -97,13 +98,24 @@
 	let routeWaypoints = $state<RouteWaypoint[]>([]);
 	let cutoffLegs = $state<RoadbookLeg[]>([]);
 	let latestPosition = $state<{ lat: number; lng: number } | null>(null);
-	let recentPings = $state<Array<{ distance_m: number; elapsed_s: number }>>([]);
+	let recentPings = $state<
+		Array<{ distance_m: number; elapsed_s: number; at_ms: number | null }>
+	>([]);
 	const hasCutoffRoute = $derived(cutoffLegs.some((l) => l.cutoff != null));
 
+	// Two windows over one buffer, deliberately different lengths: pace is
+	// the last handful of pings (a live number the cut-off ETA projects
+	// from), motion needs an hour to state how long a runner has been
+	// standing in the same place.
+	const PACE_WINDOW_PINGS = 5;
+	const MOTION_BUFFER_MS = 60 * 60 * 1000;
+	const MOTION_BUFFER_MAX = 1000;
+
 	const recentPaceSecPerKm = $derived.by((): number | null => {
-		if (recentPings.length < 2) return null;
-		const oldest = recentPings[0];
-		const newest = recentPings[recentPings.length - 1];
+		const window = recentPings.slice(-PACE_WINDOW_PINGS);
+		if (window.length < 2) return null;
+		const oldest = window[0];
+		const newest = window[window.length - 1];
 		const dDist = newest.distance_m - oldest.distance_m;
 		const dElapsed = newest.elapsed_s - oldest.elapsed_s;
 		if (dDist <= 0) return null;
@@ -131,6 +143,20 @@
 	// actually registers. Distance is deliberately NOT extrapolated: only
 	// time that has genuinely passed is added.
 	const raceElapsedS = $derived(liveElapsedS(elapsed, freshness?.ageMs ?? null));
+
+	// A runner still pinging from the same spot renders as a fresh LIVE dot
+	// and, because the pace delta is zero, drops the pace readout entirely —
+	// so "not moving" and "no data" looked the same. State it instead.
+	const motion = $derived(
+		status === 'live'
+			? motionFor({
+					samples: recentPings
+						.filter((p) => p.at_ms != null)
+						.map((p) => ({ distanceM: p.distance_m, atMs: p.at_ms as number })),
+					stale: isStale,
+				})
+			: null,
+	);
 
 	// A concluded run has no "next" cut-off — the projection would be a live
 	// claim about a runner who has already stopped.
@@ -241,15 +267,29 @@
 		if (ping.elapsed_s != null) elapsed = ping.elapsed_s;
 		if (distance > 0 && elapsed > 0) currentPace = formatPace(elapsed, distance);
 
-		// Feed the next-cut-off card: latest fix + a 5-ping recent buffer
-		// (only pings that carry both odometer fields, so the pace delta is
-		// real). Reassigned (not mutated) so the $derived ETA recomputes.
+		// Feed the next-cut-off card + the motion readout: latest fix plus a
+		// recent-ping buffer (only pings that carry both odometer fields, so
+		// the pace delta is real). Reassigned (not mutated) so the $derived
+		// ETA recomputes. Held for an hour so a long stop can be stated as a
+		// figure rather than a floor, and hard-capped so a dense backlog
+		// replay can't grow it without bound.
 		latestPosition = { lat: ping.lat, lng: ping.lng };
 		if (ping.distance_m != null && ping.elapsed_s != null) {
-			recentPings = [
+			const atMs = Number.isFinite(ts) ? (ts as number) : null;
+			const next = [
 				...recentPings,
-				{ distance_m: ping.distance_m, elapsed_s: ping.elapsed_s },
-			].slice(-5);
+				{ distance_m: ping.distance_m, elapsed_s: ping.elapsed_s, at_ms: atMs },
+			].slice(-MOTION_BUFFER_MAX);
+			const oldestKeptMs = atMs != null ? atMs - MOTION_BUFFER_MS : null;
+			const aged =
+				oldestKeptMs == null
+					? next
+					: next.filter((p) => p.at_ms == null || p.at_ms >= oldestKeptMs);
+			// A silence longer than the buffer would age out everything but
+			// the newest ping and take the pace readout with it, so never
+			// trim below the pace window.
+			recentPings =
+				aged.length >= PACE_WINDOW_PINGS ? aged : next.slice(-PACE_WINDOW_PINGS);
 		}
 
 		if (!map) return;
@@ -908,10 +948,22 @@
 				{#if status === 'live' && recentPaceSecPerKm != null}
 					<div class="live-stat" data-testid="recent-pace">
 						<span class="live-stat-value">{formatPace(recentPaceSecPerKm, 1000)}</span>
-						<span class="live-stat-label">{m('live.statRecentPace')}</span>
+						<span class="live-stat-label"
+							>{isStale ? m('live.statRecentPaceStale') : m('live.statRecentPace')}</span
+						>
 					</div>
 				{/if}
 			</div>
+			{#if motion?.state === 'stopped' && motion.stoppedForMs != null}
+				<p class="motion-chip" data-testid="motion-stopped">
+					<span class="material-symbols" aria-hidden="true">pause_circle</span>
+					{motion.atLeast
+						? m('live.motionStoppedAtLeast', {
+								n: Math.floor(motion.stoppedForMs / 60000),
+							})
+						: m('live.motionStopped', { n: Math.floor(motion.stoppedForMs / 60000) })}
+				</p>
+			{/if}
 			{#if status === 'live' && courseProgressPct != null}
 				<div
 					class="course-progress"
@@ -1375,6 +1427,24 @@
 		.live-runner-name {
 			font-size: 0.9rem;
 		}
+	}
+
+	/* Neutral, not alarming: a stopped runner is at an aid station far more
+	   often than they are in trouble, and the surface states the fact
+	   without grading it. */
+	.motion-chip {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		margin: 0;
+		padding: 0 var(--space-2xl) var(--space-md);
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+	.motion-chip .material-symbols {
+		font-size: 1.125rem;
 	}
 
 	.course-progress {
