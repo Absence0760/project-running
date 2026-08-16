@@ -4971,4 +4971,12 @@ export const en = {
 	"prefs.undoWindow8s": "8 seconds",
 	"prefs.undoWindow30s": "30 seconds",
 	"prefs.undoWindowManual": "Until I dismiss it",
+	"challenges.standingTitle": "Your standing",
+	"challenges.standingTitleTeam": "Your team's standing",
+	"challenges.standingRank": "#{rank} of {total}",
+	"challenges.standingTiedOne": "Tied with 1 other",
+	"challenges.standingTiedMany": "Tied with {n} others",
+	"challenges.standingBehind": "{gap} behind {name}",
+	"challenges.standingAhead": "{gap} ahead of {name}",
+	"challenges.standingLeading": "Leading",
 } satisfies Record<string, string>;

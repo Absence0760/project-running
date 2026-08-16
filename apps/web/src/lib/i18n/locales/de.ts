@@ -4951,4 +4951,12 @@ export const messages = {
 	"prefs.undoWindow8s": "8 Sekunden",
 	"prefs.undoWindow30s": "30 Sekunden",
 	"prefs.undoWindowManual": "Bis ich es schließe",
+	"challenges.standingTitle": "Deine Platzierung",
+	"challenges.standingTitleTeam": "Platzierung deines Teams",
+	"challenges.standingRank": "#{rank} von {total}",
+	"challenges.standingTiedOne": "Gleichauf mit 1 weiteren",
+	"challenges.standingTiedMany": "Gleichauf mit {n} weiteren",
+	"challenges.standingBehind": "{gap} hinter {name}",
+	"challenges.standingAhead": "{gap} vor {name}",
+	"challenges.standingLeading": "In Führung",
 } satisfies Messages;

@@ -4946,4 +4946,12 @@ export const messages = {
 	"prefs.undoWindow8s": "8秒",
 	"prefs.undoWindow30s": "30秒",
 	"prefs.undoWindowManual": "自分で閉じるまで",
+	"challenges.standingTitle": "あなたの順位",
+	"challenges.standingTitleTeam": "チームの順位",
+	"challenges.standingRank": "{total}中{rank}位",
+	"challenges.standingTiedOne": "同順位: 1",
+	"challenges.standingTiedMany": "同順位: {n}",
+	"challenges.standingBehind": "{name} まで {gap}",
+	"challenges.standingAhead": "{name} に {gap} リード",
+	"challenges.standingLeading": "首位",
 } satisfies Messages;
