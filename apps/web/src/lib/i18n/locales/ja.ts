@@ -4950,4 +4950,10 @@ export const messages = {
 	"roadbook.targetAhead": "前倒し",
 	"roadbook.targetOn": "予定どおり",
 	"roadbook.targetBehind": "遅れ",
+	"settingsGear.rotationNextUp": "次に使うペア: {name}",
+	"settingsGear.rotationNextUpWhy": "このローテーションで最も摩耗が少ないペアです。",
+	"settingsGear.rotationMakeCurrent": "現在のペアにする",
+	"settingsGear.rotationMakeCurrentLabel": "{name} を現在のペアにします — 新しいランに自動でタグ付けされます",
+	"settingsGear.rotationNextUpIsCurrent": "すでに現在のペアです。",
+	"settingsGear.rotationAllWorn": "ここにあるすべてのペアが交換の目安に達しています。",
 } satisfies Messages;

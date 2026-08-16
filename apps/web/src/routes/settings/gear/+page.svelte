@@ -28,6 +28,7 @@
 	import type { Run } from '$lib/types';
 	import { getUnit } from '$lib/format/units.svelte';
 	import { gearWear } from '$lib/gear/gear_wear';
+	import { rotationPick } from '$lib/gear/rotation_pick';
 	import { gearBackfillCandidates, gearPurchaseSince } from '$lib/gear/gear_backfill';
 	import GearBackfillModal from '$lib/components/GearBackfillModal.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -215,6 +216,45 @@
 			showToast(t('settingsGear.rotationSaveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			savingMembers = false;
+		}
+	}
+
+	// Which pair of a rotation comes out next. A rotation may hold both shoes
+	// and bikes (§183) while the star is scoped to (owner, kind), so the answer
+	// is computed within the kind the tab is showing.
+	function nextUpFor(r: GearRotationWithMembers) {
+		const memberIds = new Set(r.gear_ids);
+		const members = gear.filter((g) => memberIds.has(g.id) && g.kind === activeTab);
+		const pick = rotationPick(
+			members.map((g) => ({
+				id: g.id,
+				totalDistanceM: g.total_distance_m,
+				targetDistanceM: g.target_distance_m,
+				retiredAt: g.retired_at,
+				isCurrent: g.is_default,
+			})),
+		);
+		// Fewer than two pairs still in service is not a rotation — there is
+		// nothing to choose between. Gate on what the pick actually ranked, not
+		// on the membership count: a retired member is dropped by the pick, so
+		// counting memberships offers a "next up" for a single usable pair.
+		if (pick.ranked.length < 2) return null;
+		const picked = members.find((g) => g.id === pick.pickId);
+		if (!picked) return null;
+		return { picked, isCurrent: pick.pickIsCurrent, allWorn: pick.allWorn };
+	}
+
+	let movingStar = $state(false);
+
+	async function handleWearNext(g: GearWithDistance) {
+		movingStar = true;
+		try {
+			await setDefaultGear(g.id, g.kind);
+			gear = await fetchMyGear();
+		} catch (e) {
+			showToast(t('settingsGear.failed', { error: e instanceof Error ? e.message : String(e) }), 'error');
+		} finally {
+			movingStar = false;
 		}
 	}
 
@@ -644,12 +684,40 @@
 			{:else}
 				<ul class="rotation-list">
 					{#each rotations as r (r.id)}
+						{@const next = nextUpFor(r)}
 						<li class="rotation-row">
 							<div class="rotation-info">
 								<strong>{r.name}</strong>
 								<span class="muted">
 									{t(r.gear_ids.length === 1 ? 'settingsGear.rotationMemberCount' : 'settingsGear.rotationMemberCountMany', { n: r.gear_ids.length })}
 								</span>
+								{#if next}
+									<div class="rotation-next" data-testid="rotation-next">
+										<span class="rotation-next-name">
+											{t('settingsGear.rotationNextUp', { name: next.picked.name })}
+										</span>
+										{#if next.isCurrent}
+											<span class="muted">{t('settingsGear.rotationNextUpIsCurrent')}</span>
+										{:else}
+											<button
+												class="btn-outline btn-sm"
+												type="button"
+												disabled={movingStar}
+												aria-label={t('settingsGear.rotationMakeCurrentLabel', { name: next.picked.name })}
+												onclick={() => handleWearNext(next.picked)}
+											>
+												{t('settingsGear.rotationMakeCurrent')}
+											</button>
+										{/if}
+										<span class="muted">{t('settingsGear.rotationNextUpWhy')}</span>
+									</div>
+									{#if next.allWorn}
+										<p class="rotation-next-warn">
+											<span class="material-symbols" aria-hidden="true">change_circle</span>
+											{t('settingsGear.rotationAllWorn')}
+										</p>
+									{/if}
+								{/if}
 							</div>
 							<div class="rotation-actions">
 								<button class="btn-outline btn-sm" onclick={() => openManageRotation(r)}>
@@ -1388,6 +1456,28 @@
 		gap: 0.2rem;
 		min-width: 0;
 	}
+	.rotation-next {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-top: 0.2rem;
+		font-size: 0.85rem;
+	}
+	.rotation-next-name {
+		color: var(--color-text);
+		font-weight: 600;
+	}
+	.rotation-next-warn {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin: 0.3rem 0 0;
+		font-size: 0.8rem;
+		line-height: 1.4;
+		color: var(--color-danger-text);
+	}
+	.rotation-next-warn .material-symbols { font-size: 1rem; }
 	.rotation-actions {
 		display: flex;
 		align-items: center;

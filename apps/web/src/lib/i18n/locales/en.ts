@@ -4975,4 +4975,10 @@ export const en = {
 	"roadbook.targetAhead": "ahead",
 	"roadbook.targetOn": "on plan",
 	"roadbook.targetBehind": "behind",
+	"settingsGear.rotationNextUp": "Next up: {name}",
+	"settingsGear.rotationNextUpWhy": "Least worn in this rotation.",
+	"settingsGear.rotationMakeCurrent": "Make current",
+	"settingsGear.rotationMakeCurrentLabel": "Make {name} the current pair — new runs will auto-tag with it",
+	"settingsGear.rotationNextUpIsCurrent": "Already the current pair.",
+	"settingsGear.rotationAllWorn": "Every pair here is at or past its replacement target.",
 } satisfies Record<string, string>;
