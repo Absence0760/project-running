@@ -130,6 +130,22 @@ the one-click seed, hand-tunable per marker afterwards. During a mobile
 recording that follows the route, crossing a targeted marker speaks
 ahead/behind-plan (run_recording.md, `voice_cue_types.marker_targets`).
 
+`buildRoadbook` grades a target the way it grades a cutoff: every leg whose
+marker carries one gets a `target` verdict — the resolved `targetElapsedS`, a
+`marginS` signed like the cutoff's (positive is time in hand), and an
+`ahead` / `on` / `behind` status. A clock-only target resolves through the same
+first-occurrence-after-the-start rule as `cutoff_clock`, so the two cannot
+disagree about what "06:00" means on one row. The **on-schedule band is
+proportional** — `max(60 s, 1 % of the target)` — because two minutes down at a
+30-minute checkpoint is a real problem and two minutes down at hour twenty of a
+200-miler is noise; a flat band would grade every ultra checkpoint off-plan and
+every 10K one on it. Web renders a **Target** column beside Arrival that appears
+only once a checkpoint carries one (no empty column on an unplanned route),
+states the verdict in words rather than by colour alone, and carries into
+copy-as-text and the printed sheet. This closes the loop on "Save as marker
+targets": save the projections, change the goal or the pacing model, and the
+sheet says how far the new plan has drifted from the one the crew agreed.
+
 ## Deferred (follow-ups)
 
 - **Saved named race plans** — a `race_plans` table (route + goal + start +
