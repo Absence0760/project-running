@@ -682,7 +682,8 @@
 		font-size: 0.75rem;
 		opacity: 0.85;
 	}
-	.cut-safe {
+	.cut-safe,
+	.tgt-ahead {
 		background: var(--color-success-light);
 		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
@@ -690,21 +691,14 @@
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 	}
-	.cut-miss {
+	.cut-miss,
+	.tgt-behind {
 		background: var(--color-danger-light);
 		color: color-mix(in srgb, var(--color-danger) 65%, var(--color-text));
-	}
-	.tgt-ahead {
-		background: var(--color-success-light);
-		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
 	.tgt-on {
 		background: var(--color-bg-secondary);
 		color: var(--color-text);
-	}
-	.tgt-behind {
-		background: var(--color-danger-light);
-		color: color-mix(in srgb, var(--color-danger) 65%, var(--color-text));
 	}
 	.services .svc {
 		display: inline-block;
