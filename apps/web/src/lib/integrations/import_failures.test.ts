@@ -52,6 +52,27 @@ test('a database refusal classifies as rejected', () => {
 	);
 });
 
+test('a data-exception SQLSTATE reads as rejected, not as an unreadable file', () => {
+	// 22P02 carries "invalid input syntax", which the unparseable message
+	// pattern would otherwise claim — the server answered and refused.
+	assert.equal(
+		classifyImportFailure({ code: '22P02', message: 'invalid input syntax for type uuid' }).reason,
+		'rejected',
+	);
+	assert.equal(
+		classifyImportFailure({ code: 'PGRST204', message: "Could not find the column" }).reason,
+		'rejected',
+	);
+});
+
+test('a code never overrides the network / auth / size signals', () => {
+	assert.equal(
+		classifyImportFailure({ code: 'PGRST000', message: 'TypeError: Failed to fetch' }).reason,
+		'network',
+	);
+	assert.equal(classifyImportFailure({ code: '42501', message: 'JWT expired' }).reason, 'auth');
+});
+
 test('a bad archive member classifies as unparseable', () => {
 	assert.equal(
 		classifyImportFailure(new Error('Unsupported file format: .bin. Use GPX, KML, KMZ, GeoJSON, or TCX.'))

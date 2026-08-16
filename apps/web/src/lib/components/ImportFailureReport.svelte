@@ -43,7 +43,7 @@
 </script>
 
 <section class="failure-report" data-testid="import-failure-report">
-	<h3>{m('importFailures.heading', { count: log.items.length + log.truncated })}</h3>
+	<h3 role="status">{m('importFailures.heading', { count: log.items.length + log.truncated })}</h3>
 	<p class="intro">{m('importFailures.intro')}</p>
 
 	<ul class="reasons">

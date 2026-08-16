@@ -100,8 +100,6 @@ export function classifyImportFailure(err: unknown): {
 
 	if (code === 'P0001' && /rate limit exceeded/i.test(message))
 		return { reason: 'rate_limited', detail };
-	if (code === '42501' || code === '23505' || code === '23514')
-		return { reason: 'rejected', detail };
 
 	if (/failed to fetch|networkerror|network error|load failed|fetch failed|err_internet/i.test(message))
 		return { reason: 'network', detail };
@@ -110,6 +108,14 @@ export function classifyImportFailure(err: unknown): {
 	if (/too many requests|rate limit/i.test(message)) return { reason: 'rate_limited', detail };
 	if (/too large|maximum allowed size|exceeds the maximum|payload too large|quota/i.test(message))
 		return { reason: 'too_large', detail };
+
+	// Any remaining SQLSTATE / PGRST code means the server answered and
+	// refused — a data-exception class like 22P02 ("invalid input syntax")
+	// otherwise fell through to the `invalid` message pattern below and
+	// reported a server rejection as an unreadable file. Same principle as
+	// settings_write.ts's classifyWriteFailure: a code at all is `rejected`.
+	if (code) return { reason: 'rejected', detail };
+
 	if (/row-level security|violates|permission denied|forbidden/i.test(message))
 		return { reason: 'rejected', detail };
 	if (/parse|malformed|corrupt|unsupported file format|no track|invalid|not a valid/i.test(message))
