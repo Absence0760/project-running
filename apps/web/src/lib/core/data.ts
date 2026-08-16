@@ -11208,7 +11208,7 @@ export async function fetchChallengeById(id: string): Promise<ChallengeWithMeta 
 	// partial read failure fails the whole read.
 	const { data: parts, error: partsError } = await supabase
 		.from(TABLES.challenge_participants)
-		.select('user_id, completed_at')
+		.select('user_id, completed_at, team_club_id')
 		.eq('challenge_id', id);
 	if (partsError) throw partsError;
 	const joinedRow = userId ? (parts ?? []).find((p) => p.user_id === userId) : undefined;
@@ -11218,7 +11218,8 @@ export async function fetchChallengeById(id: string): Promise<ChallengeWithMeta 
 		my_value: null,
 		my_rank: null,
 		joined: !!joinedRow,
-		completed_at: joinedRow?.completed_at ?? null
+		completed_at: joinedRow?.completed_at ?? null,
+		my_team_club_id: joinedRow?.team_club_id ?? null
 	};
 }
 

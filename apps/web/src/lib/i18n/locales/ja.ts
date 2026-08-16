@@ -4956,4 +4956,12 @@ export const messages = {
 	"settingsGear.rotationMakeCurrentLabel": "{name} を現在のペアにします — 新しいランに自動でタグ付けされます",
 	"settingsGear.rotationNextUpIsCurrent": "すでに現在のペアです。",
 	"settingsGear.rotationAllWorn": "ここにあるすべてのペアが交換の目安に達しています。",
+	"challenges.standingTitle": "あなたの順位",
+	"challenges.standingTitleTeam": "チームの順位",
+	"challenges.standingRank": "{total}中{rank}位",
+	"challenges.standingTiedOne": "同順位: 1",
+	"challenges.standingTiedMany": "同順位: {n}",
+	"challenges.standingBehind": "{name} まで {gap}",
+	"challenges.standingAhead": "{name} に {gap} リード",
+	"challenges.standingLeading": "首位",
 } satisfies Messages;

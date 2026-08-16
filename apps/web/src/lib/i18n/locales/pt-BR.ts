@@ -4960,4 +4960,12 @@ export const messages = {
 	"settingsGear.rotationMakeCurrentLabel": "Definir {name} como o par atual — as novas corridas serão marcadas automaticamente com ele",
 	"settingsGear.rotationNextUpIsCurrent": "Já é o par atual.",
 	"settingsGear.rotationAllWorn": "Todos os pares aqui atingiram ou ultrapassaram a meta de substituição.",
+	"challenges.standingTitle": "Sua posição",
+	"challenges.standingTitleTeam": "Posição da sua equipe",
+	"challenges.standingRank": "#{rank} de {total}",
+	"challenges.standingTiedOne": "Empatado com mais 1",
+	"challenges.standingTiedMany": "Empatado com mais {n}",
+	"challenges.standingBehind": "{gap} atrás de {name}",
+	"challenges.standingAhead": "{gap} à frente de {name}",
+	"challenges.standingLeading": "Na liderança",
 } satisfies Messages;

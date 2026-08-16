@@ -4981,4 +4981,12 @@ export const en = {
 	"settingsGear.rotationMakeCurrentLabel": "Make {name} the current pair — new runs will auto-tag with it",
 	"settingsGear.rotationNextUpIsCurrent": "Already the current pair.",
 	"settingsGear.rotationAllWorn": "Every pair here is at or past its replacement target.",
+	"challenges.standingTitle": "Your standing",
+	"challenges.standingTitleTeam": "Your team's standing",
+	"challenges.standingRank": "#{rank} of {total}",
+	"challenges.standingTiedOne": "Tied with 1 other",
+	"challenges.standingTiedMany": "Tied with {n} others",
+	"challenges.standingBehind": "{gap} behind {name}",
+	"challenges.standingAhead": "{gap} ahead of {name}",
+	"challenges.standingLeading": "Leading",
 } satisfies Record<string, string>;

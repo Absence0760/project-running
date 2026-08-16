@@ -4961,4 +4961,12 @@ export const messages = {
 	"settingsGear.rotationMakeCurrentLabel": "Définir {name} comme paire actuelle — les nouvelles courses seront automatiquement associées à cette paire",
 	"settingsGear.rotationNextUpIsCurrent": "Déjà la paire actuelle.",
 	"settingsGear.rotationAllWorn": "Toutes les paires ici ont atteint ou dépassé leur objectif de remplacement.",
+	"challenges.standingTitle": "Votre classement",
+	"challenges.standingTitleTeam": "Classement de votre équipe",
+	"challenges.standingRank": "#{rank} sur {total}",
+	"challenges.standingTiedOne": "À égalité avec 1 autre",
+	"challenges.standingTiedMany": "À égalité avec {n} autres",
+	"challenges.standingBehind": "{gap} derrière {name}",
+	"challenges.standingAhead": "{gap} devant {name}",
+	"challenges.standingLeading": "En tête",
 } satisfies Messages;
