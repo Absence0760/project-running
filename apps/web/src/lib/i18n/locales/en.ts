@@ -4971,4 +4971,8 @@ export const en = {
 	"prefs.undoWindow8s": "8 seconds",
 	"prefs.undoWindow30s": "30 seconds",
 	"prefs.undoWindowManual": "Until I dismiss it",
+	"roadbook.colTarget": "Target",
+	"roadbook.targetAhead": "ahead",
+	"roadbook.targetOn": "on plan",
+	"roadbook.targetBehind": "behind",
 } satisfies Record<string, string>;

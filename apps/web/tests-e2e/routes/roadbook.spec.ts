@@ -86,6 +86,38 @@ test.describe('/routes/[id]/roadbook', () => {
 		await expect(rows.nth(2).locator('.cut-miss')).toHaveCount(0);
 	});
 
+	test('a checkpoint target time is graded against the projection', async ({ page }) => {
+		routeId = await seedRoute();
+
+		// No marker carries a target yet, so the column stays off the sheet.
+		await page.goto(`/routes/${routeId}/roadbook?goal=7200&model=even`);
+		await expect(page.locator('.rb-table tbody tr')).toHaveCount(4);
+		await expect(page.getByRole('columnheader', { name: 'Target' })).toHaveCount(0);
+
+		// Aid 1 sits ~22 % along, so a 2 h goal projects it at ~26 min — well
+		// inside a 50-minute target, and well outside it at a 6 h goal.
+		const admin = getAdminClient();
+		const { error } = await admin
+			.from('route_markers')
+			.update({ meta: { services: ['water', 'food'], target_elapsed_s: 3000 } })
+			.eq('route_id', routeId)
+			.eq('label', 'Aid 1');
+		if (error) throw new Error(`target update failed: ${error.message}`);
+
+		await page.goto(`/routes/${routeId}/roadbook?goal=7200&model=even`);
+		await expect(page.getByRole('columnheader', { name: 'Target' })).toBeVisible();
+		const targetCells = page.locator('[data-testid="roadbook-target"]');
+		await expect(targetCells.nth(1).locator('.tgt-ahead')).toBeVisible();
+		// The verdict is stated in words, not by colour alone.
+		await expect(targetCells.nth(1)).toContainText('ahead');
+		// Only the marker carrying a target gets a verdict.
+		await expect(targetCells.nth(0)).toBeEmpty();
+
+		await page.goto(`/routes/${routeId}/roadbook?goal=21600&model=even`);
+		await expect(targetCells.nth(1).locator('.tgt-behind')).toBeVisible();
+		await expect(targetCells.nth(1)).toContainText('behind');
+	});
+
 	test('the leg-pace column exposes the effort model re-pacing the climb', async ({ page }) => {
 		routeId = await seedRoute();
 

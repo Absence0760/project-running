@@ -4951,4 +4951,8 @@ export const messages = {
 	"prefs.undoWindow8s": "8 segundos",
 	"prefs.undoWindow30s": "30 segundos",
 	"prefs.undoWindowManual": "Hasta que lo cierre",
+	"roadbook.colTarget": "Objetivo",
+	"roadbook.targetAhead": "por delante",
+	"roadbook.targetOn": "según el plan",
+	"roadbook.targetBehind": "por detrás",
 } satisfies Messages;
