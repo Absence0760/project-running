@@ -338,6 +338,58 @@ step.
   sustained departure to confirmed contacts via the existing notify path,
   gated on a fail-closed deploy flag.
 
+## Stopped-runner readout on the spectator page (2026-08-15, ADR §617)
+
+> **STATUS: shipped web.** The spectator half of the safety story, complementing
+> the staleness work in `live_freshness`.
+
+`live_freshness` answers *"can we see them at all"* and `/live/[id]` is
+scrupulous about it — a lost-signal runner reads DELAYED, never LIVE. The
+complementary question had no answer anywhere on the surface: a runner whose
+phone is still pinging every few seconds from the same spot rendered as a
+fresh green LIVE dot, and the one derived stat that would have exposed it (the
+Recent-pace tile) computes a zero distance delta, returned `null`, and
+*disappeared*. Silence about "not moving" and silence about "no data yet"
+looked identical — and the more alarming of the two was the one that vanished.
+For the canyon-collapse (`ws100-spectator`), night-section (`moab240-spectator`)
+and alpine (`utmb-sweep-medical-sar`) cases this is the distinction that
+matters most.
+
+- **Decision (pure, web-only).** `motionFor` in
+  `apps/web/src/lib/safety/live_motion.ts` grades a window of recent pings into
+  `moving` / `stopped` / `unknown`. Constants: `MOTION_MIN_WINDOW_MS` (180 s —
+  the minimum observation before any claim, past every ordinary pause a moving
+  runner takes) and `MOTION_STOPPED_DISTANCE_M` (25 m — enough to absorb an
+  accumulating GPS random walk over minutes, not just one fix's error).
+- **Fail-closed in both directions.** A **stale** fix yields `unknown`: the last
+  position being old is exactly the case where "they have not moved" is
+  unknowable, and reporting a stationary runner off pre-dropout pings would be
+  the same lie in a new place. Too short a window yields `unknown` too — a
+  five-ping buffer at a 5 s cadence spans twenty seconds, and every runner
+  alive stands still for twenty seconds at a road crossing. A rewound odometer
+  (a re-armed recorder) is read as absolute ground covered, so it cannot
+  manufacture a stopped verdict.
+- **Neutral, not an alarm.** A runner stopped for six minutes is at an aid
+  station; one stopped for ninety is a question for their crew. The chip states
+  the fact and the duration in the body text colour and draws no conclusion.
+  When the stop fills the whole held buffer the duration is a **floor**
+  (`atLeast`) and the copy says "at least N min" rather than stating a figure
+  the data does not support.
+- **Recent pace under staleness.** The Recent tile kept its confident present-
+  tense label on a fix the cut-off card had already refused to project from.
+  It now relabels to "When last seen" when `isStale` — the number is a real
+  fact about the last sighting and is worth keeping, but not under a label that
+  reads as current.
+- **Surface.** `/live/[id]` only. No new data reaches an anonymous viewer: the
+  readout is derived from the `distance_m` + `at` fields the page already
+  renders as the trace and the stat strip, and the position itself still comes
+  through the existing privacy-zone clipping. Pinned by
+  `apps/web/tests-e2e/live/motion.spec.ts` (4) + 13 unit tests.
+- **No Dart twin, deliberately.** The Flutter `live_spectator_screen` renders
+  the same pings but has no motion readout, so a twin would be a helper with no
+  caller — dead code the parity guard would police forever. `live_motion` is
+  **not** a registered parity pair; the mobile mirror is tracked as a follow-up.
+
 ## Off-route → auto-notify trusted contact (feature D, 2026-07-13, ADR §241)
 
 > **STATUS: code shipped, prod-gated.** Built against the
