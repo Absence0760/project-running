@@ -272,7 +272,9 @@
 		// the pace delta is real). Reassigned (not mutated) so the $derived
 		// ETA recomputes. Held for an hour so a long stop can be stated as a
 		// figure rather than a floor, and hard-capped so a dense backlog
-		// replay can't grow it without bound.
+		// replay can't grow it without bound — a cadence fast enough to hit
+		// the cap just shortens the held span, which `motionFor` then
+		// reports as an "at least" floor rather than a wrong figure.
 		latestPosition = { lat: ping.lat, lng: ping.lng };
 		if (ping.distance_m != null && ping.elapsed_s != null) {
 			const atMs = Number.isFinite(ts) ? (ts as number) : null;

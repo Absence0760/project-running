@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	motionFor,
+	MOTION_MAX_GAP_MS,
 	MOTION_MIN_WINDOW_MS,
 	MOTION_STOPPED_DISTANCE_M,
 	type MotionSample,
@@ -43,10 +44,9 @@ test('a window shorter than the minimum is unknown, however still the runner', (
 });
 
 test('a window exactly at the minimum with no ground covered is stopped', () => {
-	const samples = [
-		{ distanceM: 5_000, atMs: T0 },
-		{ distanceM: 5_000, atMs: T0 + MOTION_MIN_WINDOW_MS },
-	];
+	// Contiguous 5 s pings spanning exactly the minimum. Two pings three
+	// minutes apart would NOT do — see the gap cases below.
+	const samples = ramp(MOTION_MIN_WINDOW_MS / 5_000 + 1, 5_000, 0, 5_000);
 	const m = motionFor({ samples, stale: false });
 	assert.equal(m.state, 'stopped');
 	assert.equal(m.stoppedForMs, MOTION_MIN_WINDOW_MS);
@@ -145,13 +145,72 @@ test('non-finite samples are dropped rather than poisoning the window', () => {
 	assert.equal(m.windowMs, 59 * 5_000);
 });
 
-test('a rewound odometer cannot manufacture a stopped verdict', () => {
-	// A re-armed recorder resets distance to 0; the naive delta is a large
-	// negative number, which must not read as "covered no ground".
+test('an outage inside the buffer is not counted as stillness', () => {
+	// The dangerous shape: an hour of silence between two pings from the
+	// same place. The runner was NOT observed standing there — they could
+	// have run out and back — so the whole outage must be discarded, not
+	// reported as "at least 60 min in the same spot".
+	const before = ramp(12, 5_000, 0, 5_000);
+	const last = before[before.length - 1];
+	const after = [{ distanceM: 5_000, atMs: last.atMs + 60 * 60 * 1000 }];
+	const m = motionFor({ samples: [...before, ...after], stale: false });
+	assert.equal(m.state, 'unknown');
+	assert.equal(m.stoppedForMs, null);
+});
+
+test('a claim resumes once enough contiguous pings land after an outage', () => {
+	const before = ramp(12, 5_000, 0, 5_000);
+	const last = before[before.length - 1];
+	// Four minutes of fresh, contiguous, stationary pings after the gap.
+	const after: MotionSample[] = Array.from({ length: 49 }, (_, i) => ({
+		distanceM: 5_000,
+		atMs: last.atMs + 60 * 60 * 1000 + i * 5_000,
+	}));
+	const m = motionFor({ samples: [...before, ...after], stale: false });
+	assert.equal(m.state, 'stopped');
+	// Measured from the far side of the gap only, never through it.
+	assert.equal(m.stoppedForMs, 48 * 5_000);
+	assert.equal(m.atLeast, true);
+});
+
+test('a gap at the accepted limit is vouched for, one millisecond past it is not', () => {
+	const spanning = (gapMs: number): MotionSample[] => {
+		const base = ramp(MOTION_MIN_WINDOW_MS / 5_000 + 1, 5_000, 0, 5_000);
+		const last = base[base.length - 1];
+		return [...base, { distanceM: 5_000, atMs: last.atMs + gapMs }];
+	};
+	assert.equal(motionFor({ samples: spanning(MOTION_MAX_GAP_MS), stale: false }).state, 'stopped');
+	// Past the limit the vouched window is the single trailing ping.
+	assert.equal(
+		motionFor({ samples: spanning(MOTION_MAX_GAP_MS + 1), stale: false }).state,
+		'unknown',
+	);
+});
+
+test('only the gap nearest the newest ping bounds the window', () => {
+	// Two outages. The vouched window starts after the LATER one, so the
+	// earlier stretch cannot leak back into the claim.
 	const samples: MotionSample[] = [
-		{ distanceM: 12_000, atMs: T0 },
-		{ distanceM: 0, atMs: T0 + MOTION_MIN_WINDOW_MS },
-		{ distanceM: 400, atMs: T0 + MOTION_MIN_WINDOW_MS + 60_000 },
+		{ distanceM: 1_000, atMs: T0 },
+		{ distanceM: 1_000, atMs: T0 + 30 * 60 * 1000 },
+		...Array.from({ length: 49 }, (_, i) => ({
+			distanceM: 1_000,
+			atMs: T0 + 60 * 60 * 1000 + i * 5_000,
+		})),
+	];
+	const m = motionFor({ samples, stale: false });
+	assert.equal(m.state, 'stopped');
+	assert.equal(m.stoppedForMs, 48 * 5_000);
+});
+
+test('a rewound odometer cannot manufacture a stopped verdict', () => {
+	// A re-armed recorder resets distance to 0 mid-stream; the naive delta
+	// is a large negative number, which must not read as "covered no
+	// ground". Contiguous cadence throughout, so the gap rule is not what
+	// is under test here.
+	const samples: MotionSample[] = [
+		...ramp(18, 5_000, 10, 12_000),
+		...ramp(19, 5_000, 10, 0).map((s) => ({ ...s, atMs: s.atMs + 18 * 5_000 })),
 	];
 	const m = motionFor({ samples, stale: false });
 	assert.equal(m.state, 'moving');

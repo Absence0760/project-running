@@ -16,13 +16,16 @@
 /// ninety is a question for their crew. The surface states the fact and
 /// the duration; it draws no conclusion the data cannot support.
 ///
-/// Fail-closed in both directions. A stale fix yields `unknown` — the last
-/// position being old is exactly the case where "they have not moved" is
-/// unknowable, and reporting a stationary runner off pre-dropout pings
-/// would be the same lie in a new place. Too short an observation window
-/// also yields `unknown`, because a five-ping buffer at a 5 s cadence
-/// spans twenty seconds and every runner alive stands still for twenty
-/// seconds at a road crossing.
+/// Fail-closed in three directions. A stale fix yields `unknown` — the
+/// last position being old is exactly the case where "they have not moved"
+/// is unknowable, and reporting a stationary runner off pre-dropout pings
+/// would be the same lie in a new place. A gap inside the buffer yields
+/// `unknown` too, for the same reason arriving through a different door: a
+/// runner who reconnects near where they dropped out has not been observed
+/// standing there, and the outage must not be counted as stillness. And
+/// too short an observation window yields `unknown`, because a five-ping
+/// buffer at a 5 s cadence spans twenty seconds and every runner alive
+/// stands still for twenty seconds at a road crossing.
 ///
 /// Web-only: this is a spectator-surface derivation with no mobile
 /// consumer today (the Flutter `live_spectator_screen` renders the same
@@ -41,6 +44,17 @@ export const MOTION_MIN_WINDOW_MS = 180_000;
 /// does not average out, so the floor has to absorb an accumulating
 /// random walk over minutes rather than a single fix's error.
 export const MOTION_STOPPED_DISTANCE_M = 25;
+
+/// The longest gap between two consecutive pings the window may span. A
+/// claim about a runner staying put is a claim about every moment in
+/// between, and a hole in the telemetry is precisely where they could have
+/// left and come back. Everything before a longer gap is discarded rather
+/// than vouched for, so a reconnection after an hour off-grid starts the
+/// observation again instead of reading the whole outage as stillness.
+/// Kept below `MOTION_MIN_WINDOW_MS` so no accepted gap can be most of a
+/// minimum-length claim. Two minutes still absorbs the ordinary cellular
+/// flakiness a ~5 s broadcast cadence sees.
+export const MOTION_MAX_GAP_MS = 120_000;
 
 export type MotionState = 'moving' | 'stopped' | 'unknown';
 
@@ -73,7 +87,8 @@ export interface LiveMotion {
 	/// the time it took them to cover that radius — bounded, and the right
 	/// side to err on for a claim phrased as "has not left this spot".
 	stoppedForMs: number | null;
-	/// The stopped span reached the oldest sample held, so the real
+	/// The stopped span reached the start of the vouched window — either
+	/// the oldest sample held or the far side of a gap — so the real
 	/// duration is at least `stoppedForMs` and possibly longer. The
 	/// surface must say "at least" rather than state the figure flat.
 	atLeast: boolean;
@@ -98,7 +113,20 @@ function usable(s: MotionSample): boolean {
 export function motionFor(input: LiveMotionInput): LiveMotion {
 	if (input.stale) return UNKNOWN;
 
-	const samples = input.samples.filter(usable).sort((a, b) => a.atMs - b.atMs);
+	const all = input.samples.filter(usable).sort((a, b) => a.atMs - b.atMs);
+	if (all.length < 2) return UNKNOWN;
+
+	// Only the contiguous run ending at the newest ping is evidence. A
+	// caller holding a buffer that straddles an outage would otherwise hand
+	// us a pre-gap sample as the start of an unbroken stop.
+	let firstVouched = 0;
+	for (let i = all.length - 1; i > 0; i--) {
+		if (all[i].atMs - all[i - 1].atMs > MOTION_MAX_GAP_MS) {
+			firstVouched = i;
+			break;
+		}
+	}
+	const samples = all.slice(firstVouched);
 	if (samples.length < 2) return UNKNOWN;
 
 	const newest = samples[samples.length - 1];
