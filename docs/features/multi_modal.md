@@ -543,10 +543,44 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   two). A missing upstream value stays **null**, never a phantom 0, and
   `scalePortion` carries the nulls through. Manual entry exposes the five as
   optional numeric inputs. They surface on the searched-portion preview and as
-  a per-item breakdown on `/nutrition/[date]/[slot]`. They are **not** daily
-  targets yet — `nutrition_targets` / `nutrition_budget` still only budget
-  kcal + the three macros; folding these five into daily targets is a
-  follow-up.
+  a per-item breakdown on `/nutrition/[date]/[slot]`.
+- **Extended-nutrient day roll-up** (shipped web 2026-08-15,
+  `nutrition/extended_nutrients.ts`). The five now roll up to a self-hiding
+  **Nutrients** section on `/nutrition`, beneath the water card. The headline
+  macros keep the rings; these are rows, so the two don't read as equal weight.
+  `nutrition_targets` / `nutrition_budget` are **unchanged** — they still budget
+  kcal + the three macros, and the `.dart` twins take on no new obligation
+  (this module is web-only).
+  - The hard part is **coverage**, not arithmetic. Both food sources carry
+    these fields unevenly, so `sumMacros`' "null counts as 0" rule (right for
+    calories) would be fail-open here: eight items of which two report sodium
+    sum to a number that reads as the day and sits comfortably under a ceiling
+    it may have blown. So a total is accompanied by how many entries reported
+    it, and only the claims that survive partial coverage are offered.
+    `exceeded` (ceiling past target) and `reached` (floor at/past target) are
+    **monotone** — the reported items alone already clear the line — so they
+    hold; `remaining` ("600 mg left") is a claim about the *whole* day's intake
+    and is **withheld** (null) whenever an entry didn't report the nutrient,
+    with the row marked "at least" instead. A nutrient nothing reported is
+    omitted, never a zero row.
+  - Targets are public reference intakes, and two of the five deliberately have
+    **none**. **Fibre** is a floor at 14 g/1000 kcal (IOM/DGA), scaled off the
+    *base* calorie goal rather than the exercise-inflated one — a long-run
+    day's extra carbohydrate is deliberately low-residue, and scaling by
+    workout calories would prescribe 50 g+ of fibre on exactly the day a runner
+    wants least of it. **Sodium** is a ceiling of 2300 mg (FDA daily value)
+    that *rises* with logged exercise on the same "base + exercise" model as
+    the calorie goal (§134) and the water goal, at 6 mg/min — derived from
+    `hydration.ts`'s own 480 ml/hr sweat assumption at ~700 mg Na per litre —
+    capped at that module's `MAX_EXERCISE_MINUTES`, past which this is a race
+    fuel plan (`fuel_plan.ts`), not a daily baseline. It is the one target that
+    resolves with **no body metrics**, for the same reason `hydrationTargetMl`
+    always answers. **Saturated fat** is a ceiling at 10 % of the full dynamic
+    calorie goal (DGA). **Sugar** is ungraded — the stored field is *total*
+    sugars while every published ceiling is about *free/added* sugars, so
+    grading it would flag a bowl of fruit as an overshoot. **Cholesterol** is
+    ungraded — the 300 mg/day cap left the Dietary Guidelines in 2015 and no
+    numeric limit replaced it.
 - **Dynamic TDEE ("base + exercise").** The daily calorie goal is the
   Mifflin-St Jeor base (activity level treated as your *non-exercise*
   baseline) **plus** the calories burned by today's logged runs + gym
