@@ -173,6 +173,12 @@ test('a claim resumes once enough contiguous pings land after an outage', () => 
 	assert.equal(m.atLeast, true);
 });
 
+test('a tolerated gap can never be most of the shortest claim', () => {
+	// The constant is a proportion, not a guarantee — pin the proportion so
+	// a future widening has to argue with this test rather than slip past.
+	assert.ok(MOTION_MAX_GAP_MS * 6 <= MOTION_MIN_WINDOW_MS);
+});
+
 test('a gap at the accepted limit is vouched for, one millisecond past it is not', () => {
 	const spanning = (gapMs: number): MotionSample[] => {
 		const base = ramp(MOTION_MIN_WINDOW_MS / 5_000 + 1, 5_000, 0, 5_000);

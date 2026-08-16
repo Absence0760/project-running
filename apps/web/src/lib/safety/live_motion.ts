@@ -51,10 +51,12 @@ export const MOTION_STOPPED_DISTANCE_M = 25;
 /// left and come back. Everything before a longer gap is discarded rather
 /// than vouched for, so a reconnection after an hour off-grid starts the
 /// observation again instead of reading the whole outage as stillness.
-/// Kept below `MOTION_MIN_WINDOW_MS` so no accepted gap can be most of a
-/// minimum-length claim. Two minutes still absorbs the ordinary cellular
-/// flakiness a ~5 s broadcast cadence sees.
-export const MOTION_MAX_GAP_MS = 120_000;
+/// No gap length is perfectly safe — at a slow jog a runner clears the
+/// stopped radius and returns in about twenty seconds — so this is a
+/// proportion, not a guarantee: six missed pings at the ~5 s broadcast
+/// cadence absorbs ordinary cellular flakiness while keeping any tolerated
+/// hole to at most a sixth of the shortest claim the helper will make.
+export const MOTION_MAX_GAP_MS = 30_000;
 
 export type MotionState = 'moving' | 'stopped' | 'unknown';
 

@@ -18,21 +18,24 @@ import { USER_A } from '../fixtures/users';
 
 const SPOT = { lat: -37.8, lng: 144.96 };
 
-/// Pings every 30 s across `spanS`, ending `freshS` ago so the last fix is
-/// inside the 90 s staleness window.
+/// Pings every 15 s across `spanS` — inside `MOTION_MAX_GAP_MS`, so the
+/// window is contiguous evidence — ending `freshS` ago so the last fix sits
+/// inside (or, for the stale cases, well outside) the 90 s staleness window.
+const STEP_S = 15;
+
 function pingSeries(opts: {
 	spanS: number;
 	freshS: number;
 	metresPerStep: number;
 	startDistanceM: number;
 }) {
-	const steps = Math.floor(opts.spanS / 30);
+	const steps = Math.floor(opts.spanS / STEP_S);
 	const endMs = Date.now() - opts.freshS * 1000;
 	return Array.from({ length: steps + 1 }, (_, i) => ({
 		...SPOT,
 		distance_m: opts.startDistanceM + i * opts.metresPerStep,
-		elapsed_s: 600 + i * 30,
-		at: new Date(endMs - (steps - i) * 30_000).toISOString(),
+		elapsed_s: 600 + i * STEP_S,
+		at: new Date(endMs - (steps - i) * STEP_S * 1000).toISOString(),
 	}));
 }
 
@@ -92,11 +95,11 @@ test.describe('/live/[id] — stopped-runner readout (anon)', () => {
 			await insertLivePings({
 				run_id: runId,
 				user_id: USER_A.id,
-				// Same span + freshness, but 90 m per 30 s step (~5:33 /km).
+				// Same span + freshness, but 45 m per 15 s step (~5:33 /km).
 				points: pingSeries({
 					spanS: 300,
 					freshS: 10,
-					metresPerStep: 90,
+					metresPerStep: 45,
 					startDistanceM: 900,
 				}),
 			});
@@ -147,7 +150,7 @@ test.describe('/live/[id] — stopped-runner readout (anon)', () => {
 				points: pingSeries({
 					spanS: 300,
 					freshS: 600,
-					metresPerStep: 90,
+					metresPerStep: 45,
 					startDistanceM: 900,
 				}),
 			});
