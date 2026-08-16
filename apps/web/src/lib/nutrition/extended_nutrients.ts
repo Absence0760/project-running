@@ -147,10 +147,6 @@ export interface NutrientBudget {
 	/// milligrams to whole.
 	consumed: number;
 	target: number | null;
-	/// Progress toward the target, clamped to [0, 1]; null with no target.
-	/// Under partial coverage this is a fraction of the *reported* intake —
-	/// render it beside the "at least" treatment `partial` calls for.
-	fraction: number | null;
 	/// Headroom under a ceiling / shortfall to a floor, never negative. Null
 	/// with no target AND null whenever coverage is partial: the unreported
 	/// entries could have consumed all of it.
@@ -203,7 +199,6 @@ export function extendedNutrientBudgets(
 			labelKey: spec.labelKey,
 			consumed,
 			target: hasTarget ? target : null,
-			fraction: hasTarget ? Math.max(0, Math.min(1, consumed / target)) : null,
 			remaining:
 				hasTarget && !partial ? Math.max(0, roundFor(spec.unit, target - consumed)) : null,
 			exceeded: hasTarget && spec.direction === 'ceiling' && consumed > target,

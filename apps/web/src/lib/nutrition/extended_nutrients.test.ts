@@ -152,7 +152,6 @@ test('budgets: exceeding a ceiling still holds under partial coverage', () => {
 	assert.equal(b.partial, true);
 	assert.equal(b.exceeded, true, 'the reported entries alone already clear the ceiling');
 	assert.equal(b.remaining, null);
-	assert.equal(b.fraction, 1);
 });
 
 test('budgets: reaching a floor still holds under partial coverage', () => {
@@ -176,7 +175,6 @@ test('budgets: an ungraded nutrient reports its total and nothing else', () => {
 	const b = budgetFor('sugar', [row({ sugar_g: 42.25 })]);
 	assert.equal(b.consumed, 42.3);
 	assert.equal(b.target, null);
-	assert.equal(b.fraction, null);
 	assert.equal(b.remaining, null);
 	assert.equal(b.exceeded, false);
 	assert.equal(b.reached, false);
@@ -224,9 +222,9 @@ test('budgets: results come back in EXTENDED_NUTRIENTS display order', () => {
 	);
 });
 
-test('budgets: fraction clamps to [0, 1] and never divides by a null target', () => {
-	const over = budgetFor('sodium', [row({ sodium_mg: 9000 })]);
-	assert.equal(over.fraction, 1);
+test('budgets: an ungraded nutrient never claims remaining, however much is eaten', () => {
 	const none = budgetFor('cholesterol', [row({ cholesterol_mg: 500 })]);
-	assert.equal(none.fraction, null);
+	assert.equal(none.target, null);
+	assert.equal(none.remaining, null);
+	assert.equal(none.exceeded, false);
 });
