@@ -338,7 +338,7 @@ step.
   sustained departure to confirmed contacts via the existing notify path,
   gated on a fail-closed deploy flag.
 
-## Stopped-runner readout on the spectator page (2026-08-15, ADR §617)
+## Stopped-runner readout on the spectator page (2026-08-15, ADR §621)
 
 > **STATUS: shipped web.** The spectator half of the safety story, complementing
 > the staleness work in `live_freshness`.
