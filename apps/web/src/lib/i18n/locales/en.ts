@@ -4971,4 +4971,16 @@ export const en = {
 	"prefs.undoWindow8s": "8 seconds",
 	"prefs.undoWindow30s": "30 seconds",
 	"prefs.undoWindowManual": "Until I dismiss it",
+	// Comeback load card (ComebackCard.svelte) — the load signal for a runner
+	// back from a break, where the acute:chronic ratio refuses to grade
+	"comeback.title": "Coming back from a break",
+	"comeback.verdict_easing_in": "Easing in",
+	"comeback.verdict_steep": "Big first week",
+	"comeback.layoff": "{weeks} weeks without a run",
+	"comeback.shareCaption": "this week vs your average week before the break",
+	"comeback.meaning_easing_in": "This week sits comfortably under the weeks you were running before the break. Building back gradually from here is what makes the comeback stick.",
+	"comeback.meaning_steep": "This week is already more than half of what you were running before the break. Your body has lost the base that made those weeks routine, so a shorter week now costs far less than a setback later.",
+	"comeback.thisWeekLabel": "Last 7 days",
+	"comeback.baseLabel": "Weekly average before the break",
+	"comeback.footnote": "Your training load ramp comes back once you have a few consistent weeks again.",
 } satisfies Record<string, string>;
