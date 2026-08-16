@@ -2833,17 +2833,17 @@ export async function fetchClubMembers(
 
 // --- Events ---
 
+/// Read a small run of RSVP rows rather than one, because the soonest may have
+/// been called off and the card wants the soonest that is still on.
+const RSVP_CANDIDATE_LIMIT = 10;
+
 /// The next event the signed-in user has RSVP'd `going` to within the
 /// given window. Returns null when nothing matches — the dashboard
-/// card hides itself.
+/// card hides itself. Fail-closed on a run of cancellations: with every
+/// candidate called off it shows nothing rather than a cancelled event.
 ///
 /// Mirrors `SocialService.fetchNextRsvpedEvent` on Android so both
 /// surfaces show the same card at the same moment in time.
-///
-/// Reads a small run of candidates rather than one row because the soonest
-/// ones may have been called off; the card wants the soonest that is still on.
-const RSVP_CANDIDATE_LIMIT = 10;
-
 export async function fetchNextRsvpedEvent(
 	windowHours = 48,
 ): Promise<{
