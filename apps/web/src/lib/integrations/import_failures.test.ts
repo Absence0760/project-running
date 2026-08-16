@@ -43,6 +43,22 @@ test('an oversized upload reads as too_large, not rejected', () => {
 	);
 });
 
+test('a storage quota rejection is a size problem, not a rate limit', () => {
+	// The word "quota" also appears in third-party rate-limit prose, but the
+	// only errors reaching this classifier come from saveRun (PostgREST),
+	// addRunPhoto (Storage) and the parsers — where a quota IS a size cap.
+	assert.equal(
+		classifyImportFailure(new DOMException('The quota has been exceeded.', 'QuotaExceededError'))
+			.reason,
+		'too_large',
+	);
+	// A genuine rate limit still wins: it is matched before the size patterns.
+	assert.equal(
+		classifyImportFailure(new Error('API quota exceeded — too many requests')).reason,
+		'rate_limited',
+	);
+});
+
 test('a database refusal classifies as rejected', () => {
 	assert.equal(classifyImportFailure({ code: '42501', message: 'denied' }).reason, 'rejected');
 	assert.equal(classifyImportFailure({ code: '23505', message: 'duplicate key' }).reason, 'rejected');
