@@ -4987,4 +4987,11 @@ export const messages = {
 	"nutrition.nutrientLeft": "{n} {unit} restantes",
 	"nutrition.nutrientReached": "Objetivo alcanzado",
 	"nutrition.nutrientUntargeted": "Sin objetivo diario",
+	"gym.routine.history.title": "Historial de la rutina",
+	"gym.routine.history.recent": "Sesiones recientes",
+	"gym.routine.history.lastDone":
+		"{days, plural, =0 {Realizada hoy} =1 {Realizada ayer} other {Realizada hace # días}}",
+	"gym.routine.history.completedRate": "{completed} de {graded} completadas",
+	"gym.routine.history.verdict.ungraded": "Sin evaluar",
+	"gym.routine.history.loadError": "No se pudo cargar el historial de esta rutina.",
 } satisfies Messages;

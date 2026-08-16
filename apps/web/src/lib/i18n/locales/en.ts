@@ -5009,4 +5009,11 @@ export const en = {
 	"nutrition.nutrientLeft": "{n} {unit} left",
 	"nutrition.nutrientReached": "Goal reached",
 	"nutrition.nutrientUntargeted": "No daily target",
+	"gym.routine.history.title": "Routine history",
+	"gym.routine.history.recent": "Recent sessions",
+	"gym.routine.history.lastDone":
+		"{days, plural, =0 {Run today} =1 {Run yesterday} other {Run # days ago}}",
+	"gym.routine.history.completedRate": "{completed} of {graded} completed",
+	"gym.routine.history.verdict.ungraded": "Not graded",
+	"gym.routine.history.loadError": "Couldn’t load this routine’s history.",
 } satisfies Record<string, string>;

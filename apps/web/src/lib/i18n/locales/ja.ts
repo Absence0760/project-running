@@ -4982,4 +4982,11 @@ export const messages = {
 	"nutrition.nutrientLeft": "残り {n} {unit}",
 	"nutrition.nutrientReached": "目標達成",
 	"nutrition.nutrientUntargeted": "1日の目標なし",
+	"gym.routine.history.title": "ルーティン履歴",
+	"gym.routine.history.recent": "最近のセッション",
+	"gym.routine.history.lastDone":
+		"{days, plural, =0 {今日実施} =1 {昨日実施} other {#日前に実施}}",
+	"gym.routine.history.completedRate": "{graded}件中{completed}件を完了",
+	"gym.routine.history.verdict.ungraded": "評価なし",
+	"gym.routine.history.loadError": "このルーティンの履歴を読み込めませんでした。",
 } satisfies Messages;

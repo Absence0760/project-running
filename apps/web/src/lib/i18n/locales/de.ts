@@ -4987,4 +4987,11 @@ export const messages = {
 	"nutrition.nutrientLeft": "{n} {unit} übrig",
 	"nutrition.nutrientReached": "Ziel erreicht",
 	"nutrition.nutrientUntargeted": "Kein Tagesziel",
+	"gym.routine.history.title": "Routine-Verlauf",
+	"gym.routine.history.recent": "Letzte Einheiten",
+	"gym.routine.history.lastDone":
+		"{days, plural, =0 {Heute absolviert} =1 {Gestern absolviert} other {Vor # Tagen absolviert}}",
+	"gym.routine.history.completedRate": "{completed} von {graded} abgeschlossen",
+	"gym.routine.history.verdict.ungraded": "Nicht bewertet",
+	"gym.routine.history.loadError": "Verlauf dieser Routine konnte nicht geladen werden.",
 } satisfies Messages;

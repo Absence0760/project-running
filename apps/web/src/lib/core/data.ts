@@ -9542,6 +9542,36 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 	};
 }
 
+/// The workout rows this routine has been run as, newest first — the read-back
+/// of `gym_workouts.metadata.routine_id`. Owner-scoped by RLS.
+///
+/// Includes in-flight drafts and ungraded "save as is" rows; classifying them
+/// is `gym/routine_history.ts`'s job, not the query's, so the shaping rules
+/// stay unit-testable in one place.
+export async function fetchGymRoutineSessions(
+	routineId: string,
+	limit = 50,
+): Promise<Array<{ id: string; started_at: string; title: string | null; metadata: unknown }>> {
+	const userId = auth.user?.id;
+	if (!userId || !routineId) return [];
+	const { data, error } = await supabase
+		.from(TABLES.gym_workouts)
+		.select('id, started_at, title, metadata')
+		.eq('user_id', userId)
+		.eq('metadata->>routine_id', routineId)
+		.order('started_at', { ascending: false })
+		.limit(limit);
+	// A failed read is not "you have never run this" — the caller shows a retry
+	// rather than an empty history.
+	if (error) throw error;
+	return (data ?? []) as Array<{
+		id: string;
+		started_at: string;
+		title: string | null;
+		metadata: unknown;
+	}>;
+}
+
 /// Insert a routine + its exercises + their planned sets. Blank-named
 /// exercises are dropped. exercise_count is stamped client-side from the
 /// surviving exercise list (non-authoritative cache).
