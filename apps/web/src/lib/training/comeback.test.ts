@@ -63,9 +63,10 @@ test('the steep threshold is exclusive — exactly half the old base still eases
 });
 
 test('layoff weeks round to nearest so a break is never understated', () => {
-	// 45 days is 6.43 weeks; flooring would report 6 and undersell the break.
+	// 32 days is 4.57 weeks — the case that separates rounding from flooring,
+	// which would report 4 and undersell the break by most of a week.
+	assert.equal(comebackLoad(comebackRunner(32, 12_000), NOW).layoffWeeks, 5);
 	assert.equal(comebackLoad(comebackRunner(45, 12_000), NOW).layoffWeeks, 6);
-	assert.equal(comebackLoad(comebackRunner(52, 12_000), NOW).layoffWeeks, 7);
 });
 
 test('a rest week shorter than the layoff threshold is not a comeback', () => {
@@ -122,6 +123,14 @@ test('a run stamped in the future does not inflate the break it appears to open'
 	const load = comebackLoad(runs, NOW);
 	assert.equal(load.layoffDays, 30);
 	assert.equal(load.thisWeekM, 10_000);
+});
+
+test('a skewed stamp grades identically to an honest one', () => {
+	const base = [run(60, 40_000), run(67, 40_000), run(74, 40_000), run(81, 40_000)];
+	const skewed = comebackLoad([run(-100, 8_000), ...base], NOW);
+	const honest = comebackLoad([run(0, 8_000), ...base], NOW);
+	assert.deepEqual(skewed, honest);
+	assert.equal(honest.layoffDays, 60);
 });
 
 test('the two load cards are mutually exclusive by construction', () => {

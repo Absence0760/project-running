@@ -93,7 +93,7 @@ That last refusal is right, and it is also silent in the case that most warrants
 - **A week with no running is not graded.** An "easing in" verdict off zero kilometres would read as praise for not running, so `acuteM <= 0` returns `insufficient` — which also means the card never nags someone still on their break.
 - **The pre-break base clears the same evidence bar.** `MIN_ACTIVE_WEEKS` of the four windows before the break must carry a run, so a single session before a layoff is not a base to come back to. Both sides of the comparison are reduced through `plan_ramp`'s `volumeSample`, so the current week and the pre-break base can never come from different run sets.
 
-19 unit tests in `comeback.test.ts`; the surface is pinned by `tests-e2e/dashboard/comeback.spec.ts` (steep → called out + no ratio card, gentle → easing in, no base → no card). **Web-only** for the same reason as `self_load`.
+21 unit tests in `comeback.test.ts` — including two that pin a clock-skewed stamp grading identically to an honest one, since an unclamped future timestamp opens a phantom gap that reads as a break the runner never took; the surface is pinned by `tests-e2e/dashboard/comeback.spec.ts` (steep → called out + no ratio card, gentle → easing in, no base → no card). **Web-only** for the same reason as `self_load`.
 
 ## Opening-week ramp check (`plan_ramp.ts`, web-only)
 
