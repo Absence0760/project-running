@@ -80,6 +80,12 @@ test('a bad archive member classifies as unparseable', () => {
 		'unparseable',
 	);
 	assert.equal(classifyImportFailure(new Error('TCX file contains no track points')).reason, 'unparseable');
+	// garmin-zip throws this for a bundle .zip that wraps no activity —
+	// the runner's answer is "that file wasn't a run", not "unknown error".
+	assert.equal(
+		classifyImportFailure(new Error('Archive member contains no FIT file')).reason,
+		'unparseable',
+	);
 });
 
 test('an unrecognised failure stays unknown rather than guessing', () => {

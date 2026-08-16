@@ -118,7 +118,11 @@ export function classifyImportFailure(err: unknown): {
 
 	if (/row-level security|violates|permission denied|forbidden/i.test(message))
 		return { reason: 'rejected', detail };
-	if (/parse|malformed|corrupt|unsupported file format|no track|invalid|not a valid/i.test(message))
+	if (
+		/parse|malformed|corrupt|unsupported file format|no track|no fit file|invalid|not a valid/i.test(
+			message,
+		)
+	)
 		return { reason: 'unparseable', detail };
 
 	return { reason: 'unknown', detail };
