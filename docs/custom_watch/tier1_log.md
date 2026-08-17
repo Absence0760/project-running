@@ -1087,8 +1087,11 @@ loop must shed LED drive *before* the detector declares a rail, checked at both 
 rather than argued from proportionality.
 
 **The driver.** `drivers/max30101`: public register map, green LED on slot 1 (the wrist
-wavelength — a MAX30102 has none, answers on the same address, and is refused on its
-`PART_ID` before a single register is written), LED-off ambient on slot 2, 18-bit counts.
+wavelength — a MAX30102 has none and answers on the same address), LED-off ambient on
+slot 2, 18-bit counts. The parenthesis above originally ended "and is refused on its
+`PART_ID` before a single register is written", which was wrong: the whole MAX3010x
+family reports `0x15`. Corrected on 2026-08-17 — see the entry below and
+[§ 625](../architecture/decisions.md).
 
 Its design problem is that **this FIFO is positional**. The MAX86177 tags each word; the
 MAX30101 writes one sample per enabled slot in slot order and labels nothing, so the tag
@@ -1125,8 +1128,45 @@ alerts, pages, terrain, dropout, screens, idle, workout, storm), with `smoke` re
 model's FIFO is untagged, that assertion now covers the driver's positional tagging as
 well: a phase slip feeds ambient counts in as PPG and no plausible BPM survives it.
 Nothing here is
-bench-verified; no hardware exists. The `PART_ID` refusal, the register values, and the
+bench-verified; no hardware exists. The part checks, the register values, and the
 overflow behaviour are all datasheet-derived and await silicon.
+
+## 2026-08-17 (fourth) — the part check that never checked anything
+
+A verification pass over [`parts.md`](parts.md) before ordering, against both the firmware
+and the vendors, turned up a claim this repo had asserted in five places and never tested:
+that `drivers/max30101` refuses a MAX30102 on its `PART_ID`. **It does not.** The MAX30101,
+MAX30102 and MAX30105 all report `0x15` — the register names the family, not the die. The
+same pass found the mirror-image error in the same paragraph: the list said a MAX30105
+would be *refused* until its id was added, when in fact it passes and should.
+
+The gap mattered because § 623 chose this part partly for being a commodity, the market for
+these modules is dominated by the wrong one, and the two boards are visually near-identical
+— so the procurement advice was leaning on a backstop that was not there.
+
+**What the wrong part would actually have done, since the old comment overstated it.** Not a
+confident wrong pulse: slot 1 selects LED3, a MAX30102 has none, so both slots read ambient,
+the corrected DC collapses and `PeakDetector::contact` refuses it. The cost would have been a
+bench day chasing strap pressure and light barriers — step 5 warns that is the hard part — for
+a fault that was never mechanical. Full reasoning, including the one narrow path to a genuinely
+wrong number, in [§ 625](../architecture/decisions.md).
+
+**The fix, in the order § 625 argues for.** `init` now checks the green channel by capability:
+write `LED3_PA`, read it back, refuse before the mode write so nothing streams. That is a
+better test than the id even ignoring the family problem — it catches a broken LED3 line or a
+cold joint too, which on a hand-wired breadboard is not a hypothetical. Because reserved-register
+behaviour is unspecified, `watch_core::ppg::EmitterCheck` backstops it optically: full drive, a
+lit diode, no reflected DC, sustained ten auto-gain ticks, and the task says so once. It reports
+rather than gates — the contact floor was already withholding the reading, so what was missing
+was the reason.
+
+17 host tests on the driver (5 new, including one that pins the shared part id so the premise
+cannot be forgotten again) and 8 new on `EmitterCheck`, covering both directions and the two
+scenes that must never accuse the hardware. Firmware builds, CI clippy clean.
+
+Still not bench-verified, and one item is now owed that was not before: step 5 opens with a
+**negative control** — force the LED drive to zero and watch the new line fire — because a
+guard nobody has seen fire is a guard nobody knows works.
 
 ## Next entry expected
 

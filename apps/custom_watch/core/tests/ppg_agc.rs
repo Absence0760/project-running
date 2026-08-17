@@ -273,3 +273,123 @@ fn eighteen_bit_bounds_are_half_the_nineteen_bit_ones() {
         );
     }
 }
+
+/// The emitter check rides the same auto-gain tick, so its tests live beside
+/// the loop that drives it. What it answers is a hardware question the register
+/// map cannot: the MAX3010x family shares one part id, so a MAX30102 — no green
+/// die — identifies as the part the driver was written for (decisions.md § 625).
+mod emitter {
+    use watch_core::ppg::{AgcConfig, Emitter, EmitterCheck, PpgScale, EMITTER_DWELL_TICKS};
+
+    const SCALE: PpgScale = PpgScale::BITS_18;
+
+    fn check() -> EmitterCheck {
+        EmitterCheck::new(SCALE, &AgcConfig::BITS_18)
+    }
+
+    /// A lit diode: comfortably above the worn floor, so "dark" is never the
+    /// reason a tick fails to qualify.
+    fn lit() -> u32 {
+        SCALE.contact_dc_min as u32 * 4
+    }
+
+    #[test]
+    fn a_fresh_check_has_no_verdict() {
+        assert_eq!(check().state(), Emitter::Unknown);
+    }
+
+    #[test]
+    fn a_working_emitter_latches_responding_on_its_first_lit_tick() {
+        let mut c = check();
+        assert_eq!(
+            c.tick(AgcConfig::BITS_18.max_pa, lit(), lit()),
+            Emitter::Responding
+        );
+        // Latched: a wrist lifted off the sensor afterwards is a contact
+        // problem, and must never be re-read as missing silicon.
+        for _ in 0..EMITTER_DWELL_TICKS * 4 {
+            assert_eq!(
+                c.tick(AgcConfig::BITS_18.max_pa, lit(), 0),
+                Emitter::Responding
+            );
+        }
+    }
+
+    #[test]
+    fn max_drive_with_a_lit_diode_and_no_reflected_dc_reports_no_response() {
+        let mut c = check();
+        let max = AgcConfig::BITS_18.max_pa;
+        for i in 1..EMITTER_DWELL_TICKS {
+            assert_eq!(
+                c.tick(max, lit(), 0),
+                Emitter::Unknown,
+                "must not conclude after {i} tick(s)"
+            );
+        }
+        assert_eq!(c.tick(max, lit(), 0), Emitter::NoResponse);
+    }
+
+    #[test]
+    fn a_dark_diode_is_never_evidence() {
+        // Nothing in front of the sensor: a genuine emitter also returns
+        // almost nothing, so this scene must not accuse the hardware however
+        // long it lasts.
+        let mut c = check();
+        for _ in 0..EMITTER_DWELL_TICKS * 5 {
+            assert_eq!(c.tick(AgcConfig::BITS_18.max_pa, 0, 0), Emitter::Unknown);
+        }
+    }
+
+    #[test]
+    fn a_drive_below_the_ceiling_is_never_evidence() {
+        // Mid-walk the loop has not yet asked the emitter for everything it
+        // has, so a low corrected DC says nothing about whether one exists.
+        let mut c = check();
+        let below = AgcConfig::BITS_18.max_pa - AgcConfig::BITS_18.step;
+        for _ in 0..EMITTER_DWELL_TICKS * 5 {
+            assert_eq!(c.tick(below, lit(), 0), Emitter::Unknown);
+        }
+    }
+
+    #[test]
+    fn the_dwell_must_be_consecutive() {
+        // One qualifying tick short of the verdict, then a disqualifying one:
+        // the count restarts rather than resuming, so an intermittent scene
+        // cannot accumulate its way to an accusation.
+        let mut c = check();
+        let max = AgcConfig::BITS_18.max_pa;
+        for _ in 1..EMITTER_DWELL_TICKS {
+            assert_eq!(c.tick(max, lit(), 0), Emitter::Unknown);
+        }
+        assert_eq!(c.tick(max, 0, 0), Emitter::Unknown);
+        for _ in 1..EMITTER_DWELL_TICKS {
+            assert_eq!(c.tick(max, lit(), 0), Emitter::Unknown);
+        }
+        assert_eq!(c.tick(max, lit(), 0), Emitter::NoResponse);
+    }
+
+    #[test]
+    fn the_verdict_latches_so_a_caller_can_log_on_the_transition() {
+        let mut c = check();
+        let max = AgcConfig::BITS_18.max_pa;
+        for _ in 0..EMITTER_DWELL_TICKS {
+            c.tick(max, lit(), 0);
+        }
+        assert_eq!(c.state(), Emitter::NoResponse);
+        // Even a scene that would have read as healthy cannot revise it — the
+        // finding is about the silicon, and the part does not change mid-run.
+        assert_eq!(c.tick(max, lit(), lit()), Emitter::NoResponse);
+    }
+
+    #[test]
+    fn the_responding_bar_is_the_detectors_own_worn_floor() {
+        // Deliberately not a new tuning constant: a corrected DC that clears
+        // the level the detector already calls a plausible worn baseline has
+        // proved the emitter exists.
+        let mut c = check();
+        let max = AgcConfig::BITS_18.max_pa;
+        let floor = SCALE.contact_dc_min as u32;
+        assert_eq!(c.tick(max, lit(), floor - 1), Emitter::Unknown);
+        assert_eq!(c.tick(max, lit(), floor), Emitter::Responding);
+    }
+}

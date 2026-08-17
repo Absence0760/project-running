@@ -131,7 +131,11 @@ ble = ["dep:nrf-softdevice", "dep:nrf-softdevice-s140", "dep:embedded-storage-as
 # Embassy async runtime + nRF52 HAL + time driver
 embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread", "defmt"] }
 embassy-time     = { version = "0.5",  features = ["tick-hz-32_768", "defmt", "defmt-timestamp-uptime"] }
-embassy-nrf      = { version = "0.10", features = ["nrf52840", "time-driver-rtc1", "gpiote", "defmt"] }
+# `unstable-pac` re-exports the raw PAC. Used in exactly one place — `supply.rs`
+# reads POWER.MAINREGSTATUS and UICR.REGOUT0 at boot, neither of which the HAL
+# models, to report a supply configuration that would drive the breakouts at
+# 1.8 V. Typed PAC enums beat volatile reads at literal addresses for that.
+embassy-nrf      = { version = "0.10", features = ["nrf52840", "time-driver-rtc1", "gpiote", "defmt", "unstable-pac"] }
 embassy-sync     = { version = "0.8",  features = ["defmt"] }
 embassy-futures  = "0.1"
 

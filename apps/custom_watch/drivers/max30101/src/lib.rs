@@ -14,6 +14,14 @@
 //! wrist-worn optical sensor uses it and why the red/IR-only MAX30102 is the
 //! wrong part for a watch even though it is otherwise a near-twin.
 //!
+//! **And the near-twin cannot be told apart by its part number.** Every member
+//! of the MAX3010x family — 30101, 30102, 30105 — reports the same `0x15` in
+//! `PART_ID`, so the id read rules out an unrelated device on the address and
+//! nothing more. What distinguishes them is which emitters were bonded out, so
+//! [`Max30101::init`] tests for the green channel by *capability*: it writes
+//! `LED3_PA` and reads it back, and a part with no third LED cannot hold it.
+//! See [`Error::NoGreenChannel`] and decisions.md § 625.
+//!
 //! ## The FIFO is positional, and that is the whole design problem
 //!
 //! The MAX86177 tags each FIFO word with the measurement that produced it. The
@@ -87,9 +95,11 @@ mod reg {
     pub const PART_ID: u8 = 0xFF;
 }
 
-/// `PART_ID` value the MAX30101 reports. [`Max30101::init`] checks it, so a
-/// MAX30102 (or an unrelated device answering on 0x57) is refused up front
-/// rather than producing a plausible-looking stream from the wrong emitters.
+/// `PART_ID` value the MAX30101 reports — and the value a MAX30102 and a
+/// MAX30105 report as well. The register identifies the *family*, not the
+/// part, so checking it refuses an unrelated device answering on 0x57 and
+/// achieves nothing against the near-twin actually worth refusing. That is
+/// what the green-channel check exists for ([`Error::NoGreenChannel`]).
 pub const PART_ID: u8 = 0x15;
 
 /// `MODE_CONFIG` bits.
@@ -170,10 +180,27 @@ const TEMP_FRAC_MASK: u8 = 0x0F;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error<E> {
     I2c(E),
-    /// `PART_ID` did not read back [`PART_ID`]. The likeliest cause is a
-    /// MAX30102 fitted in place of a MAX30101 — a near-twin with no green
-    /// emitter, and so the wrong part for a wrist.
+    /// `PART_ID` did not read back [`PART_ID`], so whatever answered on 0x57
+    /// is not a MAX3010x at all. Note what this does *not* catch: every part
+    /// in the family reports the same id, so a MAX30102 passes here.
     WrongPart(u8),
+    /// `LED3_PA` would not hold the drive code written to it — the part has no
+    /// third LED channel, which is the signature of a MAX30102 fitted in place
+    /// of a MAX30101. Carries the value that read back.
+    ///
+    /// Green is the wrist wavelength; red and IR are a fingertip-SpO2 pair. A
+    /// part missing it configures cleanly through every other register in this
+    /// driver and then samples ambient light on the slot the detector treats
+    /// as the pulse, so the mistake has to be caught here.
+    ///
+    /// **What this check can and cannot promise.** A MAX30101 always holds the
+    /// register, so a genuine part is never refused. A MAX30102 has no such
+    /// register, and reserved-address behaviour is not specified — the likely
+    /// read is `0x00`, but silicon whose register file happens to echo writes
+    /// would slip through. `watch_core::ppg::EmitterCheck` is the backstop for
+    /// that case: it watches for LED drive pinned at its ceiling with no
+    /// LED-reflected DC to show for it.
+    NoGreenChannel(u8),
     /// The reset bit never cleared within [`RESET_POLL_MAX`] reads.
     ResetTimeout,
     /// The temperature conversion never completed within [`TEMP_POLL_MAX`]
@@ -237,10 +264,14 @@ impl<I2C: I2c> Max30101<I2C> {
     /// Verify the part, soft-reset it, configure the green PPG slot plus the
     /// LED-off ambient slot, and start sampling into the FIFO.
     ///
-    /// The part check runs **first**, before any write: a MAX30102 answers on
-    /// the same address and accepts most of the same configuration, so
-    /// discovering the mistake after programming it would leave a device
-    /// streaming red-LED counts that look like a plausible but wrong pulse.
+    /// Two checks guard this, because the obvious one is not enough. The
+    /// `PART_ID` read runs **first**, before any write, and rules out an
+    /// unrelated device answering on 0x57. It cannot rule out a MAX30102: the
+    /// whole family reports the same id. So the emitter that actually matters
+    /// is checked by capability rather than by nameplate — `LED3_PA` is
+    /// written and read back, and a part with no third LED channel cannot hold
+    /// it. Both run before the mode write, so a part that fails either never
+    /// streams a sample.
     pub fn init(&mut self) -> Result<(), Error<I2C::Error>> {
         let id = self.read_reg(reg::PART_ID)?;
         if id != PART_ID {
@@ -261,6 +292,10 @@ impl<I2C: I2c> Max30101<I2C> {
         self.write_reg(reg::LED1_PA, 0)?;
         self.write_reg(reg::LED2_PA, 0)?;
         self.write_reg(reg::LED3_PA, LED_PA_DEFAULT_CODE)?;
+        let led3 = self.read_reg(reg::LED3_PA)?;
+        if led3 != LED_PA_DEFAULT_CODE {
+            return Err(Error::NoGreenChannel(led3));
+        }
         self.write_reg(reg::LED4_PA, 0)?;
 
         self.write_reg(reg::MULTI_LED_SLOT_12, MULTI_LED_SLOT_12)?;

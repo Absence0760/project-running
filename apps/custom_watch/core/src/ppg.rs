@@ -562,6 +562,104 @@ pub fn agc_next_pa_ambient(raw_dc: u32, corrected_dc: u32, current_pa: u8, cfg: 
     agc_next_pa(corrected_dc, current_pa, cfg)
 }
 
+/// Consecutive auto-gain ticks the drive must sit at its ceiling, with light on
+/// the diode and nothing to show for the drive, before the emitter is called
+/// absent. At the `AgcCadence::per_second` pace that is ten seconds — long
+/// enough that the loop has finished walking the drive up and settled, short
+/// enough to appear in a bench session rather than after it.
+pub const EMITTER_DWELL_TICKS: u32 = 10;
+
+/// Whether the PPG slot's emitter is there and lighting the scene.
+///
+/// This is a question about the *hardware*, asked because no register can
+/// answer it: the MAX3010x family shares one `PART_ID`, so a MAX30102 — red and
+/// IR only, no green die — identifies as its own sibling. The driver's
+/// `LED3_PA` write-readback catches that at init, but only if the missing
+/// register refuses the write, which reserved-address behaviour does not
+/// guarantee. So the optical path gets checked optically as well.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Emitter {
+    /// No verdict yet: the auto-gain loop has not pinned the drive at its
+    /// ceiling, or the photodiode is in the dark, where a working emitter has
+    /// nothing to reflect off either.
+    Unknown,
+    /// The LED-reflected DC has cleared the worn floor at least once, so an
+    /// emitter exists and lights. Latched — a level that has been reached
+    /// cannot later be evidence of missing silicon.
+    Responding,
+    /// The drive has sat at its ceiling for [`EMITTER_DWELL_TICKS`] ticks with
+    /// light reaching the diode and no LED-reflected DC to show for it. Latched.
+    NoResponse,
+}
+
+/// Watches the auto-gain loop for the one scene a working optical stack cannot
+/// produce: maximum LED drive, a photodiode that is plainly receiving light,
+/// and a corrected DC still at the dark floor. Since the corrected DC *is* the
+/// LED's own contribution (ambient cancels out of it by construction), that
+/// scene says the drive is going nowhere — no emitter, a dead one, or an
+/// `LED3_PA` write that is not landing. All three are the same finding at the
+/// bench and all three deserve to be named, because the symptom they otherwise
+/// present with is a permanent `Contact::OffWrist`, which reads as a strap
+/// problem and can eat a day.
+///
+/// Two deliberate limits, both in the direction of not accusing the hardware:
+///
+/// - A dark diode is never evidence. `raw_dc` below the same worn floor means
+///   nothing is in front of the sensor, where a genuine emitter also returns
+///   almost nothing.
+/// - A sensor face-up under bright light *can* reach the qualifying scene with
+///   a perfectly good emitter, since it has nothing to reflect off either. The
+///   dwell makes that unlikely rather than impossible, which is why
+///   [`Emitter::NoResponse`] is a diagnostic to report and not a reason to
+///   withhold a reading — the contact gate already withholds it.
+///
+/// The bar for "responding" is [`PpgScale::contact_dc_min`] rather than a new
+/// constant: that is already the level the detector calls a plausible worn DC,
+/// and an emitter that can drive the diode there has proved it exists.
+pub struct EmitterCheck {
+    floor: u32,
+    max_pa: u8,
+    state: Emitter,
+    dwell: u32,
+}
+
+impl EmitterCheck {
+    pub fn new(scale: PpgScale, cfg: &AgcConfig) -> Self {
+        Self {
+            floor: scale.contact_dc_min.max(0) as u32,
+            max_pa: cfg.max_pa,
+            state: Emitter::Unknown,
+            dwell: 0,
+        }
+    }
+
+    pub fn state(&self) -> Emitter {
+        self.state
+    }
+
+    /// Feed one auto-gain tick: the drive code that produced these levels (not
+    /// the one about to be written), and the raw and corrected DC estimates.
+    pub fn tick(&mut self, led_pa: u8, raw_dc: u32, corrected_dc: u32) -> Emitter {
+        if self.state != Emitter::Unknown {
+            return self.state;
+        }
+        if corrected_dc >= self.floor {
+            self.state = Emitter::Responding;
+            return self.state;
+        }
+        if led_pa >= self.max_pa && raw_dc >= self.floor {
+            self.dwell += 1;
+            if self.dwell >= EMITTER_DWELL_TICKS {
+                self.state = Emitter::NoResponse;
+            }
+        } else {
+            self.dwell = 0;
+        }
+        self.state
+    }
+}
+
 /// One decoded FIFO word: which measurement slot produced it, and its raw
 /// photodiode count.
 ///

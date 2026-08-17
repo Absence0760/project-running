@@ -28,7 +28,8 @@ const REG_PART_ID: u8 = 0xFF;
 
 const REG_OVF_COUNTER: u8 = 0x05;
 
-#[derive(Default)]
+const REG_LED3_PA: u8 = 0x0E;
+
 struct Bus {
     writes: Vec<Vec<u8>>,
     /// Samples staged for `FIFO_DATA` to hand back, oldest first.
@@ -36,6 +37,26 @@ struct Bus {
     /// What `OVF_COUNTER` reports — non-zero means the part dropped samples.
     overflow: u8,
     part_id: u8,
+    /// Register file, so a write is visible to a later read the way it is on
+    /// the real part. Needed at all because `init` reads `LED3_PA` back.
+    regs: [u8; 256],
+    /// Whether this part has a third (green) LED channel. `false` models a
+    /// MAX30102: same address, same `PART_ID`, but `LED3_PA` is not a register
+    /// it implements, so a write there does not stick.
+    green: bool,
+}
+
+impl Default for Bus {
+    fn default() -> Self {
+        Self {
+            writes: Vec::new(),
+            fifo: Vec::new(),
+            overflow: 0,
+            part_id: 0,
+            regs: [0; 256],
+            green: true,
+        }
+    }
 }
 
 /// A mock that answers register reads plausibly enough to drive the real code
@@ -49,6 +70,15 @@ impl MockI2c {
     fn new(part_id: u8) -> Self {
         let m = Self::default();
         m.0.borrow_mut().part_id = part_id;
+        m
+    }
+
+    /// A MAX30102 as the bus sees one: it answers on the MAX30101's address
+    /// with the MAX30101's part id, and differs only in having no green LED
+    /// channel behind `LED3_PA`.
+    fn max30102() -> Self {
+        let m = Self::new(PART_ID);
+        m.0.borrow_mut().green = false;
         m
     }
 
@@ -98,7 +128,10 @@ impl embedded_hal::i2c::I2c for MockI2c {
                         match (bytes[0], bytes[1]) {
                             (REG_FIFO_RD_PTR, 0) => bus.fifo.clear(),
                             (REG_OVF_COUNTER, v) => bus.overflow = v,
-                            _ => {}
+                            // A register the part does not implement does not
+                            // hold what is written to it.
+                            (REG_LED3_PA, _) if !bus.green => {}
+                            (reg, val) => bus.regs[reg as usize] = val,
                         }
                     }
                 }
@@ -124,7 +157,12 @@ impl embedded_hal::i2c::I2c for MockI2c {
                                 chunk[2] = v as u8;
                             }
                         }
-                        _ => buf.fill(0),
+                        other => {
+                            buf.fill(0);
+                            if let Some(b) = buf.first_mut() {
+                                *b = bus.regs[other as usize];
+                            }
+                        }
                     }
                 }
             }
@@ -170,9 +208,9 @@ fn an_out_of_range_index_folds_onto_ambient_not_ppg() {
 
 #[test]
 fn wrong_part_id_is_refused_before_anything_is_configured() {
-    // A MAX30102 answers on the same address and takes most of the same
-    // configuration, but has no green emitter. Discovering that after
-    // programming it leaves a device streaming a plausible, wrong pulse.
+    // Catches a device that is not a MAX3010x at all — an unrelated part that
+    // happens to answer on 0x57. It is deliberately NOT what catches a
+    // MAX30102; see the pair of tests below.
     let bus = MockI2c::new(0x11);
     let mut sensor = Max30101::new(bus.clone());
     match sensor.init() {
@@ -183,6 +221,62 @@ fn wrong_part_id_is_refused_before_anything_is_configured() {
         bus.writes().is_empty(),
         "no register may be written before the part is identified"
     );
+}
+
+#[test]
+fn the_part_id_alone_cannot_tell_a_max30102_apart() {
+    // The premise the green-channel check exists for, pinned so it cannot be
+    // quietly forgotten again: 30101, 30102 and 30105 all report 0x15, so a
+    // MAX30102 sails through the id read. Nothing here should be read as the
+    // driver accepting one — the next test is what refuses it.
+    let bus = MockI2c::max30102();
+    let mut sensor = Max30101::new(bus.clone());
+    assert!(
+        !matches!(sensor.init(), Err(Error::WrongPart(_))),
+        "a MAX30102 reports the MAX30101's part id; refusing it here would mean \
+         the fixture, not the silicon, is wrong"
+    );
+}
+
+#[test]
+fn a_part_with_no_green_channel_is_refused_by_capability() {
+    // The real guard. A MAX30102 has no LED3, so its drive register cannot
+    // hold the code written to it — the one difference visible over I2C
+    // between a part that can read a wrist and one that cannot.
+    let bus = MockI2c::max30102();
+    let mut sensor = Max30101::new(bus.clone());
+    match sensor.init() {
+        Err(Error::NoGreenChannel(v)) => assert_eq!(v, 0),
+        other => panic!("expected NoGreenChannel, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_part_with_no_green_channel_never_starts_streaming() {
+    // Refusing late would be nearly as bad as not refusing: a configured part
+    // in multi-LED mode fills its FIFO, and those samples are ambient light on
+    // the slot the detector treats as the pulse.
+    let bus = MockI2c::max30102();
+    let mut sensor = Max30101::new(bus.clone());
+    assert!(sensor.init().is_err());
+    let writes = bus.writes();
+    assert!(
+        !writes.contains(&vec![0x09, 0x07]),
+        "MODE_CONFIG must never reach multi-LED on a part that failed the check: {writes:?}"
+    );
+    assert!(
+        !writes.iter().any(|w| w[0] == 0x11 || w[0] == 0x12),
+        "no slot may be assigned on a part that failed the check: {writes:?}"
+    );
+}
+
+#[test]
+fn a_genuine_part_passes_the_green_channel_check() {
+    // The other direction, so the guard cannot be tightened into refusing the
+    // part it exists to accept.
+    let bus = MockI2c::new(PART_ID);
+    let mut sensor = Max30101::new(bus.clone());
+    assert!(sensor.init().is_ok());
 }
 
 #[test]

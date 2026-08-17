@@ -56,7 +56,9 @@ use max30101::{Max30101, I2C_ADDR};
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_drain::{next_window_wait_s, AgcCadence, FifoDemux, FifoSlot};
 use watch_core::hr_duty::{self, HrSample};
-use watch_core::ppg::{agc_next_pa_ambient, Contact, FifoWord, PeakDetector, PpgAfe, Reading};
+use watch_core::ppg::{
+    agc_next_pa_ambient, Contact, Emitter, EmitterCheck, FifoWord, PeakDetector, PpgAfe, Reading,
+};
 
 use crate::state;
 
@@ -119,6 +121,14 @@ pub async fn run(mut twim: Twim<'static>) {
     let mut led_pa: u8 = sensor.led_pa_default();
     let mut agc = AgcCadence::per_second(SAMPLE_RATE_HZ);
     let mut warned_unknown_tag = false;
+    // Rides the same auto-gain tick to answer a question no register can: is
+    // there an emitter behind the PPG slot at all? The family shares one part
+    // id, so a MAX30102 identifies as a MAX30101, and if the driver's
+    // `LED3_PA` readback did not catch it the only remaining evidence is
+    // optical — full drive, a lit diode, and no reflected DC. Reported, never
+    // acted on: the contact gate already refuses to publish a BPM from that
+    // scene, so all this adds is the reason (decisions.md § 625).
+    let mut emitter = EmitterCheck::new(sensor.scale(), &agc_cfg);
     // Change-only observability: one line when the published estimate flips
     // (valid BPM appears / moves / blanks) and one when the contact
     // classification changes (Worn / OffWrist / Saturated), so a defmt stream
@@ -222,6 +232,18 @@ pub async fn run(mut twim: Twim<'static>) {
             }
         }
         if let Some(dc) = agc.due(detector.raw_dc(), detector.corrected_dc()) {
+            // Judged against the drive that produced these levels, before the
+            // step below moves it. Logged on the transition, not on the state:
+            // the verdict latches, so testing the state alone would repeat the
+            // line every tick for the rest of the run.
+            let emitter_was = emitter.state();
+            if emitter.tick(led_pa, dc.raw, dc.corrected) == Emitter::NoResponse
+                && emitter_was != Emitter::NoResponse
+            {
+                error!(
+                    "hr: LED at max drive with no reflected signal — dead green emitter, an unlanded LED3_PA write, or a MAX30102 fitted for a MAX30101 (docs/custom_watch/parts.md)"
+                );
+            }
             let next = agc_next_pa_ambient(dc.raw, dc.corrected, led_pa, &agc_cfg);
             if next != led_pa {
                 // L4 best-effort like every other write here: a failed drive
