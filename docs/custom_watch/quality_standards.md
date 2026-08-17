@@ -269,7 +269,7 @@ These are the figures currently shipping in the firmware and its docs as **deriv
 - **The GNSS power-down scheduler's constants** (sleep window, 5 s reacquire margin, PMREQ self-wake backstop duration).
 - **The battery-percent curve.** A piecewise-linear 1S LiPo *resting*-discharge model; a loaded cell sags below the anchors, so the displayed percent is systematically optimistic under load by an unmeasured amount.
 - **The mid-run checkpoint's flash-wear estimate** (~1200 page erases in a 100 h run, ~12 % of endurance).
-- **The bench rig's own ~12-15 h run time on the 500 mAh cell** ([`parts.md`](parts.md)). A datasheet sum — ~25 mA GNSS continuous, ~6 mA MCU, ~2 mA board overhead, under 1 mA for everything else — against a nominal capacity, with no allowance for the cell's unusable tail or the DK's real quiescent draw. It is quoted only to say the DoD run fits inside one charge, which is a much weaker claim than the figures above and should not be repeated as a device capability.
+- **The bench rig's own ~20-25 h run time on the 500 mAh cell** ([`parts.md`](parts.md)). A datasheet sum — ~10-13 mA GNSS (u-blox's own 7.0 mA VCC + 2.2 mA V_IO acquisition figures), ~6 mA MCU, ~2 mA board overhead, under 1 mA for everything else — against a nominal capacity, with no allowance for the cell's unusable tail or the DK's real quiescent draw. The MCU and board terms are the guesses; the receiver's is the only one with a datasheet behind it. Quoted only to say the DoD run fits inside one charge, which is a much weaker claim than the figures above and must not be repeated as a device capability.
 
 **Capacity limits — bench-prototype foundations, explicitly not shipping capacity:**
 
