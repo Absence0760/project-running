@@ -35,7 +35,7 @@ dependencies = [
  "embedded-storage",
  "embedded-storage-async",
  "heapless",
- "max86177",
+ "max30101",
  "nrf-softdevice",
  "nrf-softdevice-s140",
  "nrf52840_dk",
@@ -774,6 +774,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata",
+]
+
+[[package]]
+name = "max30101"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.1.0",
+ "embedded-hal 1.0.0",
+ "watch_core",
 ]
 
 [[package]]

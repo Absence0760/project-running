@@ -52,7 +52,7 @@ use defmt::*;
 use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Instant, Timer};
 use embedded_hal::i2c::Operation;
-use max86177::{Max86177, I2C_ADDR};
+use max30101::{Max30101, I2C_ADDR};
 use watch_core::gnss_mode::GnssMode;
 use watch_core::hr_drain::{next_window_wait_s, AgcCadence, FifoDemux, FifoSlot};
 use watch_core::hr_duty::{self, HrSample};
@@ -89,13 +89,13 @@ pub async fn run(mut twim: Twim<'static>) {
         Ok(Ok(())) => {}
     }
 
-    let mut sensor = Max86177::new(twim);
+    let mut sensor = Max30101::new(twim);
     if let Err(e) = PpgAfe::init(&mut sensor) {
         warn!("hr: AFE init failed {:?}; task parked", e);
         return;
     }
     // Scale, AGC window, LED seed and slot tags all come from the part rather
-    // than from constants here, so swapping the AFE is a `Max86177::new` line
+    // than from constants here, so swapping the AFE is a `Max30101::new` line
     // and nothing else in this task (decisions.md § 623).
     let mut detector = PeakDetector::new(SAMPLE_RATE_HZ, sensor.scale());
     let sender = state::HR_OPTICAL.sender();
