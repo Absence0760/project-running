@@ -28,7 +28,15 @@
 //! downstream of the raw sample — [`peak_detect`], the LED AGC, the contact
 //! classes, the duty-cycle schedule — is part-agnostic and survives whatever
 //! AFE tier 1 actually ends up with; this file is the half that does not.
-//! `docs/custom_watch/parts.md` holds the open sourcing decision.
+//!
+//! **Tier 1 no longer orders this part** (decisions.md § 623): the bench gets a
+//! commodity MAX30101 with a public register map, and this crate is kept as the
+//! head start on the *production* AFE for the day an NDA lands. The port's first
+//! step is therefore to lift [`peak_detect`] and the AGC ([`AgcConfig`],
+//! [`agc_next_pa_ambient`]) **out of this crate** — they are part-agnostic logic
+//! that happens to live in a part crate, and `app/src/tasks/hr.rs` imports them
+//! from here while calling a concrete [`Max86177`] rather than a trait. Writing
+//! a second driver before that lift forks the peak detector.
 
 #![no_std]
 

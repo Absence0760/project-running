@@ -37,6 +37,8 @@ Per-subsystem component choices with the reasoning, and the rejected alternative
 | *Alt: PixArt PAH8011* | Cheapest viable optical HR at ~$2 | Single-LED — measurably worse in low-perfusion conditions (cold weather, dark skin tones) |
 | *Future upgrade: MAX86178* | Same family as MAX86177 + adds ECG + BioZ in one part; IEC 60601-2-47-compliant ECG channel; 0.5 µA shutdown. ~$8 single-qty | Documented upgrade path per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) for a future ECG-capable SKU (AFib screening, HRV-from-ECG). Not the launch pick — adds cost + ECG-electrode design complexity at tier 2 |
 
+**Tier-1 bench prototype diverges from this row.** [§ 623](../architecture/decisions.md) orders a commodity **MAX30101** for the bench, because the MAX86177's register map is NDA-gated and § 82 accepts raw photodiode reads. That is a tier-1 sourcing choice only — the launch pick below is unchanged, and `drivers/max86177` is kept as the head start on it.
+
 **Pick: MAX86177 for launch.** Optical HR is the second-most-common complaint about cheap watches (after battery); cutting cost here is false economy. Also: support **ANT+ chest strap pairing** as a first-class option — the people we're building for already own a strap. ECG-capable upgrade path via MAX86178 documented for a future SKU.
 
 ## Barometric altimeter
