@@ -1062,8 +1062,73 @@ a driver that does not exist; that gap is stated in [`roadmap.md`](roadmap.md) a
 step 0 of [`quality_standards.md`](quality_standards.md) rather than left for someone to
 discover with a sensor in their hand.
 
+## 2026-08-17 (third) — the driver lift, and the two bugs that only appeared once something else had to use the same code
+
+§ 623's owed firmware work, done in the order the decision insisted on: **lift first, then
+write the second driver.** The reverse order is what forks a peak detector, and a forked
+detector is two things to tune against one wrist.
+
+**The lift.** `peak_detect` (374 lines) and the LED AGC moved out of the `max86177` crate
+into `watch_core::ppg`, joined by a `PpgAfe` trait. `hr.rs` now names a part exactly once —
+at construction — and asks it for its ADC scale, auto-gain window, LED seed and slot tags.
+All 30 detector tests passed untouched, which is the point: nothing about the logic
+changed, only where it lives and who may use it.
+
+**What the lift exposed, and it was not in the plan.** The detector's four DC thresholds
+are quoted in *photodiode counts*, and a count means nothing without the converter's full
+scale behind it. They were 19-bit numbers with nothing saying so. An 18-bit part reports
+half the counts for the identical optical scene, so porting them across unchanged would
+have made every contact and rail threshold **twice as strict** on the new AFE — a wrist
+reading as off-wrist, and no test anywhere would have failed. `PpgScale` now carries the
+width and derives the bounds; `BITS_19` stays literal so the existing suite pins exactly
+what it always pinned, and `scaled_to` is the only thing that ever moves a number. Three
+tests pin the relationship, including the invariant that actually matters — the auto-gain
+loop must shed LED drive *before* the detector declares a rail, checked at both widths
+rather than argued from proportionality.
+
+**The driver.** `drivers/max30101`: public register map, green LED on slot 1 (the wrist
+wavelength — a MAX30102 has none, answers on the same address, and is refused on its
+`PART_ID` before a single register is written), LED-off ambient on slot 2, 18-bit counts.
+
+Its design problem is that **this FIFO is positional**. The MAX86177 tags each word; the
+MAX30101 writes one sample per enabled slot in slot order and labels nothing, so the tag
+is assigned from read position — and a single sample read out of step transposes PPG and
+ambient *for the rest of the window*. Nothing downstream can detect that: `hr_drain`
+demuxes on the tag it is handed, and a transposed stream yields a plausible wrong heart
+rate. Two guards, both tested: reads are whole frames (a FIFO holding half a frame yields
+nothing rather than its first sample), and phase is re-derived on every flush rather than
+carried across a duty-cycle window.
+
+**Then the Renode model found the second bug, which is the part worth recording.** The
+model was going to be a straight adaptation until the FIFO ring was modelled *honestly* —
+real write/read pointers and a real overflow counter instead of a queue. That made the
+overflow case reachable, and the driver had no answer for it: an overflow drops samples,
+an **odd** number of dropped samples slips slot phase exactly as a partial read would, and
+`OVF_COUNTER` saturates so the parity is unrecoverable. The whole-frame guard does not
+help — every frame after the drop is whole *and* transposed. `refill_frame` now flushes
+and re-derives alignment, trading a fraction of a second of pulse for not reporting a
+confident wrong number, and the test pins that it clears the counter too (leaving it set
+would re-trigger forever). The mock needed the same honesty to make that test mean
+anything: it had been ignoring the pointer writes it was supposed to be flushed by.
+
+The general lesson is the one this whole day keeps repeating: **a model that agrees with
+the driver's belief cannot detect a wrong belief** — `quality_standards.md` already says
+that about the sensor models, and here it was the model getting *less* agreeable that
+found the defect.
+
+**Rung: host-tested + sim-verified.** Workspace host sweep 2739 -> 2755 passed / 0 failed
+(3 scale invariants, 12 driver, 1 overflow);
+`cargo fmt --all --check` clean, `clippy -D warnings` clean for `thumbv7em-none-eabihf` on
+the workspace default and the sim feature set. **All nine Renode scenarios green** (smoke,
+alerts, pages, terrain, dropout, screens, idle, workout, storm), with `smoke` reading
+**70 BPM** off the new model (band 55-95 against a synthesised ~72.3) — and because the
+model's FIFO is untagged, that assertion now covers the driver's positional tagging as
+well: a phase slip feeds ambient counts in as PPG and no plausible BPM survives it.
+Nothing here is
+bench-verified; no hardware exists. The `PART_ID` refusal, the register values, and the
+overflow behaviour are all datasheet-derived and await silicon.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md), now fully
-specified. The `max30101` driver is owed in parallel and gates only step 5; the other
-bring-up steps do not wait for it. That entry starts the photo record.
+specified, with every line's driver written. That entry starts the photo record.
