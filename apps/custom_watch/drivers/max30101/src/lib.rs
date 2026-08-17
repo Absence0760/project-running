@@ -20,7 +20,7 @@
 //! nothing more. What distinguishes them is which emitters were bonded out, so
 //! [`Max30101::init`] tests for the green channel by *capability*: it writes
 //! `LED3_PA` and reads it back, and a part with no third LED cannot hold it.
-//! See [`Error::NoGreenChannel`] and decisions.md § 624.
+//! See [`Error::NoGreenChannel`] and decisions.md § 625.
 //!
 //! ## The FIFO is positional, and that is the whole design problem
 //!

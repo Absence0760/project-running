@@ -1091,7 +1091,7 @@ wavelength — a MAX30102 has none and answers on the same address), LED-off amb
 slot 2, 18-bit counts. The parenthesis above originally ended "and is refused on its
 `PART_ID` before a single register is written", which was wrong: the whole MAX3010x
 family reports `0x15`. Corrected on 2026-08-17 — see the entry below and
-[§ 624](../architecture/decisions.md).
+[§ 625](../architecture/decisions.md).
 
 Its design problem is that **this FIFO is positional**. The MAX86177 tags each word; the
 MAX30101 writes one sample per enabled slot in slot order and labels nothing, so the tag
@@ -1149,9 +1149,9 @@ confident wrong pulse: slot 1 selects LED3, a MAX30102 has none, so both slots r
 the corrected DC collapses and `PeakDetector::contact` refuses it. The cost would have been a
 bench day chasing strap pressure and light barriers — step 5 warns that is the hard part — for
 a fault that was never mechanical. Full reasoning, including the one narrow path to a genuinely
-wrong number, in [§ 624](../architecture/decisions.md).
+wrong number, in [§ 625](../architecture/decisions.md).
 
-**The fix, in the order § 624 argues for.** `init` now checks the green channel by capability:
+**The fix, in the order § 625 argues for.** `init` now checks the green channel by capability:
 write `LED3_PA`, read it back, refuse before the mode write so nothing streams. That is a
 better test than the id even ignoring the family problem — it catches a broken LED3 line or a
 cold joint too, which on a hand-wired breadboard is not a hypothetical. Because reserved-register

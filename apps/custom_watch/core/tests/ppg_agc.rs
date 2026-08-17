@@ -277,7 +277,7 @@ fn eighteen_bit_bounds_are_half_the_nineteen_bit_ones() {
 /// The emitter check rides the same auto-gain tick, so its tests live beside
 /// the loop that drives it. What it answers is a hardware question the register
 /// map cannot: the MAX3010x family shares one part id, so a MAX30102 — no green
-/// die — identifies as the part the driver was written for (decisions.md § 624).
+/// die — identifies as the part the driver was written for (decisions.md § 625).
 mod emitter {
     use watch_core::ppg::{AgcConfig, Emitter, EmitterCheck, PpgScale, EMITTER_DWELL_TICKS};
 

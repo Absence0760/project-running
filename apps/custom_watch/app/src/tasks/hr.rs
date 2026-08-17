@@ -127,7 +127,7 @@ pub async fn run(mut twim: Twim<'static>) {
     // `LED3_PA` readback did not catch it the only remaining evidence is
     // optical — full drive, a lit diode, and no reflected DC. Reported, never
     // acted on: the contact gate already refuses to publish a BPM from that
-    // scene, so all this adds is the reason (decisions.md § 624).
+    // scene, so all this adds is the reason (decisions.md § 625).
     let mut emitter = EmitterCheck::new(sensor.scale(), &agc_cfg);
     // Change-only observability: one line when the published estimate flips
     // (valid BPM appears / moves / blanks) and one when the contact
