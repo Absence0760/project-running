@@ -3,18 +3,22 @@
 //! Register-level bring-up over blocking I2C: soft-reset, configure a
 //! LED-driven PPG measurement channel plus an ambient (LED-off) channel, and
 //! drain raw photodiode counts from the FIFO. Tier 1 stops at raw samples —
-//! [`peak_detect`] turns the stream into a BPM estimate in pure, host-testable
-//! logic. The licensed Maxim HR algorithm is C and gets pulled in via
-//! `bindgen` post-tier-1; see `docs/architecture/decisions.md` § 80
-//! ("Trade-offs we accept") for the FFI budget.
+//! `watch_core::ppg` turns the stream into a BPM estimate in pure,
+//! host-testable logic, and this crate reaches it through
+//! [`PpgAfe`](watch_core::ppg::PpgAfe). The licensed Maxim HR algorithm is C
+//! and gets pulled in via `bindgen` post-tier-1; see
+//! `docs/architecture/decisions.md` § 80 ("Trade-offs we accept") for the FFI
+//! budget.
 //!
 //! The ambient channel (MEAS2) samples the same photodiode with no LED driven,
 //! so it reads only the ambient light bleeding into the diode. In blinding sun
 //! that ambient bleed rails the LED-on PPG channel; subtracting the ambient
-//! sample from the PPG sample (see [`peak_detect::PeakDetector::push_ambient`])
+//! sample from the PPG sample (see `watch_core::ppg::PeakDetector::push_ambient`)
 //! cancels it, so a worn-but-sunny wrist can still yield a real pulse instead
-//! of a saturated dead read. FIFO words are tagged per measurement
-//! ([`decode_fifo_word`]) so the two interleaved streams can be told apart.
+//! of a saturated dead read. **This part tags its FIFO words per measurement**
+//! ([`decode_fifo_word`]), so the two interleaved streams are told apart by a
+//! field the hardware transmits — unlike a positional FIFO, where the driver
+//! has to assign the tag from the read position.
 //!
 //! No community Rust crate exists for this part, so the register map is
 //! hand-rolled. Real implementation for step 5 of `apps/custom_watch/README.md`.
@@ -25,24 +29,22 @@
 //! modelled on the family idiom (the MAX86171 has a full public datasheet and
 //! the same charge-integrating, autonomous-FIFO design), **not read off this
 //! part's own datasheet**, and no silicon has ever answered it. Everything
-//! downstream of the raw sample — [`peak_detect`], the LED AGC, the contact
+//! downstream of the raw sample — the peak detector, the LED AGC, the contact
 //! classes, the duty-cycle schedule — is part-agnostic and survives whatever
 //! AFE tier 1 actually ends up with; this file is the half that does not.
 //!
 //! **Tier 1 no longer orders this part** (decisions.md § 623): the bench gets a
 //! commodity MAX30101 with a public register map, and this crate is kept as the
-//! head start on the *production* AFE for the day an NDA lands. The port's first
-//! step is therefore to lift [`peak_detect`] and the AGC ([`AgcConfig`],
-//! [`agc_next_pa_ambient`]) **out of this crate** — they are part-agnostic logic
-//! that happens to live in a part crate, and `app/src/tasks/hr.rs` imports them
-//! from here while calling a concrete [`Max86177`] rather than a trait. Writing
-//! a second driver before that lift forks the peak detector.
+//! head start on the *production* AFE for the day an NDA lands. The lift that
+//! decision called for has happened — the peak detector and the AGC now live in
+//! `watch_core::ppg`, and what remains here is the register map, the wire
+//! decode, and the [`PpgAfe`] impl that joins them.
 
 #![no_std]
 
-pub mod peak_detect;
-
 use embedded_hal::i2c::I2c;
+use watch_core::hr_drain::FifoTags;
+use watch_core::ppg::{AgcConfig, FifoWord, PpgAfe, PpgScale};
 
 /// 7-bit I2C address with the device's `ADDR` pin tied low.
 pub const I2C_ADDR: u8 = 0x62;
@@ -127,14 +129,6 @@ pub const MEAS1_TAG: u8 = 0x01;
 /// FIFO tag identifying a MEAS2 (LED-off ambient) sample.
 pub const MEAS2_TAG: u8 = 0x02;
 
-/// One decoded FIFO word: which measurement produced it, and its 19-bit count.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct FifoWord {
-    pub tag: u8,
-    pub value: u32,
-}
-
 /// Split a raw 3-byte FIFO word into its measurement tag and 19-bit photodiode
 /// count. Pure so it is exercised on the host; the [`read_tagged_sample`] path
 /// on the device wraps it around the I2C burst.
@@ -177,91 +171,6 @@ pub enum Error<E> {
     /// The temperature conversion never completed within [`TEMP_POLL_MAX`]
     /// reads.
     TempTimeout,
-}
-
-/// LED-current auto-gain window for [`agc_next_pa`] / [`agc_next_pa_ambient`].
-/// `target_low`/`target_high` are the desired DC operating band in raw 19-bit
-/// photodiode counts; the band itself is the hysteresis dead-zone, so a level
-/// already inside it never moves the drive. `raw_ceiling` is the *raw*
-/// (pre-subtraction) DC bound the ambient-aware loop guards clipping headroom
-/// against. `step` is how many LEDx_PA codes each correction walks, and
-/// `min_pa`/`max_pa` clamp the result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct AgcConfig {
-    pub target_low: u32,
-    pub target_high: u32,
-    pub raw_ceiling: u32,
-    pub step: u8,
-    pub min_pa: u8,
-    pub max_pa: u8,
-}
-
-impl Default for AgcConfig {
-    /// Centres the DC on roughly a quarter-to-three-fifths of the 0x7_FFFF full
-    /// scale, leaving headroom for the pulsatile AC before the ADC rails.
-    /// `raw_ceiling` keeps ~44k counts (~8 % of full scale) of raw headroom —
-    /// enough for the pulse swing plus ambient flicker — and sits below the
-    /// peak detector's raw-rail floor, so the loop sheds drive before the read
-    /// has to be declared `Saturated`. Bench-verify values alongside
-    /// `MEAS1_LEDA_CURRENT`.
-    fn default() -> Self {
-        Self {
-            target_low: 130_000,
-            target_high: 300_000,
-            raw_ceiling: 480_000,
-            step: 8,
-            min_pa: 0x08,
-            max_pa: 0xC0,
-        }
-    }
-}
-
-/// Propose the next LEDx_PA drive code from the measured DC level. Steps the
-/// current up when the diode reads too dim (DC below the window), down when it
-/// is saturating (DC above the window), and holds when the DC already sits in
-/// the target band — the band is the hysteresis that stops one bright/dim pair
-/// of samples from oscillating the drive. The result is clamped into
-/// `[min_pa, max_pa]`, so a level pinned past a bound returns the bound rather
-/// than wrapping.
-pub fn agc_next_pa(dc: u32, current_pa: u8, cfg: &AgcConfig) -> u8 {
-    let next = if dc < cfg.target_low {
-        current_pa.saturating_add(cfg.step)
-    } else if dc > cfg.target_high {
-        current_pa.saturating_sub(cfg.step)
-    } else {
-        current_pa
-    };
-    next.clamp(cfg.min_pa, cfg.max_pa)
-}
-
-/// Ambient-aware LED auto-gain step, for the two-channel (MEAS1 + MEAS2)
-/// configuration. Which magnitude drives the decision is deliberate:
-///
-/// - **The brightness target judges the *corrected* DC** (`raw − ambient`, the
-///   LED-reflected operating point the pulse rides on). Ambient cancels out of
-///   it by construction, so a cloud passing or an arm swinging through shade
-///   cannot walk the LED drive — the loop cannot oscillate against ambient
-///   swings. Judging the raw DC here would do exactly that.
-/// - **A one-sided rail guard judges the *raw* DC** (what the ADC actually
-///   converts — clipping happens there, corrected or not). A raw DC above
-///   `cfg.raw_ceiling` sheds one `step` of drive to recover conversion
-///   headroom, overriding a dim corrected level: stepping the LED *up* into an
-///   ADC that is already near its rail only deepens the clip that destroys the
-///   pulse. Under ambient the LED cannot out-shine, the guard walks the drive
-///   to `min_pa` and holds — the honest floor; the peak detector reports that
-///   scene `Saturated`.
-///
-/// The guard never steps up, so ambient variation below the ceiling leaves the
-/// drive untouched unless the corrected band asks for a change. Result is
-/// clamped into `[min_pa, max_pa]` like [`agc_next_pa`].
-pub fn agc_next_pa_ambient(raw_dc: u32, corrected_dc: u32, current_pa: u8, cfg: &AgcConfig) -> u8 {
-    if raw_dc > cfg.raw_ceiling {
-        return current_pa
-            .saturating_sub(cfg.step)
-            .clamp(cfg.min_pa, cfg.max_pa);
-    }
-    agc_next_pa(corrected_dc, current_pa, cfg)
 }
 
 /// Decode the MAX86177 internal temperature channel to milli-degrees Celsius.
@@ -337,7 +246,8 @@ impl<I2C: I2c> Max86177<I2C> {
     }
 
     /// Set the MEAS1 LED-A drive current (LEDx_PA register code). Pair with
-    /// [`agc_next_pa`] to close the auto-gain loop over the streamed DC level.
+    /// `watch_core::ppg::agc_next_pa_ambient` to close the auto-gain loop over
+    /// the streamed DC level.
     pub fn set_led_current(&mut self, pa: u8) -> Result<(), Error<I2C::Error>> {
         self.write_reg(reg::MEAS1_LEDA_CURRENT, pa)
     }
@@ -400,5 +310,55 @@ impl<I2C: I2c> Max86177<I2C> {
         self.i2c
             .write_read(I2C_ADDR, &[reg], buf)
             .map_err(Error::I2c)
+    }
+}
+
+/// The MAX86177 half of the [`PpgAfe`] contract. Every method here forwards to
+/// the inherent one of the same name; the impl exists so the `hr` task names a
+/// capability rather than this part.
+impl<I2C: I2c> PpgAfe for Max86177<I2C> {
+    type Error = Error<I2C::Error>;
+
+    fn init(&mut self) -> Result<(), Self::Error> {
+        Max86177::init(self)
+    }
+
+    fn read_tagged_sample(&mut self) -> Result<Option<FifoWord>, Self::Error> {
+        Max86177::read_tagged_sample(self)
+    }
+
+    fn set_led_current(&mut self, pa: u8) -> Result<(), Self::Error> {
+        Max86177::set_led_current(self, pa)
+    }
+
+    fn shutdown(&mut self) -> Result<(), Self::Error> {
+        Max86177::shutdown(self)
+    }
+
+    fn wake(&mut self) -> Result<(), Self::Error> {
+        Max86177::wake(self)
+    }
+
+    /// 19-bit converter, which is where `PpgScale::BITS_19`'s thresholds came
+    /// from in the first place.
+    fn scale(&self) -> PpgScale {
+        PpgScale::BITS_19
+    }
+
+    fn agc_config(&self) -> AgcConfig {
+        AgcConfig::BITS_19
+    }
+
+    fn led_pa_default(&self) -> u8 {
+        LED_PA_DEFAULT
+    }
+
+    /// Tags the hardware transmits in each FIFO word, not positions this driver
+    /// assigns.
+    fn tags(&self) -> FifoTags {
+        FifoTags {
+            ppg: MEAS1_TAG,
+            ambient: MEAS2_TAG,
+        }
     }
 }

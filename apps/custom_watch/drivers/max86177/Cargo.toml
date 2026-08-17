@@ -6,8 +6,9 @@ publish.workspace = true
 
 [dependencies]
 embedded-hal = "1.0"
+watch_core   = { path = "../../core" }
 defmt        = { version = "1.1", optional = true }
 
 [features]
 default = []
-defmt   = ["dep:defmt"]
+defmt   = ["dep:defmt", "watch_core/defmt"]

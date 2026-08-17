@@ -1,5 +1,12 @@
-//! HR task — drives the Maxim MAX86177 optical-HR AFE over I²C, runs the
-//! host-tested peak-detect pipeline, and publishes a stamped BPM estimate.
+//! HR task — drives an optical-HR AFE over I²C, runs the host-tested
+//! peak-detect pipeline, and publishes a stamped BPM estimate.
+//!
+//! The part is named exactly once, at construction: everything after that goes
+//! through `watch_core::ppg::PpgAfe`, and the ADC scale, auto-gain window, LED
+//! seed and slot tags are asked of the part rather than written here
+//! (decisions.md § 623). A threshold quoted in photodiode counts means nothing
+//! without the converter width behind it, so a task that hard-coded them would
+//! judge an 18-bit stream by 19-bit bounds the moment the AFE changed.
 //!
 //! It publishes to `state::HR_OPTICAL`, not to the shared `state::HR` the face
 //! and recorder read: an external BLE chest strap is a second source (§365),
@@ -7,13 +14,12 @@
 //! a stated rule rather than by whichever task happened to write last. This
 //! task keeps reporting what the wrist sensor sees either way.
 //!
-//! The `max86177` driver is blocking, so a bus that never answers would spin
+//! The driver is blocking, so a bus that never answers would spin
 //! the executor forever. Optical HR is an auxiliary layer (decisions §80 /
 //! the layered-resilience contract): its absence must not stall GPS, display,
 //! or the phone link. So the first transaction is an async, timeout-bounded
-//! presence probe; if it times out — the Renode sim has no MAX86177 model, and
-//! a bench build may not have the part wired — the task parks instead of
-//! wedging the blocking driver.
+//! presence probe; if it times out — a bench build may not have the part wired
+//! — the task parks instead of wedging the blocking driver.
 //!
 //! Sampling is duty-cycled to the selected GNSS recording mode's schedule
 //! (`watch_core::hr_duty`): continuous in Performance, a short window per
@@ -26,8 +32,8 @@
 //! untouched. The mode is frozen mid-run (BTN3 cycles pages then), so the
 //! schedule never shifts under an open run.
 //!
-//! The FIFO interleaves two measurement slots — MEAS1 (LED-on PPG) and MEAS2
-//! (LED-off ambient) — told apart by their word tags. The drain demuxes
+//! The FIFO interleaves two measurement slots — LED-on PPG and LED-off ambient
+//! — told apart by the logical tags the driver reports. The drain demuxes
 //! strictly (`watch_core::hr_drain`): each PPG count is paired with the latest
 //! ambient count for subtraction (bright-sun recovery), and a word with a tag
 //! we didn't enable is dropped, never fed to the detector as PPG. A slow LED
@@ -35,24 +41,22 @@
 //! guard protects ADC clipping headroom — ambient swings cancel out of the
 //! corrected level, so the drive can't oscillate against sunlight flicker. Its
 //! cadence is `hr_drain::AgcCadence` (~1 Hz, and a fresh period after every
-//! duty-cycle wake) and its step size `agc_next_pa_ambient`. Register effects
-//! are compile-only until the dev kit lands, like the rest of this path.
+//! duty-cycle wake) and its step size `ppg::agc_next_pa_ambient`. Register
+//! effects are compile-only until the dev kit lands, like the rest of this
+//! path.
 //!
 //! The licensed Maxim HR algorithm is pulled in via `bindgen` post-tier-1;
-//! tier 1 uses the naive peak-detect in `max86177::peak_detect`.
+//! tier 1 uses the naive peak-detect in `watch_core::ppg`.
 
 use defmt::*;
 use embassy_nrf::twim::Twim;
 use embassy_time::{with_timeout, Duration, Instant, Timer};
 use embedded_hal::i2c::Operation;
-use max86177::peak_detect::{Contact, PeakDetector, Reading};
-use max86177::{
-    agc_next_pa_ambient, AgcConfig, FifoWord, Max86177, I2C_ADDR, LED_PA_DEFAULT, MEAS1_TAG,
-    MEAS2_TAG,
-};
+use max86177::{Max86177, I2C_ADDR};
 use watch_core::gnss_mode::GnssMode;
-use watch_core::hr_drain::{next_window_wait_s, AgcCadence, FifoDemux, FifoSlot, FifoTags};
+use watch_core::hr_drain::{next_window_wait_s, AgcCadence, FifoDemux, FifoSlot};
 use watch_core::hr_duty::{self, HrSample};
+use watch_core::ppg::{agc_next_pa_ambient, Contact, FifoWord, PeakDetector, PpgAfe, Reading};
 
 use crate::state;
 
@@ -75,34 +79,34 @@ pub async fn run(mut twim: Twim<'static>) {
     .await
     {
         Err(_) => {
-            warn!("hr: no MAX86177 on I2C (probe timed out); task parked");
+            warn!("hr: no AFE on I2C (probe timed out); task parked");
             return;
         }
         Ok(Err(e)) => {
-            warn!("hr: MAX86177 probe failed {:?}; task parked", e);
+            warn!("hr: AFE probe failed {:?}; task parked", e);
             return;
         }
         Ok(Ok(())) => {}
     }
 
     let mut sensor = Max86177::new(twim);
-    if let Err(e) = sensor.init() {
-        warn!("hr: MAX86177 init failed {:?}; task parked", e);
+    if let Err(e) = PpgAfe::init(&mut sensor) {
+        warn!("hr: AFE init failed {:?}; task parked", e);
         return;
     }
-    let mut detector = PeakDetector::new(SAMPLE_RATE_HZ);
+    // Scale, AGC window, LED seed and slot tags all come from the part rather
+    // than from constants here, so swapping the AFE is a `Max86177::new` line
+    // and nothing else in this task (decisions.md § 623).
+    let mut detector = PeakDetector::new(SAMPLE_RATE_HZ, sensor.scale());
     let sender = state::HR_OPTICAL.sender();
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
     let mut mode = GnssMode::default();
     let mut asleep = false;
-    info!("hr: MAX86177 streaming");
+    info!("hr: AFE streaming");
     // Slot demux + the ambient (LED-off) latch each PPG (LED-on) sample is
     // corrected against, so bright-sun ambient bleed can't rail the pulse
     // (`watch_core::hr_drain`).
-    let mut demux = FifoDemux::new(FifoTags {
-        ppg: MEAS1_TAG,
-        ambient: MEAS2_TAG,
-    });
+    let mut demux = FifoDemux::new(sensor.tags());
     // LED auto-gain state. `led_pa` mirrors the LEDx_PA register (init programs
     // LED_PA_DEFAULT; the register survives shutdown, so it carries across duty
     // windows without a re-write). `agc` owns when a step is allowed
@@ -111,8 +115,8 @@ pub async fn run(mut twim: Twim<'static>) {
     // ambient swings can't walk the drive. One unknown-tag warning per task
     // lifetime: a persistent stray tag means config drift, and per-word logging
     // at 100 Hz would drown defmt.
-    let agc_cfg = AgcConfig::default();
-    let mut led_pa: u8 = LED_PA_DEFAULT;
+    let agc_cfg = sensor.agc_config();
+    let mut led_pa: u8 = sensor.led_pa_default();
     let mut agc = AgcCadence::per_second(SAMPLE_RATE_HZ);
     let mut warned_unknown_tag = false;
     // Change-only observability: one line when the published estimate flips
@@ -138,7 +142,7 @@ pub async fn run(mut twim: Twim<'static>) {
                     // way; a failed shutdown only costs the power it was
                     // meant to save.
                     asleep = true;
-                    match sensor.shutdown() {
+                    match PpgAfe::shutdown(&mut sensor) {
                         Ok(()) => info!(
                             "hr: window closed; sensor shut down until {=u32}s",
                             w.next_start_s(now_s)
@@ -158,7 +162,7 @@ pub async fn run(mut twim: Twim<'static>) {
             }
         }
         if asleep {
-            match sensor.wake() {
+            match PpgAfe::wake(&mut sensor) {
                 Ok(()) => {
                     asleep = false;
                     // The pre-shutdown pulse train is 45+ s old; a fresh
@@ -196,7 +200,7 @@ pub async fn run(mut twim: Twim<'static>) {
         Timer::after(POLL).await;
         let mut latest: Option<Reading> = None;
         loop {
-            match sensor.read_tagged_sample() {
+            match PpgAfe::read_tagged_sample(&mut sensor) {
                 Ok(Some(FifoWord { tag, value })) => match demux.apply(tag, value as i32) {
                     FifoSlot::Ppg => {
                         latest = Some(detector.push_ambient(value as i32, demux.ambient()));
@@ -223,7 +227,7 @@ pub async fn run(mut twim: Twim<'static>) {
                 // L4 best-effort like every other write here: a failed drive
                 // update keeps the old current — the detector's contact honesty
                 // covers a rail until the next attempt.
-                match sensor.set_led_current(next) {
+                match PpgAfe::set_led_current(&mut sensor, next) {
                     Ok(()) => {
                         debug!("hr: AGC LED drive {=u8} -> {=u8}", led_pa, next);
                         led_pa = next;

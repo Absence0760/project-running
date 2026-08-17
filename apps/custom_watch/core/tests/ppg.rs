@@ -1,11 +1,11 @@
 //! Host-side tests for the PPG peak detector. Run via `bin/watch-test.sh` from
-//! the repo root, or `cargo test --target <HOST_TRIPLE> -p max86177` from
+//! the repo root, or `cargo test --target <HOST_TRIPLE> -p watch_core` from
 //! anywhere. Each test synthesizes a PPG-like waveform (a pulse train plus
 //! additive noise and slow DC drift) and asserts the detector's behaviour.
 
 use std::f64::consts::PI;
 
-use max86177::peak_detect::{Contact, PeakDetector, Reading};
+use watch_core::ppg::{Contact, PeakDetector, PpgScale, Reading};
 
 /// Deterministic pseudo-noise so the tests don't pull in a rand dependency.
 struct Noise(u64);
@@ -77,7 +77,7 @@ impl Synth {
 }
 
 fn converges_to(rate: u32, bpm: f64, tolerance: u16) {
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let final_reading = Synth::new(rate).run(&mut det, bpm, 25);
     assert!(final_reading.valid, "{bpm} bpm should read valid");
     let target = bpm as u16;
@@ -110,7 +110,7 @@ fn converges_at_a_different_sample_rate() {
 
 #[test]
 fn fresh_detector_is_invalid() {
-    let det = PeakDetector::new(100);
+    let det = PeakDetector::new(100, PpgScale::BITS_19);
     // A detector that has seen no samples must not claim a heart rate; drive one
     // baseline sample and confirm it is still invalid.
     let mut det = det;
@@ -121,7 +121,7 @@ fn fresh_detector_is_invalid() {
 
 #[test]
 fn flat_signal_with_noise_is_invalid() {
-    let mut det = PeakDetector::new(100);
+    let mut det = PeakDetector::new(100, PpgScale::BITS_19);
     let mut synth = Synth::new(100);
     synth.amplitude = 0.0;
     synth.noise_amp = 8;
@@ -132,7 +132,7 @@ fn flat_signal_with_noise_is_invalid() {
 
 #[test]
 fn weak_signal_below_floor_is_invalid() {
-    let mut det = PeakDetector::new(100);
+    let mut det = PeakDetector::new(100, PpgScale::BITS_19);
     let mut synth = Synth::new(100);
     synth.amplitude = 5.0;
     synth.noise_amp = 3;
@@ -145,7 +145,7 @@ fn weak_signal_below_floor_is_invalid() {
 
 #[test]
 fn dc_drift_alone_produces_no_valid_beats() {
-    let mut det = PeakDetector::new(100);
+    let mut det = PeakDetector::new(100, PpgScale::BITS_19);
     let mut synth = Synth::new(100);
     synth.amplitude = 0.0;
     synth.noise_amp = 2;
@@ -159,7 +159,7 @@ fn dc_drift_alone_produces_no_valid_beats() {
 #[test]
 fn abrupt_rate_change_is_tracked() {
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
 
     let settled = synth.run(&mut det, 60.0, 20);
@@ -181,7 +181,7 @@ fn abrupt_rate_change_is_tracked() {
 
 #[test]
 fn reset_clears_the_estimate() {
-    let mut det = PeakDetector::new(100);
+    let mut det = PeakDetector::new(100, PpgScale::BITS_19);
     let mut synth = Synth::new(100);
     assert!(synth.run(&mut det, 72.0, 20).valid);
 
@@ -201,7 +201,7 @@ fn clean_signal_unchanged_by_the_guards() {
 #[test]
 fn implausibly_fast_rhythm_is_rejected() {
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
 
     assert!(
@@ -234,7 +234,7 @@ fn implausibly_fast_rhythm_is_rejected() {
 #[test]
 fn low_amplitude_bumps_are_rejected() {
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
 
     assert!(
@@ -261,7 +261,7 @@ fn low_amplitude_bumps_are_rejected() {
 #[test]
 fn recovers_to_valid_after_artifacts_pass() {
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
 
     assert!(synth.run(&mut det, 72.0, 15).valid);
@@ -283,7 +283,7 @@ fn recovers_to_valid_after_artifacts_pass() {
 #[test]
 fn worn_signal_reports_contact() {
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
     let r = synth.run(&mut det, 72.0, 20);
     assert_eq!(det.contact(), Contact::Worn, "a real pulse means worn");
@@ -296,7 +296,7 @@ fn floor_signal_reads_off_wrist() {
     // AC riding it — which the beat detector alone would latch onto — must read
     // off-wrist, because the DC baseline is nowhere near a wrist's.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
     synth.dc = 0.0;
     let r = synth.run(&mut det, 72.0, 20);
@@ -312,7 +312,7 @@ fn saturated_rail_reads_saturated() {
     // top is not a pulse; the railed DC level gives it away and reads
     // `Saturated` — distinct from an off-wrist dark floor — and never valid.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
     synth.dc = 524_000.0;
     let r = synth.run(&mut det, 72.0, 20);
@@ -327,7 +327,7 @@ fn plausible_dc_without_ac_reads_off_wrist() {
     // envelope floor — a static reflector, not skin. Contact must still read
     // off-wrist, so a plausible resting level alone can't unlock a reading.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
     synth.amplitude = 5.0;
     synth.noise_amp = 2;
@@ -342,7 +342,7 @@ fn worn_weak_but_real_pulse_keeps_contact() {
     // on a plausible DC must still read worn and valid — the contact gate must
     // not suppress a real, if faint, heartbeat.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
     synth.amplitude = 60.0;
     let r = synth.run(&mut det, 72.0, 20);
@@ -354,7 +354,7 @@ fn worn_weak_but_real_pulse_keeps_contact() {
 #[test]
 fn fresh_detector_reads_off_wrist() {
     // Fail-closed: before any sample, the sensor is off-wrist, not worn.
-    let det = PeakDetector::new(100);
+    let det = PeakDetector::new(100, PpgScale::BITS_19);
     assert_eq!(det.contact(), Contact::OffWrist);
 }
 
@@ -429,7 +429,7 @@ fn high_ambient_would_rail_without_subtraction() {
     // the huge ambient DC rails the channel and the detector correctly reports
     // Saturated / invalid. The next test shows subtraction recovering it.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = AmbientSynth::new(rate);
     let mut last = Reading {
         bpm: 0,
@@ -456,7 +456,7 @@ fn high_ambient_recovers_valid_bpm_after_subtraction() {
     // The headline case: the same bright-sun scene that rails the raw channel
     // yields a real, correct BPM once the ambient (LED-off) sample is subtracted.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = AmbientSynth::new(rate);
     let r = synth.run_subtracted(&mut det, 72.0, 25);
     assert_eq!(
@@ -478,7 +478,7 @@ fn off_wrist_high_ambient_stays_invalid_after_subtraction() {
     // same blinding ambient. Subtracting ambient collapses the net signal to the
     // dark floor — it must NOT manufacture a pulse. Off-wrist, invalid, no BPM.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = AmbientSynth::new(rate);
     synth.led_dc = 0.0;
     synth.amplitude = 0.0;
@@ -500,8 +500,8 @@ fn zero_ambient_subtraction_matches_single_channel() {
     // With no ambient the subtracted path must be bit-for-bit the single-channel
     // path, so the ambient plumbing can't perturb a clean indoor read.
     let rate = 100;
-    let mut det_sub = PeakDetector::new(rate);
-    let mut det_raw = PeakDetector::new(rate);
+    let mut det_sub = PeakDetector::new(rate, PpgScale::BITS_19);
+    let mut det_raw = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
     for _ in 0..rate * 25 {
         // Same synthesized sample fed both ways.
@@ -526,7 +526,7 @@ fn clean_signal_not_regressed_by_ambient_path() {
     // Regression guard: a clean indoor pulse driven through the ambient-subtracted
     // path (ambient == 0) still converges valid and correct.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
     let mut last = Reading {
         bpm: 0,
@@ -560,7 +560,7 @@ fn pinned_adc_stays_saturated_despite_in_band_correction() {
     // never Worn, and no BPM may be fabricated.
     let rate = 100;
     const FULL_SCALE: i32 = 0x7_FFFF;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = AmbientSynth::new(rate);
     synth.ambient_dc = 510_000.0;
     synth.led_dc = 40_000.0; // scene DC ~550k — beyond the ADC's reach
@@ -591,7 +591,7 @@ fn subtraction_saturates_at_integer_extremes() {
     // argument pair may overflow (a plain `-` would abort a debug build on
     // i32::MAX − i32::MIN). Behaviour, not just absence of a panic: extremes
     // must still never yield a valid reading.
-    let mut det = PeakDetector::new(100);
+    let mut det = PeakDetector::new(100, PpgScale::BITS_19);
     let a = det.push_ambient(i32::MAX, i32::MIN);
     let b = det.push_ambient(i32::MIN, i32::MAX);
     assert!(!a.valid && !b.valid);
@@ -605,7 +605,7 @@ fn ambient_exceeding_ppg_clamps_to_the_dark_floor() {
     // so the corrected stream is a dark floor — OffWrist, invalid, never a
     // negative-count artifact pulse.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut noise = Noise::new(0xD00D);
     for _ in 0..rate * 20 {
         let ppg = 1_000 + noise.sample(6);
@@ -627,7 +627,7 @@ fn saturated_recovers_to_worn_once_ambient_data_arrives() {
     // must re-converge to Worn with a correct BPM — Saturated is a live state,
     // not a latch.
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = AmbientSynth::new(rate);
     for _ in 0..rate * 10 {
         let ppg = synth.ppg(72.0);
@@ -655,7 +655,7 @@ fn saturated_recovers_to_worn_once_ambient_data_arrives() {
 #[test]
 fn sustained_weaker_signal_is_not_suppressed() {
     let rate = 100;
-    let mut det = PeakDetector::new(rate);
+    let mut det = PeakDetector::new(rate, PpgScale::BITS_19);
     let mut synth = Synth::new(rate);
 
     assert!(synth.run(&mut det, 72.0, 15).valid);
