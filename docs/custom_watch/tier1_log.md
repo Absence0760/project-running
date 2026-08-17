@@ -942,6 +942,193 @@ directory drop also produces and is exactly the distinction this erase exists to
 make. The bond half can never be sim-verified at all (§ 210). Nothing here is
 bench-verified, because no hardware exists.
 
+## 2026-08-17 — the parts list audited against the firmware, before a penny was spent
+
+Triggered by a plain question — are we ready to order? — and the answer was no, for
+reasons none of which were visible from either document alone. The list and the
+firmware had been drifting past each other for months because nothing ever compared
+them: every row was individually plausible, and five were wrong about the part the
+code actually drives.
+
+**The barometer was the clean case.** `parts.md` ordered a **BMP390** while
+`drivers/bmp581` gates on `CHIP_ID == 0x50` at register `0x01`; a BMP390 answers
+`0x60` at `0x00` with an unrelated map. § 90 had codified the swap for the
+*production* target only, tier-1 firmware implemented BMP581 anyway, and the shopping
+list stayed where § 90 left it. The failure would have been silent — a failed probe
+parks the baro task, taking elevation, vert, the storm page and the GAP grade with it,
+and presenting as four unrelated dead features.
+
+**The GNSS link would not have carried a byte.** `main.rs` had configured UARTE0 at
+9600 since bring-up. That is the u-blox **M8** default; the MAX-M10S is M10 and ships
+at **38400**, which SparkFun's guide for this exact breakout states outright. No
+decision had ever set 9600 — it was an inherited assumption, and § 419/§ 421 had since
+built derivations on top of it. Fixed by meeting the part rather than configuring it
+([§ 622](../architecture/decisions.md)): the breakout's backup cell holds a u-center
+setting about a fortnight, so a configured baud is a value with an expiry date, and the
+prototype that sat out a holiday would have come back mute with nobody suspecting a
+setting they touched once. Two derived figures moved with it, and **the second is the
+one worth having caught**: `BufferedUarte`'s guaranteed headroom is `half_len`, so the
+512-byte ring § 421 is holding open covered three 85 ms erases at 9600 and covers
+**none** at 38400. It needs to be 2048. A later implementer would have built the fix to
+a spec that stopped being right.
+
+**Three more that each cost a bench day rather than a subsystem.** The BMP581 breakout
+ships on **0x47** against the driver's **0x46** (one jumper). The display's silkscreen
+calls EXTMODE `EIN` and EXTCOMIN `EMD`, and `DISP` needs no MCU pin — which is why the
+board crate has none, a coincidence that reads as a bug until you know. And the DK
+supplies from a Li-Po but does not **charge** one, so the "percent falls monotonically
+across a discharge" bench item had no charger on the list and was a one-shot. Sundries
+too: the SKU was `GPS-21086` for a board that is `GPS-18037`, `prototyping.md` named the
+obsolete 96×96 `LS013B4DN04` against a framebuffer that hard-codes 168×144, and the
+chassis and strap that § 82's on-a-real-wrist DoD requires sat filed under
+nice-to-have.
+
+**The finding that actually matters is the optical HR, and it is a doc-process failure
+rather than a doc error.** [`vendor_research.md`](vendor_research.md) established on
+2026-07-09 that **no public MAX86177 datasheet exists** — ADI gates it behind an NDA —
+and closed by asking for a note on `roadmap.md` step 5 and the `bom.md` HR row, marking
+those edits as the parent session's job. The parent session never did them. So the
+finding sat in one file while three others kept describing the part as ready to wire,
+and the driver written afterwards inherited exactly the predicted gap: `drivers/max86177`
+carries a register map **modelled on the MAX86171 family idiom, not read off this
+part's datasheet**, and says nothing about it. Procurement has moved underneath the
+research since: `MAX86177EVSYS#` is discontinued at Digi-Key with no lead time and is a
+two-board evaluation *system* rather than a breakout, and the MAX86171 fallback the
+research recommended has an EV kit that is **obsolete and no longer manufactured**.
+
+The framing that resolves it is that the MAX86177 is a *production* pick that got
+imported into tier 1. § 82 asks for a run recording HR and explicitly accepts "raw
+photodiode reads + naive peak-detect"; it does not ask for the launch AFE. So a ~$20
+MAX30101-class part with a fully public register map is the tier-1-appropriate choice,
+not a compromise — and everything above the raw sample (`peak_detect`, the AGC, the
+contact classes, the duty-cycle schedule, the `hr` task seam) is part-agnostic and
+survives whichever way it goes. The register map is the only half that does not. The
+three costed options live in [`parts.md`](parts.md); the decision is owed before that
+line can be ordered, and the other ~$700 should not wait for it.
+
+**Rung: build-verified, and deliberately not more.** `bin/watch-test.sh` 2739 passed /
+0 failed, `cargo fmt --all --check` clean, `clippy -D warnings` clean for
+`thumbv7em-none-eabihf`. Nothing here is sim-verifiable — Renode delivers the NMEA
+fixture over a PTY and its UARTE model does not rate-limit against the baud register,
+so the sim is exactly as green at 38400 as it was at 9600 and proves nothing about
+either. The baud is now a step-3 bench item alongside the four step-0 gates this entry
+added.
+
+**The process lesson, which is the part worth keeping.** A cross-check nobody owns does
+not happen. `parts.md` was audited against `bom.md` (§ 90) and `vendor_research.md` was
+audited against the vendors, but no document's job was to check the shopping list
+against the code that drives the parts — so the two drifted for months while each stayed
+internally consistent. The same shape produced the NDA gap: a research doc that ends by
+assigning follow-through to "the parent session" has assigned it to nobody. Both are now
+`parts.md`'s stated job, in its own opening lines.
+
+## 2026-08-17 (same day) — the HR part decided: a $20 commodity sensor over the $130 one nobody can document
+
+The open line from the audit above, closed ([§ 623](../architecture/decisions.md)). Tier
+1 orders a **MAX30101** breakout; § 90's production MAX86177 row is untouched, and
+`drivers/max86177` stays in the tree as the head start on it rather than being deleted.
+
+**The wavelength nearly went wrong, which is worth recording because it was one word.**
+The option was drafted as "a MAX30101 / MAX30102 breakout" as though the two were
+interchangeable. They are not: the MAX30102 carries red and IR only — a fingertip-SpO2
+part — and the **green** LED the MAX30101 adds is the wavelength every wrist-worn optical
+sensor uses, because green is absorbed strongly by haemoglobin and penetrates shallowly
+enough to read a capillary bed through a moving wrist. A device whose entire premise is
+the wrist would have been ordered with no wrist wavelength, and the failure would have
+looked like a bad peak detector.
+
+**The upside that comes with leaving the NDA part behind** is that the board vendor
+stops mattering. The MAX30101 register map is public and identical whoever assembles the
+module, so the fact that SparkFun's `SEN-16474` is on backorder and Pimoroni's `PIM438`
+reads 0 at Digi-Key (still *Active*, stocked direct) is an inconvenience rather than a
+blocker — a generic module answers the same registers. Compare where the MAX86177 left
+us: one discontinued kit as the only route to a part whose documentation was also gated.
+
+**And a correction to the audit entry above, made the same day it was written.** It
+claimed everything above the raw sample "is part-agnostic and survives the choice". True
+of the logic, false of the packaging — `peak_detect` (374 lines) and the LED AGC are
+modules of the **`max86177` crate**, and `hr.rs` imports them from there while calling a
+concrete `Max86177` rather than a trait. So the port is not "write a second driver": it
+is **lift the shared half out first** (to `watch_core` or a `ppg` crate), then a thin
+`max30101` register driver under it, then point `hr.rs` at the abstraction. Done in the
+other order it forks the peak detector, and two detectors is two things to tune against
+one wrist. Three concrete deltas go with it: an **18-bit** saturation ceiling rather than
+19, ambient sampling through **multi-LED slots** rather than the MEAS1/MEAS2 tag pair,
+and a register-retention-across-shutdown question that § 623 **re-opens rather than
+inherits** — it was logged against different silicon.
+
+Nothing is built yet. The step-5 bench items now describe a part the bench will have and
+a driver that does not exist; that gap is stated in [`roadmap.md`](roadmap.md) and in
+step 0 of [`quality_standards.md`](quality_standards.md) rather than left for someone to
+discover with a sensor in their hand.
+
+## 2026-08-17 (third) — the driver lift, and the two bugs that only appeared once something else had to use the same code
+
+§ 623's owed firmware work, done in the order the decision insisted on: **lift first, then
+write the second driver.** The reverse order is what forks a peak detector, and a forked
+detector is two things to tune against one wrist.
+
+**The lift.** `peak_detect` (374 lines) and the LED AGC moved out of the `max86177` crate
+into `watch_core::ppg`, joined by a `PpgAfe` trait. `hr.rs` now names a part exactly once —
+at construction — and asks it for its ADC scale, auto-gain window, LED seed and slot tags.
+All 30 detector tests passed untouched, which is the point: nothing about the logic
+changed, only where it lives and who may use it.
+
+**What the lift exposed, and it was not in the plan.** The detector's four DC thresholds
+are quoted in *photodiode counts*, and a count means nothing without the converter's full
+scale behind it. They were 19-bit numbers with nothing saying so. An 18-bit part reports
+half the counts for the identical optical scene, so porting them across unchanged would
+have made every contact and rail threshold **twice as strict** on the new AFE — a wrist
+reading as off-wrist, and no test anywhere would have failed. `PpgScale` now carries the
+width and derives the bounds; `BITS_19` stays literal so the existing suite pins exactly
+what it always pinned, and `scaled_to` is the only thing that ever moves a number. Three
+tests pin the relationship, including the invariant that actually matters — the auto-gain
+loop must shed LED drive *before* the detector declares a rail, checked at both widths
+rather than argued from proportionality.
+
+**The driver.** `drivers/max30101`: public register map, green LED on slot 1 (the wrist
+wavelength — a MAX30102 has none, answers on the same address, and is refused on its
+`PART_ID` before a single register is written), LED-off ambient on slot 2, 18-bit counts.
+
+Its design problem is that **this FIFO is positional**. The MAX86177 tags each word; the
+MAX30101 writes one sample per enabled slot in slot order and labels nothing, so the tag
+is assigned from read position — and a single sample read out of step transposes PPG and
+ambient *for the rest of the window*. Nothing downstream can detect that: `hr_drain`
+demuxes on the tag it is handed, and a transposed stream yields a plausible wrong heart
+rate. Two guards, both tested: reads are whole frames (a FIFO holding half a frame yields
+nothing rather than its first sample), and phase is re-derived on every flush rather than
+carried across a duty-cycle window.
+
+**Then the Renode model found the second bug, which is the part worth recording.** The
+model was going to be a straight adaptation until the FIFO ring was modelled *honestly* —
+real write/read pointers and a real overflow counter instead of a queue. That made the
+overflow case reachable, and the driver had no answer for it: an overflow drops samples,
+an **odd** number of dropped samples slips slot phase exactly as a partial read would, and
+`OVF_COUNTER` saturates so the parity is unrecoverable. The whole-frame guard does not
+help — every frame after the drop is whole *and* transposed. `refill_frame` now flushes
+and re-derives alignment, trading a fraction of a second of pulse for not reporting a
+confident wrong number, and the test pins that it clears the counter too (leaving it set
+would re-trigger forever). The mock needed the same honesty to make that test mean
+anything: it had been ignoring the pointer writes it was supposed to be flushed by.
+
+The general lesson is the one this whole day keeps repeating: **a model that agrees with
+the driver's belief cannot detect a wrong belief** — `quality_standards.md` already says
+that about the sensor models, and here it was the model getting *less* agreeable that
+found the defect.
+
+**Rung: host-tested + sim-verified.** Workspace host sweep 2739 -> 2755 passed / 0 failed
+(3 scale invariants, 12 driver, 1 overflow);
+`cargo fmt --all --check` clean, `clippy -D warnings` clean for `thumbv7em-none-eabihf` on
+the workspace default and the sim feature set. **All nine Renode scenarios green** (smoke,
+alerts, pages, terrain, dropout, screens, idle, workout, storm), with `smoke` reading
+**70 BPM** off the new model (band 55-95 against a synthesised ~72.3) — and because the
+model's FIFO is untagged, that assertion now covers the driver's positional tagging as
+well: a phase slip feeds ambient counts in as PPG and no plausible BPM survives it.
+Nothing here is
+bench-verified; no hardware exists. The `PART_ID` refusal, the register values, and the
+overflow behaviour are all datasheet-derived and await silicon.
+
 ## Next entry expected
 
-Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
+Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md), now fully
+specified, with every line's driver written. That entry starts the photo record.

@@ -1,5 +1,5 @@
 [package]
-name = "max86177"
+name = "max30101"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true

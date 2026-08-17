@@ -31,7 +31,7 @@ no longer applies.
 **Build here:**
 
 - Tier-1 bench-prototype Rust firmware: Embassy tasks, hand-rolled drivers
-  for the Sharp MIP / MAX86177 / u-blox NMEA breakouts that don't have
+  for the Sharp MIP / MAX30101 / u-blox NMEA breakouts that don't have
   community Rust crates, GATT-server bring-up via `nrf-softdevice`.
 - Firmware-architecture work that ports forward to production silicon:
   DMA-driven I/O, async tasks, coprocessor-split design, partial display

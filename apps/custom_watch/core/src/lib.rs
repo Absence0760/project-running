@@ -329,6 +329,7 @@ pub mod plan_adaptive_replan;
 pub mod plan_adherence;
 pub mod plan_progress;
 pub mod plan_replan;
+pub mod ppg;
 pub mod pr_recency;
 pub mod privacy;
 pub mod profiles;

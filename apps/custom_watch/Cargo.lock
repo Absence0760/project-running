@@ -35,7 +35,7 @@ dependencies = [
  "embedded-storage",
  "embedded-storage-async",
  "heapless",
- "max86177",
+ "max30101",
  "nrf-softdevice",
  "nrf-softdevice-s140",
  "nrf52840_dk",
@@ -777,11 +777,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "max30101"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.1.0",
+ "embedded-hal 1.0.0",
+ "watch_core",
+]
+
+[[package]]
 name = "max86177"
 version = "0.1.0"
 dependencies = [
  "defmt 1.1.0",
  "embedded-hal 1.0.0",
+ "watch_core",
 ]
 
 [[package]]

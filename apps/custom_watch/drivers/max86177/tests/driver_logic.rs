@@ -1,13 +1,17 @@
-//! Host-side tests for the driver's pure register-logic helpers: the LED-current
-//! auto-gain step and the internal die-temperature decode. Run via
-//! `bin/watch-test.sh` from the repo root, or `cargo test --target <HOST_TRIPLE>
-//! -p max86177` from anywhere. These touch no peripheral, only the integer math
-//! that decides a register value.
+//! Host-side tests for what is part-*specific* about this driver: the tagged
+//! FIFO word decode, the internal die-temperature decode, and the exact
+//! register traffic each method puts on the wire. Run via `bin/watch-test.sh`
+//! from the repo root, or `cargo test --target <HOST_TRIPLE> -p max86177` from
+//! anywhere.
+//!
+//! The auto-gain tests that used to live here moved to
+//! `core/tests/ppg_agc.rs` with the code (decisions.md § 623) — they were never
+//! about this part, only about arithmetic over DC levels.
 
 use max86177::{
-    agc_next_pa, agc_next_pa_ambient, decode_die_temp_milli_c, decode_fifo_word, AgcConfig,
-    FifoWord, Max86177, I2C_ADDR, LED_PA_MAX, MEAS1_TAG, MEAS2_TAG,
+    decode_die_temp_milli_c, decode_fifo_word, Max86177, I2C_ADDR, MEAS1_TAG, MEAS2_TAG,
 };
+use watch_core::ppg::FifoWord;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -40,102 +44,6 @@ impl embedded_hal::i2c::I2c for MockI2c {
             }
         }
         Ok(())
-    }
-}
-
-#[test]
-fn dim_signal_steps_current_up() {
-    let cfg = AgcConfig::default();
-    let next = agc_next_pa(cfg.target_low - 50_000, 0x40, &cfg);
-    assert_eq!(next, 0x40 + cfg.step, "a dim DC must raise the LED drive");
-}
-
-#[test]
-fn saturating_signal_steps_current_down() {
-    let cfg = AgcConfig::default();
-    let next = agc_next_pa(cfg.target_high + 50_000, 0x40, &cfg);
-    assert_eq!(
-        next,
-        0x40 - cfg.step,
-        "a railing DC must lower the LED drive"
-    );
-}
-
-#[test]
-fn in_window_holds_the_current() {
-    let cfg = AgcConfig::default();
-    let mid = (cfg.target_low + cfg.target_high) / 2;
-    assert_eq!(
-        agc_next_pa(mid, 0x40, &cfg),
-        0x40,
-        "a DC inside the target band must not move the drive"
-    );
-    assert_eq!(
-        agc_next_pa(cfg.target_low, 0x40, &cfg),
-        0x40,
-        "the low edge is inside the band"
-    );
-    assert_eq!(
-        agc_next_pa(cfg.target_high, 0x40, &cfg),
-        0x40,
-        "the high edge is inside the band"
-    );
-}
-
-#[test]
-fn step_up_clamps_at_max() {
-    let cfg = AgcConfig::default();
-    let near_max = cfg.max_pa - cfg.step / 2;
-    let next = agc_next_pa(0, near_max, &cfg);
-    assert_eq!(next, cfg.max_pa, "stepping up must not exceed max_pa");
-}
-
-#[test]
-fn step_down_clamps_at_min() {
-    let cfg = AgcConfig::default();
-    let near_min = cfg.min_pa + cfg.step / 2;
-    let next = agc_next_pa(u32::MAX, near_min, &cfg);
-    assert_eq!(next, cfg.min_pa, "stepping down must not fall below min_pa");
-}
-
-#[test]
-fn saturating_add_cannot_wrap_past_the_register() {
-    let cfg = AgcConfig {
-        max_pa: LED_PA_MAX,
-        ..AgcConfig::default()
-    };
-    let next = agc_next_pa(0, LED_PA_MAX - 1, &cfg);
-    assert_eq!(
-        next, LED_PA_MAX,
-        "a near-full code must saturate, not wrap to 0"
-    );
-}
-
-#[test]
-fn converges_into_the_window_and_holds() {
-    // A simple monotone optical model: DC scales with the drive code. Closing the
-    // loop must walk the drive until the DC lands inside the band and then leave
-    // it there forever — the anti-oscillation guarantee, not just a single step.
-    let cfg = AgcConfig::default();
-    let gain = 3_000u32;
-    let mut pa = cfg.min_pa;
-
-    for _ in 0..256 {
-        let dc = u32::from(pa) * gain;
-        pa = agc_next_pa(dc, pa, &cfg);
-    }
-
-    let settled = pa;
-    let dc = u32::from(settled) * gain;
-    assert!(
-        dc >= cfg.target_low && dc <= cfg.target_high,
-        "loop must settle inside the window, got dc {dc} at pa {settled}"
-    );
-
-    for _ in 0..32 {
-        let dc = u32::from(pa) * gain;
-        pa = agc_next_pa(dc, pa, &cfg);
-        assert_eq!(pa, settled, "a settled loop must not oscillate");
     }
 }
 
@@ -212,99 +120,6 @@ fn decode_temp_negative() {
     // Two's-complement whole part with a positive added fraction: -6 + 8/16.
     assert_eq!(decode_die_temp_milli_c(0xFA, 8), -5_500);
     assert_eq!(decode_die_temp_milli_c(0xFF, 0), -1_000);
-}
-
-#[test]
-fn rail_guard_sheds_drive_even_when_corrected_is_dim() {
-    // Blinding ambient: the raw DC is past the clip guard while the corrected
-    // (LED-reflected) DC reads dim. A corrected-only loop would step UP into
-    // the rail; the guard must win and step DOWN — driving the LED harder into
-    // an ADC near its rail only deepens the clip.
-    let cfg = AgcConfig::default();
-    let next = agc_next_pa_ambient(cfg.raw_ceiling + 10_000, 1_000, 0x40, &cfg);
-    assert_eq!(next, 0x40 - cfg.step);
-}
-
-#[test]
-fn rail_guard_clamps_at_min_pa() {
-    let cfg = AgcConfig::default();
-    let next = agc_next_pa_ambient(cfg.raw_ceiling + 10_000, 1_000, cfg.min_pa, &cfg);
-    assert_eq!(next, cfg.min_pa, "the guard clamps at min_pa, never wraps");
-}
-
-#[test]
-fn ambient_swings_below_the_ceiling_never_move_the_drive() {
-    // The anti-oscillation property: with the corrected DC parked inside the
-    // target band, raw-DC excursions from ambient (clouds, shade, a headlamp)
-    // anywhere up to the ceiling must not walk the LED current — ambient
-    // cancels out of the corrected level the band judges.
-    let cfg = AgcConfig::default();
-    let corrected = (cfg.target_low + cfg.target_high) / 2;
-    for raw in [corrected, 350_000, 460_000, cfg.raw_ceiling] {
-        assert_eq!(
-            agc_next_pa_ambient(raw, corrected, 0x40, &cfg),
-            0x40,
-            "raw {raw} at/below the ceiling must hold the drive"
-        );
-    }
-}
-
-#[test]
-fn ambient_loop_converges_and_holds_under_steady_ambient() {
-    // Closed-loop model with a large but sub-rail ambient bleed: raw = ambient
-    // + gain*pa, corrected = gain*pa. Starting over-driven (raw past the
-    // ceiling), the guard walks the drive down until conversion headroom is
-    // back, the band then finishes the job, and the settled point holds — the
-    // whole-loop anti-oscillation guarantee of `converges_into_the_window_and_
-    // holds`, under ambient.
-    let cfg = AgcConfig::default();
-    let ambient = 150_000u32;
-    let gain = 3_000u32;
-    let mut pa = cfg.max_pa;
-
-    for _ in 0..256 {
-        let corrected = u32::from(pa) * gain;
-        pa = agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg);
-    }
-
-    let settled = pa;
-    let corrected = u32::from(settled) * gain;
-    assert!(
-        corrected >= cfg.target_low && corrected <= cfg.target_high,
-        "loop must settle the corrected DC inside the window, got {corrected} at pa {settled}"
-    );
-    assert!(
-        ambient + corrected <= cfg.raw_ceiling,
-        "the settled raw level must respect the ceiling"
-    );
-
-    for _ in 0..32 {
-        let corrected = u32::from(pa) * gain;
-        pa = agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg);
-        assert_eq!(pa, settled, "a settled ambient loop must not oscillate");
-    }
-}
-
-#[test]
-fn blinding_ambient_walks_to_the_floor_and_stays() {
-    // Ambient alone far past the ceiling, whatever the LED does: the loop must
-    // walk the drive to min_pa and hold — the honest floor while the peak
-    // detector reports Saturated. It must never bounce back up against the dim
-    // corrected read that scene produces.
-    let cfg = AgcConfig::default();
-    let ambient = 520_000u32;
-    let gain = 500u32;
-    let mut pa = 0x40;
-    for _ in 0..64 {
-        let corrected = u32::from(pa) * gain;
-        pa = agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg);
-    }
-    assert_eq!(pa, cfg.min_pa);
-    let corrected = u32::from(pa) * gain; // dim — unguarded, this would step up
-    assert_eq!(
-        agc_next_pa_ambient(ambient + corrected, corrected, pa, &cfg),
-        cfg.min_pa
-    );
 }
 
 #[test]

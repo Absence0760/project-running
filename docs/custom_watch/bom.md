@@ -32,10 +32,12 @@ Per-subsystem component choices with the reasoning, and the rejected alternative
 
 | Part | Why | Trade |
 |---|---|---|
-| **Maxim MAX86177** | Industry-leading optical-HR AFE — 4-LED, 2-PD, sub-µA standby, on-chip motion-artifact preprocessing. Used by several premium wearables. ~$6 single-qty | Algorithm IP needs licensing or in-house DSP work. Raw signal alone won't beat the tuned pipelines the incumbents have iterated on for years |
+| **Maxim MAX86177** | Industry-leading optical-HR AFE — public material says **2 LED drivers (up to 6 LEDs) and 4 photodiode readout channels**, not the "4-LED, 2-PD" this row long claimed; 1.8 V main + 3.1–5.5 V LED rails; standby current *unpublished* for this part (sub-µA is a family extrapolation, unverified). Used by several premium wearables. ~$6 single-qty | **Datasheet and register map are NDA-gated** ([`vendor_research.md`](vendor_research.md)) — a driver cannot be written from public sources, which is why tier 1's HR part is an open decision in [`parts.md`](parts.md) rather than this row. Algorithm IP needs licensing or in-house DSP work on top. Raw signal alone won't beat the tuned pipelines the incumbents have iterated on for years |
 | *Alt: Goodix GH3026* | Used by Huawei, Honor, several mid-tier wearables. Cheaper at ~$3, mature drivers | Documentation is China-first; English datasheets exist but are partial. Algorithm IP almost always sourced from Goodix themselves under licence |
 | *Alt: PixArt PAH8011* | Cheapest viable optical HR at ~$2 | Single-LED — measurably worse in low-perfusion conditions (cold weather, dark skin tones) |
 | *Future upgrade: MAX86178* | Same family as MAX86177 + adds ECG + BioZ in one part; IEC 60601-2-47-compliant ECG channel; 0.5 µA shutdown. ~$8 single-qty | Documented upgrade path per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) for a future ECG-capable SKU (AFib screening, HRV-from-ECG). Not the launch pick — adds cost + ECG-electrode design complexity at tier 2 |
+
+**Tier-1 bench prototype diverges from this row.** [§ 623](../architecture/decisions.md) orders a commodity **MAX30101** for the bench, because the MAX86177's register map is NDA-gated and § 82 accepts raw photodiode reads. That is a tier-1 sourcing choice only — the launch pick below is unchanged, and `drivers/max86177` is kept as the head start on it.
 
 **Pick: MAX86177 for launch.** Optical HR is the second-most-common complaint about cheap watches (after battery); cutting cost here is false economy. Also: support **ANT+ chest strap pairing** as a first-class option — the people we're building for already own a strap. ECG-capable upgrade path via MAX86178 documented for a future SKU.
 

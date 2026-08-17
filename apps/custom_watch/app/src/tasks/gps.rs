@@ -48,22 +48,33 @@
 //! in `gnss_power`). The receiver's *actual* power state is bench-gated
 //! until the dev kit lands.
 //!
+//! The link runs at the receiver's factory-default **38400 baud** (decisions.md
+//! § 622), not a configured rate: the breakout's backup cell holds a u-center
+//! setting for about a fortnight, so a firmware that assumed anything else would
+//! work on the bench and go silent after a holiday.
+//!
 //! Reads are burst-DMA: the UARTE fills an [`RX_BURST`]-byte buffer over
 //! EasyDMA and wakes the CPU once per buffer, not once per byte. A
-//! byte-at-a-time loop woke the executor hundreds of times a second at 9600
-//! baud; the burst read is the same data for a fraction of the active-CPU
-//! time — the DMA-not-polling lever in `docs/custom_watch/performance_path.md`,
-//! which ports straight to tier-2.
+//! byte-at-a-time loop woke the executor hundreds of times a second; the burst
+//! read is the same data for a fraction of the active-CPU time — the
+//! DMA-not-polling lever in `docs/custom_watch/performance_path.md`, which
+//! ports straight to tier-2.
 //!
 //! **What is still owed here is DMA *depth*, and it is not idle-line
-//! detection.** One [`RX_BURST`] transfer fills in 32 * 10 / 9600 = 33.3 ms, and
+//! detection.** One [`RX_BURST`] transfer fills in 32 * 10 / 38400 = 8.3 ms, and
 //! once its ENDRX lands the receiver is disarmed until a task runs again. An
 //! NVMC page erase halts the CPU for ~85 ms — a bus stall, so yielding buys
-//! nothing, every other task lives in flash too — which is ~82 bytes at this
-//! baud. So a checkpoint or a commit costs most of a buffer's worth of NMEA: an
-//! L4 flash write degrading L1 distance, which the layering contract forbids.
+//! nothing, every other task lives in flash too — which is up to 326 bytes at
+//! this baud. So a checkpoint or a commit costs several buffers' worth of NMEA:
+//! an L4 flash write degrading L1 distance, which the layering contract forbids.
 //! The parser resyncs on the next `$`, so it costs sentences rather than the
 //! run, but it is still the wrong direction of dependency.
+//!
+//! Note what the baud does and does not change here. The receiver emits one
+//! epoch's sentences per second whatever the line rate, so a faster link packs
+//! that burst into a smaller slice of the second: a stall is proportionally
+//! *less* likely to land on live bytes, and loses proportionally *more* when it
+//! does. Expected loss is roughly baud-independent; only the worst case grew.
 //!
 //! `split_with_idle` is **not** the tool for it, even though UARTE1's settings
 //! pipe now uses exactly that (`phone::settings_rx`, decisions.md § 407) and the
@@ -78,9 +89,12 @@
 //! sleep-window `select3` below.
 //!
 //! The right shape is `BufferedUarte`, whose ENDRX->STARTRX PPI chain keeps the
-//! next transfer armed in *hardware* across a CPU stall; a 512-byte ring gives a
-//! guaranteed `half_len` = 256 bytes = 267 ms of headroom, three erases' worth.
-//! It is blocked rather than declined: embassy derives that ring's write
+//! next transfer armed in *hardware* across a CPU stall. **Size that ring
+//! against 38400, not the 9600 this note was first written for** (§ 622): the
+//! guaranteed headroom is `half_len` bytes, so the 512-byte ring once planned
+//! here buys 256 B = 66.7 ms and no longer covers even one 85 ms erase. A
+//! 2048-byte ring restores the intended margin — `half_len` = 1024 B = 267 ms,
+//! three erases' worth. It is blocked rather than declined: embassy derives that ring's write
 //! position from a TIMER byte-counter which wraps via `SHORTS.COMPARE1_CLEAR`,
 //! and Renode's `NRF52840_Timer` does not model SHORTS at all, so the counter
 //! would climb past `2 * rx_len` and then read as zero — GPS dead about a second
@@ -108,8 +122,8 @@ use crate::state;
 
 /// Burst-read size. Small enough to bound the tail latency (a partly-filled
 /// buffer waits for the next bytes to top it off) while cutting UART wakes ~30x
-/// versus one byte per read at 9600 baud. The parser is byte-stateful, so a
-/// sentence split across two reads is fine.
+/// versus one byte per read. The parser is byte-stateful, so a sentence split
+/// across two reads is fine.
 const RX_BURST: usize = 32;
 
 /// The parse→merge→publish pipeline both loop branches feed: byte assembly +
