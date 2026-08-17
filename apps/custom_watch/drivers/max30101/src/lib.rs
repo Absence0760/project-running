@@ -343,8 +343,22 @@ impl<I2C: I2c> Max30101<I2C> {
     }
 
     /// Read one whole frame into the buffer. Returns `false` when the FIFO does
-    /// not hold a complete one.
+    /// not hold a complete one, or when an overflow has made its alignment
+    /// unknowable.
     fn refill_frame(&mut self) -> Result<bool, Error<I2C::Error>> {
+        // An overflow means the part overwrote samples the host never read. If
+        // it dropped an ODD number, slot phase has slipped and every later
+        // frame is transposed — the exact failure whole-frame reads exist to
+        // prevent, arriving by a different door. `OVF_COUNTER` saturates and so
+        // cannot say how many were lost, and the pointer pair cannot either
+        // (`wr - rd` is the same modulo the depth), so parity is genuinely
+        // unrecoverable. Give up the window's alignment and re-derive it: a few
+        // lost samples cost a fraction of a second of pulse, a transposed
+        // stream costs a plausible wrong heart rate for the whole window.
+        if self.read_reg(reg::OVF_COUNTER)? != 0 {
+            self.flush_fifo()?;
+            return Ok(false);
+        }
         let avail = self.available()?;
         if avail < SLOTS {
             return Ok(false);

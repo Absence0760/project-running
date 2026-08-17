@@ -28,8 +28,11 @@ evidence under sim/verification-2026-07-19/, except the two marked below:
 neither needs anything this boot is not already doing, and a scenario costs a
 whole emulator. Both cover a rail that had no assertion at all:
 
-  - The MAX86177 model has existed since 2026-07-19 and was built to take the
+  - An AFE model has existed since 2026-07-19 and was built to take the
     optical-HR path off the bench gate, but no scenario ever read a BPM off it.
+    The model is a MAX30101 since decisions.md § 623 — a positional FIFO, so
+    this assertion now also covers the driver's slot tagging: a phase slip
+    feeds ambient counts to the detector as PPG and no plausible BPM survives.
     The whole chain — TWIM EasyDMA master, the model's tagged MEAS1/MEAS2 sample
     stream, the driver's AGC and pulse detector — could break and every scenario
     would still pass.
@@ -175,7 +178,7 @@ MIN_WHITE_PIXELS = 200
 MIN_SATS = 4
 STOP_ATTEMPTS = 3
 
-# The band a BPM off the MAX86177 model has to land in. Max86177.cs synthesizes
+# The band a BPM off the MAX30101 model has to land in. Max30101.cs synthesizes
 # one synthetic beat every `PulsePeriodSamples` at its 100 Hz frame rate and
 # defaults to 83, which is 6000/83 = ~72.3 BPM. The band is wide enough that the
 # detector's own smoothing and the AGC's opening settle do not have to be pinned,
@@ -1585,9 +1588,9 @@ def scenario_smoke(sim):
     # pulse detector. Asking for the streaming line first makes those two
     # failures say different things.
     sim.wait(
-        re.compile(r"hr: MAX86177 streaming"),
+        re.compile(r"hr: AFE streaming"),
         HR_TIMEOUT,
-        "the hr task to reach the MAX86177 model ('hr: MAX86177 streaming') — a "
+        "the hr task to reach the MAX30101 model ('hr: AFE streaming') — a "
         "parked task means the TWIM EasyDMA master never completed the presence "
         "probe, not that the pulse detector is wrong",
     )
@@ -1595,7 +1598,7 @@ def scenario_smoke(sim):
         sim.wait(
             re.compile(r"hr: bpm (\d+)"),
             HR_TIMEOUT,
-            "a trusted pulse off the MAX86177 model ('hr: bpm N') — the model "
+            "a trusted pulse off the MAX30101 model ('hr: bpm N') — the model "
             "synthesizes a beat every PulsePeriodSamples frames, so a driver that "
             "reads the tagged MEAS1/MEAS2 stream correctly has to find it",
         ).group(1)
@@ -1608,7 +1611,7 @@ def scenario_smoke(sim):
             "other than the model's beat (the ambient channel, the AGC's own "
             "steps, or a half/double-rate harmonic)"
         )
-    passed(f"the optical-HR driver read {bpm} BPM off the MAX86177 model")
+    passed(f"the optical-HR driver read {bpm} BPM off the MAX30101 model")
 
     sim.wait(
         re.compile(r"record: sim-autostart on first fix"),

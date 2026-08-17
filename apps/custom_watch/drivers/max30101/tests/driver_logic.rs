@@ -26,12 +26,15 @@ const REG_FIFO_DATA: u8 = 0x07;
 const REG_MODE_CONFIG: u8 = 0x09;
 const REG_PART_ID: u8 = 0xFF;
 
+const REG_OVF_COUNTER: u8 = 0x05;
+
 #[derive(Default)]
 struct Bus {
     writes: Vec<Vec<u8>>,
     /// Samples staged for `FIFO_DATA` to hand back, oldest first.
     fifo: Vec<u32>,
-    /// What `available()` should compute to: staged via the pointer pair.
+    /// What `OVF_COUNTER` reports — non-zero means the part dropped samples.
+    overflow: u8,
     part_id: u8,
 }
 
@@ -51,6 +54,10 @@ impl MockI2c {
 
     fn stage(&self, samples: &[u32]) {
         self.0.borrow_mut().fifo.extend_from_slice(samples);
+    }
+
+    fn set_overflow(&self, n: u8) {
+        self.0.borrow_mut().overflow = n;
     }
 
     fn writes(&self) -> Vec<Vec<u8>> {
@@ -80,7 +87,19 @@ impl embedded_hal::i2c::I2c for MockI2c {
                     if bytes.len() == 1 {
                         pending = Some(bytes[0]);
                     } else {
-                        self.0.borrow_mut().writes.push(bytes.to_vec());
+                        let mut bus = self.0.borrow_mut();
+                        bus.writes.push(bytes.to_vec());
+                        // Honour the two writes that change what a later read
+                        // sees, like the real part: zeroing the read pointer
+                        // discards unread samples, and writing the overflow
+                        // counter sets it. A mock that ignored these would let
+                        // a flush test pass while stale samples were still
+                        // being served.
+                        match (bytes[0], bytes[1]) {
+                            (REG_FIFO_RD_PTR, 0) => bus.fifo.clear(),
+                            (REG_OVF_COUNTER, v) => bus.overflow = v,
+                            _ => {}
+                        }
                     }
                 }
                 embedded_hal::i2c::Operation::Read(buf) => {
@@ -90,6 +109,7 @@ impl embedded_hal::i2c::I2c for MockI2c {
                         REG_PART_ID => buf[0] = bus.part_id,
                         // Reset bit reads back clear, so `wait_reset` returns.
                         REG_MODE_CONFIG => buf[0] = 0,
+                        REG_OVF_COUNTER => buf[0] = bus.overflow,
                         REG_FIFO_WR_PTR => buf[0] = bus.fifo.len() as u8,
                         REG_FIFO_RD_PTR => buf[0] = 0,
                         REG_FIFO_DATA => {
@@ -325,4 +345,44 @@ fn decode_temp_matches_the_sixteenth_degree_encoding() {
     );
     // Two's-complement whole part with a positive added fraction: -6 + 8/16.
     assert_eq!(decode_die_temp_milli_c(0xFA, 8), -5_500);
+}
+
+#[test]
+fn an_overflow_resyncs_rather_than_risking_a_transposed_stream() {
+    // The other door to a phase slip. An overflow means the part overwrote
+    // samples the host never read; if it dropped an odd number, every later
+    // frame is transposed and nothing downstream can tell. The counter
+    // saturates, so parity is unrecoverable — the only safe move is to drop the
+    // window's alignment and re-derive it.
+    let bus = MockI2c::new(PART_ID);
+    let mut sensor = inited(&bus);
+
+    bus.stage(&[10, 20, 30, 40]);
+    bus.set_overflow(3);
+    assert_eq!(
+        sensor.read_tagged_sample().unwrap(),
+        None,
+        "an overflowed FIFO must not be served, however full it looks"
+    );
+
+    // It flushed rather than merely declining: the pointer registers were
+    // rewritten, the overflow counter among them.
+    let flush: Vec<Vec<u8>> = bus
+        .writes()
+        .into_iter()
+        .filter(|w| matches!(w[0], 0x04 | 0x05 | 0x06))
+        .collect();
+    assert_eq!(
+        flush,
+        vec![vec![0x04, 0x00], vec![0x05, 0x00], vec![0x06, 0x00]],
+        "the overflow path must clear the counter too, or it re-triggers forever"
+    );
+
+    // The driver cleared the counter itself — an overflow path that left it set
+    // would re-trigger on every subsequent refill and the stream would never
+    // recover. Staging a fresh frame is enough; nothing here re-clears it.
+    bus.stage(&[50, 60]);
+    let w = sensor.read_tagged_sample().unwrap().unwrap();
+    assert_eq!(w.tag, PPG_TAG);
+    assert_eq!(w.value, 50);
 }
