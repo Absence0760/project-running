@@ -942,6 +942,87 @@ directory drop also produces and is exactly the distinction this erase exists to
 make. The bond half can never be sim-verified at all (§ 210). Nothing here is
 bench-verified, because no hardware exists.
 
+## 2026-08-17 — the parts list audited against the firmware, before a penny was spent
+
+Triggered by a plain question — are we ready to order? — and the answer was no, for
+reasons none of which were visible from either document alone. The list and the
+firmware had been drifting past each other for months because nothing ever compared
+them: every row was individually plausible, and five were wrong about the part the
+code actually drives.
+
+**The barometer was the clean case.** `parts.md` ordered a **BMP390** while
+`drivers/bmp581` gates on `CHIP_ID == 0x50` at register `0x01`; a BMP390 answers
+`0x60` at `0x00` with an unrelated map. § 90 had codified the swap for the
+*production* target only, tier-1 firmware implemented BMP581 anyway, and the shopping
+list stayed where § 90 left it. The failure would have been silent — a failed probe
+parks the baro task, taking elevation, vert, the storm page and the GAP grade with it,
+and presenting as four unrelated dead features.
+
+**The GNSS link would not have carried a byte.** `main.rs` had configured UARTE0 at
+9600 since bring-up. That is the u-blox **M8** default; the MAX-M10S is M10 and ships
+at **38400**, which SparkFun's guide for this exact breakout states outright. No
+decision had ever set 9600 — it was an inherited assumption, and § 419/§ 421 had since
+built derivations on top of it. Fixed by meeting the part rather than configuring it
+([§ 622](../architecture/decisions.md)): the breakout's backup cell holds a u-center
+setting about a fortnight, so a configured baud is a value with an expiry date, and the
+prototype that sat out a holiday would have come back mute with nobody suspecting a
+setting they touched once. Two derived figures moved with it, and **the second is the
+one worth having caught**: `BufferedUarte`'s guaranteed headroom is `half_len`, so the
+512-byte ring § 421 is holding open covered three 85 ms erases at 9600 and covers
+**none** at 38400. It needs to be 2048. A later implementer would have built the fix to
+a spec that stopped being right.
+
+**Three more that each cost a bench day rather than a subsystem.** The BMP581 breakout
+ships on **0x47** against the driver's **0x46** (one jumper). The display's silkscreen
+calls EXTMODE `EIN` and EXTCOMIN `EMD`, and `DISP` needs no MCU pin — which is why the
+board crate has none, a coincidence that reads as a bug until you know. And the DK
+supplies from a Li-Po but does not **charge** one, so the "percent falls monotonically
+across a discharge" bench item had no charger on the list and was a one-shot. Sundries
+too: the SKU was `GPS-21086` for a board that is `GPS-18037`, `prototyping.md` named the
+obsolete 96×96 `LS013B4DN04` against a framebuffer that hard-codes 168×144, and the
+chassis and strap that § 82's on-a-real-wrist DoD requires sat filed under
+nice-to-have.
+
+**The finding that actually matters is the optical HR, and it is a doc-process failure
+rather than a doc error.** [`vendor_research.md`](vendor_research.md) established on
+2026-07-09 that **no public MAX86177 datasheet exists** — ADI gates it behind an NDA —
+and closed by asking for a note on `roadmap.md` step 5 and the `bom.md` HR row, marking
+those edits as the parent session's job. The parent session never did them. So the
+finding sat in one file while three others kept describing the part as ready to wire,
+and the driver written afterwards inherited exactly the predicted gap: `drivers/max86177`
+carries a register map **modelled on the MAX86171 family idiom, not read off this
+part's datasheet**, and says nothing about it. Procurement has moved underneath the
+research since: `MAX86177EVSYS#` is discontinued at Digi-Key with no lead time and is a
+two-board evaluation *system* rather than a breakout, and the MAX86171 fallback the
+research recommended has an EV kit that is **obsolete and no longer manufactured**.
+
+The framing that resolves it is that the MAX86177 is a *production* pick that got
+imported into tier 1. § 82 asks for a run recording HR and explicitly accepts "raw
+photodiode reads + naive peak-detect"; it does not ask for the launch AFE. So a ~$20
+MAX30101-class part with a fully public register map is the tier-1-appropriate choice,
+not a compromise — and everything above the raw sample (`peak_detect`, the AGC, the
+contact classes, the duty-cycle schedule, the `hr` task seam) is part-agnostic and
+survives whichever way it goes. The register map is the only half that does not. The
+three costed options live in [`parts.md`](parts.md); the decision is owed before that
+line can be ordered, and the other ~$700 should not wait for it.
+
+**Rung: build-verified, and deliberately not more.** `bin/watch-test.sh` 2739 passed /
+0 failed, `cargo fmt --all --check` clean, `clippy -D warnings` clean for
+`thumbv7em-none-eabihf`. Nothing here is sim-verifiable — Renode delivers the NMEA
+fixture over a PTY and its UARTE model does not rate-limit against the baud register,
+so the sim is exactly as green at 38400 as it was at 9600 and proves nothing about
+either. The baud is now a step-3 bench item alongside the four step-0 gates this entry
+added.
+
+**The process lesson, which is the part worth keeping.** A cross-check nobody owns does
+not happen. `parts.md` was audited against `bom.md` (§ 90) and `vendor_research.md` was
+audited against the vendors, but no document's job was to check the shopping list
+against the code that drives the parts — so the two drifted for months while each stayed
+internally consistent. The same shape produced the NDA gap: a research doc that ends by
+assigning follow-through to "the parent session" has assigned it to nobody. Both are now
+`parts.md`'s stated job, in its own opening lines.
+
 ## Next entry expected
 
-Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md). That entry starts the photo record.
+Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md), whose
+optical-HR line needs a decision recorded first. That entry starts the photo record.
