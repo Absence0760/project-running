@@ -1022,7 +1022,48 @@ internally consistent. The same shape produced the NDA gap: a research doc that 
 assigning follow-through to "the parent session" has assigned it to nobody. Both are now
 `parts.md`'s stated job, in its own opening lines.
 
+## 2026-08-17 (same day) — the HR part decided: a $20 commodity sensor over the $130 one nobody can document
+
+The open line from the audit above, closed ([§ 623](../architecture/decisions.md)). Tier
+1 orders a **MAX30101** breakout; § 90's production MAX86177 row is untouched, and
+`drivers/max86177` stays in the tree as the head start on it rather than being deleted.
+
+**The wavelength nearly went wrong, which is worth recording because it was one word.**
+The option was drafted as "a MAX30101 / MAX30102 breakout" as though the two were
+interchangeable. They are not: the MAX30102 carries red and IR only — a fingertip-SpO2
+part — and the **green** LED the MAX30101 adds is the wavelength every wrist-worn optical
+sensor uses, because green is absorbed strongly by haemoglobin and penetrates shallowly
+enough to read a capillary bed through a moving wrist. A device whose entire premise is
+the wrist would have been ordered with no wrist wavelength, and the failure would have
+looked like a bad peak detector.
+
+**The upside that comes with leaving the NDA part behind** is that the board vendor
+stops mattering. The MAX30101 register map is public and identical whoever assembles the
+module, so the fact that SparkFun's `SEN-16474` is on backorder and Pimoroni's `PIM438`
+reads 0 at Digi-Key (still *Active*, stocked direct) is an inconvenience rather than a
+blocker — a generic module answers the same registers. Compare where the MAX86177 left
+us: one discontinued kit as the only route to a part whose documentation was also gated.
+
+**And a correction to the audit entry above, made the same day it was written.** It
+claimed everything above the raw sample "is part-agnostic and survives the choice". True
+of the logic, false of the packaging — `peak_detect` (374 lines) and the LED AGC are
+modules of the **`max86177` crate**, and `hr.rs` imports them from there while calling a
+concrete `Max86177` rather than a trait. So the port is not "write a second driver": it
+is **lift the shared half out first** (to `watch_core` or a `ppg` crate), then a thin
+`max30101` register driver under it, then point `hr.rs` at the abstraction. Done in the
+other order it forks the peak detector, and two detectors is two things to tune against
+one wrist. Three concrete deltas go with it: an **18-bit** saturation ceiling rather than
+19, ambient sampling through **multi-LED slots** rather than the MEAS1/MEAS2 tag pair,
+and a register-retention-across-shutdown question that § 623 **re-opens rather than
+inherits** — it was logged against different silicon.
+
+Nothing is built yet. The step-5 bench items now describe a part the bench will have and
+a driver that does not exist; that gap is stated in [`roadmap.md`](roadmap.md) and in
+step 0 of [`quality_standards.md`](quality_standards.md) rather than left for someone to
+discover with a sensor in their hand.
+
 ## Next entry expected
 
-Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md), whose
-optical-HR line needs a decision recorded first. That entry starts the photo record.
+Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md), now fully
+specified. The `max30101` driver is owed in parallel and gates only step 5; the other
+bring-up steps do not wait for it. That entry starts the photo record.
