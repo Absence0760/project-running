@@ -99,7 +99,11 @@ async fn main(spawner: Spawner) {
     info!("custom_watch firmware booting (tier 1)");
 
     let mut gps_config = uarte::Config::default();
-    gps_config.baudrate = uarte::Baudrate::BAUD9600;
+    // The MAX-M10S's own factory default, so a receiver straight out of the bag
+    // talks to us with no u-center step. Its config survives a power cut only
+    // while the breakout's backup cell holds (~2 weeks), so anything other than
+    // the factory value is a setting that silently lapses in a drawer.
+    gps_config.baudrate = uarte::Baudrate::BAUD38400;
     let gps_uart = uarte::Uarte::new(
         board.gps.uarte,
         board.gps.rx,

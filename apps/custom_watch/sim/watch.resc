@@ -85,7 +85,7 @@ bmp581: Sensors.BMP581 @ twi1 0x46
 # (which also defeats the read-modify-write the driver does to set the bit).
 # The counter then climbs monotonically past 2 * rx_len and BufferedUarte's own
 # guard (`rxdrdy > rx_buf.len() * 2` -> 0) pins the derived write position at
-# zero for the rest of the run — about a kilobyte of NMEA, ~1 s at 9600 baud,
+# zero for the rest of the run — about a kilobyte of NMEA, a couple of epochs,
 # in. sim/NRF52840_Timer_Shorts.cs is the upstream v1.16.1 model plus a real
 # SHORTS (COMPARE[n]_CLEAR + COMPARE[n]_STOP, honoured in the TASKS_COUNT path
 # as well as the clocked one — counter mode is the one the driver uses). All
