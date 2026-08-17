@@ -19,8 +19,13 @@ name: Security
 #   - java-kotlin covers apps/watch_wear (native Kotlin + Compose) plus
 #     apps/mobile_android/android (Gradle host)
 #   - actions covers every workflow under .github/workflows/
-#   - Trivy scans apps/job_worker/Dockerfile (the only Dockerfile in
-#     the repo; multi-stage, final image distroless).
+#   - Trivy scans both Go service images — apps/job_worker and
+#     apps/graph_cycle (multi-stage, final image distroless). They
+#     share one pinned golang builder digest, so an unpatched stdlib
+#     lands in both at once; scanning only one left the other's copy
+#     of the same CVEs invisible (alerts 179-186).
+#     apps/job_worker/graphhopper/Dockerfile is a JVM image built from
+#     a pinned upstream tag and is not scanned here.
 #
 # What's deliberately NOT covered:
 #   - Swift (apps/watch_ios + apps/mobile_ios/ios). CodeQL's Swift
@@ -220,3 +225,36 @@ jobs:
         with:
           sarif_file: trivy-job-worker.sarif
           category: trivy-job-worker
+
+  trivy-graph-cycle-image:
+    name: Trivy (graph_cycle container)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build graph_cycle image
+        run: docker build -t graph-cycle:scan ./apps/graph_cycle
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: graph-cycle:scan
+          format: sarif
+          output: trivy-graph-cycle.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        if: always()
+        with:
+          sarif_file: trivy-graph-cycle.sarif
+          # Distinct category — two uploads sharing one category make the
+          # alert set flip-flop between whichever scan ran last.
+          category: trivy-graph-cycle
