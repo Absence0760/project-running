@@ -18,6 +18,17 @@
 //!
 //! No community Rust crate exists for this part, so the register map is
 //! hand-rolled. Real implementation for step 5 of `apps/custom_watch/README.md`.
+//!
+//! **Read this before trusting a register address here.** There is no public
+//! MAX86177 datasheet — ADI gates the full documentation behind an NDA
+//! (`docs/custom_watch/vendor_research.md`, 2026-07-09). So the map below is
+//! modelled on the family idiom (the MAX86171 has a full public datasheet and
+//! the same charge-integrating, autonomous-FIFO design), **not read off this
+//! part's own datasheet**, and no silicon has ever answered it. Everything
+//! downstream of the raw sample — [`peak_detect`], the LED AGC, the contact
+//! classes, the duty-cycle schedule — is part-agnostic and survives whatever
+//! AFE tier 1 actually ends up with; this file is the half that does not.
+//! `docs/custom_watch/parts.md` holds the open sourcing decision.
 
 #![no_std]
 
