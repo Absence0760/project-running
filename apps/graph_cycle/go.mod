@@ -1,6 +1,9 @@
 module github.com/Absence0760/project-running/apps/graph_cycle
 
-go 1.25.11
+// Patch-level floor, not a bare `go 1.26`: CVE-2026-46600 has no fix in the
+// 1.25 line at all, so anything below 1.26.6 links a stdlib that cannot be
+// patched against it. CI resolves its toolchain from this line.
+go 1.26.6
 
 require github.com/paulmach/osm v0.9.0
 

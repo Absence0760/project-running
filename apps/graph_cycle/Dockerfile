@@ -14,7 +14,7 @@
 # PinnedDependenciesID — resolve a new digest with
 # `docker manifest inspect golang:<tag>` when bumping. Kept identical to
 # apps/job_worker/Dockerfile so both Go services share one base.
-FROM golang:1.26-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
+FROM golang:1.26-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS build
 WORKDIR /src
 
 # Cache go.mod / go.sum first so dependency-only changes don't invalidate the
