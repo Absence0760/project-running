@@ -78,6 +78,7 @@ mod reg {
     pub const LED1_PA: u8 = 0x0C;
     pub const LED2_PA: u8 = 0x0D;
     pub const LED3_PA: u8 = 0x0E;
+    pub const LED4_PA: u8 = 0x0F;
     pub const MULTI_LED_SLOT_12: u8 = 0x11;
     pub const MULTI_LED_SLOT_34: u8 = 0x12;
     pub const TEMP_INT: u8 = 0x1F;
@@ -252,11 +253,15 @@ impl<I2C: I2c> Max30101<I2C> {
         self.write_reg(reg::FIFO_CONFIG, FIFO_CONFIG)?;
         self.write_reg(reg::SPO2_CONFIG, SPO2_CONFIG)?;
 
-        // LED1 (red) and LED2 (IR) stay dark: this is a wrist HR sensor, and an
-        // emitter nothing samples is only heat and battery.
+        // Every emitter except the green one on slot 1 stays dark: this is a
+        // wrist HR sensor, and an emitter nothing samples is only heat and
+        // battery. The reset above already zeroed these, so the writes are
+        // documentary — they say "considered, and deliberately off", which is
+        // the difference between a dark LED4 and an LED4 nobody thought about.
         self.write_reg(reg::LED1_PA, 0)?;
         self.write_reg(reg::LED2_PA, 0)?;
         self.write_reg(reg::LED3_PA, LED_PA_DEFAULT_CODE)?;
+        self.write_reg(reg::LED4_PA, 0)?;
 
         self.write_reg(reg::MULTI_LED_SLOT_12, MULTI_LED_SLOT_12)?;
         self.write_reg(reg::MULTI_LED_SLOT_34, MULTI_LED_SLOT_34)?;

@@ -202,6 +202,7 @@ fn init_configures_green_ppg_plus_a_dark_ambient_slot() {
             vec![0x0C, 0x00],           // LED1_PA (red) dark
             vec![0x0D, 0x00],           // LED2_PA (IR) dark
             vec![0x0E, LED_PA_DEFAULT], // LED3_PA (green) <- drive seed
+            vec![0x0F, 0x00],           // LED4_PA (second green) dark
             vec![0x11, 0x03],           // SLOT_12 <- slot1 = LED3 green, slot2 = none
             vec![0x12, 0x00],           // SLOT_34 <- disabled
             vec![0x09, 0x07],           // MODE_CONFIG <- multi-LED
