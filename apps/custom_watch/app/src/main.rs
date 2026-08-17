@@ -32,6 +32,7 @@ use nrf_softdevice::Softdevice;
 mod panic;
 mod run_flash;
 mod state;
+mod supply;
 mod tasks;
 
 /// Say something before halting on a hard fault.
@@ -97,6 +98,10 @@ async fn main(spawner: Spawner) {
 
     let board = Board::split(p);
     info!("custom_watch firmware booting (tier 1)");
+    // Before any peripheral is driven: say which supply path the SoC came up
+    // on, because one of them sets the GPIO logic level to 1.8 V by default and
+    // every breakout on this bench expects 3 V.
+    supply::report();
 
     let mut gps_config = uarte::Config::default();
     // The MAX-M10S's own factory default, so a receiver straight out of the bag
