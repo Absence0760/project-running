@@ -1412,6 +1412,8 @@ export const en = {
 	"settingsAccount.resetLinkSent": "Reset link sent. Check your email to set a new password.",
 	"settingsAccount.exportFailed": "Export failed: {error}",
 	"settingsAccount.exportReady": "Export ready ({count, plural, one {# run} other {# runs}}). The download tab will close once the file lands.",
+	"settingsAccount.exportPartialReady": "Export ready, but partial — {count, plural, one {# run} other {# runs}} of {total}.",
+	"settingsAccount.exportPartialNotice": "Your last export is partial: it holds {count} of the {total} runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.",
 	"settingsAccount.backupFailed": "Backup failed: {error}",
 	"settingsAccount.identitiesLoadFailed": "Failed to load sign-in methods: {error}",
 	"settingsAccount.linkFailed": "Could not link {provider}: {error}",

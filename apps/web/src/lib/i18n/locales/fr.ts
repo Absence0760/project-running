@@ -1404,6 +1404,8 @@ export const messages = {
 	"settingsAccount.resetLinkSent": "Lien de réinitialisation envoyé. Consulte tes e-mails pour définir un nouveau mot de passe.",
 	"settingsAccount.exportFailed": "Échec de l'export : {error}",
 	"settingsAccount.exportReady": "Export prêt ({count, plural, one {# course} other {# courses}}). L'onglet de téléchargement se fermera une fois le fichier reçu.",
+	"settingsAccount.exportPartialReady": "Export prêt, mais partiel — {count, plural, one {# course} other {# courses}} sur {total}.",
+	"settingsAccount.exportPartialNotice": "Ton dernier export est partiel : il contient {count} des {total} courses de ton compte. Rien n'a été supprimé — relance l'export pour réessayer. L'archive complète du compte indique chaque section incomplète dans son manifest.json.",
 	"settingsAccount.backupFailed": "Échec de la sauvegarde : {error}",
 	"settingsAccount.identitiesLoadFailed": "Échec du chargement des méthodes de connexion : {error}",
 	"settingsAccount.linkFailed": "Impossible de lier {provider} : {error}",

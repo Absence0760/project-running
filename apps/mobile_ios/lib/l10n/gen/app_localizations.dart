@@ -9910,6 +9910,18 @@ abstract class AppLocalizations {
   /// **'Backup failed: {error}'**
   String settingsAccountBackupFailed(Object error);
 
+  /// Banner shown after a server-built export that came back short of the account run history
+  ///
+  /// In en, this message translates to:
+  /// **'Export is partial — {count} of {total} runs.'**
+  String settingsAccountBackupPartial(int count, int total);
+
+  /// Persistent notice under the full-backup tile naming how short the last export was
+  ///
+  /// In en, this message translates to:
+  /// **'Your last export is partial: it holds {count} of the {total} runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.'**
+  String settingsAccountBackupPartialNotice(int count, int total);
+
   /// Banner shown when restore can't run because the local store is missing
   ///
   /// In en, this message translates to:

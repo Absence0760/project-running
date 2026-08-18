@@ -64,7 +64,8 @@ class BackupService {
   /// and a typical phone's connection pool isn't saturated.
   static const _kTrackDownloadConcurrency = 6;
 
-  /// Build a `.zip` and write it to [outputFile]. Returns the file.
+  /// Build a `.zip` and write it to [outputFile]. Returns the file plus
+  /// whatever the server said about the archive's completeness.
   ///
   /// Tracks are archived in their raw gzipped form — the same bytes
   /// that live in the `runs` Storage bucket — so restore can upload
@@ -84,7 +85,7 @@ class BackupService {
   /// from the device. They exist ONLY in `<appDocs>/runs/<id>.json`; without
   /// this the archive is a backup of the cloud, not of the phone, and a
   /// wipe-and-restore silently loses whatever hadn't synced.
-  Future<File> createBackup({
+  Future<BackupOutcome> createBackup({
     required File outputFile,
     LocalRunStore? runStore,
     LocalGymStore? gymStore,
@@ -113,15 +114,17 @@ class BackupService {
     // the archive from the cloud rows and cannot see this device's undrained
     // runs, so taking it would produce an archive missing them.
     final localOnly = runStore?.unsyncedRuns ?? const <cm.Run>[];
-    final didServer = localOnly.isNotEmpty
-        ? false
+    final serverSummary = localOnly.isNotEmpty
+        ? null
         : await tryServerBackup(
             serverClient: _serverClient,
             accessToken: client.auth.currentSession?.accessToken,
             outputFile: outputFile,
             onProgress: onProgress,
           );
-    if (didServer) return outputFile;
+    if (serverSummary != null) {
+      return BackupOutcome(outputFile, server: serverSummary);
+    }
 
     onProgress?.call(const BackupProgress.stage('runs'));
     final runs = await api.fetchRunRowsRaw();
@@ -182,7 +185,7 @@ class BackupService {
         (prefsRow != null && prefsRow['prefs'] is Map)
             ? Map<String, dynamic>.from(prefsRow['prefs'] as Map)
             : const <String, dynamic>{};
-    return writeBackupZipStreaming(
+    return BackupOutcome(await writeBackupZipStreaming(
       outputFile: outputFile,
       runsOut: runsOut,
       routesOut: routesOut,
@@ -198,16 +201,16 @@ class BackupService {
       fetchTrackBytes: (path) => api.downloadTrackBytes(path),
       concurrency: _kTrackDownloadConcurrency,
       onProgress: onProgress,
-    );
+    ));
   }
 
   /// Server-first attempt + partial-file cleanup, pulled out as a
   /// static helper so the orchestration is unit-testable without a
   /// live Supabase session.
   ///
-  /// Returns `true` when the server path was attempted **and**
-  /// succeeded — the caller treats the [outputFile] as a finished
-  /// backup. Returns `false` when:
+  /// Returns the server's completeness verdict when the server path
+  /// was attempted **and** succeeded — the caller treats the
+  /// [outputFile] as a finished backup. Returns null when:
   ///
   /// * the server is unconfigured (null client or empty baseUrl),
   /// * the access token is null or empty,
@@ -219,22 +222,22 @@ class BackupService {
   /// either way, so a transient server hiccup can't block a
   /// power-user backup.
   @visibleForTesting
-  static Future<bool> tryServerBackup({
+  static Future<ServerBackupSummary?> tryServerBackup({
     required BackupServerClient? serverClient,
     required String? accessToken,
     required File outputFile,
     void Function(BackupProgress)? onProgress,
   }) async {
-    if (serverClient == null || !serverClient.isConfigured) return false;
-    if (accessToken == null || accessToken.isEmpty) return false;
+    if (serverClient == null || !serverClient.isConfigured) return null;
+    if (accessToken == null || accessToken.isEmpty) return null;
     onProgress?.call(const BackupProgress.stage('server'));
     try {
-      await serverClient.fetchBackupToFile(
+      final summary = await serverClient.fetchBackupToFile(
         accessToken: accessToken,
         outputFile: outputFile,
       );
       onProgress?.call(const BackupProgress.done());
-      return true;
+      return summary;
     } catch (e) {
       debugPrint('[backup] server path failed, falling back to local: $e');
       // Clean up any partial download so the local writer doesn't
@@ -248,7 +251,7 @@ class BackupService {
           debugPrint('backup: partial-download cleanup failed: $e2');
         }
       }
-      return false;
+      return null;
     }
   }
 
@@ -996,6 +999,24 @@ class BackupService {
   }
 
   String _randomUuid() => const Uuid().v4();
+}
+
+/// A finished archive plus what the server said about it. [server] is
+/// null whenever the local writer built the file — that path has no
+/// server verdict to report, so the UI makes no completeness claim
+/// about it either way.
+class BackupOutcome {
+  final File file;
+  final ServerBackupSummary? server;
+  const BackupOutcome(this.file, {this.server});
+
+  /// The server built this archive and told us it is short of the
+  /// account's run history. Null when the archive is whole, or when
+  /// there is no server verdict to read.
+  ServerBackupSummary? get shortfall {
+    final s = server;
+    return s != null && !s.complete ? s : null;
+  }
 }
 
 class BackupProgress {

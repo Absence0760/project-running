@@ -1677,6 +1677,8 @@
   "settingsAccountBackupPreparing": "Backup wird vorbereitet…",
   "settingsAccountBackupShareText": "Run-App-Backup",
   "settingsAccountBackupFailed": "Backup fehlgeschlagen: {error}",
+  "settingsAccountBackupPartial": "Export unvollständig — {count} von {total} Läufen.",
+  "settingsAccountBackupPartialNotice": "Dein letzter Export ist unvollständig: Er enthält {count} der {total} Läufe in deinem Konto. Es wurde nichts gelöscht — exportiere erneut, um es noch einmal zu versuchen. Das vollständige Kontoarchiv nennt jeden unvollständigen Abschnitt in seiner manifest.json.",
   "settingsAccountRestoreUnavailable": "Backup-Dienst nicht verfügbar.",
   "settingsAccountRestoreTitle": "Aus Backup wiederherstellen?",
   "settingsAccountRestoreBodyOffline": "Du bist nicht angemeldet. Läufe werden auf diesem Gerät wiederhergestellt und beim nächsten Anmelden mit deinem Konto synchronisiert.",

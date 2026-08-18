@@ -6024,6 +6024,16 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Exportación parcial: $count de $total carreras.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Tu última exportación es parcial: contiene $count de las $total carreras de tu cuenta. No se borró nada; vuelve a exportar para reintentarlo. El archivo completo de la cuenta indica cada sección incompleta en su manifest.json.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Servicio de copia de seguridad no disponible.';
 

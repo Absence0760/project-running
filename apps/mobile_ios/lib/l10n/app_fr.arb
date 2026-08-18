@@ -1677,6 +1677,8 @@
   "settingsAccountBackupPreparing": "Préparation de la sauvegarde…",
   "settingsAccountBackupShareText": "Sauvegarde Run app",
   "settingsAccountBackupFailed": "Échec de la sauvegarde : {error}",
+  "settingsAccountBackupPartial": "Export partiel — {count} courses sur {total}.",
+  "settingsAccountBackupPartialNotice": "Ton dernier export est partiel : il contient {count} des {total} courses de ton compte. Rien n'a été supprimé — relance l'export pour réessayer. L'archive complète du compte indique chaque section incomplète dans son manifest.json.",
   "settingsAccountRestoreUnavailable": "Service de sauvegarde indisponible.",
   "settingsAccountRestoreTitle": "Restaurer depuis la sauvegarde ?",
   "settingsAccountRestoreBodyOffline": "Tu n'es pas connecté. Les courses seront restaurées sur cet appareil et synchronisées avec ton compte lors de ta prochaine connexion.",

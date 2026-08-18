@@ -6023,6 +6023,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Exportação parcial — $count de $total corridas.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Sua última exportação está parcial: contém $count das $total corridas da sua conta. Nada foi excluído — exporte de novo para tentar outra vez. O arquivo completo da conta lista cada seção incompleta no manifest.json.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Serviço de backup indisponível.';
 
@@ -18679,6 +18689,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String settingsAccountBackupFailed(Object error) {
     return 'Falha no backup: $error';
+  }
+
+  @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Exportação parcial — $count de $total corridas.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Sua última exportação está parcial: contém $count das $total corridas da sua conta. Nada foi excluído — exporte de novo para tentar outra vez. O arquivo completo da conta lista cada seção incompleta no manifest.json.';
   }
 
   @override

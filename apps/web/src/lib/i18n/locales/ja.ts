@@ -1399,6 +1399,8 @@ export const messages = {
 	"settingsAccount.resetLinkSent": "リセットリンクを送信しました。メールを確認して新しいパスワードを設定してください。",
 	"settingsAccount.exportFailed": "エクスポートに失敗しました: {error}",
 	"settingsAccount.exportReady": "エクスポートの準備ができました（{count, plural, other {# 件のラン}}）。ファイルが届くとダウンロードタブは閉じます。",
+	"settingsAccount.exportPartialReady": "エクスポートは完了しましたが、一部のみです — {total} 件中 {count, plural, other {# 件のラン}}。",
+	"settingsAccount.exportPartialNotice": "前回のエクスポートは一部のみです。アカウントにある {total} 件のランのうち {count} 件を含んでいます。データは削除されていません — もう一度エクスポートしてください。アカウント全体のアーカイブでは、不完全なセクションが manifest.json に記載されます。",
 	"settingsAccount.backupFailed": "バックアップに失敗しました: {error}",
 	"settingsAccount.identitiesLoadFailed": "ログイン方法を読み込めませんでした: {error}",
 	"settingsAccount.linkFailed": "{provider} をリンクできませんでした: {error}",

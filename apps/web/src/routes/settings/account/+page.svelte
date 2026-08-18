@@ -37,6 +37,11 @@
 		getCurrentSubscription,
 	} from '$lib/util/push';
 	import { cloudExport } from '$lib/backup/cloud_export';
+	import {
+		type CloudExportResponse,
+		type CloudExportShortfall,
+		cloudExportShortfall,
+	} from '$lib/backup/cloud_export_helpers';
 	import { m } from '$lib/i18n/store.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { isCyclePlansEnabled } from '$lib/training/cycle_plan_flag';
@@ -95,6 +100,12 @@
 	let exportingJson = $state(false);
 	let exportingGpx = $state(false);
 	let exportingArchive = $state(false);
+	/// Last server-built export that came back short of the account's run
+	/// history. Kept on the page rather than only toasted: a truncated
+	/// Art. 20 export is a claim the runner has to be able to re-read
+	/// after the toast has gone, and the archive itself only says so
+	/// inside manifest.json.
+	let exportShortfall = $state<CloudExportShortfall | null>(null);
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
@@ -653,6 +664,25 @@
 		}
 	}
 
+	/// Report a finished server-built export. A whole archive gets the
+	/// success toast it always got; a short one says so instead of
+	/// claiming it is ready, and leaves the counts on the page.
+	function announceExport(res: CloudExportResponse) {
+		const short = cloudExportShortfall(res);
+		exportShortfall = short;
+		if (short) {
+			showToast(
+				m('settingsAccount.exportPartialReady', {
+					count: short.count,
+					total: short.total,
+				}),
+				'info',
+			);
+			return;
+		}
+		showToast(m('settingsAccount.exportReady', { count: res.count }), 'success');
+	}
+
 	/// Server-built GPX zip download. Calls /v1/export on the Go
 	/// service (or the legacy `export-data` Edge Function when
 	/// PUBLIC_EXPORT_HUB_URL is unset). The server builds the zip
@@ -670,10 +700,7 @@
 			// preserves the user's settings tab — the browser swaps to
 			// a download tab, then auto-closes after the GET completes.
 			window.open(res.url, '_blank', 'noopener');
-			showToast(
-				m('settingsAccount.exportReady', { count: res.count }),
-				'success',
-			);
+			announceExport(res);
 		} catch (e) {
 			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
 		} finally {
@@ -697,10 +724,7 @@
 		try {
 			const res = await cloudExport('backup');
 			window.open(res.url, '_blank', 'noopener');
-			showToast(
-				m('settingsAccount.exportReady', { count: res.count }),
-				'success',
-			);
+			announceExport(res);
 		} catch (e) {
 			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
 		} finally {
@@ -1371,6 +1395,14 @@
 		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
 			<strong>{m('settingsAccount.fullArchiveFootnotePrefix')}</strong>{m('settingsAccount.fullArchiveFootnoteSuffix')}
 		</p>
+		{#if exportShortfall}
+			<p class="warn-text" role="status" data-testid="export-shortfall">
+				{m('settingsAccount.exportPartialNotice', {
+					count: exportShortfall.count,
+					total: exportShortfall.total,
+				})}
+			</p>
+		{/if}
 	</section>
 
 	<section class="card">
@@ -1546,6 +1578,7 @@
 	.handle-help { display: block; font-size: 0.78rem; color: var(--color-text-tertiary); margin-top: var(--space-xs); }
 	.error-text { color: var(--color-danger-text); font-size: 0.85rem; margin-top: var(--space-sm); }
 	.ok-text { color: var(--color-success-text); font-size: 0.85rem; margin-top: var(--space-sm); }
+	.warn-text { color: var(--color-warning-text); font-size: 0.85rem; margin-top: var(--space-sm); }
 	.danger-heading { color: var(--color-danger-text); }
 	.material-symbols { font-family: 'Material Symbols Outlined'; font-size: 1.1rem; }
 	.muted { color: var(--color-text-tertiary); font-size: 0.9rem; }

@@ -5675,6 +5675,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'エクスポートは一部のみです — $total 件中 $count 件のラン。';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return '前回のエクスポートは一部のみです。アカウントにある $total 件のランのうち $count 件を含んでいます。データは削除されていません — もう一度エクスポートしてください。アカウント全体のアーカイブでは、不完全なセクションが manifest.json に記載されます。';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable => 'バックアップサービスを利用できません。';
 
   @override

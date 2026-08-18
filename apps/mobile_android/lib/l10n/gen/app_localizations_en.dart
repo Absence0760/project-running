@@ -5960,6 +5960,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Export is partial — $count of $total runs.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Your last export is partial: it holds $count of the $total runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable => 'Backup service unavailable.';
 
   @override

@@ -1677,6 +1677,8 @@
   "settingsAccountBackupPreparing": "Preparando la copia de seguridad…",
   "settingsAccountBackupShareText": "Copia de seguridad de Run app",
   "settingsAccountBackupFailed": "Error en la copia de seguridad: {error}",
+  "settingsAccountBackupPartial": "Exportación parcial: {count} de {total} carreras.",
+  "settingsAccountBackupPartialNotice": "Tu última exportación es parcial: contiene {count} de las {total} carreras de tu cuenta. No se borró nada; vuelve a exportar para reintentarlo. El archivo completo de la cuenta indica cada sección incompleta en su manifest.json.",
   "settingsAccountRestoreUnavailable": "Servicio de copia de seguridad no disponible.",
   "settingsAccountRestoreTitle": "¿Restaurar desde la copia de seguridad?",
   "settingsAccountRestoreBodyOffline": "No has iniciado sesión. Las carreras se restaurarán en este dispositivo y se sincronizarán con tu cuenta la próxima vez que inicies sesión.",

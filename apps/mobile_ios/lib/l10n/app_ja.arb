@@ -1677,6 +1677,8 @@
   "settingsAccountBackupPreparing": "バックアップを準備しています…",
   "settingsAccountBackupShareText": "Run app バックアップ",
   "settingsAccountBackupFailed": "バックアップに失敗しました：{error}",
+  "settingsAccountBackupPartial": "エクスポートは一部のみです — {total} 件中 {count} 件のラン。",
+  "settingsAccountBackupPartialNotice": "前回のエクスポートは一部のみです。アカウントにある {total} 件のランのうち {count} 件を含んでいます。データは削除されていません — もう一度エクスポートしてください。アカウント全体のアーカイブでは、不完全なセクションが manifest.json に記載されます。",
   "settingsAccountRestoreUnavailable": "バックアップサービスを利用できません。",
   "settingsAccountRestoreTitle": "バックアップから復元しますか？",
   "settingsAccountRestoreBodyOffline": "サインインしていません。ランはこの端末に復元され、次回サインインしたときにアカウントと同期されます。",

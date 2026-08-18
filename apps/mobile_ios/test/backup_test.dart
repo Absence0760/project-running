@@ -6,12 +6,14 @@ import 'package:api_client/api_client.dart';
 import 'package:archive/archive.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:archive/archive_io.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/backup.dart';
 import '../lib/backup_server_client.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/local_route_store.dart';
@@ -993,37 +995,80 @@ void main() {
     });
   });
 
+  // ---- truncated-export disclosure ------------------------------------
+  //
+  // The server caps an export at 5 000 runs and reports `complete:
+  // false` when the archive is short of the account. Until this landed,
+  // both clients said only "your export is ready" and the shortfall was
+  // visible nowhere but inside the archive's own manifest.json.
+  group('BackupOutcome.shortfall', () {
+    final file = File('/tmp/does-not-need-to-exist.zip');
+
+    test('a whole server archive discloses nothing', () {
+      final outcome = BackupOutcome(file,
+          server: const ServerBackupSummary(
+              count: 12, total: 12, complete: true));
+      expect(outcome.shortfall, isNull);
+    });
+
+    test('a truncated server archive reports both counts', () {
+      final outcome = BackupOutcome(file,
+          server: const ServerBackupSummary(
+              count: 5000, total: 7412, complete: false));
+      expect(outcome.shortfall?.count, 5000);
+      expect(outcome.shortfall?.total, 7412);
+    });
+
+    test('a locally-built archive makes no completeness claim', () {
+      // The local writer has no server verdict to read, so the screen
+      // must not label its output partial OR whole from this field.
+      expect(BackupOutcome(file).shortfall, isNull);
+    });
+
+    test('the disclosure copy names both counts', () {
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      final banner = l10n.settingsAccountBackupPartial(5000, 7412);
+      expect(banner, contains('5000'));
+      expect(banner, contains('7412'));
+      final notice = l10n.settingsAccountBackupPartialNotice(5000, 7412);
+      expect(notice, contains('5000'));
+      expect(notice, contains('7412'));
+      expect(notice, contains('manifest.json'));
+    });
+  });
+
   // ---- tryServerBackup orchestration ----------------------------------
   //
   // The extracted helper that decides whether to attempt the Go
   // service's /v1/export?format=backup path. Drives all the
   // server-first branches createBackup composes — without needing
   // a live Supabase session or a real network. Production failure
-  // returns false + cleans up any partial file so the local writer
-  // sees a clean slate.
+  // returns null + cleans up any partial file so the local writer
+  // sees a clean slate; success returns the server's completeness
+  // verdict so the screen can disclose a truncated archive.
   group('tryServerBackup', () {
-    test('returns false when serverClient is null', () async {
+    test('returns null when serverClient is null', () async {
       final file = File('${tempDir.path}/backup.zip');
       final result = await BackupService.tryServerBackup(
         serverClient: null,
         accessToken: 'tok',
         outputFile: file,
       );
-      expect(result, isFalse);
+      expect(result, isNull);
       expect(file.existsSync(), isFalse);
     });
 
-    test('returns false when serverClient has empty baseUrl', () async {
+    test('returns null when serverClient has empty baseUrl', () async {
       final file = File('${tempDir.path}/backup.zip');
       final result = await BackupService.tryServerBackup(
         serverClient: BackupServerClient(baseUrl: ''),
         accessToken: 'tok',
         outputFile: file,
       );
-      expect(result, isFalse);
+      expect(result, isNull);
     });
 
-    test('returns false when accessToken is null', () async {
+    test('returns null when accessToken is null', () async {
       var called = false;
       final stub = BackupServerClient(
         baseUrl: 'https://example/',
@@ -1038,12 +1083,12 @@ void main() {
         accessToken: null,
         outputFile: file,
       );
-      expect(result, isFalse);
+      expect(result, isNull);
       expect(called, isFalse,
           reason: 'request fetcher must not fire when token is null');
     });
 
-    test('returns false when accessToken is empty string', () async {
+    test('returns null when accessToken is empty string', () async {
       var called = false;
       final stub = BackupServerClient(
         baseUrl: 'https://example/',
@@ -1058,11 +1103,11 @@ void main() {
         accessToken: '',
         outputFile: file,
       );
-      expect(result, isFalse);
+      expect(result, isNull);
       expect(called, isFalse);
     });
 
-    test('returns true + writes file on server success', () async {
+    test('returns the summary + writes file on server success', () async {
       var requestCount = 0;
       var downloadCount = 0;
       final stub = BackupServerClient(
@@ -1086,13 +1131,16 @@ void main() {
         accessToken: 'tok-abc',
         outputFile: file,
       );
-      expect(result, isTrue);
+      expect(result, isNotNull);
+      expect(result!.count, 12);
+      expect(result.total, 12);
+      expect(result.complete, isTrue);
       expect(requestCount, 1);
       expect(downloadCount, 1);
       expect(file.existsSync(), isTrue);
     });
 
-    test('returns false + deletes partial file when fetchBackupToFile throws',
+    test('returns null + deletes partial file when fetchBackupToFile throws',
         () async {
       final stub = BackupServerClient(
         baseUrl: 'https://example/',
@@ -1113,14 +1161,14 @@ void main() {
         accessToken: 'tok-abc',
         outputFile: file,
       );
-      expect(result, isFalse,
+      expect(result, isNull,
           reason: 'failure should not be reported as a successful server run');
       expect(file.existsSync(), isFalse,
           reason: 'partial file must be cleaned up so the local '
               'writer sees a clean slate');
     });
 
-    test('returns false on non-200 server response (no partial file)', () async {
+    test('returns null on non-200 server response (no partial file)', () async {
       final stub = BackupServerClient(
         baseUrl: 'https://example/',
         requestFetcher: (_, __, ___) async => (
@@ -1135,7 +1183,7 @@ void main() {
         accessToken: 'tok-abc',
         outputFile: file,
       );
-      expect(result, isFalse);
+      expect(result, isNull);
       expect(file.existsSync(), isFalse);
     });
 
@@ -1209,7 +1257,7 @@ void main() {
         accessToken: 'tok',
         outputFile: file,
       );
-      expect(result, isFalse);
+      expect(result, isNull);
       expect(file.existsSync(), isFalse);
     });
   });

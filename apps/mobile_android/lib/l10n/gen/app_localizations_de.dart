@@ -6034,6 +6034,16 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Export unvollständig — $count von $total Läufen.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Dein letzter Export ist unvollständig: Er enthält $count der $total Läufe in deinem Konto. Es wurde nichts gelöscht — exportiere erneut, um es noch einmal zu versuchen. Das vollständige Kontoarchiv nennt jeden unvollständigen Abschnitt in seiner manifest.json.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Backup-Dienst nicht verfügbar.';
 
