@@ -5,8 +5,8 @@
 // whether they were finishing it.
 //
 // Pure — no Svelte / Supabase dependencies, so it runs under `npx tsx --test`.
-// Web-only: mobile's routine detail screen reads its own LocalRoutineStore and
-// has no consumer for this shaping, so there is deliberately no Dart twin.
+// TS↔Dart parity pair with `apps/mobile_android/lib/routine_history.dart` —
+// keep the algorithm, edge cases, outputs, and test counts in lockstep.
 
 import { hasSessionDraft } from './gym_session_draft';
 import type { RoutineVerdict } from './gym_adherence';
