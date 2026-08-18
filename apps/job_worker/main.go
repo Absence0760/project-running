@@ -57,10 +57,10 @@ func (b *dataexportBackend) CheckRateLimitTiered(ctx context.Context, userID, bu
 	return b.client.CheckRateLimitTiered(ctx, userID, bucket, freeMax, proMax, windowSec)
 }
 
-func (b *dataexportBackend) FetchExportRuns(ctx context.Context, userID string, limit int) ([]dataexport.ExportRun, error) {
-	rows, err := b.client.FetchExportRuns(ctx, userID, limit)
+func (b *dataexportBackend) FetchExportRuns(ctx context.Context, userID string, limit int) ([]dataexport.ExportRun, dataexport.ExportCompleteness, error) {
+	rows, comp, err := b.client.FetchExportRuns(ctx, userID, limit)
 	if err != nil {
-		return nil, err
+		return nil, exportCompleteness(comp), err
 	}
 	out := make([]dataexport.ExportRun, len(rows))
 	for i, r := range rows {
@@ -74,7 +74,7 @@ func (b *dataexportBackend) FetchExportRuns(ctx context.Context, userID string, 
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		}
 	}
-	return out, nil
+	return out, exportCompleteness(comp), nil
 }
 
 func (b *dataexportBackend) DownloadTrackBytes(ctx context.Context, path string) ([]dataexport.TrackPoint, error) {
@@ -101,10 +101,10 @@ func (b *dataexportBackend) DownloadTrackBytes(ctx context.Context, path string)
 	return out, nil
 }
 
-func (b *dataexportBackend) FetchExportRoutes(ctx context.Context, userID string) ([]dataexport.ExportRoute, error) {
-	rows, err := b.client.FetchExportRoutes(ctx, userID)
+func (b *dataexportBackend) FetchExportRoutes(ctx context.Context, userID string) ([]dataexport.ExportRoute, dataexport.ExportCompleteness, error) {
+	rows, comp, err := b.client.FetchExportRoutes(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, exportCompleteness(comp), err
 	}
 	out := make([]dataexport.ExportRoute, len(rows))
 	for i, r := range rows {
@@ -117,7 +117,7 @@ func (b *dataexportBackend) FetchExportRoutes(ctx context.Context, userID string
 			ClubID: r.ClubID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		}
 	}
-	return out, nil
+	return out, exportCompleteness(comp), nil
 }
 
 func (b *dataexportBackend) FetchExportProfile(ctx context.Context, userID string) (map[string]interface{}, error) {
@@ -144,8 +144,15 @@ func (b *dataexportBackend) ListStorageObjects(ctx context.Context, bucket, pref
 	return b.client.ListStorageObjects(ctx, bucket, prefix)
 }
 
-func (b *dataexportBackend) FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, error) {
-	return b.client.FetchExportPersonalDataTables(ctx, userID)
+func (b *dataexportBackend) FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, dataexport.ExportCompleteness, error) {
+	rows, comp, err := b.client.FetchExportPersonalDataTables(ctx, userID)
+	return rows, exportCompleteness(comp), err
+}
+
+// exportCompleteness bridges the two mirror types — `internal` stays a
+// leaf and doesn't import `dataexport`, same as ExportRun/ExportRoute.
+func exportCompleteness(c internal.ExportCompleteness) dataexport.ExportCompleteness {
+	return dataexport.ExportCompleteness{Totals: c.Totals, Incomplete: c.Incomplete}
 }
 
 func (b *dataexportBackend) UploadExportArtifact(ctx context.Context, path, contentType string, body []byte) error {

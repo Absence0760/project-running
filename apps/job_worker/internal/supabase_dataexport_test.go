@@ -43,7 +43,7 @@ func TestFetchExportRoutes_HappyPath(t *testing.T) {
 			{"id":"rt-2","name":"Trail run","waypoints":[{"lat":51.5,"lng":-0.1},{"lat":51.6,"lng":-0.2}],"distance_m":10000,"surface":"trail"}
 		]`))
 	})
-	rows, err := client.FetchExportRoutes(context.Background(), "user-A")
+	rows, _, err := client.FetchExportRoutes(context.Background(), "user-A")
 	if err != nil {
 		t.Fatalf("FetchExportRoutes: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestFetchExportRoutes_EmptyResultReturnsEmptySlice(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[]`))
 	})
-	rows, err := client.FetchExportRoutes(context.Background(), "user-A")
+	rows, _, err := client.FetchExportRoutes(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestFetchExportRoutes_5xxReturnsHTTPError(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db down", http.StatusInternalServerError)
 	})
-	_, err := client.FetchExportRoutes(context.Background(), "user-A")
+	_, _, err := client.FetchExportRoutes(context.Background(), "user-A")
 	if err == nil {
 		t.Fatal("expected error on 500")
 	}
@@ -107,7 +107,7 @@ func TestFetchExportRoutes_MalformedJSONReturnsError(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{not valid json`))
 	})
-	_, err := client.FetchExportRoutes(context.Background(), "user-A")
+	_, _, err := client.FetchExportRoutes(context.Background(), "user-A")
 	if err == nil {
 		t.Fatal("expected error on malformed JSON")
 	}
@@ -121,7 +121,7 @@ func TestFetchExportRoutes_UrlEncodesUserId(t *testing.T) {
 		capturedRaw = r.URL.RawQuery
 		_, _ = w.Write([]byte(`[]`))
 	})
-	_, err := client.FetchExportRoutes(context.Background(), "user+with+plus")
+	_, _, err := client.FetchExportRoutes(context.Background(), "user+with+plus")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +461,7 @@ func TestFetchExportRoutes_OptionalPointerFieldsRoundTrip(t *testing.T) {
 		})
 		_, _ = w.Write(body)
 	})
-	rows, err := client.FetchExportRoutes(context.Background(), "user-A")
+	rows, _, err := client.FetchExportRoutes(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -514,7 +514,7 @@ func TestFetchExportRoutes_RespectsContextCancellation(t *testing.T) {
 		// race-friendly because the assertion is "err != nil".
 		cancel()
 	}()
-	_, err := client.FetchExportRoutes(ctx, "user-A")
+	_, _, err := client.FetchExportRoutes(ctx, "user-A")
 	if err == nil {
 		t.Fatal("expected error on context cancel")
 	}
@@ -558,7 +558,7 @@ func TestSupabaseClient_AllNewMethodsCarryAuthHeaders(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := NewSupabaseClient(srv.URL, testServiceKey)
 
-	_, _ = c.FetchExportRoutes(context.Background(), "user-A")
+	_, _, _ = c.FetchExportRoutes(context.Background(), "user-A")
 	_, _ = c.FetchExportProfile(context.Background(), "user-A")
 	_, _ = c.FetchUserSettingsPrefs(context.Background(), "user-A")
 	_, _ = c.DownloadRawTrackBytes(context.Background(), "user-A/r.json.gz")
@@ -601,7 +601,7 @@ func TestFetchExportPersonalDataTables_RunGearUsesTwoStepFetch(t *testing.T) {
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	_, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	_, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatalf("FetchExportPersonalDataTables: %v", err)
 	}
@@ -644,7 +644,7 @@ func TestFetchExportPersonalDataTables_RunGearSkippedWhenUserHasNoGear(t *testin
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -665,7 +665,7 @@ func TestFetchExportPersonalDataTables_RedactsDeviceTokens(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -698,7 +698,7 @@ func TestFetchExportPersonalDataTables_IntegrationsSelectIncludesDisconnectColum
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	_, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	_, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatalf("FetchExportPersonalDataTables: %v", err)
 	}
@@ -742,7 +742,7 @@ func TestFetchExportPersonalDataTables_IncludesUserSettings(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -776,7 +776,7 @@ func TestFetchExportPersonalDataTables_PerTableErrorIsTolerated(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[{"id":"x"}]`))
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Errorf("per-table failures must be swallowed; got err=%v", err)
 	}
@@ -828,7 +828,7 @@ func TestFetchExportPersonalDataTables_IncludesAuditCompletenessTables(t *testin
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -882,7 +882,7 @@ func TestFetchExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T)
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -953,7 +953,7 @@ func TestFetchExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1010,7 +1010,7 @@ func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T)
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1067,7 +1067,7 @@ func TestFetchExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1124,7 +1124,7 @@ func TestFetchExportPersonalDataTables_IncludesGymRoutines(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}

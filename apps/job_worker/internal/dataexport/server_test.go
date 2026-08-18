@@ -55,6 +55,10 @@ type fakeBackend struct {
 	// per-bucket object listings for the orphan sweep (format=backup only).
 	listedObjects map[string][]string
 	listErr       error
+	// completeness the fetchers report back (paging ledger).
+	runsComp   ExportCompleteness
+	routesComp ExportCompleteness
+	extrasComp ExportCompleteness
 }
 
 type uploadCall struct {
@@ -67,8 +71,8 @@ func (f *fakeBackend) CheckRateLimitTiered(_ context.Context, _, _ string, _, _,
 	return f.denied, f.retryAfter, f.rateErr
 }
 
-func (f *fakeBackend) FetchExportRuns(_ context.Context, _ string, _ int) ([]ExportRun, error) {
-	return f.runs, f.runsErr
+func (f *fakeBackend) FetchExportRuns(_ context.Context, _ string, _ int) ([]ExportRun, ExportCompleteness, error) {
+	return f.runs, f.runsComp, f.runsErr
 }
 
 func (f *fakeBackend) DownloadTrackBytes(_ context.Context, path string) ([]TrackPoint, error) {
@@ -93,8 +97,8 @@ func (f *fakeBackend) CreateSignedURL(_ context.Context, _ string, _ int) (strin
 	return f.signedURL, nil
 }
 
-func (f *fakeBackend) FetchExportRoutes(_ context.Context, _ string) ([]ExportRoute, error) {
-	return f.routes, f.routesErr
+func (f *fakeBackend) FetchExportRoutes(_ context.Context, _ string) ([]ExportRoute, ExportCompleteness, error) {
+	return f.routes, f.routesComp, f.routesErr
 }
 
 func (f *fakeBackend) FetchExportProfile(_ context.Context, _ string) (map[string]interface{}, error) {
@@ -107,8 +111,8 @@ func (f *fakeBackend) FetchUserSettingsPrefs(_ context.Context, _ string) (map[s
 
 func (f *fakeBackend) FetchExportPersonalDataTables(
 	_ context.Context, _ string,
-) (map[string][]map[string]interface{}, error) {
-	return f.extraTables, f.extraTablesErr
+) (map[string][]map[string]interface{}, ExportCompleteness, error) {
+	return f.extraTables, f.extrasComp, f.extraTablesErr
 }
 
 func (f *fakeBackend) DownloadRawTrackBytes(_ context.Context, path string) ([]byte, error) {
@@ -1832,5 +1836,96 @@ func TestGpxFloat_NeverUsesScientificNotation(t *testing.T) {
 		if strings.ContainsAny(got, "eE") {
 			t.Errorf("gpxFloat(%v) = %q contains an exponent — invalid xsd:decimal", c.in, got)
 		}
+	}
+}
+
+// ─────────────────── manifest honesty ───────────────────
+//
+// The manifest's per-table count is the AUTHORITATIVE row count the
+// database holds, not the number of rows this archive happens to carry.
+// A section the pager could not read in full is named in `incomplete`
+// and flips `complete` to false — the check a data subject (or a
+// regulator) runs is "does runs.json hold counts.runs rows", and a
+// count copied from the truncated fetch defeats exactly that check.
+
+func manifestOf(t *testing.T, zipped []byte) map[string]any {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(zipped), int64(len(zipped)))
+	if err != nil {
+		t.Fatalf("zip parse: %v", err)
+	}
+	for _, f := range zr.File {
+		if f.Name != "manifest.json" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open manifest: %v", err)
+		}
+		defer rc.Close()
+		buf, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("read manifest: %v", err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(buf, &m); err != nil {
+			t.Fatalf("manifest parse: %v", err)
+		}
+		return m
+	}
+	t.Fatal("no manifest.json in the archive")
+	return nil
+}
+
+func TestBuildBackupZip_ManifestCountsTheDatabaseNotTheArchive(t *testing.T) {
+	zipped, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs:   []ExportRun{{ID: "r-1", UserID: "uid"}, {ID: "r-2", UserID: "uid"}},
+		UserID: "uid",
+		ExtraTables: map[string][]map[string]interface{}{
+			"food_log.json": {{"id": "f-1"}},
+		},
+		Completeness: ExportCompleteness{
+			Totals:     map[string]int{"runs": 12000, "food_log": 4000},
+			Incomplete: []string{"runs", "food_log"},
+		},
+	}, BackupFetchers{})
+	if err != nil {
+		t.Fatalf("BuildBackupZip: %v", err)
+	}
+	m := manifestOf(t, zipped)
+	if m["complete"] != false {
+		t.Errorf("complete=%v; a short archive must not claim completeness", m["complete"])
+	}
+	inc, _ := m["incomplete"].([]any)
+	if len(inc) != 2 || inc[0] != "food_log" || inc[1] != "runs" {
+		t.Errorf("incomplete=%v; want both short sections, sorted", m["incomplete"])
+	}
+	counts := m["counts"].(map[string]any)
+	if counts["runs"] != float64(12000) {
+		t.Errorf("counts.runs=%v; want the database's 12000, not the 2 rows exported", counts["runs"])
+	}
+	if counts["food_log"] != float64(4000) {
+		t.Errorf("counts.food_log=%v; want 4000", counts["food_log"])
+	}
+}
+
+func TestBuildBackupZip_CompleteExportSaysSo(t *testing.T) {
+	zipped, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs:         []ExportRun{{ID: "r-1", UserID: "uid"}},
+		UserID:       "uid",
+		Completeness: ExportCompleteness{Totals: map[string]int{"runs": 1}},
+	}, BackupFetchers{})
+	if err != nil {
+		t.Fatalf("BuildBackupZip: %v", err)
+	}
+	m := manifestOf(t, zipped)
+	if m["complete"] != true {
+		t.Errorf("complete=%v; a whole archive should say so", m["complete"])
+	}
+	if inc, _ := m["incomplete"].([]any); len(inc) != 0 {
+		t.Errorf("incomplete=%v; want empty", inc)
+	}
+	if m["counts"].(map[string]any)["runs"] != float64(1) {
+		t.Errorf("counts=%v", m["counts"])
 	}
 }
