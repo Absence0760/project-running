@@ -1618,8 +1618,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'No GPS — tracking will start when permission is granted.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.';
+  String get runBackgroundLocationPaused =>
+      'Tracking paused while you were away — your run kept timing and nothing was lost, but distance covered off screen wasn’t counted. Set Location to \"Allow all the time\" to track in the background.';
 
   @override
   String get runGpsSensorFailed =>

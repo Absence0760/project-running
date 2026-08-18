@@ -459,7 +459,7 @@
   "runGpsNoServiceSettings": "Kein GPS — die Aufzeichnung startet, sobald der Standort aktiv ist.",
   "runGpsBlockedSettings": "Kein GPS — Berechtigung blockiert. Aktiviere sie, um die Route aufzuzeichnen.",
   "runGpsPermissionPending": "Kein GPS — die Aufzeichnung startet, sobald die Berechtigung erteilt ist.",
-  "runGpsAllowAllTheTime": "Stelle den Standort auf „Immer zulassen“ — Läufe stoppen die Aufzeichnung, wenn du ohne Hintergrundberechtigung die App wechselst.",
+  "runBackgroundLocationPaused": "Die Aufzeichnung pausierte, während du weg warst — die Zeit lief weiter und nichts ging verloren, aber die Distanz außerhalb des Bildschirms wurde nicht gezählt. Stelle den Standort auf „Immer zulassen“, um im Hintergrund aufzuzeichnen.",
   "runGpsSensorFailed": "Aufzeichnung ohne GPS — der Sensor konnte nicht gestartet werden.",
   "runAgoJustNow": "Gerade eben",
   "runAgoMinutes": "vor {count} Min.",

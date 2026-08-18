@@ -1557,8 +1557,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runGpsPermissionPending => 'GPSなし — 権限が許可されると記録が始まります。';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      '位置情報を「常に許可」に設定してください — バックグラウンド権限がないと、アプリを切り替えた時点で記録が停止します。';
+  String get runBackgroundLocationPaused =>
+      'アプリを離れている間、位置情報の記録が一時停止しました — タイムは計測を続け、記録済みのデータは失われていませんが、画面外で進んだ距離は加算されていません。バックグラウンドでも記録するには、位置情報を「常に許可」に設定してください。';
 
   @override
   String get runGpsSensorFailed => 'GPSなしで記録中 — センサーを開始できませんでした。';

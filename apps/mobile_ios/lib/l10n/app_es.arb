@@ -459,7 +459,7 @@
   "runGpsNoServiceSettings": "Sin GPS — el seguimiento empezará cuando la Ubicación esté activada.",
   "runGpsBlockedSettings": "Sin GPS — permiso bloqueado. Actívalo para seguir la ruta.",
   "runGpsPermissionPending": "Sin GPS — el seguimiento empezará cuando se conceda el permiso.",
-  "runGpsAllowAllTheTime": "Configura la Ubicación en «Permitir siempre» — las carreras dejan de grabarse cuando cambias de app sin permiso en segundo plano.",
+  "runBackgroundLocationPaused": "El seguimiento se pausó mientras no estabas — el tiempo siguió corriendo y no se perdió nada, pero la distancia fuera de pantalla no se contó. Configura la Ubicación en «Permitir siempre» para seguir registrando en segundo plano.",
   "runGpsSensorFailed": "Grabando sin GPS — no se pudo iniciar el sensor.",
   "runAgoJustNow": "Ahora mismo",
   "runAgoMinutes": "hace {count} min",

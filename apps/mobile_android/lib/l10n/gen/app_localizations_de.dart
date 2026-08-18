@@ -1636,8 +1636,8 @@ class AppLocalizationsDe extends AppLocalizations {
       'Kein GPS — die Aufzeichnung startet, sobald die Berechtigung erteilt ist.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Stelle den Standort auf „Immer zulassen“ — Läufe stoppen die Aufzeichnung, wenn du ohne Hintergrundberechtigung die App wechselst.';
+  String get runBackgroundLocationPaused =>
+      'Die Aufzeichnung pausierte, während du weg warst — die Zeit lief weiter und nichts ging verloren, aber die Distanz außerhalb des Bildschirms wurde nicht gezählt. Stelle den Standort auf „Immer zulassen“, um im Hintergrund aufzuzeichnen.';
 
   @override
   String get runGpsSensorFailed =>

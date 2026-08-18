@@ -2867,11 +2867,11 @@ abstract class AppLocalizations {
   /// **'No GPS — tracking will start when permission is granted.'**
   String get runGpsPermissionPending;
 
-  /// Banner shown when only while-in-use location permission is granted at run start
+  /// Banner shown on returning to a recording run after the app was backgrounded under a foreground-only location grant and no fix arrived while away
   ///
   /// In en, this message translates to:
-  /// **'Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.'**
-  String get runGpsAllowAllTheTime;
+  /// **'Tracking paused while you were away — your run kept timing and nothing was lost, but distance covered off screen wasn’t counted. Set Location to \"Allow all the time\" to track in the background.'**
+  String get runBackgroundLocationPaused;
 
   /// Banner shown when the GPS sensor could not start for an unknown reason
   ///

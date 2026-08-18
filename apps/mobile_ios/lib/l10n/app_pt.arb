@@ -459,7 +459,7 @@
   "runGpsNoServiceSettings": "Sem GPS — o rastreamento começará quando a Localização estiver ativada.",
   "runGpsBlockedSettings": "Sem GPS — permissão bloqueada. Ative-a para rastrear a rota.",
   "runGpsPermissionPending": "Sem GPS — o rastreamento começará quando a permissão for concedida.",
-  "runGpsAllowAllTheTime": "Defina a Localização como \"Permitir o tempo todo\" — as corridas param de gravar quando você troca de app sem permissão em segundo plano.",
+  "runBackgroundLocationPaused": "O registo foi pausado enquanto esteve fora — o tempo continuou a contar e nada se perdeu, mas a distância percorrida fora do ecrã não foi contabilizada. Defina a Localização como \"Permitir sempre\" para continuar a registar em segundo plano.",
   "runGpsSensorFailed": "Gravando sem GPS — não foi possível iniciar o sensor.",
   "runAgoJustNow": "Agora mesmo",
   "runAgoMinutes": "há {count} min",

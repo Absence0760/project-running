@@ -1633,8 +1633,8 @@ class AppLocalizationsEs extends AppLocalizations {
       'Sin GPS — el seguimiento empezará cuando se conceda el permiso.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Configura la Ubicación en «Permitir siempre» — las carreras dejan de grabarse cuando cambias de app sin permiso en segundo plano.';
+  String get runBackgroundLocationPaused =>
+      'El seguimiento se pausó mientras no estabas — el tiempo siguió corriendo y no se perdió nada, pero la distancia fuera de pantalla no se contó. Configura la Ubicación en «Permitir siempre» para seguir registrando en segundo plano.';
 
   @override
   String get runGpsSensorFailed =>

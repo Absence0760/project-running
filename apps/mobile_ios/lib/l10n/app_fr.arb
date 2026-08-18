@@ -459,7 +459,7 @@
   "runGpsNoServiceSettings": "Pas de GPS — le suivi démarrera quand la localisation sera activée.",
   "runGpsBlockedSettings": "Pas de GPS — autorisation bloquée. Activez-la pour suivre le parcours.",
   "runGpsPermissionPending": "Pas de GPS — le suivi démarrera quand l'autorisation sera accordée.",
-  "runGpsAllowAllTheTime": "Réglez la localisation sur « Toujours autoriser » — les courses arrêtent d'enregistrer quand vous changez d'app sans autorisation en arrière-plan.",
+  "runBackgroundLocationPaused": "Le suivi a été mis en pause pendant votre absence — le chrono a continué et rien n’a été perdu, mais la distance parcourue hors écran n’a pas été comptée. Réglez la localisation sur « Toujours autoriser » pour suivre en arrière-plan.",
   "runGpsSensorFailed": "Enregistrement sans GPS — impossible de démarrer le capteur.",
   "runAgoJustNow": "À l'instant",
   "runAgoMinutes": "il y a {count} min",

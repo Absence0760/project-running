@@ -57,28 +57,46 @@ void main() {
       );
     });
 
-    test('a foreground-only location grant is disclosed, never a reason to skip GPS',
-        () {
+    test('a foreground-only location grant is disclosed when it costs the run, '
+        'never at run start', () {
       // Reason: Android's first-run dialog only ever grants "While using the
       // app"; "Allow all the time" is a separate trip to Settings. The
       // recorder used to REFUSE that grant, so the default Android runner got
       // no position stream at all — the live map sat on "Waiting for GPS" for
       // the whole run, distance stayed 0, and the run saved as indoor. GPS now
-      // records under it and the recorder reports the limitation through
-      // backgroundLocationLimited; _begin must surface that, or the runner is
-      // never told background recording is at risk.
+      // records under it (#784). The disclosure that used to fire at _begin
+      // read as "recording is broken" at the exact moment nothing was wrong;
+      // it belongs on the real event — the runner returning to a recording run
+      // that received no fix while the app was off screen (#785).
       final begin = _extractMethodBody(source, r'Future<void> _begin\(\) async \{');
       expect(
-        begin.contains('backgroundLocationLimited'),
-        isTrue,
-        reason: 'run start must read the recorder\'s backgroundLocationLimited '
-            'flag and disclose it',
+        begin.contains('_notifyBackgroundLocationLimited()'),
+        isFalse,
+        reason: 'run start must not warn about background permission — '
+            'nothing has gone wrong yet',
+      );
+      final lifecycle = _extractMethodBody(
+        source,
+        r'void didChangeAppLifecycleState\(AppLifecycleState state\) \{',
       );
       expect(
-        source.contains('_notifyBackgroundLocationLimited()'),
+        lifecycle.contains('shouldDiscloseBackgroundLocationLimit('),
+        isTrue,
+        reason: 'the disclosure must be driven by the app-lifecycle event and '
+            'gated on the evidenced-gap decision',
+      );
+      expect(
+        lifecycle.contains('_notifyBackgroundLocationLimited()'),
         isTrue,
         reason: 'the disclosure must reach the runner as a banner, not be '
             'dropped on the floor',
+      );
+      // L4: the disclosure is auxiliary to recording and carries its own
+      // catch, so nothing in it can reach the recording state machine.
+      expect(
+        lifecycle.contains('catch'),
+        isTrue,
+        reason: 'the lifecycle disclosure path must be L4-isolated',
       );
       // The disclosure is a warning about a recording run — it must never
       // reuse the GPS-unavailable path, which describes a run with no fixes.

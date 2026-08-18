@@ -1632,8 +1632,8 @@ class AppLocalizationsPt extends AppLocalizations {
       'Sem GPS — o rastreamento começará quando a permissão for concedida.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Defina a Localização como \"Permitir o tempo todo\" — as corridas param de gravar quando você troca de app sem permissão em segundo plano.';
+  String get runBackgroundLocationPaused =>
+      'O registo foi pausado enquanto esteve fora — o tempo continuou a contar e nada se perdeu, mas a distância percorrida fora do ecrã não foi contabilizada. Defina a Localização como \"Permitir sempre\" para continuar a registar em segundo plano.';
 
   @override
   String get runGpsSensorFailed =>
@@ -14294,8 +14294,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Sem GPS — o rastreamento começará quando a permissão for concedida.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Defina a Localização como \"Permitir o tempo todo\" — as corridas param de gravar quando você troca de app sem permissão em segundo plano.';
+  String get runBackgroundLocationPaused =>
+      'O rastreamento pausou enquanto você esteve fora — o tempo continuou correndo e nada foi perdido, mas a distância percorrida fora da tela não foi contada. Defina a Localização como \"Permitir o tempo todo\" para continuar rastreando em segundo plano.';
 
   @override
   String get runGpsSensorFailed =>

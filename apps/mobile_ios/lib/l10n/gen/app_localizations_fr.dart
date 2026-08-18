@@ -1640,8 +1640,8 @@ class AppLocalizationsFr extends AppLocalizations {
       'Pas de GPS — le suivi démarrera quand l\'autorisation sera accordée.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Réglez la localisation sur « Toujours autoriser » — les courses arrêtent d\'enregistrer quand vous changez d\'app sans autorisation en arrière-plan.';
+  String get runBackgroundLocationPaused =>
+      'Le suivi a été mis en pause pendant votre absence — le chrono a continué et rien n’a été perdu, mais la distance parcourue hors écran n’a pas été comptée. Réglez la localisation sur « Toujours autoriser » pour suivre en arrière-plan.';
 
   @override
   String get runGpsSensorFailed =>
