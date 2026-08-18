@@ -95,10 +95,20 @@ export function draftMetadata(
 	};
 }
 
+// `typeof x === 'object'` is true for null AND for arrays, so it is not the
+// "is this a JSON object" test it reads as. The marker's shape is a
+// cross-platform contract: Dart asks `is Map` and the `gym_routine_history`
+// RPC asks `jsonb_typeof(...) = 'object'`, so an array under the key has to
+// answer "not a draft" here too, or a row three rails call performed reads as
+// in-flight on one of them.
+function isJsonObject(v: unknown): v is Record<string, unknown> {
+	return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
 function draftOf(metadata: unknown): { results: unknown } | null {
-	if (!metadata || typeof metadata !== 'object') return null;
-	const snap = (metadata as Record<string, unknown>)[GYM_SESSION_DRAFT_KEY];
-	if (!snap || typeof snap !== 'object') return null;
+	if (!isJsonObject(metadata)) return null;
+	const snap = metadata[GYM_SESSION_DRAFT_KEY];
+	if (!isJsonObject(snap)) return null;
 	return snap as { results: unknown };
 }
 
@@ -168,8 +178,8 @@ export function resumedStartedAt(durationS: number | null | undefined, nowMs: nu
 /// draft marker. `routine_id` stays (the link is real); no adherence verdict is
 /// claimed, because the session never ran to completion.
 export function stripSessionDraft(metadata: unknown): Record<string, unknown> {
-	if (!metadata || typeof metadata !== 'object') return {};
-	const out = { ...(metadata as Record<string, unknown>) };
+	if (!isJsonObject(metadata)) return {};
+	const out = { ...metadata };
 	delete out[GYM_SESSION_DRAFT_KEY];
 	return out;
 }

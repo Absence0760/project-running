@@ -9,6 +9,9 @@
 -- Covers:
 --   * a routine with more sessions than the PostgREST cap reports the TRUE count
 --   * an in-flight `gym_session_draft` row is excluded from count AND page
+--   * a NON-object under that key is not a draft — the exclusion is
+--     `jsonb_typeof(...) = 'object'`, matched by Dart's `is Map` and web's
+--     `hasSessionDraft`, so an array there leaves the row a session performed
 --   * a "save as is" row counts as a session but not in the graded denominator
 --   * last_performed_at is the max over every session, not over the page
 --   * the recent page is newest-first and honours p_recent_limit (incl. the clamp)
@@ -17,7 +20,7 @@
 
 begin;
 
-select plan(12);
+select plan(13);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -154,6 +157,29 @@ select is(
   (select session_count from gym_routine_history('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02')),
   0,
   'a routine that has never been run reports zero, not the sibling routine''s sessions'
+);
+
+-- 9b. A marker that is not a JSON OBJECT is not a draft. `typeof x === 'object'`
+--     is true for an array in JS, which is exactly how web drifted from this
+--     RPC and from Dart's `is Map`; a row like this is a session performed on
+--     all three rails. Its own routine, so the tallies above stay untouched.
+insert into gym_routines (id, author_id, title, exercise_count)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb03', '00000000-0000-0000-0000-0000000b0001', 'Legs C', 2);
+
+insert into gym_workouts (id, user_id, title, started_at, metadata)
+values
+  ('cccccccc-cccc-cccc-cccc-ccccccccccc3',
+   '00000000-0000-0000-0000-0000000b0001', 'Array marker',
+   timestamptz '2026-07-01 08:00:00+00',
+   jsonb_build_object(
+     'routine_id', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb03',
+     'gym_session_draft', '[]'::jsonb
+   ));
+
+select is(
+  (select session_count from gym_routine_history('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb03')),
+  1,
+  'a non-object under gym_session_draft is not a draft — the row still counts as performed'
 );
 
 -- 10. RLS: a stranger sees none of the lifter's sessions. The gym_workouts

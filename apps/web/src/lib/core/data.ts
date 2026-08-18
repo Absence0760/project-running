@@ -78,7 +78,7 @@ import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
 import type { RecapPeriodKind } from '../types';
 import { normaliseExerciseName } from '../gym/gym_prs';
-import { GYM_SESSION_DRAFT_KEY } from '../gym/gym_session_draft';
+import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
 import type { RoutineHistoryAggregate, RoutineSessionRow } from '../gym/routine_history';
 import type { YearInRunningRecap } from '../runs/recap';
 import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
@@ -9013,9 +9013,14 @@ export async function fetchGymWorkoutWithSets(
 }
 
 /// The newest in-flight guided-session draft for a routine — the row a refresh
-/// mid-session resumes from (decisions.md § 483). Owner-scoped by RLS; the
-/// `metadata ? key` existence filter is what distinguishes a draft from a
-/// finished workout, whose bag carries the execution trio instead.
+/// mid-session resumes from (decisions.md § 483). Owner-scoped by RLS.
+///
+/// The server-side key-existence filter is a cheap prefilter, not the
+/// predicate: PostgREST cannot ask `jsonb_typeof`, so it also matches a bag
+/// whose key carries JSON null or an array. `hasSessionDraft` is what decides,
+/// so this agrees with the resume card and the routine-history exclusion
+/// instead of adopting — and overwriting the sets of — a row they both count
+/// as a session performed.
 export async function fetchGymSessionDraft(routineId: string): Promise<GymWorkout | null> {
 	const userId = auth.user?.id;
 	if (!userId || !routineId) return null;
@@ -9031,7 +9036,8 @@ export async function fetchGymSessionDraft(routineId: string): Promise<GymWorkou
 		console.error('fetchGymSessionDraft failed', error);
 		return null;
 	}
-	return (data?.[0] as GymWorkout | undefined) ?? null;
+	const row = (data?.[0] as GymWorkout | undefined) ?? null;
+	return row && hasSessionDraft(row.metadata) ? row : null;
 }
 
 /// Sets the user has logged, joined to their workout start time. Owner-scoped.

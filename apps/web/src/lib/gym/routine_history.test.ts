@@ -79,6 +79,28 @@ test('an in-flight draft row is not a performed session', () => {
 	assert.equal(h.lastPerformedAt, '2026-08-10T10:00:00.000Z');
 });
 
+// The exclusion is a three-rail contract: Dart asks `is Map` and the RPC asks
+// `jsonb_typeof(...) = 'object'`. A marker that is not a JSON object leaves the
+// row a session performed on all three, so a divergence fails here.
+test('a non-object under the draft key leaves the row a session performed', () => {
+	const h = routineHistoryFromAggregate(
+		agg(
+			[
+				row({
+					id: 'arr',
+					started_at: '2026-08-10T10:00:00.000Z',
+					metadata: { routine_id: 'r1', gym_session_draft: [] },
+				}),
+			],
+			{ sessionCount: 1, lastPerformedAt: '2026-08-10T10:00:00.000Z' },
+		),
+		NOW,
+	);
+	assert.equal(h.recentSessions.length, 1);
+	assert.equal(h.recentSessions[0].id, 'arr');
+	assert.equal(h.sessionCount, 1);
+});
+
 test('a save-as-is row is ungraded, not completed', () => {
 	const h = routineHistoryFromAggregate(
 		agg([row({ id: 'x', started_at: '2026-08-10T10:00:00.000Z', metadata: { routine_id: 'r1' } })], {

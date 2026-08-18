@@ -87,6 +87,25 @@ void main() {
     expect(h.lastPerformedAt, '2026-08-10T10:00:00.000Z');
   });
 
+  // The exclusion is a three-rail contract: web's `hasSessionDraft` and the
+  // RPC's `jsonb_typeof(...) = 'object'` give the same answer. A marker that is
+  // not a JSON object leaves the row a session performed on all three.
+  test('a non-object under the draft key leaves the row a session performed',
+      () {
+    final h = routineHistoryFromAggregate(
+      agg([
+        row('arr', '2026-08-10T10:00:00.000Z', metadata: {
+          'routine_id': 'r1',
+          'gym_session_draft': <dynamic>[],
+        }),
+      ], sessionCount: 1, lastPerformedAt: '2026-08-10T10:00:00.000Z'),
+      now,
+    );
+    expect(h.recentSessions.length, 1);
+    expect(h.recentSessions[0].id, 'arr');
+    expect(h.sessionCount, 1);
+  });
+
   test('a save-as-is row is ungraded, not completed', () {
     final h = routineHistoryFromAggregate(
       agg([
