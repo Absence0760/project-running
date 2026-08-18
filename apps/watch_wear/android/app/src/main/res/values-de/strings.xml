@@ -52,6 +52,7 @@
     <string name="activity_walk">Gehen</string>
     <string name="activity_hike">Wandern</string>
     <string name="activity_cycle">Radfahren</string>
+    <string name="activity_stroller">Kinderwagen</string>
     <string name="sign_in">Anmelden</string>
     <string name="sign_out">Abmelden</string>
     <string name="cd_cancel_countdown">Countdown abbrechen</string>

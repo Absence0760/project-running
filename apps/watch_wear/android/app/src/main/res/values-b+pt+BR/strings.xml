@@ -52,6 +52,7 @@
     <string name="activity_walk">Caminhada</string>
     <string name="activity_hike">Trilha</string>
     <string name="activity_cycle">Ciclismo</string>
+    <string name="activity_stroller">Carrinho</string>
     <string name="sign_in">Entrar</string>
     <string name="sign_out">Sair</string>
     <string name="cd_cancel_countdown">Cancelar a contagem regressiva</string>
