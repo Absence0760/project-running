@@ -126,6 +126,43 @@ test.describe('/gym/routines/[id] — routine history', () => {
 		}
 	});
 
+	test('the count is the complete total while the list stays a bounded page', async ({ page }) => {
+		// The panel lists five rows but claims a session COUNT; before the
+		// gym_routine_history aggregate that count came from the rows the client
+		// happened to read, so a lifter past the window saw a capped figure.
+		const admin = getAdminClient();
+		const stamp = Date.now();
+		const title = `E2E History Paged ${stamp}`;
+		const { data: routine } = await admin
+			.from('gym_routines')
+			.insert({ author_id: USER_A.id, title, exercise_count: 0 })
+			.select('id')
+			.single();
+		const routineId = routine!.id as string;
+		const { data: workouts } = await admin
+			.from('gym_workouts')
+			.insert(
+				Array.from({ length: 7 }, (_, i) => ({
+					user_id: USER_A.id,
+					title: `${title} ${i}`,
+					started_at: new Date(stamp - (i + 1) * DAY_MS).toISOString(),
+					duration_s: 1200,
+					metadata: { routine_id: routineId, gym_adherence: 'completed' },
+				})),
+			)
+			.select('id');
+		try {
+			await page.goto(`/gym/routines/${routineId}`);
+			const panel = page.getByTestId('routine-history');
+			await expect(panel).toBeVisible({ timeout: 15_000 });
+			await expect(page.getByTestId('routine-history-count')).toHaveText('7 sessions');
+			await expect(panel.getByRole('link')).toHaveCount(5);
+		} finally {
+			for (const w of workouts ?? []) await admin.from('gym_workouts').delete().eq('id', w.id as string);
+			await admin.from('gym_routines').delete().eq('id', routineId);
+		}
+	});
+
 	test('a routine that has never been run shows no history panel', async ({ page }) => {
 		const admin = getAdminClient();
 		const title = `E2E History Unrun ${Date.now()}`;
