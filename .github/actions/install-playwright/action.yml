@@ -1,12 +1,12 @@
 name: Install Playwright Chromium
 description: >
-  Download the Chromium build the pinned @playwright/test needs, then
-  install that browser's system libraries under a bounded retry.
+  Download the Chromium build the pinned @playwright/test needs, then prove
+  that browser can actually launch — reaching for apt only if it cannot.
 
   Why a composite action rather than three inline copies: this install is
   duplicated across every Playwright job (e2e-web's 14 shards,
   e2e-web-livehub, e2e-web-sso) as byte-identical blocks. One source of
-  truth keeps the retry budget — and the incident comment below — from
+  truth keeps the verification — and the incident comment below — from
   diverging, which is the same reason start-supabase exists.
 
   The `actions/cache` step that restores ~/.cache/ms-playwright stays
@@ -17,32 +17,35 @@ description: >
   flutter-action, and start-supabase carries no `uses:` for this reason.
   Only `run:` steps belong here.
 
-  Why the two halves are separate subcommands rather than one
-  `playwright install --with-deps chromium`:
+  Why the apt half is conditional rather than unconditional:
 
-  `--with-deps` runs `apt-get update` from inside the browser install, so
-  the apt half has no budget of its own and one unreachable Ubuntu mirror
-  stalls the whole step. This took main red twice in five hours on
-  2026-08-17/18: run 32069680540 (shard 13) and run 32090988359 (shards
-  9, 10 and 14). azure.archive.ubuntu.com answered `Ign:` instead of
-  serving, apt fell through to archive.ubuntu.com for InRelease and then
-  sat in silence on the Packages indices; the shards were still inside
-  this step 23 minutes later when `timeout-minutes: 25` killed them, and
-  each run — every other job green — went red at the `CI gate`. A healthy
-  run of this step is 14-17s, so nothing in the output distinguished the
-  hang from ordinary progress until the cap hit.
+  `playwright install-deps` exists to make Chromium's system libraries
+  present. On a GitHub-hosted image they already ARE — every library it
+  would install is the newest version on the image — so the command only
+  ever verifies, and it verifies by talking to a third party. That turned
+  an Ubuntu-mirror outage into a red test shard five times across two
+  pushes on 2026-08-18 (round 4: shards 1, 7, 13; round 5: shards 6, 7),
+  each identical: three 120s attempts all timing out, then a hard fail,
+  no test ever run, and a re-run clean every time. Two earlier outages
+  took main red the same way (runs 32069680540 and 32090988359).
 
-  Split, each half gets the handling it actually needs. The browser
-  download is cache-backed and must succeed. The apt half is bounded at
-  120s x 3 (~7x headroom over a healthy 17s) and fails LOUDLY naming the
-  mirrors, so ~6 minutes is the worst case against the 25-minute cap that
-  the slowest observed shard (12 min) leaves ~13 minutes of.
+  So verify the libraries directly instead, and let apt run only when the
+  verification says something is genuinely missing. The verification is a
+  real Chromium launch — the exact thing the shards go on to do, and
+  strictly stronger than inspecting `ldd` output, which cannot see what
+  Chromium dlopens. Playwright names the missing library itself when a
+  launch fails on a dependency, so the failure path stays loud and
+  specific.
 
-  Deliberately NOT continue-on-error. Every library it installs is
-  already the newest version on the GitHub-hosted image — the step only
-  ever VERIFIES — so skipping it would usually pass, and on the run where
-  it did not it would surface as every spec in the shard failing with
-  "browser closed unexpectedly" rather than as one named red step.
+  What this deliberately does NOT do: pass when it cannot tell. A launch
+  that fails for ANY reason sends the job to apt, and a launch that still
+  fails afterwards fails the step with the browser's own error text and
+  the mirror list. A check that could only ever pass would be worse than
+  the outage it replaces.
+
+  The apt half keeps its bounded 120s x 3 budget for the case where a
+  library really is missing: that is a real install, it must be allowed
+  to finish, and a dead mirror must not hang it for 25 minutes.
 
 runs:
   using: composite
@@ -52,17 +55,43 @@ runs:
       working-directory: apps/web
       run: pnpm exec playwright install chromium
 
-    # Bound apt so a dead mirror fails fast instead of hanging. Both
-    # halves are needed: the conf caps each index fetch so the usual case
-    # exits non-zero on its own within seconds, and the outer `timeout`
-    # still bounds the pathological case the per-fetch cap cannot (~20
-    # index files x a retried timeout each is minutes, not seconds).
-    - name: Install Chromium system libraries
+    - name: Verify Chromium's system libraries
       shell: bash
       working-directory: apps/web
       run: |
         set -uo pipefail
 
+        # `node -e` resolves require() from the cwd, which is why this runs
+        # from apps/web rather than from a script written to a temp dir.
+        # chromium.launch() with no options is the headless shell — the same
+        # binary devices['Desktop Chrome'] drives in the shards' config.
+        launch_check() {
+          timeout -k 10 120 node -e '
+            const { chromium } = require("@playwright/test");
+            chromium
+              .launch()
+              .then((browser) => browser.close())
+              .then(() => process.exit(0))
+              .catch((error) => {
+                console.error(String((error && error.message) || error));
+                process.exit(1);
+              });
+          ' 2>&1
+        }
+
+        if launched=$(launch_check); then
+          echo "Chromium launched — its system libraries are present, apt not needed"
+          exit 0
+        fi
+
+        echo "::warning::Chromium would not launch, so a system library is genuinely missing — falling through to apt"
+        printf '%s\n' "${launched}"
+
+        # Bound apt so a dead mirror fails fast instead of hanging. Both
+        # halves are needed: the conf caps each index fetch so the usual case
+        # exits non-zero on its own within seconds, and the outer `timeout`
+        # still bounds the pathological case the per-fetch cap cannot (~20
+        # index files x a retried timeout each is minutes, not seconds).
         sudo tee /etc/apt/apt.conf.d/99-ci-timeouts >/dev/null <<'CONF'
         Acquire::http::Timeout "15";
         Acquire::https::Timeout "15";
@@ -86,16 +115,21 @@ runs:
           # -k: SIGKILL 10s after the SIGTERM, because apt ignores TERM
           # while it is inside a socket read on an unresponsive mirror.
           if timeout -k 10 120 pnpm exec playwright install-deps chromium; then
-            exit 0
+            break
           fi
-
           echo "::warning::playwright install-deps attempt ${attempt} failed or exceeded 120s"
-
-          if [ "${attempt}" = "3" ]; then
-            echo "::error::playwright install-deps failed three times — the runner's apt mirrors are not answering, so Chromium's system libraries could not be verified"
-            grep -hoE 'https?://[^ /]+' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null | sort -u || true
-            exit 1
-          fi
-
           reap_apt
         done
+
+        # The verdict is the browser, not apt's exit code: install-deps can
+        # succeed and still leave the launch broken, and it can fail on a
+        # mirror having already installed what was missing.
+        if launched=$(launch_check); then
+          echo "Chromium launched after installing its system libraries"
+          exit 0
+        fi
+
+        echo "::error::Chromium still will not launch after the system-library install — its own error is below, and a library named there is one the runner's apt mirrors could not resolve"
+        printf '%s\n' "${launched}"
+        grep -hoE 'https?://[^ /]+' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null | sort -u || true
+        exit 1
