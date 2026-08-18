@@ -748,7 +748,8 @@ class TrainingService extends ChangeNotifier {
     await _c.from('plan_workouts').update({
       'completed_run_id': runId,
       'manually_completed': manual,
-      'completed_at': isCompleting ? DateTime.now().toIso8601String() : null,
+      'completed_at':
+          isCompleting ? DateTime.now().toUtc().toIso8601String() : null,
       // Completing clears any prior skip — the two states are mutually
       // exclusive. Un-completing leaves the skip flag untouched.
       if (isCompleting) 'skipped_at': null,
@@ -764,7 +765,7 @@ class TrainingService extends ChangeNotifier {
     await _c.from('plan_workouts').update(
       skipped
           ? {
-              'skipped_at': DateTime.now().toIso8601String(),
+              'skipped_at': DateTime.now().toUtc().toIso8601String(),
               'completed_run_id': null,
               'manually_completed': false,
               'completed_at': null,

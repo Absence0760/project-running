@@ -3039,7 +3039,9 @@ class ApiClient {
     if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(NotificationRow.table)
-        .update({NotificationRow.colReadAt: DateTime.now().toIso8601String()})
+        .update({
+          NotificationRow.colReadAt: DateTime.now().toUtc().toIso8601String()
+        })
         .eq(NotificationRow.colId, id)
         .eq(NotificationRow.colUserId, viewerId)
         .isFilter(NotificationRow.colReadAt, null);
@@ -3051,7 +3053,9 @@ class ApiClient {
     if (viewerId == null) throw StateError('not signed in');
     await _client
         .from(NotificationRow.table)
-        .update({NotificationRow.colReadAt: DateTime.now().toIso8601String()})
+        .update({
+          NotificationRow.colReadAt: DateTime.now().toUtc().toIso8601String()
+        })
         .eq(NotificationRow.colUserId, viewerId)
         .isFilter(NotificationRow.colReadAt, null);
   }
@@ -4236,7 +4240,7 @@ class ApiClient {
   Future<void> archiveCoachThread({String? planId}) async {
     final viewerId = _client.auth.currentUser?.id;
     if (viewerId == null) throw StateError('not signed in');
-    final ts = DateTime.now().toIso8601String();
+    final ts = DateTime.now().toUtc().toIso8601String();
     var q = _client
         .from(CoachMessageRow.table)
         .update({CoachMessageRow.colArchivedAt: ts})
@@ -5714,7 +5718,8 @@ double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
             ExerciseRow.colNameKey: nameKey,
             ExerciseRow.colCategory: category,
             ExerciseRow.colModality: modality,
-            ExerciseRow.colLastModifiedAt: DateTime.now().toIso8601String(),
+            ExerciseRow.colLastModifiedAt:
+                DateTime.now().toUtc().toIso8601String(),
           })
           .select()
           .single();
