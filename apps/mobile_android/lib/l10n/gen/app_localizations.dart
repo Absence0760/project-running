@@ -11343,6 +11343,48 @@ abstract class AppLocalizations {
   /// **'Done'**
   String get gearRotationDone;
 
+  /// Which pair of a rotation comes out next, on the rotation row
+  ///
+  /// In en, this message translates to:
+  /// **'Next up: {name}'**
+  String gearRotationNextUp(String name);
+
+  /// Why that pair was picked, beside the next-up read-out
+  ///
+  /// In en, this message translates to:
+  /// **'Least worn in this rotation.'**
+  String get gearRotationNextUpWhy;
+
+  /// Button moving the current-pair star onto the next-up pair
+  ///
+  /// In en, this message translates to:
+  /// **'Make current'**
+  String get gearRotationMakeCurrent;
+
+  /// Accessibility label for the make-current button
+  ///
+  /// In en, this message translates to:
+  /// **'Make {name} the current pair — new runs will auto-tag with it'**
+  String gearRotationMakeCurrentLabel(String name);
+
+  /// Shown when the next-up pair already holds the star
+  ///
+  /// In en, this message translates to:
+  /// **'Already the current pair.'**
+  String get gearRotationNextUpIsCurrent;
+
+  /// Warning when every pair in a rotation is at or past its target
+  ///
+  /// In en, this message translates to:
+  /// **'Every pair here is at or past its replacement target.'**
+  String get gearRotationAllWorn;
+
+  /// Banner shown when moving the current-pair star fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change the current pair: {error}'**
+  String gearRotationMakeCurrentFailed(Object error);
+
   /// Banner shown after saving privacy zones
   ///
   /// In en, this message translates to:

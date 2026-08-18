@@ -6937,6 +6937,34 @@ class AppLocalizationsEs extends AppLocalizations {
   String get gearRotationDone => 'Listo';
 
   @override
+  String gearRotationNextUp(String name) {
+    return 'A continuación: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'El menos desgastado de esta rotación.';
+
+  @override
+  String get gearRotationMakeCurrent => 'Marcar como actual';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return 'Marcar $name como el par actual: las nuevas carreras se etiquetarán automáticamente con él';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'Ya es el par actual.';
+
+  @override
+  String get gearRotationAllWorn =>
+      'Todos los pares de aquí han alcanzado o superado su objetivo de sustitución.';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return 'No se pudo cambiar el par actual: $error';
+  }
+
+  @override
   String get privacyZonesSaved => 'Zonas de privacidad guardadas.';
 
   @override

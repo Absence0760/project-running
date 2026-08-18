@@ -6935,6 +6935,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gearRotationDone => 'Concluído';
 
   @override
+  String gearRotationNextUp(String name) {
+    return 'Próximo: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'O menos desgastado deste rodízio.';
+
+  @override
+  String get gearRotationMakeCurrent => 'Definir como atual';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return 'Definir $name como o par atual — as novas corridas serão marcadas automaticamente com ele';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'Já é o par atual.';
+
+  @override
+  String get gearRotationAllWorn =>
+      'Todos os pares aqui atingiram ou ultrapassaram a meta de substituição.';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return 'Não foi possível alterar o par atual: $error';
+  }
+
+  @override
   String get privacyZonesSaved => 'Zonas de privacidade salvas.';
 
   @override
@@ -19602,6 +19630,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gearRotationDone => 'Concluído';
+
+  @override
+  String gearRotationNextUp(String name) {
+    return 'Próximo: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'O menos desgastado deste rodízio.';
+
+  @override
+  String get gearRotationMakeCurrent => 'Definir como atual';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return 'Definir $name como o par atual — as novas corridas serão marcadas automaticamente com ele';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'Já é o par atual.';
+
+  @override
+  String get gearRotationAllWorn =>
+      'Todos os pares aqui atingiram ou ultrapassaram a meta de substituição.';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return 'Não foi possível alterar o par atual: $error';
+  }
 
   @override
   String get privacyZonesSaved => 'Zonas de privacidade salvas.';
