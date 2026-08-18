@@ -11108,6 +11108,18 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get roadbookColTarget => 'Zielzeit';
+
+  @override
+  String get roadbookTargetAhead => 'voraus';
+
+  @override
+  String get roadbookTargetOn => 'im Plan';
+
+  @override
+  String get roadbookTargetBehind => 'zurück';
+
+  @override
   String get checkpointCheckinAction => 'Checkpoint-Check-in';
 
   @override

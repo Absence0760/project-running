@@ -11096,6 +11096,18 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get roadbookColTarget => 'Meta';
+
+  @override
+  String get roadbookTargetAhead => 'adiantado';
+
+  @override
+  String get roadbookTargetOn => 'no plano';
+
+  @override
+  String get roadbookTargetBehind => 'atrasado';
+
+  @override
   String get checkpointCheckinAction => 'Check-in no ponto de controlo';
 
   @override
@@ -23762,6 +23774,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String roadbookCarryHint(String gels, String fluid) {
     return 'levar $gels géis · $fluid ml';
   }
+
+  @override
+  String get roadbookColTarget => 'Meta';
+
+  @override
+  String get roadbookTargetAhead => 'adiantado';
+
+  @override
+  String get roadbookTargetOn => 'no plano';
+
+  @override
+  String get roadbookTargetBehind => 'atrasado';
 
   @override
   String get checkpointCheckinAction => 'Check-in no posto de controle';

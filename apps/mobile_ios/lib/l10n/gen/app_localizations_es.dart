@@ -11100,6 +11100,18 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get roadbookColTarget => 'Objetivo';
+
+  @override
+  String get roadbookTargetAhead => 'por delante';
+
+  @override
+  String get roadbookTargetOn => 'según el plan';
+
+  @override
+  String get roadbookTargetBehind => 'por detrás';
+
+  @override
   String get checkpointCheckinAction => 'Registro en checkpoint';
 
   @override

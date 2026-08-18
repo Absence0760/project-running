@@ -136,6 +136,44 @@ void main() {
     expect(find.textContaining('Cut-off'), findsNothing);
   });
 
+  testWidgets('a checkpoint target renders its time, margin and verdict',
+      (tester) async {
+    // The 2 km course at the seeded 6:30/km goal projects the halfway
+    // checkpoint around 6:30, so a 20 min target is comfortably ahead and a
+    // 60 s one comfortably behind. Both verdicts must reach the row — the
+    // engine has computed them since the target twin landed, and the screen
+    // rendered only the cutoff column.
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, {'target_elapsed_s': 1200}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.byKey(const Key('roadbook-target')), findsOneWidget);
+    expect(find.textContaining('Target 20:00'), findsOneWidget);
+    expect(find.textContaining('ahead'), findsOneWidget);
+  });
+
+  testWidgets('a target the projection misses reads behind, not on plan',
+      (tester) async {
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, {'target_elapsed_s': 60}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.textContaining('behind'), findsOneWidget);
+    expect(find.textContaining('ahead'), findsNothing);
+  });
+
+  testWidgets('a checkpoint with no target time grows no target chip',
+      (tester) async {
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.byKey(const Key('roadbook-target')), findsNothing);
+  });
+
   testWidgets('editing the goal is persisted for the watch push',
       (tester) async {
     await tester.pumpWidget(_host([

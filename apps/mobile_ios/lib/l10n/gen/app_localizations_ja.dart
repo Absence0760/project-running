@@ -10566,6 +10566,18 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get roadbookColTarget => '目標';
+
+  @override
+  String get roadbookTargetAhead => '前倒し';
+
+  @override
+  String get roadbookTargetOn => '予定どおり';
+
+  @override
+  String get roadbookTargetBehind => '遅れ';
+
+  @override
   String get checkpointCheckinAction => 'チェックポイント受付';
 
   @override

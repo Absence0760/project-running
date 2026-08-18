@@ -14461,6 +14461,22 @@
       }
     }
   },
+  "roadbookColTarget": "Target",
+  "@roadbookColTarget": {
+    "description": "Label on the roadbook target-time verdict chip"
+  },
+  "roadbookTargetAhead": "ahead",
+  "@roadbookTargetAhead": {
+    "description": "Roadbook target verdict: the projection is ahead of the planned time"
+  },
+  "roadbookTargetOn": "on plan",
+  "@roadbookTargetOn": {
+    "description": "Roadbook target verdict: the projection is within the on-schedule band"
+  },
+  "roadbookTargetBehind": "behind",
+  "@roadbookTargetBehind": {
+    "description": "Roadbook target verdict: the projection is behind the planned time"
+  },
   "checkpointCheckinAction": "Checkpoint check-in",
   "@checkpointCheckinAction": {
     "description": "Organiser action on event detail opening the aid-station check-in screen"

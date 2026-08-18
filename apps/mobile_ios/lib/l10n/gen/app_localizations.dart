@@ -18434,6 +18434,30 @@ abstract class AppLocalizations {
   /// **'carry {gels} gels · {fluid} ml'**
   String roadbookCarryHint(String gels, String fluid);
 
+  /// Label on the roadbook target-time verdict chip
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get roadbookColTarget;
+
+  /// Roadbook target verdict: the projection is ahead of the planned time
+  ///
+  /// In en, this message translates to:
+  /// **'ahead'**
+  String get roadbookTargetAhead;
+
+  /// Roadbook target verdict: the projection is within the on-schedule band
+  ///
+  /// In en, this message translates to:
+  /// **'on plan'**
+  String get roadbookTargetOn;
+
+  /// Roadbook target verdict: the projection is behind the planned time
+  ///
+  /// In en, this message translates to:
+  /// **'behind'**
+  String get roadbookTargetBehind;
+
   /// Organiser action on event detail opening the aid-station check-in screen
   ///
   /// In en, this message translates to:
