@@ -306,6 +306,72 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count activités n\'ont pas été importées',
+      one: '1 activité n\'a pas été importée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Relancez l\'import pour réessayer : ce qui est déjà importé est ignoré, rien n\'est dupliqué.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count échecs supplémentaires n\'ont pas été enregistrés.',
+      one: '1 échec supplémentaire n\'a pas été enregistré.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Afficher chaque activité';
+
+  @override
+  String get importFailuresShare => 'Partager le rapport (CSV)';
+
+  @override
+  String get importFailuresShareFailed => 'Impossible de partager le rapport.';
+
+  @override
+  String get importFailuresDismiss => 'Masquer';
+
+  @override
+  String get importFailuresNoDate => 'Date inconnue';
+
+  @override
+  String get importFailuresReasonNetwork => 'Connexion interrompue';
+
+  @override
+  String get importFailuresReasonAuth => 'Déconnecté';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Trop de requêtes';
+
+  @override
+  String get importFailuresReasonTooLarge => 'Fichier trop volumineux';
+
+  @override
+  String get importFailuresReasonUnparseable => 'Fichier illisible';
+
+  @override
+  String get importFailuresReasonRejected => 'Refusé par le serveur';
+
+  @override
+  String get importFailuresReasonUnknown => 'Erreur inconnue';
+
+  @override
+  String get importStatusCloudPushDeferred =>
+      'Enregistré sur cet appareil : l\'envoi vers le cloud n\'a pas abouti. Il sera retenté à la prochaine synchronisation.';
+
+  @override
   String get importHealthSubtitleIos =>
       'Récupérez les séances enregistrées sur Apple Watch, Nike Run Club, Strava et d\'autres apps qui écrivent dans Apple Santé';
 

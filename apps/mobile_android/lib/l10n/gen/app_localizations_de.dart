@@ -307,6 +307,73 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Aktivitäten wurden nicht importiert',
+      one: '1 Aktivität wurde nicht importiert',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Starte den Import erneut, um es noch einmal zu versuchen — bereits importierte Aktivitäten werden übersprungen, es entstehen keine Duplikate.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count weitere Fehler wurden nicht erfasst.',
+      one: '1 weiterer Fehler wurde nicht erfasst.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Jede Aktivität anzeigen';
+
+  @override
+  String get importFailuresShare => 'Bericht teilen (CSV)';
+
+  @override
+  String get importFailuresShareFailed =>
+      'Der Bericht konnte nicht geteilt werden.';
+
+  @override
+  String get importFailuresDismiss => 'Ausblenden';
+
+  @override
+  String get importFailuresNoDate => 'Datum unbekannt';
+
+  @override
+  String get importFailuresReasonNetwork => 'Verbindung abgebrochen';
+
+  @override
+  String get importFailuresReasonAuth => 'Abgemeldet';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Zu viele Anfragen';
+
+  @override
+  String get importFailuresReasonTooLarge => 'Datei zu groß';
+
+  @override
+  String get importFailuresReasonUnparseable => 'Datei nicht lesbar';
+
+  @override
+  String get importFailuresReasonRejected => 'Vom Server abgelehnt';
+
+  @override
+  String get importFailuresReasonUnknown => 'Unbekannter Fehler';
+
+  @override
+  String get importStatusCloudPushDeferred =>
+      'Auf diesem Gerät gespeichert — das Hochladen in die Cloud hat nicht geklappt. Es wird bei der nächsten Synchronisierung erneut versucht.';
+
+  @override
   String get importHealthSubtitleIos =>
       'Hole Workouts, die du auf der Apple Watch, in Nike Run Club, Strava und anderen Apps aufgezeichnet hast, die in Apple Health schreiben';
 

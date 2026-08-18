@@ -480,6 +480,80 @@
       }
     }
   },
+  "importFailuresHeading": "{count, plural, one{1 activity didn't import} other{{count} activities didn't import}}",
+  "@importFailuresHeading": {
+    "description": "Heading above the import failure report, counting the activities that did not import",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importFailuresIntro": "Re-run the import to retry these — anything that already landed is skipped, so nothing is duplicated.",
+  "@importFailuresIntro": {
+    "description": "Explains that re-running the import retries the failures without duplicating"
+  },
+  "importFailuresTruncated": "{count, plural, one{1 further failure was not recorded.} other{{count} further failures were not recorded.}}",
+  "@importFailuresTruncated": {
+    "description": "Shown when the failure log hit its recording cap",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importFailuresShowDetail": "Show each activity",
+  "@importFailuresShowDetail": {
+    "description": "Expander label revealing each failed activity"
+  },
+  "importFailuresShare": "Share report (CSV)",
+  "@importFailuresShare": {
+    "description": "Button that shares the failure report as a CSV file"
+  },
+  "importFailuresShareFailed": "Could not share the report.",
+  "@importFailuresShareFailed": {
+    "description": "Banner when sharing the failure report CSV failed"
+  },
+  "importFailuresDismiss": "Dismiss",
+  "@importFailuresDismiss": {
+    "description": "Button that hides the import failure report"
+  },
+  "importFailuresNoDate": "Date unknown",
+  "@importFailuresNoDate": {
+    "description": "Placeholder when a failed activity has no known start date"
+  },
+  "importFailuresReasonNetwork": "Connection dropped",
+  "@importFailuresReasonNetwork": {
+    "description": "Import failure reason: the connection dropped"
+  },
+  "importFailuresReasonAuth": "Signed out",
+  "@importFailuresReasonAuth": {
+    "description": "Import failure reason: the session was signed out"
+  },
+  "importFailuresReasonRateLimited": "Rate limited",
+  "@importFailuresReasonRateLimited": {
+    "description": "Import failure reason: rate limited"
+  },
+  "importFailuresReasonTooLarge": "File too large",
+  "@importFailuresReasonTooLarge": {
+    "description": "Import failure reason: the file was too large"
+  },
+  "importFailuresReasonUnparseable": "File could not be read",
+  "@importFailuresReasonUnparseable": {
+    "description": "Import failure reason: the file could not be read"
+  },
+  "importFailuresReasonRejected": "Rejected by the server",
+  "@importFailuresReasonRejected": {
+    "description": "Import failure reason: the server refused the write"
+  },
+  "importFailuresReasonUnknown": "Unknown error",
+  "@importFailuresReasonUnknown": {
+    "description": "Import failure reason: unrecognised error"
+  },
+  "importStatusCloudPushDeferred": "Saved on this device — the upload to the cloud didn't go through. It will retry on the next sync.",
+  "@importStatusCloudPushDeferred": {
+    "description": "Shown when imported runs saved locally but the upload to the cloud failed"
+  },
   "importHealthSubtitleIos": "Pull workouts you've recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health",
   "@importHealthSubtitleIos": {
     "description": "iOS subtitle naming apps that write to Apple Health"

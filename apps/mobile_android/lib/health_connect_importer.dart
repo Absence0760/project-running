@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:health/health.dart';
 
 import 'embedded_bests.dart';
+import 'import_failures.dart';
 import 'imported_run_id.dart';
 
 /// One `ExerciseRoute` location, flattened off the plugin's
@@ -18,20 +19,28 @@ typedef HcRoutePoint = ({
   double? altitudeMetres,
 });
 
-/// What one Health Connect route read produced: the tracks it released, and
-/// the sessions whose route it refused to release.
+/// What one Health Connect route read produced: the tracks it released, the
+/// sessions whose route it refused to release, and — when the read itself
+/// threw — the error behind an empty result. Without that last field an
+/// outright failed read is indistinguishable from a source that genuinely
+/// holds no routes, and the import tells the runner the wrong one.
 typedef HealthConnectRoutes = ({
   Map<String, List<Waypoint>> tracks,
   Set<String> withheldSessionIds,
+  Object? readFailure,
 });
 
-/// A Health Connect import: the runs, and the sessions whose GPS route Health
-/// Connect withheld. The withheld set is the only honest trigger for offering
-/// the route grant — there is no point asking a runner for a permission that
-/// would buy them nothing.
+/// A Health Connect import: the runs, the sessions whose GPS route Health
+/// Connect withheld, and the workouts that could not be mapped at all. The
+/// withheld set is the only honest trigger for offering the route grant —
+/// there is no point asking a runner for a permission that would buy them
+/// nothing. `failures` names the workouts that were dropped: they used to
+/// vanish into a `debugPrint` with nothing on screen at all, so a session
+/// Health Connect could not hand over simply never appeared.
 typedef HealthConnectImport = ({
   List<Run> runs,
   Set<String> withheldSessionIds,
+  ImportFailureLog failures,
 });
 
 /// The Health Connect permission that releases a workout's GPS route. Must
@@ -132,10 +141,28 @@ class HealthConnectImporter {
     final routeTracks = routes.tracks;
 
     final runs = <Run>[];
+    final failures = newImportFailureLog();
+    // A refused route read leaves exactly the shape a source with no routes
+    // leaves, so without this the import would tell the runner their maps
+    // don't exist when they were simply unreadable.
+    if (routes.readFailure != null) {
+      recordImportFailure(
+        failures,
+        name: 'GPS routes',
+        error: routes.readFailure,
+      );
+    }
     for (final point in data) {
+      // Filled as soon as the workout identifies itself so the catch below
+      // can name what was dropped; a throw before that still reports, under
+      // the unnamed-activity fallback.
+      var label = '';
+      String? startedAt;
       try {
         final value = point.value;
         if (value is! WorkoutHealthValue) continue;
+        label = value.workoutActivityType.name;
+        startedAt = point.dateFrom.toUtc().toIso8601String();
 
         final activityType = _mapWorkoutType(value.workoutActivityType);
         if (activityType == null) continue; // not a movement workout we care about
@@ -183,9 +210,19 @@ class HealthConnectImporter {
         ));
       } catch (e) {
         debugPrint('Failed to map Health Connect workout: $e');
+        recordImportFailure(
+          failures,
+          name: label,
+          startedAt: startedAt,
+          error: e,
+        );
       }
     }
-    return (runs: runs, withheldSessionIds: routes.withheldSessionIds);
+    return (
+      runs: runs,
+      withheldSessionIds: routes.withheldSessionIds,
+      failures: failures,
+    );
   }
 
   /// Per-workout GPS tracks Health Connect will release for the window, keyed
@@ -202,6 +239,7 @@ class HealthConnectImporter {
       return (
         tracks: const <String, List<Waypoint>>{},
         withheldSessionIds: const <String>{},
+        readFailure: null,
       );
     }
     try {
@@ -230,12 +268,14 @@ class HealthConnectImporter {
       return (
         tracks: tracksFromRoutePoints(routes),
         withheldSessionIds: withheldRouteSessionIds(routes),
+        readFailure: null,
       );
     } catch (e) {
       debugPrint('Health Connect route fetch failed: $e');
       return (
         tracks: const <String, List<Waypoint>>{},
         withheldSessionIds: const <String>{},
+        readFailure: e,
       );
     }
   }

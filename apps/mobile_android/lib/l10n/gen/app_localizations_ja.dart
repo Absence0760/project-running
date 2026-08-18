@@ -300,6 +300,70 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のアクティビティを取り込めませんでした',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'インポートをやり直すと再試行できます。取り込み済みのものはスキップされるため、重複は発生しません。';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'さらに $count 件の失敗は記録されていません。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => '各アクティビティを表示';
+
+  @override
+  String get importFailuresShare => 'レポートを共有 (CSV)';
+
+  @override
+  String get importFailuresShareFailed => 'レポートを共有できませんでした。';
+
+  @override
+  String get importFailuresDismiss => '閉じる';
+
+  @override
+  String get importFailuresNoDate => '日付不明';
+
+  @override
+  String get importFailuresReasonNetwork => '接続が切断されました';
+
+  @override
+  String get importFailuresReasonAuth => 'サインアウト済み';
+
+  @override
+  String get importFailuresReasonRateLimited => 'レート制限';
+
+  @override
+  String get importFailuresReasonTooLarge => 'ファイルが大きすぎます';
+
+  @override
+  String get importFailuresReasonUnparseable => 'ファイルを読み取れません';
+
+  @override
+  String get importFailuresReasonRejected => 'サーバーに拒否されました';
+
+  @override
+  String get importFailuresReasonUnknown => '不明なエラー';
+
+  @override
+  String get importStatusCloudPushDeferred =>
+      'この端末に保存しました。クラウドへのアップロードは完了していません。次回の同期時に再試行します。';
+
+  @override
   String get importHealthSubtitleIos =>
       'Apple Watch、Nike Run Club、Strava など、Apple Health に書き込む各アプリで記録したワークアウトを取り込みます';
 
