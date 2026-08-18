@@ -48,14 +48,28 @@ class _FakeApi extends ApiClient {
   }
 }
 
+/// A store whose sidecar write refuses. The runs still reach the server; only
+/// this device's note that they did fails to persist, which is a different
+/// fact from a deferred upload and must not borrow its words.
+class _SidecarRefusingStore extends LocalRunStore {
+  int markCalls = 0;
+
+  @override
+  Future<void> markManySynced(Iterable<Run> pushed) async {
+    markCalls++;
+    throw const FileSystemException('sidecar write refused');
+  }
+}
+
 late Directory _runsDir;
 
-Future<LocalRunStore> _makeStore() async {
+Future<T> _initStore<T extends LocalRunStore>(T store) async {
   _runsDir = Directory.systemTemp.createTempSync('import_deferred_test_');
-  final store = LocalRunStore();
   await store.init(overrideDirectory: _runsDir);
   return store;
 }
+
+Future<LocalRunStore> _makeStore() => _initStore(LocalRunStore());
 
 Run _hcRun(String sessionId, int minuteOffset) => Run(
       id: 'run-$sessionId',
@@ -184,6 +198,56 @@ void main() {
       await _tapAndDrain(tester, _importButton);
 
       expect(find.text(l10n.importStatusCloudPushDeferred(3)), findsOneWidget);
+    });
+  });
+
+  group('a refused sidecar write', () {
+    // `markManySynced` runs AFTER `saveRunsBatch` returned, so its failure
+    // cannot mean the runs are absent from the server. It leaves this device
+    // reading them as unsynced on the next cold start, and `SyncService`
+    // pushes them again onto the same rows (`saveRunsBatch` upserts on `id` /
+    // `external_id`) — invisible to the runner, so nothing is claimed.
+    testWidgets('is not reported as a deferred upload', (tester) async {
+      final store = await _initStore(_SidecarRefusingStore());
+      final api = _FakeApi();
+      await _pump(
+        tester,
+        store,
+        api,
+        workouts: _import([_hcRun('a', 0), _hcRun('b', 1), _hcRun('c', 2)]),
+      );
+
+      await _tapAndDrain(tester, _importButton);
+
+      expect(store.markCalls, 1);
+      expect(api.batches.single, hasLength(3));
+      expect(find.textContaining('saved on this device'), findsNothing);
+      // These sessions carry no track, so the import's own status is the
+      // no-GPS-note form; the point is that it still reads as a clean import.
+      expect(
+        find.text(l10n.importStatusNoGpsNote(
+            l10n.importStatusImported(3, 'Health Connect'), 'Health Connect')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('does not inflate a genuinely partial push', (tester) async {
+      final store = await _initStore(_SidecarRefusingStore());
+      final api = _FakeApi()
+        ..failedByCall = [
+          {'run-b'}
+        ];
+      await _pump(
+        tester,
+        store,
+        api,
+        workouts: _import([_hcRun('a', 0), _hcRun('b', 1), _hcRun('c', 2)]),
+      );
+
+      await _tapAndDrain(tester, _importButton);
+
+      expect(find.text(l10n.importStatusCloudPushDeferred(1)), findsOneWidget);
+      expect(find.text(l10n.importStatusCloudPushDeferred(3)), findsNothing);
     });
   });
 

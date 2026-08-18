@@ -268,6 +268,7 @@ class _ImportScreenState extends State<ImportScreen> {
     final api = widget.apiClient;
     var pushDeferredCount = 0;
     if (filled.isNotEmpty && api != null && api.userId != null) {
+      var landed = const <Run>[];
       try {
         final failed = await api.saveRunsBatch(filled);
         // A non-empty `failed` set is not an error and never throws: the
@@ -275,9 +276,8 @@ class _ImportScreenState extends State<ImportScreen> {
         // the server. Same claim as a thrown push, for fewer runs.
         pushDeferredCount =
             storedFilled.where((r) => failed.contains(r.id)).length;
-        await widget.runStore.markManySynced(
-          storedFilled.where((r) => !failed.contains(r.id)),
-        );
+        landed =
+            storedFilled.where((r) => !failed.contains(r.id)).toList();
       } catch (e) {
         // The maps are on disk; only the upload failed, and SyncService
         // retries it. Same claim, same words as the import path — a map that
@@ -285,6 +285,7 @@ class _ImportScreenState extends State<ImportScreen> {
         debugPrint('Route backfill cloud push failed: $e');
         pushDeferredCount = filled.length;
       }
+      await _markLandedSynced(landed);
     }
     return (filled: filled.length, pushDeferredCount: pushDeferredCount);
   }
@@ -304,6 +305,23 @@ class _ImportScreenState extends State<ImportScreen> {
       );
     } catch (e) {
       debugPrint('Body-weight seed sync failed: $e');
+    }
+  }
+
+  /// Record on this device that [landed] reached the server.
+  ///
+  /// Its own effect, its own catch. A failure here is NOT the deferral the
+  /// push sites report: those runs ARE on the server, and only this device's
+  /// sidecar note of that fact failed to persist. The next cold start reads
+  /// them back as unsynced and `SyncService` pushes them again, which upserts
+  /// onto the rows already there — no duplicate, no loss, nothing for the
+  /// runner to act on. Folding it into the push's catch reported the whole
+  /// batch as sitting on the device when the uploads had all succeeded.
+  Future<void> _markLandedSynced(Iterable<Run> landed) async {
+    try {
+      await widget.runStore.markManySynced(landed);
+    } catch (e) {
+      debugPrint('Import: recording the pushed runs as synced failed: $e');
     }
   }
 
@@ -376,6 +394,7 @@ class _ImportScreenState extends State<ImportScreen> {
     var pushDeferredCount = 0;
     if (canSync && savedRuns.isNotEmpty) {
       if (mounted) setState(() => _status = l10n.importStatusSyncingToCloud);
+      var landed = const <Run>[];
       try {
         final failed = await api.saveRunsBatch(
           savedRuns,
@@ -393,15 +412,14 @@ class _ImportScreenState extends State<ImportScreen> {
         // to report a clean import.
         pushDeferredCount =
             savedRuns.where((r) => failed.contains(r.id)).length;
-        await widget.runStore.markManySynced(
-          savedRuns.where((r) => !failed.contains(r.id)),
-        );
+        landed = savedRuns.where((r) => !failed.contains(r.id)).toList();
       } catch (e) {
         // The runs are on disk; only the upload failed, and SyncService
         // retries it. Say so instead of reporting a clean import.
         debugPrint('Batch cloud push failed: $e');
         pushDeferredCount = savedRuns.length;
       }
+      await _markLandedSynced(landed);
     }
 
     if (!mounted) return;
