@@ -728,35 +728,9 @@ class ApiClient {
       trackUrl = existingTrackUrl;
     }
 
-    // `startedAt` is captured as `DateTime.now()` — a local-tz DateTime.
-    // `toIso8601String()` on a local DateTime emits a naive string with no
-    // Z or offset, which PostgreSQL's `timestamptz` column interprets as
-    // UTC — off by the user's offset and potentially a full calendar day.
-    // Force UTC here so the stored instant is unambiguous.
-    final row = RunRow(
-      id: run.id,
+    final row = runRowFromRun(
+      run,
       userId: userId,
-      startedAt: run.startedAt.toUtc(),
-      durationS: run.duration.inSeconds,
-      distanceM: run.distanceMetres,
-      // Round-trip the route link. Omitting it makes the upsert write
-      // route_id = null, wiping a `linkRunToRoute` on the next sync.
-      routeId: run.routeId,
-      source: run.source.name,
-      activityType: (run.metadata?['activity_type'] as String?) ?? 'run',
-      isDnf: run.metadata?['is_dnf'] == true,
-      // The promoted column the vert challenge aggregate SUMS (20270302_001,
-      // "writers populate both"). metadata.elevation_m alone left every vert
-      // board reading 0 m for app-recorded and mobile-imported runs.
-      elevationGainM: _promotedDouble(run.metadata, 'elevation_m'),
-      fastest5kS: _embeddedBestSeconds(run.metadata, 'fastest_5k_s'),
-      fastest10kS: _embeddedBestSeconds(run.metadata, 'fastest_10k_s'),
-      fastestHalfMarathonS:
-          _embeddedBestSeconds(run.metadata, 'fastest_half_marathon_s'),
-      fastestMarathonS:
-          _embeddedBestSeconds(run.metadata, 'fastest_marathon_s'),
-      externalId: run.externalId,
-      metadata: _metadataWithoutPromotedColumns(run.metadata),
       trackUrl: trackUrl,
       isPublic: isPublic,
     );
@@ -791,7 +765,7 @@ class ApiClient {
       RunRow.colDurationS: run.duration.inSeconds,
       RunRow.colDistanceM: run.distanceMetres,
       RunRow.colIsDnf: run.metadata?['is_dnf'] == true,
-      RunRow.colMetadata: _metadataWithoutPromotedColumns(run.metadata),
+      RunRow.colMetadata: runMetadataForRow(run.metadata),
     }).eq(RunRow.colId, run.id);
   }
 
@@ -889,27 +863,9 @@ class ApiClient {
       final trackUrl = trackUrls[r.id] ??
           (r.metadata?['track_url'] as String?) ??
           '';
-      return _runUpsertBody(RunRow(
-        id: r.id,
+      return _runUpsertBody(runRowFromRun(
+        r,
         userId: userId,
-        // Same UTC-normalisation as saveRun — see comment there.
-        startedAt: r.startedAt.toUtc(),
-        durationS: r.duration.inSeconds,
-        distanceM: r.distanceMetres,
-        // Round-trip the route link — see saveRun.
-        routeId: r.routeId,
-        source: r.source.name,
-        activityType: (r.metadata?['activity_type'] as String?) ?? 'run',
-        isDnf: r.metadata?['is_dnf'] == true,
-        elevationGainM: _promotedDouble(r.metadata, 'elevation_m'),
-        fastest5kS: _embeddedBestSeconds(r.metadata, 'fastest_5k_s'),
-        fastest10kS: _embeddedBestSeconds(r.metadata, 'fastest_10k_s'),
-        fastestHalfMarathonS:
-            _embeddedBestSeconds(r.metadata, 'fastest_half_marathon_s'),
-        fastestMarathonS:
-            _embeddedBestSeconds(r.metadata, 'fastest_marathon_s'),
-        externalId: r.externalId,
-        metadata: _metadataWithoutPromotedColumns(r.metadata),
         trackUrl: trackUrl.isEmpty ? null : trackUrl,
       ).toJson());
     }).toList();
@@ -1559,23 +1515,6 @@ class ApiClient {
   /// be exercised without booting Supabase.
   @visibleForTesting
   static Run debugRunFromRow(Map<String, dynamic> row) => _runFromRow(row);
-
-  /// Test-only: exposes the bag-strip that saveRun applies before persisting
-  /// a run, so the activity_type / is_dnf promotion (no double-write into the
-  /// metadata bag) can be pinned without booting Supabase.
-  @visibleForTesting
-  static Map<String, dynamic>? debugMetadataWithoutPromotedColumns(
-    Map<String, dynamic>? metadata,
-  ) =>
-      _metadataWithoutPromotedColumns(metadata);
-
-  /// Test-only: exposes [_embeddedBestSeconds] for the same reason.
-  @visibleForTesting
-  static int? debugEmbeddedBestSeconds(
-    Map<String, dynamic>? metadata,
-    String key,
-  ) =>
-      _embeddedBestSeconds(metadata, key);
 
   /// Test-only: exposes [_routeFromRow] for the same reason.
   @visibleForTesting
@@ -5377,46 +5316,6 @@ class ApiClient {
   // These go through the generated row classes so that column renames surface
   // as compile errors on the consuming fields below, not as silent runtime
   // drift.
-
-  // activity_type and is_dnf (migration 20261207_001) plus the four
-  // embedded-best fastest_*_s keys (migration 20270325_001) are promoted
-  // columns; the `Run` domain object still carries them inside its metadata
-  // bag for a single read path, so saveRun lifts them into the columns and
-  // strips them from the persisted bag here — the column is the only stored
-  // copy.
-  static Map<String, dynamic>? _metadataWithoutPromotedColumns(
-    Map<String, dynamic>? metadata,
-  ) {
-    if (metadata == null) return null;
-    final out = Map<String, dynamic>.from(metadata)
-      ..remove('activity_type')
-      ..remove('is_dnf')
-      ..remove('fastest_5k_s')
-      ..remove('fastest_10k_s')
-      ..remove('fastest_half_marathon_s')
-      ..remove('fastest_marathon_s');
-    return out.isEmpty ? null : out;
-  }
-
-  // Bag → column lift for the promoted embedded-best keys. Non-negative
-  // integers only — the same domain the old SQL-side `~ '^[0-9]+$'`
-  // validation admitted; anything else is dropped, never written.
-
-/// Read a numeric metadata key for a column that was PROMOTED out of the jsonb
-/// bag. The key is kept in metadata for the readers that still use it, so both
-/// are written — see 20270302_001.
-double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
-  final v = metadata?[key];
-  if (v is num && v.isFinite) return v.toDouble();
-  return null;
-}
-
-  static int? _embeddedBestSeconds(Map<String, dynamic>? metadata, String key) {
-    final v = metadata?[key];
-    final secs = v is int ? v : (v is num ? v.toInt() : null);
-    if (secs == null || secs < 0) return null;
-    return secs;
-  }
 
   static Run _runFromRow(Map<String, dynamic> row) {
     final r = RunRow.fromJson(row);
