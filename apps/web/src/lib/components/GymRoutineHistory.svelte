@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { fetchGymRoutineSessions } from '$lib/core/data';
+	import { fetchGymRoutineHistory } from '$lib/core/data';
 	import {
-		summariseRoutineHistory,
+		routineHistoryFromAggregate,
 		type RoutineHistory,
 		type RoutineSessionVerdict,
 	} from '$lib/gym/routine_history';
@@ -33,9 +33,9 @@
 		history = null;
 		loadError = false;
 		try {
-			const rows = await fetchGymRoutineSessions(routineId);
+			const agg = await fetchGymRoutineHistory(routineId, RECENT_LIMIT);
 			if (token !== readToken) return;
-			history = summariseRoutineHistory(rows, Date.now());
+			history = routineHistoryFromAggregate(agg, Date.now());
 		} catch (e) {
 			if (token !== readToken) return;
 			console.debug('routine history load failed', e);
@@ -58,7 +58,7 @@
 					: t('gym.routine.history.verdict.ungraded');
 	}
 
-	const recent = $derived(history?.sessions.slice(0, RECENT_LIMIT) ?? []);
+	const recent = $derived(history?.recentSessions ?? []);
 </script>
 
 {#if loadError}

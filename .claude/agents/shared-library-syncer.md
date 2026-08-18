@@ -46,7 +46,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/social/session_steps.ts` (`expandSessionSteps`, `computeSessionAdherence`) | `apps/mobile_android/lib/session_steps.dart` | `social/session_steps.test.ts` ↔ `test/session_steps_test.dart` |
 | `apps/web/src/lib/gym/gym_routine.ts` (`routineFromWorkout`, `prefillFromRoutine`, `expandRoutineSteps`) | `apps/mobile_android/lib/gym_routine.dart` | `gym/gym_routine.test.ts` ↔ `test/gym_routine_test.dart` |
 | `apps/web/src/lib/gym/gym_adherence.ts` (`computeRoutineAdherence`) | `apps/mobile_android/lib/gym_adherence.dart` | `gym/gym_adherence.test.ts` ↔ `test/gym_adherence_test.dart` |
-| `apps/web/src/lib/gym/routine_history.ts` (`summariseRoutineHistory`) | `apps/mobile_android/lib/routine_history.dart` | `gym/routine_history.test.ts` ↔ `test/routine_history_test.dart` |
+| `apps/web/src/lib/gym/routine_history.ts` (`routineHistoryFromAggregate`) | `apps/mobile_android/lib/routine_history.dart` | `gym/routine_history.test.ts` ↔ `test/routine_history_test.dart` |
 | `apps/web/src/lib/gym/gym_progression.ts` (`nextPrescription`, `workingSets`, `fiveByFiveTargets`, `fiveByFiveSessionSucceeded`) | `apps/mobile_android/lib/gym_progression.dart` | `gym/gym_progression.test.ts` ↔ `test/gym_progression_test.dart` |
 | `apps/web/src/lib/training/plan_adherence.ts` (`weeklyDrift`, `missedWorkoutAdvice`) | `apps/mobile_android/lib/plan_adherence.dart` | `training/plan_adherence.test.ts` ↔ `test/plan_adherence_test.dart` |
 | `apps/web/src/lib/training/plan_replan.ts` (`replanRemaining`) | `apps/mobile_android/lib/plan_replan.dart` | `training/plan_replan.test.ts` ↔ `test/plan_replan_test.dart` |

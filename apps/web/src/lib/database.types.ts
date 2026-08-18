@@ -5303,6 +5303,16 @@ export type Database = {
         }[]
       }
       gym_has_weighted_sets: { Args: never; Returns: boolean }
+      gym_routine_history: {
+        Args: { p_recent_limit?: number; p_routine_id: string }
+        Returns: {
+          completed_count: number
+          graded_count: number
+          last_performed_at: string
+          recent_sessions: Json
+          session_count: number
+        }[]
+      }
       gym_workout_summaries: {
         Args: { p_limit?: number }
         Returns: {

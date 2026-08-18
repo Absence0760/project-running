@@ -982,3 +982,46 @@ test('setEventPricing names the one non-partial arbiter and keeps a single branc
 		'setEventPricing must send instance_start (null = the series price), not omit it.'
 	);
 });
+
+test('fetchGymRoutineHistory aggregates on the server, never re-windows gym_workouts', () => {
+	// Reason: the routine-history panel used to read up to 500 gym_workouts
+	// rows carrying `metadata.routine_id` and reduce them client-side just to
+	// show a count. A count is an aggregate — an unbounded PostgREST select
+	// truncates at db.max-rows and still answers 200, so any client window
+	// silently under-reports a lifter who has run one routine for years. The
+	// read must stay on the gym_routine_history RPC; a `.from(gym_workouts)`
+	// select with a `.limit()` here is the regression.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchGymRoutineHistory');
+	assert.ok(start >= 0, 'Could not locate fetchGymRoutineHistory — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/supabase\.rpc\('gym_routine_history'/,
+		'fetchGymRoutineHistory must read the server-side aggregate RPC.'
+	);
+	assert.doesNotMatch(
+		body,
+		/\.from\(/,
+		'fetchGymRoutineHistory must not fall back to a windowed gym_workouts select.'
+	);
+	assert.match(
+		body,
+		/if \(error\) throw error;/,
+		'a failed read must throw so the panel offers a retry — never an empty history.'
+	);
+	// The panel asks for exactly the rows it lists, and reads the count off the
+	// aggregate rather than off the page it renders.
+	const panel = read('src/lib/components/GymRoutineHistory.svelte');
+	assert.match(
+		panel,
+		/fetchGymRoutineHistory\(routineId, RECENT_LIMIT\)/,
+		'the panel must bound its page explicitly, not take whatever arrives.'
+	);
+	assert.doesNotMatch(
+		panel,
+		/recentSessions\.length/,
+		'the count shown must be the aggregate sessionCount, never the bounded page length.'
+	);
+});
