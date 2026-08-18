@@ -3,6 +3,7 @@ import { chromium } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
+import { assertServedTreeMatches } from './dev_server_guard';
 import { signIn } from './helpers';
 import { ALL_USERS, type SeededUser } from './users';
 // @ts-expect-error — sibling .mjs imports run fine under tsx but the
@@ -49,6 +50,9 @@ export default async function globalSetup(config: FullConfig) {
 
 	const baseURL =
 		config.projects[0]?.use?.baseURL ?? 'http://localhost:7777';
+
+	// A reused dev server from another checkout serves its own bundle.
+	await assertServedTreeMatches(baseURL);
 
 	for (const user of ALL_USERS) {
 		await signInAndSaveState(baseURL, user);

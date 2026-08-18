@@ -37,6 +37,8 @@ pnpm test:e2e          # headless run
 pnpm test:e2e:ui       # interactive picker
 ```
 
+**Playwright and a dev server you did not start.** `playwright.config.ts` sets `reuseExistingServer: !CI`, so a `vite dev` left on `:7777` by another checkout is adopted silently and serves *its* bundle. The symptoms are a spec for a brand-new surface failing with no console error while every pre-existing spec passes, or — when that foreign server dies mid-suite — a wave of `ERR_CONNECTION_REFUSED` failures indistinguishable from real breaks. `globalSetup` now probes the server with Vite's `/@fs/` route before signing anyone in: a `403` proves the server is rooted in a different tree and fails the run with that reason. Kill the stray server (or run the suite from the checkout that owns it).
+
 `flutter test` has no built-in `--watch` flag. For a tight edit-save-test loop, either rerun the single file manually (sub-second) or wire up an editor integration — the Flutter plugin for VS Code and Android Studio both support running individual tests from gutter icons and auto-re-running on save.
 
 **When to run:**

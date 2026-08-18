@@ -114,7 +114,10 @@ test.describe('dashboard training-load-ramp card', () => {
 		const page = await ctx.newPage();
 		try {
 			await page.goto('/dashboard');
-			await page.waitForLoadState('networkidle');
+			// Anchor on a stat the dashboard always renders: a bare
+			// toHaveCount(0) also passes on a page that never loaded, so the
+			// absence only means something once the dashboard is up.
+			await expect(page.getByTestId('dash-total-runs')).toBeVisible({ timeout: 15_000 });
 			await expect(page.getByTestId('load-ramp')).toHaveCount(0);
 		} finally {
 			await ctx.close();
