@@ -1,4 +1,4 @@
--- Pins migration 20270517_001 (event_pricing gets ONE non-partial arbiter):
+-- Pins migration 20270518_001 (event_pricing gets ONE non-partial arbiter):
 --   * an organiser can upsert a SERIES price (instance_start IS NULL) twice —
 --     the second call updates in place instead of raising 42P10 or inserting a
 --     duplicate series row.
