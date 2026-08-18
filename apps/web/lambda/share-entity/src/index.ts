@@ -138,11 +138,15 @@ export const handler = async (
 		for (const route of ROUTES) {
 			const match = path.match(route.re);
 			if (!match) continue;
-			const key = decodeURIComponent(match[1]);
-			// A missing Supabase config or a private/missing entity both
-			// resolve to the branded 404 (the render fn returns null).
+			// `%zz` is not a valid escape, so decodeURIComponent THROWS on it.
+			// Unguarded that reached the outer catch and answered 503 — a server
+			// error and a retry signal to crawlers for what is simply a
+			// malformed link. It is an entity we cannot find, like any other.
+			const key = decodeKey(match[1]);
+			// A missing Supabase config, a malformed key, or a private/missing
+			// entity all resolve to the branded 404 (the render fn returns null).
 			const headTags =
-				config.supabaseUrl && config.supabaseAnonKey
+				key !== null && config.supabaseUrl && config.supabaseAnonKey
 					? await route.render(key, config)
 					: null;
 			if (!headTags) return html(404, notFoundHtml());
@@ -158,6 +162,16 @@ export const handler = async (
 		return json(503, { error: 'temporarily unavailable' });
 	}
 };
+
+/// The path segment as a decoded entity key, or null when the segment carries
+/// a malformed percent-escape.
+export function decodeKey(segment: string): string | null {
+	try {
+		return decodeURIComponent(segment);
+	} catch {
+		return null;
+	}
+}
 
 function html(statusCode: number, body: string): LambdaFunctionURLResult {
 	return {

@@ -49,3 +49,12 @@ The web client treats any non-200 as "this snap/segment failed": snapping
 returns the un-snapped pin, per-segment routing falls back to a straight line
 with the existing warning banner. An engine outage degrades route-builder
 quality, it never breaks the page.
+
+Two distinct non-200s sit behind that. An OSRM **4xx** means the engine answered
+and rejected the coordinates (`NoSegment` — a pin outside the loaded extract, or
+off any routable way): that is 422 `no_route_for_coordinates`. Only a 5xx, a
+timeout, or a connect failure is 502. The split is load-bearing for
+observability, not just for the client: this Lambda logs the alarm-driving
+`[osrm-proxy] engine_unreachable` line on **every** 502, so one user dropping a
+pin in the sea used to read as "the OSRM engine is unreachable, all users
+degraded".

@@ -44,7 +44,13 @@ Output: `dist/generate-route.zip` (esbuild bundle, no native/SDK deps). CI's
 
 ## Fallback contract
 
-The web client treats any non-200 (501 unconfigured / 502 engine down / 503
-unhandled) as a signal to fall back to the legacy in-browser OSRM loop
-generator, so generate-by-distance keeps working through an engine outage or in
-local dev without GraphHopper running.
+The web client treats any non-200 (501 unconfigured / 422 no loop at this start
+/ 502 engine down / 503 unhandled) as a signal to fall back to the legacy
+in-browser OSRM loop generator, so generate-by-distance keeps working through an
+engine outage or in local dev without GraphHopper running.
+
+The 422/502 split is load-bearing for observability, not just for the client:
+this Lambda logs the alarm-driving `[generate-route] engine_unreachable` line on
+**every** 502, so only a transport failure may carry that status. An engine that
+answered — graph-cycle reporting loop-poor, every seed raising `no_route`, or a
+candidate set the selector declines — is 422, and pages nobody.

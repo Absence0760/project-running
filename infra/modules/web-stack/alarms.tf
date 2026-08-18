@@ -271,7 +271,7 @@ resource "aws_cloudwatch_metric_alarm" "osrm_proxy_engine_unreachable" {
   tags                = var.tags
 }
 
-# The four share Lambdas keep serving a branded fallback card (HTTP 200 PNG /
+# The share Lambdas keep serving a branded fallback card (HTTP 200 PNG /
 # 404 HTML) when Supabase is unreachable — correct for never breaking a social
 # unfurl, but it means a Supabase outage degrades EVERY card with no AWS/Lambda
 # Errors metric to alarm on (the fallback is a returned response, not a throw).
@@ -287,13 +287,16 @@ locals {
     recap = aws_cloudwatch_log_group.lambda_share_recap.name
     badge = aws_cloudwatch_log_group.lambda_share_badge.name
     # The shared entity Lambda logs a per-surface tag ([share-event] /
-    # [share-profile] / [share-club] / [share-race]) rather than a single
-    # [share-entity], so it gets four metric filters — one per surface —
-    # all against its single log group, keeping per-surface visibility.
+    # [share-profile] / [share-club] / [share-race] / [share-session] /
+    # [share-workout]) rather than a single [share-entity], so it gets one
+    # metric filter per surface, all against its single log group, keeping
+    # per-surface visibility.
     event   = aws_cloudwatch_log_group.lambda_share_entity.name
     profile = aws_cloudwatch_log_group.lambda_share_entity.name
     club    = aws_cloudwatch_log_group.lambda_share_entity.name
     race    = aws_cloudwatch_log_group.lambda_share_entity.name
+    session = aws_cloudwatch_log_group.lambda_share_entity.name
+    workout = aws_cloudwatch_log_group.lambda_share_entity.name
   }
 }
 
