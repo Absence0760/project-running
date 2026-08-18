@@ -778,6 +778,34 @@ GNSS_SILENCE_S = 30.0
 # 300 s scenario budget burns out. A false positive needs the stream to be
 # genuinely silent for a minute and a half.
 GUEST_WEDGED_S = 90.0
+# The LIVE wedge issue. Deliberately a constant rather than prose inside the
+# message: the previous reference was hard-coded to #754, which has since been
+# closed and describes a DIFFERENT wedge (scenario `storm`, ~1-in-30, dying at
+# t=19.0s mid-run, against this one's boot-time death inside embassy_nrf::init).
+# A failure message citing a closed issue trains its reader to dismiss it, so
+# what the message carries now is the signature it actually measured; the issue
+# number is only the place to compare that signature against.
+WEDGE_ISSUE = 788
+# Wall seconds between the two machine samples the wedge probe takes. Long
+# enough that a running emulator retires a visible number of instructions,
+# short enough to add nothing meaningful to a run that has already failed.
+WEDGE_SAMPLE_GAP_S = 1.5
+# The monitor has no request/response framing, so a command's answer is
+# whatever the transcript grew by afterwards. Renode colours its prompt.
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+VIRTUAL_TIME_CMD = (
+    "python \"print('VT=%.6f' % "
+    'monitor.Machine.ElapsedVirtualTime.TimeElapsed.TotalSeconds)"'
+)
+# defmt-print stamps every decoded line with the firmware's own clock. The
+# wedge report quotes it because WHEN the guest died is most of the diagnosis:
+# t=0.000000 is a boot that never finished, anything else is a run that stopped.
+FIRMWARE_STAMP = re.compile(r"^(\d+\.\d+)\s")
+# Renode logs one of these per NMEA character the host feeder writes while the
+# guest has UARTE0 disabled, which on a boot-time wedge is every line in the
+# log's tail. Dropping them is what leaves the last thing the CPU actually did
+# visible — that line is what located this wedge inside embassy_nrf::init.
+RENODE_HOST_SIDE_NOISE = "receiver is disabled"
 # The same question asked at a wait's deadline instead of during it: was the
 # stream still alive when the claim ran out of time? A wait shorter than
 # `GUEST_WEDGED_S` can expire with the guest already dead, and reporting that
@@ -788,6 +816,41 @@ GUEST_WEDGED_S = 90.0
 LINE_CADENCE_S = 5.0
 
 Panel = namedtuple("Panel", "path width height dark data")
+MachineSample = namedtuple("MachineSample", "pc instructions virtual_s")
+
+
+def monitor_value(command, transcript):
+    """The one line a monitor command printed, out of its echo and prompt."""
+    plain = ANSI_ESCAPE.sub("", transcript).replace("\r", "\n")
+    for line in plain.split("\n"):
+        line = line.strip()
+        if not line or line == command.strip() or line.startswith("(watch)"):
+            continue
+        return line
+    return None
+
+
+def renode_cpu_tail(run_dir, keep=6):
+    """The last renode.log lines that are not host-side UART noise."""
+    if run_dir is None:
+        return []
+    log = Path(run_dir) / "renode.log"
+    if not log.exists():
+        return []
+    lines = [
+        line
+        for line in log.read_text(errors="replace").splitlines()
+        if RENODE_HOST_SIDE_NOISE not in line
+    ]
+    return lines[-keep:]
+
+
+def last_firmware_stamp(lines):
+    for line in reversed(lines):
+        match = FIRMWARE_STAMP.match(line.strip())
+        if match:
+            return match.group(1)
+    return None
 
 
 class SmokeFailure(Exception):
@@ -823,6 +886,10 @@ class LogTail:
         # that dies before the first wait is still measured from a real
         # starting point rather than from whenever a wait happened to begin.
         self.last_line_at = clock()
+        # Set by Sim once the monitor port is known. Silence alone cannot say
+        # whether the FIRMWARE stopped or the RENODE EXECUTOR did; this asks
+        # the emulator, which is the only thing that can tell them apart.
+        self.forensics = None
 
     def poll(self):
         if not self.path.exists():
@@ -845,15 +912,32 @@ class LogTail:
 
     def _wedged(self, what, silent_s):
         last = self.lines[-1].strip() if self.lines else "<nothing decoded at all>"
+        stamp = last_firmware_stamp(self.lines)
+        when = (
+            f"firmware clock last read {stamp}s"
+            if stamp
+            else "no line ever carried a firmware timestamp"
+        )
+        probe = ""
+        if self.forensics is not None:
+            try:
+                probe = self.forensics()
+            # Bare: a probe that fails for ANY reason must still leave the wedge
+            # itself reported. A crash in the diagnosis would otherwise replace
+            # the diagnosis with a stack trace about the diagnosis.
+            except Exception as exc:  # noqa: BLE001
+                probe = f"the wedge probe itself failed: {exc!r}"
         return SmokeFailure(
             f"the firmware stopped emitting {silent_s:.0f}s ago while waiting for "
             f"{what}. This is a WEDGED GUEST, not a failure of that assertion: "
             f"every scenario's log stream ticks at >= 1 Hz (the baro task's 1 Hz "
             f"sample), and the widest gap ever measured across the nine scenarios "
             f"is 1.01s, so a stream this quiet is firmware that stopped running. "
-            f"Look at the tail of the renode.log beside this run for what the CPU "
-            f"did last, not at the assertion above. Last decoded line: {last!r}. "
-            f"Known occurrence: issue #754."
+            f"WEDGE SIGNATURE — {when}; last decoded line: {last!r}"
+            + (f"; {probe}" if probe else "")
+            + f". Compare that signature against issue #{WEDGE_ISSUE} before "
+            "assuming it is the same wedge: more than one has been seen, they "
+            "die at different points, and only the signature tells them apart."
         )
 
     def mark(self):
@@ -916,6 +1000,8 @@ class Monitor:
         self.sock.settimeout(1.0)
         self.log = open(log_path, "w")
         self.stop = threading.Event()
+        self.lock = threading.Lock()
+        self.transcript = ""
         self.reader = threading.Thread(target=self._drain, daemon=True)
         self.reader.start()
 
@@ -929,12 +1015,29 @@ class Monitor:
                 return
             if not data:
                 return
-            self.log.write(data.decode("utf-8", errors="replace"))
+            text = data.decode("utf-8", errors="replace")
+            with self.lock:
+                self.transcript += text
+            self.log.write(text)
             self.log.flush()
 
     def send(self, command):
         announce(f"monitor: {command}")
         self.sock.sendall((command + "\n").encode())
+
+    def ask(self, command, wait=1.0):
+        """Send a command and return what the monitor printed for it.
+
+        The reader thread owns the socket and the monitor frames nothing, so
+        the answer is whatever the transcript grew by — there is no reply
+        boundary to key on instead. Quiet: a probe that ran hundreds of times
+        would drown the failure it is explaining."""
+        with self.lock:
+            mark = len(self.transcript)
+        self.sock.sendall((command + "\n").encode())
+        time.sleep(wait)
+        with self.lock:
+            return self.transcript[mark:]
 
     def close(self):
         self.stop.set()
@@ -1061,6 +1164,86 @@ class Sim:
             self._monitor = Monitor(self.monitor_port, self.out_dir / "monitor.log")
         return self._monitor
 
+    def _sample(self, monitor):
+        pc = monitor_value("sysbus.cpu PC", monitor.ask("sysbus.cpu PC"))
+        retired = monitor_value(
+            "sysbus.cpu ExecutedInstructions",
+            monitor.ask("sysbus.cpu ExecutedInstructions"),
+        )
+        virtual = monitor_value(VIRTUAL_TIME_CMD, monitor.ask(VIRTUAL_TIME_CMD))
+        return MachineSample(
+            pc,
+            int(retired, 0) if retired else None,
+            float(virtual[3:]) if virtual and virtual.startswith("VT=") else None,
+        )
+
+    def wedge_report(self):
+        """Whether the GUEST stopped or the RENODE EXECUTOR did.
+
+        Both look identical from the log — silence — which is why a CI-only
+        wedge could not be root-caused from the artifacts. Two samples of the
+        retired-instruction count and the machine's virtual clock separate
+        them, and the PC (resolved through the loaded ELF's symbols, so no
+        local rebuild is needed to read it) says where the guest is."""
+        if self.monitor_port is None:
+            return "no monitor port yet — the wedge predates a booted machine"
+        monitor = self.monitor()
+        first = self._sample(monitor)
+        time.sleep(WEDGE_SAMPLE_GAP_S)
+        second = self._sample(monitor)
+
+        parts = [f"cpu pc={second.pc}"]
+        if second.pc is not None and second.pc == first.pc:
+            # The difference between a spin and a live scheduler: an executor
+            # doing work is somewhere else 1.5s later, a busy-wait is not.
+            parts.append("PINNED at that instruction across both samples")
+        if second.pc:
+            symbol = monitor_value(
+                f"sysbus FindSymbolAt {second.pc}",
+                monitor.ask(f"sysbus FindSymbolAt {second.pc}"),
+            )
+            if symbol:
+                parts.append(f"in {symbol}")
+        retired = None
+        if first.instructions is not None and second.instructions is not None:
+            retired = second.instructions - first.instructions
+            parts.append(f"{retired} instructions retired")
+        advanced = None
+        if first.virtual_s is not None and second.virtual_s is not None:
+            advanced = second.virtual_s - first.virtual_s
+            parts.append(f"virtual clock +{advanced:.3f}s")
+        parts.append(f"over {WEDGE_SAMPLE_GAP_S:.1f}s of wall time")
+
+        if retired is None or advanced is None:
+            verdict = "the monitor did not answer, so neither side is ruled out"
+        elif retired > 0 and advanced > 0:
+            verdict = (
+                "the RENODE EXECUTOR IS RUNNING and the guest is burning "
+                "instructions — a firmware busy-wait or a task that stopped "
+                "yielding, and the pc above names where"
+            )
+        elif retired == 0 and advanced == 0:
+            verdict = (
+                "the RENODE EXECUTOR STOPPED — no instruction retired and no "
+                "virtual time passed, so this is the emulator, not the firmware"
+            )
+        elif retired == 0:
+            verdict = (
+                "the executor is running but the CPU RETIRED NOTHING — halted "
+                "or asleep with no interrupt left to wake it"
+            )
+        else:
+            verdict = "instructions retired against a frozen virtual clock"
+        parts.append(verdict)
+
+        tail = renode_cpu_tail(self.run_dir)
+        if tail:
+            parts.append(
+                "last renode.log lines the host-side UART noise was hiding: "
+                + " | ".join(line.strip() for line in tail)
+            )
+        return "; ".join(parts)
+
     def dump(self, name, what):
         """Dump the panel to `name` in this session's artifact dir and decode it.
 
@@ -1117,6 +1300,7 @@ class Sim:
 
         self.run_dir = Path(os.readlink(latest_link))
         self.monitor_port = int((self.run_dir / "monitor.port").read_text().strip())
+        self.tail.forensics = self.wedge_report
         announce(f"run dir {self.run_dir}, monitor port {self.monitor_port}")
 
     def shutdown(self):
@@ -3638,8 +3822,19 @@ def report_artifacts(out_dir):
         for line in log.read_text(errors="replace").splitlines()[-40:]:
             print(line, file=sys.stderr)
     for log in sorted(out_dir.glob("*/renode.log")):
-        print(f"--- last 20 lines of {log} ---", file=sys.stderr)
-        for line in log.read_text(errors="replace").splitlines()[-20:]:
+        # Filtered, because on a boot-time wedge every one of the last twenty
+        # lines is the host feeder writing NMEA at a UARTE the guest never
+        # enabled — which spends the whole budget saying nothing and buries
+        # the last thing the CPU actually did.
+        lines = log.read_text(errors="replace").splitlines()
+        kept = [line for line in lines if RENODE_HOST_SIDE_NOISE not in line]
+        elided = len(lines) - len(kept)
+        print(
+            f"--- last 20 lines of {log} "
+            f"({elided} host-side UART lines elided) ---",
+            file=sys.stderr,
+        )
+        for line in kept[-20:]:
             print(line, file=sys.stderr)
 
 
