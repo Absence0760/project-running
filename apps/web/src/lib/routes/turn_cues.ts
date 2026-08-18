@@ -13,6 +13,16 @@
  * connectivity. An optional external routing engine could later replace
  * the generator with a parsed named-road step list, falling back to this
  * when offline — this file stays the L1 baseline.
+ *
+ * A turn is the NET direction change accumulated within `mergeWithinM`
+ * metres of where the turning starts, reported at the vertex where that
+ * turning passes its halfway point. The two knobs then read as one
+ * sentence: at least `minTurnAngleDeg` of direction change within
+ * `mergeWithinM` metres is a turn; anything slacker is a curve and is not
+ * announced. Every bearing is measured on a segment that TOUCHES the
+ * vertex it is measured at, never one that spans it: a segment drawn
+ * across a corner carries half that corner's angle and none of its
+ * position.
  */
 export interface TurnCueWaypoint {
 	lat: number;
@@ -30,9 +40,9 @@ export type TurnDirection =
 export interface TurnCue {
 	/// Distance along the route, in metres from the start, at the turn vertex.
 	positionM: number;
-	/// Bearing (degrees, 0–360, 0 = north) approaching the vertex.
+	/// Bearing (degrees, 0–360, 0 = north) approaching the turn.
 	bearingInDeg: number;
-	/// Bearing leaving the vertex.
+	/// Bearing leaving the turn.
 	bearingOutDeg: number;
 	direction: TurnDirection;
 	/// Alias of positionM kept explicit for the cue-firing consumer.
@@ -40,11 +50,13 @@ export interface TurnCue {
 }
 
 export interface TurnCueOptions {
-	/// Suppress vertices whose absolute bearing change is below this — GPS /
+	/// Suppress turns whose accumulated direction change is below this — GPS /
 	/// drawing noise on a roughly-straight line. Default 30°.
 	minTurnAngleDeg?: number;
-	/// Merge a vertex into the previous cue when it falls within this many
-	/// metres of it (coincident / densely-sampled vertices). Default 15 m.
+	/// The window one turn is accumulated over: vertices within this many
+	/// metres of where the turning starts belong to the same turn, so a
+	/// densely-sampled or rounded corner fires once at its full angle.
+	/// Default 15 m.
 	mergeWithinM?: number;
 }
 
@@ -52,15 +64,25 @@ const DEFAULT_MIN_TURN_ANGLE_DEG = 30;
 const DEFAULT_MERGE_WITHIN_M = 15;
 const SLIGHT_MAX_DEG = 45;
 const UTURN_MIN_DEG = 150;
+/// A leg shorter than this carries no usable bearing, so its far vertex is
+/// dropped. Far below any route's vertex resolution, so dropping it cannot
+/// move a corner.
+const MIN_LEG_M = 0.05;
+/// A vertex bending less than this does not open a turn window. A corner
+/// built from bends this small would need more vertices inside one window
+/// than any drawn or imported route carries.
+const TURN_EPSILON_DEG = 0.5;
+
+interface Bend {
+	positionM: number;
+	bearingInDeg: number;
+	bearingOutDeg: number;
+	deltaDeg: number;
+}
 
 /**
- * Generate an ordered list of turn cues from `waypoints`. A cue is emitted
- * at each interior vertex whose bearing change exceeds `minTurnAngleDeg`,
- * classified by signed turn angle into left/right/slight/uturn. Coincident
- * vertices and vertices within `mergeWithinM` of the previous cue are merged
- * so a densely-sampled corner produces one cue, not a burst. Returns `[]`
- * for a straight line or fewer than 3 waypoints (no interior vertex to turn
- * at).
+ * Generate an ordered list of turn cues from `waypoints`. Returns `[]` for a
+ * straight line or fewer than 3 waypoints (no interior vertex to turn at).
  */
 export function generateTurnCues(
 	waypoints: TurnCueWaypoint[],
@@ -70,43 +92,70 @@ export function generateTurnCues(
 	const mergeWithin = options.mergeWithinM ?? DEFAULT_MERGE_WITHIN_M;
 	if (waypoints.length < 3) return [];
 
-	// Collapse coincident / sub-merge-distance vertices first, carrying the
-	// cumulative distance of each surviving vertex along the ORIGINAL line. A
-	// duplicated or densely-sampled corner then presents as a single vertex with
-	// a well-defined entry/exit bearing, so it fires one cue instead of a burst
-	// of zero-length-leg skips.
-	const collapsed: { wp: TurnCueWaypoint; cumM: number }[] = [];
+	const pts: { wp: TurnCueWaypoint; cumM: number }[] = [
+		{ wp: waypoints[0], cumM: 0 },
+	];
 	let cum = 0;
-	collapsed.push({ wp: waypoints[0], cumM: 0 });
 	for (let i = 1; i < waypoints.length; i++) {
 		cum += haversineM(waypoints[i - 1], waypoints[i]);
-		const prev = collapsed[collapsed.length - 1];
-		if (cum - prev.cumM <= mergeWithin) {
-			// Within merge distance of the kept vertex: advance the kept vertex to
-			// this point so the exit bearing reflects where the line actually goes,
-			// but keep the earlier cumulative position.
-			prev.wp = waypoints[i];
-			continue;
-		}
-		collapsed.push({ wp: waypoints[i], cumM: cum });
+		if (cum - pts[pts.length - 1].cumM < MIN_LEG_M) continue;
+		pts.push({ wp: waypoints[i], cumM: cum });
 	}
-	if (collapsed.length < 3) return [];
+	if (pts.length < 3) return [];
+
+	const bends: Bend[] = [];
+	for (let i = 1; i < pts.length - 1; i++) {
+		const bearingInDeg = bearingDeg(pts[i - 1].wp, pts[i].wp);
+		const bearingOutDeg = bearingDeg(pts[i].wp, pts[i + 1].wp);
+		bends.push({
+			positionM: pts[i].cumM,
+			bearingInDeg,
+			bearingOutDeg,
+			deltaDeg: signedTurn(bearingInDeg, bearingOutDeg),
+		});
+	}
 
 	const cues: TurnCue[] = [];
-	for (let i = 1; i < collapsed.length - 1; i++) {
-		const bearingIn = bearingDeg(collapsed[i - 1].wp, collapsed[i].wp);
-		const bearingOut = bearingDeg(collapsed[i].wp, collapsed[i + 1].wp);
-		const delta = signedTurn(bearingIn, bearingOut);
-		if (Math.abs(delta) < minAngle) continue;
-
-		const positionM = collapsed[i].cumM;
+	let i = 0;
+	while (i < bends.length) {
+		if (Math.abs(bends[i].deltaDeg) < TURN_EPSILON_DEG) {
+			i++;
+			continue;
+		}
+		let net = 0;
+		let swept = 0;
+		let end = i;
+		while (
+			end < bends.length &&
+			bends[end].positionM - bends[i].positionM <= mergeWithin
+		) {
+			net += bends[end].deltaDeg;
+			swept += Math.abs(bends[end].deltaDeg);
+			end++;
+		}
+		if (Math.abs(net) < minAngle) {
+			// Not a turn over this window. Slide by one rather than consuming the
+			// window, so a corner that starts just inside it still opens its own.
+			i++;
+			continue;
+		}
+		let run = 0;
+		let positionM = bends[i].positionM;
+		for (let k = i; k < end; k++) {
+			run += Math.abs(bends[k].deltaDeg);
+			if (run * 2 >= swept) {
+				positionM = bends[k].positionM;
+				break;
+			}
+		}
 		cues.push({
 			positionM,
-			bearingInDeg: bearingIn,
-			bearingOutDeg: bearingOut,
-			direction: classify(delta),
+			bearingInDeg: bends[i].bearingInDeg,
+			bearingOutDeg: bends[end - 1].bearingOutDeg,
+			direction: classify(net),
 			distanceFromStartM: positionM,
 		});
+		i = end;
 	}
 	return cues;
 }

@@ -11,6 +11,16 @@ import 'dart:math';
 /// instructions ("turn onto Oak St"); that is the deliberate trade for an
 /// always-works offline cue list the recorder can play back with zero
 /// connectivity.
+///
+/// A turn is the NET direction change accumulated within [mergeWithinM]
+/// metres of where the turning starts, reported at the vertex where that
+/// turning passes its halfway point. The two knobs then read as one
+/// sentence: at least [minTurnAngleDeg] of direction change within
+/// [mergeWithinM] metres is a turn; anything slacker is a curve and is not
+/// announced. Every bearing is measured on a segment that TOUCHES the
+/// vertex it is measured at, never one that spans it: a segment drawn
+/// across a corner carries half that corner's angle and none of its
+/// position.
 
 class TurnCueWaypoint {
   const TurnCueWaypoint(this.lat, this.lng);
@@ -31,10 +41,10 @@ class TurnCue {
   /// Distance along the route, in metres from the start, at the turn vertex.
   final double positionM;
 
-  /// Bearing (degrees, 0–360, 0 = north) approaching the vertex.
+  /// Bearing (degrees, 0–360, 0 = north) approaching the turn.
   final double bearingInDeg;
 
-  /// Bearing leaving the vertex.
+  /// Bearing leaving the turn.
   final double bearingOutDeg;
 
   final TurnDirection direction;
@@ -48,12 +58,31 @@ const double _defaultMergeWithinM = 15;
 const double _slightMaxDeg = 45;
 const double _uturnMinDeg = 150;
 
-/// Generate an ordered list of turn cues from [waypoints]. A cue is emitted
-/// at each interior vertex whose bearing change exceeds [minTurnAngleDeg],
-/// classified by signed turn angle into left/right/slight/uturn. Coincident
-/// vertices and vertices within [mergeWithinM] of the previous kept vertex
-/// are merged so a densely-sampled corner produces one cue, not a burst.
-/// Returns `[]` for a straight line or fewer than 3 waypoints.
+/// A leg shorter than this carries no usable bearing, so its far vertex is
+/// dropped. Far below any route's vertex resolution, so dropping it cannot
+/// move a corner.
+const double _minLegM = 0.05;
+
+/// A vertex bending less than this does not open a turn window. A corner
+/// built from bends this small would need more vertices inside one window
+/// than any drawn or imported route carries.
+const double _turnEpsilonDeg = 0.5;
+
+class _Bend {
+  const _Bend(
+    this.positionM,
+    this.bearingInDeg,
+    this.bearingOutDeg,
+    this.deltaDeg,
+  );
+  final double positionM;
+  final double bearingInDeg;
+  final double bearingOutDeg;
+  final double deltaDeg;
+}
+
+/// Generate an ordered list of turn cues from [waypoints]. Returns `[]` for a
+/// straight line or fewer than 3 waypoints (no interior vertex to turn at).
 List<TurnCue> generateTurnCues(
   List<TurnCueWaypoint> waypoints, {
   double minTurnAngleDeg = _defaultMinTurnAngleDeg,
@@ -61,37 +90,67 @@ List<TurnCue> generateTurnCues(
 }) {
   if (waypoints.length < 3) return const [];
 
-  // Collapse coincident / sub-merge-distance vertices first, carrying the
-  // cumulative distance of each surviving vertex along the ORIGINAL line.
-  final collapsedWp = <TurnCueWaypoint>[];
-  final collapsedCum = <double>[];
+  final ptsWp = <TurnCueWaypoint>[waypoints[0]];
+  final ptsCum = <double>[0];
   var cum = 0.0;
-  collapsedWp.add(waypoints[0]);
-  collapsedCum.add(0);
   for (var i = 1; i < waypoints.length; i++) {
     cum += _haversineM(waypoints[i - 1], waypoints[i]);
-    if (cum - collapsedCum.last <= mergeWithinM) {
-      collapsedWp[collapsedWp.length - 1] = waypoints[i];
-      continue;
-    }
-    collapsedWp.add(waypoints[i]);
-    collapsedCum.add(cum);
+    if (cum - ptsCum.last < _minLegM) continue;
+    ptsWp.add(waypoints[i]);
+    ptsCum.add(cum);
   }
-  if (collapsedWp.length < 3) return const [];
+  if (ptsWp.length < 3) return const [];
+
+  final bends = <_Bend>[];
+  for (var i = 1; i < ptsWp.length - 1; i++) {
+    final bearingIn = _bearingDeg(ptsWp[i - 1], ptsWp[i]);
+    final bearingOut = _bearingDeg(ptsWp[i], ptsWp[i + 1]);
+    bends.add(_Bend(
+      ptsCum[i],
+      bearingIn,
+      bearingOut,
+      _signedTurn(bearingIn, bearingOut),
+    ));
+  }
 
   final cues = <TurnCue>[];
-  for (var i = 1; i < collapsedWp.length - 1; i++) {
-    final bearingIn = _bearingDeg(collapsedWp[i - 1], collapsedWp[i]);
-    final bearingOut = _bearingDeg(collapsedWp[i], collapsedWp[i + 1]);
-    final delta = _signedTurn(bearingIn, bearingOut);
-    if (delta.abs() < minTurnAngleDeg) continue;
-
+  var i = 0;
+  while (i < bends.length) {
+    if (bends[i].deltaDeg.abs() < _turnEpsilonDeg) {
+      i++;
+      continue;
+    }
+    var net = 0.0;
+    var swept = 0.0;
+    var end = i;
+    while (end < bends.length &&
+        bends[end].positionM - bends[i].positionM <= mergeWithinM) {
+      net += bends[end].deltaDeg;
+      swept += bends[end].deltaDeg.abs();
+      end++;
+    }
+    if (net.abs() < minTurnAngleDeg) {
+      // Not a turn over this window. Slide by one rather than consuming the
+      // window, so a corner that starts just inside it still opens its own.
+      i++;
+      continue;
+    }
+    var run = 0.0;
+    var positionM = bends[i].positionM;
+    for (var k = i; k < end; k++) {
+      run += bends[k].deltaDeg.abs();
+      if (run * 2 >= swept) {
+        positionM = bends[k].positionM;
+        break;
+      }
+    }
     cues.add(TurnCue(
-      positionM: collapsedCum[i],
-      bearingInDeg: bearingIn,
-      bearingOutDeg: bearingOut,
-      direction: _classify(delta),
+      positionM: positionM,
+      bearingInDeg: bends[i].bearingInDeg,
+      bearingOutDeg: bends[end - 1].bearingOutDeg,
+      direction: _classify(net),
     ));
+    i = end;
   }
   return cues;
 }
