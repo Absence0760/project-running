@@ -26,8 +26,16 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform {
   // pauseLocationUpdatesAutomatically, activityType, FGS config, ...).
   final List<LocationSettings?> lastLocationSettings = <LocationSettings?>[];
 
+  // When set, isLocationServiceEnabled parks on this completer — lets a test
+  // hold the GPS retry loop mid-precheck while something else happens.
+  Completer<bool>? serviceEnabledGate;
+
   @override
-  Future<bool> isLocationServiceEnabled() async => serviceEnabled;
+  Future<bool> isLocationServiceEnabled() async {
+    final gate = serviceEnabledGate;
+    if (gate != null) return gate.future;
+    return serviceEnabled;
+  }
 
   @override
   Future<LocationPermission> checkPermission() async => permissionState;
@@ -477,6 +485,57 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(r.debugTrack.length, firstTrackLen,
           reason: 'dispose should have cancelled the position subscription');
+    });
+
+    test(
+      'a retry callback in flight during dispose cannot re-open the stream',
+      () async {
+        // The retry loop awaits its service/permission precheck. A callback
+        // parked on that await when the recorder is disposed used to resume and
+        // subscribe again — a subscription nothing is left to cancel, holding
+        // the GPS radio and the foreground service for the life of the process
+        // while every fix raised on the closed snapshot sink.
+        final r = RunRecorder();
+        await r.prepare();
+        await Future<void>.delayed(Duration.zero);
+        r.begin();
+        expect(fake.subscriptionsOpened, 1);
+
+        // Tear the stream down so the retry loop has work to do, and park its
+        // precheck.
+        final gate = Completer<bool>();
+        fake.serviceEnabledGate = gate;
+        fake.emitError(Exception('platform stream torn down'));
+        await Future<void>.delayed(Duration.zero);
+
+        // Wait past a retry tick (the interval is 3 s) so a callback is parked
+        // on the gate, then dispose while it is still in flight.
+        await Future<void>.delayed(const Duration(seconds: 4));
+        r.dispose();
+        gate.complete(true);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        expect(fake.subscriptionsOpened, 1,
+            reason: 'dispose must be terminal — no stream may be opened after '
+                'it, whatever was already in flight');
+
+        // Nothing is listening, but a re-opened stream would push this fix
+        // through _emitSnapshot and raise on the closed controller.
+        fake.emit(_pos(metresEast: 50, secondsFromStart: 5));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(r.debugTrack, isEmpty);
+      },
+      timeout: const Timeout(Duration(seconds: 20)),
+    );
+
+    test('prepare() after dispose() throws rather than returning a zombie',
+        () async {
+      final r = RunRecorder();
+      await r.prepare();
+      r.dispose();
+      await expectLater(r.prepare(), throwsA(isA<StateError>()));
+      expect(r.prepared, isFalse);
+      expect(fake.subscriptionsOpened, 1);
     });
   });
 }

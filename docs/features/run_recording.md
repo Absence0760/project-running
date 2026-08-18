@@ -39,6 +39,8 @@ idle ──prepare()──▶ prepared ──begin()──▶ recording ──st
 
 `prepare()` is async (permission check + stream subscription + foreground service startup). `begin()` is synchronous — it just flips bits and starts the 1-second elapsed-time timer. `stop()` closes the stream and returns a `Run`.
 
+`dispose()` is **terminal**, not a return to `idle`: it clears `_prepared` / `_recording` and latches a disposed flag that blocks the GPS retry loop from ever opening a stream again, and `prepare()` on a disposed recorder throws a `StateError`. Without the latch a retry callback parked on its async service/permission precheck when `dispose()` ran would resume afterwards and re-subscribe — a position stream nothing is left to cancel, holding the GPS radio and the foreground service for the life of the process while every fix raised on the closed snapshot sink. Each run builds a fresh `RunRecorder`.
+
 A `start()` convenience method exists that calls `prepare()` then `begin()` in sequence, for callers that don't need the split.
 
 ### Countdown preload
@@ -193,6 +195,7 @@ If the local save throws (disk full, isolate crash, plugin failure), `_stop` del
 Immediately after `LocalRunStore.init()` and before `runApp`, the app checks for a leftover `in_progress.json`. `evaluateInProgressPartial` returns one of three outcomes (decisions §230):
 
 - **`resumable`** — the partial has **≥ 3 waypoints and ≥ 50 m** *and* was last saved within the 48 h `kResumableWindow` (`in_progress_saved_at`). Cold start jumps to the run screen and offers **Resume** / **Finish now** / **Discard**. Resume calls `RunRecorder.resumeSession(...)`, which re-hydrates the track, distance, prior elapsed (`_elapsedOffset`), original `startedAt`, and restored laps (`lapsFromCanonicalJson`), then continues appending to the *same* NDJSON file — one continuous run, not a second record. The dead-process gap is deliberately **not** credited to elapsed (monotonic-clock honesty). This is the fix for a multi-day ultra whose process is killed mid-run.
+  The monotonic route floor (`_minMatchedSegmentIdx`, the reason distance-remaining cannot climb back up on a loop or an out-and-back) is **rebuilt** on resume by replaying the seeded track through the same closest-segment search, within a fixed projection budget. `prepare()` resets the floor to 1, so without the rebuild the resumed matcher had no memory of the ground already covered: on a route that doubles back the segment under the runner's feet is the outbound one, distance-remaining roughly doubles, and — the floor being by design never lowered — it never self-corrects.
 - **`recovered`** — the partial clears the size floor but is stale (older than the window, or has no timestamp — the safe default). It's promoted to a completed run (tagged `metadata.recovered_from_crash = true`), saved via `store.save()`, and a first-frame snackbar reads *"Recovered unfinished run — X.XX km, Y min"*. "Finish now" from the resumable prompt takes this same path.
 - **`discarded`** — below the size floor (filters out "tap Start then background" noise).
 
