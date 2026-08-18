@@ -119,6 +119,9 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 
 ## CI reliability
 
+- [ ] **The `pages` sim scenario wedges the firmware executor in CI, and issue #754 — which describes exactly this — is closed.** Seen twice consecutively on 2026-08-18 (PR #787, runs `95791544620` and `95812234823`), both reporting `scenario pages: the firmware stopped emitting 90s ago while waiting for the first accepted fix`. The harness's own message names #754 as the known occurrence, but #754 is CLOSED and scoped to the **storm** scenario at ~1-in-30; this is a different scenario at 2-for-2. Triaged against the round-3 firmware changes and **cleared**: the `pages` scenario passes locally on the merged branch (every assertion, 17-press BTN4 walk, all 6 page dumps distinct), and the baro task's 1 Hz DEBUG line — the invariant the wedge detector keys off — still ticks with a max inter-line gap of 0.996 s, so neither the new `continue` on an implausible altitude nor the `if let Some(corrected)` guard silenced it. The `continue` is also not a busy loop: the `select(ticker.next(), ...)` await sits at the loop head, so it re-awaits. So this is #754's defect, still live and now reproducing on a second scenario. Reopen #754 (or file a successor) rather than leaving the harness pointing at a closed issue.
+
+
 - [ ] **The local Supabase edge runtime intermittently never boots, failing a job in setup.** Seen twice on 2026-08-14 in one session — `Web e2e (Playwright) shard 8/14` on PR #764 and `Web e2e — Go live-hub (WebSocket)` on PR #766 — both dying in the *Start local Supabase stack* step with `edge runtime (clip-public-track) never became ready within 90s (last status 000000)` after ~45 consecutive curl attempts, ~9 minutes apart from the stated 90 s. No test ever runs; a re-run of the failed job passes clean both times. Two things to look at: (1) why the edge runtime container never serves, which the step's own forensics do not currently capture (it logs the wait loop but not the container's logs or exit state); (2) the message says "within 90s" while the loop actually ran ~9 minutes, so the wait helper's timeout accounting and its error string disagree — whichever is right, one of them is lying to whoever reads the failure. **Do not "fix" this by widening the timeout**: the runtime is not slow, it is not coming up at all (status `000000` is connection-refused, not a slow 200), so a longer wait would only make each failure more expensive. Worth catching because the failure is indistinguishable from a real break at a glance and trains people to re-run reflexively.
 
 ## Testing gaps
@@ -395,41 +398,63 @@ Two hunters (Dart data layer, production Lambdas). Fixes landed on
 everyone.** These are the inverse of the share-id bug fixed in this branch,
 and worth doing together as one alarm-hygiene pass:
 
-- [ ] `share_session_lookup` / `share_workout_lookup` never inspect `error` at
-  all (unlike the other six), and `alarms.tf` registers no metric filter for
-  either. A Supabase outage on those two paths is invisible: 404 HTML, no
-  Lambda `Errors`, nobody paged.
-- [ ] `osrm-proxy` collapses OSRM's own 4xx (`NoSegment` — a waypoint outside
-  the loaded extract) into 502, and the Lambda logs `engine_unreachable` for
-  every 502. A user dropping a pin outside the extract raises "the OSRM engine
-  is unreachable, all users degraded".
-- [ ] `generate-route` gives three distinct outcomes status 502 and logs
-  `engine_unreachable` for all of them; only one is a real outage. A Pro user
-  in a loop-poor neighbourhood pages someone, and a genuine GraphHopper outage
-  can't be told apart from geography.
-- [ ] `lambda/share-entity` 503s on a percent-malformed path (`/share/club/%zz`
-  → `decodeURIComponent` throws `URIError` → outer catch), where every other
-  missing entity returns the branded `noindex` 404. Bad client input surfaced
-  as a server error, and a retry signal to crawlers.
+- [x] `share_session_lookup` / `share_workout_lookup` now inspect `error` on the
+  parent AND child queries and log `[share-<x>] upstream_unreachable`; `session`
+  + `workout` are registered in `share_log_groups` in `alarms.tf`, which drives
+  both the metric filter and the alarm. `share_upstream_alarm_guard.test.ts`
+  derives the surface set from the lookup files themselves and fails when either
+  half is missing, so the next share surface cannot ship unalarmed.
+- [x] `osrm-proxy` returns `422 no_route_for_coordinates` on an OSRM 4xx (the
+  engine ANSWERED and rejected the coordinates) and reserves 502 — the only
+  status the Lambda's `engine_unreachable` line is gated on — for a 5xx, timeout,
+  or connect failure.
+- [x] `generate-route` split FOUR outcomes, not the three filed: graph-cycle
+  loop-poor with no fallback, every seed raising `no_route`, and a declined
+  candidate set are all 422; only a transport failure is 502. The graph-cycle
+  branch now tracks whether the call THREW rather than inferring geography from a
+  missing fallback engine — a sidecar outage and a cul-de-sac had been one signal.
+- [x] `lambda/share-entity` decodes a path segment through `decodeKey`, so a
+  malformed percent-escape takes the branded `noindex` 404 like any other entity
+  we cannot find, instead of a 503 that tells crawlers to retry.
 
-**Mobile data layer** (all `packages/api_client/lib/src/api_client.dart`):
+**Mobile data layer** (all `packages/api_client/lib/src/api_client.dart`) — CLOSED 2026-08-18, [decisions § 646](../architecture/decisions.md)
 
-- [ ] `fetchRunRowsRaw()` has no paging and is consumed as the complete history
-  by `backup.dart`, so an account with 1,400 runs archives the newest 1,000 and
-  a restore silently loses the rest. Same shape, lower impact, in
-  `fetchCheckpointCrossings`, `fetchEventAttendees`, `getRouteReviews`,
-  `fetchExerciseCatalogue`.
-- [ ] `_hydratePeopleSuggestions` counts public runs via the `runs` base table,
-  whose non-owner SELECT policy `20260701_001` dropped — that migration states
-  the outcome verbatim ("returns zero rows"). So `people_screen` shows
-  "0 public runs" for everyone and `comparePeopleRank`'s primary sort key is a
-  constant. Migration `20270118_001_public_run_counts.sql` exists to replace
-  this exact query and web already migrated; mobile didn't.
-- [ ] Four writes stamp local wall-clock into a `timestamptz` via
-  `DateTime.now().toIso8601String()` with no `.toUtc()` (`:3019`, `:3031`,
-  `:4216`, `:5658`) — the bug `saveRun`'s own comment documents. A Berlin user
-  archiving a coach thread at 23:30 sees it dated the next day.
-  `createCustomExercise`'s is worse in kind: it feeds newer-wins sync.
+- [x] **Five reads whose contract is "every row" truncated silently at 1000.**
+  `fetchRunRowsRaw` is consumed by `backup.dart` as the COMPLETE history, so a
+  1,400-run account archived 1,000 and the restore lost the other 400 with no
+  error on either side of the round trip. Fixed by `readAllPages`
+  (`paged_read.dart`), wired into `fetchRunRowsRaw`, `fetchCheckpointCrossings`,
+  `fetchEventAttendees`, `getRouteReviews`, `fetchExerciseCatalogue` and the
+  `routes` read inside `createBackup` (same bug, same function). Each gained a
+  unique tiebreaker order — a range over an ambiguous order duplicates or drops
+  the page-boundary row. The "local backup writer capped at 1000 runs" carried
+  into this round **was this cap and not a separate policy**, so the local path is
+  now genuinely complete and correctly still makes no completeness claim. 13 tests.
+- [x] **`_hydratePeopleSuggestions` counted public runs off a relation RLS
+  empties.** Every People suggestion read "0 public runs" and `comparePeopleRank`'s
+  PRIMARY sort key had been a constant since `20260701_001`. Now reads the
+  SECURITY DEFINER `public_run_counts` RPC. Guarded as source rather than wire
+  because the failure is static — the old query is well-formed and succeeds; the
+  guard also parses the migration and pins the RPC name, parameter name and
+  returned columns against what the client unpacks. 5 tests.
+- [x] **Six writes stamped local wall-clock into a `timestamptz`.** The four filed
+  plus `markCompleted` and `setSkipped` in `training_service.dart`, which had
+  diverged from the identical `completed_at` write `api_client` already had right.
+  Two jsonb `metadata.imported_at` writes went with them. The tree-wide guard
+  allowlists by exact source line the four occurrences that are genuinely not
+  instants, so a new wall-clock write even inside an allowlisted file still fails.
+
+## People-search hydrate exceeds the project's own `in`-filter chunk (2026-08-18)
+
+- [ ] `searchPeople` hands `_hydratePeopleSuggestions` up to 120 candidate ids
+  (`limit * 3`, capped at 120), which go straight into two `.inFilter(...)` calls.
+  `chunk.dart` sets `kInFilterChunk = 100` and warns that an over-long `in` filter
+  "silently returns an empty result", so the profile and follow reads are unguarded
+  above the project's own stated bound. ~4.5 KB of uuids is probably under the
+  gateway limit, which is why nobody has seen it, but it is a silent-empty failure
+  mode by the same reasoning that motivated the constant. Route both through
+  `chunkList` and merge, or lower the candidate cap. The public-run-count leg is
+  already immune (RPC, POST body). Surfaced while closing the round-3 block above.
 
 ## Gear backfill vs the auto-tag trigger's activity mapping (2026-08-13) — CLOSED
 
@@ -619,8 +644,8 @@ column) excluded it.
 
 Five parallel `/improve-round` passes landed web-first in one PR ([decisions § 612](../architecture/decisions.md)–§ 616). Each deferred its mobile half deliberately rather than shipping a Dart twin with no caller — a twin with no consumer is dead code the parity guard then polices forever.
 
-- [ ] **Mobile mirror: gear rotation next-up.** Web ships `gear/rotation_pick.ts` + the "Next up / Make current" affordance on each rotation row at `/settings/gear` ([decisions § 613](../architecture/decisions.md)) — the bridge between a rotation and the `is_default` star the `runs`-insert trigger auto-tags with, without which a runner rotating three pairs banks every kilometre on one. Mobile already has the parallel `GearRotationsScreen` (§ 183) but no equivalent, so the mileage-accuracy problem persists on the phone. Port `rotation_pick.ts` to `apps/mobile_android/lib/gear_rotation_pick.dart` (+ iOS twin + mirror suite), register the new pair in **both** the `CLAUDE.md` parity list and `.claude/agents/shared-library-syncer.md` in the same change (`scripts/check_parity_pair_registry.mjs` fails on either-direction drift), and surface it on the rotations screen.
-- [ ] **Mobile roadbook screen does not render the target verdict.** The Dart `roadbook.dart` twin computes `RoadbookLeg.target` in lockstep with web ([decisions § 614](../architecture/decisions.md)), but `apps/mobile_android/lib/screens/roadbook_screen.dart` still shows only the cutoff column. Web-first per § 24, so this is a mirror task, not a gap — the engine half is already done and tested on both sides.
+- [x] **Mobile mirror: gear rotation next-up.** Shipped 2026-08-18 ([decisions § 649](../architecture/decisions.md)) — `gear_rotation_pick.dart` is a registered parity pair (18 mirror tests each) and `GearRotationsScreen` carries the Next up / Make current affordance over a new `ApiClient.setDefaultGear`; mobile had **no** `is_default` writer at all before this, which is why the star could not follow a rotation on the phone. Original text: Web ships `gear/rotation_pick.ts` + the "Next up / Make current" affordance on each rotation row at `/settings/gear` ([decisions § 613](../architecture/decisions.md)) — the bridge between a rotation and the `is_default` star the `runs`-insert trigger auto-tags with, without which a runner rotating three pairs banks every kilometre on one. Mobile already has the parallel `GearRotationsScreen` (§ 183) but no equivalent, so the mileage-accuracy problem persists on the phone. Port `rotation_pick.ts` to `apps/mobile_android/lib/gear_rotation_pick.dart` (+ iOS twin + mirror suite), register the new pair in **both** the `CLAUDE.md` parity list and `.claude/agents/shared-library-syncer.md` in the same change (`scripts/check_parity_pair_registry.mjs` fails on either-direction drift), and surface it on the rotations screen.
+- [x] **Mobile roadbook screen does not render the target verdict.** Shipped 2026-08-18 — `roadbook_screen.dart` renders the resolved target time, signed margin and ahead/on-plan/behind verdict as a chip above the cut-off chip, and carries it into share-as-text. On-plan is neutral rather than a third alert colour. 4 ARB keys x 7 locales, 3 widget tests. Original text: The Dart `roadbook.dart` twin computes `RoadbookLeg.target` in lockstep with web ([decisions § 614](../architecture/decisions.md)), but `apps/mobile_android/lib/screens/roadbook_screen.dart` still shows only the cutoff column. Web-first per § 24, so this is a mirror task, not a gap — the engine half is already done and tested on both sides.
 - [ ] **Mobile mirror: the challenge leaderboard standing.** `apps/web/src/lib/social/leaderboard_standing.ts` (`standingFor`) backs the "Your standing — #2 of 24, 2.4 km behind Alex" card above the board on `/challenges/[id]` ([decisions § 615](../architecture/decisions.md)). `challenge_detail_screen.dart` renders the leaderboard with no equivalent, so the helper is deliberately web-only and NOT a registered parity pair. If the mobile screen grows the card, port `leaderboard_standing.dart` with mirror tests and register the pair in BOTH registries in the same change.
 - [ ] **Mobile: mirror the extended-nutrient day roll-up on `nutrition_screen.dart`.** Web shipped the self-hiding Nutrients section + `nutrition/extended_nutrients.ts` ([decisions § 616](../architecture/decisions.md)); the mobile composer already captures all five nutrients and `nutrition_meal_detail_screen.dart` already shows them per item, but there is no day roll-up. Mirroring it would make `extended_nutrients` a registered TS↔Dart parity pair (both registries, per § 604) and would need to carry the coverage contract intact — the "at least" treatment and the withheld `remaining` are the point of the helper, not decoration.
 - [ ] **`comeback.ts` has no Dart twin.** Like `self_load.ts` and `plan_ramp.ts` before it, the comeback load card is web-only ([decisions § 612](../architecture/decisions.md)): mobile carries the `coach_load` Dart twin but has no self-facing load surface at all, so a Dart port would be dead code today. If a mobile dashboard ever grows a load card, port `self_load`, `plan_ramp` and `comeback` **together** — they share `recentRunVolume` / `volumeSample` and the `activeWeeks` gate that makes the ratio card and the comeback card mutually exclusive, so porting one without the others would either duplicate the reduction or let a phone show both cards at once.
@@ -638,9 +663,9 @@ Five parallel `/improve-round` passes landed web-first in one PR ([decisions § 
 
 - [ ] **Mobile mirror: the gym routine-history panel.** `apps/web/src/lib/gym/routine_history.ts` + `GymRoutineHistory.svelte` ship web-only ([decisions § 617](../architecture/decisions.md)). `routine_detail_screen.dart` has no equivalent read-back of `gym_workouts.metadata.routine_id`, so a phone-only lifter cannot see when they last ran a routine or their completion rate. Port only alongside a real mobile caller, and register the pair in BOTH root `CLAUDE.md` and `.claude/agents/shared-library-syncer.md` in the same change.
 - [ ] **Mobile bulk importers report a bare failure count.** `apps/mobile_android/lib/strava_importer.dart` (and the Health Connect / CSV paths in `import_screen.dart`) still swallow the caught error and increment a counter — the gap web closed in [§ 618](../architecture/decisions.md). Port `import_failures.ts` only alongside a mobile report surface; register the pair in both registries if you do.
-- [ ] **Mobile mirror: run-detail pacing halves + the grade-adjusted split column.** Web ships `apps/web/src/lib/runs/pace_analysis.ts` behind the Pacing card and the extra splits column on `/runs/[id]` ([decisions § 619](../architecture/decisions.md)). `run_detail_screen.dart` already computes splits (`_computeSplits`) and whole-run GAP, so the Dart port is additive. Doing it makes `pace_analysis` a registered parity pair — add it to BOTH registries in the same change, and flip the `docs/product/parity.md` row when it lands.
+- [x] **Mobile mirror: run-detail pacing halves + the grade-adjusted split column.** Shipped 2026-08-18 ([decisions § 648](../architecture/decisions.md)) — `pace_analysis.dart` is a registered parity pair (13 mirror tests each); `run_detail_screen.dart` renders the pacing card above the splits list and a grade-adjusted lane on each split row, both gated on the same 2 s/km margin the key-stat GAP tile uses. `parity.md` row flipped. Original text: Web ships `apps/web/src/lib/runs/pace_analysis.ts` behind the Pacing card and the extra splits column on `/runs/[id]` ([decisions § 619](../architecture/decisions.md)). `run_detail_screen.dart` already computes splits (`_computeSplits`) and whole-run GAP, so the Dart port is additive. Doing it makes `pace_analysis` a registered parity pair — add it to BOTH registries in the same change, and flip the `docs/product/parity.md` row when it lands.
 - [x] **Mobile: the club event listings still advertise a cancelled occurrence.** Closed 2026-08-18 ([decisions § 629](../architecture/decisions.md)). `event_occurrence` is now a registered TS<->Dart parity pair carrying `isOccurrenceCancelled` + `nextLiveInstance`; `upcomingCancelledOccurrences` stays web-only because it backs an organiser reinstate picker mobile does not have. `SocialService._enrichEvents` and `fetchNextRsvpedEvent` both resolve through it off a new batched, chunked `fetchCancelledInstancesForEvents` (one `in`-filtered read per list, `gte now`, fail-closed to none-cancelled), and the RSVP fetcher walks 10 candidates like web's `RSVP_CANDIDATE_LIMIT`. `EventView.hasLiveOccurrence` (default `true`) is the non-nullable encoding of web's null `next_instance_start`. **Still open:** those three fetchers have no unit-test reach — `SocialService` resolves its client inline — so only the decision logic they delegate to is pinned. `SocialService._enrichEvents` and `SocialService.fetchNextRsvpedEvent` both resolve an event's next instance with a bare `nextInstanceAfter` and never consult `event_exceptions`, so the mobile club Events tab and the Run-tab `widgets/upcoming_event_card.dart` keep pointing at an occurrence the organiser called off — the leak web closed in [§ 620](../architecture/decisions.md). Mobile already has the primitive (`fetchCancelledInstances`, used today only by `event_detail_screen.dart`), so the fix is to feed it into both fetchers. If the Dart side takes the shaping helpers too, `social/event_occurrence.ts` becomes a registered parity pair.
-- [ ] **Mirror the spectator stopped-runner readout to mobile.** `apps/web/src/lib/safety/live_motion.ts` + the `/live/[id]` chip shipped web-only ([decisions § 621](../architecture/decisions.md)); mobile's `live_spectator_screen.dart` renders the same `live_run_pings` stream but has no motion readout, so a runner still pinging from one spot reads there as a plain live dot with the pace row simply absent. Carry all three fail-closed branches and the `atLeast` floor; the screen already holds the `stale` flag it needs from the `live_freshness` twin. Relevant personas: `moab240-spectator`, `ws100-spectator`, `utmb-spectator`.
+- [x] **Mirror the spectator stopped-runner readout to mobile.** Shipped 2026-08-18 ([decisions § 647](../architecture/decisions.md)) — `live_motion.dart` ported test-for-test (18/18) with all three fail-closed branches and the `atLeast` floor, registered in both registries; `live_spectator_screen.dart` renders the neutral chip off a 1 h ping buffer stamped from each ping's own `at` clock, not the device clock. 4 widget tests. Original text: `apps/web/src/lib/safety/live_motion.ts` + the `/live/[id]` chip shipped web-only ([decisions § 621](../architecture/decisions.md)); mobile's `live_spectator_screen.dart` renders the same `live_run_pings` stream but has no motion readout, so a runner still pinging from one spot reads there as a plain live dot with the pace row simply absent. Carry all three fail-closed branches and the `atLeast` floor; the screen already holds the `stale` flag it needs from the `live_freshness` twin. Relevant personas: `moab240-spectator`, `ws100-spectator`, `utmb-spectator`.
 
 ### Bugs and hygiene surfaced by the same batch
 
