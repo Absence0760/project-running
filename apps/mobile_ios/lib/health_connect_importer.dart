@@ -150,7 +150,7 @@ class HealthConnectImporter {
 
         final metadata = <String, dynamic>{
           MetadataKeys.importedFrom: 'health_connect',
-          MetadataKeys.importedAt: DateTime.now().toIso8601String(),
+          MetadataKeys.importedAt: DateTime.now().toUtc().toIso8601String(),
           MetadataKeys.healthConnectType: value.workoutActivityType.name,
           MetadataKeys.activityType: activityType,
         };

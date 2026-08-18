@@ -293,7 +293,7 @@ class StravaImporter {
         MetadataKeys.activityType: _activityTypeFromStrava(stravaType),
         MetadataKeys.importedFrom: 'strava',
         MetadataKeys.stravaActivityType: stravaType,
-        MetadataKeys.importedAt: DateTime.now().toIso8601String(),
+        MetadataKeys.importedAt: DateTime.now().toUtc().toIso8601String(),
       },
     );
 

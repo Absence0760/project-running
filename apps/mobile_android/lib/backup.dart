@@ -130,11 +130,15 @@ class BackupService {
     final runs = await api.fetchRunRowsRaw();
 
     onProgress?.call(const BackupProgress.stage('routes'));
-    final routesData = await client
-        .from('routes')
-        .select()
-        .eq('user_id', userId);
-    final routes = (routesData as List).cast<Map<String, dynamic>>();
+    final routes = await readAllPages<Map<String, dynamic>>((from, to) async {
+      final routesData = await client
+          .from('routes')
+          .select()
+          .eq('user_id', userId)
+          .order('id', ascending: true)
+          .range(from, to);
+      return (routesData as List).cast<Map<String, dynamic>>();
+    });
 
     onProgress?.call(const BackupProgress.stage('profile'));
     // Self-read via RPC — sensitive columns are column-level revoked from
