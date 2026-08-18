@@ -370,8 +370,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get importFailuresReasonUnknown => 'Erro desconhecido';
 
   @override
-  String get importStatusCloudPushDeferred =>
-      'Guardado neste dispositivo — o envio para a nuvem não foi concluído. Será tentado novamente na próxima sincronização.';
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count corridas estão guardadas neste dispositivo — o envio para a nuvem não foi concluído. Será tentado novamente na próxima sincronização.',
+      one:
+          '1 corrida está guardada neste dispositivo — o envio para a nuvem não foi concluído. Será tentado novamente na próxima sincronização.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get importHealthSubtitleIos =>
@@ -13299,8 +13308,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get importFailuresReasonUnknown => 'Erro desconhecido';
 
   @override
-  String get importStatusCloudPushDeferred =>
-      'Salvo neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.';
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count corridas estão salvas neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.',
+      one:
+          '1 corrida está salva neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get importHealthSubtitleIos =>

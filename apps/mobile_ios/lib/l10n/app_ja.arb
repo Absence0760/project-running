@@ -93,7 +93,7 @@
   "importFailuresReasonUnparseable": "ファイルを読み取れません",
   "importFailuresReasonRejected": "サーバーに拒否されました",
   "importFailuresReasonUnknown": "不明なエラー",
-  "importStatusCloudPushDeferred": "この端末に保存しました。クラウドへのアップロードは完了していません。次回の同期時に再試行します。",
+  "importStatusCloudPushDeferred": "{count, plural, other{{count}件のランをこの端末に保存しました。クラウドへのアップロードは完了していません。次回の同期時に再試行します。}}",
   "importHealthSubtitleIos": "Apple Watch、Nike Run Club、Strava など、Apple Health に書き込む各アプリで記録したワークアウトを取り込みます",
   "importHealthSubtitleAndroid": "Google Fit、Samsung Health、Garmin、Fitbit など、Health Connect 対応アプリからワークアウトを取り込みます",
   "importHealthDescriptionIos": "過去1年間のワークアウト概要（日付、距離、時間、種類）を読み込みます。Apple Health はサードパーティ製アプリが記録した GPS ルートを公開しないため、この方法でインポートしたランには地図のトレースがありません。",

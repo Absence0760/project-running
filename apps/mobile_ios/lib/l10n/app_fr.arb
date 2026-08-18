@@ -93,7 +93,7 @@
   "importFailuresReasonUnparseable": "Fichier illisible",
   "importFailuresReasonRejected": "Refusé par le serveur",
   "importFailuresReasonUnknown": "Erreur inconnue",
-  "importStatusCloudPushDeferred": "Enregistré sur cet appareil : l'envoi vers le cloud n'a pas abouti. Il sera retenté à la prochaine synchronisation.",
+  "importStatusCloudPushDeferred": "{count, plural, one{1 course est enregistrée sur cet appareil : son envoi vers le cloud n'a pas abouti. Il sera retenté à la prochaine synchronisation.} other{{count} courses sont enregistrées sur cet appareil : leur envoi vers le cloud n'a pas abouti. Il sera retenté à la prochaine synchronisation.}}",
   "importHealthSubtitleIos": "Récupérez les séances enregistrées sur Apple Watch, Nike Run Club, Strava et d'autres apps qui écrivent dans Apple Santé",
   "importHealthSubtitleAndroid": "Récupérez les séances depuis Google Fit, Samsung Health, Garmin, Fitbit et toute autre app Health Connect",
   "importHealthDescriptionIos": "Lit les résumés de séances (date, distance, durée, type) de la dernière année. Apple Santé n'expose pas les itinéraires GPS enregistrés par les apps tierces — les courses importées ainsi n'auront pas de tracé sur la carte.",

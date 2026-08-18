@@ -367,8 +367,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importFailuresReasonUnknown => 'Unknown error';
 
   @override
-  String get importStatusCloudPushDeferred =>
-      'Saved on this device — the upload to the cloud didn\'t go through. It will retry on the next sync.';
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count runs are saved on this device — their upload to the cloud didn\'t go through. They will retry on the next sync.',
+      one:
+          '1 run is saved on this device — its upload to the cloud didn\'t go through. It will retry on the next sync.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get importHealthSubtitleIos =>

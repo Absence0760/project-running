@@ -57,6 +57,23 @@ class ImportScreen extends StatefulWidget {
   final Preferences? preferences;
   final SettingsSyncService? settingsSync;
 
+  /// Test seam — the Health Connect workout-read permission sheet.
+  /// Production callers leave null (the screen calls
+  /// `HealthConnectImporter.requestPermission`).
+  final Future<bool> Function()? requestHealthPermissionFn;
+
+  /// Test seam — the Health Connect workout read. Production callers leave
+  /// null (the screen calls `HealthConnectImporter.fetchWorkouts`).
+  final Future<HealthConnectImport> Function()? fetchHealthWorkoutsFn;
+
+  /// Test seam — the exercise-route permission sheet, which refuses outright
+  /// off Android. Production callers leave null.
+  final Future<bool> Function()? requestHealthRoutePermissionFn;
+
+  /// Test seam — the Health Connect route read, which also refuses outright
+  /// off Android. Production callers leave null.
+  final Future<HealthConnectRoutes> Function()? fetchHealthRoutesFn;
+
   const ImportScreen({
     super.key,
     this.apiClient,
@@ -64,6 +81,10 @@ class ImportScreen extends StatefulWidget {
     this.routeStore,
     this.preferences,
     this.settingsSync,
+    this.requestHealthPermissionFn,
+    this.fetchHealthWorkoutsFn,
+    this.requestHealthRoutePermissionFn,
+    this.fetchHealthRoutesFn,
   });
 
   @override
@@ -80,16 +101,34 @@ class _ImportScreenState extends State<ImportScreen> {
   List<String> _errors = [];
   ImportFailureLog _failures = newImportFailureLog();
   String _failureProvider = '';
-  // A local save succeeded but the batch push to the cloud threw, so the
-  // runs exist only on this device until the next sync. Reporting the
-  // import as a plain success hid that entirely.
-  bool _cloudPushDeferred = false;
+  // How many runs of the last import are on this device and not on the
+  // server. A push that threw defers the whole batch; a push that returned a
+  // non-empty `failed` set defers exactly those. Reporting either as a plain
+  // success hid it entirely, and reporting only "some" makes 3-of-400
+  // indistinguishable from 400-of-400.
+  int _cloudPushDeferredCount = 0;
   // Sessions the last Health Connect import found a route for but wasn't
   // allowed to read. Drives the route-permission offer — the runner is never
   // shown it speculatively, only once there are maps behind it.
   Set<String> _withheldRouteIds = const {};
 
   String get _healthLabel => healthLabelFor(isIOS: Platform.isIOS);
+
+  Future<bool> _requestHealthPermission() =>
+      widget.requestHealthPermissionFn?.call() ??
+          HealthConnectImporter.requestPermission();
+
+  Future<HealthConnectImport> _fetchHealthWorkouts() =>
+      widget.fetchHealthWorkoutsFn?.call() ??
+          HealthConnectImporter.fetchWorkouts();
+
+  Future<bool> _requestHealthRoutePermission() =>
+      widget.requestHealthRoutePermissionFn?.call() ??
+          requestHealthRoutePermission(isAndroid: Platform.isAndroid);
+
+  Future<HealthConnectRoutes> _fetchHealthRoutes() =>
+      widget.fetchHealthRoutesFn?.call() ??
+          HealthConnectImporter.fetchRoutes();
 
   Future<void> _importHealthConnect() async {
     final l10n = AppLocalizations.of(context);
@@ -100,11 +139,11 @@ class _ImportScreenState extends State<ImportScreen> {
       _total = 0;
       _errors = [];
       _failures = newImportFailureLog();
-      _cloudPushDeferred = false;
+      _cloudPushDeferredCount = 0;
     });
 
     try {
-      final granted = await HealthConnectImporter.requestPermission();
+      final granted = await _requestHealthPermission();
       if (!granted) {
         if (!mounted) return;
         setState(() {
@@ -118,7 +157,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
       if (!mounted) return;
       setState(() => _status = l10n.importHealthReadingWorkouts);
-      final imported = await HealthConnectImporter.fetchWorkouts();
+      final imported = await _fetchHealthWorkouts();
       final runs = imported.runs;
       // Health Connect only releases a workout's route when the exercise-route
       // permission is granted, so an import can land with maps or without.
@@ -160,11 +199,10 @@ class _ImportScreenState extends State<ImportScreen> {
       _status = l10n.importHealthRoutesRequesting;
       _errors = [];
       _failures = newImportFailureLog();
-      _cloudPushDeferred = false;
+      _cloudPushDeferredCount = 0;
     });
 
-    final granted =
-        await requestHealthRoutePermission(isAndroid: Platform.isAndroid);
+    final granted = await _requestHealthRoutePermission();
     if (!mounted) return;
     if (!granted) {
       setState(() {
@@ -182,7 +220,7 @@ class _ImportScreenState extends State<ImportScreen> {
       setState(() {
         _busy = false;
         _withheldRouteIds = const {};
-        _cloudPushDeferred = backfill.pushDeferred;
+        _cloudPushDeferredCount = backfill.pushDeferredCount;
         _status = l10n.importHealthRoutesAdded(backfill.filled);
       });
     } catch (e) {
@@ -199,12 +237,13 @@ class _ImportScreenState extends State<ImportScreen> {
   /// them onto the runs already imported without one. A plain re-import can't
   /// do this: `isCrossSourceDuplicate` treats Health Connect as an aggregator
   /// and skips every workout already in the store, so the tracks would never
-  /// land. Reports how many runs gained a map, and whether the maps reached
-  /// the server — the same two-part answer `_saveImportedRuns` gives.
-  Future<({int filled, bool pushDeferred})>
+  /// land. Reports how many runs gained a map, and how many of those maps did
+  /// not reach the server — the same two-part answer `_saveImportedRuns`
+  /// gives.
+  Future<({int filled, int pushDeferredCount})>
       _backfillHealthConnectTracks() async {
-    final routes = await HealthConnectImporter.fetchRoutes();
-    if (routes.tracks.isEmpty) return (filled: 0, pushDeferred: false);
+    final routes = await _fetchHealthRoutes();
+    if (routes.tracks.isEmpty) return (filled: 0, pushDeferredCount: 0);
 
     // Hydrate only the runs a released route can actually fill — the summary
     // index carries source + external_id, so the whole history is filtered
@@ -227,10 +266,15 @@ class _ImportScreenState extends State<ImportScreen> {
     }
 
     final api = widget.apiClient;
-    var pushDeferred = false;
+    var pushDeferredCount = 0;
     if (filled.isNotEmpty && api != null && api.userId != null) {
       try {
         final failed = await api.saveRunsBatch(filled);
+        // A non-empty `failed` set is not an error and never throws: the
+        // batch landed minus those runs, whose maps are on disk and not on
+        // the server. Same claim as a thrown push, for fewer runs.
+        pushDeferredCount =
+            storedFilled.where((r) => failed.contains(r.id)).length;
         await widget.runStore.markManySynced(
           storedFilled.where((r) => !failed.contains(r.id)),
         );
@@ -239,10 +283,10 @@ class _ImportScreenState extends State<ImportScreen> {
         // retries it. Same claim, same words as the import path — a map that
         // exists only on this device is not a finished backfill.
         debugPrint('Route backfill cloud push failed: $e');
-        pushDeferred = true;
+        pushDeferredCount = filled.length;
       }
     }
-    return (filled: filled.length, pushDeferred: pushDeferred);
+    return (filled: filled.length, pushDeferredCount: pushDeferredCount);
   }
 
   /// Seed `body_weight_kg` from Health Connect when the user hasn't set
@@ -329,7 +373,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
     final api = widget.apiClient;
     final canSync = api != null && api.userId != null;
-    var pushDeferred = false;
+    var pushDeferredCount = 0;
     if (canSync && savedRuns.isNotEmpty) {
       if (mounted) setState(() => _status = l10n.importStatusSyncingToCloud);
       try {
@@ -343,7 +387,12 @@ class _ImportScreenState extends State<ImportScreen> {
           },
         );
         // Mark only the runs that successfully uploaded — same
-        // partial-success contract as SyncService / background_sync.
+        // partial-success contract as SyncService / background_sync. The ones
+        // left out are on disk and not on the server, which is the deferral
+        // the catch below reports; a half-landed batch that never threw used
+        // to report a clean import.
+        pushDeferredCount =
+            savedRuns.where((r) => failed.contains(r.id)).length;
         await widget.runStore.markManySynced(
           savedRuns.where((r) => !failed.contains(r.id)),
         );
@@ -351,7 +400,7 @@ class _ImportScreenState extends State<ImportScreen> {
         // The runs are on disk; only the upload failed, and SyncService
         // retries it. Say so instead of reporting a clean import.
         debugPrint('Batch cloud push failed: $e');
-        pushDeferred = true;
+        pushDeferredCount = savedRuns.length;
       }
     }
 
@@ -360,7 +409,7 @@ class _ImportScreenState extends State<ImportScreen> {
       _busy = false;
       _failures = log;
       _failureProvider = provider;
-      _cloudPushDeferred = pushDeferred;
+      _cloudPushDeferredCount = pushDeferredCount;
       _status = buildImportStatus(
         savedCount: savedRuns.length,
         errorCount: log.total,
@@ -389,7 +438,7 @@ class _ImportScreenState extends State<ImportScreen> {
       _total = 0;
       _errors = [];
       _failures = newImportFailureLog();
-      _cloudPushDeferred = false;
+      _cloudPushDeferredCount = 0;
     });
 
     try {
@@ -428,7 +477,7 @@ class _ImportScreenState extends State<ImportScreen> {
       _total = 0;
       _errors = [];
       _failures = newImportFailureLog();
-      _cloudPushDeferred = false;
+      _cloudPushDeferredCount = 0;
     });
 
     try {
@@ -469,7 +518,7 @@ class _ImportScreenState extends State<ImportScreen> {
       _total = 0;
       _errors = [];
       _failures = newImportFailureLog();
-      _cloudPushDeferred = false;
+      _cloudPushDeferredCount = 0;
     });
 
     try {
@@ -790,10 +839,11 @@ class _ImportScreenState extends State<ImportScreen> {
                       const SizedBox(height: 12),
                       ProgressBar(value: _imported / _total),
                     ],
-                    if (!_busy && _cloudPushDeferred) ...[
+                    if (!_busy && _cloudPushDeferredCount > 0) ...[
                       const SizedBox(height: 8),
                       Text(
-                        l10n.importStatusCloudPushDeferred,
+                        l10n.importStatusCloudPushDeferred(
+                            _cloudPushDeferredCount),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           height: 1.4,

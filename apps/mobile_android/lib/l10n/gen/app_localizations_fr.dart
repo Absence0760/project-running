@@ -368,8 +368,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get importFailuresReasonUnknown => 'Erreur inconnue';
 
   @override
-  String get importStatusCloudPushDeferred =>
-      'Enregistré sur cet appareil : l\'envoi vers le cloud n\'a pas abouti. Il sera retenté à la prochaine synchronisation.';
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count courses sont enregistrées sur cet appareil : leur envoi vers le cloud n\'a pas abouti. Il sera retenté à la prochaine synchronisation.',
+      one:
+          '1 course est enregistrée sur cet appareil : son envoi vers le cloud n\'a pas abouti. Il sera retenté à la prochaine synchronisation.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get importHealthSubtitleIos =>

@@ -93,7 +93,7 @@
   "importFailuresReasonUnparseable": "Não foi possível ler o arquivo",
   "importFailuresReasonRejected": "Recusado pelo servidor",
   "importFailuresReasonUnknown": "Erro desconhecido",
-  "importStatusCloudPushDeferred": "Salvo neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.",
+  "importStatusCloudPushDeferred": "{count, plural, one{1 corrida está salva neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.} other{{count} corridas estão salvas neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.}}",
   "importHealthSubtitleIos": "Importe treinos gravados no Apple Watch, Nike Run Club, Strava e outros apps que gravam no Apple Saúde",
   "importHealthSubtitleAndroid": "Importe treinos do Google Fit, Samsung Health, Garmin, Fitbit e qualquer outro app do Health Connect",
   "importHealthDescriptionIos": "Lê resumos de treino (data, distância, duração, tipo) do último ano. O Apple Saúde não expõe rotas de GPS gravadas por apps de terceiros — as corridas importadas assim não terão trajeto no mapa.",

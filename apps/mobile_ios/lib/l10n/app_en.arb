@@ -550,9 +550,10 @@
   "@importFailuresReasonUnknown": {
     "description": "Import failure reason: unrecognised error"
   },
-  "importStatusCloudPushDeferred": "Saved on this device — the upload to the cloud didn't go through. It will retry on the next sync.",
+  "importStatusCloudPushDeferred": "{count, plural, one{1 run is saved on this device — its upload to the cloud didn't go through. It will retry on the next sync.} other{{count} runs are saved on this device — their upload to the cloud didn't go through. They will retry on the next sync.}}",
   "@importStatusCloudPushDeferred": {
-    "description": "Shown when imported runs saved locally but the upload to the cloud failed"
+    "description": "Shown when imported runs saved locally but the upload to the cloud failed for some or all of them",
+    "placeholders": {"count": {"type": "int"}}
   },
   "importHealthSubtitleIos": "Pull workouts you've recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health",
   "@importHealthSubtitleIos": {
