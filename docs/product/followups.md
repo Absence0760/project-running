@@ -345,20 +345,7 @@ call, or a three-way lockstep port — not because it is uncertain.
 
 ### Wrong data, fix needs a decision
 
-- [ ] **Enabling treadmill mode mid-run zeroes the accumulated distance.**
-  `setTreadmillSample` anchors its baseline at the belt's own total, so
-  `_reportedDistanceMetres` drops the GPS kilometres the moment the belt
-  engages — measured: 60 m of GPS distance becomes 0.0, and a later belt
-  reading of 100 m reports 100, not 160. Mid-run is the *only* way to enable
-  it (`treadmill_live_mode.md` § open questions), so every activation lands on
-  an already-accumulating run, and `lapsToCanonicalJson` clamps the negative
-  delta so `metadata.laps` records a silent 0 m lap. **But** `run_recorder_test.dart`'s
-  *"clearTreadmillMode reverts to the GPS distance"* pins the same discard in
-  the opposite direction (20 m GPS + belt 1000→1200 asserts 200, not 220), so
-  the current behaviour is a deliberate "two independent accumulators, show
-  the active source", not an oversight. Changing it is a product call about
-  what distance means across a source switch — decide the rule for both
-  directions at once, then fix and re-pin.
+- [x] **Enabling treadmill mode mid-run zeroes the accumulated distance.** Fixed 2026-08-18 ([decisions § 634](../architecture/decisions.md)): the run distance is ONE total handed between sources in both directions, so switching into belt mode carries the GPS metres onto the belt accumulator and `clearTreadmillMode` hands the belt total back. Five treadmill tests re-pinned, including the one that asserted the discard from the other side; new tests cover 60 m GPS + 100 m belt = 160 m, the lap split that used to clamp to 0 m, and the speed-only belt.
 
 ### Three-way lockstep port
 
@@ -430,13 +417,8 @@ call, or a three-way lockstep port — not because it is uncertain.
 
 ### Smaller, still real
 
-- [ ] **A partial Stripe refund is processed as a full refund.**
-  `charge.amount` / `amount_refunded` are never read, so a £5 goodwill refund
-  on a £50 registration marks the order `refunded` and hands the seat to a
-  waitlister; the `partially_refunded` state in lib.ts is never produced.
-- [ ] **`events-checkout`'s stable idempotency key + now-derived `expires_at`**
-  makes every retry a Stripe `idempotency_error` → 502 for ~24 h. The header
-  comment's "a double-click reuses the same session" is inverted.
+- [x] **A partial Stripe refund is processed as a full refund.** STALE the day it was filed — already fixed by PR #758 (`refundScopeOfCharge` + the `partially_refunded` transition), repaired in `582fc1b4f`. What was genuinely missing was a guard on the *wiring*: every assertion lived in `lib.test.ts`, which cannot see whether `index.ts` asks the lib anything, so dropping the `scope` argument or hoisting the seat delete above the partial short-circuit would have restored the bug with a green suite. Closed 2026-08-18 by `stripe-events-webhook/wiring.test.ts` (3 source-level guards) plus three `lib.test.ts` cases driving a real-shaped `charge.refunded` envelope, including the instalment sequence.
+- [x] **`events-checkout`'s stable idempotency key + now-derived `expires_at`** made every retry a Stripe `idempotency_error`. Fixed 2026-08-18 ([decisions § 632](../architecture/decisions.md)): the key is now the pending `event_orders.id` and `expires_at` derives from that order's persisted `created_at`, so a re-click inside the live hold replays byte-identically and Stripe returns the session already open; a lapsed hold is superseded with its session expired at Stripe first. `reserved_until` is no longer extended on reuse (it must not outlive the session backing it), and the capacity precheck runs only when opening a new hold. Pinned by a byte-identity test over two attempts eight minutes apart, verified failing against the pre-fix source.
 - [ ] **`export-data` backup truncates every table at PostgREST's 1000-row
   cap** (no Range/limit/paging), and `manifest.json` reports the truncated
   count as the true one — an Art 20 completeness problem. `strava-import`
@@ -444,22 +426,10 @@ call, or a three-way lockstep port — not because it is uncertain.
 - [ ] **`search_public_events` derives `p_byday` in the session timezone**
   while the sibling `p_time` filter correctly uses the event's, so every
   evening event west of UTC is filed under the wrong weekday.
-- [ ] **`clubs_member_count_trigger` double-counts** a combined
-  `status` + `club_id` UPDATE (two non-exclusive `if` blocks); the sibling
-  `routes_run_count_trigger` gets this right with was/is deltas. Note
-  `derived_state.md` currently claims the pgtap "guards every branch" — it
-  never changes `club_id`, so that claim is false.
-- [ ] **`routes_run_count_trigger` skips the decrement when the route's
-  visibility changed**, permanently overcounting. This is not the drift
-  `derived_state.md` accepts (that covers the *run's* `is_public`), and
-  `routes.run_count` is the only cache there with no "Pinned by" line.
-- [ ] **Recorder `dispose()` is not terminal** the way `stop()` is, so an
-  in-flight async retry callback can re-open the GPS stream after disposal —
-  an uncancellable subscription holding the foreground service and GPS radio
-  for the process's life, with every fix raising on a closed sink.
-- [ ] **`resumeSession` resets the monotonic route floor**, so distance-
-  remaining nearly doubles on a loop or out-and-back (measured 1298.5 m where
-  a fresh run reads 699.2 m) and never self-corrects.
+- [x] **`clubs_member_count_trigger` double-counts** a combined `status` + `club_id` UPDATE. Fixed 2026-08-18 by migration `20270526_001` ([decisions § 633](../architecture/decisions.md)): both count triggers now recompute the affected parent from the authoritative query instead of applying deltas. `clubs_member_count_test.sql` grew 6 -> 12 assertions covering move-only, move-and-approve and move-and-demote, each combined case on its own club — a double increment and a double decrement on one club cancel out and let the broken trigger pass. `derived_state.md`'s claim that the suite "guards every branch" was false and is corrected.
+- [x] **`routes_run_count_trigger` skips the decrement when the route's visibility changed**, permanently overcounting. Fixed 2026-08-18 by the same migration. Root cause: the OLD-side gate re-evaluated `is_route_visible_to` at trigger time, reading the route's *current* visibility rather than the visibility in force at increment — a fact about the past that no delta form can recover. The new `routes_run_count_test.sql` (8 assertions) is this cache's first pgtap and supplies the "Pinned by" line it never had.
+- [x] **Recorder `dispose()` is not terminal** the way `stop()` is. Fixed 2026-08-18 ([decisions § 636](../architecture/decisions.md)): a latched `_disposed` flag blocks `_openPositionStream` outright and `prepare()` after `dispose()` throws a `StateError`, so a retry callback parked on its async precheck can no longer resume into a subscription nothing can cancel. Pinned with a completer-gated fake platform.
+- [x] **`resumeSession` resets the monotonic route floor**. Fixed 2026-08-18 ([decisions § 635](../architecture/decisions.md)): `_seedResumeState` rebuilds the floor by replaying the seeded track through the same closest-segment search, within a fixed projection budget so a multi-day track against a dense route is not a burst of the whole run's route maths on the UI isolate. Pinned by an out-and-back that read 699.2 m where a fresh run reads 299.7 m.
 
 ## Bug-hunt round 3, 2026-08-10 — verified but deferred
 
