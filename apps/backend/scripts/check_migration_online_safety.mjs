@@ -134,7 +134,13 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // over a small bounded table; the routes reconcile walks keyset batches of 500
 // so no single statement holds row locks across the table, and the refresher
 // no-ops when the cache already agrees, so only drifted rows are written.
-export const GRANDFATHER_CUTOFF = '20270526';
+// 20270527: recreates search_public_events so the one-off weekday branch
+// derives its ISO day in the EVENT's timezone rather than the caller's session
+// timezone, matching the sibling p_time filter. One function body, no table DDL
+// and no constraint, so the scanner passes it with zero violations after this
+// bump too — a same-day 12-character version still sorts after a bare 8-digit
+// cutoff, so bumping does not exempt it from the scan.
+export const GRANDFATHER_CUTOFF = '20270527';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
