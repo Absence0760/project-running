@@ -948,3 +948,37 @@ test('the exercise-calorie surfaces decide day membership by instant, never by s
 		);
 	}
 });
+test('setEventPricing names the one non-partial arbiter and keeps a single branch', () => {
+	// Reason: event_pricing shipped with two PARTIAL unique indexes, and
+	// Postgres only infers a partial index as an ON CONFLICT arbiter when the
+	// statement carries a matching WHERE clause — which PostgREST never emits.
+	// Every call raised 42P10, so no event could ever be priced and the whole
+	// paid-registration rail was unreachable (decisions §580). Migration
+	// 20270518_001 replaced both with one non-partial `nulls not distinct`
+	// index on (event_id, instance_start); the caller must name exactly that
+	// pair. Naming `event_id` alone — the old series branch — is the specific
+	// regression that reintroduces 42P10, because no index is keyed on it.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function setEventPricing');
+	assert.ok(start >= 0, 'Could not locate setEventPricing — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+
+	assert.match(
+		body,
+		/onConflict:\s*'event_id,instance_start'/,
+		'setEventPricing must arbitrate on (event_id, instance_start) — the only unique on the table.'
+	);
+	assert.doesNotMatch(
+		body,
+		/onConflict:\s*'event_id'/,
+		"the 'event_id' branch names no index and raises 42P10 — the arbiter is non-partial, so one branch covers both shapes."
+	);
+	// A NULL instance_start is the series price. Coercing it away (or dropping
+	// the key) would make every series write land as a per-instance override.
+	assert.match(
+		body,
+		/instance_start:\s*input\.instance_start\s*\?\?\s*null/,
+		'setEventPricing must send instance_start (null = the series price), not omit it.'
+	);
+});

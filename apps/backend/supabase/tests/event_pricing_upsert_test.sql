@@ -16,12 +16,14 @@
 -- caller), not the service role, so the RLS write policy is in the path too.
 
 begin;
-select plan(9);
+select plan(12);
 
 -- ── Fixtures: host (also club owner) with a charges-enabled payout account ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values ('aaaa2222-0000-0000-0000-000000000001', 'authenticated', 'authenticated',
-        'ep-host@evt.local', '', now(), now());
+        'ep-host@evt.local', '', now(), now()),
+       ('aaaa2222-0000-0000-0000-000000000002', 'authenticated', 'authenticated',
+        'ep-stranger@evt.local', '', now(), now());
 
 set local role service_role;
 
@@ -132,6 +134,45 @@ select is(
     where event_id = 'cccc2222-0000-0000-0000-000000000001'),
   2,
   'series row and per-instance override coexist — 2 rows, not 1'
+);
+
+-- ── The arbiter is a real unique, not just an ON CONFLICT target ────────────
+-- The upserts above prove the index is INFERABLE. These prove it still
+-- CONSTRAINS: a plain INSERT is the shape the service role and the seed use,
+-- and it must not be able to plant the second series row that would make
+-- "which price governs this occurrence" ambiguous. NULLS NOT DISTINCT is doing
+-- the work on the series row — under a plain unique the two NULLs would be
+-- distinct and this insert would succeed.
+select throws_ok(
+  $$ insert into event_pricing (event_id, instance_start, price_cents)
+     values ('cccc2222-0000-0000-0000-000000000001', null, 9900) $$,
+  '23505',
+  null,
+  'a second series row is rejected — the arbiter constrains, it does not just resolve'
+);
+
+select throws_ok(
+  $$ insert into event_pricing (event_id, instance_start, price_cents)
+     values ('cccc2222-0000-0000-0000-000000000001', '2026-07-08 18:00+00', 9900) $$,
+  '23505',
+  null,
+  'a second row for an already-overridden instance is rejected'
+);
+
+-- ── The write policy, from the other side ──────────────────────────────────
+-- Everything above runs as the organiser, so it only ever proves the policy
+-- lets the right caller through. A stranger must not be able to price someone
+-- else's event: the host here is charges-enabled, so the BEFORE trigger passes
+-- and the RLS WITH CHECK is what refuses.
+set local "request.jwt.claims" =
+  '{"sub":"aaaa2222-0000-0000-0000-000000000002","role":"authenticated"}';
+
+select throws_ok(
+  $$ insert into event_pricing (event_id, instance_start, price_cents)
+     values ('cccc2222-0000-0000-0000-000000000001', '2026-07-15 18:00+00', 100) $$,
+  '42501',
+  null,
+  'a non-organiser cannot price an event they do not run'
 );
 
 select * from finish();
