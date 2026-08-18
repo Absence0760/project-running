@@ -474,9 +474,15 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// longer exist. Both passes isolate per-file failures so one bad row can't
   /// abort the rest; a row whose write throws is still kept so its prior file
   /// (left intact by the atomic write) isn't then deleted as an orphan.
+  ///
+  /// Refuses on an uninitialised store like every other write path (§ 660).
+  /// The callers are the subclasses' `replaceFromServer`, which have already
+  /// rebuilt `rowsById` from the fetch by the time they get here, so each of
+  /// them re-checks BEFORE that rebuild — a silent return here left the
+  /// resident rows replaced and nothing on disk agreeing with them.
   Future<void> rewriteAll() async {
-    final d = dir;
-    if (d == null) return;
+    requireInitialised('rewriteAll');
+    final d = dir!;
     final keep = <String>{};
     for (final stored in rowsById.values) {
       final file = File('${d.path}/${stored.id}.json');

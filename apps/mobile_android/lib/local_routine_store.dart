@@ -353,6 +353,7 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
         serverRoutines, {
     int? fetchLimit,
   }) async {
+    requireInitialised('replaceFromServer');
     DateTime? windowStart;
     if (fetchLimit != null && serverRoutines.length >= fetchLimit) {
       for (final r in serverRoutines) {

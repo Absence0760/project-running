@@ -274,6 +274,7 @@ class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
     DateTime? windowEnd,
     int? fetchLimit,
   }) async {
+    requireInitialised('replaceFromServer');
     if (windowStart == null &&
         fetchLimit != null &&
         serverWorkouts.length >= fetchLimit) {

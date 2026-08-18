@@ -210,6 +210,7 @@ class LocalCrossingsStore extends OfflineSyncStore<StoredCrossing> {
     String? eventId,
     DateTime? instanceStart,
   }) async {
+    requireInitialised('replaceFromServer');
     final now = DateTime.now().toUtc();
     final iso = instanceStart?.toIso8601String();
     bool outOfScope(Map<String, dynamic> row) =>

@@ -190,7 +190,13 @@ class _GymScreenState extends State<GymScreen> {
         debugPrint('gym_screen: routine store init failed: $e');
       }
     }
-    if (mounted) setState(() => _routineStoreReady = true);
+    // `dir`, not the absence of a throw: a failed init leaves the store
+    // resident but directoryless, and every write to it then refuses (§ 660).
+    // Offering the Routines peer over one is offering a surface that cannot
+    // save anything.
+    if (mounted) {
+      setState(() => _routineStoreReady = _routineStore.dir != null);
+    }
   }
 
   @override
