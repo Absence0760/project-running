@@ -529,9 +529,8 @@
 			parts.push(mk.meta.note as string);
 		}
 		const target = parseTarget(mk.meta);
-		if (target?.elapsedS != null) {
-			parts.push(m('routeMarker.targetAt', { time: formatElapsed(target.elapsedS) }));
-		}
+		const targetTime = target?.elapsedS != null ? formatElapsed(target.elapsedS) : target?.clock;
+		if (targetTime) parts.push(m('routeMarker.targetAt', { time: targetTime }));
 		return parts.join(' · ');
 	}
 </script>
