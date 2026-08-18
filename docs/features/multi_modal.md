@@ -544,13 +544,20 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   `scalePortion` carries the nulls through. Manual entry exposes the five as
   optional numeric inputs. They surface on the searched-portion preview and as
   a per-item breakdown on `/nutrition/[date]/[slot]`.
-- **Extended-nutrient day roll-up** (shipped web 2026-08-15,
-  `nutrition/extended_nutrients.ts`). The five now roll up to a self-hiding
-  **Nutrients** section on `/nutrition`, beneath the water card. The headline
-  macros keep the rings; these are rows, so the two don't read as equal weight.
-  `nutrition_targets` / `nutrition_budget` are **unchanged** — they still budget
-  kcal + the three macros, and the `.dart` twins take on no new obligation
-  (this module is web-only).
+- **Extended-nutrient day roll-up** (shipped web 2026-08-15, mobile
+  2026-08-18; `nutrition/extended_nutrients.ts` ↔ `extended_nutrients.dart`, a
+  registered TS↔Dart parity pair). The five now roll up to a self-hiding
+  **Nutrients** section on `/nutrition` and on `nutrition_screen.dart`, beneath
+  the water card on both. The headline macros keep the rings; these are rows, so
+  the two don't read as equal weight. `nutrition_targets` /
+  `nutrition_budget` are **unchanged** — they still budget kcal + the three
+  macros. Two idiomatic shape differences between the twins, neither a
+  divergence: TypeScript indexes the row structurally with `keyof`, so the Dart
+  side carries a nominal `ExtendedNutrientRow` with a `valueOf(column)` lookup;
+  and `labelKey` is web's dotted `MessageKey` against mobile's camelCase ARB
+  identifier, resolved at the render layer exactly as `badges` does — the key
+  strings are outside the lockstep, the kinds / columns / directions / units /
+  thresholds are in it.
   - The hard part is **coverage**, not arithmetic. Both food sources carry
     these fields unevenly, so `sumMacros`' "null counts as 0" rule (right for
     calories) would be fail-open here: eight items of which two report sodium
@@ -562,7 +569,9 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
     hold; `remaining` ("600 mg left") is a claim about the *whole* day's intake
     and is **withheld** (null) whenever an entry didn't report the nutrient,
     with the row marked "at least" instead. A nutrient nothing reported is
-    omitted, never a zero row.
+    omitted, never a zero row. A **withheld `remaining` is not the same claim
+    as no target**, so neither surface falls back to the "No daily target" chip
+    in its place — the row simply carries no chip.
   - Targets are public reference intakes, and two of the five deliberately have
     **none**. **Fibre** is a floor at 14 g/1000 kcal (IOM/DGA), scaled off the
     *base* calorie goal rather than the exercise-inflated one — a long-run

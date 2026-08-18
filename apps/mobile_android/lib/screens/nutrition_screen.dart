@@ -10,6 +10,7 @@ import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../diary_day.dart';
 import '../exercise_calories.dart';
+import '../extended_nutrients.dart';
 import '../food_search.dart' show FoodMacros;
 import '../hydration.dart';
 import '../l10n/date_format.dart';
@@ -927,6 +928,15 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     const SizedBox(height: 12),
                     _waterCard(theme, l10n),
                     const SizedBox(height: 12),
+                    ...(() {
+                      final nutrients = _nutrientBudgets(today);
+                      return nutrients.isEmpty
+                          ? const <Widget>[]
+                          : <Widget>[
+                              _nutrientsCard(theme, l10n, nutrients),
+                              const SizedBox(height: 12),
+                            ];
+                    })(),
                     if (_templateStore.templates.isNotEmpty) ...[
                       _templatesCard(theme, l10n),
                       const SizedBox(height: 12),
@@ -1300,6 +1310,133 @@ class _NutritionScreenState extends State<NutritionScreen> {
         ),
       ],
     );
+  }
+
+  List<NutrientBudget> _nutrientBudgets(List<FoodEntry> today) =>
+      extendedNutrientBudgets(
+        [
+          for (final e in today)
+            ExtendedNutrientRow(
+              fiberG: e.fiberG,
+              sugarG: e.sugarG,
+              sodiumMg: e.sodiumMg,
+              saturatedFatG: e.saturatedFatG,
+              cholesterolMg: e.cholesterolMg,
+            ),
+        ],
+        extendedNutrientTargets(_targets, _exerciseMinutes),
+      );
+
+  Widget _nutrientsCard(
+      ThemeData theme, AppLocalizations l10n, List<NutrientBudget> budgets) {
+    final tag = localeToTag(Localizations.localeOf(context));
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.nutritionNutrients, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            for (final n in budgets)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: _nutrientRow(theme, l10n, tag, n),
+              ),
+            const SizedBox(height: 4),
+            Text(l10n.nutritionNutrientsHint,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _nutrientRow(ThemeData theme, AppLocalizations l10n, String tag,
+      NutrientBudget n) {
+    final label = _nutrientLabel(l10n, n.labelKey);
+    final amount = StringBuffer();
+    if (n.partial) amount.write('${l10n.nutritionNutrientAtLeast} ');
+    amount.write(_nutrientAmount(n.consumed, n.unit, tag));
+    if (n.target != null) {
+      amount.write(' / ${_nutrientAmount(n.target!.toDouble(), n.unit, tag)}');
+    }
+    amount.write(' ${n.unit}');
+    // The coverage sentence rides as a semantics label rather than only as a
+    // tooltip: it is the one thing qualifying the number beside it, and a
+    // long-press tooltip is unreachable to a screen reader.
+    final coverage = n.partial
+        ? l10n.nutritionNutrientPartial(n.reportedEntries, n.totalEntries, label)
+        : null;
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+        Semantics(
+          label: coverage,
+          child: Text(amount.toString(), style: theme.textTheme.bodyMedium),
+        ),
+        const SizedBox(width: 8),
+        _nutrientChip(theme, l10n, tag, n),
+      ],
+    );
+  }
+
+  Widget _nutrientChip(ThemeData theme, AppLocalizations l10n, String tag,
+      NutrientBudget n) {
+    String text;
+    Color bg;
+    Color fg;
+    if (n.exceeded) {
+      text = l10n.nutritionNutrientOver(
+          _nutrientAmount(n.consumed - n.target!, n.unit, tag), n.unit);
+      bg = theme.colorScheme.errorContainer;
+      fg = theme.colorScheme.onErrorContainer;
+    } else if (n.reached) {
+      text = l10n.nutritionNutrientReached;
+      bg = theme.colorScheme.secondaryContainer;
+      fg = theme.colorScheme.onSecondaryContainer;
+    } else if (n.remaining != null) {
+      text = l10n.nutritionNutrientLeft(
+          _nutrientAmount(n.remaining!, n.unit, tag), n.unit);
+      bg = theme.colorScheme.surfaceContainerHighest;
+      fg = theme.colorScheme.onSurfaceVariant;
+    } else if (n.target == null) {
+      text = l10n.nutritionNutrientUntargeted;
+      bg = theme.colorScheme.surfaceContainerHighest;
+      fg = theme.colorScheme.onSurfaceVariant;
+    } else {
+      // Targeted but partially covered: the helper withheld `remaining`
+      // because the unreported entries could have consumed all of it, and
+      // "No daily target" would be a different — and false — claim.
+      return const SizedBox.shrink();
+    }
+    return StatusPill(
+        label: text, foreground: fg, fill: bg, size: StatusPillSize.compact);
+  }
+
+  /// Grams carry one decimal, milligrams none — mirroring the helper's own
+  /// rounding — with a trailing `.0` trimmed so a whole number reads as one.
+  String _nutrientAmount(double value, String unit, String tag) {
+    if (unit != 'g') return formatFixed(value, 0, tag);
+    return formatFixed(value, 1, tag).replaceAll(RegExp(r'[.,]0$'), '');
+  }
+
+  String _nutrientLabel(AppLocalizations l10n, String labelKey) {
+    switch (labelKey) {
+      case 'nutritionSodium':
+        return l10n.nutritionSodium;
+      case 'nutritionFiber':
+        return l10n.nutritionFiber;
+      case 'nutritionSaturatedFat':
+        return l10n.nutritionSaturatedFat;
+      case 'nutritionSugar':
+        return l10n.nutritionSugar;
+      case 'nutritionCholesterol':
+        return l10n.nutritionCholesterol;
+    }
+    return labelKey;
   }
 
   Widget _waterCard(ThemeData theme, AppLocalizations l10n) {

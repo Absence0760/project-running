@@ -10238,6 +10238,37 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionCholesterol => 'Colesterol';
 
   @override
+  String get nutritionNutrients => 'Nutrientes';
+
+  @override
+  String get nutritionNutrientsHint =>
+      'Valores de referência. Cada total conta apenas os alimentos registados que indicam esse nutriente.';
+
+  @override
+  String get nutritionNutrientAtLeast => 'pelo menos';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '$reported de $total alimentos registados indicam $nutrient';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit acima';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return 'Faltam $n $unit';
+  }
+
+  @override
+  String get nutritionNutrientReached => 'Objetivo atingido';
+
+  @override
+  String get nutritionNutrientUntargeted => 'Sem objetivo diário';
+
+  @override
   String get nutritionWater => 'Água';
 
   @override
@@ -23161,6 +23192,37 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionCholesterol => 'Colesterol';
+
+  @override
+  String get nutritionNutrients => 'Nutrientes';
+
+  @override
+  String get nutritionNutrientsHint =>
+      'Valores de referência. Cada total conta apenas os alimentos registrados que informam esse nutriente.';
+
+  @override
+  String get nutritionNutrientAtLeast => 'pelo menos';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '$reported de $total alimentos registrados informam $nutrient';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit acima';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return '$n $unit restantes';
+  }
+
+  @override
+  String get nutritionNutrientReached => 'Meta atingida';
+
+  @override
+  String get nutritionNutrientUntargeted => 'Sem meta diária';
 
   @override
   String get nutritionWater => 'Água';

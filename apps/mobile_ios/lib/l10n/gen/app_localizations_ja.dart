@@ -9727,6 +9727,37 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionCholesterol => 'コレステロール';
 
   @override
+  String get nutritionNutrients => '栄養素';
+
+  @override
+  String get nutritionNutrientsHint =>
+      '参考摂取量です。各合計には、その栄養素の値がある記録済みの食品のみが含まれます。';
+
+  @override
+  String get nutritionNutrientAtLeast => '少なくとも';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '記録した$total件中$reported件に$nutrientの値があります';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit 超過';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return '残り $n $unit';
+  }
+
+  @override
+  String get nutritionNutrientReached => '目標達成';
+
+  @override
+  String get nutritionNutrientUntargeted => '1日の目標なし';
+
+  @override
   String get nutritionWater => '水分';
 
   @override

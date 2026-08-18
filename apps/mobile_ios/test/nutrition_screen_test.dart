@@ -348,6 +348,106 @@ void main() {
     }
   });
 
+  // The extended-nutrient day roll-up (web parity, decisions §616). The
+  // coverage contract is the point of the section, not decoration: a nutrient
+  // no entry reported is absent rather than shown as a zero, and a total only
+  // some entries reported is prefixed "at least" with its `remaining` withheld.
+  testWidgets('the nutrients section self-hides when nothing reports one',
+      (tester) async {
+    final f = await _store('nutrients_hidden_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Nutrients'), findsNothing);
+      expect(find.text('Sodium'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a fully-covered nutrient renders its total flat',
+      (tester) async {
+    final f = await _store('nutrients_full_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Soup',
+          mealSlot: 'lunch',
+          calories: 200,
+          sodiumMg: 650,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Nutrients'), findsOneWidget);
+      expect(find.text('Sodium'), findsOneWidget);
+      // No body metrics here, so only the flat sodium ceiling resolves.
+      expect(find.text('650 / 2300 mg'), findsOneWidget);
+      expect(find.text('1650 mg left'), findsOneWidget);
+      expect(find.textContaining('at least'), findsNothing);
+      // A nutrient no entry reported is absent, not a zero row.
+      expect(find.text('Fiber'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('partial coverage says "at least" and withholds remaining',
+      (tester) async {
+    final f = await _store('nutrients_partial_');
+    await tester.runAsync(() async {
+      await f.store.createLocal(
+        startedAt: DateTime.now(),
+        itemName: 'Soup',
+        mealSlot: 'lunch',
+        calories: 200,
+        sodiumMg: 650,
+      );
+      await f.store.createLocal(
+        startedAt: DateTime.now(),
+        itemName: 'Mystery bar',
+        mealSlot: 'snack',
+        calories: 180,
+      );
+    });
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('at least 650 / 2300 mg'), findsOneWidget);
+      expect(find.text('1650 mg left'), findsNothing,
+          reason: 'the unreported entry could have consumed all the headroom');
+      expect(find.text('No daily target'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('an ungraded nutrient reports its total and says so',
+      (tester) async {
+    final f = await _store('nutrients_ungraded_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Yoghurt',
+          mealSlot: 'snack',
+          calories: 120,
+          sugarG: 12.5,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Sugar'), findsOneWidget);
+      expect(find.text('12.5 g'), findsOneWidget);
+      expect(find.text('No daily target'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('water card shows the litre readout + a remaining chip',
       (tester) async {
     final f = await _store('water_target_');
