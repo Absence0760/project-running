@@ -9643,6 +9643,42 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionTitle => '栄養';
 
   @override
+  String get nutritionDayNavLabel => '記録する日';
+
+  @override
+  String get nutritionDayPrevious => '前の日';
+
+  @override
+  String get nutritionDayNext => '次の日';
+
+  @override
+  String get nutritionDayToday => '今日';
+
+  @override
+  String get nutritionDayYesterday => '昨日';
+
+  @override
+  String get nutritionDayBackfillHint => 'ここで記録した内容はこの日に追加されます。';
+
+  @override
+  String get nutritionDayEmptyPast => 'この日は何も記録されていません。';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return '目標 $base + この日の消費 $exercise kcal';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '$date までの7日間';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return '食事を記録 — $date';
+  }
+
+  @override
   String get nutritionLogFood => '食事を記録';
 
   @override

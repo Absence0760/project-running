@@ -13259,6 +13259,43 @@
     }
   },
   "nutritionTitle": "Nutrition",
+  "nutritionDayNavLabel": "Diary day",
+  "nutritionDayPrevious": "Previous day",
+  "nutritionDayNext": "Next day",
+  "nutritionDayToday": "Today",
+  "nutritionDayYesterday": "Yesterday",
+  "nutritionDayBackfillHint": "Anything you log here is added to this day.",
+  "nutritionDayEmptyPast": "Nothing logged on this day.",
+  "nutritionDayGoalBreakdown": "Goal {base} + {exercise} kcal burned that day",
+  "@nutritionDayGoalBreakdown": {
+    "description": "Calorie goal breakdown on a past diary day: base goal + exercise kcal burned that day",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
+  "nutritionDayTrendEnding": "7 days to {date}",
+  "@nutritionDayTrendEnding": {
+    "description": "Trend-card heading when the diary is showing a past day",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionDayLogHeadingFor": "Log food — {date}",
+  "@nutritionDayLogHeadingFor": {
+    "description": "Log-food composer title when the diary is showing a past day",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionLogFood": "Log food",
   "nutritionCalories": "Calories",
   "nutritionProtein": "Protein",

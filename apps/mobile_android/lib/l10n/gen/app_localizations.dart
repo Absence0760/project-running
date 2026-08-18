@@ -16778,6 +16778,66 @@ abstract class AppLocalizations {
   /// **'Nutrition'**
   String get nutritionTitle;
 
+  /// No description provided for @nutritionDayNavLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Diary day'**
+  String get nutritionDayNavLabel;
+
+  /// No description provided for @nutritionDayPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous day'**
+  String get nutritionDayPrevious;
+
+  /// No description provided for @nutritionDayNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next day'**
+  String get nutritionDayNext;
+
+  /// No description provided for @nutritionDayToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get nutritionDayToday;
+
+  /// No description provided for @nutritionDayYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get nutritionDayYesterday;
+
+  /// No description provided for @nutritionDayBackfillHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Anything you log here is added to this day.'**
+  String get nutritionDayBackfillHint;
+
+  /// No description provided for @nutritionDayEmptyPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing logged on this day.'**
+  String get nutritionDayEmptyPast;
+
+  /// Calorie goal breakdown on a past diary day: base goal + exercise kcal burned that day
+  ///
+  /// In en, this message translates to:
+  /// **'Goal {base} + {exercise} kcal burned that day'**
+  String nutritionDayGoalBreakdown(int base, int exercise);
+
+  /// Trend-card heading when the diary is showing a past day
+  ///
+  /// In en, this message translates to:
+  /// **'7 days to {date}'**
+  String nutritionDayTrendEnding(String date);
+
+  /// Log-food composer title when the diary is showing a past day
+  ///
+  /// In en, this message translates to:
+  /// **'Log food — {date}'**
+  String nutritionDayLogHeadingFor(String date);
+
   /// No description provided for @nutritionLogFood.
   ///
   /// In en, this message translates to:
