@@ -13347,6 +13347,65 @@
   "nutritionSodium": "Sodium",
   "nutritionSaturatedFat": "Saturated fat",
   "nutritionCholesterol": "Cholesterol",
+  "nutritionNutrients": "Nutrients",
+  "@nutritionNutrients": {
+    "description": "Section title for the nutrition day's extended-nutrient roll-up"
+  },
+  "nutritionNutrientsHint": "Reference intakes. Each total counts only the logged items that report that nutrient.",
+  "@nutritionNutrientsHint": {
+    "description": "Footnote under the nutrients section explaining partial coverage"
+  },
+  "nutritionNutrientAtLeast": "at least",
+  "@nutritionNutrientAtLeast": {
+    "description": "Prefix on a nutrient total that only some logged items reported"
+  },
+  "nutritionNutrientPartial": "{reported} of {total} logged items report {nutrient}",
+  "@nutritionNutrientPartial": {
+    "description": "Accessible explanation of a partially-covered nutrient total",
+    "placeholders": {
+      "reported": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "nutrient": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionNutrientOver": "{n} {unit} over",
+  "@nutritionNutrientOver": {
+    "description": "Nutrient chip: amount past a ceiling nutrient's daily reference",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionNutrientLeft": "{n} {unit} left",
+  "@nutritionNutrientLeft": {
+    "description": "Nutrient chip: amount still within a nutrient's daily reference",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionNutrientReached": "Goal reached",
+  "@nutritionNutrientReached": {
+    "description": "Nutrient chip: a floor nutrient has met its daily reference"
+  },
+  "nutritionNutrientUntargeted": "No daily target",
+  "@nutritionNutrientUntargeted": {
+    "description": "Nutrient chip: this nutrient is reported but deliberately ungraded"
+  },
   "nutritionWater": "Water",
   "nutritionWaterAdd": "Add water",
   "nutritionWaterRemove": "Remove water",

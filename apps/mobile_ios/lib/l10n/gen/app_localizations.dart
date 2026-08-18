@@ -16922,6 +16922,54 @@ abstract class AppLocalizations {
   /// **'Cholesterol'**
   String get nutritionCholesterol;
 
+  /// Section title for the nutrition day's extended-nutrient roll-up
+  ///
+  /// In en, this message translates to:
+  /// **'Nutrients'**
+  String get nutritionNutrients;
+
+  /// Footnote under the nutrients section explaining partial coverage
+  ///
+  /// In en, this message translates to:
+  /// **'Reference intakes. Each total counts only the logged items that report that nutrient.'**
+  String get nutritionNutrientsHint;
+
+  /// Prefix on a nutrient total that only some logged items reported
+  ///
+  /// In en, this message translates to:
+  /// **'at least'**
+  String get nutritionNutrientAtLeast;
+
+  /// Accessible explanation of a partially-covered nutrient total
+  ///
+  /// In en, this message translates to:
+  /// **'{reported} of {total} logged items report {nutrient}'**
+  String nutritionNutrientPartial(int reported, int total, String nutrient);
+
+  /// Nutrient chip: amount past a ceiling nutrient's daily reference
+  ///
+  /// In en, this message translates to:
+  /// **'{n} {unit} over'**
+  String nutritionNutrientOver(String n, String unit);
+
+  /// Nutrient chip: amount still within a nutrient's daily reference
+  ///
+  /// In en, this message translates to:
+  /// **'{n} {unit} left'**
+  String nutritionNutrientLeft(String n, String unit);
+
+  /// Nutrient chip: a floor nutrient has met its daily reference
+  ///
+  /// In en, this message translates to:
+  /// **'Goal reached'**
+  String get nutritionNutrientReached;
+
+  /// Nutrient chip: this nutrient is reported but deliberately ungraded
+  ///
+  /// In en, this message translates to:
+  /// **'No daily target'**
+  String get nutritionNutrientUntargeted;
+
   /// No description provided for @nutritionWater.
   ///
   /// In en, this message translates to:

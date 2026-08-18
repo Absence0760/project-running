@@ -410,7 +410,26 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     await persist(asSynced(existing));
   }
 
+  /// Refuse a write on a store that was never [init]ed.
+  ///
+  /// [dir] is null only in that case, and every write path then dies on a bare
+  /// `dir!` — an opaque "Null check operator used on a null value" that reads
+  /// like a bug in the caller. Worse, the in-memory mutation happened first, so
+  /// the row appeared in the list, the screen reported a failure over the top
+  /// of it, and nothing was ever written to disk or drained to the server
+  /// (`NutritionScreen` shipped in exactly that state). Raising here, BEFORE
+  /// `rowsById` is touched, keeps the resident state honest: a write that
+  /// cannot be durable leaves no trace that says it was.
+  @protected
+  void requireInitialised(String op) {
+    if (dir != null) return;
+    throw StateError(
+        '$debugLabel: $op before init() — the store has no directory, so this '
+        'write could never reach disk or the server');
+  }
+
   Future<void> dropRow(String id) async {
+    requireInitialised('dropRow');
     rowsById.remove(id);
     _writtenJson.remove(id);
     final file = File('${dir!.path}/$id.json');
@@ -432,6 +451,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// not a live row) but still writes its on-disk file so the drain can push
   /// the server DELETE.
   Future<void> _persistRow(S stored) async {
+    requireInitialised('persist');
     rowsById[stored.id] = stored;
     final file = File('${dir!.path}/${stored.id}.json');
     final json = stored.toJson();

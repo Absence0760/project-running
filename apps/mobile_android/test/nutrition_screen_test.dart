@@ -348,6 +348,106 @@ void main() {
     }
   });
 
+  // The extended-nutrient day roll-up (web parity, decisions §616). The
+  // coverage contract is the point of the section, not decoration: a nutrient
+  // no entry reported is absent rather than shown as a zero, and a total only
+  // some entries reported is prefixed "at least" with its `remaining` withheld.
+  testWidgets('the nutrients section self-hides when nothing reports one',
+      (tester) async {
+    final f = await _store('nutrients_hidden_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Nutrients'), findsNothing);
+      expect(find.text('Sodium'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a fully-covered nutrient renders its total flat',
+      (tester) async {
+    final f = await _store('nutrients_full_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Soup',
+          mealSlot: 'lunch',
+          calories: 200,
+          sodiumMg: 650,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Nutrients'), findsOneWidget);
+      expect(find.text('Sodium'), findsOneWidget);
+      // No body metrics here, so only the flat sodium ceiling resolves.
+      expect(find.text('650 / 2300 mg'), findsOneWidget);
+      expect(find.text('1650 mg left'), findsOneWidget);
+      expect(find.textContaining('at least'), findsNothing);
+      // A nutrient no entry reported is absent, not a zero row.
+      expect(find.text('Fiber'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('partial coverage says "at least" and withholds remaining',
+      (tester) async {
+    final f = await _store('nutrients_partial_');
+    await tester.runAsync(() async {
+      await f.store.createLocal(
+        startedAt: DateTime.now(),
+        itemName: 'Soup',
+        mealSlot: 'lunch',
+        calories: 200,
+        sodiumMg: 650,
+      );
+      await f.store.createLocal(
+        startedAt: DateTime.now(),
+        itemName: 'Mystery bar',
+        mealSlot: 'snack',
+        calories: 180,
+      );
+    });
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('at least 650 / 2300 mg'), findsOneWidget);
+      expect(find.text('1650 mg left'), findsNothing,
+          reason: 'the unreported entry could have consumed all the headroom');
+      expect(find.text('No daily target'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('an ungraded nutrient reports its total and says so',
+      (tester) async {
+    final f = await _store('nutrients_ungraded_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Yoghurt',
+          mealSlot: 'snack',
+          calories: 120,
+          sugarG: 12.5,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Sugar'), findsOneWidget);
+      expect(find.text('12.5 g'), findsOneWidget);
+      expect(find.text('No daily target'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('water card shows the litre readout + a remaining chip',
       (tester) async {
     final f = await _store('water_target_');
@@ -409,17 +509,31 @@ void main() {
       await tester.runAsync(() async {
         await tester.tap(confirm);
       });
+      // The guard now releases only once the write actually lands, so wait for
+      // the persisted row AND the re-enable. `find.text` also matches the
+      // dialog's own EditableText, so polling the typed name alone passes
+      // before the save has even started.
+      IconButton saveBtn() => tester.widget<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.bookmark_add_outlined),
+          );
+      final templateDir = Directory('${pp.path}/meal_templates');
       await _pumpUntil(
-          tester, () => find.text('My breakfast').evaluate().isNotEmpty);
+          tester,
+          () =>
+              templateDir.existsSync() &&
+              templateDir
+                  .listSync()
+                  .whereType<File>()
+                  .any((e) =>
+                      e.path.endsWith('.json') &&
+                      !e.path.endsWith('index.json')) &&
+              saveBtn().onPressed != null);
       await tester.pumpAndSettle();
 
       // Saved exactly once: the template section shows the one row, and the
       // save action is re-enabled (the guard released in `finally`).
       expect(find.text('My breakfast'), findsOneWidget);
-      final saveBtn = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.bookmark_add_outlined),
-      );
-      expect(saveBtn.onPressed, isNotNull);
+      expect(saveBtn().onPressed, isNotNull);
 
       // Drain the showTopBanner auto-dismiss timer (mobile-test gotcha).
       await tester.pump(const Duration(seconds: 5));
@@ -675,6 +789,68 @@ void _diaryDayTests() {
       );
     } finally {
       f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  // The pre-existing bug this pins (followups, 2026-08-18): `initState` called
+  // `loadAll()` instead of `init()`, so both owned stores had a null `dir` and
+  // every save died on `dir!`. The row still landed in `rowsById`, so a test
+  // asserting `find.text('My breakfast')` went green over a save that reached
+  // neither disk nor the server. Assert the DISK, not the list.
+  testWidgets('Save as meal persists the template to disk, not just memory',
+      (tester) async {
+    final f = await _store('save_meal_disk_');
+    final pp = Directory.systemTemp.createTempSync('nutrition_disk_pp_');
+    PathProviderPlatform.instance = _FakePathProvider(pp);
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Save as meal'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'My breakfast');
+      final confirm = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Save meal'),
+      );
+      await tester.runAsync(() async {
+        await tester.tap(confirm);
+      });
+      // Poll the DISK, not the list: the row is installed in memory (and so
+      // renders) before `writeJsonAtomic` renames its `.tmp` sibling into
+      // place, which is exactly why a list assertion proves nothing here.
+      final templateDir = Directory('${pp.path}/meal_templates');
+      List<String> writtenRows() => templateDir.existsSync()
+          ? templateDir
+              .listSync()
+              .whereType<File>()
+              .where((e) =>
+                  e.path.endsWith('.json') && !e.path.endsWith('index.json'))
+              .map((e) => e.readAsStringSync())
+              .toList()
+          : <String>[];
+      await _pumpUntil(tester, () => writtenRows().isNotEmpty);
+      await tester.pumpAndSettle();
+
+      final written = writtenRows();
+      expect(written, hasLength(1),
+          reason: 'the saved meal must be on disk, not only in the list');
+      expect(written.single, contains('My breakfast'));
+      expect(find.text('My breakfast'), findsOneWidget);
+
+      // No save-failed banner: the screen reports what actually happened.
+      expect(find.textContaining('save the template'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 5));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+      pp.deleteSync(recursive: true);
     }
   });
 

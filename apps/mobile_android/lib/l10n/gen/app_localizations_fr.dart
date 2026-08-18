@@ -10273,6 +10273,37 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nutritionCholesterol => 'Cholestérol';
 
   @override
+  String get nutritionNutrients => 'Nutriments';
+
+  @override
+  String get nutritionNutrientsHint =>
+      'Valeurs de référence. Chaque total ne compte que les aliments enregistrés qui indiquent ce nutriment.';
+
+  @override
+  String get nutritionNutrientAtLeast => 'au moins';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '$reported aliments enregistrés sur $total indiquent $nutrient';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit de trop';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return '$n $unit restants';
+  }
+
+  @override
+  String get nutritionNutrientReached => 'Objectif atteint';
+
+  @override
+  String get nutritionNutrientUntargeted => 'Pas d’objectif quotidien';
+
+  @override
   String get nutritionWater => 'Eau';
 
   @override
