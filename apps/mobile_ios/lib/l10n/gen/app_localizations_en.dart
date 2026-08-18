@@ -5109,6 +5109,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get planNewRampLabel => 'Plan vs. your recent training';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'This plan peaks at $peak a week, below the $recent a week you\'ve averaged over the last four weeks. A longer goal race or more training days would make better use of that base.';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return 'Week 1 asks for $opening against the $recent a week you\'ve averaged over the last four weeks — a real step up. Ease into it, or drop a training day.';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return 'Week 1 asks for $opening, well above the $recent a week you\'ve averaged over the last four weeks. Fewer training days, a shorter goal race, or a few weeks of base building first would make that first step safer.';
+  }
+
+  @override
   String get planNewWeekOutline => 'Week outline';
 
   @override

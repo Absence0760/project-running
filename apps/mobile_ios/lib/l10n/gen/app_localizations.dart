@@ -8506,6 +8506,30 @@ abstract class AppLocalizations {
   /// **'Daniels VDOT: {value}'**
   String planNewVdot(String value);
 
+  /// Plan-wizard ramp-note section label
+  ///
+  /// In en, this message translates to:
+  /// **'Plan vs. your recent training'**
+  String get planNewRampLabel;
+
+  /// Ramp note when the plan's peak week sits below the runner's recent weekly average
+  ///
+  /// In en, this message translates to:
+  /// **'This plan peaks at {peak} a week, below the {recent} a week you\'ve averaged over the last four weeks. A longer goal race or more training days would make better use of that base.'**
+  String planNewRampUnder(String peak, String recent);
+
+  /// Ramp note when the plan's opening week is an elevated step above the runner's recent weekly average
+  ///
+  /// In en, this message translates to:
+  /// **'Week 1 asks for {opening} against the {recent} a week you\'ve averaged over the last four weeks — a real step up. Ease into it, or drop a training day.'**
+  String planNewRampElevated(String opening, String recent);
+
+  /// Ramp note when the plan's opening week is far above the runner's recent weekly average
+  ///
+  /// In en, this message translates to:
+  /// **'Week 1 asks for {opening}, well above the {recent} a week you\'ve averaged over the last four weeks. Fewer training days, a shorter goal race, or a few weeks of base building first would make that first step safer.'**
+  String planNewRampHigh(String opening, String recent);
+
   /// Week-outline preview section label
   ///
   /// In en, this message translates to:

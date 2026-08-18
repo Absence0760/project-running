@@ -4856,6 +4856,24 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get planNewRampLabel => 'プランと最近のトレーニングの比較';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'このプランの最大週は$peakで、過去4週間の平均である週$recentを下回ります。目標レースを長くするか、トレーニング日を増やすと、その土台をより活かせます。';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return '第1週は$openingで、過去4週間の平均である週$recentからはっきり上がります。無理せず入るか、トレーニング日を1日減らしましょう。';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return '第1週は$openingで、過去4週間の平均である週$recentを大きく上回ります。トレーニング日を減らす、目標レースを短くする、または数週間かけて土台を作ってから始めると、最初の一歩が安全になります。';
+  }
+
+  @override
   String get planNewWeekOutline => '週の概要';
 
   @override
