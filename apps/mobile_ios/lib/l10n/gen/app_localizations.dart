@@ -16178,6 +16178,42 @@ abstract class AppLocalizations {
   /// **'Couldn\'t publish the routine.'**
   String get gymRoutinePublishFailed;
 
+  /// Routine detail: heading of the past-sessions panel
+  ///
+  /// In en, this message translates to:
+  /// **'Routine history'**
+  String get gymRoutineHistoryTitle;
+
+  /// Routine detail: sub-heading above the recent session list
+  ///
+  /// In en, this message translates to:
+  /// **'Recent sessions'**
+  String get gymRoutineHistoryRecent;
+
+  /// Routine detail: how long ago the routine was last performed
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Done today} =1{Done yesterday} other{Done {days} days ago}}'**
+  String gymRoutineHistoryLastDone(int days);
+
+  /// Routine detail: how many graded sessions of the routine were completed
+  ///
+  /// In en, this message translates to:
+  /// **'{completed} of {graded} completed'**
+  String gymRoutineHistoryCompletedRate(int completed, int graded);
+
+  /// Routine detail: verdict badge for a session saved without an adherence grade
+  ///
+  /// In en, this message translates to:
+  /// **'Not graded'**
+  String get gymRoutineHistoryVerdictUngraded;
+
+  /// Routine detail: the past-sessions panel could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load this routine’s history.'**
+  String get gymRoutineHistoryLoadError;
+
   /// Badge shown on a routine that is already a club-owned template
   ///
   /// In en, this message translates to:

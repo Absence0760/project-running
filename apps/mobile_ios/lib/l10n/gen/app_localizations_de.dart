@@ -9809,6 +9809,36 @@ class AppLocalizationsDe extends AppLocalizations {
       'Routine konnte nicht veröffentlicht werden.';
 
   @override
+  String get gymRoutineHistoryTitle => 'Routine-Verlauf';
+
+  @override
+  String get gymRoutineHistoryRecent => 'Letzte Einheiten';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Vor $days Tagen absolviert',
+      one: 'Gestern absolviert',
+      zero: 'Heute absolviert',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$completed von $graded abgeschlossen';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => 'Nicht bewertet';
+
+  @override
+  String get gymRoutineHistoryLoadError =>
+      'Verlauf dieser Routine konnte nicht geladen werden.';
+
+  @override
   String get gymRoutineClubTemplateBadge => 'Club-Vorlage';
 
   @override

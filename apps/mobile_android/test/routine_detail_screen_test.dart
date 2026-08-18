@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,12 +22,12 @@ Future<({LocalRoutineStore store, LocalGymStore gym, Directory dir})> _fixture(
 }
 
 Widget _app(LocalRoutineStore store, LocalGymStore gym, String id,
-        {SocialService? social, String? viewerId}) =>
+        {SocialService? social, String? viewerId, ApiClient? api}) =>
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: RoutineDetailScreen(
-          api: null,
+          api: api,
           store: store,
           gymStore: gym,
           routineId: id,
@@ -40,6 +41,33 @@ class _FakeSocial extends SocialService {
   @override
   Future<List<ClubView>> fetchMyClubs() async => clubs;
 }
+
+class _HistoryApi extends ApiClient {
+  _HistoryApi({this.rows = const [], this.throwUntilCall = 0});
+
+  final List<Map<String, dynamic>> rows;
+  final int throwUntilCall;
+  int calls = 0;
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchGymRoutineSessions(
+    String routineId, {
+    int limit = 500,
+  }) async {
+    calls++;
+    if (calls <= throwUntilCall) throw StateError('offline');
+    return rows;
+  }
+}
+
+Map<String, dynamic> _session(String id, String startedAt,
+        {String? title, Object? metadata}) =>
+    <String, dynamic>{
+      'id': id,
+      'started_at': startedAt,
+      'title': title,
+      'metadata': metadata ?? <String, dynamic>{},
+    };
 
 ClubView _club(String id, String name, String role) => ClubView(
       row: ClubRow(shadowHidden: false, 
@@ -274,6 +302,143 @@ void main() {
       await tester.pumpWidget(_app(f.store, f.gym, 'r-1', viewerId: 'me'));
       await tester.pump();
       expect(find.text('Publish to public library'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('past sessions render as the routine history panel',
+      (tester) async {
+    final f = await _fixture('history_render');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(rows: [
+      _session('w-1', now.subtract(const Duration(days: 2)).toIso8601String(),
+          title: 'Push day A', metadata: {'gym_adherence': 'completed'}),
+      _session('w-2', now.subtract(const Duration(days: 9)).toIso8601String(),
+          metadata: {'gym_adherence': 'partial'}),
+      _session('w-3', now.subtract(const Duration(days: 16)).toIso8601String(),
+          metadata: {'routine_id': 'r-1'}),
+    ]);
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Routine history'), findsOneWidget);
+      expect(find.text('3 sessions'), findsOneWidget);
+      // Only the two graded sessions reach the rate denominator.
+      expect(find.text('Done 2 days ago  ·  1 of 2 completed'), findsOneWidget);
+      expect(find.text('Recent sessions'), findsOneWidget);
+      expect(find.text('Push day A'), findsOneWidget);
+      expect(find.text('Untitled workout'), findsNWidgets(2));
+      expect(find.text('Completed'), findsOneWidget);
+      expect(find.text('Partly done'), findsOneWidget);
+      expect(find.text('Not graded'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('an in-flight draft session is not counted as performed',
+      (tester) async {
+    final f = await _fixture('history_draft');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(rows: [
+      _session('draft', now.toIso8601String(), metadata: {
+        'routine_id': 'r-1',
+        'gym_session_draft': {'saved_at': now.toIso8601String(), 'results': []},
+      }),
+      _session('done', now.subtract(const Duration(days: 1)).toIso8601String(),
+          title: 'Push day A', metadata: {'gym_adherence': 'completed'}),
+    ]);
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('1 session'), findsOneWidget);
+      expect(find.text('Done yesterday  ·  1 of 1 completed'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a routine never run renders no history panel', (tester) async {
+    final f = await _fixture('history_empty');
+    final api = _HistoryApi();
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Routine history'), findsNothing);
+      expect(find.text('Couldn’t load this routine’s history.'),
+          findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a failed history read shows a retry, and the retry recovers',
+      (tester) async {
+    final f = await _fixture('history_error');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(throwUntilCall: 1, rows: [
+      _session('w-1', now.toIso8601String(),
+          title: 'Push day A', metadata: {'gym_adherence': 'completed'}),
+    ]);
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Couldn’t load this routine’s history.'),
+          findsOneWidget);
+      expect(find.text('Routine history'), findsNothing);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(api.calls, 2);
+      expect(find.text('Couldn’t load this routine’s history.'),
+          findsNothing);
+      expect(find.text('Routine history'), findsOneWidget);
+      expect(find.text('Done today  ·  1 of 1 completed'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the history panel is not read for a non-author', (tester) async {
+    final f = await _fixture('history_nonauthor');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(rows: [
+      _session('w-1', now.toIso8601String(),
+          metadata: {'gym_adherence': 'completed'}),
+    ]);
+    try {
+      await tester.runAsync(() => f.store.replaceFromServer(
+          _seed(_row('r-1', 'Push day', authorId: 'someone-else'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(api.calls, 0);
+      expect(find.text('Routine history'), findsNothing);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

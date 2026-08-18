@@ -9300,6 +9300,35 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymRoutinePublishFailed => 'ルーティンを公開できませんでした。';
 
   @override
+  String get gymRoutineHistoryTitle => 'ルーティン履歴';
+
+  @override
+  String get gymRoutineHistoryRecent => '最近のセッション';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days日前に実施',
+      one: '昨日実施',
+      zero: '今日実施',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$graded件中$completed件を完了';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => '評価なし';
+
+  @override
+  String get gymRoutineHistoryLoadError => 'このルーティンの履歴を読み込めませんでした。';
+
+  @override
   String get gymRoutineClubTemplateBadge => 'クラブテンプレート';
 
   @override

@@ -12957,6 +12957,43 @@
   "@gymRoutinePublishFailed": {
     "description": "Error after a failed publish-as-template"
   },
+  "gymRoutineHistoryTitle": "Routine history",
+  "@gymRoutineHistoryTitle": {
+    "description": "Routine detail: heading of the past-sessions panel"
+  },
+  "gymRoutineHistoryRecent": "Recent sessions",
+  "@gymRoutineHistoryRecent": {
+    "description": "Routine detail: sub-heading above the recent session list"
+  },
+  "gymRoutineHistoryLastDone": "{days, plural, =0{Done today} =1{Done yesterday} other{Done {days} days ago}}",
+  "@gymRoutineHistoryLastDone": {
+    "description": "Routine detail: how long ago the routine was last performed",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "gymRoutineHistoryCompletedRate": "{completed} of {graded} completed",
+  "@gymRoutineHistoryCompletedRate": {
+    "description": "Routine detail: how many graded sessions of the routine were completed",
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "graded": {
+        "type": "int"
+      }
+    }
+  },
+  "gymRoutineHistoryVerdictUngraded": "Not graded",
+  "@gymRoutineHistoryVerdictUngraded": {
+    "description": "Routine detail: verdict badge for a session saved without an adherence grade"
+  },
+  "gymRoutineHistoryLoadError": "Couldn’t load this routine’s history.",
+  "@gymRoutineHistoryLoadError": {
+    "description": "Routine detail: the past-sessions panel could not be read"
+  },
   "gymRoutineClubTemplateBadge": "Club template",
   "@gymRoutineClubTemplateBadge": {
     "description": "Badge shown on a routine that is already a club-owned template"

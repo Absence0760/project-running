@@ -6354,6 +6354,28 @@ double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
     );
   }
 
+  /// The signed-in user's gym workouts linked to one routine, newest first.
+  /// Mirrors web `data.ts#fetchGymRoutineSessions`, including its 500-row
+  /// window: an unbounded PostgREST select truncates silently at `db.max-rows`
+  /// with a 200, so a bounded read whose limit the caller knows beats a page
+  /// that quietly claims to be everything. A failed read throws — "you have
+  /// never run this" is a different answer from "we could not look".
+  Future<List<Map<String, dynamic>>> fetchGymRoutineSessions(
+    String routineId, {
+    int limit = 500,
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null || routineId.isEmpty) return const [];
+    final data = await _client
+        .from(GymWorkoutRow.table)
+        .select('id, started_at, title, metadata')
+        .eq(GymWorkoutRow.colUserId, uid)
+        .eq('metadata->>routine_id', routineId)
+        .order(GymWorkoutRow.colStartedAt, ascending: false)
+        .limit(limit);
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
   // ─────────────────── Nutrition / food log (Phase 4) ───────────────────
 
   /// Food entries in the half-open day range [from, to), newest first.

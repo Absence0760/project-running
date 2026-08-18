@@ -9798,6 +9798,36 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymRoutinePublishFailed => 'Não foi possível publicar a rotina.';
 
   @override
+  String get gymRoutineHistoryTitle => 'Histórico da rotina';
+
+  @override
+  String get gymRoutineHistoryRecent => 'Sessões recentes';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Feita há $days dias',
+      one: 'Feita ontem',
+      zero: 'Feita hoje',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$completed de $graded concluídas';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => 'Sem avaliação';
+
+  @override
+  String get gymRoutineHistoryLoadError =>
+      'Não foi possível carregar o histórico desta rotina.';
+
+  @override
   String get gymRoutineClubTemplateBadge => 'Modelo do clube';
 
   @override
@@ -22565,6 +22595,36 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymRoutinePublishFailed => 'Não foi possível publicar a rotina.';
+
+  @override
+  String get gymRoutineHistoryTitle => 'Histórico da rotina';
+
+  @override
+  String get gymRoutineHistoryRecent => 'Sessões recentes';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Feita há $days dias',
+      one: 'Feita ontem',
+      zero: 'Feita hoje',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$completed de $graded concluídas';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => 'Sem avaliação';
+
+  @override
+  String get gymRoutineHistoryLoadError =>
+      'Não foi possível carregar o histórico desta rotina.';
 
   @override
   String get gymRoutineClubTemplateBadge => 'Modelo do clube';
