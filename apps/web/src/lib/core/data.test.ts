@@ -294,13 +294,25 @@ test('api_client.dart round-trips runs.route_id on read and both write paths', (
 	assert.match(
 		source,
 		/routeId:\s*r\.routeId/,
-		'_runFromRow (read) + saveRunsBatch (write) must set routeId: r.routeId.',
+		'_runFromRow (read) must set routeId: r.routeId.',
 	);
+	// The write half moved: runRowFromRun in core_models is now the only
+	// place a Run becomes a runs row, so the link is carried there and the
+	// writers are checked for delegating to it rather than for the literal.
+	const shaper = read('../../packages/core_models/lib/src/run_row_shape.dart');
 	assert.match(
-		source,
+		shaper,
 		/routeId:\s*run\.routeId/,
-		'saveRun (write) must set routeId: run.routeId — omitting it re-writes route_id = null on upsert.',
+		'runRowFromRun must set routeId: run.routeId — omitting it re-writes route_id = null on upsert.',
 	);
+	for (const writer of ['saveRun', 'saveRunsBatch']) {
+		const start = source.search(new RegExp(`Future<[\\w<>, ]*>\\s+${writer}\\(`));
+		assert.ok(start >= 0, `Could not locate ${writer} in api_client.dart — rename?`);
+		assert.ok(
+			source.slice(start, start + 4000).includes('runRowFromRun('),
+			`${writer} must build its row through runRowFromRun, or route_id stops round-tripping.`,
+		);
+	}
 });
 
 test('fetchRouteById anon/public branch assembles waypoints from the server clip', () => {
