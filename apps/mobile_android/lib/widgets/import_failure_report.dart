@@ -120,40 +120,40 @@ class ImportFailureReport extends StatelessWidget {
               ),
             ],
             if (log.items.isNotEmpty)
-              Theme(
-                data: theme.copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  tilePadding: EdgeInsets.zero,
-                  childrenPadding: EdgeInsets.zero,
-                  title: Text(l10n.importFailuresShowDetail,
-                      style: theme.textTheme.bodyMedium),
-                  children: [
-                    for (final f in log.items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(f.name, style: theme.textTheme.bodyMedium),
+              ExpansionTile(
+                // No enclosing rule lines: the card already bounds this.
+                shape: const Border(),
+                collapsedShape: const Border(),
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: Text(l10n.importFailuresShowDetail,
+                    style: theme.textTheme.bodyMedium),
+                children: [
+                  for (final f in log.items)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(f.name, style: theme.textTheme.bodyMedium),
+                          Text(
+                            '${_formatStart(l10n, tag, f.startedAt)} · '
+                            '${reasonLabel(l10n, f.reason)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (f.detail.isNotEmpty)
                             Text(
-                              '${_formatStart(l10n, tag, f.startedAt)} · '
-                              '${reasonLabel(l10n, f.reason)}',
+                              f.detail,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
-                            if (f.detail.isNotEmpty)
-                              Text(
-                                f.detail,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ),
-                          ],
-                        ),
+                        ],
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             const SizedBox(height: 8),
             Wrap(
