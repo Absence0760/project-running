@@ -7924,6 +7924,18 @@ abstract class AppLocalizations {
   /// **'{p}% of route'**
   String liveSpectatorCourseProgress(int p);
 
+  /// Spectator chip: the runner is still pinging but has not left this spot for n minutes
+  ///
+  /// In en, this message translates to:
+  /// **'Not moving — {n} min in the same spot'**
+  String liveSpectatorMotionStopped(int n);
+
+  /// Same chip when the stop reaches the start of the observed window, so n is a floor
+  ///
+  /// In en, this message translates to:
+  /// **'Not moving — at least {n} min in the same spot'**
+  String liveSpectatorMotionStoppedAtLeast(int n);
+
   /// Heading of the spectator conclusion card shown when the broadcast has concluded
   ///
   /// In en, this message translates to:

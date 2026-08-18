@@ -4796,6 +4796,16 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Aucun mouvement — $n min au même endroit';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Aucun mouvement — au moins $n min au même endroit';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Course terminée';
 
   @override

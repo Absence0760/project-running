@@ -4794,6 +4794,16 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Keine Bewegung — $n Min. an derselben Stelle';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Keine Bewegung — mindestens $n Min. an derselben Stelle';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Lauf beendet';
 
   @override

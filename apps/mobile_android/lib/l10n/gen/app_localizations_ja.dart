@@ -4499,6 +4499,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return '動きなし — 同じ地点に$n分';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return '動きなし — 同じ地点に少なくとも$n分';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'ランが完了しました';
 
   @override

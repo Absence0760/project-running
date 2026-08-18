@@ -4785,6 +4785,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Sem movimento — $n min no mesmo ponto';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Sem movimento — pelo menos $n min no mesmo ponto';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Corrida concluída';
 
   @override
@@ -17466,6 +17476,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String liveSpectatorCourseProgress(int p) {
     return '$p% do percurso';
+  }
+
+  @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Sem movimento — $n min no mesmo ponto';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Sem movimento — pelo menos $n min no mesmo ponto';
   }
 
   @override

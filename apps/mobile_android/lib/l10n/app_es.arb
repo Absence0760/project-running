@@ -1349,6 +1349,8 @@
   "liveSpectatorBadgeDnf": "DNF",
   "liveSpectatorRecentPace": "Reciente",
   "liveSpectatorCourseProgress": "{p}% del recorrido",
+  "liveSpectatorMotionStopped": "Sin movimiento — {n} min en el mismo punto",
+  "liveSpectatorMotionStoppedAtLeast": "Sin movimiento — al menos {n} min en el mismo punto",
   "liveSpectatorConcludedTitle": "Carrera completada",
   "liveSpectatorConcludedBody": "Consulta el recorrido completo, los parciales y las estadísticas.",
   "liveSpectatorViewFullRun": "Ver la carrera completa",
