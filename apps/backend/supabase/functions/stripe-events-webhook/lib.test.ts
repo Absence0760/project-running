@@ -329,3 +329,85 @@ Deno.test('orderStatusTransition — a completing refund releases a partially re
     null,
   );
 });
+
+/// A `charge.refunded` delivery in the shape Stripe actually sends: the charge
+/// sits at `data.object`, `refunded` stays false while any balance remains,
+/// and the amounts are the only honest discriminator. Pinned against the real
+/// envelope because the round-2 bug was reading neither `amount` nor
+/// `amount_refunded` — it decided off the event TYPE, which is identical for
+/// a £5 goodwill refund and a full one.
+function chargeRefundedEvent(amount: number, amountRefunded: number) {
+  return JSON.stringify({
+    id: 'evt_3PartialRefund',
+    object: 'event',
+    api_version: '2024-06-20',
+    created: 1_760_000_000,
+    type: 'charge.refunded',
+    livemode: false,
+    pending_webhooks: 1,
+    data: {
+      object: {
+        id: 'ch_3TestCharge',
+        object: 'charge',
+        amount,
+        amount_captured: amount,
+        amount_refunded: amountRefunded,
+        currency: 'gbp',
+        captured: true,
+        paid: true,
+        refunded: amountRefunded >= amount,
+        status: 'succeeded',
+        payment_intent: 'pi_3TestIntent',
+        refunds: {
+          object: 'list',
+          total_count: 1,
+          data: [{
+            id: 're_3TestRefund',
+            object: 'refund',
+            amount: amountRefunded,
+            currency: 'gbp',
+            charge: 'ch_3TestCharge',
+            reason: 'requested_by_customer',
+            status: 'succeeded',
+          }],
+        },
+      },
+    },
+  });
+}
+
+Deno.test('charge.refunded envelope — a goodwill part-refund keeps the seat', () => {
+  const event = parseStripeEventEnvelope(chargeRefundedEvent(5000, 500));
+  assertStrictEquals(event?.type, 'charge.refunded');
+  const charge = event!.data.object;
+  const scope = refundScopeOfCharge(charge);
+  assertStrictEquals(scope, 'partial');
+  assertStrictEquals(
+    orderStatusTransition('paid', event!.type, scope),
+    'partially_refunded',
+  );
+});
+
+Deno.test('charge.refunded envelope — the whole charge back releases the seat', () => {
+  const event = parseStripeEventEnvelope(chargeRefundedEvent(5000, 5000));
+  const charge = event!.data.object;
+  assertStrictEquals(refundScopeOfCharge(charge), 'full');
+  assertStrictEquals(
+    orderStatusTransition('paid', event!.type, refundScopeOfCharge(charge)),
+    'refunded',
+  );
+});
+
+Deno.test('charge.refunded envelope — the balance of a part-refund completes it', () => {
+  const first = parseStripeEventEnvelope(chargeRefundedEvent(5000, 500))!;
+  const status = orderStatusTransition(
+    'paid',
+    first.type,
+    refundScopeOfCharge(first.data.object),
+  );
+  const second = parseStripeEventEnvelope(chargeRefundedEvent(5000, 5000))!;
+  assertStrictEquals(
+    orderStatusTransition(status!, second.type, refundScopeOfCharge(second.data.object)),
+    'refunded',
+  );
+});
