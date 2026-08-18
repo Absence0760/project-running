@@ -2258,11 +2258,14 @@ class ApiClient {
         .from(UserProfileRow.table)
         .select('id, display_name, avatar_url, handle')
         .inFilter(UserProfileRow.colId, ids);
+    // Public-run counts come from the SECURITY DEFINER GROUP BY RPC, not from
+    // the base `runs` table: 20260701_001 dropped the public-anyone SELECT
+    // policy, so a client tally over `runs` reads zero rows for every
+    // candidate but the viewer and every suggestion showed "0 public runs" —
+    // which is also comparePeopleRank's primary sort key. See
+    // public_run_counts (migration 20270118_001); web reads the same RPC.
     final runsF = _client
-        .from(RunRow.table)
-        .select(RunRow.colUserId)
-        .inFilter(RunRow.colUserId, ids)
-        .eq(RunRow.colIsPublic, true);
+        .rpc('public_run_counts', params: {'p_user_ids': ids});
     final followsF = viewerId == null
         ? Future.value(<dynamic>[])
         : _client
@@ -2270,16 +2273,16 @@ class ApiClient {
             .select(UserFollowRow.colFolloweeId)
             .eq(UserFollowRow.colFollowerId, viewerId)
             .inFilter(UserFollowRow.colFolloweeId, ids);
-    final results = await Future.wait([profilesF, runsF, followsF]);
+    final results = await Future.wait<dynamic>([profilesF, runsF, followsF]);
     final profileRows = results[0];
     final runRows = results[1];
     final followRows = results[2];
 
     final counts = <String, int>{};
-    for (final r in runRows) {
+    for (final r in runRows as List) {
       final row = r as Map<String, dynamic>;
-      final uid = row[RunRow.colUserId] as String;
-      counts[uid] = (counts[uid] ?? 0) + 1;
+      counts[row['user_id'] as String] =
+          (row['public_run_count'] as num?)?.toInt() ?? 0;
     }
     final follows = <String>{};
     for (final r in followRows) {
