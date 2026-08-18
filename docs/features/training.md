@@ -95,7 +95,7 @@ That last refusal is right, and it is also silent in the case that most warrants
 
 21 unit tests in `comeback.test.ts` — including two that pin a clock-skewed stamp grading identically to an honest one, since an unclamped future timestamp opens a phantom gap that reads as a break the runner never took; the surface is pinned by `tests-e2e/dashboard/comeback.spec.ts` (steep → called out + no ratio card, gentle → easing in, no base → no card). **Web-only** for the same reason as `self_load`.
 
-## Opening-week ramp check (`plan_ramp.ts`, web-only)
+## Opening-week ramp check (`plan_ramp.ts` ↔ `plan_ramp.dart`)
 
 `generatePlan` sizes every week from the goal race, the training days and the fitness anchor — it never reads the runner's history. So a runner averaging 20 km a week could generate a marathon plan (4 days/week, goal time entered) whose **week 1 asks for 38.0 km**, and nothing in the wizard said a word. The opening step is the one a plan is most likely to injure someone on.
 
@@ -109,7 +109,11 @@ That last refusal is right, and it is also silent in the case that most warrants
 
 Surfaced in `PlanEditor.svelte`'s preview pane, above the week outline, each verdict quoting the week it was graded on beside the runner's average (`planEditor.rampUnder` / `rampElevated` / `rampHigh`). It recomputes as the wizard's inputs change, so dropping a training day or shortening the goal race shows the ramp easing live. The 28-day volume read is its own guarded mount effect — a failure leaves the wizard and its preview untouched and the note simply doesn't appear (fail-closed: no base, no claim).
 
-Web-only, and **not** a parity pair — mobile's `plan_new_screen` has no such surface yet; the mirror is tracked in [followups.md § Mobile](../product/followups.md). 32 unit tests in `plan_ramp.test.ts`; wiring pinned by `tests-e2e/plans/ramp-vs-recent-volume.spec.ts`.
+**Mirrored on mobile** (`plan_ramp.dart`, a registered parity pair): `plan_new_screen.dart` renders the same note in the same place — inside the preview card, above the week outline — off `TrainingService.fetchRecentRunVolume`, an L4 best-effort read that returns null on any failure so the note self-hides rather than grading against a base it doesn't have. Keys are `planNewRampLabel` / `planNewRampUnder` / `planNewRampElevated` / `planNewRampHigh`, translated from the matching web locale so the two surfaces cannot drift.
+
+34 unit tests in `plan_ramp.test.ts` and 34 in `plan_ramp_test.dart`; the web wiring is pinned by `tests-e2e/plans/ramp-vs-recent-volume.spec.ts`, the mobile wiring by the `opening-week ramp note` group in `test/plan_new_screen_test.dart`.
+
+`recentRunVolume` / `volumeSample` and the two constants live in this module on both platforms, not in a private copy: web's `self_load.ts` and `comeback.ts` already import them from here, so a later Dart port of either reduces the same runs through the same filter rather than growing a second definition of "this row is running volume".
 
 ## Multi-distance race-time predictor (`race_predictor.ts` ↔ `race_predictor.dart`)
 
