@@ -31,6 +31,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/gym/lift_load.ts` (`liftsFromSetHistory`) | `apps/mobile_android/lib/lift_load.dart` | `gym/lift_load.test.ts` ↔ `test/lift_load_test.dart` |
 | `apps/web/src/lib/nutrition/exercise_calories.ts` | `apps/mobile_android/lib/exercise_calories.dart` | `nutrition/exercise_calories.test.ts` ↔ `test/exercise_calories_test.dart` |
 | `apps/web/src/lib/gear/gear_wear.ts` | `apps/mobile_android/lib/gear_wear.dart` | `gear/gear_wear.test.ts` ↔ `test/gear_wear_test.dart` |
+| `apps/web/src/lib/gear/rotation_pick.ts` | `apps/mobile_android/lib/gear_rotation_pick.dart` | `gear/rotation_pick.test.ts` ↔ `test/gear_rotation_pick_test.dart` |
 | `apps/web/src/lib/gear/gear_backfill.ts` (`gearBackfillCandidates`) | `apps/mobile_android/lib/gear_backfill.dart` | `gear/gear_backfill.test.ts` ↔ `test/gear_backfill_test.dart` |
 | `apps/web/src/lib/gym/exercise_history.ts` (incl. `previousExerciseSession`) | `apps/mobile_android/lib/exercise_history.dart` | `gym/exercise_history.test.ts` ↔ `test/exercise_history_test.dart` |
 | `apps/web/src/lib/nutrition/nutrition_budget.ts` | `apps/mobile_android/lib/nutrition_budget.dart` | `nutrition/nutrition_budget.test.ts` ↔ `test/nutrition_budget_test.dart` |
