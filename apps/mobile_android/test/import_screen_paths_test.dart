@@ -206,6 +206,58 @@ void main() {
           find.text(l10n.importStatusImportedWithErrors(0, 1)), findsOneWidget);
     });
 
+    testWidgets('a manual activity with no track file still imports',
+        (tester) async {
+      // Strava leaves `Filename` empty for a manually-entered or indoor
+      // activity. Mobile used to `continue` past those rows before any
+      // counter, so a migrating runner's treadmill history vanished from a
+      // ZIP that reported a clean import — while web imported the same rows
+      // trackless off the CSV's own numbers.
+      final store = await _makeStore();
+      await _pump(
+        tester,
+        store,
+        _write(
+            'manual.zip',
+            _stravaZip(
+                csv:
+                    'Activity ID,Activity Date,Activity Name,Activity Type,Elapsed Time,Distance,Filename\n'
+                    '4242,"Apr 9, 2026, 6:00:00 AM",Treadmill 8k,Run,2400,8,\n',
+                withTrack: false)),
+      );
+
+      await _tapAndDrain(tester, _stravaButton);
+
+      expect(store.summaryRuns, hasLength(1));
+      final saved = await store.runById(store.summaryRuns.single.id);
+      expect(saved!.externalId, 'strava:4242');
+      expect(saved.track, isEmpty);
+      expect(saved.distanceMetres, 8000);
+      expect(saved.duration, const Duration(seconds: 2400));
+      expect(find.text(l10n.importStatusImported(1, 'Strava')), findsOneWidget);
+    });
+
+    testWidgets('a short row missing its Filename cell still imports',
+        (tester) async {
+      final store = await _makeStore();
+      await _pump(
+        tester,
+        store,
+        _write(
+            'short.zip',
+            _stravaZip(
+                csv:
+                    'Activity ID,Activity Date,Activity Name,Activity Type,Elapsed Time,Distance,Filename\n'
+                    '5151,"Apr 9, 2026, 6:00:00 AM",Rowing erg,Run,1200,5\n',
+                withTrack: false)),
+      );
+
+      await _tapAndDrain(tester, _stravaButton);
+
+      expect(store.summaryRuns, hasLength(1));
+      expect(find.text(l10n.importStatusImported(1, 'Strava')), findsOneWidget);
+    });
+
     testWidgets('a cancelled pick changes nothing', (tester) async {
       final store = await _makeStore();
       await _pump(tester, store, null);
