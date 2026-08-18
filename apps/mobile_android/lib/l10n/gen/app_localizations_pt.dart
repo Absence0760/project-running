@@ -5160,6 +5160,24 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get planNewRampLabel => 'O plano em relação ao seu treino recente';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'Este plano chega no máximo a $peak por semana, abaixo dos $recent por semana que você correu em média nas últimas quatro semanas. Uma prova-alvo mais longa ou mais dias de treino aproveitariam melhor essa base.';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return 'A semana 1 pede $opening contra os $recent por semana que você correu em média nas últimas quatro semanas — é um degrau real. Entre com calma ou tire um dia de treino.';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return 'A semana 1 pede $opening, bem acima dos $recent por semana que você correu em média nas últimas quatro semanas. Menos dias de treino, uma prova-alvo mais curta ou algumas semanas de base antes deixariam esse primeiro passo mais seguro.';
+  }
+
+  @override
   String get planNewWeekOutline => 'Resumo das semanas';
 
   @override
@@ -18030,6 +18048,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String planNewVdot(String value) {
     return 'VDOT de Daniels: $value';
+  }
+
+  @override
+  String get planNewRampLabel => 'O plano em relação ao seu treino recente';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'Este plano chega no máximo a $peak por semana, abaixo dos $recent por semana que você correu em média nas últimas quatro semanas. Uma prova-alvo mais longa ou mais dias de treino aproveitariam melhor essa base.';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return 'A semana 1 pede $opening contra os $recent por semana que você correu em média nas últimas quatro semanas — é um degrau real. Entre com calma ou tire um dia de treino.';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return 'A semana 1 pede $opening, bem acima dos $recent por semana que você correu em média nas últimas quatro semanas. Menos dias de treino, uma prova-alvo mais curta ou algumas semanas de base antes deixariam esse primeiro passo mais seguro.';
   }
 
   @override

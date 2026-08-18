@@ -4,6 +4,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/plan_ramp.dart';
 import '../lib/screens/plan_new_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training.dart';
@@ -17,6 +18,23 @@ Future<void> _pump(WidgetTester tester) {
       home: PlanNewScreen(training: TrainingService()),
     ),
   );
+}
+
+/// Serves a fixed chronic-volume read to the ramp note. The demographic
+/// fetches return quietly so no network is touched in the widget test.
+class _RampTraining extends TrainingService {
+  final RecentVolume? volume;
+  _RampTraining(this.volume);
+
+  @override
+  Future<TrainingGender> fetchViewerGender() async => null;
+  @override
+  Future<int?> fetchViewerAge() async => null;
+  @override
+  Future<RecentVolume?> fetchRecentRunVolume() async => volume;
+  @override
+  Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async =>
+      const [];
 }
 
 class _FakeSocial extends SocialService {
@@ -442,6 +460,74 @@ void main() {
         expect(find.text(label), findsNothing, reason: 'pace pill "$label"');
       }
       expect(find.textContaining('Daniels VDOT'), findsNothing);
+    });
+  });
+
+  group('PlanNewScreen — opening-week ramp note', () {
+    Future<void> pumpTall(WidgetTester tester, RecentVolume? volume) {
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      return tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanNewScreen(training: _RampTraining(volume)),
+        ),
+      );
+    }
+
+    testWidgets('a plan far above the runner\'s recent volume is called out',
+        (tester) async {
+      await pumpTall(
+        tester,
+        const RecentVolume(weeklyM: 2000, acuteM: 2000, activeWeeks: 4),
+      );
+      await tester.pump();
+      expect(find.text('Plan vs. your recent training'), findsOneWidget);
+      expect(find.textContaining('Week 1 asks for'), findsOneWidget);
+    });
+
+    testWidgets('a plan the runner has already outgrown reads under',
+        (tester) async {
+      await pumpTall(
+        tester,
+        const RecentVolume(weeklyM: 1000000, acuteM: 1000000, activeWeeks: 4),
+      );
+      await tester.pump();
+      expect(find.textContaining('This plan peaks at'), findsOneWidget);
+    });
+
+    testWidgets('too little history says nothing at all', (tester) async {
+      // The gate the check exists for: two active weeks is arithmetic on
+      // noise, and a confident verdict off it would be worse than silence.
+      await pumpTall(
+        tester,
+        const RecentVolume(weeklyM: 2000, acuteM: 2000, activeWeeks: 2),
+      );
+      await tester.pump();
+      expect(find.text('Plan vs. your recent training'), findsNothing);
+    });
+
+    testWidgets('a failed volume read leaves the wizard untouched',
+        (tester) async {
+      await pumpTall(tester, null);
+      await tester.pump();
+      expect(find.text('Plan vs. your recent training'), findsNothing);
+      expect(find.text('Week outline'), findsOneWidget);
+    });
+
+    testWidgets('a walk-run plan is not told it is gentle', (tester) async {
+      await pumpTall(
+        tester,
+        const RecentVolume(weeklyM: 1000000, acuteM: 1000000, activeWeeks: 4),
+      );
+      await tester.pump();
+      expect(find.textContaining('This plan peaks at'), findsOneWidget);
+      await tester.tap(find.byType(CheckboxListTile).first);
+      await tester.pump();
+      expect(find.text('Plan vs. your recent training'), findsNothing);
     });
   });
 

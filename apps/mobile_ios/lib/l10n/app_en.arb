@@ -6944,6 +6944,46 @@
       }
     }
   },
+  "planNewRampLabel": "Plan vs. your recent training",
+  "@planNewRampLabel": {
+    "description": "Plan-wizard ramp-note section label"
+  },
+  "planNewRampUnder": "This plan peaks at {peak} a week, below the {recent} a week you've averaged over the last four weeks. A longer goal race or more training days would make better use of that base.",
+  "@planNewRampUnder": {
+    "description": "Ramp note when the plan's peak week sits below the runner's recent weekly average",
+    "placeholders": {
+      "peak": {
+        "type": "String"
+      },
+      "recent": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewRampElevated": "Week 1 asks for {opening} against the {recent} a week you've averaged over the last four weeks — a real step up. Ease into it, or drop a training day.",
+  "@planNewRampElevated": {
+    "description": "Ramp note when the plan's opening week is an elevated step above the runner's recent weekly average",
+    "placeholders": {
+      "opening": {
+        "type": "String"
+      },
+      "recent": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewRampHigh": "Week 1 asks for {opening}, well above the {recent} a week you've averaged over the last four weeks. Fewer training days, a shorter goal race, or a few weeks of base building first would make that first step safer.",
+  "@planNewRampHigh": {
+    "description": "Ramp note when the plan's opening week is far above the runner's recent weekly average",
+    "placeholders": {
+      "opening": {
+        "type": "String"
+      },
+      "recent": {
+        "type": "String"
+      }
+    }
+  },
   "planNewWeekOutline": "Week outline",
   "@planNewWeekOutline": {
     "description": "Week-outline preview section label"

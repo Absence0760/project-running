@@ -51,6 +51,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/training/plan_adherence.ts` (`weeklyDrift`, `missedWorkoutAdvice`) | `apps/mobile_android/lib/plan_adherence.dart` | `training/plan_adherence.test.ts` ↔ `test/plan_adherence_test.dart` |
 | `apps/web/src/lib/training/plan_replan.ts` (`replanRemaining`) | `apps/mobile_android/lib/plan_replan.dart` | `training/plan_replan.test.ts` ↔ `test/plan_replan_test.dart` |
 | `apps/web/src/lib/training/plan_week.ts` (`currentPlanWeekIndex`) | `apps/mobile_android/lib/plan_week.dart` | `training/plan_week.test.ts` ↔ `test/plan_week_test.dart` |
+| `apps/web/src/lib/training/plan_ramp.ts` (`recentRunVolume`, `volumeSample`, `openingWeekVolumeM`, `peakWeekVolumeM`, `planRampCheck`, `shouldSurfaceRampNote`) | `apps/mobile_android/lib/plan_ramp.dart` | `training/plan_ramp.test.ts` ↔ `test/plan_ramp_test.dart` |
 | `apps/web/src/lib/training/plan_adaptive_replan.ts` (`adaptiveReplanRemaining`) | `apps/mobile_android/lib/plan_adaptive_replan.dart` | `training/plan_adaptive_replan.test.ts` ↔ `test/plan_adaptive_replan_test.dart` |
 | `apps/web/src/lib/training/starter_plans.ts` (`STARTER_PLANS`, `instantiateStarter`) | `apps/mobile_android/lib/starter_plans.dart` | `training/starter_plans.test.ts` ↔ `test/starter_plans_test.dart` |
 | `apps/web/src/lib/runs/age_grade.ts` | `apps/mobile_android/lib/age_grade.dart` | `runs/age_grade.test.ts` ↔ `test/age_grade_test.dart` |

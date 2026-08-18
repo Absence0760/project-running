@@ -12,8 +12,9 @@
  * the chronic base. So the bands come from `coach_load` rather than from new
  * numbers invented here, and the two surfaces cannot drift.
  *
- * Web-only (the wizard surface it backs is `PlanEditor.svelte`); the mobile
- * mirror is tracked in docs/product/followups.md.
+ * Dart twin: apps/mobile_android/lib/plan_ramp.dart (parity pair — keep the
+ * algorithm, band edges, gates, and test counts in lockstep). The wizard
+ * surfaces are `PlanEditor.svelte` here and `plan_new_screen.dart` there.
  */
 
 import { acwr, injuryRiskBand } from './coach_load';
