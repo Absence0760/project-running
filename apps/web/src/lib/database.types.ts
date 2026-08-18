@@ -5551,12 +5551,20 @@ export type Database = {
       }
       record_coach_consent: { Args: never; Returns: string }
       redeem_coach_invite: { Args: { token: string }; Returns: string }
+      refresh_club_member_count: {
+        Args: { p_club_id: string }
+        Returns: undefined
+      }
       refresh_gym_workout_totals: {
         Args: { p_workout_id: string }
         Returns: undefined
       }
       refresh_personal_records_for_user: {
         Args: { p_user_id: string }
+        Returns: undefined
+      }
+      refresh_route_run_count: {
+        Args: { p_route_id: string }
         Returns: undefined
       }
       resolve_target_reports: {

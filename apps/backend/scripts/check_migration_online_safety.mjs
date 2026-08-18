@@ -125,7 +125,16 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // pg_proc only, takes no lock on any table, and the migration transaction
 // makes the swap atomic for concurrent callers. Two function bodies, no
 // table DDL, so the scanner passed it with zero violations before this bump.
-export const GRANDFATHER_CUTOFF = '20270525';
+// 20270526: re-emits clubs_member_count_trigger + routes_run_count_trigger so
+// both recompute their cache from the authoritative query instead of applying
+// ±1 deltas, adds the two refresher functions they call, and reconciles the
+// rows the delta form already got wrong. Four function bodies plus two
+// backfills — no table DDL and no constraint, so the scanner passed it with
+// zero violations before this bump. The clubs reconcile is one scoped UPDATE
+// over a small bounded table; the routes reconcile walks keyset batches of 500
+// so no single statement holds row locks across the table, and the refresher
+// no-ops when the cache already agrees, so only drifted rows are written.
+export const GRANDFATHER_CUTOFF = '20270526';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
