@@ -5,7 +5,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../diary_day.dart';
 import '../food_search.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_food_store.dart';
@@ -20,17 +22,29 @@ import 'full_screen_form.dart';
 /// Flutter twin of web `/nutrition/log`: search Open Food Facts -> tap a
 /// result -> confirm portion, with manual macro entry as the no-match
 /// fallback. Writes through [LocalFoodStore] so logging works offline.
+///
+/// [diaryDate] is the `YYYY-MM-DD` day the caller is viewing; the entry is
+/// stamped inside that day rather than at now, so a forgotten yesterday can be
+/// back-filled. Null (the quick-log entry points, which are always about today)
+/// stamps now.
 Future<bool?> showNutritionLogSheet({
   required BuildContext context,
   required LocalFoodStore store,
+  String? diaryDate,
 }) {
   final l10n = AppLocalizations.of(context);
   final formKey = GlobalKey<_NutritionLogSheetState>();
+  final day = diaryDate == null ? null : diaryWindow(diaryDate)?.start;
+  final title = day == null || isDiaryToday(diaryDate!, DateTime.now())
+      ? l10n.nutritionLogTitle
+      : l10n.nutritionDayLogHeadingFor(
+          formatDateMed(day, localeToTag(Localizations.localeOf(context))));
   return showFullScreenForm<bool>(
     context,
-    title: l10n.nutritionLogTitle,
+    title: title,
     isDirty: () => formKey.currentState?.isDirty ?? false,
-    builder: (ctx) => NutritionLogSheet(key: formKey, store: store),
+    builder: (ctx) =>
+        NutritionLogSheet(key: formKey, store: store, diaryDate: diaryDate),
   );
 }
 
@@ -58,12 +72,16 @@ class NutritionLogSheet extends StatefulWidget {
 
   /// Test seam — override the USDA key (defaults to the env-bundle value).
   final String? usdaApiKey;
+
+  /// `YYYY-MM-DD` day the entry belongs to; null stamps now.
+  final String? diaryDate;
   const NutritionLogSheet({
     super.key,
     required this.store,
     this.fetcher,
     this.scanner,
     this.usdaApiKey,
+    this.diaryDate,
   });
 
   @override
@@ -272,8 +290,10 @@ class _NutritionLogSheetState extends State<NutritionLogSheet> {
       _error = null;
     });
     try {
+      final day = widget.diaryDate;
       await widget.store.createLocal(
-        startedAt: DateTime.now(),
+        startedAt:
+            day == null ? DateTime.now() : entryTimestampFor(day, DateTime.now()),
         itemName: itemName,
         mealSlot: _mealSlot,
         calories: calories,

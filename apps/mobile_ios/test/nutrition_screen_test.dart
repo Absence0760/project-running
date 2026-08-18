@@ -13,6 +13,7 @@ import '../lib/local_food_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/nutrition_screen.dart';
 import '../lib/screens/settings_body_metrics_screen.dart';
+import '../lib/widgets/nutrition_log_sheet.dart';
 import '../lib/widgets/undo_bar.dart';
 
 class _OfflineFakeApi extends ApiClient {
@@ -86,6 +87,7 @@ Widget _app(LocalFoodStore store, {double textScale = 1.0}) => MaterialApp(
 
 void main() {
   group('exerciseInputsForDay', _exerciseInputsTests);
+  group('diary day navigation', _diaryDayTests);
 
   setUpAll(() => initializeDateFormatting());
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -542,6 +544,237 @@ void _exerciseInputsTests() {
       ActivityRow.kindMeal,
     ]) {
       expect(sql, contains("'$kind'::text as kind"), reason: kind);
+    }
+  });
+}
+
+/// The `?date=` day stepper web `/nutrition` gained on 2026-08-13, mirrored.
+/// The load-bearing half is that back-filled logging stamps the VIEWED day —
+/// a stepper that lets a runner review yesterday but silently logs to today
+/// would be worse than no stepper at all.
+void _diaryDayTests() {
+  DateTime yesterdayNoon() {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day - 1, 12);
+  }
+
+  bool sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  testWidgets('today cannot step forward and shows no back-fill hint',
+      (tester) async {
+    final f = await _store('day_today_');
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Today'), findsOneWidget);
+      expect(find.text('Anything you log here is added to this day.'),
+          findsNothing);
+      final next = tester.widget<IconButton>(find.ancestor(
+          of: find.byTooltip('Next day'), matching: find.byType(IconButton)));
+      expect(next.onPressed, isNull);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('stepping back shows yesterday, its entries, and the hint',
+      (tester) async {
+    final f = await _store('day_back_');
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: yesterdayNoon(),
+          itemName: 'Leftovers',
+          mealSlot: 'dinner',
+          calories: 700,
+        ));
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: DateTime.now(),
+          itemName: 'Oats',
+          mealSlot: 'breakfast',
+          calories: 350,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      expect(find.text('Oats'), findsOneWidget);
+      expect(find.text('Leftovers'), findsNothing);
+
+      await tester.tap(find.byTooltip('Previous day'));
+      await tester.pump();
+      expect(find.text('Yesterday'), findsOneWidget);
+      expect(find.text('Leftovers'), findsOneWidget);
+      expect(find.text('Oats'), findsNothing);
+      expect(find.text('Anything you log here is added to this day.'),
+          findsOneWidget);
+      final next = tester.widget<IconButton>(find.ancestor(
+          of: find.byTooltip('Next day'), matching: find.byType(IconButton)));
+      expect(next.onPressed, isNotNull);
+
+      await tester.tap(find.text('Today'));
+      await tester.pump();
+      expect(find.text('Oats'), findsOneWidget);
+      expect(find.text('Leftovers'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a past day with nothing logged says so, not "no food today"',
+      (tester) async {
+    final f = await _store('day_empty_');
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Previous day'));
+      await tester.pump();
+      expect(find.text('Nothing logged on this day.'), findsOneWidget);
+      expect(find.text('No food logged today'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the water count is per viewed day, not one shared counter',
+      (tester) async {
+    final f = await _store('day_water_');
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Add water'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(find.text('1 × 250 ml'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Previous day'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+      expect(find.text('0 × 250 ml'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the composer opened on a past day is titled with that day',
+      (tester) async {
+    final f = await _store('day_sheet_');
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Previous day'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Log food'));
+      await tester.pumpAndSettle();
+      expect(find.byType(NutritionLogSheet), findsOneWidget);
+      // Not the plain "Log food" title the today path uses.
+      expect(
+        find.descendant(
+            of: find.byType(AppBar), matching: find.text('Log food')),
+        findsNothing,
+      );
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('logging a saved meal on a past day stamps that day',
+      (tester) async {
+    final f = await _store('day_tmpl_');
+    final pp = Directory.systemTemp.createTempSync('nutrition_day_tmpl_pp_');
+    PathProviderPlatform.instance = _FakePathProvider(pp);
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: yesterdayNoon(),
+          itemName: 'Leftovers',
+          mealSlot: 'dinner',
+          calories: 700,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Previous day'));
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Save as meal'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'Dinner again');
+      await tester.runAsync(() async {
+        await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextButton, 'Save meal'),
+        ));
+      });
+      await _pumpUntil(
+          tester, () => find.text('Dinner again').evaluate().isNotEmpty);
+      await tester.pumpAndSettle();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.widgetWithText(TextButton, 'Log'));
+      });
+      await _pumpUntil(tester, () => f.store.rows.length == 2);
+      await tester.pumpAndSettle();
+
+      final stamps = [
+        for (final r in f.store.rows)
+          DateTime.parse(r['started_at'] as String).toLocal(),
+      ];
+      expect(stamps.every((s) => sameDay(s, yesterdayNoon())), isTrue,
+          reason: 'a back-filled template must land on the viewed day: $stamps');
+
+      await tester.pump(const Duration(seconds: 5));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+      pp.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('logging a saved recipe on a past day stamps that day',
+      (tester) async {
+    final f = await _store('day_recipe_');
+    final pp = Directory.systemTemp.createTempSync('nutrition_day_recipe_pp_');
+    PathProviderPlatform.instance = _FakePathProvider(pp);
+    await tester.runAsync(() => f.store.createLocal(
+          startedAt: yesterdayNoon(),
+          itemName: 'Leftovers',
+          mealSlot: 'dinner',
+          calories: 700,
+        ));
+    try {
+      await tester.pumpWidget(_app(f.store));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Previous day'));
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Save as recipe'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'Big pot');
+      await tester.runAsync(() async {
+        await tester.tap(find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextButton, 'Save recipe'),
+        ));
+      });
+      await _pumpUntil(
+          tester, () => find.text('Big pot').evaluate().isNotEmpty);
+      await tester.pumpAndSettle();
+
+      await tester.runAsync(() async {
+        await tester.tap(find.widgetWithText(TextButton, 'Log'));
+      });
+      await _pumpUntil(tester, () => f.store.rows.length == 2);
+      await tester.pumpAndSettle();
+
+      final stamps = [
+        for (final r in f.store.rows)
+          DateTime.parse(r['started_at'] as String).toLocal(),
+      ];
+      expect(stamps.every((s) => sameDay(s, yesterdayNoon())), isTrue,
+          reason: 'a back-filled recipe must land on the viewed day: $stamps');
+
+      await tester.pump(const Duration(seconds: 5));
+    } finally {
+      f.dir.deleteSync(recursive: true);
+      pp.deleteSync(recursive: true);
     }
   });
 }
