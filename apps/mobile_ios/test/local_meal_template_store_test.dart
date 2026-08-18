@@ -139,4 +139,16 @@ void main() {
       f.dir.deleteSync(recursive: true);
     }
   });
+
+  test('a write before init() refuses loudly and leaves no in-memory row',
+      () async {
+    final store = LocalMealTemplateStore();
+    await expectLater(
+      store.createLocal(name: 'Never saved', items: [_item('Oats')]),
+      throwsA(isA<StateError>().having((e) => e.message, 'message',
+          allOf(contains('local_meal_template_store'), contains('init()')))),
+    );
+    expect(store.templates, isEmpty,
+        reason: 'a row that could never reach disk must not appear saved');
+  });
 }

@@ -166,9 +166,27 @@ class _NutritionScreenState extends State<NutritionScreen> {
     _templateStore.addListener(_onStoreChange);
     _recipeStore.addListener(_onStoreChange);
     _loadWater();
-    _templateStore.loadAll();
-    _recipeStore.loadAll();
+    _initOwnedStores();
     _refresh();
+  }
+
+  /// `init()`, never a bare `loadAll()`: `loadAll` alone leaves `dir` null, and
+  /// every subsequent write then refuses (see `OfflineSyncStore`), so a saved
+  /// meal or recipe would live in memory for the session and never reach disk
+  /// or the server. Failures are per-store so a broken meal-template directory
+  /// can't cost the user their recipes.
+  Future<void> _initOwnedStores() async {
+    try {
+      await _templateStore.init();
+    } catch (e) {
+      debugPrint('nutrition_screen: meal template store init failed: $e');
+    }
+    try {
+      await _recipeStore.init();
+    } catch (e) {
+      debugPrint('nutrition_screen: recipe store init failed: $e');
+    }
+    if (mounted) setState(() {});
   }
 
   @override

@@ -5100,6 +5100,49 @@ void main() {
     });
   });
 
+  group('a screen-owned OfflineSyncStore is init()ed, never only loadAll()ed',
+      () {
+    // Reason (followups 2026-08-18): `nutrition_screen.dart` constructed its
+    // meal-template + recipe stores and called `loadAll()` on them. `loadAll`
+    // tolerates a null `dir` and returns, so the store read as alive while
+    // every write refused — a saved meal or recipe lived in memory for the
+    // session and reached neither disk nor the server. Only `init()` resolves
+    // the directory, so a screen that owns one of these stores must call it.
+    test('every field holding one calls init() on it', () {
+      final sources = <String, String>{};
+      for (final entity in Directory('lib').listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        sources[entity.path] = entity.readAsStringSync();
+      }
+      final storeTypes = <String>{};
+      for (final src in sources.values) {
+        for (final m
+            in RegExp(r'class\s+(\w+)\s+extends\s+OfflineSyncStore<')
+                .allMatches(src)) {
+          storeTypes.add(m.group(1)!);
+        }
+      }
+      expect(storeTypes, isNotEmpty,
+          reason: 'the subclass scan itself must find the stores');
+
+      final offenders = <String>[];
+      sources.forEach((path, src) {
+        for (final m in RegExp(r'(\w+)\s*=\s*(\w+)\(\)').allMatches(src)) {
+          final field = m.group(1)!;
+          if (!storeTypes.contains(m.group(2)!)) continue;
+          if (RegExp('${RegExp.escape(field)}\\.init\\(').hasMatch(src)) {
+            continue;
+          }
+          offenders.add('$path: $field');
+        }
+      });
+      expect(offenders, isEmpty,
+          reason: 'these fields hold an OfflineSyncStore that is never '
+              'init()ed, so every write to them refuses and the rows never '
+              'reach disk or the server: ${offenders.join(', ')}');
+    });
+  });
+
   group('local-day arithmetic is DST-safe', () {
     // A calendar week spanning a DST transition is 167 or 169 hours, so
     // stepping days with a fixed Duration walks the boundary off local
