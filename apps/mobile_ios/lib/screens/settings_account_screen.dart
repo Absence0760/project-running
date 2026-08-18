@@ -1054,7 +1054,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        Icons.warning_amber_outlined,
+                        Icons.warning_amber_rounded,
                         size: 18,
                         color: Theme.of(context).colorScheme.error,
                       ),
