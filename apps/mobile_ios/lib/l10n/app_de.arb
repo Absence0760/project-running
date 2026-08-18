@@ -93,7 +93,7 @@
   "importFailuresReasonUnparseable": "Datei nicht lesbar",
   "importFailuresReasonRejected": "Vom Server abgelehnt",
   "importFailuresReasonUnknown": "Unbekannter Fehler",
-  "importStatusCloudPushDeferred": "Auf diesem Gerät gespeichert — das Hochladen in die Cloud hat nicht geklappt. Es wird bei der nächsten Synchronisierung erneut versucht.",
+  "importStatusCloudPushDeferred": "{count, plural, one{1 Lauf ist auf diesem Gerät gespeichert — das Hochladen in die Cloud hat nicht geklappt. Es wird bei der nächsten Synchronisierung erneut versucht.} other{{count} Läufe sind auf diesem Gerät gespeichert — das Hochladen in die Cloud hat nicht geklappt. Es wird bei der nächsten Synchronisierung erneut versucht.}}",
   "importHealthSubtitleIos": "Hole Workouts, die du auf der Apple Watch, in Nike Run Club, Strava und anderen Apps aufgezeichnet hast, die in Apple Health schreiben",
   "importHealthSubtitleAndroid": "Hole Workouts aus Google Fit, Samsung Health, Garmin, Fitbit und jeder anderen Health-Connect-App",
   "importHealthDescriptionIos": "Liest Workout-Zusammenfassungen (Datum, Distanz, Dauer, Typ) des letzten Jahres. Apple Health gibt von Drittanbieter-Apps aufgezeichnete GPS-Routen nicht preis — so importierte Läufe haben keinen Karten-Track.",

@@ -665,11 +665,11 @@ abstract class AppLocalizations {
   /// **'Unknown error'**
   String get importFailuresReasonUnknown;
 
-  /// Shown when imported runs saved locally but the upload to the cloud failed
+  /// Shown when imported runs saved locally but the upload to the cloud failed for some or all of them
   ///
   /// In en, this message translates to:
-  /// **'Saved on this device — the upload to the cloud didn\'t go through. It will retry on the next sync.'**
-  String get importStatusCloudPushDeferred;
+  /// **'{count, plural, one{1 run is saved on this device — its upload to the cloud didn\'t go through. It will retry on the next sync.} other{{count} runs are saved on this device — their upload to the cloud didn\'t go through. They will retry on the next sync.}}'**
+  String importStatusCloudPushDeferred(int count);
 
   /// iOS subtitle naming apps that write to Apple Health
   ///

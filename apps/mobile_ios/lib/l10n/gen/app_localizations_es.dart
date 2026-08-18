@@ -369,8 +369,17 @@ class AppLocalizationsEs extends AppLocalizations {
   String get importFailuresReasonUnknown => 'Error desconocido';
 
   @override
-  String get importStatusCloudPushDeferred =>
-      'Guardado en este dispositivo: la subida a la nube no se completó. Se reintentará en la próxima sincronización.';
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count carreras están guardadas en este dispositivo: su subida a la nube no se completó. Se reintentará en la próxima sincronización.',
+      one:
+          '1 carrera está guardada en este dispositivo: su subida a la nube no se completó. Se reintentará en la próxima sincronización.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get importHealthSubtitleIos =>

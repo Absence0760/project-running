@@ -370,8 +370,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get importFailuresReasonUnknown => 'Unbekannter Fehler';
 
   @override
-  String get importStatusCloudPushDeferred =>
-      'Auf diesem Gerät gespeichert — das Hochladen in die Cloud hat nicht geklappt. Es wird bei der nächsten Synchronisierung erneut versucht.';
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count Läufe sind auf diesem Gerät gespeichert — das Hochladen in die Cloud hat nicht geklappt. Es wird bei der nächsten Synchronisierung erneut versucht.',
+      one:
+          '1 Lauf ist auf diesem Gerät gespeichert — das Hochladen in die Cloud hat nicht geklappt. Es wird bei der nächsten Synchronisierung erneut versucht.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get importHealthSubtitleIos =>

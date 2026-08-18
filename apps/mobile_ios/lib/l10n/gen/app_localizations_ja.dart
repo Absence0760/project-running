@@ -360,8 +360,14 @@ class AppLocalizationsJa extends AppLocalizations {
   String get importFailuresReasonUnknown => '不明なエラー';
 
   @override
-  String get importStatusCloudPushDeferred =>
-      'この端末に保存しました。クラウドへのアップロードは完了していません。次回の同期時に再試行します。';
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件のランをこの端末に保存しました。クラウドへのアップロードは完了していません。次回の同期時に再試行します。',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get importHealthSubtitleIos =>
