@@ -9,6 +9,7 @@ import 'package:meta/meta.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'chunk.dart';
+import 'paged_read.dart';
 import 'segments_rank.dart';
 
 // Column-level grant lockdowns: see migrations 20260801_001 +
@@ -1481,15 +1482,25 @@ class ApiClient {
   /// backup writer needs every column verbatim so round-trips preserve
   /// source-specific metadata, `event_id`, and anything else added to
   /// the schema later.
+  ///
+  /// Paged: the backup writer consumes this as the COMPLETE history, and an
+  /// unbounded SELECT hands back only the newest [kPostgrestPageSize] rows,
+  /// so a 1,400-run account archived 1,000 and restored 1,000.
   Future<List<Map<String, dynamic>>> fetchRunRowsRaw() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
-    final data = await _client
-        .from(RunRow.table)
-        .select()
-        .eq(RunRow.colUserId, userId)
-        .order(RunRow.colStartedAt, ascending: false);
-    return (data as List).cast<Map<String, dynamic>>();
+    return readAllPages<Map<String, dynamic>>((from, to) async {
+      final data = await _client
+          .from(RunRow.table)
+          .select()
+          .eq(RunRow.colUserId, userId)
+          .order(RunRow.colStartedAt, ascending: false)
+          // Tiebreaker: two runs can share a start instant, and a range over
+          // an ambiguous order duplicates or drops the row on the boundary.
+          .order(RunRow.colId, ascending: true)
+          .range(from, to);
+      return (data as List).cast<Map<String, dynamic>>();
+    });
   }
 
   /// Upsert a raw run row. The backup restore path builds these
@@ -1919,15 +1930,19 @@ class ApiClient {
 
   /// Fetch all reviews for a route, newest first.
   Future<List<RouteReviewRow>> getRouteReviews(String routeId) async {
-    final data = await _client
-        .from(RouteReviewRow.table)
-        .select()
-        .eq(RouteReviewRow.colRouteId, routeId)
-        .order(RouteReviewRow.colCreatedAt, ascending: false);
-    return data
-        .map<RouteReviewRow>(
-            (row) => RouteReviewRow.fromJson(row))
-        .toList();
+    return readAllPages<RouteReviewRow>((from, to) async {
+      final data = await _client
+          .from(RouteReviewRow.table)
+          .select()
+          .eq(RouteReviewRow.colRouteId, routeId)
+          .order(RouteReviewRow.colCreatedAt, ascending: false)
+          .order(RouteReviewRow.colId, ascending: true)
+          .range(from, to);
+      return (data as List)
+          .map<RouteReviewRow>(
+              (row) => RouteReviewRow.fromJson(row as Map<String, dynamic>))
+          .toList();
+    });
   }
 
   /// Submit or update a review for a route (one per user per route).
@@ -4516,14 +4531,21 @@ class ApiClient {
     required String eventId,
     required DateTime instanceStart,
   }) async {
-    final data = await _client
-        .from(EventAttendeeRow.table)
-        .select()
-        .eq(EventAttendeeRow.colEventId, eventId)
-        .eq(EventAttendeeRow.colInstanceStart, instanceStart.toIso8601String());
-    return data
-        .map<EventAttendeeRow>((r) => EventAttendeeRow.fromJson(r))
-        .toList();
+    return readAllPages<EventAttendeeRow>((from, to) async {
+      final data = await _client
+          .from(EventAttendeeRow.table)
+          .select()
+          .eq(EventAttendeeRow.colEventId, eventId)
+          .eq(EventAttendeeRow.colInstanceStart, instanceStart.toIso8601String())
+          // The table has no id; user_id is unique inside this filter (the PK
+          // is (event_id, user_id, instance_start)) so it totally orders a page.
+          .order(EventAttendeeRow.colUserId, ascending: true)
+          .range(from, to);
+      return (data as List)
+          .map<EventAttendeeRow>(
+              (r) => EventAttendeeRow.fromJson(r as Map<String, dynamic>))
+          .toList();
+    });
   }
 
   // ──────────────── Race-director checkpoints (race_director_ops.md) ──────
@@ -4549,19 +4571,23 @@ class ApiClient {
     String eventId,
     DateTime instanceStart,
   ) async {
-    final data = await _client
-        .from(CheckpointCrossingRow.table)
-        .select(
-          'id, event_id, checkpoint_id, instance_start, user_id, bib, '
-          'runner_name, in_time, out_time, recorded_at, updated_at',
-        )
-        .eq(CheckpointCrossingRow.colEventId, eventId)
-        .eq(CheckpointCrossingRow.colInstanceStart,
-            instanceStart.toIso8601String());
-    return (data as List)
-        .map<CheckpointCrossingRow>(
-            (r) => CheckpointCrossingRow.fromJson(r as Map<String, dynamic>))
-        .toList();
+    return readAllPages<CheckpointCrossingRow>((from, to) async {
+      final data = await _client
+          .from(CheckpointCrossingRow.table)
+          .select(
+            'id, event_id, checkpoint_id, instance_start, user_id, bib, '
+            'runner_name, in_time, out_time, recorded_at, updated_at',
+          )
+          .eq(CheckpointCrossingRow.colEventId, eventId)
+          .eq(CheckpointCrossingRow.colInstanceStart,
+              instanceStart.toIso8601String())
+          .order(CheckpointCrossingRow.colId, ascending: true)
+          .range(from, to);
+      return (data as List)
+          .map<CheckpointCrossingRow>(
+              (r) => CheckpointCrossingRow.fromJson(r as Map<String, dynamic>))
+          .toList();
+    });
   }
 
   /// Stamp a runner IN / OUT at a checkpoint through the single-writer RPC. The
@@ -5645,13 +5671,18 @@ double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
   /// exercise_id. Additive — a user who never picks a catalogue entry logs
   /// exactly as before (exercise_id stays null).
   Future<List<ExerciseRow>> fetchExerciseCatalogue() async {
-    final rows = await _client
-        .from(ExerciseRow.table)
-        .select()
-        .order(ExerciseRow.colName, ascending: true);
-    return (rows as List)
-        .map((r) => ExerciseRow.fromJson(r as Map<String, dynamic>))
-        .toList();
+    return readAllPages<ExerciseRow>((from, to) async {
+      final rows = await _client
+          .from(ExerciseRow.table)
+          .select()
+          .order(ExerciseRow.colName, ascending: true)
+          // A seeded global and a user's custom entry can carry the same name.
+          .order(ExerciseRow.colId, ascending: true)
+          .range(from, to);
+      return (rows as List)
+          .map((r) => ExerciseRow.fromJson(r as Map<String, dynamic>))
+          .toList();
+    });
   }
 
   /// Create an owner-scoped custom catalogue entry (migration 20270222_001).
