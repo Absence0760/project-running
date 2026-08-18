@@ -553,7 +553,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         ),
       RoutineSessionVerdict.ungraded => (
           l10n.gymRoutineHistoryVerdictUngraded,
-          theme.colorScheme.outline,
+          theme.colorScheme.onSurfaceVariant,
           Colors.transparent,
         ),
     };
