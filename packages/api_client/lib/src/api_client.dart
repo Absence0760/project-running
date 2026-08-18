@@ -2070,10 +2070,13 @@ class ApiClient {
     // Cross-user reads must stay inside the granted column set
     // (migration 20260707_001) — a bare select() requests revoked
     // columns and PostgREST rejects the whole read with 42501.
-    final profiles = await _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url, created_at')
-        .inFilter(UserProfileRow.colId, ids);
+    final profiles = await readChunked(
+      ids,
+      (chunk) async => _client
+          .from(UserProfileRow.table)
+          .select('id, display_name, avatar_url, created_at')
+          .inFilter(UserProfileRow.colId, chunk),
+    );
     return profiles
         .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
         .toList();
@@ -2098,10 +2101,13 @@ class ApiClient {
     // Same granted-column constraint as fetchFollowers — a bare
     // select() here broke the entire feed (42501) once 20260707_001
     // locked the cross-user grant down.
-    final profiles = await _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url, created_at')
-        .inFilter(UserProfileRow.colId, ids);
+    final profiles = await readChunked(
+      ids,
+      (chunk) async => _client
+          .from(UserProfileRow.table)
+          .select('id, display_name, avatar_url, created_at')
+          .inFilter(UserProfileRow.colId, chunk),
+    );
     return profiles
         .map<UserProfileRow>((row) => UserProfileRow.fromJson(row))
         .toList();
@@ -2210,12 +2216,15 @@ class ApiClient {
         .toList();
     if (myClubIds.isEmpty) return const [];
 
-    final coMemberRows = await _client
-        .from(ClubMemberRow.table)
-        .select('${ClubMemberRow.colUserId}, ${ClubMemberRow.colClubId}')
-        .inFilter(ClubMemberRow.colClubId, myClubIds)
-        .eq(ClubMemberRow.colStatus, 'active')
-        .neq(ClubMemberRow.colUserId, viewerId);
+    final coMemberRows = await readChunked(
+      myClubIds,
+      (chunk) async => _client
+          .from(ClubMemberRow.table)
+          .select('${ClubMemberRow.colUserId}, ${ClubMemberRow.colClubId}')
+          .inFilter(ClubMemberRow.colClubId, chunk)
+          .eq(ClubMemberRow.colStatus, 'active')
+          .neq(ClubMemberRow.colUserId, viewerId),
+    );
     if (coMemberRows.isEmpty) return const [];
 
     final shared = <String, int>{};
@@ -2224,11 +2233,14 @@ class ApiClient {
       shared[uid] = (shared[uid] ?? 0) + 1;
     }
 
-    final followedRows = await _client
-        .from(UserFollowRow.table)
-        .select(UserFollowRow.colFolloweeId)
-        .eq(UserFollowRow.colFollowerId, viewerId)
-        .inFilter(UserFollowRow.colFolloweeId, shared.keys.toList());
+    final followedRows = await readChunked(
+      shared.keys.toList(),
+      (chunk) async => _client
+          .from(UserFollowRow.table)
+          .select(UserFollowRow.colFolloweeId)
+          .eq(UserFollowRow.colFollowerId, viewerId)
+          .inFilter(UserFollowRow.colFolloweeId, chunk),
+    );
     for (final r in followedRows) {
       shared.remove(r[UserFollowRow.colFolloweeId] as String);
     }
@@ -2254,10 +2266,13 @@ class ApiClient {
     required Map<String, int> sharedCounts,
   }) async {
     if (ids.isEmpty) return const [];
-    final profilesF = _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url, handle')
-        .inFilter(UserProfileRow.colId, ids);
+    final profilesF = readChunked(
+      ids,
+      (chunk) async => _client
+          .from(UserProfileRow.table)
+          .select('id, display_name, avatar_url, handle')
+          .inFilter(UserProfileRow.colId, chunk),
+    );
     // Public-run counts come from the SECURITY DEFINER GROUP BY RPC, not from
     // the base `runs` table: 20260701_001 dropped the public-anyone SELECT
     // policy, so a client tally over `runs` reads zero rows for every
@@ -2268,11 +2283,14 @@ class ApiClient {
         .rpc('public_run_counts', params: {'p_user_ids': ids});
     final followsF = viewerId == null
         ? Future.value(<dynamic>[])
-        : _client
-            .from(UserFollowRow.table)
-            .select(UserFollowRow.colFolloweeId)
-            .eq(UserFollowRow.colFollowerId, viewerId)
-            .inFilter(UserFollowRow.colFolloweeId, ids);
+        : readChunked(
+            ids,
+            (chunk) async => _client
+                .from(UserFollowRow.table)
+                .select(UserFollowRow.colFolloweeId)
+                .eq(UserFollowRow.colFollowerId, viewerId)
+                .inFilter(UserFollowRow.colFolloweeId, chunk),
+          );
     final results = await Future.wait<dynamic>([profilesF, runsF, followsF]);
     final profileRows = results[0];
     final runRows = results[1];
@@ -2328,13 +2346,17 @@ class ApiClient {
     final weekIds = planWeekIds ?? await _planWeekIdsForUser(userId);
     if (weekIds.isEmpty) return null;
 
-    final candidates = await _client
-        .from(PlanWorkoutRow.table)
-        .select('${PlanWorkoutRow.colId}, ${PlanWorkoutRow.colTargetDistanceM}, '
-            '${PlanWorkoutRow.colCompletedRunId}, ${PlanWorkoutRow.colWeekId}')
-        .inFilter(PlanWorkoutRow.colWeekId, weekIds)
-        .eq(PlanWorkoutRow.colScheduledDate, isoDate)
-        .isFilter(PlanWorkoutRow.colCompletedRunId, null);
+    final candidates = await readChunked(
+      weekIds,
+      (chunk) async => _client
+          .from(PlanWorkoutRow.table)
+          .select(
+              '${PlanWorkoutRow.colId}, ${PlanWorkoutRow.colTargetDistanceM}, '
+              '${PlanWorkoutRow.colCompletedRunId}, ${PlanWorkoutRow.colWeekId}')
+          .inFilter(PlanWorkoutRow.colWeekId, chunk)
+          .eq(PlanWorkoutRow.colScheduledDate, isoDate)
+          .isFilter(PlanWorkoutRow.colCompletedRunId, null),
+    );
 
     // Closest target distance within 25% wins (mirrors web's sort-by-delta).
     String? bestId;
@@ -2899,14 +2921,20 @@ class ApiClient {
     if (runIds.isEmpty) return const {};
     final viewerId = _client.auth.currentUser?.id;
 
-    final kudos = await _client
-        .from(RunKudosRow.table)
-        .select('${RunKudosRow.colRunId}, ${RunKudosRow.colUserId}')
-        .inFilter(RunKudosRow.colRunId, runIds);
-    final comments = await _client
-        .from(RunCommentRow.table)
-        .select(RunCommentRow.colRunId)
-        .inFilter(RunCommentRow.colRunId, runIds);
+    final kudos = await readChunked(
+      runIds,
+      (chunk) async => _client
+          .from(RunKudosRow.table)
+          .select('${RunKudosRow.colRunId}, ${RunKudosRow.colUserId}')
+          .inFilter(RunKudosRow.colRunId, chunk),
+    );
+    final comments = await readChunked(
+      runIds,
+      (chunk) async => _client
+          .from(RunCommentRow.table)
+          .select(RunCommentRow.colRunId)
+          .inFilter(RunCommentRow.colRunId, chunk),
+    );
 
     final kudosCount = <String, int>{};
     final viewerHas = <String, bool>{};
@@ -3067,11 +3095,13 @@ class ApiClient {
     if (ids.isEmpty) return;
     final viewerId = _client.auth.currentUser?.id;
     if (viewerId == null) throw StateError('not signed in');
-    await _client
-        .from(NotificationRow.table)
-        .delete()
-        .inFilter(NotificationRow.colId, ids)
-        .eq(NotificationRow.colUserId, viewerId);
+    for (final chunk in chunkList(ids)) {
+      await _client
+          .from(NotificationRow.table)
+          .delete()
+          .inFilter(NotificationRow.colId, chunk)
+          .eq(NotificationRow.colUserId, viewerId);
+    }
   }
 
   // ──────────────────── Run photos (P1.B) ────────────────────
@@ -4807,26 +4837,33 @@ class ApiClient {
     // redaction applies on the wire. The view filters on
     // is_public = true so the explicit eq filter would be
     // redundant.
-    var q = _client
-        .from('public_runs')
-        .select()
-        .inFilter(RunRow.colUserId, filtered)
-        .gte(RunRow.colStartedAt, cutoff);
-    if (activityType != null && activityType != 'all') {
-      q = q.eq(RunRow.colActivityType, activityType);
-    }
-    if (cursor != null) {
-      // Stable (started_at desc, id desc) cursor — strictly less than
-      // the cursor row.
-      final iso = cursor.startedAt.toIso8601String();
-      q = q.or(
-        'started_at.lt.$iso,and(started_at.eq.$iso,id.lt.${cursor.id})',
-      );
-    }
-    final runs = await q
-        .order(RunRow.colStartedAt, ascending: false)
-        .order(RunRow.colId, ascending: false)
-        .limit(limit);
+    final runs = topByRecency(
+      await readChunked(filtered, (chunk) async {
+        var q = _client
+            .from('public_runs')
+            .select()
+            .inFilter(RunRow.colUserId, chunk)
+            .gte(RunRow.colStartedAt, cutoff);
+        if (activityType != null && activityType != 'all') {
+          q = q.eq(RunRow.colActivityType, activityType);
+        }
+        if (cursor != null) {
+          // Stable (started_at desc, id desc) cursor — strictly less than
+          // the cursor row.
+          final iso = cursor.startedAt.toIso8601String();
+          q = q.or(
+            'started_at.lt.$iso,and(started_at.eq.$iso,id.lt.${cursor.id})',
+          );
+        }
+        return q
+            .order(RunRow.colStartedAt, ascending: false)
+            .order(RunRow.colId, ascending: false)
+            .limit(limit);
+      }),
+      limit: limit,
+      idOf: (r) => r[RunRow.colId] as String,
+      recencyOf: (r) => DateTime.parse(r[RunRow.colStartedAt] as String),
+    );
     if (runs.isEmpty) return const [];
 
     final authorIds = runs
@@ -4935,21 +4972,28 @@ class ApiClient {
     // 20270313_001) — the base table is owner-only, so a non-owner query
     // against it returns nothing. The view filters on is_public = true so
     // the explicit eq filter would be redundant.
-    var q = _client
-        .from('public_gym_workouts')
-        .select('id, user_id, started_at, title, set_count, volume_kg')
-        .inFilter(GymWorkoutRow.colUserId, filtered)
-        .gte(GymWorkoutRow.colStartedAt, cutoff);
-    if (cursor != null) {
-      final iso = cursor.startedAt.toIso8601String();
-      q = q.or(
-        'started_at.lt.$iso,and(started_at.eq.$iso,id.lt.${cursor.id})',
-      );
-    }
-    final workouts = await q
-        .order(GymWorkoutRow.colStartedAt, ascending: false)
-        .order(GymWorkoutRow.colId, ascending: false)
-        .limit(limit);
+    final workouts = topByRecency(
+      await readChunked(filtered, (chunk) async {
+        var q = _client
+            .from('public_gym_workouts')
+            .select('id, user_id, started_at, title, set_count, volume_kg')
+            .inFilter(GymWorkoutRow.colUserId, chunk)
+            .gte(GymWorkoutRow.colStartedAt, cutoff);
+        if (cursor != null) {
+          final iso = cursor.startedAt.toIso8601String();
+          q = q.or(
+            'started_at.lt.$iso,and(started_at.eq.$iso,id.lt.${cursor.id})',
+          );
+        }
+        return q
+            .order(GymWorkoutRow.colStartedAt, ascending: false)
+            .order(GymWorkoutRow.colId, ascending: false)
+            .limit(limit);
+      }),
+      limit: limit,
+      idOf: (w) => w['id'] as String,
+      recencyOf: (w) => DateTime.parse(w['started_at'] as String),
+    );
     if (workouts.isEmpty) return const [];
 
     final authorIds = workouts
@@ -4988,10 +5032,13 @@ class ApiClient {
     if (comments.isEmpty) return const [];
     final authorIds =
         comments.map((c) => c.authorId).toSet().toList();
-    final profileRows = await _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url')
-        .inFilter(UserProfileRow.colId, authorIds);
+    final profileRows = await readChunked(
+      authorIds,
+      (chunk) async => _client
+          .from(UserProfileRow.table)
+          .select('id, display_name, avatar_url')
+          .inFilter(UserProfileRow.colId, chunk),
+    );
     final profilesById = {
       for (final p in profileRows)
         p['id'] as String: PublicProfile.fromJson(p),
@@ -5135,10 +5182,13 @@ class ApiClient {
     }.toList();
     final clubById = <String, ({String slug, String name})>{};
     if (clubIds.isNotEmpty) {
-      final clubRows = await _client
-          .from(ClubRow.table)
-          .select('${ClubRow.colId}, ${ClubRow.colSlug}, ${ClubRow.colName}')
-          .inFilter(ClubRow.colId, clubIds);
+      final clubRows = await readChunked(
+        clubIds,
+        (chunk) async => _client
+            .from(ClubRow.table)
+            .select('${ClubRow.colId}, ${ClubRow.colSlug}, ${ClubRow.colName}')
+            .inFilter(ClubRow.colId, chunk),
+      );
       for (final row in clubRows) {
         clubById[row[ClubRow.colId] as String] = (
           slug: (row[ClubRow.colSlug] as String?) ?? '',
@@ -5205,10 +5255,13 @@ class ApiClient {
       ..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds));
 
     final athleteIds = efforts.map((e) => e.userId).toList();
-    final profileRows = await _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url')
-        .inFilter(UserProfileRow.colId, athleteIds);
+    final profileRows = await readChunked(
+      athleteIds,
+      (chunk) async => _client
+          .from(UserProfileRow.table)
+          .select('id, display_name, avatar_url')
+          .inFilter(UserProfileRow.colId, chunk),
+    );
     final athletesById = {
       for (final p in profileRows)
         p['id'] as String: PublicProfile.fromJson(p),
@@ -5287,10 +5340,13 @@ class ApiClient {
     if (efforts.isEmpty) return const [];
 
     final segIds = efforts.map((e) => e.segmentId).toSet().toList();
-    final segRows = await _client
-        .from(SegmentRow.table)
-        .select()
-        .inFilter(SegmentRow.colId, segIds);
+    final segRows = await readChunked(
+      segIds,
+      (chunk) async => _client
+          .from(SegmentRow.table)
+          .select()
+          .inFilter(SegmentRow.colId, chunk),
+    );
     final segById = {
       for (final s in segRows)
         s['id'] as String: SegmentRow.fromJson(s),
@@ -5769,11 +5825,14 @@ double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
     final workouts = (ws as List).cast<Map<String, dynamic>>();
     if (workouts.isEmpty) return [];
     final ids = [for (final w in workouts) w[GymWorkoutRow.colId] as String];
-    final ss = await _client
-        .from(GymSetRow.table)
-        .select()
-        .inFilter(GymSetRow.colWorkoutId, ids)
-        .order(GymSetRow.colSetIndex, ascending: true);
+    final ss = await readChunked(
+      ids,
+      (chunk) async => _client
+          .from(GymSetRow.table)
+          .select()
+          .inFilter(GymSetRow.colWorkoutId, chunk)
+          .order(GymSetRow.colSetIndex, ascending: true),
+    );
     final byWorkout = <String, List<Map<String, dynamic>>>{};
     for (final raw in (ss as List).cast<Map<String, dynamic>>()) {
       (byWorkout[raw[GymSetRow.colWorkoutId] as String] ??= []).add(raw);
@@ -6970,10 +7029,13 @@ double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
       List<Map<String, dynamic>> rows, String otherIdCol) async {
     if (rows.isEmpty) return const [];
     final ids = rows.map((r) => r[otherIdCol] as String).toSet().toList();
-    final profiles = await _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url')
-        .inFilter(UserProfileRow.colId, ids);
+    final profiles = await readChunked(
+      ids,
+      (chunk) async => _client
+          .from(UserProfileRow.table)
+          .select('id, display_name, avatar_url')
+          .inFilter(UserProfileRow.colId, chunk),
+    );
     final byId = <String, ({String? displayName, String? avatarUrl})>{};
     for (final p in (profiles as List).cast<Map<String, dynamic>>()) {
       byId[p['id'] as String] = (
@@ -7216,11 +7278,11 @@ double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
     // silently empty badge feed. Each chunk applies the same cursor + ordering
     // + limit; the global top-`limit` is a subset of the union, re-sorted by
     // earned_at desc then id desc.
-    Future<List<AchievementRow>> queryChunk(List<String> ids) async {
+    Future<List<AchievementRow>> queryChunk(List<String> chunk) async {
       var q = _client
           .from(AchievementRow.table)
           .select()
-          .inFilter(AchievementRow.colUserId, ids)
+          .inFilter(AchievementRow.colUserId, chunk)
           .eq(AchievementRow.colIsPublic, true);
       if (cursor != null) {
         final iso = cursor.earnedAt.toIso8601String();
@@ -7235,26 +7297,22 @@ double? _promotedDouble(Map<String, dynamic>? metadata, String key) {
       return rows.map<AchievementRow>((r) => AchievementRow.fromJson(r)).toList();
     }
 
-    final pages = await Future.wait(chunkList(authors).map(queryChunk));
-    final mergedById = <String, AchievementRow>{};
-    for (final page in pages) {
-      for (final b in page) {
-        mergedById[b.id] = b;
-      }
-    }
-    final badges = mergedById.values.toList()
-      ..sort((a, b) {
-        final byDate = b.earnedAt.compareTo(a.earnedAt);
-        return byDate != 0 ? byDate : b.id.compareTo(a.id);
-      });
-    if (badges.length > limit) badges.removeRange(limit, badges.length);
+    final badges = topByRecency(
+      await readChunked(authors, queryChunk),
+      limit: limit,
+      idOf: (b) => b.id,
+      recencyOf: (b) => b.earnedAt,
+    );
     if (badges.isEmpty) return const [];
 
     final ids = badges.map((b) => b.userId).toSet().toList();
-    final profiles = await _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url')
-        .inFilter('id', ids);
+    final profiles = await readChunked(
+      ids,
+      (chunk) async => _client
+          .from(UserProfileRow.table)
+          .select('id, display_name, avatar_url')
+          .inFilter('id', chunk),
+    );
     final byId = <String, Map<String, dynamic>>{
       for (final p in profiles) p['id'] as String: p,
     };
