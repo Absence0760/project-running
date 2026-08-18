@@ -389,28 +389,15 @@ call, or a three-way lockstep port — not because it is uncertain.
 
 ### Watch apps
 
-- [ ] **Wear `drainQueue` has no re-entrancy guard** and cold start fires two
-  (cached-session restore and phone-bridge restore both call it, neither gated
-  by backoff at zero failures). Both take the same queue snapshot; `pushRun`
-  deletes the track file last, so the loser either re-uploads a multi-MB ultra
-  track over LTE or hits `FileNotFoundException` — which `classifyDrainError`
-  does not match, so it surfaces a raw ENOENT as a sync failure for a run that
-  uploaded fine. Same gap lets two `refreshAccessToken()` calls race a
-  rotating refresh token.
-- [ ] **Wear `LocalRunStore.save`/`remove` read-modify-write outside the
-  DataStore transaction**, so an uploaded run can be resurrected after its
-  track file is deleted — every later drain throws ENOENT and the entry never
-  clears. Fix is to move the whole mutation inside one `edit` lambda.
+- [x] **Wear `drainQueue` had no re-entrancy guard.** Resolved 2026-08-18 ([decisions § 640](../architecture/decisions.md)). `drainMutex` serialises the pass with the backoff check and the queue snapshot inside it and `awaitAuth()` outside it, so the second cold-start drain re-reads a drained queue instead of re-uploading a multi-MB ultra track. The `FileNotFoundException` arm `classifyDrainError` was missing is now unreachable rather than handled. The refresh-token half needed a different fix: `refreshIfExpired` sits outside `drainQueue` and GoTrue *rotates* the token, so serialising would only make the second caller POST later with a spent one — `refreshAccessToken` is single-flighted through the new `SingleFlight.kt`.
+- [x] **Wear `LocalRunStore.save`/`remove` read-modify-write outside the DataStore transaction.** Resolved 2026-08-18 ([decisions § 640](../architecture/decisions.md)). All three mutations (`clear()` had the same shape) now reduce against the transaction's own `Preferences` snapshot inside one `edit` lambda, so a concurrent save can no longer resurrect a run the drain just removed.
 - [ ] **iOS pace look-back spans a pause.** `resume()` clears
   `lastLocationForDistance` (the #371 fix) but not `track`, so `updatePace`
   divides a ~200 m look-back by a span containing the entire stop. A 12-minute
   aid stop makes the first ~200 m after resume read on the order of an hour per
   km, published to the complication and to `checkPaceAlert` — the same class of
   bug as the recorder pace-gap fix landed in this branch, on the other platform.
-- [ ] **Both watch apps keep the only copy of an unsynced run's GPS track in
-  the OS-purgeable cache directory** (Wear `context.cacheDir`, iOS
-  `.cachesDirectory`). After a purge the queue still promises "Sync 3 runs"
-  while every push throws ENOENT. A not-yet-synced payload is not a cache.
+- [x] **Both watch apps kept the only copy of an unsynced run's GPS track in the OS-purgeable cache directory.** Resolved 2026-08-18 ([decisions § 638](../architecture/decisions.md)). Wear writes to `filesDir/tracks` via the new `recording/TrackStorage.kt`; watchOS to `Application Support/run_checkpoint` via the new `RunPayloadStorage.swift`, marked `isExcludedFromBackup`. Both carry an existing install's queued payloads across at cold start and both sweep the new home against a keep-set that can never include a live recording. The watchOS **export** moved too, not just the NDJSON — WCSession reads it off disk for the life of the transfer, by which time `reset()` has deleted the NDJSON it was built from. Honesty: Wear posts a queued run whose payload is gone with a null `track_url` rather than promising a sync forever ([§ 639](../architecture/decisions.md)); watchOS reports "GPS track unavailable — synced without it" instead of shipping an empty array indistinguishable from an indoor run.
 - [ ] **iOS `HKWorkoutSession` failure is swallowed** — `didFailWithError` is
   empty and nothing nils the session, so HR freezes on a plausible number and a
   partial `avg_bpm` is stamped as if it covered the whole run.
