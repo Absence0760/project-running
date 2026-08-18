@@ -1566,9 +1566,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
-      - name: Install Playwright Chromium
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+      - uses: ./.github/actions/install-playwright
       # The dev server reads PUBLIC_* keys from apps/web/.env. Write the
       # local-stack URL + anon key from `supabase status` so the in-test
       # browser hits the same DB the seed populated.
@@ -1676,9 +1674,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
-      - name: Install Playwright Chromium
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+      - uses: ./.github/actions/install-playwright
       - name: Write apps/web/.env from supabase status
         working-directory: apps/backend
         run: |
@@ -1789,9 +1785,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
-      - name: Install Playwright Chromium
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+      - uses: ./.github/actions/install-playwright
       - name: Write apps/web/.env from supabase status
         working-directory: apps/backend
         run: |
