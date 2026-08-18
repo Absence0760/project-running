@@ -22,9 +22,9 @@ List<List<T>> chunkList<T>(List<T> items, [int size = kInFilterChunk]) {
 }
 
 /// Run [query] once per [chunkList] chunk of [ids] and concatenate the rows.
-/// The closure's parameter is named `chunk` by convention: `in_filter_bound_
-/// test.dart` reads that name to tell a chunked `.inFilter(...)` from an
-/// unguarded one.
+/// Name the closure's parameter `chunk`: the in-filter bound guard reads that
+/// name off the source to tell a chunked `.inFilter(...)` from an unguarded
+/// one.
 Future<List<T>> readChunked<T>(
   List<String> ids,
   Future<List<T>> Function(List<String> chunk) query,
