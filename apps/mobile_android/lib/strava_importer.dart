@@ -180,9 +180,13 @@ class StravaImporter {
 
     for (var i = 1; i < rows.length; i++) {
       final row = rows[i];
-      if (row.length <= filenameIdx) continue;
-      final filename = row[filenameIdx].toString();
-      if (filename.isEmpty) continue;
+      // Strava leaves `Filename` empty for a manually-entered or indoor
+      // activity — there is no track file to point at, and the row's own
+      // date / distance / elapsed time is the whole activity. Skipping those
+      // rows dropped every one of a migrating runner's manual activities with
+      // no count and no report; web's importer keeps them, trackless.
+      final filename =
+          filenameIdx < row.length ? row[filenameIdx].toString() : '';
 
       // Read outside the try so a row that throws is still reported under
       // the name and date the runner will recognise, not under the opaque
@@ -234,32 +238,38 @@ class StravaImporter {
     required double fallbackDistanceMetres,
     required int fallbackDurationSeconds,
   }) {
-    final file = archive[path];
-    if (file == null) {
-      throw FormatException('Track file not found in zip: $path');
-    }
+    // An empty path is not a broken export: the row simply has no track file.
+    // A path that names one and is missing it, or names a format we can't
+    // read, still throws so the caller reports it — the export promised
+    // something it did not deliver.
+    Route? parsedRoute;
+    if (path.isNotEmpty) {
+      final file = archive[path];
+      if (file == null) {
+        throw FormatException('Track file not found in zip: $path');
+      }
 
-    // Decompress if .gz
-    List<int> content = file.content as List<int>;
-    if (path.endsWith('.gz')) {
-      content = GZipDecoder().decodeBytes(content);
-    }
+      // Decompress if .gz
+      List<int> content = file.content as List<int>;
+      if (path.endsWith('.gz')) {
+        content = GZipDecoder().decodeBytes(content);
+      }
 
-    final lower = path.toLowerCase();
-    Route parsedRoute;
-    if (lower.contains('.gpx')) {
-      parsedRoute = RouteParser.fromGpx(utf8.decode(content));
-    } else if (lower.contains('.tcx')) {
-      parsedRoute = RouteParser.fromTcx(utf8.decode(content));
-    } else if (lower.contains('.fit')) {
-      parsedRoute = FitParser.parse(Uint8List.fromList(content));
-    } else {
-      throw FormatException('Unknown track format: $path');
+      final lower = path.toLowerCase();
+      if (lower.contains('.gpx')) {
+        parsedRoute = RouteParser.fromGpx(utf8.decode(content));
+      } else if (lower.contains('.tcx')) {
+        parsedRoute = RouteParser.fromTcx(utf8.decode(content));
+      } else if (lower.contains('.fit')) {
+        parsedRoute = FitParser.parse(Uint8List.fromList(content));
+      } else {
+        throw FormatException('Unknown track format: $path');
+      }
     }
 
     // Use the parsed track. Fall back to CSV-supplied numbers if the file
     // somehow has no waypoints.
-    final track = parsedRoute.waypoints
+    final track = (parsedRoute?.waypoints ?? const [])
         .map((w) => Waypoint(
               lat: w.lat,
               lng: w.lng,
@@ -268,8 +278,8 @@ class StravaImporter {
             ))
         .toList();
 
-    final distance = parsedRoute.distanceMetres > 0
-        ? parsedRoute.distanceMetres
+    final distance = (parsedRoute?.distanceMetres ?? 0) > 0
+        ? parsedRoute!.distanceMetres
         : fallbackDistanceMetres;
 
     // Strava CSV date format: "Apr 9, 2026, 7:30:00 AM"
