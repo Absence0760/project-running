@@ -499,6 +499,24 @@ void main() {
       expect(find.byType(GymRecordsScreen), findsOneWidget);
     });
 
+    testWidgets('an un-init()ed routine store hides the Routines peer',
+        (tester) async {
+      // A routine store whose init() threw is resident but directoryless, and
+      // every write to it then refuses (decisions § 660). Offering the peer
+      // over one advertises a surface that cannot save a routine.
+      final s = await seed(tester);
+      await tester.pumpWidget(_gymScreen(s.store, LocalRoutineStore()));
+      await tester.pumpAndSettle();
+      expect(
+          find.descendant(
+              of: find.byType(SurfacePeerStrip), matching: find.text('Routines')),
+          findsNothing);
+      expect(
+          find.descendant(
+              of: find.byType(SurfacePeerStrip), matching: find.text('Log')),
+          findsOneWidget);
+    });
+
     testWidgets('Routines opens the routine library', (tester) async {
       final s = await seed(tester);
       await tester.pumpWidget(_gymScreen(s.store, s.routines));
