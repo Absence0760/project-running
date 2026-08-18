@@ -51,6 +51,7 @@
     <string name="activity_walk">ウォーク</string>
     <string name="activity_hike">ハイク</string>
     <string name="activity_cycle">サイクル</string>
+    <string name="activity_stroller">ベビーカー</string>
     <string name="sign_in">サインイン</string>
     <string name="sign_out">サインアウト</string>
     <string name="cd_cancel_countdown">カウントダウンをキャンセル</string>

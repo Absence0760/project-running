@@ -1904,15 +1904,22 @@ private fun paceLabel(
     return stringResource(res, formatPace(perUnit))
 }
 
-/// Resolve a localized label for a cycled activity type. Unknown values
-/// fall back to a capitalized form of the raw key so a future activity
-/// added to the cycle list still renders something readable before its
-/// string lands.
+/// Resolve a localized label for an activity type. Covers every value the
+/// `runs_activity_type_check` constraint admits, not only the four the chip
+/// cycles: `default_activity_type` primes this from the phone's settings bag
+/// unfiltered, so `stroller` reaches the wrist without ever being cycled to.
+///
+/// An unrecognised value is returned VERBATIM rather than capitalized. It can
+/// only appear when this watch is older than the database, and a capitalized
+/// token ("Stroller") is indistinguishable from a real translation — it hides
+/// the drift on exactly the surface where it would be noticed. Web's
+/// `activity_type.svelte.ts` refuses for the same reason.
 @Composable
 private fun activityLabel(activityType: String): String = when (activityType) {
     "run" -> stringResource(R.string.activity_run)
     "walk" -> stringResource(R.string.activity_walk)
     "hike" -> stringResource(R.string.activity_hike)
     "cycle" -> stringResource(R.string.activity_cycle)
-    else -> activityType.replaceFirstChar { it.uppercase() }
+    "stroller" -> stringResource(R.string.activity_stroller)
+    else -> activityType
 }

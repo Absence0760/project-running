@@ -52,6 +52,7 @@
     <string name="activity_walk">Marche</string>
     <string name="activity_hike">Rando</string>
     <string name="activity_cycle">Vélo</string>
+    <string name="activity_stroller">Poussette</string>
     <string name="sign_in">Se connecter</string>
     <string name="sign_out">Se déconnecter</string>
     <string name="cd_cancel_countdown">Annuler le compte à rebours</string>

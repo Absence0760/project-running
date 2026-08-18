@@ -72,6 +72,7 @@
     <string name="activity_walk">Walk</string>
     <string name="activity_hike">Hike</string>
     <string name="activity_cycle">Cycle</string>
+    <string name="activity_stroller">Stroller</string>
     <string name="sign_in">Sign in</string>
     <string name="sign_out">Sign out</string>
     <string name="cd_cancel_countdown">Cancel countdown</string>
