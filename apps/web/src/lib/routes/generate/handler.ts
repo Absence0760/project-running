@@ -16,8 +16,12 @@
  *      when graph-cycle is loop-poor or unreachable.
  * The v2 polygon generator is retired: graph-cycle beat it at every spike start.
  *
- * Fail-closed: no engine URL → 501 (operator config); an engine that's down or
- * can't build a loop → 502; bad input → 400.
+ * Fail-closed: no engine URL → 501 (operator config); an engine that's down →
+ * 502; an engine that answered but found no loop worth serving near this start
+ * → 422; bad input → 400. The 502/422 split matters beyond politeness: the
+ * Lambda logs the alarm-driving `engine_unreachable` line on every 502, so a
+ * loop-poor neighbourhood answering 502 pages the on-call over geography and
+ * makes a real GraphHopper outage indistinguishable from it.
  *
  * Server-side generation is a Pro perk (decisions §204): after validation the
  * handler requires a user JWT and a true `is_pro()`, mirroring the
@@ -160,7 +164,7 @@ export type GenerateResult =
 				largestLoopM?: number;
 			};
 	  }
-	| { status: 400 | 401 | 429 | 500 | 501 | 502; body: { error: string } }
+	| { status: 400 | 401 | 422 | 429 | 500 | 501 | 502; body: { error: string } }
 	| { status: 403; body: { error: 'pro_required'; upgrade: true } };
 
 /// Seeds raced at EACH request multiplier (so total round_trip calls is
@@ -310,6 +314,10 @@ export async function handleGenerate(
 	// yet honour preferences (full edge-weighted search is the v3 § Extension work),
 	// and it would otherwise return a clean-but-arterial loop that ignores the
 	// "quiet roads" ask. The custom-model round_trip below carries the preference.
+	// Whether the graph-cycle call FAILED, as opposed to answering "loop-poor".
+	// With no round_trip fallback configured the two ended at the same 502, so a
+	// sidecar outage and a cul-de-sac neighbourhood were one signal.
+	let graphCycleUnreachable = false;
 	if (config.graphCycleUrl && !req.preference) {
 		try {
 			const result = await fetchGraphCycle(
@@ -329,19 +337,21 @@ export async function handleGenerate(
 				};
 			}
 		} catch (e) {
-			// Unconfigured/unreachable sidecar → fall through to round_trip (or 502
-			// below if no fallback engine is configured). Log so a prolonged sidecar
-			// outage is visible rather than silently degrading every request to the
-			// fallback — the request still ends 200, so nothing else would surface it.
+			graphCycleUnreachable = true;
+			// Unconfigured/unreachable sidecar → fall through to round_trip (or the
+			// 502 below if no fallback engine is configured). Log so a prolonged
+			// sidecar outage is visible rather than silently degrading every request
+			// to the fallback — the request still ends 200, so nothing else would
+			// surface it.
 			console.warn(
 				'[generate] graph_cycle sidecar error, falling back:',
 				e instanceof Error ? e.message : String(e),
 			);
 		}
-		// graph-cycle produced no loop AND GraphHopper isn't configured for the
-		// fallback: a loop-poor location with no out-and-back engine to offer.
 		if (!config.graphhopperUrl) {
-			return { status: 502, body: { error: 'no usable route' } };
+			return graphCycleUnreachable
+				? { status: 502, body: { error: 'route engine unavailable' } }
+				: { status: 422, body: { error: 'no usable route' } };
 		}
 	}
 
@@ -371,17 +381,24 @@ export async function handleGenerate(
 	}
 
 	if (candidates.length === 0) {
-		// Every seed failed. An unconfigured engine is an operator problem
-		// (501); anything else is the engine being down / unable to build a
-		// loop at this location (502).
+		// Every seed failed. An unconfigured engine is an operator problem (501);
+		// a `no_route` is the engine ANSWERING that it can't build a loop at this
+		// start (422 — the runner's neighbourhood, and the commonest way a
+		// loop-poor location used to page the on-call); anything else is the
+		// engine being down (502).
 		if (lastError instanceof GraphHopperError && lastError.kind === 'unconfigured') {
 			return { status: 501, body: { error: 'route generation is not configured' } };
+		}
+		if (lastError instanceof GraphHopperError && lastError.kind === 'no_route') {
+			return { status: 422, body: { error: 'no usable route' } };
 		}
 		return { status: 502, body: { error: 'route engine unavailable' } };
 	}
 
+	// Candidates came back, so the engine is healthy — none was shaped well
+	// enough to serve. That is this start's street layout, not an outage.
 	const best = pickBestLoop(candidates, req.targetDistanceM);
-	if (!best) return { status: 502, body: { error: 'no usable route' } };
+	if (!best) return { status: 422, body: { error: 'no usable route' } };
 
 	// This loop is a round_trip fallback — graph-cycle found no clean in-band loop
 	// near target. If the graph search nonetheless reported a larger genuinely

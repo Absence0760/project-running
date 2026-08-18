@@ -397,6 +397,57 @@ test('handleGenerate → 502 when every seed fails upstream', async () => {
 	const fetcher: Fetcher = async () => new Response('down', { status: 503 });
 	const res = await handleGenerate(AUTH, { start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, OK_CFG, { fetcher, proChecker: asPro });
 	assert.equal(res.status, 502);
+	assert.deepEqual(res.body, { error: 'route engine unavailable' });
+});
+
+// The Lambda logs the alarm-driving `engine_unreachable` line on every 502, so
+// each of these three had to be told apart: a loop-poor neighbourhood is the
+// user's street layout, not an outage, and lumping them together also hid a
+// genuine engine failure inside the noise.
+const GC_CFG = { ...OK_CFG, graphCycleUrl: 'http://gc.local', graphhopperUrl: undefined };
+
+function gcResponse(body: unknown): Response {
+	return new Response(JSON.stringify(body), {
+		status: 200,
+		headers: { 'content-type': 'application/json' },
+	});
+}
+
+test('handleGenerate → 422 when graph-cycle answers loop-poor and there is no fallback engine', async () => {
+	const fetcher: Fetcher = async () => gcResponse({ found: false, largestClean: null });
+	const res = await handleGenerate(AUTH, VALID_BODY, GC_CFG, { fetcher, proChecker: asPro });
+	assert.equal(res.status, 422);
+	assert.deepEqual(res.body, { error: 'no usable route' });
+});
+
+test('handleGenerate → 502 when graph-cycle itself is unreachable and there is no fallback engine', async () => {
+	const fetcher: Fetcher = async () => {
+		throw new Error('connect ECONNREFUSED');
+	};
+	const res = await handleGenerate(AUTH, VALID_BODY, GC_CFG, { fetcher, proChecker: asPro });
+	assert.equal(res.status, 502);
+	assert.deepEqual(res.body, { error: 'route engine unavailable' });
+});
+
+test('handleGenerate → 422 when every seed reports no_route at this start', async () => {
+	// GraphHopper answered on every seed; it just cannot build a loop here.
+	const fetcher: Fetcher = async () => new Response(JSON.stringify({ paths: [] }), { status: 200 });
+	const res = await handleGenerate(AUTH, VALID_BODY, OK_CFG, { fetcher, proChecker: asPro });
+	assert.equal(res.status, 422);
+	assert.deepEqual(res.body, { error: 'no usable route' });
+});
+
+test('handleGenerate → 422 when candidates come back but none is usable', async () => {
+	// Paths with geometry but no reported distance survive the parse and are
+	// then rejected by the selector — the engine is plainly healthy.
+	const fetcher: Fetcher = async () =>
+		new Response(
+			JSON.stringify({ paths: [{ points: { coordinates: squareLoop(0, 0, 0.0056) } }] }),
+			{ status: 200, headers: { 'content-type': 'application/json' } },
+		);
+	const res = await handleGenerate(AUTH, VALID_BODY, OK_CFG, { fetcher, proChecker: asPro });
+	assert.equal(res.status, 422);
+	assert.deepEqual(res.body, { error: 'no usable route' });
 });
 
 test('handleGenerate races N seeds and returns the best-shaped loop', async () => {

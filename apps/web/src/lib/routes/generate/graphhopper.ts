@@ -29,8 +29,8 @@ export interface LoopCandidate {
 }
 
 /// Typed failure so wrappers can map "unconfigured" → 501 (operator must set
-/// GRAPHHOPPER_URL) distinctly from "upstream"/"no_route" → 502 (engine down
-/// or couldn't build a loop here).
+/// GRAPHHOPPER_URL), "upstream" → 502 (engine down), and "no_route" → 422 (the
+/// engine answered; it just can't build a loop at this start).
 export class GraphHopperError extends Error {
 	constructor(
 		readonly kind: 'unconfigured' | 'upstream' | 'no_route',
