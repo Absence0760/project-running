@@ -11285,6 +11285,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get roadbookColTarget => 'Meta';
 
   @override
+  String get roadbookColLegPace => 'Ritmo do troço';
+
+  @override
   String get roadbookTargetAhead => 'adiantado';
 
   @override
@@ -24149,6 +24152,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get roadbookColTarget => 'Meta';
+
+  @override
+  String get roadbookColLegPace => 'Ritmo do trecho';
 
   @override
   String get roadbookTargetAhead => 'adiantado';

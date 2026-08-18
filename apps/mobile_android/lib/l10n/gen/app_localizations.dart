@@ -18710,6 +18710,12 @@ abstract class AppLocalizations {
   /// **'Target'**
   String get roadbookColTarget;
 
+  /// Roadbook per-leg pace label - the pace this stretch has to be run at to hold the goal
+  ///
+  /// In en, this message translates to:
+  /// **'Leg pace'**
+  String get roadbookColLegPace;
+
   /// Roadbook target verdict: the projection is ahead of the planned time
   ///
   /// In en, this message translates to:

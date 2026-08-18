@@ -394,7 +394,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     final unit = activeDistanceUnit;
     final rb = _roadbook;
     final lines = <String>['${widget.route.name} — ${l10n.roadbookTitle}', ''];
-    for (final leg in rb.legs) {
+    for (var i = 0; i < rb.legs.length; i++) {
+      final leg = rb.legs[i];
       final name = _checkpointLabel(l10n, leg);
       final arrival = _elapsedLabel(leg.projectedElapsedS) +
           (leg.projectedClockMin != null ? ' (${_clockLabel(leg.projectedClockMin!)})' : '');
@@ -403,9 +404,27 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
           ? '  ${l10n.roadbookColTarget} ${_elapsedLabel(leg.target!.targetElapsedS.toDouble())}'
               ' ${_marginLabel(leg.target!.marginS)} ${_targetStatusLabel(l10n, leg.target!.status)}'
           : '';
-      lines.add('${UnitFormat.distance(leg.cumDistM, unit)}  $name  $arrival$tgt$cut');
+      final pace =
+          '${l10n.roadbookColLegPace} ${_legPace(rb.legs, i, unit)}';
+      lines.add(
+          '${UnitFormat.distance(leg.cumDistM, unit)}  $name  $pace  $arrival$tgt$cut');
     }
     Share.share(lines.join('\n'));
+  }
+
+  /// Seconds the pacing model allocated to the leg arriving at [i]. The start
+  /// row has no preceding leg.
+  static double _legSeconds(List<RoadbookLeg> legs, int i) =>
+      i <= 0 ? 0 : legs[i].projectedElapsedS - legs[i - 1].projectedElapsedS;
+
+  /// The pace this leg has to be run at to hold the goal. Under the effort
+  /// model this is the number that differs between a climb and a flat — the
+  /// whole point of the model, and invisible from cumulative arrivals alone.
+  static String _legPace(List<RoadbookLeg> legs, int i, DistanceUnit unit) {
+    final leg = legs[i];
+    if (i <= 0 || leg.legDistM <= 0) return '—';
+    final secPerKm = _legSeconds(legs, i) / (leg.legDistM / 1000);
+    return '${UnitFormat.pace(secPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
   }
 
   String _checkpointLabel(AppLocalizations l10n, RoadbookLeg leg) {
@@ -527,7 +546,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
             ),
             const SizedBox(height: 4),
             for (var i = 0; i < rb.legs.length; i++)
-              _legRow(context, l10n, rb.legs[i], unit, fuel?.legs[i]),
+              _legRow(context, l10n, rb.legs[i], unit, fuel?.legs[i],
+                  _legPace(rb.legs, i, unit)),
           ],
         ],
       ),
@@ -535,7 +555,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
   }
 
   Widget _legRow(BuildContext context, AppLocalizations l10n, RoadbookLeg leg,
-      DistanceUnit unit, FuelLeg? fuelLeg) {
+      DistanceUnit unit, FuelLeg? fuelLeg, String legPace) {
     final theme = Theme.of(context);
     final cutoff = leg.cutoff;
     final target = leg.target;
@@ -571,6 +591,15 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                     if (leg.legGainM >= 1) '+${leg.legGainM.round()}m',
                   ].join(' · '),
                   style: theme.textTheme.bodySmall,
+                ),
+                Padding(
+                  key: const Key('roadbook-leg-pace'),
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '${l10n.roadbookColLegPace} $legPace',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
                 ),
                 if (target != null)
                   _verdictChip(

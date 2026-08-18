@@ -3242,6 +3242,7 @@
   "roadbookFluidValue": "{ml} ml",
   "roadbookCarryHint": "emporter {gels} gels · {fluid} ml",
   "roadbookColTarget": "Objectif",
+  "roadbookColLegPace": "Allure du tronçon",
   "roadbookTargetAhead": "en avance",
   "roadbookTargetOn": "dans les temps",
   "roadbookTargetBehind": "en retard",

@@ -3242,6 +3242,7 @@
   "roadbookFluidValue": "{ml} ml",
   "roadbookCarryHint": "levar {gels} géis · {fluid} ml",
   "roadbookColTarget": "Meta",
+  "roadbookColLegPace": "Ritmo do trecho",
   "roadbookTargetAhead": "adiantado",
   "roadbookTargetOn": "no plano",
   "roadbookTargetBehind": "atrasado",

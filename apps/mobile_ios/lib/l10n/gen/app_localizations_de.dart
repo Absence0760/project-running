@@ -11297,6 +11297,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get roadbookColTarget => 'Zielzeit';
 
   @override
+  String get roadbookColLegPace => 'Etappentempo';
+
+  @override
   String get roadbookTargetAhead => 'voraus';
 
   @override

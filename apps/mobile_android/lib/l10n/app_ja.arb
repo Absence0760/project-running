@@ -3242,6 +3242,7 @@
   "roadbookFluidValue": "{ml} ml",
   "roadbookCarryHint": "携行: ジェル {gels} 個 · {fluid} ml",
   "roadbookColTarget": "目標",
+  "roadbookColLegPace": "区間ペース",
   "roadbookTargetAhead": "前倒し",
   "roadbookTargetOn": "予定どおり",
   "roadbookTargetBehind": "遅れ",

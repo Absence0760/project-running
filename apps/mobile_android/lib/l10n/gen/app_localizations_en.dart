@@ -11169,6 +11169,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get roadbookColTarget => 'Target';
 
   @override
+  String get roadbookColLegPace => 'Leg pace';
+
+  @override
   String get roadbookTargetAhead => 'ahead';
 
   @override

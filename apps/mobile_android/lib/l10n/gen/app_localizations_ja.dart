@@ -10745,6 +10745,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get roadbookColTarget => '目標';
 
   @override
+  String get roadbookColLegPace => '区間ペース';
+
+  @override
   String get roadbookTargetAhead => '前倒し';
 
   @override

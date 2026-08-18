@@ -3242,6 +3242,7 @@
   "roadbookFluidValue": "{ml} ml",
   "roadbookCarryHint": "llevar {gels} geles · {fluid} ml",
   "roadbookColTarget": "Objetivo",
+  "roadbookColLegPace": "Ritmo del tramo",
   "roadbookTargetAhead": "por delante",
   "roadbookTargetOn": "según el plan",
   "roadbookTargetBehind": "por detrás",

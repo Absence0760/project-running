@@ -14699,6 +14699,10 @@
   "@roadbookColTarget": {
     "description": "Label on the roadbook target-time verdict chip"
   },
+  "roadbookColLegPace": "Leg pace",
+  "@roadbookColLegPace": {
+    "description": "Roadbook per-leg pace label - the pace this stretch has to be run at to hold the goal"
+  },
   "roadbookTargetAhead": "ahead",
   "@roadbookTargetAhead": {
     "description": "Roadbook target verdict: the projection is ahead of the planned time"

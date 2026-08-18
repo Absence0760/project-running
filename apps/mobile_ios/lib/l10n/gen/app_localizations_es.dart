@@ -11287,6 +11287,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get roadbookColTarget => 'Objetivo';
 
   @override
+  String get roadbookColLegPace => 'Ritmo del tramo';
+
+  @override
   String get roadbookTargetAhead => 'por delante';
 
   @override
