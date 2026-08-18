@@ -140,7 +140,11 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // and no constraint, so the scanner passes it with zero violations after this
 // bump too — a same-day 12-character version still sorts after a bare 8-digit
 // cutoff, so bumping does not exempt it from the scan.
-export const GRANDFATHER_CUTOFF = '20270527';
+// 20270528: adds the gym_routine_history aggregate RPC so the routine-history
+// panel stops reading up to 500 gym_workouts rows just to count them. One
+// function body, no table DDL and no constraint, so the scanner passes it with
+// zero violations after this bump too.
+export const GRANDFATHER_CUTOFF = '20270528';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
