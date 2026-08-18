@@ -305,7 +305,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             distanceMetres: distanceMetres,
             trackFileURL: store?.trackFileURL ?? CheckpointStore.trackFile(runId: runId),
             trackPointCount: trackPointCount,
-            averageBPM: healthKit.averageBPM
+            averageBPM: healthKit.summaryAverageBPM
         )
 
         state = .finished
@@ -525,7 +525,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             pausedIntervalSeconds: totalPausedInterval,
             trackPointCount: trackPointCount,
             cacheFileURL: store.trackFileURL,
-            averageBPM: healthKit.averageBPM
+            averageBPM: healthKit.summaryAverageBPM
         )
         store.write(checkpoint: cp)
         // Match the track's crash-durability window to the checkpoint's.

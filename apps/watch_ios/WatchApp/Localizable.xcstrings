@@ -210,6 +210,26 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Trajeto GPS indisponível — sincronizado sem ele" } }
       }
     },
+    "Heart rate unavailable" : {
+      "comment" : "Shown during a run when the HealthKit workout session failed, so no further heart rate can be read.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Herzfrequenz nicht verfügbar" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Frecuencia cardíaca no disponible" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fréquence cardiaque indisponible" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "心拍数を取得できません" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível" } }
+      }
+    },
+    "Heart rate unavailable — run saved without it" : {
+      "comment" : "Shown on the run summary when the HealthKit workout session failed mid-run; the run itself is intact but carries no average heart rate.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Herzfrequenz nicht verfügbar – Lauf ohne sie gespeichert" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Frecuencia cardíaca no disponible: carrera guardada sin ella" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fréquence cardiaque indisponible – course enregistrée sans elle" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "心拍数を取得できません。心拍数なしでランを保存しました" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível — corrida salva sem ela" } }
+      }
+    },
     "Phone unavailable — tap Sync Run to retry" : {
       "comment" : "Sync failure shown when WCSession has not finished activating; the run is kept for a manual retry.",
       "localizations" : {

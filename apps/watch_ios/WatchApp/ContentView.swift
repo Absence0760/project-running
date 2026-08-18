@@ -29,6 +29,7 @@ struct ContentView: View {
                 case .finished:
                     PostRunView(
                         workoutManager: workoutManager,
+                        healthKit: workoutManager.healthKit,
                         transferState: connectivity.transferState,
                         thisRunSynced: thisRunSynced,
                         syncError: syncError,
@@ -324,6 +325,12 @@ struct RunningView: View {
                 }
             }
 
+            if healthKit.heartRateUnavailable {
+                Text("Heart rate unavailable")
+                    .font(.caption2)
+                    .foregroundColor(AppTheme.error)
+            }
+
             if let navigator = workoutManager.routeNavigator {
                 RouteGuidanceView(navigator: navigator)
             }
@@ -493,6 +500,7 @@ struct RecoveryView: View {
 
 struct PostRunView: View {
     @ObservedObject var workoutManager: WorkoutManager
+    @ObservedObject var healthKit: HealthKitManager
     let transferState: WatchConnectivityManager.TransferState
     let thisRunSynced: Bool
     let syncError: String?
@@ -527,6 +535,13 @@ struct PostRunView: View {
                     .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 4)
+
+                if healthKit.heartRateUnavailable {
+                    Text("Heart rate unavailable — run saved without it")
+                        .font(.caption2)
+                        .foregroundColor(AppTheme.error)
+                        .multilineTextAlignment(.center)
+                }
 
                 if thisRunSynced {
                     Label(syncedStatusText, systemImage: syncedStatusIcon)

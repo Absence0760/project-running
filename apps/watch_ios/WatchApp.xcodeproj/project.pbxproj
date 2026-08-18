@@ -40,6 +40,8 @@
 		B2C3D4E5F6A70001000B0013 /* RouteGuidanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0013 /* RouteGuidanceTests.swift */; };
 		B2C3D4E5F6A70001000B0014 /* MetadataRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0014 /* MetadataRegistryTests.swift */; };
 		B2C3D4E5F6A70001000B0015 /* RunPayloadStorageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0015 /* RunPayloadStorageTests.swift */; };
+		B2C3D4E5F6A70001000B0017 /* HealthKitFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0017 /* HealthKitFailureTests.swift */; };
+		B2C3D4E5F6A70001000B0016 /* WorkoutManagerPaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A70002000B0016 /* WorkoutManagerPaceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -79,6 +81,8 @@
 		B2C3D4E5F6A70002000B0014 /* MetadataRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataRegistryTests.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0013 /* RunPayloadStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunPayloadStorage.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70002000B0015 /* RunPayloadStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunPayloadStorageTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0017 /* HealthKitFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitFailureTests.swift; sourceTree = "<group>"; };
+		B2C3D4E5F6A70002000B0016 /* WorkoutManagerPaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutManagerPaceTests.swift; sourceTree = "<group>"; };
 		B2C3D4E5F6A70004000B0001 /* WatchAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WatchAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -131,6 +135,8 @@
 				B2C3D4E5F6A70002000B0013 /* RouteGuidanceTests.swift */,
 				B2C3D4E5F6A70002000B0014 /* MetadataRegistryTests.swift */,
 				B2C3D4E5F6A70002000B0015 /* RunPayloadStorageTests.swift */,
+				B2C3D4E5F6A70002000B0017 /* HealthKitFailureTests.swift */,
+				B2C3D4E5F6A70002000B0016 /* WorkoutManagerPaceTests.swift */,
 			);
 			path = WatchAppTests;
 			sourceTree = "<group>";
@@ -337,6 +343,8 @@
 				B2C3D4E5F6A70001000B0013 /* RouteGuidanceTests.swift in Sources */,
 				B2C3D4E5F6A70001000B0014 /* MetadataRegistryTests.swift in Sources */,
 				B2C3D4E5F6A70001000B0015 /* RunPayloadStorageTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0017 /* HealthKitFailureTests.swift in Sources */,
+				B2C3D4E5F6A70001000B0016 /* WorkoutManagerPaceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
