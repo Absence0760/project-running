@@ -305,6 +305,11 @@ export async function handleGenerate(
 	// choice instead of a silent out-and-back + a generic shortfall banner.
 	let largestCleanM: number | null = null;
 
+	// Whether the graph-cycle call FAILED, as opposed to answering "loop-poor".
+	// With no round_trip fallback configured the two ended at the same 502, so a
+	// sidecar outage and a cul-de-sac neighbourhood were one signal.
+	let graphCycleUnreachable = false;
+
 	// graph-cycle FIRST: search the real foot graph. A real loop wins; null means
 	// loop-poor (or the sidecar is unreachable) and we fall through to round_trip.
 	// A sidecar error is never fatal — graph-cycle is a quality upgrade, not a
@@ -314,10 +319,6 @@ export async function handleGenerate(
 	// yet honour preferences (full edge-weighted search is the v3 § Extension work),
 	// and it would otherwise return a clean-but-arterial loop that ignores the
 	// "quiet roads" ask. The custom-model round_trip below carries the preference.
-	// Whether the graph-cycle call FAILED, as opposed to answering "loop-poor".
-	// With no round_trip fallback configured the two ended at the same 502, so a
-	// sidecar outage and a cul-de-sac neighbourhood were one signal.
-	let graphCycleUnreachable = false;
 	if (config.graphCycleUrl && !req.preference) {
 		try {
 			const result = await fetchGraphCycle(
