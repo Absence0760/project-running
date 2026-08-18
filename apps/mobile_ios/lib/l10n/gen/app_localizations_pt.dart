@@ -2300,6 +2300,56 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get runDetailPacing => 'Ritmo por metades';
+
+  @override
+  String get runDetailPacingFirstHalf => 'Primeira metade';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Segunda metade';
+
+  @override
+  String get runDetailPacingNegative => 'Split negativo';
+
+  @override
+  String get runDetailPacingEven => 'Ritmo constante';
+
+  @override
+  String get runDetailPacingPositive => 'Split positivo';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta mais rápido na segunda metade';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta mais lento na segunda metade';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Constante nas duas metades';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Ajustado pelo relevo, você acelerou na segunda metade.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Ajustado pelo relevo, seu esforço foi igual nas duas metades.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Ajustado pelo relevo, você desacelerou na segunda metade.';
+
+  @override
+  String get runDetailGapColumn => 'Ajustado';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'O ritmo ajustado é o ritmo no plano que teria custado o mesmo esforço que as subidas que você realmente correu.';
+
+  @override
   String get runDetailSectionSegments => 'Segmentos';
 
   @override
@@ -14970,6 +15020,56 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String runDetailRunTooShortSplit(String unit) {
     return 'Corrida curta demais para um parcial completo de $unit';
   }
+
+  @override
+  String get runDetailPacing => 'Ritmo por metades';
+
+  @override
+  String get runDetailPacingFirstHalf => 'Primeira metade';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Segunda metade';
+
+  @override
+  String get runDetailPacingNegative => 'Split negativo';
+
+  @override
+  String get runDetailPacingEven => 'Ritmo constante';
+
+  @override
+  String get runDetailPacingPositive => 'Split positivo';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta mais rápido na segunda metade';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta mais lento na segunda metade';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Constante nas duas metades';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Ajustado pelo relevo, você acelerou na segunda metade.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Ajustado pelo relevo, seu esforço foi igual nas duas metades.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Ajustado pelo relevo, você desacelerou na segunda metade.';
+
+  @override
+  String get runDetailGapColumn => 'Ajustado';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'O ritmo ajustado é o ritmo no plano que teria custado o mesmo esforço que as subidas que você realmente correu.';
 
   @override
   String get runDetailSectionSegments => 'Segmentos';

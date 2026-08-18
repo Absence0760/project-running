@@ -2304,6 +2304,56 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get runDetailPacing => 'Ritmo por mitades';
+
+  @override
+  String get runDetailPacingFirstHalf => 'Primera mitad';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Segunda mitad';
+
+  @override
+  String get runDetailPacingNegative => 'Split negativo';
+
+  @override
+  String get runDetailPacingEven => 'Ritmo constante';
+
+  @override
+  String get runDetailPacingPositive => 'Split positivo';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta más rápido en la segunda mitad';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta más lento en la segunda mitad';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Constante en ambas mitades';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Ajustado por el desnivel, aceleraste en la segunda mitad.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Ajustado por el desnivel, tu esfuerzo fue igual en ambas mitades.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Ajustado por el desnivel, bajaste el ritmo en la segunda mitad.';
+
+  @override
+  String get runDetailGapColumn => 'Ajustado';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'El ritmo ajustado es el ritmo en llano que habría costado el mismo esfuerzo que las cuestas que corriste de verdad.';
+
+  @override
   String get runDetailSectionSegments => 'Segmentos';
 
   @override

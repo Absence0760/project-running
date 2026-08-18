@@ -2282,6 +2282,56 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get runDetailPacing => 'Pacing';
+
+  @override
+  String get runDetailPacingFirstHalf => 'First half';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Second half';
+
+  @override
+  String get runDetailPacingNegative => 'Negative split';
+
+  @override
+  String get runDetailPacingEven => 'Even split';
+
+  @override
+  String get runDetailPacingPositive => 'Positive split';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta faster over the second half';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta slower over the second half';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Steady across both halves';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Adjusted for the terrain, you sped up over the second half.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Adjusted for the terrain, your effort was even across both halves.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Adjusted for the terrain, you slowed over the second half.';
+
+  @override
+  String get runDetailGapColumn => 'Grade-adj.';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.';
+
+  @override
   String get runDetailSectionSegments => 'Segments';
 
   @override
