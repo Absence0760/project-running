@@ -353,29 +353,9 @@ call, or a three-way lockstep port — not because it is uncertain.
 
 ### Firmware (bench-gated trigger, host-tested logic)
 
-- [ ] **Barometric altitude bypasses the `plausible_gps` gate.** Every
-  GPS-sourced altitude is narrowed to `-500..9000 m`; the barometric one —
-  preferred over GPS at every one of those sites — is gated nowhere. A stuck-
-  high I²C burst yields `-8789.741 m` and books 10,389 m of false loss, and the
-  sample survives every later profile thinning for the rest of the run. The
-  same read also reduces to a ~300,000 hPa sea-level pressure that can raise a
-  spurious Storm banner. Trigger is bench-gated (the sim models the driver's
-  own belief), so this is *host-tested*, not *bench-verified*, per
-  `quality_standards.md`.
-- [ ] **`FixGate` has no re-anchor escape.** Above `MAX_SPEED_MPS` (10 m/s)
-  displacement outruns the gate's ceiling forever. Measured: course pushed at
-  home, 40 km driven at 80 km/h → 0 fixes accepted, 129 rejected, first
-  acceptance 36 minutes after arrival — so no off-course latch if the gun goes
-  in that window, while the map marker keeps moving from the raw fix. The
-  recorder has exactly this escape hatch (`GPS_REANCHOR_AFTER_S`); the gate
-  does not.
-- [ ] **`backyard` reads any backward clock step as a corral bell**, including
-  1 s. The value is an extrapolation off an anchor with no monotonicity check,
-  which retreats ~7 times over a 100-hour backyard at 20 ppm. It also clears
-  `closed_this_window`, so a return the runner already marked is forgotten and
-  the real bell double-counts. Separately, bell-then-press counts one loop
-  twice (`on_bell_lap` increments without setting `closed_this_window`);
-  press-then-press and press-then-bell are tested, bell-then-press is not.
+- [x] **Barometric altitude bypassed the `plausible_gps` gate.** Fixed 2026-08-18 ([decisions § 644](../architecture/decisions.md)). The window was receiver-only while the barometric altitude is PREFERRED over it at every altitude-fed site, so the trusted source was the ungated one: a stuck-high I2C burst reduces to -8789.741 m, banked 10,413 m of false descent, survived every later profile thinning, and its ~3,190 hPa reduction could raise a Storm banner. `elevation::plausible_alt` is now source-blind and applied where the altitude is PRODUCED and again at every core entry point, including `record_cadence::track_point` — representability is not plausibility, and the decimetre field alone stored an altitude 3 km below the sea floor. `storm::on_sample` requires the reduction to pass the same ~870-1080 hPa window a pushed QNH does. Six tests, each verified failing against the pre-fix source. **Host-tested, not bench-verified** — Renode's BMP581 model serves the value a scenario scripts, so it models the driver's own belief and can never produce a bus fault. Bench items owed to #597.
+- [x] **`FixGate` had no re-anchor escape.** Fixed 2026-08-18 ([decisions § 644](../architecture/decisions.md)). The gate counts a rejection streak and carries the recorder's escape hatch: a run of rejections lasting `GPS_REANCHOR_AFTER_S` AND covering at least `REANCHOR_MIN_REJECTS` (3) fixes adopts the fresh position. Both halves matter — time alone would adopt the first outlier in a throttled GNSS mode where one fix already spans a minute. Pinned by a 40 km drive that was refused 1,800 times out of 1,800 and now re-anchors at t=10 s, plus two guards that a lone outlier and a pair still fail closed. Host-tested.
+- [x] **`backyard` read any backward clock step as a corral bell.** Fixed 2026-08-18 ([decisions § 644](../architecture/decisions.md)). A rollover now needs a drop of at least half a bell window, derived from the 1 Hz fold cadence, so the ~1 s retreats a 20 ppm extrapolation makes about seven times over a 100-hour race no longer clear `closed_this_window` and let the real bell double-count; a sub-threshold step also holds `since_bell_s` monotonic so the countdown cannot gain a second back. Separately `BANK_CONSUME_WINDOW_S` moved 300 s to 900 s: it was JUSTIFIED as "the fastest a loop could be run" and SIZED as "how long a walk-in takes", and the ten minutes between the two counted a bell-banked loop a second time. Deliberately not a hard one-count-per-window latch — the bell's bank belongs to the previous window and the next loop's own return must still count. Six existing tests folded the clock sparsely, which the module's contract says never happens; they now roll at 1 Hz through a shared helper. Host-tested.
 
 ### Watch apps
 
