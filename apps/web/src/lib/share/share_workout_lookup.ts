@@ -12,7 +12,7 @@
 /// the read-only detail are fetched — no notes / RPE leak beyond what the
 /// owner already chose to make public.
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { isEntityId } from '../core/entity_id';
 
 export interface SharedWorkoutSet {
@@ -49,35 +49,48 @@ export interface SharedWorkoutLookupConfig {
 export async function lookupSharedWorkout(
 	id: string,
 	config: SharedWorkoutLookupConfig | null,
+	makeClient: (url: string, key: string) => SupabaseClient = (url, key) =>
+		createClient(url, key, { auth: { persistSession: false } }),
 ): Promise<SharedWorkoutLookup> {
 	if (!config?.supabaseUrl || !config?.supabaseAnonKey) {
 		return { workout: null, displayName: null };
 	}
-	// A non-uuid segment raises 22P02 on the uuid column. These two lookups
-	// don't inspect `error` at all, so it degrades to a silent 404 rather than
-	// a false alarm — but the query is still pointless and the guard keeps
-	// every share lookup on one rule.
+	// A non-uuid segment raises 22P02 on the uuid column, which PostgREST
+	// returns as an error — indistinguishable at this layer from Supabase
+	// being down, so reject it before querying and keep the tagged line below
+	// meaning "outage" only.
 	if (!isEntityId(id)) return { workout: null, displayName: null };
 	try {
-		const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
-			auth: { persistSession: false },
-		});
+		const supabase = makeClient(config.supabaseUrl, config.supabaseAnonKey);
 		// `is_public = true` is baked into the views, but filter explicitly too
 		// so a non-public id resolves to "not found" rather than relying on the
 		// view to blank the row.
-		const { data: workout } = await supabase
+		const { data: workout, error } = await supabase
 			.from('public_gym_workouts')
 			.select('id, user_id, title, started_at, set_count, volume_kg, is_public')
 			.eq('id', id)
 			.eq('is_public', true)
 			.maybeSingle();
+		// Non-null error (vs a clean data:null not-found) = Supabase unreachable
+		// / 5xx; the page degrades to the branded 404 with no Lambda Errors
+		// metric. Tagged line drives the share-workout-upstream-unreachable alarm.
+		if (error) {
+			console.error('[share-workout] upstream_unreachable');
+			return { workout: null, displayName: null };
+		}
 		if (!workout) return { workout: null, displayName: null };
 
-		const { data: sets } = await supabase
+		const { data: sets, error: setsError } = await supabase
 			.from('public_gym_sets')
 			.select('set_index, exercise_name, reps, weight_kg, duration_s')
 			.eq('workout_id', id)
 			.order('set_index', { ascending: true });
+		// A hollow page — the workout's title with no sets — is worse than the
+		// branded 404, and it is what an unchecked child-query error renders.
+		if (setsError) {
+			console.error('[share-workout] upstream_unreachable');
+			return { workout: null, displayName: null };
+		}
 
 		let displayName: string | null = null;
 		if (workout.user_id) {
@@ -100,7 +113,10 @@ export async function lookupSharedWorkout(
 			displayName,
 		};
 	} catch (err) {
-		console.warn('lookupSharedWorkout: fetch failed', err);
+		console.error(
+			'[share-workout] upstream_unreachable',
+			err instanceof Error ? err.message : String(err),
+		);
 		return { workout: null, displayName: null };
 	}
 }
