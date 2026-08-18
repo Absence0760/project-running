@@ -6543,6 +6543,33 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gearRotationDone => '完了';
 
   @override
+  String gearRotationNextUp(String name) {
+    return '次に使うペア: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'このローテーションで最も摩耗が少ないペアです。';
+
+  @override
+  String get gearRotationMakeCurrent => '現在のペアにする';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return '$name を現在のペアにします — 新しいランに自動でタグ付けされます';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'すでに現在のペアです。';
+
+  @override
+  String get gearRotationAllWorn => 'ここにあるすべてのペアが交換の目安に達しています。';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return '現在のペアを変更できませんでした: $error';
+  }
+
+  @override
   String get privacyZonesSaved => 'プライバシーゾーンを保存しました。';
 
   @override

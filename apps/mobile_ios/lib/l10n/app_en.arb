@@ -9244,6 +9244,49 @@
   "@gearRotationDone": {
     "description": "Save/confirm button in the rotation member-edit sheet"
   },
+  "gearRotationNextUp": "Next up: {name}",
+  "@gearRotationNextUp": {
+    "description": "Which pair of a rotation comes out next, on the rotation row",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gearRotationNextUpWhy": "Least worn in this rotation.",
+  "@gearRotationNextUpWhy": {
+    "description": "Why that pair was picked, beside the next-up read-out"
+  },
+  "gearRotationMakeCurrent": "Make current",
+  "@gearRotationMakeCurrent": {
+    "description": "Button moving the current-pair star onto the next-up pair"
+  },
+  "gearRotationMakeCurrentLabel": "Make {name} the current pair — new runs will auto-tag with it",
+  "@gearRotationMakeCurrentLabel": {
+    "description": "Accessibility label for the make-current button",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gearRotationNextUpIsCurrent": "Already the current pair.",
+  "@gearRotationNextUpIsCurrent": {
+    "description": "Shown when the next-up pair already holds the star"
+  },
+  "gearRotationAllWorn": "Every pair here is at or past its replacement target.",
+  "@gearRotationAllWorn": {
+    "description": "Warning when every pair in a rotation is at or past its target"
+  },
+  "gearRotationMakeCurrentFailed": "Couldn't change the current pair: {error}",
+  "@gearRotationMakeCurrentFailed": {
+    "description": "Banner shown when moving the current-pair star fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "privacyZonesTitle": "Privacy zones",
   "@privacyZonesTitle": {
     "description": "AppBar title for the Settings > Privacy zones screen"

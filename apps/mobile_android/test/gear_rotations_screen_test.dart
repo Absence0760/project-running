@@ -26,16 +26,60 @@ GearRotationWithMembers _rot({
       gearIds: gearIds,
     );
 
+Map<String, dynamic> _gear({
+  required String id,
+  required String name,
+  String kind = 'shoe',
+  int totalDistanceM = 0,
+  int? targetDistanceM = 800000,
+  String? retiredAt,
+  bool isDefault = false,
+}) =>
+    {
+      'id': id,
+      'owner_id': 'viewer-1',
+      'kind': kind,
+      'name': name,
+      'brand': null,
+      'model': null,
+      'purchased_at': null,
+      'retired_at': retiredAt,
+      'target_distance_m': targetDistanceM,
+      'notes': null,
+      'is_default': isDefault,
+      'created_at': '2026-06-20T00:00:00.000Z',
+      'updated_at': '2026-06-20T00:00:00.000Z',
+      'total_distance_m': totalDistanceM,
+      'run_count': 0,
+    };
+
 class _RotApi extends ApiClient {
-  _RotApi({List<GearRotationWithMembers>? seed})
-      : _rows = List.of(seed ?? const []);
+  _RotApi({List<GearRotationWithMembers>? seed, List<Map<String, dynamic>>? gear})
+      : _rows = List.of(seed ?? const []),
+        _gearRows = List.of(gear ?? const []);
 
   final List<GearRotationWithMembers> _rows;
+  final List<Map<String, dynamic>> _gearRows;
   int createCalls = 0;
   int deleteCalls = 0;
   String? lastCreateName;
   String? lastSetRotationId;
   List<String>? lastSetMembers;
+  String? lastDefaultGearId;
+  String? lastDefaultKind;
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchMyGearWithDistance() async =>
+      List.of(_gearRows);
+
+  @override
+  Future<void> setDefaultGear(String? gearId, String kind) async {
+    lastDefaultGearId = gearId;
+    lastDefaultKind = kind;
+    for (final g in _gearRows) {
+      if (g['kind'] == kind) g['is_default'] = g['id'] == gearId;
+    }
+  }
 
   @override
   String? get userId => 'viewer-1';
@@ -184,6 +228,114 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump();
       expect(api.deleteCalls, 1);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the least-worn in-service pair is offered as next up',
+      (tester) async {
+    final f = await _setup('nextup');
+    final gear = [
+      _gear(id: 'g1', name: 'Pegasus', totalDistanceM: 600000, isDefault: true),
+      _gear(id: 'g2', name: 'Ghost', totalDistanceM: 100000),
+    ];
+    await tester.runAsync(() => f.store.replaceFromServer(gear));
+    final api = _RotApi(
+        seed: [_rot(gearIds: ['g1', 'g2'])], gear: gear);
+    try {
+      await _pump(tester, _app(api, f.store));
+      expect(find.text('Next up: Ghost'), findsOneWidget);
+      expect(find.text('Least worn in this rotation.'), findsOneWidget);
+      expect(find.text('Make current'), findsOneWidget);
+      expect(find.text('Already the current pair.'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('Make current moves the star onto the picked pair',
+      (tester) async {
+    final f = await _setup('makecurrent');
+    final gear = [
+      _gear(id: 'g1', name: 'Pegasus', totalDistanceM: 600000, isDefault: true),
+      _gear(id: 'g2', name: 'Ghost', totalDistanceM: 100000),
+    ];
+    await tester.runAsync(() => f.store.replaceFromServer(gear));
+    final api = _RotApi(
+        seed: [_rot(gearIds: ['g1', 'g2'])], gear: gear);
+    try {
+      await _pump(tester, _app(api, f.store));
+      await tester.tap(find.text('Make current'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(api.lastDefaultGearId, 'g2');
+      expect(api.lastDefaultKind, 'shoe');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a pick that already holds the star offers no move',
+      (tester) async {
+    final f = await _setup('iscurrent');
+    final gear = [
+      _gear(id: 'g1', name: 'Pegasus', totalDistanceM: 600000),
+      _gear(id: 'g2', name: 'Ghost', totalDistanceM: 100000, isDefault: true),
+    ];
+    await tester.runAsync(() => f.store.replaceFromServer(gear));
+    try {
+      await _pump(
+        tester,
+        _app(_RotApi(seed: [_rot(gearIds: ['g1', 'g2'])], gear: gear), f.store),
+      );
+      expect(find.text('Next up: Ghost'), findsOneWidget);
+      expect(find.text('Already the current pair.'), findsOneWidget);
+      expect(find.text('Make current'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('one live pair beside a retired one is not a rotation to choose from',
+      (tester) async {
+    final f = await _setup('retired');
+    final gear = [
+      _gear(id: 'g1', name: 'Pegasus', totalDistanceM: 100000),
+      _gear(
+          id: 'g2',
+          name: 'Ghost',
+          totalDistanceM: 600000,
+          retiredAt: '2026-01-01'),
+    ];
+    await tester.runAsync(() => f.store.replaceFromServer(gear));
+    try {
+      await _pump(
+        tester,
+        _app(_RotApi(seed: [_rot(gearIds: ['g1', 'g2'])], gear: gear), f.store),
+      );
+      expect(find.textContaining('Next up:'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a rotation whose every pair is worn says so', (tester) async {
+    final f = await _setup('allworn');
+    final gear = [
+      _gear(id: 'g1', name: 'Pegasus', totalDistanceM: 1200000),
+      _gear(id: 'g2', name: 'Ghost', totalDistanceM: 850000),
+    ];
+    await tester.runAsync(() => f.store.replaceFromServer(gear));
+    try {
+      await _pump(
+        tester,
+        _app(_RotApi(seed: [_rot(gearIds: ['g1', 'g2'])], gear: gear), f.store),
+      );
+      expect(find.text('Next up: Ghost'), findsOneWidget);
+      expect(
+          find.text('Every pair here is at or past its replacement target.'),
+          findsOneWidget);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

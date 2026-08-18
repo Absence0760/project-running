@@ -3515,6 +3515,27 @@ class ApiClient {
     await updateGear(id, clearRetiredAt: true);
   }
 
+  /// Mark this gear as the user's current default for its kind. Unsets
+  /// any sibling (same owner + same kind) first so the partial-unique
+  /// constraint `(owner_id, kind) where is_default and not retired`
+  /// never trips. Pass null to clear the default for this kind entirely.
+  /// Mirrors the web's `setDefaultGear`.
+  Future<void> setDefaultGear(String? gearId, String kind) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    await _client
+        .from(GearRow.table)
+        .update({GearRow.colIsDefault: false})
+        .eq(GearRow.colOwnerId, viewerId)
+        .eq(GearRow.colKind, kind)
+        .eq(GearRow.colIsDefault, true);
+    if (gearId != null) {
+      await _client
+          .from(GearRow.table)
+          .update({GearRow.colIsDefault: true}).eq(GearRow.colId, gearId);
+    }
+  }
+
   /// Hard-delete a gear row (cascades to `run_gear` rows pointing at
   /// it). Surface this only behind a confirm dialog — historical
   /// mileage on past runs drops with the cascade.
