@@ -307,6 +307,72 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count actividades no se importaron',
+      one: '1 actividad no se importó',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Vuelve a ejecutar la importación para reintentarlas: lo que ya se importó se omite, así que no se duplica nada.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'No se registraron $count fallos adicionales.',
+      one: 'No se registró 1 fallo adicional.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Ver cada actividad';
+
+  @override
+  String get importFailuresShare => 'Compartir informe (CSV)';
+
+  @override
+  String get importFailuresShareFailed => 'No se pudo compartir el informe.';
+
+  @override
+  String get importFailuresDismiss => 'Descartar';
+
+  @override
+  String get importFailuresNoDate => 'Fecha desconocida';
+
+  @override
+  String get importFailuresReasonNetwork => 'Conexión interrumpida';
+
+  @override
+  String get importFailuresReasonAuth => 'Sesión cerrada';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Límite de peticiones';
+
+  @override
+  String get importFailuresReasonTooLarge => 'Archivo demasiado grande';
+
+  @override
+  String get importFailuresReasonUnparseable => 'No se pudo leer el archivo';
+
+  @override
+  String get importFailuresReasonRejected => 'Rechazado por el servidor';
+
+  @override
+  String get importFailuresReasonUnknown => 'Error desconocido';
+
+  @override
+  String get importStatusCloudPushDeferred =>
+      'Guardado en este dispositivo: la subida a la nube no se completó. Se reintentará en la próxima sincronización.';
+
+  @override
   String get importHealthSubtitleIos =>
       'Importa los entrenamientos que has registrado en Apple Watch, Nike Run Club, Strava y otras apps que escriben en Apple Salud';
 

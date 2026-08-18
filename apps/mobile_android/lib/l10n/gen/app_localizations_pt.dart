@@ -306,6 +306,74 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades não foram importadas',
+      one: '1 atividade não foi importada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Volte a executar a importação para tentar novamente — o que já entrou é ignorado, por isso nada é duplicado.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mais $count falhas não foram registadas.',
+      one: 'Mais 1 falha não foi registada.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Ver cada atividade';
+
+  @override
+  String get importFailuresShare => 'Partilhar relatório (CSV)';
+
+  @override
+  String get importFailuresShareFailed =>
+      'Não foi possível partilhar o relatório.';
+
+  @override
+  String get importFailuresDismiss => 'Dispensar';
+
+  @override
+  String get importFailuresNoDate => 'Data desconhecida';
+
+  @override
+  String get importFailuresReasonNetwork => 'Ligação interrompida';
+
+  @override
+  String get importFailuresReasonAuth => 'Sessão terminada';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Limite de pedidos';
+
+  @override
+  String get importFailuresReasonTooLarge => 'Ficheiro demasiado grande';
+
+  @override
+  String get importFailuresReasonUnparseable =>
+      'Não foi possível ler o ficheiro';
+
+  @override
+  String get importFailuresReasonRejected => 'Recusado pelo servidor';
+
+  @override
+  String get importFailuresReasonUnknown => 'Erro desconhecido';
+
+  @override
+  String get importStatusCloudPushDeferred =>
+      'Guardado neste dispositivo — o envio para a nuvem não foi concluído. Será tentado novamente na próxima sincronização.';
+
+  @override
   String get importHealthSubtitleIos =>
       'Importe treinos gravados no Apple Watch, Nike Run Club, Strava e outros apps que gravam no Apple Saúde';
 
@@ -13107,6 +13175,74 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String importErrorsMore(Object count) {
     return '... e mais $count';
   }
+
+  @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades não foram importadas',
+      one: '1 atividade não foi importada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Refaça a importação para tentar de novo — o que já entrou é ignorado, então nada é duplicado.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mais $count falhas não foram registradas.',
+      one: 'Mais 1 falha não foi registrada.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Ver cada atividade';
+
+  @override
+  String get importFailuresShare => 'Compartilhar relatório (CSV)';
+
+  @override
+  String get importFailuresShareFailed =>
+      'Não foi possível compartilhar o relatório.';
+
+  @override
+  String get importFailuresDismiss => 'Dispensar';
+
+  @override
+  String get importFailuresNoDate => 'Data desconhecida';
+
+  @override
+  String get importFailuresReasonNetwork => 'Conexão interrompida';
+
+  @override
+  String get importFailuresReasonAuth => 'Sessão encerrada';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Limite de requisições';
+
+  @override
+  String get importFailuresReasonTooLarge => 'Arquivo grande demais';
+
+  @override
+  String get importFailuresReasonUnparseable =>
+      'Não foi possível ler o arquivo';
+
+  @override
+  String get importFailuresReasonRejected => 'Recusado pelo servidor';
+
+  @override
+  String get importFailuresReasonUnknown => 'Erro desconhecido';
+
+  @override
+  String get importStatusCloudPushDeferred =>
+      'Salvo neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.';
 
   @override
   String get importHealthSubtitleIos =>

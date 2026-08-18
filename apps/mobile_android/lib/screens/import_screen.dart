@@ -10,12 +10,14 @@ import '../backup.dart';
 import '../cross_source_dedup.dart';
 import '../csv_run_importer.dart';
 import '../health_connect_importer.dart';
+import '../import_failures.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import '../strava_importer.dart';
+import '../widgets/import_failure_report.dart';
 
 /// Build the post-import status line. Appends a no-route note when the batch
 /// came in without any GPS geometry, so a map-less run detail reads as
@@ -73,7 +75,15 @@ class _ImportScreenState extends State<ImportScreen> {
   String _status = '';
   int _imported = 0;
   int _total = 0;
+  // Warnings from the backup-ZIP restore, which reports whole-archive
+  // problems rather than per-activity ones.
   List<String> _errors = [];
+  ImportFailureLog _failures = newImportFailureLog();
+  String _failureProvider = '';
+  // A local save succeeded but the batch push to the cloud threw, so the
+  // runs exist only on this device until the next sync. Reporting the
+  // import as a plain success hid that entirely.
+  bool _cloudPushDeferred = false;
   // Sessions the last Health Connect import found a route for but wasn't
   // allowed to read. Drives the route-permission offer — the runner is never
   // shown it speculatively, only once there are maps behind it.
@@ -89,6 +99,8 @@ class _ImportScreenState extends State<ImportScreen> {
       _imported = 0;
       _total = 0;
       _errors = [];
+      _failures = newImportFailureLog();
+      _cloudPushDeferred = false;
     });
 
     try {
@@ -118,6 +130,8 @@ class _ImportScreenState extends State<ImportScreen> {
       await _saveImportedRuns(
         runs,
         label: _healthLabel,
+        provider: 'health',
+        failures: imported.failures,
         noGpsNote: runs.every((r) => r.track.isEmpty) &&
             imported.withheldSessionIds.isEmpty,
       );
@@ -145,6 +159,8 @@ class _ImportScreenState extends State<ImportScreen> {
       _busy = true;
       _status = l10n.importHealthRoutesRequesting;
       _errors = [];
+      _failures = newImportFailureLog();
+      _cloudPushDeferred = false;
     });
 
     final granted =
@@ -241,15 +257,22 @@ class _ImportScreenState extends State<ImportScreen> {
 
   /// Common save loop used by both Strava and Health Connect imports.
   /// Saves each run locally, then batch-pushes to the cloud if signed in.
-  Future<void> _saveImportedRuns(List<Run> runs,
-      {required String label, bool noGpsNote = false}) async {
+  /// [failures] carries whatever the parse stage already recorded, so the
+  /// report is one list rather than a parse list plus a save list.
+  Future<void> _saveImportedRuns(
+    List<Run> runs, {
+    required String label,
+    required String provider,
+    ImportFailureLog? failures,
+    bool noGpsNote = false,
+  }) async {
     final l10n = AppLocalizations.of(context);
     setState(() {
       _total = runs.length;
       _status = l10n.importStatusSavingLocally;
     });
 
-    final localErrors = <StravaImportError>[];
+    final log = failures ?? newImportFailureLog();
     final savedRuns = <Run>[];
     // Persona-hunt Round 2 #3: cross-source dedup. The store's
     // existing runs include any prior Strava + Garmin ZIP imports;
@@ -280,7 +303,13 @@ class _ImportScreenState extends State<ImportScreen> {
         // The resident instance, not our own copy — see markManySynced.
         savedRuns.add(await widget.runStore.save(run));
       } catch (e) {
-        localErrors.add(StravaImportError(run.id, e.toString()));
+        debugPrint('Import: local save failed for ${run.id}: $e');
+        recordImportFailure(
+          log,
+          name: run.metadata?[MetadataKeys.title]?.toString() ?? '',
+          startedAt: run.startedAt.toUtc().toIso8601String(),
+          error: e,
+        );
       }
       if (mounted) {
         setState(() {
@@ -292,6 +321,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
     final api = widget.apiClient;
     final canSync = api != null && api.userId != null;
+    var pushDeferred = false;
     if (canSync && savedRuns.isNotEmpty) {
       if (mounted) setState(() => _status = l10n.importStatusSyncingToCloud);
       try {
@@ -310,17 +340,22 @@ class _ImportScreenState extends State<ImportScreen> {
           savedRuns.where((r) => !failed.contains(r.id)),
         );
       } catch (e) {
+        // The runs are on disk; only the upload failed, and SyncService
+        // retries it. Say so instead of reporting a clean import.
         debugPrint('Batch cloud push failed: $e');
+        pushDeferred = true;
       }
     }
 
     if (!mounted) return;
     setState(() {
       _busy = false;
-      _errors = localErrors.map((e) => '${e.filename}: ${e.message}').toList();
+      _failures = log;
+      _failureProvider = provider;
+      _cloudPushDeferred = pushDeferred;
       _status = buildImportStatus(
         savedCount: savedRuns.length,
-        errorCount: localErrors.length,
+        errorCount: log.total,
         label: label,
         noGpsNote: noGpsNote,
         l10n: l10n,
@@ -345,17 +380,19 @@ class _ImportScreenState extends State<ImportScreen> {
       _imported = 0;
       _total = 0;
       _errors = [];
+      _failures = newImportFailureLog();
+      _cloudPushDeferred = false;
     });
 
     try {
       final content = await File(path).readAsString();
       final parsed = CsvRunImporter.parse(content);
-      final preErrors =
-          parsed.errors.map((e) => e.toString()).toList();
-      await _saveImportedRuns(parsed.runs, label: 'CSV');
-      if (mounted && preErrors.isNotEmpty) {
-        setState(() => _errors = [...preErrors, ..._errors]);
-      }
+      await _saveImportedRuns(
+        parsed.runs,
+        label: 'CSV',
+        provider: 'csv',
+        failures: parsed.failures,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -382,6 +419,8 @@ class _ImportScreenState extends State<ImportScreen> {
       _imported = 0;
       _total = 0;
       _errors = [];
+      _failures = newImportFailureLog();
+      _cloudPushDeferred = false;
     });
 
     try {
@@ -421,18 +460,19 @@ class _ImportScreenState extends State<ImportScreen> {
       _imported = 0;
       _total = 0;
       _errors = [];
+      _failures = newImportFailureLog();
+      _cloudPushDeferred = false;
     });
 
     try {
       final file = File(result.files.first.path!);
       final parsed = await StravaImporter.importFromZip(file);
-      final preErrors = parsed.errors
-          .map((e) => '${e.filename}: ${e.message}')
-          .toList();
-      await _saveImportedRuns(parsed.runs, label: 'Strava');
-      if (mounted && preErrors.isNotEmpty) {
-        setState(() => _errors = [...preErrors, ..._errors]);
-      }
+      await _saveImportedRuns(
+        parsed.runs,
+        label: 'Strava',
+        provider: 'strava',
+        failures: parsed.failures,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -742,6 +782,16 @@ class _ImportScreenState extends State<ImportScreen> {
                       const SizedBox(height: 12),
                       ProgressBar(value: _imported / _total),
                     ],
+                    if (!_busy && _cloudPushDeferred) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.importStatusCloudPushDeferred,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                     if (_errors.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       const Divider(),
@@ -765,6 +815,15 @@ class _ImportScreenState extends State<ImportScreen> {
                   ],
                 ),
               ),
+            ),
+          ],
+          if (!_busy && _failures.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            ImportFailureReport(
+              log: _failures,
+              provider: _failureProvider,
+              onDismiss: () =>
+                  setState(() => _failures = newImportFailureLog()),
             ),
           ],
         ],

@@ -305,6 +305,72 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count activities didn\'t import',
+      one: '1 activity didn\'t import',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Re-run the import to retry these — anything that already landed is skipped, so nothing is duplicated.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count further failures were not recorded.',
+      one: '1 further failure was not recorded.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Show each activity';
+
+  @override
+  String get importFailuresShare => 'Share report (CSV)';
+
+  @override
+  String get importFailuresShareFailed => 'Could not share the report.';
+
+  @override
+  String get importFailuresDismiss => 'Dismiss';
+
+  @override
+  String get importFailuresNoDate => 'Date unknown';
+
+  @override
+  String get importFailuresReasonNetwork => 'Connection dropped';
+
+  @override
+  String get importFailuresReasonAuth => 'Signed out';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Rate limited';
+
+  @override
+  String get importFailuresReasonTooLarge => 'File too large';
+
+  @override
+  String get importFailuresReasonUnparseable => 'File could not be read';
+
+  @override
+  String get importFailuresReasonRejected => 'Rejected by the server';
+
+  @override
+  String get importFailuresReasonUnknown => 'Unknown error';
+
+  @override
+  String get importStatusCloudPushDeferred =>
+      'Saved on this device — the upload to the cloud didn\'t go through. It will retry on the next sync.';
+
+  @override
   String get importHealthSubtitleIos =>
       'Pull workouts you\'ve recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health';
 

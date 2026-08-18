@@ -10,6 +10,7 @@ import 'package:gpx_parser/gpx_parser.dart';
 import 'package:uuid/uuid.dart';
 
 import 'embedded_bests.dart';
+import 'import_failures.dart';
 import 'imported_run_id.dart';
 
 /// Parse a Strava-formatted activity date string into a [DateTime].
@@ -111,8 +112,10 @@ class StravaImporter {
   static const _uuid = Uuid();
 
   /// Read and parse a Strava export zip from disk.
-  /// Returns the runs that could be successfully extracted, plus a list of
-  /// any per-file errors so the UI can show "imported X of Y" messaging.
+  /// Returns the runs that could be successfully extracted, plus a
+  /// classified [ImportFailureLog] naming each activity that did not make
+  /// it and why — a bare count can't tell a migrant whether re-running the
+  /// import will land the missing runs or never will.
   ///
   /// Heavy lifting (ZipDecoder + per-file XML/FIT parsing) runs in a
   /// background isolate via [compute] so the UI thread stays free during
@@ -154,7 +157,9 @@ class StravaImporter {
 
     final csvText = utf8.decode(csvFile.content);
     final rows = const CsvDecoder().convert(csvText);
-    if (rows.isEmpty) return StravaImportResult([], []);
+    if (rows.isEmpty) {
+      return StravaImportResult(const [], newImportFailureLog());
+    }
 
     final header = rows.first.map((c) => c.toString().toLowerCase()).toList();
     final idIdx = header.indexOf('activity id');
@@ -171,7 +176,7 @@ class StravaImporter {
     final byPath = {for (final f in archive.files) f.name: f};
 
     final runs = <Run>[];
-    final errors = <StravaImportError>[];
+    final failures = newImportFailureLog();
 
     for (var i = 1; i < rows.length; i++) {
       final row = rows[i];
@@ -179,10 +184,17 @@ class StravaImporter {
       final filename = row[filenameIdx].toString();
       if (filename.isEmpty) continue;
 
+      // Read outside the try so a row that throws is still reported under
+      // the name and date the runner will recognise, not under the opaque
+      // archive path. Bounds-checked: a short row must record a failure,
+      // never throw past the per-row catch and abort the whole import.
+      final dateStr = dateIdx < row.length ? row[dateIdx].toString() : '';
+      final name = (nameIdx >= 0 && nameIdx < row.length)
+          ? row[nameIdx].toString()
+          : 'Strava activity';
+
       try {
         final activityId = idIdx >= 0 ? row[idIdx].toString() : _uuid.v4();
-        final dateStr = row[dateIdx].toString();
-        final name = nameIdx >= 0 ? row[nameIdx].toString() : 'Strava activity';
         final typeStr = typeIdx >= 0 ? row[typeIdx].toString() : 'Run';
         final csvElapsed = elapsedIdx >= 0
             ? int.tryParse(row[elapsedIdx].toString()) ?? 0
@@ -200,11 +212,16 @@ class StravaImporter {
         );
         runs.add(run);
       } catch (e) {
-        errors.add(StravaImportError(filename, e.toString()));
+        recordImportFailure(
+          failures,
+          name: name,
+          startedAt: parseStravaDate(dateStr)?.toIso8601String(),
+          error: e,
+        );
       }
     }
 
-    return StravaImportResult(runs, errors);
+    return StravaImportResult(runs, failures);
   }
 
   static Run _parseTrackFile({
@@ -325,12 +342,6 @@ class StravaImporter {
 
 class StravaImportResult {
   final List<Run> runs;
-  final List<StravaImportError> errors;
-  const StravaImportResult(this.runs, this.errors);
-}
-
-class StravaImportError {
-  final String filename;
-  final String message;
-  const StravaImportError(this.filename, this.message);
+  final ImportFailureLog failures;
+  const StravaImportResult(this.runs, this.failures);
 }

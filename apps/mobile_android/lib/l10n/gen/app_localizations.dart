@@ -575,6 +575,102 @@ abstract class AppLocalizations {
   /// **'... and {count} more'**
   String importErrorsMore(Object count);
 
+  /// Heading above the import failure report, counting the activities that did not import
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 activity didn\'t import} other{{count} activities didn\'t import}}'**
+  String importFailuresHeading(int count);
+
+  /// Explains that re-running the import retries the failures without duplicating
+  ///
+  /// In en, this message translates to:
+  /// **'Re-run the import to retry these — anything that already landed is skipped, so nothing is duplicated.'**
+  String get importFailuresIntro;
+
+  /// Shown when the failure log hit its recording cap
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 further failure was not recorded.} other{{count} further failures were not recorded.}}'**
+  String importFailuresTruncated(int count);
+
+  /// Expander label revealing each failed activity
+  ///
+  /// In en, this message translates to:
+  /// **'Show each activity'**
+  String get importFailuresShowDetail;
+
+  /// Button that shares the failure report as a CSV file
+  ///
+  /// In en, this message translates to:
+  /// **'Share report (CSV)'**
+  String get importFailuresShare;
+
+  /// Banner when sharing the failure report CSV failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not share the report.'**
+  String get importFailuresShareFailed;
+
+  /// Button that hides the import failure report
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get importFailuresDismiss;
+
+  /// Placeholder when a failed activity has no known start date
+  ///
+  /// In en, this message translates to:
+  /// **'Date unknown'**
+  String get importFailuresNoDate;
+
+  /// Import failure reason: the connection dropped
+  ///
+  /// In en, this message translates to:
+  /// **'Connection dropped'**
+  String get importFailuresReasonNetwork;
+
+  /// Import failure reason: the session was signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out'**
+  String get importFailuresReasonAuth;
+
+  /// Import failure reason: rate limited
+  ///
+  /// In en, this message translates to:
+  /// **'Rate limited'**
+  String get importFailuresReasonRateLimited;
+
+  /// Import failure reason: the file was too large
+  ///
+  /// In en, this message translates to:
+  /// **'File too large'**
+  String get importFailuresReasonTooLarge;
+
+  /// Import failure reason: the file could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'File could not be read'**
+  String get importFailuresReasonUnparseable;
+
+  /// Import failure reason: the server refused the write
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected by the server'**
+  String get importFailuresReasonRejected;
+
+  /// Import failure reason: unrecognised error
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown error'**
+  String get importFailuresReasonUnknown;
+
+  /// Shown when imported runs saved locally but the upload to the cloud failed
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this device — the upload to the cloud didn\'t go through. It will retry on the next sync.'**
+  String get importStatusCloudPushDeferred;
+
   /// iOS subtitle naming apps that write to Apple Health
   ///
   /// In en, this message translates to:
