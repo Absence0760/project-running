@@ -7924,6 +7924,18 @@ abstract class AppLocalizations {
   /// **'{p}% of route'**
   String liveSpectatorCourseProgress(int p);
 
+  /// Spectator chip: the runner is still pinging but has not left this spot for n minutes
+  ///
+  /// In en, this message translates to:
+  /// **'Not moving — {n} min in the same spot'**
+  String liveSpectatorMotionStopped(int n);
+
+  /// Same chip when the stop reaches the start of the observed window, so n is a floor
+  ///
+  /// In en, this message translates to:
+  /// **'Not moving — at least {n} min in the same spot'**
+  String liveSpectatorMotionStoppedAtLeast(int n);
+
   /// Heading of the spectator conclusion card shown when the broadcast has concluded
   ///
   /// In en, this message translates to:
@@ -18475,6 +18487,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'carry {gels} gels · {fluid} ml'**
   String roadbookCarryHint(String gels, String fluid);
+
+  /// Label on the roadbook target-time verdict chip
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get roadbookColTarget;
+
+  /// Roadbook target verdict: the projection is ahead of the planned time
+  ///
+  /// In en, this message translates to:
+  /// **'ahead'**
+  String get roadbookTargetAhead;
+
+  /// Roadbook target verdict: the projection is within the on-schedule band
+  ///
+  /// In en, this message translates to:
+  /// **'on plan'**
+  String get roadbookTargetOn;
+
+  /// Roadbook target verdict: the projection is behind the planned time
+  ///
+  /// In en, this message translates to:
+  /// **'behind'**
+  String get roadbookTargetBehind;
 
   /// Organiser action on event detail opening the aid-station check-in screen
   ///

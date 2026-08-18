@@ -394,15 +394,19 @@ matters most.
   It now relabels to "When last seen" when `isStale` — the number is a real
   fact about the last sighting and is worth keeping, but not under a label that
   reads as current.
-- **Surface.** `/live/[id]` only. No new data reaches an anonymous viewer: the
-  readout is derived from the `distance_m` + `at` fields the page already
-  renders as the trace and the stat strip, and the position itself still comes
-  through the existing privacy-zone clipping. Pinned by
-  `apps/web/tests-e2e/live/motion.spec.ts` (4) + 18 unit tests.
-- **No Dart twin, deliberately.** The Flutter `live_spectator_screen` renders
-  the same pings but has no motion readout, so a twin would be a helper with no
-  caller — dead code the parity guard would police forever. `live_motion` is
-  **not** a registered parity pair; the mobile mirror is tracked as a follow-up.
+- **Surface.** `/live/[id]` on web, `live_spectator_screen.dart` on mobile. No
+  new data reaches an anonymous viewer: the readout is derived from the
+  `distance_m` + `at` fields both surfaces already render as the trace and the
+  stat strip, and the position itself still comes through the existing
+  privacy-zone clipping. Pinned by `apps/web/tests-e2e/live/motion.spec.ts` (4)
+  + 18 unit tests web, 18 mirror unit tests + 4 widget tests on mobile.
+- **Registered parity pair** (`safety/live_motion.ts` ↔ `live_motion.dart`).
+  The mobile buffer is stamped from each ping's own `at` clock, never the
+  device's, so a backlog replayed on hydrate cannot land as a burst of "now"
+  and collapse an hour of history into a few seconds. The Dart `atMs` is an
+  `int` epoch-ms rather than web's `number`, so the non-finite guard covers
+  only the odometer on that side — an idiomatic shape difference, not a
+  divergence.
 
 ## Off-route → auto-notify trusted contact (feature D, 2026-07-13, ADR §241)
 

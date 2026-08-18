@@ -16,6 +16,7 @@ import 'package:ui_kit/ui_kit.dart'
 import '../l10n/gen/app_localizations.dart';
 import '../live_cutoff_eta.dart';
 import '../live_freshness.dart';
+import '../live_motion.dart';
 import '../preferences.dart';
 import '../roadbook.dart';
 import '../route_geometry.dart';
@@ -97,6 +98,18 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   ({double lat, double lng})? _latestPos;
   final List<({double distanceM, int elapsedS})> _recentSamples = [];
   static const int _paceWindow = 5;
+
+  // Two windows over one stream, deliberately different lengths: pace is the
+  // last handful of pings (a live number the cut-off ETA projects from),
+  // motion needs an hour to state how long a runner has been standing in the
+  // same place. Held for that hour so a long stop can be stated as a figure
+  // rather than a floor, and hard-capped so a dense backlog replay can't grow
+  // it without bound — a cadence fast enough to hit the cap just shortens the
+  // held span, which `motionFor` then reports as an "at least" floor rather
+  // than a wrong figure.
+  final List<MotionSample> _motionSamples = [];
+  static const int _motionBufferMs = 60 * 60 * 1000;
+  static const int _motionBufferMax = 1000;
 
   @override
   void initState() {
@@ -279,6 +292,15 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       _recentSamples.add((distanceM: dist, elapsedS: elapsed));
       if (_recentSamples.length > _paceWindow) _recentSamples.removeAt(0);
     }
+    // The motion window is stamped from the ping's own clock, never the
+    // device's: a backlog replayed on hydrate would otherwise land as a
+    // burst of "now" and collapse an hour of history into a few seconds.
+    if (dist != null && parsedAt != null) {
+      final atMs = parsedAt.toUtc().millisecondsSinceEpoch;
+      _motionSamples.add(MotionSample(distanceM: dist, atMs: atMs));
+      if (_motionSamples.length > _motionBufferMax) _motionSamples.removeAt(0);
+      _motionSamples.removeWhere((s) => s.atMs < atMs - _motionBufferMs);
+    }
   }
 
   /// Average pace over the recent-samples buffer (oldest→newest), in
@@ -315,6 +337,17 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       stale: stale,
     );
     return eta.checkpoint == null ? null : eta;
+  }
+
+  /// Is the runner we can see actually moving? A runner still pinging from
+  /// the same spot renders as a fresh Live dot and, because the pace delta is
+  /// zero, drops the recent-pace tile entirely — so "not moving" and "no data"
+  /// looked the same. State it instead. `stale` suppresses the claim (the
+  /// helper returns [MotionState.unknown]) rather than reporting stillness off
+  /// pings that predate the dropout.
+  LiveMotion? _motion(bool stale) {
+    if (_status != 'live') return null;
+    return motionFor(samples: _motionSamples, stale: stale);
   }
 
   /// Course progress (0..1) along a linked route, or null when there's no
@@ -386,6 +419,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
     // A concluded run has no "next" cut-off — the projection would be a
     // live claim about a runner who has already stopped.
     final cutoff = terminal ? null : _cutoffEta(stale, fresh?.ageMs);
+    final motion = terminal ? null : _motion(stale);
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.liveSpectatorTitle),
@@ -514,6 +548,35 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                                 ),
                             ],
                           ),
+                          if (motion?.state == MotionState.stopped &&
+                              motion?.stoppedForMs != null) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              key: const Key('motion-stopped'),
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.pause_circle_outline,
+                                    size: 18,
+                                    color: theme.colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    motion!.atLeast
+                                        ? l10n.liveSpectatorMotionStoppedAtLeast(
+                                            motion.stoppedForMs! ~/ 60000)
+                                        : l10n.liveSpectatorMotionStopped(
+                                            motion.stoppedForMs! ~/ 60000),
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color:
+                                          theme.colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           if (_status == 'live' &&
                               _courseProgressPct != null) ...[
                             const SizedBox(height: 16),

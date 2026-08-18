@@ -4499,6 +4499,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return '動きなし — 同じ地点に$n分';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return '動きなし — 同じ地点に少なくとも$n分';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'ランが完了しました';
 
   @override
@@ -10591,6 +10601,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String roadbookCarryHint(String gels, String fluid) {
     return '携行: ジェル $gels 個 · $fluid ml';
   }
+
+  @override
+  String get roadbookColTarget => '目標';
+
+  @override
+  String get roadbookTargetAhead => '前倒し';
+
+  @override
+  String get roadbookTargetOn => '予定どおり';
+
+  @override
+  String get roadbookTargetBehind => '遅れ';
 
   @override
   String get checkpointCheckinAction => 'チェックポイント受付';

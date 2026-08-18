@@ -399,7 +399,11 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
       final arrival = _elapsedLabel(leg.projectedElapsedS) +
           (leg.projectedClockMin != null ? ' (${_clockLabel(leg.projectedClockMin!)})' : '');
       final cut = leg.cutoff != null ? '  ⏱ ${_marginLabel(leg.cutoff!.marginS)}' : '';
-      lines.add('${UnitFormat.distance(leg.cumDistM, unit)}  $name  $arrival$cut');
+      final tgt = leg.target != null
+          ? '  ${l10n.roadbookColTarget} ${_elapsedLabel(leg.target!.targetElapsedS.toDouble())}'
+              ' ${_marginLabel(leg.target!.marginS)} ${_targetStatusLabel(l10n, leg.target!.status)}'
+          : '';
+      lines.add('${UnitFormat.distance(leg.cumDistM, unit)}  $name  $arrival$tgt$cut');
     }
     Share.share(lines.join('\n'));
   }
@@ -534,6 +538,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
       DistanceUnit unit, FuelLeg? fuelLeg) {
     final theme = Theme.of(context);
     final cutoff = leg.cutoff;
+    final target = leg.target;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -567,24 +572,24 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                   ].join(' · '),
                   style: theme.textTheme.bodySmall,
                 ),
+                if (target != null)
+                  _verdictChip(
+                    context,
+                    key: const Key('roadbook-target'),
+                    color: _targetColor(
+                        AppSemanticColors.of(context), theme, target.status),
+                    text: '${l10n.roadbookColTarget} '
+                        '${_elapsedLabel(target.targetElapsedS.toDouble())} · '
+                        '${_marginLabel(target.marginS)} '
+                        '${_targetStatusLabel(l10n, target.status)}',
+                  ),
                 if (cutoff != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _cutoffColor(AppSemanticColors.of(context),
-                                cutoff.status)
-                            .withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
+                  _verdictChip(
+                    context,
+                    color: _cutoffColor(
+                        AppSemanticColors.of(context), cutoff.status),
+                    text:
                         '${l10n.routeMarkerKindCutoff} ${_marginLabel(cutoff.marginS)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: _cutoffColor(
-                                AppSemanticColors.of(context), cutoff.status)),
-                      ),
-                    ),
                   ),
                 if (leg.services.isNotEmpty)
                   Padding(
@@ -637,11 +642,48 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     ];
   }
 
+  Widget _verdictChip(BuildContext context,
+      {Key? key, required Color color, required String text}) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.only(top: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          text,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+        ),
+      ),
+    );
+  }
+
   Color _cutoffColor(AppSemanticColors semantic, CutoffStatus s) =>
       switch (s) {
         CutoffStatus.miss => semantic.danger,
         CutoffStatus.tight => semantic.warning,
         CutoffStatus.safe => semantic.success,
+      };
+
+  /// On-plan is deliberately neutral rather than a third alert colour: a
+  /// checkpoint inside the band is the schedule working, and colouring it
+  /// would leave nothing on the row that reads as "look here".
+  Color _targetColor(
+          AppSemanticColors semantic, ThemeData theme, TargetStatus s) =>
+      switch (s) {
+        TargetStatus.behind => semantic.danger,
+        TargetStatus.ahead => semantic.success,
+        TargetStatus.on => theme.colorScheme.onSurfaceVariant,
+      };
+
+  static String _targetStatusLabel(AppLocalizations l10n, TargetStatus s) =>
+      switch (s) {
+        TargetStatus.ahead => l10n.roadbookTargetAhead,
+        TargetStatus.on => l10n.roadbookTargetOn,
+        TargetStatus.behind => l10n.roadbookTargetBehind,
       };
 
   static String _serviceLabel(AppLocalizations l10n, String s) => switch (s) {

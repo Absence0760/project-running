@@ -4785,6 +4785,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Sem movimento — $n min no mesmo ponto';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Sem movimento — pelo menos $n min no mesmo ponto';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Corrida concluída';
 
   @override
@@ -11122,6 +11132,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String roadbookCarryHint(String gels, String fluid) {
     return 'levar $gels géis · $fluid ml';
   }
+
+  @override
+  String get roadbookColTarget => 'Meta';
+
+  @override
+  String get roadbookTargetAhead => 'adiantado';
+
+  @override
+  String get roadbookTargetOn => 'no plano';
+
+  @override
+  String get roadbookTargetBehind => 'atrasado';
 
   @override
   String get checkpointCheckinAction => 'Check-in no ponto de controlo';
@@ -17485,6 +17507,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Sem movimento — $n min no mesmo ponto';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Sem movimento — pelo menos $n min no mesmo ponto';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Corrida concluída';
 
   @override
@@ -23818,6 +23850,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String roadbookCarryHint(String gels, String fluid) {
     return 'levar $gels géis · $fluid ml';
   }
+
+  @override
+  String get roadbookColTarget => 'Meta';
+
+  @override
+  String get roadbookTargetAhead => 'adiantado';
+
+  @override
+  String get roadbookTargetOn => 'no plano';
+
+  @override
+  String get roadbookTargetBehind => 'atrasado';
 
   @override
   String get checkpointCheckinAction => 'Check-in no posto de controle';

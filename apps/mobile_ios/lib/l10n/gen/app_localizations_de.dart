@@ -4794,6 +4794,16 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Keine Bewegung — $n Min. an derselben Stelle';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Keine Bewegung — mindestens $n Min. an derselben Stelle';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Lauf beendet';
 
   @override
@@ -11135,6 +11145,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String roadbookCarryHint(String gels, String fluid) {
     return 'mitnehmen: $gels Gels · $fluid ml';
   }
+
+  @override
+  String get roadbookColTarget => 'Zielzeit';
+
+  @override
+  String get roadbookTargetAhead => 'voraus';
+
+  @override
+  String get roadbookTargetOn => 'im Plan';
+
+  @override
+  String get roadbookTargetBehind => 'zurück';
 
   @override
   String get checkpointCheckinAction => 'Checkpoint-Check-in';

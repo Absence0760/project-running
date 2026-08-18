@@ -6435,6 +6435,20 @@
       "p": { "type": "int" }
     }
   },
+  "liveSpectatorMotionStopped": "Not moving — {n} min in the same spot",
+  "@liveSpectatorMotionStopped": {
+    "description": "Spectator chip: the runner is still pinging but has not left this spot for n minutes",
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "liveSpectatorMotionStoppedAtLeast": "Not moving — at least {n} min in the same spot",
+  "@liveSpectatorMotionStoppedAtLeast": {
+    "description": "Same chip when the stop reaches the start of the observed window, so n is a floor",
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
   "liveSpectatorConcludedTitle": "Run complete",
   "@liveSpectatorConcludedTitle": {
     "description": "Heading of the spectator conclusion card shown when the broadcast has concluded"
@@ -14503,6 +14517,22 @@
         "type": "String"
       }
     }
+  },
+  "roadbookColTarget": "Target",
+  "@roadbookColTarget": {
+    "description": "Label on the roadbook target-time verdict chip"
+  },
+  "roadbookTargetAhead": "ahead",
+  "@roadbookTargetAhead": {
+    "description": "Roadbook target verdict: the projection is ahead of the planned time"
+  },
+  "roadbookTargetOn": "on plan",
+  "@roadbookTargetOn": {
+    "description": "Roadbook target verdict: the projection is within the on-schedule band"
+  },
+  "roadbookTargetBehind": "behind",
+  "@roadbookTargetBehind": {
+    "description": "Roadbook target verdict: the projection is behind the planned time"
   },
   "checkpointCheckinAction": "Checkpoint check-in",
   "@checkpointCheckinAction": {
