@@ -10065,6 +10065,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionTitle => 'Nutrition';
 
   @override
+  String get nutritionDayNavLabel => 'Diary day';
+
+  @override
+  String get nutritionDayPrevious => 'Previous day';
+
+  @override
+  String get nutritionDayNext => 'Next day';
+
+  @override
+  String get nutritionDayToday => 'Today';
+
+  @override
+  String get nutritionDayYesterday => 'Yesterday';
+
+  @override
+  String get nutritionDayBackfillHint =>
+      'Anything you log here is added to this day.';
+
+  @override
+  String get nutritionDayEmptyPast => 'Nothing logged on this day.';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return 'Goal $base + $exercise kcal burned that day';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '7 days to $date';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return 'Log food — $date';
+  }
+
+  @override
   String get nutritionLogFood => 'Log food';
 
   @override

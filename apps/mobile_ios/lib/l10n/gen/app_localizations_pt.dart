@@ -10171,6 +10171,43 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionTitle => 'Nutrição';
 
   @override
+  String get nutritionDayNavLabel => 'Dia do diário';
+
+  @override
+  String get nutritionDayPrevious => 'Dia anterior';
+
+  @override
+  String get nutritionDayNext => 'Próximo dia';
+
+  @override
+  String get nutritionDayToday => 'Hoje';
+
+  @override
+  String get nutritionDayYesterday => 'Ontem';
+
+  @override
+  String get nutritionDayBackfillHint =>
+      'Tudo o que você registrar aqui é adicionado a este dia.';
+
+  @override
+  String get nutritionDayEmptyPast => 'Nada registrado neste dia.';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas nesse dia';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '7 dias até $date';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return 'Registrar comida — $date';
+  }
+
+  @override
   String get nutritionLogFood => 'Registrar comida';
 
   @override
@@ -23057,6 +23094,43 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionTitle => 'Nutrição';
+
+  @override
+  String get nutritionDayNavLabel => 'Dia do diário';
+
+  @override
+  String get nutritionDayPrevious => 'Dia anterior';
+
+  @override
+  String get nutritionDayNext => 'Próximo dia';
+
+  @override
+  String get nutritionDayToday => 'Hoje';
+
+  @override
+  String get nutritionDayYesterday => 'Ontem';
+
+  @override
+  String get nutritionDayBackfillHint =>
+      'Tudo o que você registrar aqui é adicionado a este dia.';
+
+  @override
+  String get nutritionDayEmptyPast => 'Nada registrado neste dia.';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas nesse dia';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '7 dias até $date';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return 'Registrar comida — $date';
+  }
 
   @override
   String get nutritionLogFood => 'Registrar comida';

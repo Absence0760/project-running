@@ -43,6 +43,7 @@ Widget _host(
   FoodFetcher? fetcher,
   BarcodeScanner? scanner,
   String? usdaApiKey,
+  String? diaryDate,
 }) =>
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -53,6 +54,7 @@ Widget _host(
           fetcher: fetcher,
           scanner: scanner,
           usdaApiKey: usdaApiKey,
+          diaryDate: diaryDate,
         ),
       ),
     );
@@ -107,6 +109,41 @@ void main() {
       expect(e['item_name'], 'Banana');
       expect(e['meal_slot'], 'breakfast');
       expect(e['calories'], 105.0);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a diaryDate stamps the entry inside that day, not at now',
+      (tester) async {
+    // The point of the /nutrition day stepper: a composer opened while
+    // reviewing a past day must back-fill it, never silently log to today.
+    final f = await _store('manual_backfill_');
+    final now = DateTime.now();
+    final past = DateTime(now.year, now.month, now.day - 3);
+    final iso =
+        '${past.year}-${past.month.toString().padLeft(2, '0')}-${past.day.toString().padLeft(2, '0')}';
+    try {
+      await tester.pumpWidget(_host(f.store, diaryDate: iso));
+      await tester.pump();
+      await tester.tap(find.text('Enter manually'));
+      await tester.pump();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Item name'), 'Banana');
+      await tester.enterText(find.widgetWithText(TextField, 'Calories'), '105');
+      await tester.pump();
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      expect(f.store.rows, hasLength(1));
+      final at =
+          DateTime.parse(f.store.rows.first['started_at'] as String).toLocal();
+      expect(at.year, past.year);
+      expect(at.month, past.month);
+      expect(at.day, past.day);
     } finally {
       f.dir.deleteSync(recursive: true);
     }
