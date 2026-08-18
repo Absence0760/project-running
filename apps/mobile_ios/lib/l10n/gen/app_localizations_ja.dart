@@ -2190,6 +2190,52 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get runDetailPacing => 'ペース配分';
+
+  @override
+  String get runDetailPacingFirstHalf => '前半';
+
+  @override
+  String get runDetailPacingSecondHalf => '後半';
+
+  @override
+  String get runDetailPacingNegative => 'ネガティブスプリット';
+
+  @override
+  String get runDetailPacingEven => 'イーブンペース';
+
+  @override
+  String get runDetailPacingPositive => 'ポジティブスプリット';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '後半が$delta速い';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '後半が$delta遅い';
+  }
+
+  @override
+  String get runDetailPacingHeld => '前半と後半で安定したペース';
+
+  @override
+  String get runDetailPacingGapNegative => '勾配を調整すると、後半はペースを上げています。';
+
+  @override
+  String get runDetailPacingGapEven => '勾配を調整すると、前半と後半の負荷は同じでした。';
+
+  @override
+  String get runDetailPacingGapPositive => '勾配を調整すると、後半はペースが落ちています。';
+
+  @override
+  String get runDetailGapColumn => '勾配調整';
+
+  @override
+  String get runDetailGapColumnHint => '勾配調整ペースは、実際に走った起伏と同じ負荷になる平地でのペースです。';
+
+  @override
   String get runDetailSectionSegments => 'セグメント';
 
   @override

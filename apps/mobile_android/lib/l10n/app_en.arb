@@ -3034,6 +3034,72 @@
       }
     }
   },
+  "runDetailPacing": "Pacing",
+  "@runDetailPacing": {
+    "description": "Heading of the first-half vs second-half pacing card on run-detail"
+  },
+  "runDetailPacingFirstHalf": "First half",
+  "@runDetailPacingFirstHalf": {
+    "description": "Label for the first half's pace in the pacing card"
+  },
+  "runDetailPacingSecondHalf": "Second half",
+  "@runDetailPacingSecondHalf": {
+    "description": "Label for the second half's pace in the pacing card"
+  },
+  "runDetailPacingNegative": "Negative split",
+  "@runDetailPacingNegative": {
+    "description": "Verdict chip when the second half was faster than the first"
+  },
+  "runDetailPacingEven": "Even split",
+  "@runDetailPacingEven": {
+    "description": "Verdict chip when both halves were paced the same"
+  },
+  "runDetailPacingPositive": "Positive split",
+  "@runDetailPacingPositive": {
+    "description": "Verdict chip when the second half was slower than the first"
+  },
+  "runDetailPacingFaster": "{delta} faster over the second half",
+  "@runDetailPacingFaster": {
+    "description": "Pacing card summary when the second half was faster; delta is a seconds figure such as 14s",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailPacingSlower": "{delta} slower over the second half",
+  "@runDetailPacingSlower": {
+    "description": "Pacing card summary when the second half was slower; delta is a seconds figure such as 14s",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailPacingHeld": "Steady across both halves",
+  "@runDetailPacingHeld": {
+    "description": "Pacing card summary when both halves were paced the same"
+  },
+  "runDetailPacingGapNegative": "Adjusted for the terrain, you sped up over the second half.",
+  "@runDetailPacingGapNegative": {
+    "description": "Pacing card note when grade-adjusted effort rose over the second half"
+  },
+  "runDetailPacingGapEven": "Adjusted for the terrain, your effort was even across both halves.",
+  "@runDetailPacingGapEven": {
+    "description": "Pacing card note when grade-adjusted effort was even across both halves"
+  },
+  "runDetailPacingGapPositive": "Adjusted for the terrain, you slowed over the second half.",
+  "@runDetailPacingGapPositive": {
+    "description": "Pacing card note when grade-adjusted effort fell over the second half"
+  },
+  "runDetailGapColumn": "Grade-adj.",
+  "@runDetailGapColumn": {
+    "description": "Header of the grade-adjusted pace column in the splits list"
+  },
+  "runDetailGapColumnHint": "Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.",
+  "@runDetailGapColumnHint": {
+    "description": "Explanation shown under the splits list when the grade-adjusted column is visible"
+  },
   "runDetailSectionSegments": "Segments",
   "@runDetailSectionSegments": {
     "description": "Section header for the segment-efforts panel on run-detail"

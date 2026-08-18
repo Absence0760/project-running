@@ -27,6 +27,7 @@ import '../hr_zones.dart';
 import '../run_intensity.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../pace_analysis.dart';
 import '../preferences.dart';
 import '../privacy.dart';
 import '../route_simplify.dart';
@@ -176,6 +177,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   bool _gapCacheChecked = false;
   List<MapEntry<String, Duration>>? _cachedBestEfforts;
   List<_Split>? _cachedSplits;
+  PacingAnalysis? _cachedPacing;
+  bool _pacingCacheChecked = false;
+  List<int?>? _cachedSplitGap;
+  DistanceUnit? _statsCacheSplitGapUnit;
   ({int min, int max, int avg})? _cachedBpmStats;
   List<HrZoneBucket>? _cachedHrBuckets;
   bool _hrCacheChecked = false;
@@ -199,6 +204,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     _cachedBestEfforts = null;
     _cachedSplits = null;
     _statsCacheSplitsUnit = null;
+    _cachedPacing = null;
+    _pacingCacheChecked = false;
+    _cachedSplitGap = null;
+    _statsCacheSplitGapUnit = null;
     _cachedBpmStats = null;
     _cachedHrBuckets = null;
     _hrCacheChecked = false;
@@ -1997,6 +2006,60 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         .toList();
   }
 
+  /// First-half vs second-half pacing, and the same comparison on
+  /// grade-adjusted effort. Independent of the split tick length — the halves
+  /// are cut at the run's own midpoint, not at a split boundary. Cached behind
+  /// a checked-flag because null is a valid result the haversine walk
+  /// shouldn't repeat.
+  PacingAnalysis? get _pacing {
+    _resetStatsCacheIfStale();
+    if (!_pacingCacheChecked) {
+      _cachedPacing = analysePacing(run.track);
+      _pacingCacheChecked = true;
+    }
+    return _cachedPacing;
+  }
+
+  /// Grade-adjusted pace per split, aligned index-for-index with
+  /// [_splitsFor]. Every split mobile emits is exactly one tick long — the
+  /// trailing partial distance never becomes a split — so the lengths handed
+  /// over are uniform.
+  List<int?> _splitGapPacesFor(DistanceUnit unit) {
+    _resetStatsCacheIfStale();
+    if (_cachedSplitGap != null && _statsCacheSplitGapUnit == unit) {
+      return _cachedSplitGap!;
+    }
+    const metresPerMile = 1609.344;
+    final tickLength = unit == DistanceUnit.mi ? metresPerMile : 1000.0;
+    final gap = gradeAdjustedSplitPaces(
+        run.track, List.filled(_splitsFor(unit).length, tickLength));
+    _cachedSplitGap = gap;
+    _statsCacheSplitGapUnit = unit;
+    return gap;
+  }
+
+  /// Both grade-adjusted reads are gated on the same 2 s/km margin the
+  /// key-stat GAP tile uses: on flat ground GAP is the raw pace, and a column
+  /// (or a sentence) restating it is noise, not information.
+  bool _showSplitGap(DistanceUnit unit, List<_Split> splits) {
+    const metresPerMile = 1609.344;
+    final tickLength = unit == DistanceUnit.mi ? metresPerMile : 1000.0;
+    final gap = _splitGapPacesFor(unit);
+    for (var i = 0; i < splits.length; i++) {
+      final g = gap[i];
+      if (g == null) continue;
+      final raw = splits[i].duration.inSeconds / (tickLength / 1000);
+      if ((g - raw).abs() >= 2) return true;
+    }
+    return false;
+  }
+
+  bool get _showPacingGap {
+    final ga = _pacing?.gradeAdjusted;
+    if (ga == null) return false;
+    return (ga.deltaSecPerKm - _pacing!.raw.deltaSecPerKm).abs() >= 2;
+  }
+
   List<Widget> _buildSplits(
       ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     if (run.track.length < 2) {
@@ -2027,13 +2090,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     final tickLane = scaler.scale(36);
     final durationLane = scaler.scale(54);
 
+    final showGap = _showSplitGap(unit, splits);
+    final gapPaces = _splitGapPacesFor(unit);
+
     // Find fastest and slowest for highlighting + bar scaling.
     final splitSeconds = splits.map((s) => s.duration.inSeconds).toList();
     final fastestSec = splitSeconds.reduce(math.min);
     final slowestSec = splitSeconds.reduce(math.max);
     final secRange = slowestSec - fastestSec;
 
-    return splits.map((s) {
+    final rows = splits.indexed.map((entry) {
+      final (index, s) = entry;
       final sec = s.duration.inSeconds;
       final paceSecPerKm = sec / (tickLength / 1000);
       final isFastest = sec == fastestSec && secRange > 0;
@@ -2125,10 +2192,190 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 textAlign: TextAlign.end,
               ),
             ),
+            if (showGap) ...[
+              const SizedBox(width: 8),
+              SizedBox(
+                width: durationLane,
+                child: Text(
+                  gapPaces[index] == null
+                      ? '—'
+                      : UnitFormat.pace(gapPaces[index]!.toDouble(), unit),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
           ],
         ),
       );
     }).toList();
+
+    final pacing = _pacing;
+    return [
+      if (pacing != null) _buildPacingCard(theme, l10n, unit, pacing),
+      if (showGap)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+          child: Row(
+            children: [
+              const Spacer(),
+              SizedBox(
+                width: durationLane,
+                child: Text(
+                  l10n.runDetailGapColumn,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.end,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ...rows,
+      if (showGap)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+          child: Text(
+            l10n.runDetailGapColumnHint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+    ];
+  }
+
+  Widget _buildPacingCard(ThemeData theme, AppLocalizations l10n,
+      DistanceUnit unit, PacingAnalysis pacing) {
+    final semantic = AppSemanticColors.ofTheme(theme);
+    final (verdictLabel, verdictBg, verdictFg) = switch (pacing.raw.verdict) {
+      PacingVerdict.negative => (
+          l10n.runDetailPacingNegative,
+          semantic.success,
+          semantic.onSuccess
+        ),
+      PacingVerdict.positive => (
+          l10n.runDetailPacingPositive,
+          semantic.warning,
+          semantic.onWarning
+        ),
+      PacingVerdict.even => (
+          l10n.runDetailPacingEven,
+          theme.colorScheme.surfaceContainerHighest,
+          theme.colorScheme.onSurfaceVariant
+        ),
+    };
+
+    final String summary;
+    if (pacing.raw.verdict == PacingVerdict.even) {
+      summary = l10n.runDetailPacingHeld;
+    } else {
+      // The split list's pace is shown per preferred unit, so the delta beside
+      // it must be too — "14s" against a /mi pace reads as sec/mi, not the
+      // sec/km the analysis is canonically in.
+      const metresPerMile = 1609.344;
+      final perUnit = unit == DistanceUnit.mi
+          ? pacing.raw.deltaSecPerKm * (metresPerMile / 1000)
+          : pacing.raw.deltaSecPerKm.toDouble();
+      final delta = '${perUnit.abs().round()}s';
+      summary = pacing.raw.verdict == PacingVerdict.negative
+          ? l10n.runDetailPacingFaster(delta)
+          : l10n.runDetailPacingSlower(delta);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.runDetailPacing,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _pacingHalf(theme, l10n.runDetailPacingFirstHalf,
+                    pacing.raw.first.paceSecPerKm, unit),
+                _pacingHalf(theme, l10n.runDetailPacingSecondHalf,
+                    pacing.raw.second.paceSecPerKm, unit),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: verdictBg,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    verdictLabel,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: verdictFg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              summary,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (_showPacingGap) ...[
+              const SizedBox(height: 4),
+              Text(
+                switch (pacing.gradeAdjusted!.verdict) {
+                  PacingVerdict.negative => l10n.runDetailPacingGapNegative,
+                  PacingVerdict.positive => l10n.runDetailPacingGapPositive,
+                  PacingVerdict.even => l10n.runDetailPacingGapEven,
+                },
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pacingHalf(
+      ThemeData theme, String label, int paceSecPerKm, DistanceUnit unit) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          UnitFormat.pace(paceSecPerKm.toDouble(), unit),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 
   /// Save this run's GPS track as a reusable route. Prompts for a name

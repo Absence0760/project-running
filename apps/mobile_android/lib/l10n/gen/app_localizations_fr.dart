@@ -2310,6 +2310,56 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get runDetailPacing => 'Gestion de l’allure';
+
+  @override
+  String get runDetailPacingFirstHalf => 'Première moitié';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Seconde moitié';
+
+  @override
+  String get runDetailPacingNegative => 'Négatif split';
+
+  @override
+  String get runDetailPacingEven => 'Allure régulière';
+
+  @override
+  String get runDetailPacingPositive => 'Positif split';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta plus rapide sur la seconde moitié';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta plus lent sur la seconde moitié';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Régulier sur les deux moitiés';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Corrigé du dénivelé, vous avez accéléré sur la seconde moitié.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Corrigé du dénivelé, votre effort a été régulier sur les deux moitiés.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Corrigé du dénivelé, vous avez ralenti sur la seconde moitié.';
+
+  @override
+  String get runDetailGapColumn => 'Corrigée';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'L’allure corrigée est l’allure sur le plat qui aurait coûté le même effort que les côtes réellement parcourues.';
+
+  @override
   String get runDetailSectionSegments => 'Segments';
 
   @override

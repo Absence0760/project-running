@@ -2307,6 +2307,56 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get runDetailPacing => 'Tempoverlauf';
+
+  @override
+  String get runDetailPacingFirstHalf => 'Erste Hälfte';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Zweite Hälfte';
+
+  @override
+  String get runDetailPacingNegative => 'Negativer Split';
+
+  @override
+  String get runDetailPacingEven => 'Gleichmäßiger Split';
+
+  @override
+  String get runDetailPacingPositive => 'Positiver Split';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta schneller in der zweiten Hälfte';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta langsamer in der zweiten Hälfte';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Gleichmäßig über beide Hälften';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Höhenkorrigiert bist du in der zweiten Hälfte schneller geworden.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Höhenkorrigiert war deine Belastung in beiden Hälften gleich.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Höhenkorrigiert bist du in der zweiten Hälfte langsamer geworden.';
+
+  @override
+  String get runDetailGapColumn => 'Höhenkorr.';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'Das höhenkorrigierte Tempo ist das Flachland-Tempo, das denselben Aufwand gekostet hätte wie die Anstiege, die du tatsächlich gelaufen bist.';
+
+  @override
   String get runDetailSectionSegments => 'Segmente';
 
   @override

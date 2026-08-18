@@ -3935,6 +3935,90 @@ abstract class AppLocalizations {
   /// **'Run too short for a full {unit} split'**
   String runDetailRunTooShortSplit(String unit);
 
+  /// Heading of the first-half vs second-half pacing card on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Pacing'**
+  String get runDetailPacing;
+
+  /// Label for the first half's pace in the pacing card
+  ///
+  /// In en, this message translates to:
+  /// **'First half'**
+  String get runDetailPacingFirstHalf;
+
+  /// Label for the second half's pace in the pacing card
+  ///
+  /// In en, this message translates to:
+  /// **'Second half'**
+  String get runDetailPacingSecondHalf;
+
+  /// Verdict chip when the second half was faster than the first
+  ///
+  /// In en, this message translates to:
+  /// **'Negative split'**
+  String get runDetailPacingNegative;
+
+  /// Verdict chip when both halves were paced the same
+  ///
+  /// In en, this message translates to:
+  /// **'Even split'**
+  String get runDetailPacingEven;
+
+  /// Verdict chip when the second half was slower than the first
+  ///
+  /// In en, this message translates to:
+  /// **'Positive split'**
+  String get runDetailPacingPositive;
+
+  /// Pacing card summary when the second half was faster; delta is a seconds figure such as 14s
+  ///
+  /// In en, this message translates to:
+  /// **'{delta} faster over the second half'**
+  String runDetailPacingFaster(String delta);
+
+  /// Pacing card summary when the second half was slower; delta is a seconds figure such as 14s
+  ///
+  /// In en, this message translates to:
+  /// **'{delta} slower over the second half'**
+  String runDetailPacingSlower(String delta);
+
+  /// Pacing card summary when both halves were paced the same
+  ///
+  /// In en, this message translates to:
+  /// **'Steady across both halves'**
+  String get runDetailPacingHeld;
+
+  /// Pacing card note when grade-adjusted effort rose over the second half
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted for the terrain, you sped up over the second half.'**
+  String get runDetailPacingGapNegative;
+
+  /// Pacing card note when grade-adjusted effort was even across both halves
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted for the terrain, your effort was even across both halves.'**
+  String get runDetailPacingGapEven;
+
+  /// Pacing card note when grade-adjusted effort fell over the second half
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted for the terrain, you slowed over the second half.'**
+  String get runDetailPacingGapPositive;
+
+  /// Header of the grade-adjusted pace column in the splits list
+  ///
+  /// In en, this message translates to:
+  /// **'Grade-adj.'**
+  String get runDetailGapColumn;
+
+  /// Explanation shown under the splits list when the grade-adjusted column is visible
+  ///
+  /// In en, this message translates to:
+  /// **'Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.'**
+  String get runDetailGapColumnHint;
+
   /// Section header for the segment-efforts panel on run-detail
   ///
   /// In en, this message translates to:
