@@ -142,6 +142,28 @@ stays in the bag. If only (2) holds on rare rows, it stays in the bag too.
 - **Stayed in the bag** (display-only telemetry): `avg_bpm`, `steps`,
   `elevation_m` — shown on the run detail, never filtered or aggregated in SQL.
 
+**A bag key that criterion (2) filters on cannot be rescued later with an
+expression index** — promoting it is the only fix, so weigh (2) as if the index
+were never an option. `create index … ((metadata ->> 'key'))` is unusable as an
+index qual in any query **RLS enforces**, because `jsonb_object_field_text` is
+not `LEAKPROOF`: the planner may not evaluate a non-leakproof qual below an RLS
+security qual, so the expression stays a heap `Filter` and only the leading
+plain columns reach `Index Cond`. `jsonb_contains` (`@>`, the GIN path) and
+`jsonb_exists` (`?`) are not leakproof either, so no jsonb access path escapes
+it. Measured against `gym_routine_history`'s own predicate as `authenticated`
+over 60 000 synthetic `gym_workouts` (one account holding 2 008 sessions, 153 on
+the target routine): the existing `(user_id, started_at desc)` index reads 1 278
+heap blocks / 1 296 buffers in 1.7 ms; adding the partial expression index makes
+it **slower** (1 277 heap blocks, 1 300 buffers, 2.5 ms — identical heap work
+plus a second index to walk and to maintain on every write); the same predicate
+over a promoted plain `uuid` column reads 154 heap blocks / 158 buffers in
+0.37 ms, because `uuid_eq` is leakproof and a plain `Var` invokes no function at
+all. The exception is a path where RLS does not apply — `service_role`, or a
+`SECURITY DEFINER` function owned by the table owner — where the expression
+index *is* used; don't flip an RPC's security model to buy a plan, though (the
+gym aggregates are uniformly `security invoker` with a load-bearing explicit
+`auth.uid()` filter, and that is worth more than the milliseconds).
+
 **When you do add a column to an activity table:**
 
 - `snake_case`; use `started_at` for "when it happened" and the right
