@@ -74,6 +74,14 @@ class ImportScreen extends StatefulWidget {
   /// off Android. Production callers leave null.
   final Future<HealthConnectRoutes> Function()? fetchHealthRoutesFn;
 
+  /// Test seam — the system file picker, which has no implementation off a
+  /// real device. Production callers leave null (the screen calls
+  /// `FilePicker.pickFiles`).
+  final Future<FilePickerResult?> Function({
+    FileType type,
+    List<String>? allowedExtensions,
+  })? pickFilesFn;
+
   const ImportScreen({
     super.key,
     this.apiClient,
@@ -85,6 +93,7 @@ class ImportScreen extends StatefulWidget {
     this.fetchHealthWorkoutsFn,
     this.requestHealthRoutePermissionFn,
     this.fetchHealthRoutesFn,
+    this.pickFilesFn,
   });
 
   @override
@@ -129,6 +138,15 @@ class _ImportScreenState extends State<ImportScreen> {
   Future<HealthConnectRoutes> _fetchHealthRoutes() =>
       widget.fetchHealthRoutesFn?.call() ??
           HealthConnectImporter.fetchRoutes();
+
+  Future<FilePickerResult?> _pickFiles({
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+  }) =>
+      (widget.pickFilesFn ?? FilePicker.pickFiles)(
+        type: type,
+        allowedExtensions: allowedExtensions,
+      );
 
   Future<void> _importHealthConnect() async {
     final l10n = AppLocalizations.of(context);
@@ -440,7 +458,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
   Future<void> _importCsv() async {
     final l10n = AppLocalizations.of(context);
-    final result = await FilePicker.pickFiles(
+    final result = await _pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
     );
@@ -479,7 +497,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
   Future<void> _importBackupZip() async {
     final l10n = AppLocalizations.of(context);
-    final picked = await FilePicker.pickFiles(
+    final picked = await _pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
     );
@@ -522,11 +540,13 @@ class _ImportScreenState extends State<ImportScreen> {
 
   Future<void> _importStrava() async {
     final l10n = AppLocalizations.of(context);
-    final result = await FilePicker.pickFiles(
+    final result = await _pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
     );
     if (result == null || result.files.isEmpty) return;
+    final path = result.files.first.path;
+    if (path == null) return;
 
     if (!mounted) return;
     setState(() {
@@ -540,8 +560,7 @@ class _ImportScreenState extends State<ImportScreen> {
     });
 
     try {
-      final file = File(result.files.first.path!);
-      final parsed = await StravaImporter.importFromZip(file);
+      final parsed = await StravaImporter.importFromZip(File(path));
       await _saveImportedRuns(
         parsed.runs,
         label: 'Strava',
