@@ -281,6 +281,7 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
     DateTime? windowStart,
     DateTime? windowEnd,
   }) async {
+    requireInitialised('replaceFromServer');
     final preserved = <String, StoredFood>{};
     final syncedLocal = <String, StoredFood>{};
     for (final entry in rowsById.entries) {

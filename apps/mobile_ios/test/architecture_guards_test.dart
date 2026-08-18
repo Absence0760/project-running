@@ -5143,6 +5143,46 @@ void main() {
     });
   });
 
+  group('every replaceFromServer refuses before it touches rowsById', () {
+    // Reason (followups 2026-08-18): `rewriteAll` used to return silently on a
+    // null `dir`, so a cache fill on a never-init()ed store replaced the
+    // resident rows and wrote nothing. Gating `rewriteAll` alone is too late —
+    // each `replaceFromServer` has already rebuilt `rowsById` from the fetch by
+    // the time it calls down, so the refusal has to be the method's first
+    // statement or a failed fill leaves a half-replaced store behind.
+    test('requireInitialised is the first statement of each override', () {
+      final offenders = <String>[];
+      var found = 0;
+      for (final entity in Directory('lib').listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        final src = entity.readAsStringSync();
+        var from = 0;
+        while (true) {
+          final at = src.indexOf('Future<void> replaceFromServer', from);
+          if (at < 0) break;
+          from = at + 1;
+          final open = src.indexOf('{', src.indexOf('async', at));
+          if (open < 0) {
+            offenders.add('${entity.path}: unparseable signature');
+            continue;
+          }
+          found++;
+          final firstStatement = src.substring(open + 1).trimLeft();
+          if (!firstStatement.startsWith("requireInitialised('")) {
+            offenders.add(entity.path);
+          }
+        }
+      }
+      expect(found, greaterThanOrEqualTo(8),
+          reason: 'the scan itself must find the replaceFromServer overrides');
+      expect(offenders, isEmpty,
+          reason: 'these replaceFromServer overrides rebuild rowsById before '
+              'anything checks the store was init()ed, so a fill that can '
+              'never reach disk still replaces what the screen is showing: '
+              '${offenders.join(', ')}');
+    });
+  });
+
   group('local-day arithmetic is DST-safe', () {
     // A calendar week spanning a DST transition is 167 or 169 hours, so
     // stepping days with a fixed Duration walks the boundary off local

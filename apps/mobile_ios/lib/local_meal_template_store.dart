@@ -231,6 +231,7 @@ class LocalMealTemplateStore extends OfflineSyncStore<StoredMealTemplate> {
     List<({Map<String, dynamic> template, List<StoredMealTemplateItem> items})>
         serverTemplates,
   ) async {
+    requireInitialised('replaceFromServer');
     final preserved = <String, StoredMealTemplate>{};
     final syncedLocal = <String, StoredMealTemplate>{};
     for (final entry in rowsById.entries) {

@@ -208,6 +208,7 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
   /// state are overwritten so an offline edit isn't clobbered by the
   /// server's older copy.
   Future<void> replaceFromServer(List<Map<String, dynamic>> serverRows) async {
+    requireInitialised('replaceFromServer');
     final preserved = <String, StoredGear>{};
     final syncedLocal = <String, StoredGear>{};
     for (final entry in rowsById.entries) {
