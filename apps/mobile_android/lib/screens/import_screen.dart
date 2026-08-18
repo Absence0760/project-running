@@ -177,12 +177,13 @@ class _ImportScreenState extends State<ImportScreen> {
 
     setState(() => _status = l10n.importHealthRoutesAdding);
     try {
-      final filled = await _backfillHealthConnectTracks();
+      final backfill = await _backfillHealthConnectTracks();
       if (!mounted) return;
       setState(() {
         _busy = false;
         _withheldRouteIds = const {};
-        _status = l10n.importHealthRoutesAdded(filled);
+        _cloudPushDeferred = backfill.pushDeferred;
+        _status = l10n.importHealthRoutesAdded(backfill.filled);
       });
     } catch (e) {
       if (!mounted) return;
@@ -198,10 +199,12 @@ class _ImportScreenState extends State<ImportScreen> {
   /// them onto the runs already imported without one. A plain re-import can't
   /// do this: `isCrossSourceDuplicate` treats Health Connect as an aggregator
   /// and skips every workout already in the store, so the tracks would never
-  /// land. Returns how many runs gained a map.
-  Future<int> _backfillHealthConnectTracks() async {
+  /// land. Reports how many runs gained a map, and whether the maps reached
+  /// the server — the same two-part answer `_saveImportedRuns` gives.
+  Future<({int filled, bool pushDeferred})>
+      _backfillHealthConnectTracks() async {
     final routes = await HealthConnectImporter.fetchRoutes();
-    if (routes.tracks.isEmpty) return 0;
+    if (routes.tracks.isEmpty) return (filled: 0, pushDeferred: false);
 
     // Hydrate only the runs a released route can actually fill — the summary
     // index carries source + external_id, so the whole history is filtered
@@ -224,6 +227,7 @@ class _ImportScreenState extends State<ImportScreen> {
     }
 
     final api = widget.apiClient;
+    var pushDeferred = false;
     if (filled.isNotEmpty && api != null && api.userId != null) {
       try {
         final failed = await api.saveRunsBatch(filled);
@@ -231,10 +235,14 @@ class _ImportScreenState extends State<ImportScreen> {
           storedFilled.where((r) => !failed.contains(r.id)),
         );
       } catch (e) {
+        // The maps are on disk; only the upload failed, and SyncService
+        // retries it. Same claim, same words as the import path — a map that
+        // exists only on this device is not a finished backfill.
         debugPrint('Route backfill cloud push failed: $e');
+        pushDeferred = true;
       }
     }
-    return filled.length;
+    return (filled: filled.length, pushDeferred: pushDeferred);
   }
 
   /// Seed `body_weight_kg` from Health Connect when the user hasn't set

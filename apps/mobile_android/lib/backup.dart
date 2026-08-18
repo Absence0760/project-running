@@ -889,53 +889,15 @@ class BackupService {
   }
 
   /// Serialise a device-only [run] into the raw `runs.json` row shape the
-  /// restore paths upsert. `user_id` is omitted (restore stamps the new
-  /// owner), `track_url` is null (the blob rides in `tracks/<id>.json.gz`),
-  /// and the promoted columns are lifted out of the metadata bag exactly as
-  /// `ApiClient.saveRun` does — the column is the only stored copy, so a bag
-  /// left carrying them would shadow a later edit after restore.
+  /// restore paths upsert, through the same shaper `ApiClient.saveRun` uses.
+  /// `user_id` is omitted (restore stamps the new owner) and `track_url` is
+  /// dropped (the blob rides in `tracks/<id>.json.gz` and the archived URL
+  /// names the old owner's path).
   @visibleForTesting
-  static Map<String, dynamic> rawRunRowForBackup(cm.Run run) {
-    final meta = run.metadata;
-    int? best(String key) {
-      final v = meta?[key];
-      final secs = v is int ? v : (v is num ? v.toInt() : null);
-      return (secs == null || secs < 0) ? null : secs;
-    }
-
-    final bag = meta == null
-        ? null
-        : (Map<String, dynamic>.from(meta)
-          ..remove('activity_type')
-          ..remove('is_dnf')
-          ..remove('fastest_5k_s')
-          ..remove('fastest_10k_s')
-          ..remove('fastest_half_marathon_s')
-          ..remove('fastest_marathon_s')
-          ..remove('track_url'));
-    final row = cm.RunRow(
-      id: run.id,
-      // Stripped below — RunRow requires it, the archive must not carry it.
-      userId: '',
-      startedAt: run.startedAt.toUtc(),
-      durationS: run.duration.inSeconds,
-      distanceM: run.distanceMetres,
-      routeId: run.routeId,
-      source: run.source.name,
-      externalId: run.externalId,
-      metadata: (bag == null || bag.isEmpty) ? null : bag,
-      createdAt: run.createdAt,
-      activityType: (meta?['activity_type'] as String?) ?? 'run',
-      isDnf: meta?['is_dnf'] == true,
-      fastest5kS: best('fastest_5k_s'),
-      fastest10kS: best('fastest_10k_s'),
-      fastestHalfMarathonS: best('fastest_half_marathon_s'),
-      fastestMarathonS: best('fastest_marathon_s'),
-    );
-    return row.toJson()
-      ..remove('user_id')
-      ..remove('track_url');
-  }
+  static Map<String, dynamic> rawRunRowForBackup(cm.Run run) =>
+      cm.runRowFromRun(run, userId: '', createdAt: run.createdAt).toJson()
+        ..remove('user_id')
+        ..remove('track_url');
 
   static Map<String, dynamic> _backupWaypointJson(cm.Waypoint w) => {
         'lat': w.lat,
