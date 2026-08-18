@@ -72,10 +72,11 @@ class TrackWriter(private val file: File) {
         private const val BUFFER_BYTES = 8192
         private const val FLUSH_EVERY = 32
 
-        /// Return a file handle in the app's cache dir for a given run id.
-        /// `cache` rather than `files` because the file is transient — it
-        /// lives until the run is uploaded + acknowledged, then we delete.
+        /// Return a file handle in the app's durable files dir for a given
+        /// run id. Until the run has uploaded this file is the only copy of
+        /// the trace, so it must not sit anywhere the platform may reclaim
+        /// on its own — see [TrackStorage].
         fun fileFor(context: Context, runId: String): File =
-            File(context.cacheDir, "tracks/$runId.json")
+            TrackStorage.fileFor(context, runId)
     }
 }

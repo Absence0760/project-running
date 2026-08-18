@@ -245,4 +245,30 @@ class SaveRunRowMapTest {
         assertEquals(3600, row[RunRow.COL_DURATION_S])
         assertEquals(10_000.5, row[RunRow.COL_DISTANCE_M] as Double, 0.0)
     }
+
+    @Test fun `a run whose track payload is gone still posts, with a null track_url`() {
+        // The platform purged the file out of the pre-migration cache dir.
+        // Everything the runner recorded except the trace is in the queue
+        // entry, so the row goes up carrying a null track_url — the same
+        // shape an indoor recording takes — rather than the run being stuck
+        // in the queue promising a sync that can never succeed.
+        val row = buildSaveRunRowMap(
+            runId = "abc",
+            uid = "user-1",
+            startedAtIso = "2026-01-01T00:00:00.000Z",
+            durationS = 3600,
+            distanceM = 10_000.0,
+            trackPath = null,
+            metadata = sampleMetadata,
+            isPublic = null,
+        )
+        assertTrue(
+            "track_url must still be present as an explicit null",
+            row.containsKey(RunRow.COL_TRACK_URL),
+        )
+        assertNull(row[RunRow.COL_TRACK_URL])
+        assertEquals("abc", row[RunRow.COL_ID])
+        assertEquals(10_000.0, row[RunRow.COL_DISTANCE_M] as Double, 0.0)
+        assertEquals(3600, row[RunRow.COL_DURATION_S])
+    }
 }

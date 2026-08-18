@@ -48,6 +48,15 @@ struct ContentView: View {
     private func syncRun() {
         guard let run = workoutManager.finishedRun else { return }
         syncError = nil
+        // A recorded trace that is no longer on disk (an older build kept it
+        // in Caches, which the system reclaims) would otherwise ship as an
+        // empty array, indistinguishable from an indoor run. The run still
+        // syncs — losing it entirely would be worse than losing its map —
+        // but the runner is told rather than quietly handed a hollow track.
+        let payloadMissing = RunPayloadStorage.payloadIsMissing(
+            recordedPointCount: run.trackPointCount,
+            fileExists: FileManager.default.fileExists(atPath: run.trackFileURL.path)
+        )
         do {
             let fileURL = try workoutManager.writeTrackJSON()
             let formatter = ISO8601DateFormatter()
@@ -84,6 +93,9 @@ struct ContentView: View {
             // Run again rather than silently dropping the run.
             if connectivity.transferRun(fileURL: fileURL, metadata: metadata) {
                 thisRunSynced = true
+                if payloadMissing {
+                    syncError = String(localized: "GPS track unavailable — synced without it")
+                }
             }
         } catch {
             syncError = error.localizedDescription

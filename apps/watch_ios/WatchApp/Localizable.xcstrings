@@ -200,6 +200,16 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Na fila — vai tentar de novo" } }
       }
     },
+    "GPS track unavailable — synced without it" : {
+      "comment" : "Shown after a successful sync when the run's recorded GPS trace was no longer on disk, so the run went up without its track.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "GPS-Track nicht verfügbar – ohne ihn synchronisiert" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Trazado GPS no disponible: sincronizado sin él" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tracé GPS indisponible – synchronisé sans lui" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "GPSトラックがありません。トラックなしで同期しました" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Trajeto GPS indisponível — sincronizado sem ele" } }
+      }
+    },
     "Phone unavailable — tap Sync Run to retry" : {
       "comment" : "Sync failure shown when WCSession has not finished activating; the run is kept for a manual retry.",
       "localizations" : {

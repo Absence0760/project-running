@@ -13,6 +13,8 @@ import com.runapp.watchwear.recording.RecoveryAction
 import com.runapp.watchwear.recording.recoveryActionFor
 import com.runapp.watchwear.recording.sealTrackFileOrNull
 import com.runapp.watchwear.recording.RunRecordingService
+import com.runapp.watchwear.recording.TrackStorage
+import com.runapp.watchwear.recording.sweepOrphanTracks
 import com.runapp.watchwear.system.BatteryOptimization
 import com.runapp.watchwear.system.BatteryStatus
 import com.runapp.watchwear.system.NetworkWatcher
@@ -25,6 +27,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import java.time.Instant
@@ -318,6 +322,21 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// Exponential-backoff window for drainQueue. Mirrors the shape of
     /// the Dart `SyncService` on phones — see `DrainBackoff` for details.
     private val drainBackoff = DrainBackoff()
+
+    /// Serialises `drainQueue`. Cold start alone fires two — the cached-
+    /// session restore and the phone-bridge restore — and neither is held
+    /// off by backoff at zero failures. Two passes over the same snapshot
+    /// upload every queued run twice (a multi-MB ultra track over LTE) and
+    /// race each other's queue removal and track-file deletion. Whoever
+    /// arrives second now waits and re-reads the queue, which by then is
+    /// drained.
+    private val drainMutex = Mutex()
+
+    /// Set once the cache→files track migration + orphan sweep have run.
+    /// Guarded by `drainMutex`, which is what orders it ahead of the first
+    /// upload: a drain must never read a queue entry whose path still points
+    /// at the purgeable location.
+    private var trackStorageReconciled = false
 
     private var queueWatchJob: Job? = null
     private var recordingObserverJob: Job? = null
@@ -1174,7 +1193,14 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun drainQueue(force: Boolean = false) {
+        // Outside the lock: a 3 s wait for a session that may never arrive
+        // must not make a runner's manual Sync chip queue behind it.
         if (!awaitAuth()) return
+        drainMutex.withLock { drainQueueLocked(force) }
+    }
+
+    private suspend fun drainQueueLocked(force: Boolean) {
+        reconcileTrackStorage()
         if (!force && drainBackoff.isInBackoff()) {
             // Auto-trigger (network-flap, auth-bootstrap) inside the backoff
             // window — don't hammer the backend. User-initiated drains pass
@@ -1210,7 +1236,21 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     false
                 }
             },
-            onSuccessfulDrain = OnSuccessfulDrain { id -> store.remove(id) },
+            onSuccessfulDrain = OnSuccessfulDrain { id ->
+                // Queue entry first, file second. The reverse order lets a
+                // process death between the two leave an entry pointing at a
+                // payload that is gone, which the next drain would then
+                // re-post with a null track_url — clobbering the track it
+                // had in fact already uploaded. This way the only crash
+                // residue is a stranded file, swept by
+                // `reconcileTrackStorage`.
+                store.remove(id)
+                snapshot.firstOrNull { it.id == id }?.let { run ->
+                    withContext(Dispatchers.IO) {
+                        runCatching { File(run.trackFilePath).delete() }
+                    }
+                }
+            },
         )
         if (result.anyTransientFailure) {
             drainBackoff.onFailure()
@@ -1228,7 +1268,14 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             laps = run.laps,
             lastModifiedAtIso = Instant.now().toString(),
         )
-        val trackFile = File(run.trackFilePath)
+        // A queued run whose payload is gone is uploaded without one rather
+        // than left in the queue promising a sync that can never happen. The
+        // file is only ever deleted after the entry is removed, so a missing
+        // file means the track was never uploaded — posting a null
+        // `track_url` cannot erase one already in Storage.
+        val trackFile = withContext(Dispatchers.IO) {
+            File(run.trackFilePath).takeIf { it.exists() }
+        }
         supabase.saveRun(
             runId = run.id,
             startedAtIso = run.startedAtIso,
@@ -1238,10 +1285,37 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             metadata = metadata,
             isPublic = run.isPublic,
         )
-        // Once the track is safely in Storage, clear the cache file. On
-        // retry paths we'll already be past this line (pushRun threw) so
-        // the file stays on disk until the next successful drain.
-        runCatching { trackFile.delete() }
+    }
+
+    /// Bring the track directory and the upload queue back into agreement.
+    /// Runs once per process, under `drainMutex` so no upload can observe a
+    /// half-migrated queue.
+    private suspend fun reconcileTrackStorage() {
+        if (trackStorageReconciled) return
+        trackStorageReconciled = true
+        val app = getApplication<Application>()
+        val durableDir = TrackStorage.durableDir(app)
+        val queued = try {
+            store.migrateTrackFiles(TrackStorage.legacyCacheDir(app), durableDir)
+        } catch (_: Throwable) {
+            // A failed migration must not block the drain — the entries that
+            // did move are already persisted, the rest retry next launch.
+            return
+        }
+        // Sweeping while a recording is live would race the open writer, whose
+        // file is not in the queue yet — leave it to a later launch.
+        if (RecordingRepository.metrics.value.stage != RecordingRepository.Stage.Idle) return
+        val keep = buildSet {
+            queued.forEach { add(it.trackFilePath) }
+            // The crash checkpoint's track is the payload a pending recovery
+            // rebuilds the run from; it is not queued until the runner
+            // accepts the prompt.
+            checkpoints.current()?.trackFilePath?.let { add(it) }
+            RecordingRepository.metrics.value.trackFilePath?.let { add(it) }
+        }
+        withContext(Dispatchers.IO) {
+            sweepOrphanTracks(durableDir, keep, System.currentTimeMillis())
+        }
     }
 
     /// Turn the service's raw lap list (cumulative marks) into split-per-lap
