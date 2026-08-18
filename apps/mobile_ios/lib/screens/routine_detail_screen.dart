@@ -109,19 +109,30 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
       _historyError = false;
     });
     try {
-      final rows = await api.fetchGymRoutineSessions(widget.routineId);
+      final agg = await api.fetchGymRoutineHistory(
+        widget.routineId,
+        recentLimit: _recentSessionLimit,
+      );
       if (!mounted) return;
+      final recent = agg['recent_sessions'];
       setState(() {
-        _history = summariseRoutineHistory(
-          [
-            for (final row in rows)
-              RoutineSessionRow(
-                id: row['id'] as String? ?? '',
-                startedAt: row['started_at'] as String? ?? '',
-                title: row['title'] as String?,
-                metadata: row['metadata'],
-              ),
-          ],
+        _history = routineHistoryFromAggregate(
+          RoutineHistoryAggregate(
+            sessionCount: (agg['session_count'] as num?)?.toInt() ?? 0,
+            lastPerformedAt: agg['last_performed_at'] as String?,
+            gradedCount: (agg['graded_count'] as num?)?.toInt() ?? 0,
+            completedCount: (agg['completed_count'] as num?)?.toInt() ?? 0,
+            recentRows: [
+              if (recent is List)
+                for (final row in recent.whereType<Map>())
+                  RoutineSessionRow(
+                    id: row['id'] as String? ?? '',
+                    startedAt: row['started_at'] as String? ?? '',
+                    title: row['title'] as String?,
+                    metadata: row['metadata'],
+                  ),
+            ],
+          ),
           DateTime.now().millisecondsSinceEpoch,
         );
       });
@@ -499,7 +510,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 4),
-            for (final s in h.sessions.take(_recentSessionLimit))
+            for (final s in h.recentSessions)
               InkWell(
                 onTap: () => _openSession(s.id),
                 child: Padding(

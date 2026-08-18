@@ -4,6 +4,14 @@
 /// routine's own detail screen can answer when it was last run and whether it
 /// gets finished.
 ///
+/// The tallies arrive already reduced, from the `gym_routine_history` RPC
+/// (migration 20270528_001): a count is an aggregate, and a windowed client
+/// read cannot serve one honestly — the previous 500-row window silently
+/// under-reported a decade of weekly sessions. What stays here is the display
+/// shaping the server has no business deciding: which verdict each row of the
+/// bounded recent page carries, its order, the floored days-since-last against
+/// the READER's clock, and the completed-of-graded ratio.
+///
 /// Dart twin of `apps/web/src/lib/gym/routine_history.ts` — keep the
 /// algorithm, edge cases, outputs, and test counts in lockstep.
 ///
@@ -42,6 +50,25 @@ class RoutineSessionRow {
   });
 }
 
+/// One `gym_routine_history` row: complete tallies over every session the
+/// routine has ever been run as, plus the explicitly bounded page of the most
+/// recent ones the panel lists.
+class RoutineHistoryAggregate {
+  final int sessionCount;
+  final String? lastPerformedAt;
+  final int gradedCount;
+  final int completedCount;
+  final List<RoutineSessionRow> recentRows;
+
+  const RoutineHistoryAggregate({
+    required this.sessionCount,
+    required this.lastPerformedAt,
+    required this.gradedCount,
+    required this.completedCount,
+    required this.recentRows,
+  });
+}
+
 class RoutineSession {
   final String id;
   final String startedAt;
@@ -59,7 +86,9 @@ class RoutineSession {
 }
 
 class RoutineHistory {
-  final List<RoutineSession> sessions;
+  /// Only the page the aggregate carried — never the whole history. Named for
+  /// what it is so no surface can present it as everything.
+  final List<RoutineSession> recentSessions;
   final int sessionCount;
   final String? lastPerformedAt;
   final int? daysSinceLast;
@@ -68,7 +97,7 @@ class RoutineHistory {
   final double? completedRate;
 
   const RoutineHistory({
-    required this.sessions,
+    required this.recentSessions,
     required this.sessionCount,
     required this.lastPerformedAt,
     required this.daysSinceLast,
@@ -98,17 +127,18 @@ RoutineSessionVerdict _verdictOf(Object? metadata) {
   return RoutineSessionVerdict.ungraded;
 }
 
-/// Reduce the workout rows linked to one routine into its performance history.
+/// Shape one routine's server-side aggregate into what the history panel reads.
 ///
-/// Rows still carrying a `gym_session_draft` snapshot are dropped: an in-flight
-/// session is not a session performed, and counting one would let a resume
-/// inflate the routine's usage.
-RoutineHistory summariseRoutineHistory(
-  List<RoutineSessionRow> rows,
+/// Rows still carrying a `gym_session_draft` snapshot are dropped from the
+/// page: an in-flight session is not a session performed. The RPC applies the
+/// same exclusion to the tallies, so filtering here keeps the listed rows from
+/// ever contradicting the count they sit under.
+RoutineHistory routineHistoryFromAggregate(
+  RoutineHistoryAggregate agg,
   int nowMs,
 ) {
   final kept = <({int index, RoutineSession session})>[];
-  for (final row in rows) {
+  for (final row in agg.recentRows) {
     if (row.id.isEmpty) continue;
     if (_hasSessionDraft(row.metadata)) continue;
     final at = DateTime.tryParse(row.startedAt);
@@ -131,27 +161,26 @@ RoutineHistory summariseRoutineHistory(
     final c = b.session.startedAtMs.compareTo(a.session.startedAtMs);
     return c != 0 ? c : a.index.compareTo(b.index);
   });
-  final sessions = [for (final k in kept) k.session];
 
-  final gradedCount = sessions
-      .where((s) => s.verdict != RoutineSessionVerdict.ungraded)
-      .length;
-  final completedCount = sessions
-      .where((s) => s.verdict == RoutineSessionVerdict.completed)
-      .length;
-  final last = sessions.isEmpty ? null : sessions.first;
+  // Taken from the aggregate, not from the page: a bounded page can be empty
+  // while the routine has been run hundreds of times.
+  final last = agg.lastPerformedAt == null
+      ? null
+      : DateTime.tryParse(agg.lastPerformedAt!);
+  final graded = math.max(0, agg.gradedCount);
+  final completed = math.max(0, agg.completedCount);
 
   return RoutineHistory(
-    sessions: sessions,
-    sessionCount: sessions.length,
-    lastPerformedAt: last?.startedAt,
+    recentSessions: [for (final k in kept) k.session],
+    sessionCount: math.max(0, agg.sessionCount),
+    lastPerformedAt: agg.lastPerformedAt,
     // A row stamped ahead of the reader's clock reads as today, never as a
     // negative "in -2 days".
     daysSinceLast: last == null
         ? null
-        : math.max(0, (nowMs - last.startedAtMs) ~/ _dayMs),
-    gradedCount: gradedCount,
-    completedCount: completedCount,
-    completedRate: gradedCount == 0 ? null : completedCount / gradedCount,
+        : math.max(0, (nowMs - last.millisecondsSinceEpoch) ~/ _dayMs),
+    gradedCount: graded,
+    completedCount: completed,
+    completedRate: graded == 0 ? null : completed / graded,
   );
 }
