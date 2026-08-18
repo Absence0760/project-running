@@ -86,6 +86,31 @@ test('a bag with no draft key is not a draft', () => {
 	assert.equal(restoreSessionDraft({ routine_id: 'r1' }, 3), null);
 });
 
+// The marker's shape is a three-rail contract: Dart's `routine_history.dart`
+// asks `is Map` and the `gym_routine_history` RPC asks
+// `jsonb_typeof(...) = 'object'`. `typeof x === 'object'` answers true for an
+// array, so without this the same row read as in-flight on web and as
+// performed on the other two.
+test('a non-object under the draft key is not a draft — the SQL + Dart answer', () => {
+	assert.equal(hasSessionDraft({ routine_id: 'r1', [GYM_SESSION_DRAFT_KEY]: [] }), false);
+	assert.equal(
+		hasSessionDraft({ routine_id: 'r1', [GYM_SESSION_DRAFT_KEY]: [{ step_index: 0 }] }),
+		false,
+	);
+	assert.equal(hasSessionDraft({ [GYM_SESSION_DRAFT_KEY]: null }), false);
+	assert.equal(hasSessionDraft({ [GYM_SESSION_DRAFT_KEY]: 'in flight' }), false);
+	assert.equal(hasSessionDraft({ [GYM_SESSION_DRAFT_KEY]: 3 }), false);
+	// …and every reader built on the same predicate agrees.
+	assert.equal(draftRoutineId({ routine_id: 'r1', [GYM_SESSION_DRAFT_KEY]: [] }), null);
+	assert.equal(restoreSessionDraft({ routine_id: 'r1', [GYM_SESSION_DRAFT_KEY]: [] }, 3), null);
+	assert.equal(draftLoggedCount({ routine_id: 'r1', [GYM_SESSION_DRAFT_KEY]: [] }), 0);
+});
+
+test('an array metadata bag is not a bag', () => {
+	assert.equal(hasSessionDraft([{ [GYM_SESSION_DRAFT_KEY]: { results: [] } }]), false);
+	assert.deepEqual(stripSessionDraft(['a']), {});
+});
+
 test('a draft with no usable routine link reports none', () => {
 	assert.equal(draftRoutineId({ [GYM_SESSION_DRAFT_KEY]: { results: [] } }), null);
 	assert.equal(draftRoutineId({ routine_id: '', [GYM_SESSION_DRAFT_KEY]: { results: [] } }), null);
