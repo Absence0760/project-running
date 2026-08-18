@@ -216,6 +216,14 @@ List<DateTime> expandInstances(
       ? DateTime.utc(start.year, start.month, start.day)
       : DateTime(start.year, start.month, start.day);
   final anchor = _addDaysCalendar(startDayOnly, -(start.weekday - 1), useUtc);
+  // The stamp below rebuilds the instant from whole seconds, so a startsAt
+  // carrying a non-zero millisecond makes its OWN first candidate sort before
+  // it and the series' first occurrence disappears everywhere — picker,
+  // listings, RSVP keys. The candidate is not-before the start at the only
+  // resolution the stamp has, so compare at that resolution. `%` is floor-based
+  // for a positive divisor, so a pre-epoch startsAt truncates downward too.
+  final startSecondMs = e.startsAt.millisecondsSinceEpoch -
+      e.startsAt.millisecondsSinceEpoch % 1000;
 
   final dayBudget = scanEnd.difference(anchor).inDays + stepDays + 1;
   var produced = 0;
@@ -250,7 +258,7 @@ List<DateTime> expandInstances(
     // already after until and broke a day early. Compare stamped.
     if (e.until != null && stamped.isAfter(e.until!)) continue;
     if (stamped.isAfter(to)) continue;
-    if (stamped.isBefore(e.startsAt)) continue;
+    if (stamped.millisecondsSinceEpoch < startSecondMs) continue;
 
     // Count every real occurrence toward count — not just the in-window ones —
     // so a count-limited series stops at its true end even when the window

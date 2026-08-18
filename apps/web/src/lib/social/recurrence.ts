@@ -150,6 +150,12 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 	// midnight time-of-day (d at midnight < start at, say, 09:00).
 	const anchor = wc.startOfWeek(start);
 	const startDayOnly = wc.startOfDay(start);
+	// `stamp` rebuilds the instant from whole seconds, so a `starts_at` carrying
+	// a non-zero millisecond makes its OWN first candidate sort before it and
+	// the series' first occurrence disappears everywhere — picker, listings,
+	// RSVP keys. The candidate is not-before the start at the only resolution
+	// the stamp has, so compare at that resolution.
+	const startSecond = Math.floor(start.getTime() / 1000) * 1000;
 	const dayBudget = Math.floor((scanEnd.getTime() - anchor.getTime()) / 86_400_000) + step + 1;
 	for (let dayOffset = 0; dayOffset <= dayBudget; dayOffset++) {
 		const d = wc.addDays(anchor, dayOffset);
@@ -166,7 +172,7 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 		const stamped = wc.stamp(d, start);
 		if (until && stamped > until) continue;
 		if (stamped > to) continue;
-		if (stamped < start) continue;
+		if (stamped.getTime() < startSecond) continue;
 
 		// Count every real occurrence toward recurrence_count — not just the
 		// in-window ones — so a count-limited series stops at its true end even
