@@ -44,7 +44,7 @@ use embassy_time::{with_timeout, Duration, Instant, Ticker};
 use embedded_hal::i2c::Operation;
 use watch_core::baro_rezero::{self, BaroSample};
 use watch_core::elevation::{
-    altitude_m, run_restarted, should_publish, Reading, RezeroStatus, VertAccumulator,
+    plausible_altitude_m, run_restarted, should_publish, Reading, RezeroStatus, VertAccumulator,
     STANDARD_SEA_LEVEL_PA,
 };
 use watch_core::fix::Fix;
@@ -216,7 +216,16 @@ pub async fn run(mut twim: Twim<'static>) {
         }
         match sensor.read_pressure_pa() {
             Ok(Some(pa)) => {
-                let alt = altitude_m(pa, sea_level_pa);
+                // One gate for every consumer downstream of the sensor: an
+                // implausible reading feeds neither the vert accumulator, the
+                // published altitude, the manual re-zero, nor the storm trend.
+                // The barometer is PREFERRED over the receiver's altitude at
+                // each of those sites, so gating only the receiver left the
+                // trusted one ungated.
+                let Some(alt) = plausible_altitude_m(pa, sea_level_pa) else {
+                    warn!("baro: implausible altitude from {}Pa; sample dropped", pa);
+                    continue;
+                };
                 last_alt = Some(BaroSample {
                     alt_m: alt,
                     at_s: Instant::now().as_secs() as u32,
@@ -231,15 +240,16 @@ pub async fn run(mut twim: Twim<'static>) {
                     last_fix = Some(f);
                 }
                 let gps_alt = fresh_fix.and_then(|f| f.alt_m);
-                let corrected = vert.push(alt, moving, gps_alt);
-                let reading = vert.reading(corrected);
-                debug!(
-                    "baro: alt={}m gain={}m loss={}m",
-                    reading.alt_m, reading.gain_m, reading.loss_m
-                );
-                if should_publish(published, reading) {
-                    elevation_tx.send(reading);
-                    published = Some(reading);
+                if let Some(corrected) = vert.push(alt, moving, gps_alt) {
+                    let reading = vert.reading(corrected);
+                    debug!(
+                        "baro: alt={}m gain={}m loss={}m",
+                        reading.alt_m, reading.gain_m, reading.loss_m
+                    );
+                    if should_publish(published, reading) {
+                        elevation_tx.send(reading);
+                        published = Some(reading);
+                    }
                 }
                 // The storm tracker takes the RAW pressure and the RAW GPS
                 // altitude — never `corrected`, which has had the weather

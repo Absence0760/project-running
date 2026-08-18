@@ -1539,8 +1539,16 @@ impl Recorder {
     /// Latest barometric altitude for the live-GAP grade. Sticky — the baro
     /// task publishes on change, so the most recent reading stays preferred
     /// over GPS altitude until the next one arrives.
+    ///
+    /// Narrowed through [`crate::elevation::plausible_alt`], the same window
+    /// the GPS fallback beside it passes: preference is not trust, and a sensor
+    /// read outside the terrestrial window would otherwise stick as the
+    /// preferred altitude for every later fix. Reject, don't clamp — the last
+    /// honest reading stands.
     pub fn set_baro_altitude(&mut self, alt_m: f32) {
-        self.baro_alt_m = Some(alt_m as f64);
+        if let Some(alt) = crate::elevation::plausible_alt(alt_m) {
+            self.baro_alt_m = Some(alt as f64);
+        }
     }
 
     /// Latest barometric pressure tendency from the `baro` task ([`crate::storm`]).
@@ -6620,8 +6628,8 @@ mod tests {
             f32::NEG_INFINITY,
             f32::NAN,
             1e9,
-            crate::elevation::GPS_ALT_MAX_M + 1.0,
-            crate::elevation::GPS_ALT_MIN_M - 1.0,
+            crate::elevation::ALT_MAX_M + 1.0,
+            crate::elevation::ALT_MIN_M - 1.0,
         ] {
             let mut r = Recorder::new();
             r.start(0);
@@ -6635,14 +6643,40 @@ mod tests {
     }
 
     #[test]
+    fn a_stuck_barometer_read_never_outranks_the_receivers_altitude() {
+        // The barometer is preferred at every altitude-fed surface, so gating
+        // only the receiver left the trusted source ungated: one stuck I2C
+        // burst (~8,789 m below sea level) became the sticky preferred
+        // altitude and the profile kept it for the rest of the run.
+        let stuck = crate::elevation::altitude_m(
+            16_777_215.0 / 64.0,
+            crate::elevation::STANDARD_SEA_LEVEL_PA,
+        );
+        let mut r = Recorder::new();
+        r.start(0);
+        r.set_baro_altitude(stuck);
+        r.on_fix(&fix_alt(40.0, -105.0, 3.0, 1, 1_624.0));
+        let p = r.snapshot().elev_profile;
+        assert_eq!(p.len, 1);
+        assert_eq!(p.samples[0], 1_624, "the stuck read outranked the receiver");
+        // ...and it is not held as the preferred altitude for later fixes
+        // either: the last honest reading stands.
+        r.set_baro_altitude(1_600.0);
+        r.set_baro_altitude(stuck);
+        r.on_fix(&fix_alt(40.0008, -105.0, 3.0, 40, 1_624.0));
+        let p = r.snapshot().elev_profile;
+        assert_eq!(p.samples[p.len - 1], 1_600);
+    }
+
+    #[test]
     fn a_plausible_gps_altitude_still_feeds_the_elevation_surfaces() {
         // The guard may only ever drop a value the vert filter already
         // distrusts; the window's own boundaries are inside it.
         for good in [
-            crate::elevation::GPS_ALT_MIN_M,
+            crate::elevation::ALT_MIN_M,
             0.0,
             1624.0,
-            crate::elevation::GPS_ALT_MAX_M,
+            crate::elevation::ALT_MAX_M,
         ] {
             let mut r = Recorder::new();
             r.start(0);

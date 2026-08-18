@@ -150,10 +150,12 @@ const GPS_PULL: f32 = 0.01;
 /// final value.
 const SEED_SAMPLES: u16 = 30;
 
-/// GPS altitude outside this terrestrial window (or non-finite) is treated as
-/// absent, so a spurious receiver altitude cannot wrench the bias.
-pub const GPS_ALT_MIN_M: f32 = -500.0;
-pub const GPS_ALT_MAX_M: f32 = 9000.0;
+/// An altitude outside this terrestrial window (or non-finite) is treated as
+/// absent, so a spurious reading cannot wrench the bias, bank vert, or stamp a
+/// track point. The window is a claim about the number, not about which sensor
+/// produced it — see [`plausible_alt`].
+pub const ALT_MIN_M: f32 = -500.0;
+pub const ALT_MAX_M: f32 = 9000.0;
 
 /// A GPS fix older than this cannot back a manual re-zero. Idle fix
 /// publication is de-rated to just under the face's 5 s staleness budget (see
@@ -206,11 +208,33 @@ pub fn rezero_banner(status: RezeroStatus) -> RezeroBanner {
     b
 }
 
+/// An altitude worth deriving anything from, or `None`.
+///
+/// Deliberately source-blind. The window began life as a receiver-only gate,
+/// which left the *barometric* altitude — preferred over the receiver's at
+/// every site that takes one — narrowed nowhere: a stuck-high I2C burst reduces
+/// to an altitude thousands of metres below the sea floor, which the vert
+/// accumulator banks as kilometres of descent and the elevation profile keeps
+/// for the rest of the run (its thinning keeps even indices, so the sample
+/// never ages out). A window that judges the number rather than its provenance
+/// cannot be bypassed by preferring one sensor over another.
+pub fn plausible_alt(alt_m: f32) -> Option<f32> {
+    (alt_m.is_finite() && (ALT_MIN_M..=ALT_MAX_M).contains(&alt_m)).then_some(alt_m)
+}
+
 /// A receiver altitude worth deriving anything from, or `None`. Shared with
 /// [`crate::record::Recorder`]'s altitude-fed surfaces so the two cannot
 /// disagree about whether the same number is trustworthy.
 pub fn plausible_gps(gps_alt_m: Option<f32>) -> Option<f32> {
-    gps_alt_m.filter(|a| a.is_finite() && (GPS_ALT_MIN_M..=GPS_ALT_MAX_M).contains(a))
+    gps_alt_m.and_then(plausible_alt)
+}
+
+/// The altitude a pressure reading implies, or `None` when the result falls
+/// outside [`plausible_alt`]'s window — the single point every barometric
+/// altitude on this device is produced at, so the gate cannot be skipped by a
+/// consumer that never knew it existed.
+pub fn plausible_altitude_m(pressure_pa: f32, sea_level_pa: f32) -> Option<f32> {
+    plausible_alt(altitude_m(pressure_pa, sea_level_pa))
 }
 
 /// The complementary filter's estimate of the `baro - GPS` bias, and its
@@ -294,13 +318,20 @@ impl VertAccumulator {
     /// (or an implausible GPS altitude) freezes the bias, so vert degrades to
     /// the baro-only deadband behaviour exactly.
     ///
+    /// Returns `None` — nothing published, nothing banked, no state moved —
+    /// when `baro_alt_m` is outside [`plausible_alt`]'s window. The barometer
+    /// gets the same gate the receiver does, because it is the *preferred*
+    /// source here: one stuck sensor read is a permanent kilometre of phantom
+    /// loss on a total nothing later in the run can walk back.
+    ///
     /// `moving` gates accumulation on the runner actually moving: while stopped,
     /// any altitude change is drift, not climb, so the reference only re-bases
     /// and banks nothing. This is the GPS-independent safety — it holds even
     /// with no GPS altitude to drive the complementary bias (aid station, sleep,
     /// waiting out weather on a col) — complementing the GPS bias that handles
     /// drift *while moving* on flat ground.
-    pub fn push(&mut self, baro_alt_m: f32, moving: bool, gps_alt_m: Option<f32>) -> f32 {
+    pub fn push(&mut self, baro_alt_m: f32, moving: bool, gps_alt_m: Option<f32>) -> Option<f32> {
+        let baro_alt_m = plausible_alt(baro_alt_m)?;
         if let Some(seed) = self.advance_bias(baro_alt_m, gps_alt_m) {
             // Engaging the seed shifts the altitude frame from raw baro to
             // GPS-corrected (auto-QNH) in one step. Re-frame the deadband anchor
@@ -331,7 +362,7 @@ impl VertAccumulator {
                 }
             }
         }
-        corrected
+        Some(corrected)
     }
 
     /// Advance the bias with the latest plausible GPS altitude. Returns the seed
@@ -369,7 +400,7 @@ impl VertAccumulator {
     /// Manual QNH re-zero: snap the complementary-filter bias so the corrected
     /// altitude reads exactly `gps_alt_m` right now, instead of waiting out the
     /// slow [`GPS_PULL`] convergence. Returns the snapped altitude, or `None`
-    /// (a no-op, nothing changed) when the GPS altitude is implausible.
+    /// (a no-op, nothing changed) when either altitude is implausible.
     ///
     /// Snapping the bias — rather than recomputing the QNH pressure reference —
     /// keeps the correction in the frame the filter already tracks: a new
@@ -382,6 +413,7 @@ impl VertAccumulator {
     /// continues from it with no convergence transient — and any in-progress
     /// seed is superseded by the runner's explicit calibration.
     pub fn rezero(&mut self, baro_alt_m: f32, gps_alt_m: Option<f32>) -> Option<f32> {
+        let baro_alt_m = plausible_alt(baro_alt_m)?;
         let gps = plausible_gps(gps_alt_m)?;
         let snapped = baro_alt_m - gps;
         let shift = snapped - self.bias.offset();
@@ -601,7 +633,7 @@ mod tests {
             acc.push(1624.0, true, Some(1610.0));
         }
         acc.start_run();
-        let corrected = acc.push(1624.0, true, Some(1610.0));
+        let corrected = acc.push(1624.0, true, Some(1610.0)).unwrap();
         assert!(
             (corrected - 1610.0).abs() < 1e-3,
             "the bias is the atmosphere's, not the run's: {corrected}"
@@ -662,7 +694,7 @@ mod tests {
     fn push_returns_the_bias_corrected_altitude() {
         // No GPS ever paired: the returned altitude is the raw baro reading.
         let mut baro_only = VertAccumulator::new();
-        assert!((baro_only.push(1620.0, true, None) - 1620.0).abs() < 1e-3);
+        assert!((baro_only.push(1620.0, true, None).unwrap() - 1620.0).abs() < 1e-3);
 
         // Baro reads 14 m high vs a flat GPS: once the seed window closes the
         // filter engages and the returned altitude tracks GPS — the auto-QNH
@@ -670,7 +702,7 @@ mod tests {
         let mut acc = VertAccumulator::new();
         let mut corrected = 0.0;
         for _ in 0..SEED_SAMPLES + 1 {
-            corrected = acc.push(1624.0, true, Some(1610.0));
+            corrected = acc.push(1624.0, true, Some(1610.0)).unwrap();
         }
         assert!((corrected - 1610.0).abs() < 1e-3, "auto-QNH: {corrected}");
     }
@@ -812,7 +844,7 @@ mod tests {
         let mut acc = VertAccumulator::new();
         acc.push(1624.0, true, None);
         assert_eq!(acc.rezero(1624.0, Some(1610.0)), Some(1610.0));
-        assert!((acc.push(1624.0, true, None) - 1610.0).abs() < 1e-3);
+        assert!((acc.push(1624.0, true, None).unwrap() - 1610.0).abs() < 1e-3);
     }
 
     #[test]
@@ -830,6 +862,60 @@ mod tests {
         assert!((acc.gain_m() - 4.0).abs() < 1e-3);
     }
 
+    /// A stuck-high I2C burst — every line held, the pressure registers read
+    /// as 0xFFFFFF — through the BMP581's 1/64 Pa LSB.
+    const STUCK_HIGH_PA: f32 = 16_777_215.0 / 64.0;
+
+    #[test]
+    fn a_stuck_high_pressure_read_yields_no_altitude_at_all() {
+        let raw = altitude_m(STUCK_HIGH_PA, STANDARD_SEA_LEVEL_PA);
+        assert!(
+            raw < -8_700.0,
+            "the burst has to reach the sea floor to be worth gating: {raw}"
+        );
+        assert_eq!(
+            plausible_altitude_m(STUCK_HIGH_PA, STANDARD_SEA_LEVEL_PA),
+            None
+        );
+        // Every pressure a terrestrial barometer can read still converts, so
+        // the gate can only ever drop what nothing on this device should have
+        // trusted. 107 kPa is the Dead Sea, 31 kPa is ~8,950 m.
+        for pa in [107_000.0, STANDARD_SEA_LEVEL_PA, 83_000.0, 31_000.0] {
+            assert_eq!(
+                plausible_altitude_m(pa, STANDARD_SEA_LEVEL_PA),
+                Some(altitude_m(pa, STANDARD_SEA_LEVEL_PA)),
+                "{pa} Pa was dropped"
+            );
+        }
+    }
+
+    #[test]
+    fn one_stuck_barometer_read_banks_no_vertical() {
+        // A runner on a 1,624 m col. One stuck burst reads ~8,789 m below sea
+        // level, which the deadband commits in full: 10,389 m of descent, on a
+        // total nothing later in the run can walk back.
+        let mut acc = VertAccumulator::new();
+        acc.push(1_624.0, true, None).expect("a real sample");
+        let stuck = altitude_m(STUCK_HIGH_PA, STANDARD_SEA_LEVEL_PA);
+        let refused = acc.push(stuck, true, None);
+        assert_eq!(acc.loss_m(), 0.0, "the burst was banked as descent");
+        assert_eq!(acc.gain_m(), 0.0);
+        assert_eq!(refused, None);
+        // The reference is untouched too, so the recovery sample is not banked
+        // as ten kilometres of climb on the way back up.
+        assert!((acc.push(1_624.0, true, None).expect("a real sample") - 1_624.0).abs() < 1e-3);
+        assert_eq!(acc.gain_m(), 0.0);
+    }
+
+    #[test]
+    fn a_stuck_barometer_read_cannot_snap_the_altitude_reference() {
+        let mut acc = VertAccumulator::new();
+        acc.push(1_624.0, true, None).expect("a real sample");
+        let stuck = altitude_m(STUCK_HIGH_PA, STANDARD_SEA_LEVEL_PA);
+        assert_eq!(acc.rezero(stuck, Some(1_610.0)), None);
+        assert!((acc.push(1_624.0, true, None).expect("a real sample") - 1_624.0).abs() < 1e-3);
+    }
+
     #[test]
     fn rezero_with_implausible_gps_is_a_refused_no_op() {
         let mut acc = VertAccumulator::new();
@@ -838,7 +924,7 @@ mod tests {
             assert_eq!(acc.rezero(500.0, bad), None);
         }
         // Nothing changed: the altitude frame is still raw baro.
-        assert!((acc.push(500.0, true, None) - 500.0).abs() < 1e-3);
+        assert!((acc.push(500.0, true, None).unwrap() - 500.0).abs() < 1e-3);
     }
 
     #[test]
@@ -867,7 +953,7 @@ mod tests {
         // engage over the explicit calibration.
         acc.rezero(1020.0, Some(1000.0));
         for _ in 0..100 {
-            let corrected = acc.push(1020.0, true, Some(1000.0));
+            let corrected = acc.push(1020.0, true, Some(1000.0)).unwrap();
             assert!((corrected - 1000.0).abs() < 1e-3);
         }
         assert_eq!(acc.gain_m(), 0.0);
@@ -1053,7 +1139,7 @@ mod tests {
         // full sample rate exactly as before.
         let mut acc = VertAccumulator::new();
         let climb = (0..=100).map(|step| {
-            let corrected = acc.push(step as f32, true, None);
+            let corrected = acc.push(step as f32, true, None).unwrap();
             acc.reading(corrected)
         });
         assert_eq!(publishes(climb), 101);
@@ -1068,7 +1154,7 @@ mod tests {
         let mut published: Option<Reading> = None;
         let mut n = 0;
         for step in 0..=100 {
-            let corrected = acc.push(step as f32 * 0.04, true, None);
+            let corrected = acc.push(step as f32 * 0.04, true, None).unwrap();
             let r = acc.reading(corrected);
             if should_publish(published, r) {
                 published = Some(r);
@@ -1108,7 +1194,7 @@ mod tests {
     #[test]
     fn a_manual_rezero_snap_moves_far_enough_to_publish() {
         let mut acc = VertAccumulator::new();
-        let raw = acc.push(1_624.0, true, None);
+        let raw = acc.push(1_624.0, true, None).unwrap();
         let before = acc.reading(raw);
         let snapped = acc.rezero(1_624.0, Some(1_610.0)).unwrap();
         assert!(should_publish(Some(before), acc.reading(snapped)));

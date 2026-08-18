@@ -16,7 +16,7 @@ use heapless::Vec;
 
 use crate::course::{Course, NavStatus, OffCourseAlert};
 use crate::grade_adjusted_pace::haversine_metres;
-use crate::record::{TurnCueView, MAX_SPEED_MPS};
+use crate::record::{TurnCueView, GPS_REANCHOR_AFTER_S, MAX_SPEED_MPS};
 use crate::trackback::{initial_bearing_deg, BEARING_MIN_DISTANCE_M};
 use crate::turn_cues::{
     direction_code, generate_turn_cues, next_turn_ahead, TurnCue, TurnCueOptions, TurnCueWaypoint,
@@ -53,13 +53,37 @@ pub fn course_cues(course: &Course) -> Vec<TurnCue, MAX_TURN_CUES> {
 /// recorder. The gate is course-independent — it judges the position stream,
 /// not the projection — so a course swap must NOT reset it: the runner did not
 /// teleport because the phone pushed a new route.
+///
+/// The ceiling growing with `dt` self-heals a relocation only while the runner
+/// is slower than it. Above [`MAX_SPEED_MPS`] the displacement grows faster
+/// than the ceiling does, so the gate never catches up and refuses *everything*
+/// — reproduced as a course pushed at home followed by 40 km of driving: 0
+/// fixes accepted, 129 rejected, and the first acceptance 36 minutes after
+/// arriving. A runner who drove to a race started it with a gate that
+/// could not fire the off-course latch, under a map marker moving from the raw
+/// fix. So the streak carries the recorder's escape hatch
+/// ([`crate::record::GPS_REANCHOR_AFTER_S`], `_gpsReanchorAfterSeconds` on the
+/// phone): a run of rejections that has lasted that long *and* covers at least
+/// [`REANCHOR_MIN_REJECTS`] fixes is not a bad fix, it is a stale anchor, and
+/// the fresh position is adopted. Both halves are needed — the time alone would
+/// adopt the very first outlier in a throttled GNSS mode, where one fix already
+/// spans a minute.
 pub struct FixGate {
     last: Option<(f64, f64, u32)>,
+    rejects: u32,
 }
+
+/// Rejections a streak needs before it can be a stale anchor rather than a run
+/// of bad fixes. Three, so a lone outlier — and a pair, at any fix cadence —
+/// still fails closed.
+pub const REANCHOR_MIN_REJECTS: u32 = 3;
 
 impl FixGate {
     pub const fn new() -> Self {
-        Self { last: None }
+        Self {
+            last: None,
+            rejects: 0,
+        }
     }
 
     /// Accept or reject one fix; an accepted fix becomes the new anchor.
@@ -68,18 +92,28 @@ impl FixGate {
             return false;
         }
         let Some((last_lat, last_lon, last_s)) = self.last else {
-            self.last = Some((lat_deg, lon_deg, uptime_s));
-            return true;
+            return self.anchor(lat_deg, lon_deg, uptime_s);
         };
         let dt = uptime_s.saturating_sub(last_s);
         if dt == 0 {
+            // A timestamp duplicate is not evidence of a stale anchor, so it
+            // must not count toward the escape either.
             return false;
         }
         let delta_m = haversine_metres(last_lat, last_lon, lat_deg, lon_deg);
         if delta_m > MAX_SPEED_MPS * dt as f64 {
+            self.rejects += 1;
+            if dt >= GPS_REANCHOR_AFTER_S && self.rejects >= REANCHOR_MIN_REJECTS {
+                return self.anchor(lat_deg, lon_deg, uptime_s);
+            }
             return false;
         }
+        self.anchor(lat_deg, lon_deg, uptime_s)
+    }
+
+    fn anchor(&mut self, lat_deg: f64, lon_deg: f64, uptime_s: u32) -> bool {
         self.last = Some((lat_deg, lon_deg, uptime_s));
+        self.rejects = 0;
         true
     }
 }
@@ -531,6 +565,59 @@ mod tests {
         let mut gate = FixGate::new();
         assert!(gate.accept(40.0155, -105.2705, 100));
         assert!(gate.accept(40.0155, -105.2705 + lon_offset_deg(1500.0), 700));
+    }
+
+    #[test]
+    fn a_sustained_faster_than_running_stream_re_anchors_instead_of_latching_shut() {
+        // The measured failure: a course pushed at home, then 40 km driven at
+        // 80 km/h. Displacement grows at 22 m/s and the ceiling at 10, so the
+        // gate never catches up while the car moves — every fix rejected, and
+        // no off-course latch available at the start line.
+        let mut gate = FixGate::new();
+        assert!(gate.accept(40.0155, -105.2705, 0));
+        let mut accepted = 0;
+        let mut first_accept_s = None;
+        for t in 1..=1_800u32 {
+            let east_m = 22.2 * f64::from(t);
+            if gate.accept(40.0155, -105.2705 + lon_offset_deg(east_m), t) {
+                accepted += 1;
+                first_accept_s.get_or_insert(t);
+            }
+        }
+        assert!(
+            accepted > 0,
+            "the gate refused all 1,800 fixes of the drive"
+        );
+        // ...and it re-anchors on the recorder's own budget, not 36 minutes
+        // later: GPS_REANCHOR_AFTER_S of rejections, at least three of them.
+        assert_eq!(first_accept_s, Some(GPS_REANCHOR_AFTER_S));
+        // The runner arrives and walks: the gate tracks them from the position
+        // they are actually at.
+        let arrive_m = 22.2 * 1_800.0;
+        assert!(gate.accept(40.0155, -105.2705 + lon_offset_deg(arrive_m + 5.0), 1_801));
+    }
+
+    #[test]
+    fn a_short_run_of_outliers_still_fails_closed() {
+        // The escape may not weaken the teleport guard it sits behind: two
+        // canyon bounces in a row, then an honest fix judged against the
+        // un-moved anchor.
+        let mut gate = FixGate::new();
+        assert!(gate.accept(40.0155, -105.2705, 100));
+        assert!(!gate.accept(40.0155, -105.2705 + lon_offset_deg(500.0), 101));
+        assert!(!gate.accept(40.0155, -105.2705 + lon_offset_deg(600.0), 102));
+        assert!(gate.accept(40.0155, -105.2705 + lon_offset_deg(5.0), 103));
+    }
+
+    #[test]
+    fn a_lone_outlier_in_a_throttled_mode_never_re_anchors() {
+        // Expedition mode publishes a fix a minute, so `dt` clears the
+        // re-anchor budget on the FIRST rejection. The rejection count is what
+        // keeps a single bad fix from being adopted as the truth there.
+        let mut gate = FixGate::new();
+        assert!(gate.accept(40.0155, -105.2705, 0));
+        assert!(!gate.accept(40.0155, -105.2705 + lon_offset_deg(50_000.0), 60));
+        assert!(gate.accept(40.0155, -105.2705 + lon_offset_deg(300.0), 120));
     }
 
     #[test]

@@ -16,7 +16,7 @@
 //! silent no-op, so the face's transient banner can always say what happened.
 
 use crate::elevation::{
-    rezero_reference, Reading, RezeroStatus, VertAccumulator, REZERO_MAX_FIX_AGE_S,
+    plausible_alt, rezero_reference, Reading, RezeroStatus, VertAccumulator, REZERO_MAX_FIX_AGE_S,
 };
 use crate::fix::Fix;
 
@@ -31,12 +31,15 @@ pub struct BaroSample {
 }
 
 /// The barometric altitude a re-zero may snap from, or `None` when there is
-/// none fresh enough: no sample yet, or a sensor that stopped answering more
-/// than [`REZERO_MAX_FIX_AGE_S`] ago.
+/// none worth snapping from: no sample yet, a sensor that stopped answering
+/// more than [`REZERO_MAX_FIX_AGE_S`] ago, or a reading outside
+/// [`plausible_alt`]'s window. A fresh sample is not the same as an honest one,
+/// and a sensor answering with nonsense reads as `NoBaro` — the refusal a
+/// runner can act on — rather than as a snap onto it.
 pub fn fresh_altitude_m(sample: Option<BaroSample>, now_s: u32) -> Option<f32> {
     sample
         .filter(|s| now_s.saturating_sub(s.at_s) <= REZERO_MAX_FIX_AGE_S)
-        .map(|s| s.alt_m)
+        .and_then(|s| plausible_alt(s.alt_m))
 }
 
 /// Resolve a manual re-zero request against the freshest barometer sample and
@@ -202,7 +205,7 @@ mod tests {
         // GPS, so `should_publish` sees no news — but the runner pressed the
         // button and the banner will say SET, so the reading goes out anyway.
         let mut vert = VertAccumulator::new();
-        let raw = vert.push(1_000.0, true, None);
+        let raw = vert.push(1_000.0, true, None).expect("plausible sample");
         let before = vert.reading(raw);
         let sample = BaroSample {
             alt_m: 1_000.0,
