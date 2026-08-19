@@ -310,14 +310,17 @@ mechanical change. Do not "fix" any of these without deciding the rule first.
   are the difference of consecutive `projectedElapsedS`. Web-canonical per
   [decisions § 24](../architecture/decisions.md).
 
-- [ ] **Should `backoff` and `dropset` sets also be excluded from progression
-  judging?** The warmup exclusion landed (a ramp-up set no longer reads as a
-  failed working set), matching the rule `gym_adherence` already states. But a
-  back-off or drop set is deliberately lighter too, so judging "did they hit
-  the target reps at the target weight" over them can stall progression the
-  same way. `gym_adherence` skips only `warmup`, so the fix followed that
-  precedent rather than inventing semantics. Decide the rule once and apply it
-  to both.
+- [x] **Should `backoff` and `dropset` sets also be excluded from progression
+  judging?** Decided yes and shipped in lockstep 2026-08-18 ([decisions
+  § 680](../architecture/decisions.md)): `gym_progression.ts` /
+  `gym_progression.dart` + the iOS twin drop all three deliberately-submaximal
+  types before judging, 4 mirror tests each. `gym_adherence` is deliberately
+  NOT changed — it grades against the target the routine author wrote for that
+  set, and a planned back-off set's target already IS the back-off target. The
+  bite is bodyweight work, where `workingSets` has no positive weight to narrow
+  on: an assisted set logged after three clean ones stalled the exercise
+  permanently. `amrap` / `failure` stay judged; both happen at the working
+  weight.
 
 ## Bug-hunt round 2, 2026-08-10 — verified but deferred
 
@@ -348,16 +351,22 @@ call, or a three-way lockstep port — not because it is uncertain.
 
 - [x] **Wear `drainQueue` had no re-entrancy guard.** Resolved 2026-08-18 ([decisions § 640](../architecture/decisions.md)). `drainMutex` serialises the pass with the backoff check and the queue snapshot inside it and `awaitAuth()` outside it, so the second cold-start drain re-reads a drained queue instead of re-uploading a multi-MB ultra track. The `FileNotFoundException` arm `classifyDrainError` was missing is now unreachable rather than handled. The refresh-token half needed a different fix: `refreshIfExpired` sits outside `drainQueue` and GoTrue *rotates* the token, so serialising would only make the second caller POST later with a spent one — `refreshAccessToken` is single-flighted through the new `SingleFlight.kt`.
 - [x] **Wear `LocalRunStore.save`/`remove` read-modify-write outside the DataStore transaction.** Resolved 2026-08-18 ([decisions § 640](../architecture/decisions.md)). All three mutations (`clear()` had the same shape) now reduce against the transaction's own `Preferences` snapshot inside one `edit` lambda, so a concurrent save can no longer resurrect a run the drain just removed.
-- [ ] **iOS pace look-back spans a pause.** `resume()` clears
-  `lastLocationForDistance` (the #371 fix) but not `track`, so `updatePace`
-  divides a ~200 m look-back by a span containing the entire stop. A 12-minute
-  aid stop makes the first ~200 m after resume read on the order of an hour per
-  km, published to the complication and to `checkPaceAlert` — the same class of
-  bug as the recorder pace-gap fix landed in this branch, on the other platform.
+- [x] **iOS pace look-back spans a pause.** Already fixed when re-checked
+  2026-08-18 — `WorkoutManager.sealPaceWindow()` landed in `028bb5e41` and is
+  called from both `resume()` and the GPS re-anchor escape, and
+  `WorkoutManagerPaceTests` pins the 12-minute aid stop and the withheld pace
+  until the resumed window refills. The box was simply never ticked. Verified
+  by running the suite on a watchOS 26.4 simulator: 2/2 passing.
 - [x] **Both watch apps kept the only copy of an unsynced run's GPS track in the OS-purgeable cache directory.** Resolved 2026-08-18 ([decisions § 638](../architecture/decisions.md)). Wear writes to `filesDir/tracks` via the new `recording/TrackStorage.kt`; watchOS to `Application Support/run_checkpoint` via the new `RunPayloadStorage.swift`, marked `isExcludedFromBackup`. Both carry an existing install's queued payloads across at cold start and both sweep the new home against a keep-set that can never include a live recording. The watchOS **export** moved too, not just the NDJSON — WCSession reads it off disk for the life of the transfer, by which time `reset()` has deleted the NDJSON it was built from. Honesty: Wear posts a queued run whose payload is gone with a null `track_url` rather than promising a sync forever ([§ 639](../architecture/decisions.md)); watchOS reports "GPS track unavailable — synced without it" instead of shipping an empty array indistinguishable from an indoor run.
-- [ ] **iOS `HKWorkoutSession` failure is swallowed** — `didFailWithError` is
-  empty and nothing nils the session, so HR freezes on a plausible number and a
-  partial `avg_bpm` is stamped as if it covered the whole run.
+- [x] **iOS `HKWorkoutSession` failure is swallowed** — already fixed when
+  re-checked 2026-08-18: `didFailWithError` drives `handleSessionFailure()`,
+  which nils the session and the reading, raises `heartRateUnavailable` (a
+  notice on the run screen and the summary) and withholds the partial average
+  through `summaryAverageBPM`, leaving GPS, distance and the timers untouched.
+  `HealthKitFailureTests` pins all of it — 7/7 passing on a watchOS 26.4
+  simulator. The one genuine residue closed in this round: the `error` value
+  itself was still dropped, so nothing named the reason; it is now logged like
+  `CheckpointStore`'s and `RunPayloadStorage`'s failures.
 
 ### Smaller, still real
 
@@ -670,7 +679,7 @@ rather than tacked onto an unrelated change.
 
 ### Residues from the round-7 fixes (2026-08-18)
 
-- [ ] **The mobile gym resume-card scan still tests the draft marker for mere presence.** `gym_screen.dart`'s scan uses `meta[gymSessionDraft] == null` where `routine_history.dart` uses `is Map` ([decisions § 662](../architecture/decisions.md)). Harmless today — `gym_session_screen.dart#_restoreFromDraft` re-checks `snap is! Map` and degrades to a fresh start on the same row — but it is a second copy of a predicate that has already drifted once, on the platform that did not drift. Tightening it touches a Flutter screen, its iOS twin, and the widget suite.
+- [x] **The mobile gym resume-card scan still tests the draft marker for mere presence.** Fixed 2026-08-18 ([decisions § 681](../architecture/decisions.md)). The three Dart copies of the predicate are now one `hasGymSessionDraft` in `lib/gym_session_draft.dart`, asking the JSON-object question the RPC, web and `routine_history.dart` all ask. "Harmless today" was true of the data and false of the offer: the card advertised "Workout in progress · Resume" for a row the routine history counts as performed, and the resume then landed in the fresh-start fallback. Pinned by a widget case over an array / string / number / null marker (verified failing against the old condition) plus a helper suite; mirrored to the iOS twin.
 - [ ] **Web's Strava importer is lenient where mobile is now strict.** `importOne` falls through to a trackless import when `zip.file(filename)` returns null or the member's format is unrecognised, so a `Filename` that *names* a file the archive does not hold imports silently as a summary row. Mobile throws and reports it through `ImportFailureReport` ([decisions § 664](../architecture/decisions.md)). Mobile's behaviour is the more honest of the two — the export promised a track it did not deliver, which is a different fact from never promising one — so this is web catching up to mobile, not the reverse. Out of scope for a mobile round.
 - [ ] **`LocalSessionStore` has no production consumer.** It defines `replaceFromServer` (now gated per [§ 663](../architecture/decisions.md)) but nothing under `lib/` outside `offline_store_wipe.dart` references it or `StoredSessionPlan` — `sessions_screen.dart` reads the server directly. Dead offline-cache scaffolding from session-planner P1, exercised only by its own suite. Deleting it or wiring it up is a product decision (does the session planner want an offline cache?), not a cleanup, which is why § 663 gated it consistently and left it standing.
 - [ ] **The eight `replaceFromServer` overrides repeat their gate line by line.** A `replaceResident(build)` base-class template would remove the repetition, but the overrides differ in signature and in how they read `rowsById` while building, so a behaviour-preserving rewrite of eight cache-fill paths is a much larger blast radius than the bug warranted ([§ 663](../architecture/decisions.md)). The architecture guard enforces the duplication rather than leaving it to convention, which buys the durability without the risk — reach for the template if a ninth store lands.
