@@ -294,7 +294,7 @@ When you add a new key, classify it explicitly — and update the strip list in 
 
 **Dart side (mobile + packages):** `apps/mobile_android/test/metadata_registry_test.dart` greps every `.dart` file under `apps/mobile_android/lib/`, `packages/api_client/lib/`, and `packages/run_recorder/lib/` for subscript access (`metadata['xxx']`) and map-literal writes (`metadata: { 'xxx': ... }`), and asserts every key is a row in this file. Runs in the `test-packages` CI job — a PR that adds an unregistered key fails there.
 
-**Web, watch_wear, watch_ios:** no equivalent guard yet. Parity tests on those platforms are a TODO — until then, this file plus PR review is the coordination point and the Dart-side discipline catches most cross-platform drift because the phone is the dominant writer.
+**Web, watch_wear, watch_ios:** all three now carry the equivalent guard — `apps/web/src/lib/metadata_registry_guard.test.ts`, `apps/watch_wear/android/app/src/test/kotlin/com/runapp/watchwear/MetadataRegistryTest.kt`, and `apps/watch_ios/WatchAppTests/MetadataRegistryTests.swift`, alongside the Dart pair and `packages/core_models/test/metadata_keys_test.dart`. Four rendering platforms, four guards; the only residual is a macOS CI run to compile the Swift one.
 
 ## Known issues
 

@@ -4,7 +4,7 @@ How `apps/web/` (SvelteKit 2 + Svelte 5) ships to production.
 
 Operational counterpart of [`apps/web/CLAUDE.md`](CLAUDE.md) (stack, conventions, file layout) and [`apps/web/local_testing.md`](local_testing.md) (running it locally). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md). For the rationale behind hosting choices see [`docs/architecture/decisions.md § 53`](../../docs/architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages).
 
-**Status: plan.** Today the web app exists as a working dev server only.
+**Status: live.** threkir.com has served from S3 + CloudFront since 2026-07-20; see [`docs/ops/deployment.md`](../../docs/ops/deployment.md) for the running topology.
 
 ---
 
