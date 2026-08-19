@@ -63,6 +63,7 @@ import workmanager_apple
     // the registry doubles as the messenger for our custom channel.
     if let messenger = engineBridge.pluginRegistry as? FlutterBinaryMessenger {
       WatchIngestBridge.shared.attach(binaryMessenger: messenger)
+      CalendarBridge.shared.attach(binaryMessenger: messenger)
     }
   }
 }

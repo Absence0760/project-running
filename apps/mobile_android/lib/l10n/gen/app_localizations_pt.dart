@@ -9746,6 +9746,32 @@ class AppLocalizationsPt extends AppLocalizations {
       'Adicionado ao seu registro de academia';
 
   @override
+  String get clubEventAddToCalendar => 'Adicionar ao calendário';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Adicionar esta ocorrência';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Adicionar toda a série';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Não foi possível abrir a sua aplicação de calendário.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'O seu calendário não consegue ignorar datas canceladas: $count ocorrências canceladas vão continuar a aparecer.',
+      one:
+          'O seu calendário não consegue ignorar datas canceladas: 1 ocorrência cancelada vai continuar a aparecer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => 'Certificado de conclusão';
 
   @override
@@ -22861,6 +22887,32 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get clubEventLogAsWorkoutSaved =>
       'Adicionado ao seu registro de academia';
+
+  @override
+  String get clubEventAddToCalendar => 'Adicionar ao calendário';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Adicionar esta ocorrência';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Adicionar toda a série';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Não foi possível abrir seu aplicativo de calendário.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Seu calendário não consegue pular datas canceladas: $count ocorrências canceladas ainda vão aparecer.',
+      one:
+          'Seu calendário não consegue pular datas canceladas: 1 ocorrência cancelada ainda vai aparecer.',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get clubEventDownloadCertificate => 'Certificado de conclusão';

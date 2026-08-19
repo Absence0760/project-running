@@ -9756,6 +9756,32 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'Zu deinem Gym-Log hinzugefügt';
 
   @override
+  String get clubEventAddToCalendar => 'In Kalender eintragen';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Diesen Termin eintragen';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Ganze Serie eintragen';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Deine Kalender-App konnte nicht geöffnet werden.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Dein Kalender kann abgesagte Termine nicht auslassen – $count abgesagte Termine erscheinen trotzdem.',
+      one:
+          'Dein Kalender kann abgesagte Termine nicht auslassen – 1 abgesagter Termin erscheint trotzdem.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => 'Finisher-Zertifikat';
 
   @override

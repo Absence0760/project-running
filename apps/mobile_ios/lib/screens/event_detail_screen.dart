@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../adaptive_width.dart';
 import '../auth_error.dart';
+import '../calendar_intent.dart';
 import '../event_category.dart';
 import '../event_gym_template.dart';
 import '../finisher_certificate.dart';
@@ -113,6 +114,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   // picker and banner-flagged when the active one is cancelled, so a member
   // can't RSVP to an occurrence that was called off.
   Set<DateTime> _cancelled = const {};
+  /// The series as a platform recurrence rule, or null for a one-off event and
+  /// for the rare recurring shape the rule grammar cannot state without
+  /// diverging from the occurrences this screen lists.
+  CalendarSeries? _calendarSeries;
   /// Members-only meetup coordinates via get_event_meet_point (null for
   /// non-members / no point set). Persona-hunt social-group #10.
   ({double lat, double lng})? _meetPoint;
@@ -282,6 +287,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           for (final d in instances)
             if (!_cancelled.contains(d.toUtc())) d,
         ];
+        _calendarSeries = calendarSeriesFor(
+          event.toRecurrence(),
+          cancelled: _cancelled,
+          now: now,
+        );
         _loading = false;
       });
       unawaited(_maybeLoadSessionPlan(event));
@@ -316,6 +326,37 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _debounce = Timer(const Duration(milliseconds: 250), () {
       if (mounted) _load();
     });
+  }
+
+  /// The public `/share/event/{id}` page the calendar entry links back to,
+  /// matching web's canonical for the same event.
+  String _eventShareUrl(String eventId) {
+    final base =
+        ((dotenv.isInitialized ? dotenv.maybeGet('WEB_BASE_URL') : null) ??
+                'https://threkir.com')
+            .trim()
+            .replaceAll(RegExp(r'/+$'), '');
+    return '$base/share/event/$eventId';
+  }
+
+  /// L4: a calendar hand-off that can't open says so and leaves the page as it
+  /// was. Nothing on this screen depends on it.
+  Future<void> _addToCalendar(EventView e, {CalendarSeries? series}) async {
+    final opened = await addToDeviceCalendar(
+      title: e.row.title,
+      start: series?.anchor ?? _activeInstance ?? e.row.startsAt,
+      durationMin: e.row.durationMin,
+      description: e.row.description,
+      location: e.row.meetLabel,
+      url: _eventShareUrl(e.row.id),
+      rrule: series?.rrule,
+    );
+    if (!opened && mounted) {
+      showTopBanner(
+        context,
+        AppLocalizations.of(context).clubEventCalendarUnavailable,
+      );
+    }
   }
 
   /// MapTiler static map centred on the meetup point with a marker.
@@ -851,6 +892,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               )
             else
               _buildRsvpRow(theme, e),
+            ..._buildCalendarActions(theme, e),
             if (athletic &&
                 (e.row.distanceM != null || e.row.paceTargetSec != null)) ...[
               const SizedBox(height: 16),
@@ -1027,6 +1069,56 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ),
       ),
     );
+  }
+
+  /// "Add to calendar" for the occurrence on screen, plus "Add whole series"
+  /// when the series has an expressible recurrence rule. Withheld for a past or
+  /// called-off occurrence — a calendar entry for either is noise.
+  List<Widget> _buildCalendarActions(ThemeData theme, EventView e) {
+    final active = _activeInstance;
+    if (active == null ||
+        active.isBefore(DateTime.now()) ||
+        _cancelled.contains(active.toUtc())) {
+      return const [];
+    }
+    final l10n = AppLocalizations.of(context);
+    final series = _calendarSeries;
+    return [
+      const SizedBox(height: 16),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            key: const Key('add-to-calendar'),
+            onPressed: () => _addToCalendar(e),
+            icon: const Icon(Icons.event_available, size: 18),
+            label: Text(e.freq == null
+                ? l10n.clubEventAddToCalendar
+                : l10n.clubEventAddOccurrenceToCalendar),
+          ),
+          if (series != null)
+            OutlinedButton.icon(
+              key: const Key('add-series-to-calendar'),
+              onPressed: () => _addToCalendar(e, series: series),
+              icon: const Icon(Icons.event_repeat, size: 18),
+              label: Text(l10n.clubEventAddSeriesToCalendar),
+            ),
+        ],
+      ),
+      if (series != null && series.unsubtractedCancellations.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            l10n.clubEventCalendarCancelledNote(
+              series.unsubtractedCancellations.length,
+            ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+    ];
   }
 
   Widget _buildRsvpRow(ThemeData theme, EventView e) {
