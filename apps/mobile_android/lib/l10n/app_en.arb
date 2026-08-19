@@ -15291,6 +15291,18 @@
   "@challengesLoadFailed": {
     "description": "Load failure banner"
   },
+  "challengesProgressUnavailable": "Progress unavailable — open for your result",
+  "@challengesProgressUnavailable": {
+    "description": "Shown on a joined-challenge row whose per-caller value is not in the my_active_challenges window — never a zero bar"
+  },
+  "challengesTeamNoClub": "No club",
+  "@challengesTeamNoClub": {
+    "description": "Club-vs-club leaderboard label for the unaffiliated participant group"
+  },
+  "challengesTeamPrivateClub": "Private club",
+  "@challengesTeamPrivateClub": {
+    "description": "Club-vs-club leaderboard label for a club the viewer cannot read"
+  },
   "fundraiserRaisedOfGoal": "{raised} of {goal} raised",
   "@fundraiserRaisedOfGoal": {
     "description": "Thermometer raised-of-goal label",

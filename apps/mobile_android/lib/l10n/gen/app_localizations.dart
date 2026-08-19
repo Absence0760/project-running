@@ -19376,6 +19376,24 @@ abstract class AppLocalizations {
   /// **'Couldn\'t load challenges.'**
   String get challengesLoadFailed;
 
+  /// Shown on a joined-challenge row whose per-caller value is not in the my_active_challenges window — never a zero bar
+  ///
+  /// In en, this message translates to:
+  /// **'Progress unavailable — open for your result'**
+  String get challengesProgressUnavailable;
+
+  /// Club-vs-club leaderboard label for the unaffiliated participant group
+  ///
+  /// In en, this message translates to:
+  /// **'No club'**
+  String get challengesTeamNoClub;
+
+  /// Club-vs-club leaderboard label for a club the viewer cannot read
+  ///
+  /// In en, this message translates to:
+  /// **'Private club'**
+  String get challengesTeamPrivateClub;
+
   /// Thermometer raised-of-goal label
   ///
   /// In en, this message translates to:

@@ -11709,6 +11709,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
 
   @override
+  String get challengesProgressUnavailable =>
+      'Progresso indisponível — abra para ver o seu resultado';
+
+  @override
+  String get challengesTeamNoClub => 'Sem clube';
+
+  @override
+  String get challengesTeamPrivateClub => 'Clube privado';
+
+  @override
   String fundraiserRaisedOfGoal(String raised, String goal) {
     return '$raised de $goal angariados';
   }
@@ -24945,6 +24955,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesLoadFailed => 'Não foi possível carregar os desafios.';
+
+  @override
+  String get challengesProgressUnavailable =>
+      'Progresso indisponível — abra para ver seu resultado';
+
+  @override
+  String get challengesTeamNoClub => 'Sem clube';
+
+  @override
+  String get challengesTeamPrivateClub => 'Clube privado';
 
   @override
   String fundraiserRaisedOfGoal(String raised, String goal) {

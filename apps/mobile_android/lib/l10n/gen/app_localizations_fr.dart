@@ -11735,6 +11735,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get challengesLoadFailed => 'Impossible de charger les défis.';
 
   @override
+  String get challengesProgressUnavailable =>
+      'Progression indisponible – ouvrez pour voir votre résultat';
+
+  @override
+  String get challengesTeamNoClub => 'Sans club';
+
+  @override
+  String get challengesTeamPrivateClub => 'Club privé';
+
+  @override
   String fundraiserRaisedOfGoal(String raised, String goal) {
     return '$raised sur $goal collectés';
   }

@@ -11152,6 +11152,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get challengesLoadFailed => 'チャレンジを読み込めませんでした。';
 
   @override
+  String get challengesProgressUnavailable => '進捗を表示できません。開いて結果を確認してください';
+
+  @override
+  String get challengesTeamNoClub => 'クラブなし';
+
+  @override
+  String get challengesTeamPrivateClub => '非公開クラブ';
+
+  @override
   String fundraiserRaisedOfGoal(String raised, String goal) {
     return '目標 $goal のうち $raised を達成';
   }
