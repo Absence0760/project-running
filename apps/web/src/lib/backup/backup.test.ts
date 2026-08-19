@@ -11,7 +11,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 
-import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
+import {
+	buildBackupZip,
+	readAllRows,
+	BACKUP_FORMAT,
+	BACKUP_VERSION
+} from './backup_writer';
 
 function gzipOf(_payload: object): Uint8Array {
 	// Tests don't actually need real gzip — the writer treats track
@@ -20,7 +25,7 @@ function gzipOf(_payload: object): Uint8Array {
 }
 
 test('buildBackupZip: writes a valid archive with all four metadata files', async () => {
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: [{ id: 'r-1', distance_m: 5000 }],
 		routesOut: [{ id: 'rt-1', name: 'Park loop' }],
 		profile: { username: 'tester' },
@@ -33,7 +38,7 @@ test('buildBackupZip: writes a valid archive with all four metadata files', asyn
 
 	// Round-trip via JSZip (the existing restore path uses it; pinning
 	// this proves the new writer hasn't drifted from what restore reads).
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
 
 	const manifestRaw = await zip.file('manifest.json')!.async('string');
@@ -114,7 +119,7 @@ test('buildBackupZip: a single download failure does not sink the rest', async (
 		{ id: 'r-good-2', track_url: 'uid/r-good-2.json.gz' }
 	];
 
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: runs,
 		routesOut: [],
 		profile: null,
@@ -126,16 +131,54 @@ test('buildBackupZip: a single download failure does not sink the rest', async (
 		concurrency: 4
 	});
 
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
-	// Healthy runs land in the archive; the bad one is silently absent.
+	// Healthy runs land in the archive; the bad one is absent.
 	assert.ok(zip.file('tracks/r-good-1.json.gz'), 'r-good-1 track must be present');
 	assert.ok(zip.file('tracks/r-good-2.json.gz'), 'r-good-2 track must be present');
 	assert.equal(zip.file('tracks/r-bad.json.gz'), null);
 
-	// Manifest counts reflect only the tracks actually added.
+	// Manifest counts reflect only the tracks actually added — and, since
+	// the skip is the ONLY way this file can be short of the account, the
+	// manifest says outright that it is.
 	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
 	assert.equal(manifest.counts.tracks, 2);
+	assert.equal(manifest.complete, false);
+	assert.deepEqual(manifest.incomplete, ['tracks']);
+
+	// The same verdict reaches the caller, which is what the download
+	// surface discloses without re-reading the zip it just built.
+	assert.equal(archive.incomplete.length, 1);
+	assert.equal(archive.blobsWanted, 3);
+	assert.equal(archive.blobsWritten, 2);
+});
+
+test('buildBackupZip: a whole archive declares itself complete', async () => {
+	const runs = [
+		{ id: 'r-1', track_url: 'uid/r-1.json.gz' },
+		{ id: 'r-2', track_url: 'uid/r-2.json.gz' }
+	];
+	const archive = await buildBackupZip({
+		runsOut: runs,
+		routesOut: [],
+		profile: null,
+		settingsPrefs: {},
+		userId: 'uid',
+		exportedFrom: 'test',
+		runsWithTracks: runs,
+		fetchTrackBytes: async () => gzipOf([])
+	});
+
+	const zip = await JSZip.loadAsync(new Uint8Array(await archive.blob.arrayBuffer()));
+	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+	// Both halves are emitted on the happy path too: a reader must be able
+	// to tell "this writer says it is whole" from "this writer says
+	// nothing", which is what an older archive does.
+	assert.equal(manifest.complete, true);
+	assert.deepEqual(manifest.incomplete, []);
+	assert.deepEqual(archive.incomplete, []);
+	assert.equal(archive.blobsWanted, 2);
+	assert.equal(archive.blobsWritten, 2);
 });
 
 test('buildBackupZip: empty runsWithTracks produces a valid manifest-only archive', async () => {
@@ -145,7 +188,7 @@ test('buildBackupZip: empty runsWithTracks produces a valid manifest-only archiv
 		return gzipOf([]);
 	};
 
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: [],
 		routesOut: [],
 		profile: null,
@@ -157,10 +200,13 @@ test('buildBackupZip: empty runsWithTracks produces a valid manifest-only archiv
 	});
 
 	assert.equal(calls, 0, 'no tracks → no fetcher calls');
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
 	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
 	assert.equal(manifest.counts.tracks, 0);
+	// An account with nothing to download is whole, not short.
+	assert.equal(manifest.complete, true);
+	assert.deepEqual(manifest.incomplete, []);
 });
 
 test('buildBackupZip: rejects concurrency < 1', async () => {
@@ -201,7 +247,7 @@ test('buildBackupZip: emits stage + tracks + done progress events in order', asy
 });
 
 test('buildBackupZip: profile id field is stripped to keep the archive re-homeable', async () => {
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: [],
 		routesOut: [],
 		profile: { id: 'old-user-uuid', username: 'tester' },
@@ -211,9 +257,98 @@ test('buildBackupZip: profile id field is stripped to keep the archive re-homeab
 		runsWithTracks: [],
 		fetchTrackBytes: async () => new Uint8Array()
 	});
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
 	const profile = JSON.parse(await zip.file('profile.json')!.async('string'));
 	assert.equal(profile.profile.username, 'tester');
 	assert.equal(profile.profile.id, undefined, 'id must be stripped');
+});
+
+// ─────────────────── readAllRows ───────────────────
+//
+// PostgREST answers an unranged SELECT with 200 and a silently clamped
+// 1000 rows. A backup built on that is short of the account and says
+// nothing about it — the exact failure decisions.md § 668 found on
+// mobile, and § 675 on web.
+
+function pagesOf(total: number, pageSize: number) {
+	return (from: number, to: number) =>
+		Promise.resolve({
+			data: Array.from(
+				{ length: Math.max(0, Math.min(to, total - 1) - from + 1) },
+				(_, i) => ({ id: `r-${from + i}` })
+			),
+			error: null
+		});
+}
+
+test('readAllRows: 2400 rows come back whole across three pages, not clamped at 1000', async () => {
+	const read = await readAllRows(pagesOf(2400, 1000));
+	assert.equal(read.rows.length, 2400);
+	assert.equal(read.complete, true);
+	assert.equal(read.rows[2399].id, 'r-2399');
+});
+
+test('readAllRows: an exactly-full last page is followed by one more (empty) page', async () => {
+	let calls = 0;
+	const read = await readAllRows((from, to) => {
+		calls++;
+		return pagesOf(2000, 1000)(from, to);
+	});
+	assert.equal(read.rows.length, 2000);
+	assert.equal(calls, 3, 'a full final page cannot be assumed to be the last');
+	assert.equal(read.complete, true);
+});
+
+test('readAllRows: an empty table is a COMPLETE read, not a short one', async () => {
+	const read = await readAllRows(pagesOf(0, 1000));
+	assert.deepEqual(read.rows, []);
+	assert.equal(read.complete, true);
+});
+
+test('readAllRows: a page that errors returns what it has, flagged short, and never throws', async () => {
+	const read = await readAllRows((from, to) =>
+		from === 0
+			? pagesOf(3000, 1000)(from, to)
+			: Promise.resolve({ data: null, error: new Error('connection reset') })
+	);
+	assert.equal(read.rows.length, 1000);
+	assert.equal(read.complete, false);
+	assert.equal((read.error as Error).message, 'connection reset');
+});
+
+test('readAllRows: the safety ceiling reports a shortfall rather than a whole read', async () => {
+	// A server that ignores `range` never returns a short page. Terminating
+	// is not the interesting part — refusing to call the result complete is.
+	const read = await readAllRows(
+		() => Promise.resolve({ data: [{ id: 'x' }, { id: 'y' }], error: null }),
+		2,
+		6
+	);
+	assert.equal(read.rows.length, 6);
+	assert.equal(read.complete, false);
+});
+
+test("buildBackupZip: a caller-reported short read joins the writer's own in the manifest", async () => {
+	const runs = [{ id: 'r-1', track_url: 'uid/r-1.json.gz' }];
+	const archive = await buildBackupZip({
+		runsOut: runs,
+		routesOut: [],
+		profile: null,
+		settingsPrefs: {},
+		userId: 'uid',
+		exportedFrom: 'test',
+		runsWithTracks: runs,
+		fetchTrackBytes: async () => {
+			throw new Error('storage offline');
+		},
+		incompleteSections: ['runs']
+	});
+
+	const zip = await JSZip.loadAsync(new Uint8Array(await archive.blob.arrayBuffer()));
+	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+	assert.equal(manifest.complete, false);
+	// Sorted + de-duplicated, matching the Go writer's manifest.
+	assert.deepEqual(manifest.incomplete, ['runs', 'tracks']);
+	assert.deepEqual(archive.incomplete, ['runs', 'tracks']);
 });

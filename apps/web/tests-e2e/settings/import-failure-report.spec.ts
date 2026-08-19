@@ -46,9 +46,11 @@ function stravaActivityDate(d: Date): string {
 	return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${hour}:${mm}:${ss} ${ampm}`;
 }
 
-/** Two run-type rows, trackless (empty Filename) so no Storage object is involved. */
+/** Run-type rows. `filename` defaults to empty (a manual / indoor activity,
+ *  no Storage object involved); pass one to make the row PROMISE a member. */
 async function buildStravaZip(
-	rows: { stravaId: string; name: string; startedAt: Date }[],
+	rows: { stravaId: string; name: string; startedAt: Date; filename?: string }[],
+	members: Record<string, string> = {},
 ): Promise<Buffer> {
 	const JSZip = (await import('jszip')).default;
 	const zip = new JSZip();
@@ -56,11 +58,12 @@ async function buildStravaZip(
 		'Activity ID,Activity Date,Activity Name,Activity Type,Filename,Distance,Moving Time,Elevation Gain',
 		...rows.map(
 			(r) =>
-				`${r.stravaId},"${stravaActivityDate(r.startedAt)}","${r.name}",Run,,5.00,1500,42`,
+				`${r.stravaId},"${stravaActivityDate(r.startedAt)}","${r.name}",Run,${r.filename ?? ''},5.00,1500,42`,
 		),
 		''
 	].join('\n');
 	zip.file('activities.csv', csv);
+	for (const [name, body] of Object.entries(members)) zip.file(name, body);
 	const arr = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 	return Buffer.from(arr);
 }
@@ -138,6 +141,64 @@ test.describe('bulk-import failure report', () => {
 			await expect(report).toHaveCount(0);
 		} finally {
 			await page.unroute('**/rest/v1/runs*');
+			await admin.from('runs').delete().in('external_id', externalIds);
+		}
+	});
+
+	// The export promised a track it did not deliver, which is a different
+	// fact from never promising one — and it used to import as a clean,
+	// summary-only run with nothing said (decisions.md § 676). Mobile has
+	// refused it since § 664; this is web catching up.
+	test('a Filename the archive does not contain fails the row instead of importing it trackless', async ({
+		page
+	}) => {
+		const admin = getAdminClient();
+		const startedAt = new Date();
+		const missing = {
+			stravaId: `${Date.now()}003`,
+			name: uniqueText('e2e-import-missing-member'),
+			startedAt,
+			filename: 'activities/9999999.gpx',
+		};
+		const present = {
+			stravaId: `${Date.now()}004`,
+			name: uniqueText('e2e-import-manual-row'),
+			startedAt,
+		};
+		const externalIds = [missing, present].map((r) => `strava:${r.stravaId}`);
+
+		try {
+			await page.goto('/settings/integrations');
+			const stravaBulkCard = page
+				.locator('section.bulk-import')
+				.filter({ hasText: 'Bulk import from a Strava export' });
+			await expect(stravaBulkCard).toBeVisible({ timeout: 10_000 });
+
+			await stravaBulkCard.locator('input[type="file"]').setInputFiles({
+				name: 'strava_export.zip',
+				mimeType: 'application/zip',
+				buffer: await buildStravaZip([missing, present])
+			});
+
+			const report = stravaBulkCard.getByTestId('import-failure-report');
+			await expect(report).toBeVisible({ timeout: 20_000 });
+			await expect(report).toContainText(/1 activity didn.t import/);
+			// Not "Unknown error": the archive is missing a member it named,
+			// so re-running the import cannot land this run.
+			await expect(report).toContainText('File could not be read');
+			await report.getByText('Show each activity').click();
+			await expect(report).toContainText(missing.name);
+
+			// The row that promised nothing still imports — the strictness is
+			// about a broken promise, not about a missing track.
+			const { data: landed } = await admin
+				.from('runs')
+				.select('external_id')
+				.in('external_id', externalIds);
+			const ids = (landed ?? []).map((r) => r.external_id);
+			expect(ids).toContain(`strava:${present.stravaId}`);
+			expect(ids).not.toContain(`strava:${missing.stravaId}`);
+		} finally {
 			await admin.from('runs').delete().in('external_id', externalIds);
 		}
 	});

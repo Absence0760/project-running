@@ -1,8 +1,13 @@
 import { supabase } from '../core/supabase';
 import { TABLES, BUCKETS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
-import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
-import type { BackupProgress } from './backup_writer';
+import {
+	buildBackupZip,
+	readAllRows,
+	BACKUP_FORMAT,
+	BACKUP_VERSION
+} from './backup_writer';
+import type { BackupArchive, BackupProgress } from './backup_writer';
 import { parseBackupArchive } from './backup_reader';
 import {
 	restoreOrchestrate,
@@ -29,30 +34,49 @@ import {
  */
 
 export { BACKUP_FORMAT, BACKUP_VERSION };
-export type { BackupProgress };
+export type { BackupArchive, BackupProgress };
 
 export type { RestoreProgress, RestoreResult } from './restore_orchestrator';
 
+/**
+ * Build the account's local backup archive.
+ *
+ * Returns the writer's own verdict alongside the bytes, not just the
+ * bytes: a track whose download failed is skipped so one dead blob
+ * can't sink the file, which makes the returned `incomplete` and the
+ * archive's manifest the only record that it is short. The caller has
+ * to disclose that — an archive that reads as whole is what someone
+ * wipes a device on.
+ */
 export async function createBackup(
 	onProgress?: (p: BackupProgress) => void
-): Promise<Blob> {
+): Promise<BackupArchive> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
+	// PAGED, and uncapped. An unranged select is clamped to `db-max-rows`
+	// (1000) and answered 200 with no flag, so a deep history backed itself
+	// up, was told it succeeded, and found out at restore.
 	onProgress?.({ stage: 'runs', current: 0, total: 1 });
-	const { data: runs, error: runsErr } = await supabase
-		.from(TABLES.runs)
-		.select('*')
-		.eq('user_id', userId)
-		.order('started_at', { ascending: false });
-	if (runsErr) throw runsErr;
-	const runRows = runs ?? [];
+	const runsRead = await readAllRows<Record<string, unknown>>((from, to) =>
+		supabase
+			.from(TABLES.runs)
+			.select('*')
+			.eq('user_id', userId)
+			.order('started_at', { ascending: false })
+			.range(from, to)
+	);
+	// Nothing at all is a failed backup, not a short one — the runner gets
+	// the error rather than a file with no runs in it. A read that died
+	// PART-way still holds runs worth keeping, so it ships flagged.
+	if (runsRead.error && runsRead.rows.length === 0) throw runsRead.error;
+	const runRows = runsRead.rows;
 
 	onProgress?.({ stage: 'routes', current: 0, total: 1 });
-	const { data: routes } = await supabase
-		.from('routes')
-		.select('*')
-		.eq('user_id', userId);
+	const routesRead = await readAllRows<Record<string, unknown>>((from, to) =>
+		supabase.from('routes').select('*').eq('user_id', userId).range(from, to)
+	);
+	const routes = routesRead.rows;
 
 	onProgress?.({ stage: 'profile', current: 0, total: 1 });
 	// Use the get_my_profile RPC because subscription_tier / parkrun_number
@@ -70,14 +94,16 @@ export async function createBackup(
 		const { user_id: _uid, ...rest } = r as Record<string, unknown>;
 		return rest;
 	});
-	const routesOut = (routes ?? []).map((r) => {
+	const routesOut = routes.map((r) => {
 		const { user_id: _uid, ...rest } = r as Record<string, unknown>;
 		return rest;
 	});
 
 	const runsWithTracks = runRows.filter(
-		(r): r is typeof r & { track_url: string } =>
-			typeof r.track_url === 'string' && r.track_url.length > 0
+		(r): r is Record<string, unknown> & { id: string; track_url: string } =>
+			typeof r.id === 'string' &&
+			typeof r.track_url === 'string' &&
+			r.track_url.length > 0
 	);
 
 	return buildBackupZip({
@@ -89,6 +115,12 @@ export async function createBackup(
 		exportedFrom: 'web',
 		runsWithTracks,
 		fetchTrackBytes: defaultTrackFetcher,
+		// A row read that came up short is the caller's finding, not the
+		// writer's; the manifest merges both.
+		incompleteSections: [
+			...(runsRead.complete ? [] : ['runs']),
+			...(routesRead.complete ? [] : ['routes'])
+		],
 		onProgress,
 	});
 }

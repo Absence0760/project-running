@@ -239,4 +239,25 @@ test.describe('anonymous walls', () => {
 		await page.goto('/settings/account');
 		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
 	});
+
+	// The other side of the wall. `global_segments` grants select to anon
+	// (migration 20270512_001) and /sitemap.xml points crawlers at the
+	// catalogue, so bouncing an anon visitor off it would advertise a URL
+	// that answers with a login form (decisions.md § 677).
+	test('anon /segments renders the catalogue instead of bouncing to /login', async ({
+		page
+	}) => {
+		await page.goto('/segments');
+		await expect(
+			page.getByRole('heading', { name: /Famous segments/ })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(page).toHaveURL(/\/segments$/);
+	});
+
+	// The catalogue is curated content; a per-segment page is a leaderboard
+	// of named runners, and it keeps its gate.
+	test('anon /segments/<id> still redirects to /login', async ({ page }) => {
+		await page.goto('/segments/00000000-0000-0000-0000-000000000001');
+		await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
+	});
 });

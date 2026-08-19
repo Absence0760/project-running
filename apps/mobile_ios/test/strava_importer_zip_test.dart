@@ -330,7 +330,10 @@ void main() {
       expect(r.failures.items.single.name, 'A');
       expect(r.failures.items.single.startedAt, isNotNull);
       expect(r.failures.items.single.detail, contains('activities/missing.gpx'));
-      expect(r.failures.items.single.reason, ImportFailureReason.unknown);
+      // NOT `unknown`: the archive is missing a member its own index named,
+      // so re-running the import can never land this run, and the report's
+      // reason has to say that rather than shrug.
+      expect(r.failures.items.single.reason, ImportFailureReason.unparseable);
     });
 
     test('unknown track extension is reported as a per-file error', () async {
@@ -349,7 +352,8 @@ void main() {
       expect(r.runs, isEmpty);
       expect(r.failures.items, hasLength(1));
       expect(r.failures.items.single.name, 'A');
-      expect(r.failures.items.single.detail, contains('Unknown'));
+      expect(r.failures.items.single.detail, contains('Unsupported'));
+      expect(r.failures.items.single.reason, ImportFailureReason.unparseable);
     });
   });
 

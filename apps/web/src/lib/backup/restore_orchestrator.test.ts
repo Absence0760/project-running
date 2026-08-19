@@ -10,8 +10,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+	noteIncompleteArchive,
 	restoreOrchestrate,
-	type RestoreBackend
+	type RestoreBackend,
+	type RestoreResult
 } from './restore_orchestrator';
 import type { ParsedBackup } from './backup_reader';
 
@@ -90,12 +92,17 @@ interface ParsedBackupOpts {
 	profile?: Record<string, unknown> | null;
 	settingsPrefs?: Record<string, unknown>;
 	tracks?: Record<string, Uint8Array>;
+	manifest?: Record<string, unknown>;
 }
 
 function makeParsedBackup(opts: ParsedBackupOpts = {}): ParsedBackup {
 	const tracks = opts.tracks ?? {};
 	return {
-		manifest: { format: 'run-app-backup', version: 1 },
+		manifest: {
+			format: 'run-app-backup',
+			version: 1,
+			...(opts.manifest ?? {})
+		} as ParsedBackup['manifest'],
 		runs: opts.runs ?? [],
 		routes: opts.routes ?? [],
 		profile: opts.profile ?? null,
@@ -263,7 +270,12 @@ test('happy-path single run with track uploads then upserts', async () => {
 	assert.equal(runRow.activity_type, 'run');
 });
 
-test('run with no track in archive still upserts the row, track_url=null', async () => {
+// A track-short archive restored into the account it came from used to
+// overwrite the run's own valid `track_url` with null — orphaning the
+// Storage object and costing the run its trace. The column is omitted
+// now, so PostgREST leaves the existing row's path alone and a fresh
+// insert still lands null.
+test('run with no track in archive upserts WITHOUT a track_url key', async () => {
 	const backend = makeFakeBackend();
 	const result = await restoreOrchestrate(
 		makeParsedBackup({
@@ -276,7 +288,121 @@ test('run with no track in archive still upserts the row, track_url=null', async
 	assert.equal(result.tracksUploaded, 0);
 	const row = backend.calls.find((c) => c.method === 'upsertRun')!
 		.arg as Record<string, unknown>;
-	assert.equal(row.track_url, null);
+	assert.equal('track_url' in row, false, 'track_url must be absent, not null');
+});
+
+// The archived value names the run + owner the archive was TAKEN from, so
+// re-homing it is worse than dropping it: a cross-account restore would
+// point the row at a stranger's object.
+test('an archived track_url does not survive a restore that uploaded no blob', async () => {
+	const backend = makeFakeBackend();
+	await restoreOrchestrate(
+		makeParsedBackup({
+			runs: [{ id: 'run-1', track_url: 'other-uid/run-1.json.gz' }]
+		}),
+		'uid',
+		backend
+	);
+	const row = backend.calls.find((c) => c.method === 'upsertRun')!
+		.arg as Record<string, unknown>;
+	assert.equal('track_url' in row, false);
+});
+
+// No web archive carries hr blobs, so an archived `hr_series_url` can only
+// be a foreign path — and one that fails `runs_hr_series_url_path_shape`
+// (§ 116) whenever the ids differ.
+test('an archived hr_series_url is never written back', async () => {
+	const backend = makeFakeBackend();
+	await restoreOrchestrate(
+		makeParsedBackup({
+			runs: [{ id: 'run-1', hr_series_url: 'other-uid/run-1.hr.json.gz' }],
+			tracks: { 'run-1': new Uint8Array([1, 2, 3]) }
+		}),
+		'uid',
+		backend
+	);
+	const row = backend.calls.find((c) => c.method === 'upsertRun')!
+		.arg as Record<string, unknown>;
+	assert.equal('hr_series_url' in row, false);
+	assert.equal(row.track_url, 'uid/run-1.json.gz');
+});
+
+// ─────────────────── archive completeness ───────────────────
+
+function emptyResult(): RestoreResult {
+	return {
+		runsImported: 0,
+		routesImported: 0,
+		tracksUploaded: 0,
+		profileRestored: false,
+		warnings: [],
+		archiveIncomplete: false,
+		archiveIncompleteSections: []
+	};
+}
+
+test('an archive declaring complete:false is carried into the result', async () => {
+	const backend = makeFakeBackend();
+	const result = await restoreOrchestrate(
+		makeParsedBackup({
+			runs: [{ id: 'run-1' }],
+			manifest: { complete: false, incomplete: ['tracks'] }
+		}),
+		'uid',
+		backend
+	);
+	assert.equal(result.archiveIncomplete, true);
+	assert.deepEqual(result.archiveIncompleteSections, ['tracks']);
+	// The shortfall is the archive's, not this restore's — the rows it
+	// does carry still land.
+	assert.equal(result.runsImported, 1);
+});
+
+test('an archive declaring complete:true claims no shortfall', async () => {
+	const backend = makeFakeBackend();
+	const result = await restoreOrchestrate(
+		makeParsedBackup({ manifest: { complete: true, incomplete: [] } }),
+		'uid',
+		backend
+	);
+	assert.equal(result.archiveIncomplete, false);
+	assert.deepEqual(result.archiveIncompleteSections, []);
+});
+
+// A web- or mobile-built archive from before the field existed says
+// NOTHING about itself; warning on all of those would be its own
+// dishonesty.
+test('a manifest with no completeness field claims no shortfall', async () => {
+	const backend = makeFakeBackend();
+	const result = await restoreOrchestrate(makeParsedBackup(), 'uid', backend);
+	assert.equal(result.archiveIncomplete, false);
+});
+
+test('noteIncompleteArchive: only an explicit false flags, and non-strings are dropped', () => {
+	for (const manifest of [
+		null,
+		undefined,
+		'nonsense',
+		{},
+		{ complete: true },
+		{ complete: 'false' },
+		{ complete: 0 }
+	]) {
+		const r = emptyResult();
+		noteIncompleteArchive(manifest, r);
+		assert.equal(r.archiveIncomplete, false, `flagged on ${JSON.stringify(manifest)}`);
+	}
+
+	const flagged = emptyResult();
+	noteIncompleteArchive({ complete: false, incomplete: ['tracks', 7, null] }, flagged);
+	assert.equal(flagged.archiveIncomplete, true);
+	assert.deepEqual(flagged.archiveIncompleteSections, ['tracks']);
+
+	// A shortfall with no named section is still a shortfall.
+	const unnamed = emptyResult();
+	noteIncompleteArchive({ complete: false }, unnamed);
+	assert.equal(unnamed.archiveIncomplete, true);
+	assert.deepEqual(unnamed.archiveIncompleteSections, []);
 });
 
 test('uploadTrack failure becomes a warning, row still upserts (no track_url)', async () => {

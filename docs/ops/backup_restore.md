@@ -70,10 +70,11 @@ writer asked for. `complete` is exactly `incomplete.length == 0`. Every writer
 that emits either emits both.
 
 **Only an explicit `complete: false` claims a shortfall.** An archive with no
-`complete` key says nothing about its own completeness — the web writer and
-every mobile archive built before 2026-08-18 carry no such field, and warning
-on all of those would be its own dishonesty. Readers mirror
-`ServerBackupSummary.fromJson` / `cloudExportShortfall` on this.
+`complete` key says nothing about its own completeness — every mobile or web
+archive built before 2026-08-18 carries no such field, and warning on all of
+those would be its own dishonesty. Readers mirror
+`ServerBackupSummary.fromJson` / `cloudExportShortfall` /
+`noteIncompleteArchive` on this.
 
 What can make each writer short:
 
@@ -81,7 +82,7 @@ What can make each writer short:
 |---|---|---|
 | `go-service` / `edge-function` | `runs` (past the 5000-run `MaxRunsPerExport` ceiling), any paged personal-data section, blobs | A capped export + a paging failure. `counts` for a short *paged* section publishes the **database's** own total, so a file short of it reads as a shortfall rather than as the whole set |
 | `mobile_android` / `mobile_ios` | `tracks`, `hr_series` | The row reads are paged and **uncapped**, so the runs and routes in the archive are the whole account. Only a blob download that failed can leave the file short, and the writer swallows that per-blob so one dead download can't sink the archive |
-| `web` | *nothing declared yet* | Same per-track swallow as mobile, but it does not emit the pair — see `docs/product/followups.md` |
+| `web` | `runs`, `routes`, `tracks` | Same per-track swallow as mobile. The row reads page through `readAllRows` and are **uncapped**, so `runs` / `routes` appear only when a page genuinely failed mid-read; a `runs` read that returned nothing at all raises instead of writing a file (decisions § 675) |
 
 The **mobile local writer carries no run ceiling**, deliberately. It streams to
 disk and downloads tracks in bounded batches ([decisions.md § 66]), so peak heap
@@ -209,8 +210,10 @@ as their DB rows.
   still lands with the column null, which is the truthful value there.
 - **An archive that declares itself incomplete says so at restore time.**
   `RestoreResult.archiveIncomplete` + `archiveIncompleteSections` carry the
-  manifest verdict, the first warning names it, and mobile Settings → Account
-  renders a persistent notice under the Restore tile. Nothing is lost either
+  manifest verdict, and both Settings → Account surfaces render a persistent
+  notice under the Restore tile. Mobile additionally inserts a first warning
+  naming it; web keeps the verdict out of `warnings` (which it renders as a
+  bare count) and localizes the notice from the two fields instead. Nothing is lost either
   way (restore is additive), but a runner about to wipe a phone on the strength
   of the file needs to know it is not the whole history.
 - A backup contains PII (the user's own data only). It is not encrypted

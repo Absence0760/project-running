@@ -109,6 +109,7 @@
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
+	let backupShortfall = $state<{ missing: number; wanted: number } | null>(null);
 	let restoring = $state(false);
 	let restoreProgress = $state<RestoreProgress | null>(null);
 	let restoreResult = $state<RestoreResult | null>(null);
@@ -733,10 +734,20 @@
 	}
 
 	async function handleBackup() {
-		backingUp = true; backupProgress = null;
+		backingUp = true; backupProgress = null; backupShortfall = null;
 		try {
-			const blob = await createBackup((p) => (backupProgress = p));
-			const url = URL.createObjectURL(blob);
+			const archive = await createBackup((p) => (backupProgress = p));
+			// A track whose download failed is skipped so one dead blob can't
+			// sink the file. The archive's manifest says so, but nobody reads
+			// a manifest before trusting a backup — so the download surface
+			// says it too, and keeps saying it.
+			if (archive.incomplete.length > 0) {
+				backupShortfall = {
+					missing: archive.blobsWanted - archive.blobsWritten,
+					wanted: archive.blobsWanted,
+				};
+			}
+			const url = URL.createObjectURL(archive.blob);
 			const a = document.createElement('a');
 			const ts = new Date().toISOString().replace(/[:.]/g, '-');
 			a.href = url; a.download = `run-app-backup-${ts}.zip`;
@@ -1342,6 +1353,23 @@
 			</button>
 			<input bind:this={restoreFileInput} type="file" accept=".zip" onchange={handleRestoreFile} style="display: none" />
 		</div>
+		{#if backupShortfall}
+			<p class="warn-text" role="status" data-testid="backup-shortfall">
+				{m('settingsAccount.backupPartialNotice', {
+					missing: backupShortfall.missing,
+					wanted: backupShortfall.wanted,
+				})}
+			</p>
+		{/if}
+		{#if restoreResult?.archiveIncomplete}
+			<p class="warn-text" role="status" data-testid="restore-incomplete-archive">
+				{restoreResult.archiveIncompleteSections.length > 0
+					? m('settingsAccount.restoreArchiveIncomplete', {
+							sections: restoreResult.archiveIncompleteSections.join(', '),
+						})
+					: m('settingsAccount.restoreArchiveIncompleteUnnamed')}
+			</p>
+		{/if}
 		{#if restoreResult}
 			<p class="ok-text">
 				{m('settingsAccount.restoreResult', { runs: restoreResult.runsImported, tracks: restoreResult.tracksUploaded, routes: restoreResult.routesImported })}

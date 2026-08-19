@@ -20,7 +20,7 @@ import { TABLES, METADATA_KEYS } from '../core/schema';
 import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { collectStravaDedupeSet, type StravaDedupeRow } from './strava-zip-dedupe';
 import { gunzipBlob } from '../util/gunzip';
-import { classifyStravaMember } from './strava-zip-classify';
+import { resolveStravaTrackMember } from './strava_track_member';
 import { classifyStravaRow } from './strava-zip-disposition';
 import { indexHeader, stravaDistanceMetres, type HeaderIndex } from './strava-zip-header';
 import { parseStravaCsvDateToIso } from './strava-zip-date';
@@ -195,44 +195,43 @@ async function importOne(
 	// its track instead of importing trackless. (persona round-5 F4)
 	// audit/strava May 2026 Medium #2.
 	let track: ImportedRoute['waypoints'] | null = null;
-	if (filename) {
-		const entry = zip.file(filename);
-		const { parser, gzipped } = classifyStravaMember(filename);
-		if (entry && parser) {
-			let blob = await entry.async('blob');
-			let innerName = filename.split('/').pop()!;
-			let canParse = true;
-			if (gzipped) {
-				const inflated = await gunzipBlob(blob);
-				if (inflated) {
-					blob = inflated;
-					innerName = innerName.replace(/\.gz$/i, '');
-				} else {
-					// Decompression failed (e.g. no DecompressionStream on
-					// old Safari) — import the CSV row trackless rather than
-					// dropping it. An early return here would skip saveRun
-					// while the caller still counts the row as imported
-					// (the phantom-import bug).
-					canParse = false;
-				}
+	// Throws when the row names a member the archive does not hold, or one
+	// in a format neither parser reads — the caller's per-row catch turns
+	// that into an `ImportFailureReport` entry instead of a summary-only
+	// run that reads as complete.
+	const member = resolveStravaTrackMember(filename, (name) => zip.file(name) != null);
+	if (member.kind === 'member') {
+		let blob = await zip.file(filename)!.async('blob');
+		let innerName = filename.split('/').pop()!;
+		let canParse = true;
+		if (member.gzipped) {
+			const inflated = await gunzipBlob(blob);
+			if (inflated) {
+				blob = inflated;
+				innerName = innerName.replace(/\.gz$/i, '');
+			} else {
+				// The one case that stays lenient: `gunzipBlob` cannot tell a
+				// corrupt member from a browser with no `DecompressionStream`
+				// (old Safari), and failing every gzipped row of a five-year
+				// export over the reader's own engine would be a worse
+				// outcome than a trackless import. An early return here
+				// would skip saveRun while the caller still counts the row
+				// as imported (the phantom-import bug).
+				canParse = false;
 			}
-			if (canParse) {
-				if (parser === 'fit') {
-					try {
-						const parsed = await parseFitBuffer(await blob.arrayBuffer());
-						if (parsed && parsed.track.length > 0) track = parsed.track;
-					} catch (_) {
-						// Fallthrough — keep row without track.
-					}
-				} else {
-					const synthetic = new File([blob], innerName);
-					try {
-						const routes = await parseRouteFile(synthetic);
-						if (routes.length > 0) track = routes[0].waypoints;
-					} catch (_) {
-						// Fallthrough — keep row without track.
-					}
-				}
+		}
+		if (canParse) {
+			// A parse failure is NOT swallowed: the member exists and is
+			// unreadable, which is the same broken promise as a missing one.
+			// A file that parses to zero waypoints is a different fact — the
+			// row keeps the CSV's own numbers and imports trackless.
+			if (member.parser === 'fit') {
+				const parsed = await parseFitBuffer(await blob.arrayBuffer());
+				if (parsed && parsed.track.length > 0) track = parsed.track;
+			} else {
+				const synthetic = new File([blob], innerName);
+				const routes = await parseRouteFile(synthetic);
+				if (routes.length > 0) track = routes[0].waypoints;
 			}
 		}
 	}
