@@ -127,10 +127,11 @@ CalendarSeries? calendarSeriesFor(
   final freq = e.freq;
   if (freq == null) return null;
 
+  final seriesStart = _wholeSecond(e.startsAt);
   final anchors = expandInstances(
     e,
-    e.startsAt,
-    e.startsAt.add(_anchorWindow),
+    seriesStart,
+    seriesStart.add(_anchorWindow),
     max: 1,
   );
   if (anchors.isEmpty) return null;
@@ -168,12 +169,22 @@ CalendarSeries? calendarSeriesFor(
   final until = e.until;
   if (count != null && until != null) {
     return (
-      count: expandInstances(e, e.startsAt, until, max: count).length,
+      count:
+          expandInstances(e, _wholeSecond(e.startsAt), until, max: count).length,
       until: null,
     );
   }
   return (count: count, until: until);
 }
+
+/// [expandInstances] stamps every occurrence at whole-second resolution, so a
+/// `starts_at` carrying sub-second precision sorts strictly after its own first
+/// occurrence — searching from the raw value silently drops it and anchors the
+/// series one period late (and counts one occurrence short).
+DateTime _wholeSecond(DateTime d) => DateTime.fromMillisecondsSinceEpoch(
+      d.millisecondsSinceEpoch - d.millisecondsSinceEpoch % 1000,
+      isUtc: d.isUtc,
+    );
 
 /// The BYDAY set, read off the expansion rather than translated from
 /// `recurrence_byday`: the stored codes are wall-clock in the event's own zone
@@ -184,7 +195,9 @@ List<Weekday> _seriesWeekdays(EventRecurrence e, DateTime anchor) {
   final cycleDays = e.freq == RecurrenceFreq.biweekly ? 15 : 8;
   final cycle = expandInstances(
     e,
-    e.startsAt,
+    _wholeSecond(e.startsAt),
+    // elapsed-time: a loose upper bound on one recurrence cycle, matching the
+    // millisecond span web's twin walks — not a calendar step.
     anchor.add(Duration(days: cycleDays)),
     max: 20,
   );

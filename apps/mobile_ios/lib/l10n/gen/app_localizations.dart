@@ -16016,6 +16016,36 @@ abstract class AppLocalizations {
   /// **'Added to your gym log'**
   String get clubEventLogAsWorkoutSaved;
 
+  /// Button that hands a one-off club event to the phone's calendar app.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to calendar'**
+  String get clubEventAddToCalendar;
+
+  /// Button that hands only the selected occurrence of a recurring club event to the phone's calendar app.
+  ///
+  /// In en, this message translates to:
+  /// **'Add this occurrence'**
+  String get clubEventAddOccurrenceToCalendar;
+
+  /// Button that hands a recurring club event to the phone's calendar app as a repeating entry.
+  ///
+  /// In en, this message translates to:
+  /// **'Add whole series'**
+  String get clubEventAddSeriesToCalendar;
+
+  /// Banner shown when the calendar hand-off could not be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open your calendar app.'**
+  String get clubEventCalendarUnavailable;
+
+  /// Note under the add-whole-series button naming how many called-off occurrences the repeating calendar entry will still show.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Your calendar can\'t skip called-off dates, so 1 cancelled occurrence will still appear.} other{Your calendar can\'t skip called-off dates, so {count} cancelled occurrences will still appear.}}'**
+  String clubEventCalendarCancelledNote(int count);
+
   /// Tooltip / title for the action that opens a finisher's downloadable certificate.
   ///
   /// In en, this message translates to:

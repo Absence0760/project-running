@@ -130,6 +130,28 @@ void main() {
       expect(series.rrule, 'FREQ=WEEKLY;BYDAY=SA');
     });
 
+    test('a sub-second start still anchors on its own first occurrence', () {
+      // The expansion stamps whole seconds, so searching from the raw instant
+      // drops the first occurrence and lands the anchor a week late.
+      final series = calendarSeriesFor(
+        _weekly(startsAt: DateTime.utc(2026, 6, 20, 18, 0, 0, 123, 456)),
+        now: DateTime.utc(2026, 6, 16),
+      );
+      expect(series!.anchor, DateTime.utc(2026, 6, 20, 18));
+    });
+
+    test('a sub-second start does not cost the series an occurrence', () {
+      final series = calendarSeriesFor(
+        _weekly(
+          startsAt: DateTime.utc(2026, 6, 20, 18, 0, 0, 123, 456),
+          count: 9,
+          until: DateTime.utc(2026, 7, 4, 18),
+        ),
+        now: DateTime.utc(2026, 6, 16),
+      );
+      expect(series!.rrule, 'FREQ=WEEKLY;COUNT=3;BYDAY=SA');
+    });
+
     test('the weekday set is read off the expansion', () {
       final series = calendarSeriesFor(
         _weekly(byday: [Weekday.tu, Weekday.th]),

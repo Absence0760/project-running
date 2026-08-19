@@ -9643,6 +9643,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'Added to your gym log';
 
   @override
+  String get clubEventAddToCalendar => 'Add to calendar';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Add this occurrence';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Add whole series';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Couldn\'t open your calendar app.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Your calendar can\'t skip called-off dates, so $count cancelled occurrences will still appear.',
+      one:
+          'Your calendar can\'t skip called-off dates, so 1 cancelled occurrence will still appear.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => 'Finisher certificate';
 
   @override

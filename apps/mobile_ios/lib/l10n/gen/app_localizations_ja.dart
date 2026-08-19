@@ -9242,6 +9242,28 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'ジムログに追加しました';
 
   @override
+  String get clubEventAddToCalendar => 'カレンダーに追加';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'この回を追加';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'シリーズ全体を追加';
+
+  @override
+  String get clubEventCalendarUnavailable => 'カレンダーアプリを開けませんでした。';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'カレンダーは中止された日を除外できないため、中止された$count回もそのまま表示されます。',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => '完走証';
 
   @override

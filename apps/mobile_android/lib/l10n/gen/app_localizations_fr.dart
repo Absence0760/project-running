@@ -9771,6 +9771,32 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'Ajouté à votre journal de muscu';
 
   @override
+  String get clubEventAddToCalendar => 'Ajouter au calendrier';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Ajouter cette occurrence';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Ajouter toute la série';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Impossible d\'ouvrir votre application Calendrier.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Votre calendrier ne peut pas ignorer les dates annulées : $count occurrences annulées apparaîtront quand même.',
+      one:
+          'Votre calendrier ne peut pas ignorer les dates annulées : 1 occurrence annulée apparaîtra quand même.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => 'Certificat de finisher';
 
   @override
