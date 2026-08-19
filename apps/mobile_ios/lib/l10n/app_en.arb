@@ -16608,5 +16608,110 @@
   "settingsGearUnavailable": "Gear isn't available on this build",
   "@settingsGearUnavailable": {
     "description": "Reason on the disabled Gear tile when no gear store is wired on this mount"
+  },
+  "loadRampTitle": "Training load ramp",
+  "@loadRampTitle": {
+    "description": "Dashboard load-ramp card title"
+  },
+  "loadRampRatioCaption": "this week vs your 4-week average",
+  "@loadRampRatioCaption": {
+    "description": "Caption under the acute:chronic ratio figure"
+  },
+  "loadRampAcuteLabel": "Last 7 days",
+  "@loadRampAcuteLabel": {
+    "description": "Label for the last-7-days distance figure"
+  },
+  "loadRampChronicLabel": "4-week weekly average",
+  "@loadRampChronicLabel": {
+    "description": "Label for the four-week weekly-average distance figure"
+  },
+  "loadRampBandLow": "Low",
+  "@loadRampBandLow": {
+    "description": "Injury-risk band chip: low"
+  },
+  "loadRampBandOptimal": "Optimal",
+  "@loadRampBandOptimal": {
+    "description": "Injury-risk band chip: optimal"
+  },
+  "loadRampBandElevated": "Elevated",
+  "@loadRampBandElevated": {
+    "description": "Injury-risk band chip: elevated"
+  },
+  "loadRampBandHigh": "High",
+  "@loadRampBandHigh": {
+    "description": "Injury-risk band chip: high"
+  },
+  "loadRampMeaningLow": "You're running below your recent base. Fine for a taper or a recovery week; sustained, it's detraining.",
+  "@loadRampMeaningLow": {
+    "description": "What a low band means for the runner"
+  },
+  "loadRampMeaningOptimal": "Your week sits in the range that best protects against injury. Keep building at this rate.",
+  "@loadRampMeaningOptimal": {
+    "description": "What an optimal band means for the runner"
+  },
+  "loadRampMeaningElevated": "You've stepped up faster than your recent base supports. Hold this week steady rather than adding more.",
+  "@loadRampMeaningElevated": {
+    "description": "What an elevated band means for the runner"
+  },
+  "loadRampMeaningHigh": "This is a sharp spike over your recent base — the pattern most associated with injury. Consider an easier week.",
+  "@loadRampMeaningHigh": {
+    "description": "What a high band means for the runner"
+  },
+  "loadRampTrendRamping": "Your load is ramping up.",
+  "@loadRampTrendRamping": {
+    "description": "Load-trend footnote: ramping"
+  },
+  "loadRampTrendSteady": "Your load is holding steady.",
+  "@loadRampTrendSteady": {
+    "description": "Load-trend footnote: steady"
+  },
+  "loadRampTrendTapering": "Your load is tapering off.",
+  "@loadRampTrendTapering": {
+    "description": "Load-trend footnote: tapering"
+  },
+  "comebackTitle": "Coming back from a break",
+  "@comebackTitle": {
+    "description": "Dashboard comeback card title"
+  },
+  "comebackVerdictEasingIn": "Easing in",
+  "@comebackVerdictEasingIn": {
+    "description": "Comeback verdict chip: easing in"
+  },
+  "comebackVerdictSteep": "Big first week",
+  "@comebackVerdictSteep": {
+    "description": "Comeback verdict chip: big first week"
+  },
+  "comebackLayoff": "{weeks} weeks without a run",
+  "@comebackLayoff": {
+    "description": "How long the runner was away, in whole weeks",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "comebackShareCaption": "this week vs your average week before the break",
+  "@comebackShareCaption": {
+    "description": "Caption under the share-of-pre-break-base figure"
+  },
+  "comebackMeaningEasingIn": "This week sits comfortably under the weeks you were running before the break. Building back gradually from here is what makes the comeback stick.",
+  "@comebackMeaningEasingIn": {
+    "description": "What an easing-in comeback means for the runner"
+  },
+  "comebackMeaningSteep": "This week is already more than half of what you were running before the break. Your body has lost the base that made those weeks routine, so a shorter week now costs far less than a setback later.",
+  "@comebackMeaningSteep": {
+    "description": "What a steep first week back means for the runner"
+  },
+  "comebackThisWeekLabel": "Last 7 days",
+  "@comebackThisWeekLabel": {
+    "description": "Label for the last-7-days distance figure"
+  },
+  "comebackBaseLabel": "Weekly average before the break",
+  "@comebackBaseLabel": {
+    "description": "Label for the pre-break weekly-average distance figure"
+  },
+  "comebackFootnote": "Your training load ramp comes back once you have a few consistent weeks again.",
+  "@comebackFootnote": {
+    "description": "Note that the load-ramp card returns once the runner is consistent again"
   }
 }

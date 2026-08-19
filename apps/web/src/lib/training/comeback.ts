@@ -21,8 +21,8 @@
  * Pure (no Svelte / Supabase) so it runs under `npx tsx --test`.
  *
  * Dart twin: apps/mobile_android/lib/comeback.dart (parity pair — keep the
- * algorithm, thresholds, gates, and test counts in lockstep). The web surface
- * is `ComebackCard.svelte`.
+ * algorithm, thresholds, gates, and test counts in lockstep). The surfaces are
+ * `ComebackCard.svelte` here and `widgets/comeback_card.dart` there.
  */
 
 import { kLayoffResetDays } from './training_load';

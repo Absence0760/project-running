@@ -12902,4 +12902,89 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsGearUnavailable => 'Gear isn\'t available on this build';
+
+  @override
+  String get loadRampTitle => 'Training load ramp';
+
+  @override
+  String get loadRampRatioCaption => 'this week vs your 4-week average';
+
+  @override
+  String get loadRampAcuteLabel => 'Last 7 days';
+
+  @override
+  String get loadRampChronicLabel => '4-week weekly average';
+
+  @override
+  String get loadRampBandLow => 'Low';
+
+  @override
+  String get loadRampBandOptimal => 'Optimal';
+
+  @override
+  String get loadRampBandElevated => 'Elevated';
+
+  @override
+  String get loadRampBandHigh => 'High';
+
+  @override
+  String get loadRampMeaningLow =>
+      'You\'re running below your recent base. Fine for a taper or a recovery week; sustained, it\'s detraining.';
+
+  @override
+  String get loadRampMeaningOptimal =>
+      'Your week sits in the range that best protects against injury. Keep building at this rate.';
+
+  @override
+  String get loadRampMeaningElevated =>
+      'You\'ve stepped up faster than your recent base supports. Hold this week steady rather than adding more.';
+
+  @override
+  String get loadRampMeaningHigh =>
+      'This is a sharp spike over your recent base — the pattern most associated with injury. Consider an easier week.';
+
+  @override
+  String get loadRampTrendRamping => 'Your load is ramping up.';
+
+  @override
+  String get loadRampTrendSteady => 'Your load is holding steady.';
+
+  @override
+  String get loadRampTrendTapering => 'Your load is tapering off.';
+
+  @override
+  String get comebackTitle => 'Coming back from a break';
+
+  @override
+  String get comebackVerdictEasingIn => 'Easing in';
+
+  @override
+  String get comebackVerdictSteep => 'Big first week';
+
+  @override
+  String comebackLayoff(int weeks) {
+    return '$weeks weeks without a run';
+  }
+
+  @override
+  String get comebackShareCaption =>
+      'this week vs your average week before the break';
+
+  @override
+  String get comebackMeaningEasingIn =>
+      'This week sits comfortably under the weeks you were running before the break. Building back gradually from here is what makes the comeback stick.';
+
+  @override
+  String get comebackMeaningSteep =>
+      'This week is already more than half of what you were running before the break. Your body has lost the base that made those weeks routine, so a shorter week now costs far less than a setback later.';
+
+  @override
+  String get comebackThisWeekLabel => 'Last 7 days';
+
+  @override
+  String get comebackBaseLabel => 'Weekly average before the break';
+
+  @override
+  String get comebackFootnote =>
+      'Your training load ramp comes back once you have a few consistent weeks again.';
 }

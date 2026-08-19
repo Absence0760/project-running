@@ -16,8 +16,8 @@
  * Pure (no Svelte / Supabase) so it runs under `npx tsx --test`.
  *
  * Dart twin: apps/mobile_android/lib/self_load.dart (parity pair — keep the
- * algorithm, band edges, gates, and test counts in lockstep). The web surface
- * is `LoadRampCard.svelte`.
+ * algorithm, band edges, gates, and test counts in lockstep). The surfaces are
+ * `LoadRampCard.svelte` here and `widgets/load_ramp_card.dart` there.
  */
 
 import {

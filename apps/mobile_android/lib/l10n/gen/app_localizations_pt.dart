@@ -13038,6 +13038,91 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get settingsGearUnavailable =>
       'Equipamento não está disponível nesta versão';
+
+  @override
+  String get loadRampTitle => 'Progressão de carga';
+
+  @override
+  String get loadRampRatioCaption => 'esta semana vs sua média de 4 semanas';
+
+  @override
+  String get loadRampAcuteLabel => 'Últimos 7 dias';
+
+  @override
+  String get loadRampChronicLabel => 'Média semanal (4 semanas)';
+
+  @override
+  String get loadRampBandLow => 'Baixa';
+
+  @override
+  String get loadRampBandOptimal => 'Ótima';
+
+  @override
+  String get loadRampBandElevated => 'Elevada';
+
+  @override
+  String get loadRampBandHigh => 'Alta';
+
+  @override
+  String get loadRampMeaningLow =>
+      'Você está correndo abaixo da sua base recente. Ok para um polimento ou semana de recuperação; se durar, é perda de forma.';
+
+  @override
+  String get loadRampMeaningOptimal =>
+      'Sua semana está na faixa que melhor protege contra lesões. Continue evoluindo nesse ritmo.';
+
+  @override
+  String get loadRampMeaningElevated =>
+      'Você subiu mais rápido do que sua base recente sustenta. Mantenha esta semana estável em vez de adicionar mais.';
+
+  @override
+  String get loadRampMeaningHigh =>
+      'É um salto forte sobre sua base recente — o padrão mais associado a lesões. Considere uma semana mais leve.';
+
+  @override
+  String get loadRampTrendRamping => 'Sua carga está aumentando.';
+
+  @override
+  String get loadRampTrendSteady => 'Sua carga está estável.';
+
+  @override
+  String get loadRampTrendTapering => 'Sua carga está diminuindo.';
+
+  @override
+  String get comebackTitle => 'Voltando de uma pausa';
+
+  @override
+  String get comebackVerdictEasingIn => 'Retomada gradual';
+
+  @override
+  String get comebackVerdictSteep => 'Primeira semana puxada';
+
+  @override
+  String comebackLayoff(int weeks) {
+    return '$weeks semanas sem correr';
+  }
+
+  @override
+  String get comebackShareCaption =>
+      'esta semana em relação à sua média semanal antes da pausa';
+
+  @override
+  String get comebackMeaningEasingIn =>
+      'Esta semana está confortavelmente abaixo das semanas que você corria antes da pausa. Reconstruir aos poucos a partir daqui é o que faz a volta se sustentar.';
+
+  @override
+  String get comebackMeaningSteep =>
+      'Esta semana já passa da metade do que você corria antes da pausa. Seu corpo perdeu a base que tornava aquelas semanas rotineiras, então uma semana mais curta agora custa muito menos do que uma recaída depois.';
+
+  @override
+  String get comebackThisWeekLabel => 'Últimos 7 dias';
+
+  @override
+  String get comebackBaseLabel => 'Média semanal antes da pausa';
+
+  @override
+  String get comebackFootnote =>
+      'Sua curva de carga de treino volta assim que você tiver algumas semanas consistentes de novo.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -26067,4 +26152,89 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get settingsGearUnavailable =>
       'Equipamento não está disponível nesta versão';
+
+  @override
+  String get loadRampTitle => 'Progressão de carga';
+
+  @override
+  String get loadRampRatioCaption => 'esta semana vs sua média de 4 semanas';
+
+  @override
+  String get loadRampAcuteLabel => 'Últimos 7 dias';
+
+  @override
+  String get loadRampChronicLabel => 'Média semanal (4 semanas)';
+
+  @override
+  String get loadRampBandLow => 'Baixa';
+
+  @override
+  String get loadRampBandOptimal => 'Ótima';
+
+  @override
+  String get loadRampBandElevated => 'Elevada';
+
+  @override
+  String get loadRampBandHigh => 'Alta';
+
+  @override
+  String get loadRampMeaningLow =>
+      'Você está correndo abaixo da sua base recente. Ok para um polimento ou semana de recuperação; se durar, é perda de forma.';
+
+  @override
+  String get loadRampMeaningOptimal =>
+      'Sua semana está na faixa que melhor protege contra lesões. Continue evoluindo nesse ritmo.';
+
+  @override
+  String get loadRampMeaningElevated =>
+      'Você subiu mais rápido do que sua base recente sustenta. Mantenha esta semana estável em vez de adicionar mais.';
+
+  @override
+  String get loadRampMeaningHigh =>
+      'É um salto forte sobre sua base recente — o padrão mais associado a lesões. Considere uma semana mais leve.';
+
+  @override
+  String get loadRampTrendRamping => 'Sua carga está aumentando.';
+
+  @override
+  String get loadRampTrendSteady => 'Sua carga está estável.';
+
+  @override
+  String get loadRampTrendTapering => 'Sua carga está diminuindo.';
+
+  @override
+  String get comebackTitle => 'Voltando de uma pausa';
+
+  @override
+  String get comebackVerdictEasingIn => 'Retomada gradual';
+
+  @override
+  String get comebackVerdictSteep => 'Primeira semana puxada';
+
+  @override
+  String comebackLayoff(int weeks) {
+    return '$weeks semanas sem correr';
+  }
+
+  @override
+  String get comebackShareCaption =>
+      'esta semana em relação à sua média semanal antes da pausa';
+
+  @override
+  String get comebackMeaningEasingIn =>
+      'Esta semana está confortavelmente abaixo das semanas que você corria antes da pausa. Reconstruir aos poucos a partir daqui é o que faz a volta se sustentar.';
+
+  @override
+  String get comebackMeaningSteep =>
+      'Esta semana já passa da metade do que você corria antes da pausa. Seu corpo perdeu a base que tornava aquelas semanas rotineiras, então uma semana mais curta agora custa muito menos do que uma recaída depois.';
+
+  @override
+  String get comebackThisWeekLabel => 'Últimos 7 dias';
+
+  @override
+  String get comebackBaseLabel => 'Média semanal antes da pausa';
+
+  @override
+  String get comebackFootnote =>
+      'Sua curva de carga de treino volta assim que você tiver algumas semanas consistentes de novo.';
 }
