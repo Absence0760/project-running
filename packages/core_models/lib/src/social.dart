@@ -289,6 +289,36 @@ class SegmentEffortWithSegment {
   });
 }
 
+/// One row of a free-standing catalogue-segment leaderboard (decisions §233).
+/// The global-catalogue twin of [SegmentLeaderboardEntry]; mirrors the web
+/// `GlobalSegmentLeaderboardEntry` interface.
+class GlobalSegmentLeaderboardEntry {
+  final GlobalSegmentEffortRow effort;
+  final PublicProfile athlete;
+  final int rank;
+
+  const GlobalSegmentLeaderboardEntry({
+    required this.effort,
+    required this.athlete,
+    required this.rank,
+  });
+}
+
+/// One catalogue-segment effort a run earned, joined to the segment and ranked.
+/// The global-catalogue twin of [SegmentEffortWithSegment]; mirrors the web
+/// `GlobalSegmentEffortWithSegment` interface.
+class GlobalSegmentEffortWithSegment {
+  final GlobalSegmentEffortRow effort;
+  final GlobalSegmentRow segment;
+  final int rank;
+
+  const GlobalSegmentEffortWithSegment({
+    required this.effort,
+    required this.segment,
+    required this.rank,
+  });
+}
+
 /// A single (lat, lng) sample returned by `heatmap_points_in_bbox`.
 /// Mobile mirror of the web `HeatmapPoint` interface; renders as a
 /// low-opacity circle on the heatmap layer so stacking creates the

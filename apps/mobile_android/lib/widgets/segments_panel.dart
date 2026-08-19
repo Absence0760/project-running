@@ -800,7 +800,7 @@ class _LeaderboardRow extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Text(
-            _fmtTime(entry.effort.timeSeconds),
+            formatEffortTime(entry.effort.timeSeconds),
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -808,16 +808,5 @@ class _LeaderboardRow extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _fmtTime(double seconds) {
-    final total = seconds.round();
-    final h = total ~/ 3600;
-    final m = (total % 3600) ~/ 60;
-    final s = total % 60;
-    if (h > 0) {
-      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    }
-    return '$m:${s.toString().padLeft(2, '0')}';
   }
 }
