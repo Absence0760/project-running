@@ -183,6 +183,12 @@ jobs:
         run: |
           node scripts/check_toolchain_pins.mjs
           node --test scripts/check_toolchain_pins.test.mjs
+      # The stack-start wait loop is shell inside a composite action, so it
+      # runs in no job's test suite. Its accounting (a wall-clock deadline the
+      # error string can be trusted to report) and its failure forensics are
+      # pinned here by driving it with stub curl/docker on PATH.
+      - name: Supabase stack sidecar wait loop
+        run: node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs
 
   test-packages:
     needs: changes
@@ -300,7 +306,10 @@ jobs:
       # src/routes (e.g. the preferences i18n guard) were silently never run.
       - name: Web TS unit tests
         working-directory: apps/web
-        run: npx tsx --test 'src/**/*.test.ts'
+        # tests-e2e/fixtures holds the Playwright harness guards, which run in
+        # no Playwright shard (the config ignores **/fixtures/**) — they are
+        # unit tests of the harness itself.
+        run: npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts'
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
