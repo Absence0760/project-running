@@ -21,7 +21,11 @@
 /// `export-data` heavy zips, OAuth code exchange. Fail-closed returns
 /// 503 with a `Retry-After: 60` so the client can back off and retry.
 
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+// `?target=deno` even though this is type-only: the specifier still enters the
+// worker's module graph, and the default build's `node:` imports pull
+// `@types/node` over the network at boot. Measured — leaving THIS line at the
+// default re-arms the failure for clip-public-track on its own (decisions § 699).
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0?target=deno';
 
 export interface RateLimitOpts {
   /// When the rate-limit RPC itself errors, return 503 instead of
