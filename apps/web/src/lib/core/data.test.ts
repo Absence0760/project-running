@@ -447,23 +447,44 @@ test('enrichClubs reads the trigger-maintained member_count cache, not a per-mem
 	);
 });
 
-test('deleteNotifications batches into one .in() delete, guards empty, surfaces errors', () => {
-	// Reason: bulk-dismissing a collapsed notification group used to await
-	// deleteNotification(id) in a for-loop — one DELETE round-trip per
-	// member, so dismissing a 20-member group fired 20 sequential requests
-	// (issue #350). The batched path must delete all ids in ONE query via
-	// .in('id', ids), short-circuit an empty list (an empty .in() would
-	// match nothing but still round-trips), and throw the supabase error
-	// (supabase-js resolves {error}, never throws — dropping the check
-	// silently swallows a failed bulk-dismiss while the row vanishes).
+test('deleteNotifications is one delete_notifications RPC call, guards empty, surfaces errors', () => {
+	// Reason: bulk-dismissing a collapsed group used to await
+	// deleteNotification(id) in a for-loop — one DELETE per member (issue
+	// #350). Batching it into `.in('id', ids)` fixed the N+1 and inherited a
+	// worse failure: PostgREST serialises an `in` filter into the request
+	// URL, so a list past the gateway's request-line budget matched NOTHING
+	// and still answered 200 — a >100-row dismiss silently deleted zero rows
+	// (decisions § 653). Chunking the list is not the fix either; it trades
+	// the silent no-op for a partial dismiss, and the undo offer is already
+	// spent by the time chunk 3 of 5 fails.
+	//
+	// The array rides the RPC's POST body, which has no such bound, so the
+	// whole dismiss is ONE statement in ONE transaction (migration
+	// 20270529_001). That atomicity is what this file can observe: a single
+	// awaited call with the full id list, never a loop and never a re-chunk.
 	const source = read('src/lib/core/data.ts');
 	const fnMatch = source.match(/export async function deleteNotifications[\s\S]*?\n}/);
 	assert.ok(fnMatch, 'Could not locate deleteNotifications — rename?');
 	const body = fnMatch![0];
 	assert.match(
 		body,
-		/\.in\('id', ids\)/,
-		'deleteNotifications must delete every id in ONE query via .in(\'id\', ids) — a per-id loop is the N+1 issue #350 fixed.',
+		/supabase\.rpc\('delete_notifications', \{ p_ids: ids \}\)/,
+		'deleteNotifications must hand the whole id list to the delete_notifications RPC — that is what makes the dismiss one transaction.',
+	);
+	assert.doesNotMatch(
+		body,
+		/\.in\(/,
+		"deleteNotifications must not go back to an `in` filter — past the request-line budget it matches nothing and still answers 200 (decisions § 653).",
+	);
+	assert.doesNotMatch(
+		body,
+		/for \(|\.map\(|while \(|chunk/i,
+		'deleteNotifications must not loop or chunk — either shape can leave the dismiss partial, which is the whole reason the RPC exists.',
+	);
+	assert.equal(
+		(body.match(/await /g) ?? []).length,
+		1,
+		'deleteNotifications must await exactly one call — a second round-trip is a second transaction.',
 	);
 	assert.match(
 		body,
@@ -473,7 +494,7 @@ test('deleteNotifications batches into one .in() delete, guards empty, surfaces 
 	assert.match(
 		body,
 		/if \(error\) throw error;/,
-		'deleteNotifications must throw the supabase error — a swallowed failure leaves the row gone from the UI but present in the DB.',
+		'deleteNotifications must throw the supabase error — a swallowed failure leaves the row gone from the UI but present in the DB. The RPC also RAISES past its 1000-id cap rather than truncating, and that refusal must reach the caller.',
 	);
 });
 
