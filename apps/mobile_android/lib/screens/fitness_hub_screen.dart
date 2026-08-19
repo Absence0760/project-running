@@ -1,5 +1,4 @@
 import 'package:api_client/api_client.dart';
-import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ui_kit/ui_kit.dart';
@@ -75,10 +74,6 @@ class FitnessHubScreen extends StatefulWidget {
   final SettingsSyncService? settingsSync;
   final TrainingService training;
 
-  /// Preselect-this-route handoff used by the Runs → Routes surface when a
-  /// user picks "Start with this route"; plumbed up to the home shell so the
-  /// run starts on the keep-alive recorder page.
-  final void Function(cm.Route route)? onStartRun;
 
   /// Sub-tab to open on first mount.
   final FitnessTab initialTab;
@@ -94,7 +89,6 @@ class FitnessHubScreen extends StatefulWidget {
     required this.preferences,
     required this.training,
     this.settingsSync,
-    this.onStartRun,
     this.initialTab = FitnessTab.history,
   });
 
@@ -130,7 +124,6 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
         routeStore: widget.routeStore,
         runStore: widget.runStore,
         preferences: widget.preferences,
-        onStartRun: widget.onStartRun,
         social: widget.social,
       ),
     ));

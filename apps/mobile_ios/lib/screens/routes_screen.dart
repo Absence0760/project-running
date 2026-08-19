@@ -68,7 +68,6 @@ class RoutesScreen extends StatefulWidget {
   /// local store as well as the server (issue #239).
   final LocalRunStore? runStore;
   final Preferences preferences;
-  final void Function(cm.Route route)? onStartRun;
   /// Optional social service. Threaded into [RouteBuilderScreen] so
   /// the SaveRouteDialog can show a "Save to" picker populated with
   /// the user's clubs. When null, the picker is hidden and saved
@@ -88,7 +87,6 @@ class RoutesScreen extends StatefulWidget {
     required this.routeStore,
     this.runStore,
     required this.preferences,
-    this.onStartRun,
     this.social,
     this.embedded = false,
   });
@@ -1127,9 +1125,9 @@ class RoutesScreenState extends State<RoutesScreen> {
                         _toggleSelection(route.id);
                         return;
                       }
-                      final picked = await Navigator.push<cm.Route?>(
+                      await Navigator.push<void>(
                         context,
-                        MaterialPageRoute(
+                        MaterialPageRoute<void>(
                           builder: (_) => RouteDetailScreen(
                             route: route,
                             routeStore: widget.routeStore,
@@ -1139,9 +1137,6 @@ class RoutesScreenState extends State<RoutesScreen> {
                           ),
                         ),
                       );
-                      if (picked != null) {
-                        widget.onStartRun?.call(picked);
-                      }
                       // Refresh bookmarks so unbookmarks made on the
                       // detail screen flow back into the list.
                       _fetchBookmarks();
@@ -1239,7 +1234,6 @@ class RoutesScreenState extends State<RoutesScreen> {
                       apiClient: widget.apiClient,
                       routeStore: widget.routeStore,
                       preferences: widget.preferences,
-                      onStartRun: widget.onStartRun,
                     ),
                   ),
                 );
