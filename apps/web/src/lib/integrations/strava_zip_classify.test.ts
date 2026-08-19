@@ -21,7 +21,10 @@ test('classifyStravaMember — routes .fit / .fit.gz through the FIT parser (F4)
 	assert.deepEqual(classifyStravaMember('activities/123.FIT.GZ'), { parser: 'fit', gzipped: true });
 });
 
-test('classifyStravaMember — unknown members are skipped (trackless, still importable)', () => {
+// A null parser means "no parser reads this", which the IMPORTER now
+// treats as a broken promise and fails the row on — see
+// strava_track_member.test.ts. The classifier itself just reports.
+test('classifyStravaMember — a member no parser reads yields a null parser', () => {
 	assert.deepEqual(classifyStravaMember('activities/123.csv'), { parser: null, gzipped: false });
 	assert.deepEqual(classifyStravaMember('media/photo.jpg'), { parser: null, gzipped: false });
 	assert.deepEqual(classifyStravaMember(''), { parser: null, gzipped: false });
