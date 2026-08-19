@@ -11584,6 +11584,38 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get challengesStandingTitle => 'Deine Platzierung';
+
+  @override
+  String get challengesStandingTitleTeam => 'Platzierung deines Teams';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '#$rank von $total';
+  }
+
+  @override
+  String get challengesStandingTiedOne => 'Gleichauf mit 1 weiteren';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return 'Gleichauf mit $n weiteren';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$gap hinter $name';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$gap vor $name';
+  }
+
+  @override
+  String get challengesStandingLeading => 'In Führung';
+
+  @override
   String challengesParticipants(int n) {
     return '$n beigetreten';
   }

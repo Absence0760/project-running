@@ -15111,6 +15111,67 @@
       }
     }
   },
+  "challengesStandingTitle": "Your standing",
+  "@challengesStandingTitle": {
+    "description": "Heading of the viewer standing card above the challenge leaderboard"
+  },
+  "challengesStandingTitleTeam": "Your team's standing",
+  "@challengesStandingTitleTeam": {
+    "description": "Heading of the standing card on a club-vs-club leaderboard"
+  },
+  "challengesStandingRank": "#{rank} of {total}",
+  "@challengesStandingRank": {
+    "description": "Viewer rank out of the board size",
+    "placeholders": {
+      "rank": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesStandingTiedOne": "Tied with 1 other",
+  "@challengesStandingTiedOne": {
+    "description": "Standing card: exactly one other entrant shares the viewer rank"
+  },
+  "challengesStandingTiedMany": "Tied with {n} others",
+  "@challengesStandingTiedMany": {
+    "description": "Standing card: several other entrants share the viewer rank",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesStandingBehind": "{gap} behind {name}",
+  "@challengesStandingBehind": {
+    "description": "Standing card: metric gap to the nearest entrant ranked above",
+    "placeholders": {
+      "gap": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "challengesStandingAhead": "{gap} ahead of {name}",
+  "@challengesStandingAhead": {
+    "description": "Standing card: metric margin over the nearest entrant ranked below",
+    "placeholders": {
+      "gap": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "challengesStandingLeading": "Leading",
+  "@challengesStandingLeading": {
+    "description": "Standing card: the viewer leads the board outright"
+  },
   "challengesParticipants": "{n} joined",
   "@challengesParticipants": {
     "description": "Participant count",

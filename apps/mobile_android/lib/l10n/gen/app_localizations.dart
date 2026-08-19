@@ -19178,6 +19178,54 @@ abstract class AppLocalizations {
   /// **'#{rank}'**
   String challengesLeaderboardRank(int rank);
 
+  /// Heading of the viewer standing card above the challenge leaderboard
+  ///
+  /// In en, this message translates to:
+  /// **'Your standing'**
+  String get challengesStandingTitle;
+
+  /// Heading of the standing card on a club-vs-club leaderboard
+  ///
+  /// In en, this message translates to:
+  /// **'Your team\'s standing'**
+  String get challengesStandingTitleTeam;
+
+  /// Viewer rank out of the board size
+  ///
+  /// In en, this message translates to:
+  /// **'#{rank} of {total}'**
+  String challengesStandingRank(int rank, int total);
+
+  /// Standing card: exactly one other entrant shares the viewer rank
+  ///
+  /// In en, this message translates to:
+  /// **'Tied with 1 other'**
+  String get challengesStandingTiedOne;
+
+  /// Standing card: several other entrants share the viewer rank
+  ///
+  /// In en, this message translates to:
+  /// **'Tied with {n} others'**
+  String challengesStandingTiedMany(int n);
+
+  /// Standing card: metric gap to the nearest entrant ranked above
+  ///
+  /// In en, this message translates to:
+  /// **'{gap} behind {name}'**
+  String challengesStandingBehind(String gap, String name);
+
+  /// Standing card: metric margin over the nearest entrant ranked below
+  ///
+  /// In en, this message translates to:
+  /// **'{gap} ahead of {name}'**
+  String challengesStandingAhead(String gap, String name);
+
+  /// Standing card: the viewer leads the board outright
+  ///
+  /// In en, this message translates to:
+  /// **'Leading'**
+  String get challengesStandingLeading;
+
   /// Participant count
   ///
   /// In en, this message translates to:

@@ -11024,6 +11024,38 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get challengesStandingTitle => 'あなたの順位';
+
+  @override
+  String get challengesStandingTitleTeam => 'チームの順位';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '$total中$rank位';
+  }
+
+  @override
+  String get challengesStandingTiedOne => '同順位: 1';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return '同順位: $n';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$name まで $gap';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$name に $gap リード';
+  }
+
+  @override
+  String get challengesStandingLeading => '首位';
+
+  @override
   String challengesParticipants(int n) {
     return '$n 人参加';
   }

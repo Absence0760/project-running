@@ -3,6 +3,7 @@ import 'package:ui_kit/ui_kit.dart';
 
 import '../challenge_progress.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../leaderboard_standing.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../widgets/confirm_destructive.dart';
@@ -294,6 +295,63 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
     );
   }
 
+  String _entrantName(ChallengeLeaderboardEntry e, bool byTeam) => byTeam
+      ? (e.teamClubId == null ? '—' : (_clubNames[e.teamClubId] ?? e.teamClubId!))
+      : (e.displayName ?? '—');
+
+  Widget _standing(BuildContext context, ChallengeView c, bool byTeam) {
+    if (_board.length < 2) return const SizedBox.shrink();
+    final s = standingFor(
+      _board,
+      byTeam ? c.myTeamClubId : widget.social.currentUserId,
+    );
+    if (s == null) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final lines = <Widget>[
+      Text(byTeam ? l10n.challengesStandingTitleTeam : l10n.challengesStandingTitle,
+          style: const TextStyle(fontWeight: FontWeight.w700)),
+      Text(l10n.challengesStandingRank(s.rank, s.total),
+          style: TextStyle(fontWeight: FontWeight.w700, color: scheme.primary)),
+      if (s.tiedWith > 0)
+        Text(
+          s.tiedWith == 1
+              ? l10n.challengesStandingTiedOne
+              : l10n.challengesStandingTiedMany(s.tiedWith),
+          style: TextStyle(color: Theme.of(context).hintColor),
+        ),
+      if (s.chasing != null)
+        Text(
+          l10n.challengesStandingBehind(
+            challengeValueLabel(l10n, c.metric, s.chasing!.delta),
+            _entrantName(s.chasing!.entry, byTeam),
+          ),
+          style: TextStyle(color: Theme.of(context).hintColor),
+        )
+      else if (s.tiedWith == 0)
+        Text(l10n.challengesStandingLeading,
+            style: TextStyle(color: scheme.tertiary, fontWeight: FontWeight.w600)),
+      if (s.chasedBy != null)
+        Text(
+          l10n.challengesStandingAhead(
+            challengeValueLabel(l10n, c.metric, s.chasedBy!.delta),
+            _entrantName(s.chasedBy!.entry, byTeam),
+          ),
+          style: TextStyle(color: Theme.of(context).hintColor),
+        ),
+    ];
+    return Container(
+      key: const Key('challenge-standing'),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Wrap(spacing: 12, runSpacing: 4, children: lines),
+    );
+  }
+
   Widget _leaderboard(BuildContext context, ChallengeView c) {
     final l10n = AppLocalizations.of(context);
     if (_board.isEmpty) {
@@ -302,36 +360,35 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
     final byTeam = c.scope == 'club_vs_club';
     final meId = widget.social.currentUserId;
     return Column(
-      children: _board.map((e) {
-        final me = !byTeam && meId != null && e.userId == meId;
-        final name = byTeam
-            ? (e.teamClubId == null
-                ? '—'
-                : (_clubNames[e.teamClubId] ?? e.teamClubId!))
-            : (e.displayName ?? '—');
-        return Container(
-          margin: const EdgeInsets.only(bottom: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: me
-                ? Theme.of(context).colorScheme.primaryContainer
-                : Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              TextLane(
-                width: 36,
-                child: Text(l10n.challengesLeaderboardRank(e.rank),
+      children: [
+        _standing(context, c, byTeam),
+        ..._board.map((e) {
+          final me = !byTeam && meId != null && e.userId == meId;
+          final name = _entrantName(e, byTeam);
+          return Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: me
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                TextLane(
+                  width: 36,
+                  child: Text(l10n.challengesLeaderboardRank(e.rank),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
+                Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
+                Text(challengeValueLabel(l10n, c.metric, e.value),
                     style: const TextStyle(fontWeight: FontWeight.w600)),
-              ),
-              Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
-              Text(challengeValueLabel(l10n, c.metric, e.value),
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-            ],
-          ),
-        );
-      }).toList(),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 }

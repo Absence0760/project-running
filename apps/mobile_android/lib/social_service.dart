@@ -10,6 +10,7 @@ import 'event_category.dart';
 import 'event_occurrence.dart';
 import 'event_gym_template.dart';
 import 'geocoding.dart';
+import 'leaderboard_standing.dart';
 import 'l10n/date_format.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'l10n/locale_support.dart';
@@ -172,6 +173,11 @@ class ChallengeView {
   final int participantCount;
   final DateTime? completedAt;
 
+  /// On a `club_vs_club` board the viewer's entrant is the club they JOINED
+  /// UNDER, off their own `challenge_participants` row — not whichever of
+  /// their clubs happens to be on the board (decisions § 615).
+  final String? myTeamClubId;
+
   const ChallengeView({
     required this.id,
     required this.creatorId,
@@ -190,14 +196,18 @@ class ChallengeView {
     this.myRank,
     this.participantCount = 0,
     this.completedAt,
+    this.myTeamClubId,
   });
 }
 
 /// One row from the `challenge_leaderboard` RPC (not a table, so hand-modelled).
-class ChallengeLeaderboardEntry {
+class ChallengeLeaderboardEntry implements StandingEntry {
+  @override
   final String? userId;
   final String? displayName;
+  @override
   final String? teamClubId;
+  @override
   final num value;
   final int rank;
   const ChallengeLeaderboardEntry({
@@ -1855,7 +1865,8 @@ class SocialService extends ChangeNotifier {
       num? myValue,
       int? myRank,
       int participantCount = 0,
-      DateTime? completedAt}) {
+      DateTime? completedAt,
+      String? myTeamClubId}) {
     return ChallengeView(
       id: r['id'] as String,
       creatorId: r['creator_id'] as String?,
@@ -1874,6 +1885,7 @@ class SocialService extends ChangeNotifier {
       myRank: myRank,
       participantCount: participantCount,
       completedAt: completedAt,
+      myTeamClubId: myTeamClubId,
     );
   }
 
@@ -1913,7 +1925,7 @@ class SocialService extends ChangeNotifier {
     if (row == null) return null;
     final parts = await _c
         .from('challenge_participants')
-        .select('user_id, completed_at')
+        .select('user_id, completed_at, team_club_id')
         .eq('challenge_id', id) as List;
     final uid = _uid;
     Map? mineRow;
@@ -1926,6 +1938,7 @@ class SocialService extends ChangeNotifier {
       joined: mineRow != null,
       participantCount: parts.length,
       completedAt: completedRaw == null ? null : DateTime.parse(completedRaw),
+      myTeamClubId: mineRow?['team_club_id'] as String?,
     );
   }
 
