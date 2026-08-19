@@ -22,6 +22,8 @@ import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart';
 
+import 'gym_session_draft.dart';
+
 /// A session that carries the routine link but no verdict is [ungraded]: the
 /// runner left mid-session and chose "Save as is", which strips the draft
 /// marker and keeps `routine_id` while deliberately claiming no adherence. It
@@ -109,11 +111,6 @@ class RoutineHistory {
 
 const int _dayMs = 86400000;
 
-bool _hasSessionDraft(Object? metadata) {
-  if (metadata is! Map) return false;
-  return metadata[MetadataKeys.gymSessionDraft] is Map;
-}
-
 RoutineSessionVerdict _verdictOf(Object? metadata) {
   if (metadata is! Map) return RoutineSessionVerdict.ungraded;
   switch (metadata[MetadataKeys.gymAdherence]) {
@@ -140,7 +137,7 @@ RoutineHistory routineHistoryFromAggregate(
   final kept = <({int index, RoutineSession session})>[];
   for (final row in agg.recentRows) {
     if (row.id.isEmpty) continue;
-    if (_hasSessionDraft(row.metadata)) continue;
+    if (hasGymSessionDraft(row.metadata)) continue;
     final at = DateTime.tryParse(row.startedAt);
     if (at == null) continue;
     kept.add((
