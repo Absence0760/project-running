@@ -1,0 +1,109 @@
+name: Release GraphHopper
+
+# Per-app tag convention: `graphhopper@1.2.3`. The workflow redeploys the
+# self-hosted GraphHopper round_trip engine (apps/job_worker/graphhopper),
+# which rebuilds the runnable jar from the `GH_VERSION` pinned in the
+# Dockerfile. It does NOT touch the routable graph: `region.osm.pbf` and
+# `graph-cache/` live on the Fly Volume (`graphhopper_data` mounted at
+# `/data`) and persist across image deploys — deliberate, so a tag for a
+# config tweak never costs a multi-minute graph import.
+#
+# Graph re-imports happen out of band — see
+# apps/job_worker/deployment.md § GraphHopper app § Initial graph build.
+#
+# Secret required:
+#   FLY_API_TOKEN  — same token as release-worker.yml / release-osrm.yml /
+#                    release-graph-cycle.yml; scoped to the project-running org.
+#
+# NOT a GitHub secret, and deliberately so: GRAPHHOPPER_API_KEY is the
+# shared secret the built-in Caddy front checks on `/route` (X-Engine-Key).
+# It is a *Fly app* secret set out of band (`flyctl secrets set`) and read by
+# the generate-route Lambda from sops. CI never needs it, so it never enters
+# a GitHub Actions context — which is why the verify step below probes the
+# open `/health` endpoint and not `/route`.
+
+# Release-triggered: publishing a GitHub Release whose tag is `graphhopper@*`
+# runs this workflow — a bare `graphhopper@*` tag push does NOT deploy. `on:
+# release` fires for every published release in the repo, so the job below
+# is guarded to `graphhopper@*` tags.
+on:
+  release:
+    types: [published]
+
+# Least-privilege default. This workflow only deploys to Fly.io; it writes
+# nothing back to the triggering Release, so the job needs no
+# `contents: write` — checkout's `contents: read` is enough.
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    name: flyctl deploy (GraphHopper)
+    runs-on: ubuntu-latest
+    # Guard: `on: release` fires for every published release in the repo,
+    # so only act on graphhopper@* releases. `graph-cycle@*` cannot match —
+    # the separator differs — so this and release-graph-cycle.yml stay
+    # mutually exclusive.
+    if: startsWith(github.event.release.tag_name, 'graphhopper@')
+    # Pause on the `production` environment's required-reviewer rule
+    # before any prod credentials/steps run (repo Settings → Environments).
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Parse version from tag
+        id: version
+        run: |
+          ref="${GITHUB_REF#refs/tags/graphhopper@}"
+          echo "version=${ref}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${ref}"
+
+      - name: Setup flyctl
+        # SHA-pinned to the v1 tag, same as release-osrm.yml — this workflow
+        # consumes secrets.FLY_API_TOKEN to deploy a production app, so the pin
+        # closes a supply-chain risk. Bump by re-resolving the v1 tag's commit
+        # SHA: `gh api repos/superfly/flyctl-actions/git/refs/tags/v1`.
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+
+      - name: Deploy to Fly.io
+        # The fly.toml in apps/job_worker/graphhopper/ pins app=graphhopper,
+        # primary_region=lhr, the Dockerfile build, and the graphhopper_data
+        # volume mount. --remote-only builds on Fly's builder; the jar build
+        # is heavy and the runner stays small.
+        run: flyctl deploy --remote-only
+        working-directory: apps/job_worker/graphhopper
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify deployment
+        # flyctl status exits non-zero when no machine is healthy, which
+        # surfaces a deploy-then-crashloop as a workflow failure rather than
+        # a green tag over a dead engine.
+        run: flyctl status --app graphhopper
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Probe /health
+        # Fail closed. The graph import on a cold volume can take minutes and
+        # `flyctl status` can read healthy while GraphHopper is still loading,
+        # so the release is not called good until the engine answers. /health
+        # is the one path the Caddy front leaves unauthenticated, so this needs
+        # no engine key. A non-200 (or a timeout) fails the job.
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            code=$(curl -fsS -o /dev/null -w '%{http_code}' \
+              --max-time 10 https://graphhopper.fly.dev/health || echo 000)
+            echo "attempt ${attempt}: /health -> ${code}"
+            if [ "${code}" = "200" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "GraphHopper did not report healthy within 10 minutes" >&2
+          exit 1
