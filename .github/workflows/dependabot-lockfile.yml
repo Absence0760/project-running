@@ -69,6 +69,16 @@ jobs:
     # install somehow executed attacker code, there's nothing here to
     # exfiltrate.
     steps:
+      # codeql[actions/untrusted-checkout/medium]
+      # Checking out the PR head is the whole point of this job, and it is
+      # safe here for reasons CodeQL's heuristic cannot see: the job runs on
+      # `pull_request` (not `pull_request_target`), inherits the workflow's
+      # `contents: read`, is passed no secret at all, discards the token with
+      # `persist-credentials: false`, and the only thing it runs against the
+      # tree is `pnpm install --lockfile-only --ignore-scripts` — which
+      # executes no lifecycle scripts. The credential-bearing half of this
+      # workflow is the separate `push` job below, and that one never writes
+      # the PR-head tree to disk.
       - name: Checkout PR branch (no credentials)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -168,25 +178,41 @@ jobs:
             exit 1
           fi
 
-          # Fresh clone (no PR-head code in the working tree). We
-          # clone the BASE branch (main), copy in the lockfile artifact,
-          # then push as a single commit onto the PR-head ref. No code
-          # from the PR-head ever executes in this step.
+          # The PR-head tree is NEVER written to the working directory in
+          # this job. It holds the PAT, so materialising attacker-controlled
+          # files beside the credential in .git/config is a window worth not
+          # having — even though nothing here executes them. The commit is
+          # assembled with plumbing instead: read the fetched tree into the
+          # index, swap one blob, write it back.
           mkdir push-workspace && cd push-workspace
           git init -q
-          git config user.name "dependabot[bot]"
-          git config user.email "49699333+dependabot[bot]@users.noreply.github.com"
           git remote add origin "https://x-access-token:${DEPENDABOT_LOCKFILE_PAT}@github.com/${REPO}.git"
           git fetch origin "$PR_HEAD_REF" --depth 1
-          git checkout "$PR_HEAD_SHA"
 
-          # Replace the lockfile with the regenerated one.
-          cp ../pnpm-lock.yaml ./pnpm-lock.yaml
+          # Refuse to push if the head moved while we were regenerating —
+          # otherwise this force-lands a lockfile derived from a manifest
+          # that is no longer what the branch says.
+          fetched=$(git rev-parse FETCH_HEAD)
+          if [ "$fetched" != "$PR_HEAD_SHA" ]; then
+            echo "::error::PR head moved during the run ($fetched != $PR_HEAD_SHA) — refusing to push a stale lockfile." >&2
+            exit 1
+          fi
 
-          if git diff --quiet pnpm-lock.yaml; then
+          existing=$(git rev-parse "${PR_HEAD_SHA}:pnpm-lock.yaml" 2>/dev/null || echo none)
+          blob=$(git hash-object -w ../pnpm-lock.yaml)
+          if [ "$existing" = "$blob" ]; then
             echo "Lockfile already in sync after fetch — nothing to commit."
             exit 0
           fi
-          git add pnpm-lock.yaml
-          git commit -m "chore: sync pnpm-lock.yaml"
-          git push origin "HEAD:${PR_HEAD_REF}"
+
+          git read-tree "$PR_HEAD_SHA"
+          git update-index --add --cacheinfo "100644,${blob},pnpm-lock.yaml"
+          tree=$(git write-tree)
+          commit=$(
+            GIT_AUTHOR_NAME="dependabot[bot]" \
+            GIT_AUTHOR_EMAIL="49699333+dependabot[bot]@users.noreply.github.com" \
+            GIT_COMMITTER_NAME="dependabot[bot]" \
+            GIT_COMMITTER_EMAIL="49699333+dependabot[bot]@users.noreply.github.com" \
+            git commit-tree "$tree" -p "$PR_HEAD_SHA" -m "chore: sync pnpm-lock.yaml"
+          )
+          git push origin "${commit}:refs/heads/${PR_HEAD_REF}"
