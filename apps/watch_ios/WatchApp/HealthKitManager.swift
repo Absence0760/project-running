@@ -135,6 +135,9 @@ extension HealthKitManager: HKWorkoutSessionDelegate {
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        // The runner is told the heart rate is gone; the reason is only ever
+        // useful to us, and nothing else records it.
+        print("HealthKitManager: workout session failed: \(error)")
         handleSessionFailure()
     }
 }
