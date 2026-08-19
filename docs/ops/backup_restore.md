@@ -52,13 +52,45 @@ without a re-encode step.
   "exported_at": "2026-04-15T12:34:56.000Z",
   "exported_by_user_id": "uuid",
   "exported_from": "web" | "mobile_android" | "mobile_ios" | "go-service" | "edge-function",
-  "counts": { "runs": 47, "routes": 3, "goals": 2, "tracks": 45 }
+  "counts": { "runs": 47, "routes": 3, "goals": 2, "tracks": 45 },
+  "complete": true,
+  "incomplete": []
 }
 ```
 
 Version number is checked on import. A version bump means the reader must
 know how to interpret the new layout — older clients reject newer backups
 rather than lose data silently.
+
+### `complete` / `incomplete` — the honesty pair
+
+`complete` is a boolean; `incomplete` is the sorted list of section names
+(`runs`, `routes`, `tracks`, `hr_series`, …) that came up short of what the
+writer asked for. `complete` is exactly `incomplete.length == 0`. Every writer
+that emits either emits both.
+
+**Only an explicit `complete: false` claims a shortfall.** An archive with no
+`complete` key says nothing about its own completeness — the web writer and
+every mobile archive built before 2026-08-18 carry no such field, and warning
+on all of those would be its own dishonesty. Readers mirror
+`ServerBackupSummary.fromJson` / `cloudExportShortfall` on this.
+
+What can make each writer short:
+
+| Writer | Can come up short on | Why |
+|---|---|---|
+| `go-service` / `edge-function` | `runs` (past the 5000-run `MaxRunsPerExport` ceiling), any paged personal-data section, blobs | A capped export + a paging failure. `counts` for a short *paged* section publishes the **database's** own total, so a file short of it reads as a shortfall rather than as the whole set |
+| `mobile_android` / `mobile_ios` | `tracks`, `hr_series` | The row reads are paged and **uncapped**, so the runs and routes in the archive are the whole account. Only a blob download that failed can leave the file short, and the writer swallows that per-blob so one dead download can't sink the archive |
+| `web` | *nothing declared yet* | Same per-track swallow as mobile, but it does not emit the pair — see `docs/product/followups.md` |
+
+The **mobile local writer carries no run ceiling**, deliberately. It streams to
+disk and downloads tracks in bounded batches ([decisions.md § 66]), so peak heap
+is `O(concurrency × avg-track-size)` and does not grow with run count; the only
+per-run cost held in memory is the already-fetched `runs.json` row list, a few
+hundred bytes each. A cap would buy nothing and would reintroduce the silent
+truncation this pair exists to remove. The server keeps its 5000-run ceiling
+because it builds the whole archive in one `bytes.Buffer`; mobile skips the
+server path entirely once it is past it, which is what covers the long tail.
 
 The two server writers (`go-service` — the Go worker's `POST /v1/export`
 `format: 'backup'` — and `edge-function` — the deprecated `export-data`
@@ -134,7 +166,7 @@ as their DB rows.
   backup". Implemented in `apps/web/src/lib/backup/backup.ts`. Uses `JSZip`.
   Both paths require an authenticated session — there's no local
   persistence to stage into.
-- **Mobile Android** → Settings → "Full backup" / "Restore from backup".
+- **Mobile Android / iOS** → Settings → Account → "Full backup" / "Restore from backup".
   Implemented in `apps/mobile_android/lib/backup.dart`. Uses the
   `archive` package. **Restore works offline** — if the user isn't
   signed in, runs + routes are hydrated into `LocalRunStore` /
@@ -142,8 +174,13 @@ as their DB rows.
   next sign-in. Profile and `user_settings` keys are skipped in that
   mode with a warning; they need a user id to attach to. Export still
   requires sign-in since the canonical source of truth is the server.
-- Mobile iOS and the watch apps do **not** offer backup — too much UI for
-  a small screen. Use the phone or the web.
+  The export is server-first (the Go service's `POST /v1/export?format=backup`)
+  and falls back to the local writer on any failure — and skips the server
+  outright while anything on the device is still undrained, since the server
+  can only see cloud rows. The local writer's completeness verdict surfaces as
+  a banner plus a persistent notice under the Full backup tile.
+- The watch apps do **not** offer backup — too much UI for a small screen. Use
+  the phone or the web.
 
 ## Implementation notes
 
@@ -160,5 +197,17 @@ as their DB rows.
   Settings) and import into the fresh one.
 - Restore is **resumable on conflict**. An `ON CONFLICT (id) DO UPDATE`
   upsert means an interrupted restore can be re-run and will converge.
+- **A blob the archive lacks leaves its column out of the upsert**, rather than
+  nulling it. PostgREST only `SET`s the columns it is handed, so an existing row
+  keeps the `track_url` / `hr_series_url` it already has; writing null instead
+  orphaned the Storage object and cost a run its GPS trace when a track-short
+  archive was restored into the very account it was taken from. A fresh insert
+  still lands with the column null, which is the truthful value there.
+- **An archive that declares itself incomplete says so at restore time.**
+  `RestoreResult.archiveIncomplete` + `archiveIncompleteSections` carry the
+  manifest verdict, the first warning names it, and mobile Settings → Account
+  renders a persistent notice under the Restore tile. Nothing is lost either
+  way (restore is additive), but a runner about to wipe a phone on the strength
+  of the file needs to know it is not the whole history.
 - A backup contains PII (the user's own data only). It is not encrypted
   at rest — callers should treat the file as sensitive.
