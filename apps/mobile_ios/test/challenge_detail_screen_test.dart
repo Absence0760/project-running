@@ -74,6 +74,7 @@ ChallengeView _ch({
   num? goalValue = 100000,
   String creatorId = 'creator',
   String scope = 'individual',
+  String? myTeamClubId,
 }) {
   final now = DateTime.now();
   return ChallengeView(
@@ -92,6 +93,7 @@ ChallengeView _ch({
     isPublic: true,
     joined: true,
     myValue: myValue,
+    myTeamClubId: myTeamClubId,
   );
 }
 
@@ -227,6 +229,118 @@ void main() {
 
     // Drain the showTopBanner auto-dismiss timer.
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  group('ChallengeDetailScreen — the viewer standing card', () {
+    ChallengeLeaderboardEntry row(String id, num value, int rank) =>
+        ChallengeLeaderboardEntry(
+          userId: id,
+          displayName: id == 'me' ? 'Me' : id,
+          teamClubId: null,
+          value: value,
+          rank: rank,
+        );
+
+    testWidgets('states the rank, the board size and both neighbour gaps',
+        (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(
+        _ch(myValue: 20000),
+        board: [row('Alex', 30000, 1), row('me', 20000, 2), row('Sam', 10000, 3)],
+      )));
+      await tester.pump();
+
+      expect(find.byKey(const Key('challenge-standing')), findsOneWidget);
+      expect(find.text('Your standing'), findsOneWidget);
+      expect(find.text('#2 of 3'), findsOneWidget);
+      expect(find.textContaining('behind Alex'), findsOneWidget);
+      expect(find.textContaining('ahead of Sam'), findsOneWidget);
+      expect(find.text('Leading'), findsNothing);
+    });
+
+    testWidgets('an outright leader is named as leading, with nobody chased',
+        (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(
+        _ch(myValue: 30000),
+        board: [row('me', 30000, 1), row('Sam', 10000, 2)],
+      )));
+      await tester.pump();
+
+      expect(find.text('#1 of 2'), findsOneWidget);
+      expect(find.text('Leading'), findsOneWidget);
+      expect(find.textContaining('behind'), findsNothing);
+    });
+
+    testWidgets('a tied leader reports the tie instead of claiming the lead',
+        (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(
+        _ch(myValue: 30000),
+        board: [row('me', 30000, 1), row('Alex', 30000, 1)],
+      )));
+      await tester.pump();
+
+      expect(find.text('Tied with 1 other'), findsOneWidget);
+      expect(find.text('Leading'), findsNothing);
+    });
+
+    testWidgets('a viewer who is not on the board gets no card', (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(
+        _ch(myValue: null),
+        board: [row('Alex', 30000, 1), row('Sam', 10000, 2)],
+      )));
+      await tester.pump();
+
+      expect(find.byKey(const Key('challenge-standing')), findsNothing);
+    });
+
+    testWidgets('a one-entrant board gets no card rather than "#1 of 1"',
+        (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(
+        _ch(myValue: 30000),
+        board: [row('me', 30000, 1)],
+      )));
+      await tester.pump();
+
+      expect(find.byKey(const Key('challenge-standing')), findsNothing);
+      expect(find.text('#1 of 1'), findsNothing);
+    });
+
+    testWidgets('an empty board gets no card', (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(_ch(myValue: null))));
+      await tester.pump();
+
+      expect(find.byKey(const Key('challenge-standing')), findsNothing);
+    });
+
+    // A runner in two competing clubs must be credited to the one their
+    // participant row names, not to whichever of theirs tops the board.
+    testWidgets('a team board keys on the club the viewer joined under',
+        (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(
+        _ch(myValue: null, scope: 'club_vs_club', myTeamClubId: 'club-b'),
+        board: const [
+          ChallengeLeaderboardEntry(
+            userId: null,
+            displayName: null,
+            teamClubId: 'club-a',
+            value: 30000,
+            rank: 1,
+          ),
+          ChallengeLeaderboardEntry(
+            userId: null,
+            displayName: null,
+            teamClubId: 'club-b',
+            value: 10000,
+            rank: 2,
+          ),
+        ],
+        clubs: [_club('club-a', 'Road Club'), _club('club-b', 'Trail Club')],
+      )));
+      await tester.pump();
+
+      expect(find.text("Your team's standing"), findsOneWidget);
+      expect(find.text('#2 of 2'), findsOneWidget);
+      expect(find.textContaining('behind Road Club'), findsOneWidget);
+    });
   });
 
   group('ChallengeDetailScreen — the leaderboard rank lane', () {
