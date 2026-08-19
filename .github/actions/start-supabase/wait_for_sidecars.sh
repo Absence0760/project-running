@@ -41,6 +41,20 @@
 # (kong's 503 while the runtime is booting) still gets the same ~45 tries it
 # always did, and a run where every attempt burns the full --max-time is a
 # stack that is not coming up at all.
+#
+# 90s is kept because it was MEASURED against green runs, not inherited.
+# Across 277 jobs carrying this step in 14 workflow runs (2026-08-13 to
+# 2026-08-19 — every stack-using job: 14 e2e shards, the SSO/OAuth and
+# live-hub lanes, pgtap, edge-functions, api_client, cross-client, schema
+# drift), the 275 green ones took a median of 1.21s and a maximum of 12.15s,
+# 274 of them finished under 2s, and exactly ONE needed a retry at all (one
+# attempt, e2e shard 10/14 in run 32150279557). So the worst healthy boot on
+# record uses 13% of the deadline. Converting an attempt count into a real
+# deadline does tighten the effective ceiling from ~540s to 90s; the tightening
+# is only ever spent by the failure mode it is meant to bound, because an
+# attempt that fails costs the whole 10s --max-time when it fails at all
+# (measured: attempts 2-45 of run 31834502152 are 12.013s apart to the
+# millisecond), and 90s still affords 8 such attempts against the 1 observed.
 set -uo pipefail
 
 if [ -z "${ANON_KEY:-}" ]; then
