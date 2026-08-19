@@ -8265,6 +8265,12 @@
   "@settingsAccountBackupPartial": { "description": "Banner shown after a server-built export that came back short of the account run history", "placeholders": { "count": { "type": "int" }, "total": { "type": "int" } } },
   "settingsAccountBackupPartialNotice": "Your last export is partial: it holds {count} of the {total} runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.",
   "@settingsAccountBackupPartialNotice": { "description": "Persistent notice under the full-backup tile naming how short the last export was", "placeholders": { "count": { "type": "int" }, "total": { "type": "int" } } },
+  "settingsAccountBackupTracksPartial": "Backup is missing {missing} of {total} GPS files.",
+  "@settingsAccountBackupTracksPartial": { "description": "Banner shown after a locally-built backup whose GPS track downloads came up short", "placeholders": { "missing": { "type": "int" }, "total": { "type": "int" } } },
+  "settingsAccountBackupTracksPartialNotice": "Your last backup could not download {missing} of the {total} GPS track files. Every run is in the archive; export again to retry the traces. Its manifest.json says complete: false.",
+  "@settingsAccountBackupTracksPartialNotice": { "description": "Persistent notice under the full-backup tile naming how many GPS track files the last local backup could not download", "placeholders": { "missing": { "type": "int" }, "total": { "type": "int" } } },
+  "settingsAccountRestoreIncompleteArchive": "That archive said it was incomplete. {runs} runs were restored and nothing was overwritten - restore from a complete backup to fill the gaps.",
+  "@settingsAccountRestoreIncompleteArchive": { "description": "Persistent notice under the restore tile shown when the restored archive declared itself incomplete", "placeholders": { "runs": { "type": "int" } } },
   "settingsAccountRestoreUnavailable": "Backup service unavailable.",
   "@settingsAccountRestoreUnavailable": {
     "description": "Banner shown when restore can't run because the local store is missing"

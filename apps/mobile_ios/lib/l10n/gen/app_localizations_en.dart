@@ -6123,6 +6123,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'Backup is missing $missing of $total GPS files.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'Your last backup could not download $missing of the $total GPS track files. Every run is in the archive; export again to retry the traces. Its manifest.json says complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'That archive said it was incomplete. $runs runs were restored and nothing was overwritten - restore from a complete backup to fill the gaps.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable => 'Backup service unavailable.';
 
   @override
