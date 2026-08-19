@@ -128,6 +128,7 @@ Required strings (Apple rejects without a meaningful description):
 - `NSBluetoothAlwaysUsageDescription` — BLE chest-strap HR
 - `NSPhotoLibraryUsageDescription` — run photos
 - `NSCameraUsageDescription` — taking a photo on the run
+- `NSCalendarsWriteOnlyAccessUsageDescription` (iOS 17+) + `NSCalendarsUsageDescription` (the pre-17 fallback) — adding a club event to the calendar. Write-only is the whole ask: the app hands `EKEventEditViewController` a pre-filled event and never reads the calendar (decisions § 690)
 
 Required keys:
 
