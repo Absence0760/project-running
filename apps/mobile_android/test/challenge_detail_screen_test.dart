@@ -203,6 +203,66 @@ void main() {
     expect(find.text('club-42'), findsNothing);
   });
 
+  testWidgets('a club the viewer cannot read is labelled, never shown as its uuid',
+      (tester) async {
+    await tester.pumpWidget(_app(_FakeSocial(
+      _ch(myValue: null, scope: 'club_vs_club'),
+      board: const [
+        ChallengeLeaderboardEntry(
+          userId: null,
+          displayName: null,
+          teamClubId: 'club-42',
+          value: 5000,
+          rank: 1,
+        ),
+      ],
+    )));
+    await tester.pump();
+
+    expect(find.text('Private club'), findsOneWidget);
+    expect(find.text('club-42'), findsNothing);
+  });
+
+  testWidgets('the unaffiliated bucket reads as "No club", not an em-dash',
+      (tester) async {
+    await tester.pumpWidget(_app(_FakeSocial(
+      _ch(myValue: null, scope: 'club_vs_club'),
+      board: const [
+        ChallengeLeaderboardEntry(
+          userId: null,
+          displayName: null,
+          teamClubId: null,
+          value: 5000,
+          rank: 1,
+        ),
+      ],
+    )));
+    await tester.pump();
+
+    expect(find.text('No club'), findsOneWidget);
+  });
+
+  testWidgets("the caller's own progress comes off the board, not a fabricated zero",
+      (tester) async {
+    // `fetchChallengeById` carries no per-caller value — the board does.
+    await tester.pumpWidget(_app(_FakeSocial(
+      _ch(myValue: null),
+      board: const [
+        ChallengeLeaderboardEntry(
+          userId: 'me',
+          displayName: 'Me',
+          teamClubId: null,
+          value: 42000,
+          rank: 1,
+        ),
+      ],
+    )));
+    await tester.pump();
+
+    expect(find.text('42.00 km of 100.00 km'), findsOneWidget);
+    expect(find.text('0.00 km of 100.00 km'), findsNothing);
+  });
+
   testWidgets('a failed delete shows the delete-specific message', (tester) async {
     await tester.pumpWidget(_app(_FakeSocial(
       _ch(myValue: 20000, creatorId: 'me'),

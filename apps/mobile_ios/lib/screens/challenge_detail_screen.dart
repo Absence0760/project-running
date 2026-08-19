@@ -1,34 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart';
 
-import '../challenge_progress.dart';
+import '../challenge_list.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../leaderboard_standing.dart';
-import '../preferences.dart';
 import '../social_service.dart';
+import '../widgets/challenge_progress_bar.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/error_state.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
-
-String challengeValueLabel(AppLocalizations l10n, String metric, num value) {
-  switch (metric) {
-    case 'duration':
-      final total = value.round();
-      final h = total ~/ 3600;
-      final m = (total % 3600) ~/ 60;
-      return h > 0 ? '${h}h ${m}m' : '${m}m';
-    case 'vert':
-      return formatElevationForPref(value.toDouble());
-    case 'streak_days':
-      return l10n.challengesUnitDays(value.round());
-    case 'activity_count':
-      return l10n.challengesUnitActivities(value.round());
-    case 'distance':
-    default:
-      return formatDistanceForPref(value.toDouble());
-  }
-}
 
 class ChallengeDetailScreen extends StatefulWidget {
   final SocialService social;
@@ -211,38 +192,30 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
     );
   }
 
+  /// The caller's own value comes off the board the page already holds — the
+  /// `challenges` read carries no per-caller value, so without this the bar
+  /// stated a confident zero for everyone (web reads it the same way).
   Widget _progress(BuildContext context, ChallengeView c) {
     final l10n = AppLocalizations.of(context);
-    final value = c.myValue ?? 0;
-    final frac = progressFraction(value, c.goalValue);
-    final complete = isComplete(value, c.goalValue);
+    final me = widget.social.currentUserId;
+    ChallengeLeaderboardEntry? myRow;
+    for (final e in _board) {
+      if (me != null && e.userId == me) {
+        myRow = e;
+        break;
+      }
+    }
+    final value = myRow?.value ?? c.myValue ?? 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                c.goalValue == null
-                    ? challengeValueLabel(l10n, c.metric, value)
-                    : l10n.challengesGoalProgress(
-                        challengeValueLabel(l10n, c.metric, value),
-                        challengeValueLabel(l10n, c.metric, c.goalValue!),
-                      ),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            if (complete)
-              Text(l10n.challengesProgressComplete,
-                  style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
-          ],
+        ChallengeProgressBar(
+          metric: c.metric,
+          value: value,
+          goal: c.goalValue,
+          startsAt: c.startsAt,
+          endsAt: c.endsAt,
         ),
-        if (frac != null) ...[
-          const SizedBox(height: 6),
-          ProgressBar(value: frac),
-        ],
-        if (!complete) _paceHint(context, c, value),
         if (c.completedAt != null) ...[
           const SizedBox(height: 8),
           Text(l10n.challengesBadgeEarned,
@@ -252,52 +225,16 @@ class _ChallengeDetailScreenState extends State<ChallengeDetailScreen> {
     );
   }
 
-  Widget _paceHint(BuildContext context, ChallengeView c, num value) {
-    if (c.goalValue == null) return const SizedBox.shrink();
+  String _entrantName(ChallengeLeaderboardEntry e, bool byTeam) {
+    if (!byTeam) return e.displayName ?? '—';
     final l10n = AppLocalizations.of(context);
-    final p = challengePace(
-      value,
-      c.goalValue,
-      c.startsAt.millisecondsSinceEpoch,
-      c.endsAt.millisecondsSinceEpoch,
-      DateTime.now().millisecondsSinceEpoch,
-    );
-    if (p.status != ChallengePaceStatus.active || p.verdict == null) {
-      return const SizedBox.shrink();
-    }
-    final scheme = Theme.of(context).colorScheme;
-    final (label, color) = switch (p.verdict!) {
-      PaceVerdict.ahead => (l10n.challengesPaceAhead, scheme.tertiary),
-      PaceVerdict.behind => (l10n.challengesPaceBehind, scheme.error),
-      PaceVerdict.onTrack => (l10n.challengesPaceOnTrack, scheme.primary),
+    final label = teamLabel(e.teamClubId, _clubNames);
+    return switch (label.kind) {
+      TeamLabelKind.named => label.name!,
+      TeamLabelKind.noClub => l10n.challengesTeamNoClub,
+      TeamLabelKind.unresolved => l10n.challengesTeamPrivateClub,
     };
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          Flexible(
-            child: Text(label,
-                style: TextStyle(color: color, fontWeight: FontWeight.w600)),
-          ),
-          if (p.verdict == PaceVerdict.behind && p.requiredPerDay != null) ...[
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                l10n.challengesPaceNeedPerDay(
-                  challengeValueLabel(l10n, c.metric, p.requiredPerDay!),
-                ),
-                style: TextStyle(color: Theme.of(context).hintColor),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
   }
-
-  String _entrantName(ChallengeLeaderboardEntry e, bool byTeam) => byTeam
-      ? (e.teamClubId == null ? '—' : (_clubNames[e.teamClubId] ?? e.teamClubId!))
-      : (e.displayName ?? '—');
 
   Widget _standing(BuildContext context, ChallengeView c, bool byTeam) {
     if (_board.length < 2) return const SizedBox.shrink();

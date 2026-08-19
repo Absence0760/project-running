@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'challenge_list.dart';
 import 'challenge_progress.dart';
 import 'event_category.dart';
 import 'event_occurrence.dart';
@@ -154,7 +155,8 @@ class AttendeeView {
 /// A challenge plus the caller-relative meta the list + detail surfaces need.
 /// `metric` / `scope` stay raw strings here (the narrow unions live in
 /// challenge_progress.dart's enum + the DB CHECK); the UI maps them.
-class ChallengeView {
+class ChallengeView implements MyProgressRow {
+  @override
   final String id;
   final String? creatorId;
   final String? clubId;
@@ -168,9 +170,12 @@ class ChallengeView {
   final DateTime endsAt;
   final bool isPublic;
   final bool joined;
+  @override
   final num? myValue;
+  @override
   final int? myRank;
   final int participantCount;
+  @override
   final DateTime? completedAt;
 
   /// On a `club_vs_club` board the viewer's entrant is the club they JOINED
@@ -198,6 +203,31 @@ class ChallengeView {
     this.completedAt,
     this.myTeamClubId,
   });
+
+  /// The caller-relative half of the row replaced with what `mergeMyProgress`
+  /// resolved, everything else untouched — the Dart stand-in for the web twin's
+  /// object spread.
+  ChallengeView withProgress(MergedProgress<ChallengeView> merged) =>
+      ChallengeView(
+        id: id,
+        creatorId: creatorId,
+        clubId: clubId,
+        title: title,
+        description: description,
+        metric: metric,
+        scope: scope,
+        goalValue: goalValue,
+        activityType: activityType,
+        startsAt: startsAt,
+        endsAt: endsAt,
+        isPublic: isPublic,
+        joined: joined,
+        myValue: merged.myValue,
+        myRank: merged.myRank,
+        participantCount: participantCount,
+        completedAt: merged.completedAt,
+        myTeamClubId: myTeamClubId,
+      );
 }
 
 /// One row from the `challenge_leaderboard` RPC (not a table, so hand-modelled).
@@ -1890,7 +1920,9 @@ class SocialService extends ChangeNotifier {
   }
 
   /// Challenges the caller can see (RLS scopes public + creator + participant +
-  /// club member), enriched with participant counts + the joined flag.
+  /// club member), enriched with participant counts + the joined flag, and — for
+  /// the ones the caller has joined — the per-caller value folded on from
+  /// `my_active_challenges`.
   Future<List<ChallengeView>> fetchChallenges() async {
     final rows = await _c
         .from('challenges')
@@ -1900,24 +1932,50 @@ class SocialService extends ChangeNotifier {
     final ids = rows.map((r) => (r as Map)['id'] as String).toList();
     final parts = await _c
         .from('challenge_participants')
-        .select('challenge_id, user_id')
+        .select('challenge_id, user_id, completed_at')
         .inFilter('challenge_id', ids) as List;
     final counts = <String, int>{};
     final mine = <String>{};
+    final myCompletedAt = <String, DateTime>{};
     final uid = _uid;
     for (final p in parts) {
       final m = p as Map;
       final cid = m['challenge_id'] as String;
       counts[cid] = (counts[cid] ?? 0) + 1;
-      if (uid != null && m['user_id'] == uid) mine.add(cid);
+      if (uid != null && m['user_id'] == uid) {
+        mine.add(cid);
+        final completedRaw = m['completed_at'] as String?;
+        if (completedRaw != null) {
+          myCompletedAt[cid] = DateTime.parse(completedRaw);
+        }
+      }
     }
-    return rows
+    final enriched = rows
         .map((r) => _challengeFromRow(
               (r as Map).cast<String, dynamic>(),
               joined: mine.contains(r['id']),
               participantCount: counts[r['id']] ?? 0,
+              completedAt: myCompletedAt[r['id']],
             ))
         .toList();
+
+    // The caller's banked value lives only in the `challenge_leaderboard`
+    // aggregate, never on the `challenges` row. Auxiliary: a failure here leaves
+    // myValue null, which the list renders as "not shown here", not as zero.
+    try {
+      final active = await myActiveChallenges();
+      final merged = {
+        for (final mp in mergeMyProgress(
+            enriched.where((c) => c.joined).toList(), active))
+          mp.row.id: mp,
+      };
+      return enriched
+          .map((c) => merged.containsKey(c.id) ? c.withProgress(merged[c.id]!) : c)
+          .toList();
+    } catch (e) {
+      debugPrint('fetchChallenges progress enrichment failed: $e');
+      return enriched;
+    }
   }
 
   Future<ChallengeView?> fetchChallengeById(String id) async {
