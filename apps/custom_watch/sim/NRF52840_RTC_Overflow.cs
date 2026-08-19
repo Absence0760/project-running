@@ -27,7 +27,11 @@
 //     the compare timers (same clock source, divider, start/stop/clear);
 //   - TASKS_TRIGOVRFLW (0x00C) is implemented (counter := 0xFFFFF0);
 //   - UpdateTimersEnable guards the nullable `tick` (the stock code throws
-//     on TASKS_STOP with the tick interrupt unconfigured).
+//     on TASKS_STOP with the tick interrupt unconfigured);
+//   - START / STOP / CLEAR / TRIGOVRFLW sync the CPU's executed-but-unreported
+//     time into the clock source first, so the counter is not credited with
+//     the part of the quantum that ran before the guest started it — see
+//     SyncCpuTime below.
 //
 // Upstream: renode-infrastructure
 // src/Emulator/Peripherals/Peripherals/Timers/NRF52840_RTC.cs (MIT).
@@ -49,6 +53,7 @@ namespace Antmicro.Renode.Peripherals.Timers
     {
         public NRF52840_RTC_Overflow(IMachine machine, int numberOfEvents)
         {
+            this.machine = machine;
             IRQ = new GPIO();
 
             if(numberOfEvents > MaxNumberOfEvents)
@@ -136,6 +141,31 @@ namespace Antmicro.Renode.Peripherals.Timers
 
         public event Action<uint> EventTriggered;
 
+        // START/STOP/CLEAR must charge the clock source for the instructions the
+        // CPU has run since its last time report BEFORE they touch the timers.
+        // Renode grants the CPU a quantum and only folds the executed slice into
+        // the clock source at the end of it, so a timer enabled part-way through
+        // is credited with the whole preceding slice the moment the report lands
+        // — a counter started at instruction n reads as if it had been running
+        // since instruction 0 of the quantum. The nRF52840 RTC starts at zero,
+        // and embassy-nrf's time driver opens with
+        // `tasks_clear; tasks_start; while counter != 0 {}`, so one stolen tick
+        // does not resolve on the next read: the loop then waits for the 24-bit
+        // counter to wrap, 2^24/32768 = 512 s, and the firmware never reaches
+        // its first log line. Measured on the failing CI ELF: TASKS_START at
+        // virtual time 0.001000000 s, the COUNTER read one instruction later at
+        // 0.001065330 s — 65.33 us, 2 ticks. Whether the slice happens to be
+        // under a 30.5 us tick is a property of how many instructions that
+        // build spends before RTC init, which is why one ELF booted and the next
+        // wedged on every host.
+        private void SyncCpuTime()
+        {
+            if(machine.SystemBus.TryGetCurrentCPU(out var cpu))
+            {
+                cpu.SyncTime();
+            }
+        }
+
         private void UpdateTimersEnable(bool? global = null, bool? tick = null)
         {
             if(global.HasValue)
@@ -169,6 +199,7 @@ namespace Antmicro.Renode.Peripherals.Timers
                     {
                         if(value)
                         {
+                            SyncCpuTime();
                             UpdateTimersEnable(global: true);
                         }
                     })
@@ -179,6 +210,7 @@ namespace Antmicro.Renode.Peripherals.Timers
                     {
                         if(value)
                         {
+                            SyncCpuTime();
                             UpdateTimersEnable(global: false);
                         }
                     })
@@ -189,6 +221,7 @@ namespace Antmicro.Renode.Peripherals.Timers
                     {
                         if(value)
                         {
+                            SyncCpuTime();
                             foreach(var timer in innerTimers)
                             {
                                 timer.Value = 0;
@@ -207,6 +240,7 @@ namespace Antmicro.Renode.Peripherals.Timers
                     {
                         if(value)
                         {
+                            SyncCpuTime();
                             foreach(var timer in innerTimers)
                             {
                                 timer.Value = 0xFFFFF0;
@@ -366,6 +400,7 @@ namespace Antmicro.Renode.Peripherals.Timers
         private readonly LimitTimer overflowTimer; // OVRFLW
         private readonly ComparingTimer[] innerTimers;
 
+        private readonly IMachine machine;
         private readonly int numberOfEvents;
         private const ulong InitialFrequency = 32768;
         private const int MaxNumberOfEvents = 4;
