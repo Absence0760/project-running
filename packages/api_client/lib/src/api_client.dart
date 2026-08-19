@@ -3028,19 +3028,20 @@ class ApiClient {
   }
 
   /// Dismiss one or more notifications in a single statement. Dismissing a
-  /// collapsed group is one user intent, so it must not fan out into N
-  /// round-trips (mirrors web `deleteNotifications`).
+  /// collapsed group is one user intent, so it is one transaction: the RPC
+  /// takes the whole id array in its POST body, which carries none of the
+  /// gateway request-line bound an `inFilter` would have been subject to, and
+  /// chunking to dodge that bound only trades the failure for a partial
+  /// dismiss the spent undo offer can no longer take back. Ownership is the
+  /// RLS delete policy's job — the RPC is SECURITY INVOKER — so no `user_id`
+  /// filter is repeated here.
+  /// Mirrors web `deleteNotifications`.
   Future<void> deleteNotifications(List<String> ids) async {
     if (ids.isEmpty) return;
-    final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) throw StateError('not signed in');
-    for (final chunk in chunkList(ids)) {
-      await _client
-          .from(NotificationRow.table)
-          .delete()
-          .inFilter(NotificationRow.colId, chunk)
-          .eq(NotificationRow.colUserId, viewerId);
+    if (_client.auth.currentUser?.id == null) {
+      throw StateError('not signed in');
     }
+    await _client.rpc('delete_notifications', params: {'p_ids': ids});
   }
 
   // ──────────────────── Run photos (P1.B) ────────────────────

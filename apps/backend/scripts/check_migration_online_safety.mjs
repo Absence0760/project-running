@@ -144,7 +144,11 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // panel stops reading up to 500 gym_workouts rows just to count them. One
 // function body, no table DDL and no constraint, so the scanner passes it with
 // zero violations after this bump too.
-export const GRANDFATHER_CUTOFF = '20270528';
+// 20270529: adds the delete_notifications(uuid[]) RPC so a bulk dismiss is one
+// transaction instead of N chunked round-trips. One function body, no table DDL
+// and no constraint, so the scanner passes it with zero violations after this
+// bump too.
+export const GRANDFATHER_CUTOFF = '20270529';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

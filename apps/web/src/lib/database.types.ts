@@ -4997,6 +4997,7 @@ export type Database = {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: string
       }
+      delete_notifications: { Args: { p_ids: string[] }; Returns: number }
       delete_user_integration_secrets: {
         Args: { p_user_id: string }
         Returns: number
