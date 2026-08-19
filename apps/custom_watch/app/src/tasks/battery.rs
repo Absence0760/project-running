@@ -1,8 +1,13 @@
-//! Battery task — samples the supply rail through the SAADC's internal VDD
-//! channel, maps the conversion onto a 1S LiPo percent via the host-tested
-//! `watch_core::battery_sense` (over the `watch_core::battery` curve), and
-//! publishes to `state::BATTERY` for the idle faces' gauge + the diagnostics
-//! BAT row.
+//! Battery task — samples the supply rail through whichever internal SAADC
+//! channel can see the cell on this supply path, maps the conversion onto a 1S
+//! LiPo percent via the host-tested `watch_core::battery_sense` (over the
+//! `watch_core::battery` curve), and publishes to `state::BATTERY` for the idle
+//! faces' gauge + the diagnostics BAT row.
+//!
+//! The channel is chosen in `main` from the supply mode `supply::report` reads
+//! at boot, and the `SupplySense` handed here is the same decision: it is what
+//! scales the conversion, so the task cannot be given a channel and a scale
+//! that disagree.
 //!
 //! Same resilience posture as the hr/baro tasks — L4, best-effort, a battery
 //! bug must never disturb recording — but the park mechanics differ, because
@@ -27,14 +32,6 @@
 //! One sample per minute: state of charge moves over hours, so a faster
 //! cadence would be an unjustifiable standing wake (README § Power
 //! discipline). Publication is change-only for the same reason.
-//!
-//! The DK bench + tier-1 enclosure run the cell on VDD, which the default
-//! SAADC range (gain 1/6, 0.6 V internal reference) reads to 3.6 V full
-//! scale — so the top of the 4.2 V charge curve saturates the converter and
-//! reads as ABSENT, not as the ~8 % the railed code would otherwise map to.
-//! Everything below the rail is a real measurement and reads normally;
-//! recovering the top of the curve needs the VDDH/5 channel + high-voltage
-//! mode, a bench follow-up noted in the README.
 
 use core::future::pending;
 use core::pin::pin;
@@ -43,7 +40,7 @@ use defmt::*;
 use embassy_futures::select::{select, Either};
 use embassy_nrf::saadc::Saadc;
 use embassy_time::{Duration, Ticker, Timer};
-use watch_core::battery_sense::{mv_from_raw, percent_from_raw};
+use watch_core::battery_sense::{mv_from_raw, percent_from_raw, SupplySense};
 
 use crate::state;
 
@@ -51,7 +48,7 @@ const SAMPLE: Duration = Duration::from_secs(60);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(200);
 
 #[embassy_executor::task]
-pub async fn run(mut saadc: Saadc<'static, 1>) {
+pub async fn run(mut saadc: Saadc<'static, 1>, sense: SupplySense) {
     let mut buf = [0i16; 1];
     {
         let probe = pin!(saadc.sample(&mut buf));
@@ -60,26 +57,29 @@ pub async fn run(mut saadc: Saadc<'static, 1>) {
             pending::<()>().await;
         }
     }
-    let mv = mv_from_raw(buf[0]);
-    let Some(pct) = percent_from_raw(buf[0]) else {
+    let mv = mv_from_raw(sense, buf[0]);
+    let Some(pct) = percent_from_raw(sense, buf[0]) else {
         info!(
-            "battery: VDD unreadable as a 1S LiPo (raw {=i16} -> {=u16}mV: bench/USB rail, or saturated above full scale); task parked",
-            buf[0], mv
+            "battery: supply unreadable as a 1S LiPo on {} (raw {=i16} -> {=u16}mV: bench/USB rail, or saturated above full scale); task parked",
+            sense, buf[0], mv
         );
         return;
     };
     let sender = state::BATTERY.sender();
     let mut shown = Some(pct);
     sender.send(shown);
-    info!("battery: streaming ({=u16}mV -> {=u8}%)", mv, pct);
+    info!(
+        "battery: streaming on {} ({=u16}mV -> {=u8}%)",
+        sense, mv, pct
+    );
     let mut ticker = Ticker::every(SAMPLE);
     loop {
         ticker.next().await;
         saadc.sample(&mut buf).await;
-        let mv = mv_from_raw(buf[0]);
+        let mv = mv_from_raw(sense, buf[0]);
         // A reading that left the readable domain mid-stream blanks the gauge
         // instead of rendering a percent off a rail; the next tick retries.
-        let next = percent_from_raw(buf[0]);
+        let next = percent_from_raw(sense, buf[0]);
         if next.is_none() {
             warn!(
                 "battery: unreadable (raw {=i16} -> {=u16}mV); blanking",

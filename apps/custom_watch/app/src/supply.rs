@@ -24,14 +24,24 @@
 //! page has already been written. A boot that reports a wrong supply is
 //! recoverable by anyone reading the log; a boot that resets forever is not.
 //! The fix is a one-time host-side step, recorded in `docs/custom_watch/parts.md`.
+//!
+//! **The mode also decides which SAADC input can see the cell**, which is why
+//! this returns a [`SupplySense`] rather than only logging. In normal mode the
+//! supply *is* VDD, so the internal `VDD` input reads it. In high-voltage mode
+//! VDD is the regulator's output and returns the same figure at every state of
+//! charge — the cell is only reachable through `VDDHDIV5`. Reading the wrong one
+//! does not fail loudly: it produces a plausible-looking constant, which the
+//! battery gauge then honestly refuses, so the wearer sees no gauge at all.
 
 use defmt::*;
 use embassy_nrf::pac;
 use pac::power::vals::Mainregstatus;
 use pac::uicr::vals::Vout;
+use watch_core::battery_sense::SupplySense;
 
-/// Log the supply mode, and warn loudly if it cannot drive 3 V peripherals.
-pub fn report() {
+/// Log the supply mode, warn loudly if it cannot drive 3 V peripherals, and
+/// report which SAADC input the battery gauge must sample on this supply path.
+pub fn report() -> SupplySense {
     let mode = pac::POWER.mainregstatus().read().mainregstatus();
     let vout = pac::UICR.regout0().read().vout();
     match mode {
@@ -39,17 +49,21 @@ pub fn report() {
             // VDD is whatever the board regulator supplies; REGOUT0 does not
             // apply, so there is nothing here that can be misconfigured.
             info!("supply: normal mode (VDD) — GPIO level follows the board rail");
+            SupplySense::VddDirect
         }
-        Mainregstatus::HIGH => match vout {
-            Vout::DEFAULT | Vout::_1V8 => error!(
-                "supply: HIGH-voltage mode (VDDH) with REGOUT0 unset — GPIO logic is 1.8 V. \
-                 The 3 V breakouts will not read it, and their outputs over-volt these pins. \
-                 Program UICR.REGOUT0 to 3.0 V before wiring them (docs/custom_watch/parts.md)"
-            ),
-            Vout::_2V1 | Vout::_2V4 | Vout::_2V7 => warn!(
-                "supply: HIGH-voltage mode (VDDH), REGOUT0 below 3.0 V — breakout logic margins are not guaranteed"
-            ),
-            _ => info!("supply: HIGH-voltage mode (VDDH), REGOUT0 at 3.0 V or above"),
-        },
+        Mainregstatus::HIGH => {
+            match vout {
+                Vout::DEFAULT | Vout::_1V8 => error!(
+                    "supply: HIGH-voltage mode (VDDH) with REGOUT0 unset — GPIO logic is 1.8 V. \
+                     The 3 V breakouts will not read it, and their outputs over-volt these pins. \
+                     Program UICR.REGOUT0 to 3.0 V before wiring them (docs/custom_watch/parts.md)"
+                ),
+                Vout::_2V1 | Vout::_2V4 | Vout::_2V7 => warn!(
+                    "supply: HIGH-voltage mode (VDDH), REGOUT0 below 3.0 V — breakout logic margins are not guaranteed"
+                ),
+                _ => info!("supply: HIGH-voltage mode (VDDH), REGOUT0 at 3.0 V or above"),
+            }
+            SupplySense::VddhDiv5
+        }
     }
 }
