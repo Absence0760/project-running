@@ -4318,15 +4318,6 @@ export type Database = {
         }
         Relationships: []
       }
-      mv_weekly_mileage: {
-        Row: {
-          run_count: number | null
-          total_distance_m: number | null
-          user_id: string | null
-          week_start: string | null
-        }
-        Relationships: []
-      }
       public_food_log: {
         Row: {
           calories: number | null
