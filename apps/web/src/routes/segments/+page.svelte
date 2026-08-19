@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import { distanceInPreferred, formatElevation } from '$lib/format/units.svelte';
@@ -74,6 +75,7 @@
 <svelte:head><title>{m('segments.browseTitle')}</title></svelte:head>
 
 <div class="catalogue">
+	<RunSurfaceTabs active="segments" />
 	<header class="catalogue-header">
 		<h1>{m('segments.browseTitle')}</h1>
 		<p class="subtitle">{m('segments.browseIntro')}</p>

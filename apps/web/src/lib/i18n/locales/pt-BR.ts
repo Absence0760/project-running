@@ -42,6 +42,7 @@ export const messages = {
 	'runSurface.label': 'Seções da área de corrida',
 	'runSurface.tabRuns': 'Corridas',
 	'runSurface.tabRoutes': 'Rotas',
+	'runSurface.tabSegments': 'Segmentos',
 	'runSurface.tabPlans': 'Planos',
 	'runSurface.tabRaces': 'Corridas',
 	'shell.offline':

@@ -259,3 +259,35 @@ test.describe('navigation — Routes nested under the run surface', () => {
 		).toBeVisible({ timeout: 10_000 });
 	});
 });
+
+test.describe('navigation — the segment catalogue under the run surface', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	// /segments shipped reachable only from a run-detail effort chip and
+	// its own detail page's back-link — a surface with no door in any
+	// global nav slot (decisions.md § 677).
+	test('Segments is reachable from /runs via the run-surface sub-tab', async ({
+		page
+	}) => {
+		await page.goto('/runs');
+		await page
+			.getByRole('navigation', { name: /Run surface sections/ })
+			.getByRole('link', { name: /^Segments$/ })
+			.click();
+		await expect(page).toHaveURL(/\/segments$/, { timeout: 10_000 });
+		await expect(
+			page.getByRole('heading', { name: /Famous segments/ })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
+	test('the catalogue carries the strip back to the other run surfaces', async ({
+		page
+	}) => {
+		await page.goto('/segments');
+		await page
+			.getByRole('navigation', { name: /Run surface sections/ })
+			.getByRole('link', { name: /^Routes$/ })
+			.click();
+		await expect(page).toHaveURL(/\/routes(\?.*)?$/, { timeout: 10_000 });
+	});
+});

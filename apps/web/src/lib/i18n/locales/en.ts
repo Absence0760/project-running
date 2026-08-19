@@ -52,6 +52,7 @@ export const en = {
 	'runSurface.label': 'Run surface sections',
 	'runSurface.tabRuns': 'Runs',
 	'runSurface.tabRoutes': 'Routes',
+	'runSurface.tabSegments': 'Segments',
 	'runSurface.tabPlans': 'Plans',
 	'runSurface.tabRaces': 'Races',
 	'shell.offline': "You're offline. New runs save locally and sync when you're back online.",
