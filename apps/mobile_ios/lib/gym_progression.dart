@@ -34,9 +34,10 @@ class ProgressionSetLike {
   final num? weightKg;
   final num? rpe;
 
-  /// gym_sets.set_type — raw string (matches the DB CHECK union). A ramp-up
-  /// set is not evidence about the working target, so it must not be judged
-  /// against it. Null reads as 'working', matching the column default.
+  /// gym_sets.set_type — raw string (matches the DB CHECK union). A
+  /// deliberately submaximal set is not evidence about the working target, so
+  /// it must not be judged against it (see `_unjudgedSetTypes`). Null reads as
+  /// 'working', matching the column default.
   final String? setType;
   const ProgressionSetLike({this.reps, this.weightKg, this.rpe, this.setType});
 }
@@ -88,9 +89,26 @@ double _positiveOr(Object? v, double fallback) {
   return (n != null && n > 0) ? n : fallback;
 }
 
+/// Set types a progression judgement must never grade. All three are
+/// deliberately submaximal — a `warmup` before the working weight, a `backoff`
+/// after it, a `dropset` down from it — so "did they reach the target reps at
+/// the target weight" can only ever read them as a miss, which holds the load
+/// and, under fiveByFive, banks a deload the lifter never earned.
+///
+/// The top-weight narrowing in [workingSets] already drops a lighter set
+/// whether or not it carries a label; this is what covers the case that
+/// narrowing cannot see. A BODYWEIGHT session has no positive weight to narrow
+/// on, so every completed set survives — and a set of assisted pull-ups typed
+/// `dropset` after three clean sets of eight stalled the exercise permanently,
+/// exactly as an unlabelled warmup would have (decisions.md § 680).
+///
+/// `amrap` and `failure` are deliberately NOT here: both are performed AT the
+/// working weight and their rep count is real evidence about it.
+const Set<String> _unjudgedSetTypes = {'warmup', 'backoff', 'dropset'};
+
 List<ProgressionSetLike> _completedSets(List<ProgressionSetLike> sets) {
   return sets.where((s) {
-    if ((s.setType ?? 'working') == 'warmup') return false;
+    if (_unjudgedSetTypes.contains(s.setType ?? 'working')) return false;
     final r = _numericOrNull(s.reps);
     return r != null && r > 0;
   }).toList();
@@ -101,10 +119,10 @@ List<ProgressionSetLike> _completedSets(List<ProgressionSetLike> sets) {
 /// narrowed to those done at the session's top completed weight.
 ///
 /// That second pass holds the judgement even when the set_type LABEL is
-/// missing: a lighter ramp-up is dropped whether or not it was typed. Both
-/// history RPCs return the column since migration 20270525_001, so the label
-/// now carries the rest — a warmup logged AT the working weight survives this
-/// narrowing and is excluded by set_type alone. Grading at the working weight
+/// missing: a lighter submaximal set is dropped whether or not it was typed.
+/// Both history RPCs return the column since migration 20270525_001, so the
+/// label now carries the rest — a warmup or drop set logged AT the working
+/// weight survives this narrowing and is excluded by set_type alone. Grading at the working weight
 /// is also the truer reading of "5 sets of 5": a lighter back-off set is not
 /// one of the five. A session with no positive weight anywhere (bodyweight)
 /// keeps every completed set.
@@ -180,10 +198,11 @@ ProgressionSuggestion nextPrescription(ProgressionInput input) {
 
   final params = input.params ?? const {};
   final sets = input.lastSets;
-  // Warmups are excluded before anything is judged. Every "did they hit the
-  // target?" test below is an `every` over this list, so a 2-rep ramp-up set
-  // counted as a failed working set and held the load — forever, for anyone who
-  // warms up, which is everyone. gym_adherence states the same rule for
+  // Warmups, back-off sets and drop sets are excluded before anything is
+  // judged (_unjudgedSetTypes). Every "did they hit the target?" test below is
+  // an `every` over this list, so a 2-rep ramp-up set counted as a failed
+  // working set and held the load — forever, for anyone who warms up, which is
+  // everyone. gym_adherence states the same rule for
   // planned-vs-actual grading. A null setType is 'working', matching the DB
   // default — the working-weight narrowing inside workingSets is what catches a
   // ramp-up that still reaches the prescriber unlabelled.
