@@ -13,10 +13,11 @@
  * it". A runner can be fully recovered today and still sitting in the spike
  * zone that shows up as an injury three weeks from now.
  *
- * Pure (no Svelte / Supabase) so it runs under `npx tsx --test`. Web-only for
- * now: mobile has the `coach_load` twin but no self-facing surface, so a Dart
- * twin of this composition would be dead code (mirror tracked in
- * docs/product/followups.md).
+ * Pure (no Svelte / Supabase) so it runs under `npx tsx --test`.
+ *
+ * Dart twin: apps/mobile_android/lib/self_load.dart (parity pair — keep the
+ * algorithm, band edges, gates, and test counts in lockstep). The web surface
+ * is `LoadRampCard.svelte`.
  */
 
 import {
