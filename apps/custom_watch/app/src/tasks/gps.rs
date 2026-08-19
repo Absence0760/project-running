@@ -89,7 +89,7 @@
 //! discarded whatever had already landed in it. `BufferedUarteRx::read` has a
 //! single await point — the ring fill — with the copy-out and `consume` after
 //! it, so a future dropped while pending leaves every byte in the ring.
-//!
+
 use defmt::{debug, info, unwrap, warn};
 use embassy_futures::select::{select3, Either3};
 use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx, Error as BufferedError};
