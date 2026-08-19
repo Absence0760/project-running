@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
+import '../lib/main.dart' show pendingStartRunWithRoute;
 import '../lib/preferences.dart';
 import '../lib/screens/route_detail_screen.dart';
 import '../lib/social_service.dart' show ClubView;
@@ -18,12 +19,14 @@ cm.Route _route({
   bool isPublic = false,
   String? description,
   List<String> tags = const [],
+  List<cm.Waypoint> waypoints = const [],
+  String userId = 'test-user',
 }) =>
     cm.Route(
       id: 'r1',
-      userId: 'test-user',
+      userId: userId,
       name: name,
-      waypoints: const [],
+      waypoints: waypoints,
       distanceMetres: 8500,
       elevationGainMetres: 45,
       isPublic: isPublic,
@@ -716,6 +719,41 @@ void main() {
             matching: find.byType(Expanded)),
         findsWidgets,
       );
+    });
+  });
+
+  group('RouteDetailScreen — start-run handoff', () {
+    tearDown(() => pendingStartRunWithRoute.value = null);
+
+    testWidgets('the Start run FAB publishes the route on the global notifier',
+        (tester) async {
+      // The only path from a route surface into the recorder. The callback
+      // chain that used to carry the route up through RoutesScreen /
+      // ExploreRoutesScreen / FitnessHubScreen was dead — this screen never
+      // pops a Route — so this notifier is what "Start with this route" is.
+      await _pump(
+        tester,
+        // Empty userId = a locally-built route, which the clip step hands
+        // through unchanged for a signed-out viewer; anything else renders no
+        // polyline in a test with no ApiClient, and so no FAB.
+        _route(userId: '', waypoints: const [
+          cm.Waypoint(lat: 51.5, lng: -0.12),
+          cm.Waypoint(lat: 51.51, lng: -0.13),
+        ]),
+      );
+
+      expect(pendingStartRunWithRoute.value, isNull);
+      await tester.tap(find.text('Start run'));
+      await tester.pump();
+
+      expect(pendingStartRunWithRoute.value?.id, 'r1');
+    });
+
+    testWidgets('a route with fewer than two waypoints offers no Start run',
+        (tester) async {
+      await _pump(tester, _route(userId: ''));
+      expect(find.text('Start run'), findsNothing);
+      expect(pendingStartRunWithRoute.value, isNull);
     });
   });
 }

@@ -25,14 +25,12 @@ class ExploreRoutesScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRouteStore routeStore;
   final Preferences preferences;
-  final void Function(cm.Route route)? onStartRun;
 
   const ExploreRoutesScreen({
     super.key,
     this.apiClient,
     required this.routeStore,
     required this.preferences,
-    this.onStartRun,
   });
 
   @override
@@ -634,10 +632,10 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
           unit: unit,
           theme: theme,
           alreadySaved: alreadySaved,
-          onTap: () async {
-            final picked = await Navigator.push<cm.Route?>(
+          onTap: () {
+            Navigator.push<void>(
               context,
-              MaterialPageRoute(
+              MaterialPageRoute<void>(
                 builder: (_) => RouteDetailScreen(
                   route: route,
                   routeStore: widget.routeStore,
@@ -646,7 +644,6 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
                 ),
               ),
             );
-            if (picked != null) widget.onStartRun?.call(picked);
           },
           onSave: () => _saveRoute(route),
         );

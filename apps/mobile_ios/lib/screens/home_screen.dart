@@ -458,7 +458,6 @@ class _HomeScreenState extends State<HomeScreen>
           preferences: widget.preferences,
           settingsSync: widget.settingsSync,
           training: widget.training,
-          onStartRun: _startRunWithRoute,
         ),
       ),
       _LazyKeepAliveTab(
@@ -541,8 +540,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _startRunWithRoute(cm.Route route) {
     // The Run page takes a preselected route via constructor; changing it
-    // means rebuilding that page. Cheap — only called from the Routes tab's
-    // "start with this route" flow, not during a swipe.
+    // means rebuilding that page. Cheap — only reached by draining the
+    // pendingStartRunWithRoute handoff, not during a swipe.
     _preselectedRoute = route;
     setState(_rebuildPages);
     _currentIndex.value = _pageRun;

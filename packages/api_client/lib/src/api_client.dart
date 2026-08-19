@@ -7185,8 +7185,8 @@ class ApiClient {
 
     // The followee set is chunked: PostgREST serialises `.inFilter()` into the
     // URL, so a viewer following many hundreds of people overflows the
-    // gateway's request-line limit and the query silently returns empty — a
-    // silently empty badge feed. Each chunk applies the same cursor + ordering
+    // gateway's request-line budget and loses the read entirely (decisions
+    // § 653). Each chunk applies the same cursor + ordering
     // + limit; the global top-`limit` is a subset of the union, re-sorted by
     // earned_at desc then id desc.
     Future<List<AchievementRow>> queryChunk(List<String> chunk) async {

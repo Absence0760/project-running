@@ -42,9 +42,8 @@ backend@1.2.3          → .github/workflows/release-backend.yml
 worker@1.2.3           → .github/workflows/release-worker.yml
 osrm@1.2.3             → .github/workflows/release-osrm.yml
 graph-cycle@1.2.3      → .github/workflows/release-graph-cycle.yml
+graphhopper@1.2.3      → .github/workflows/release-graphhopper.yml
 ```
-
-(GraphHopper — the other Fly map sidecar at `apps/job_worker/graphhopper/` — has **no** release workflow yet; it's deployed by a hand-rolled `flyctl deploy`.)
 
 The glob is `<app>@*`, so any suffix works — `1.2.3`, `1.2.3-rc.1`,
 `2.0.0-beta.4`. The workflow parses the suffix as the `versionName` and
@@ -107,6 +106,7 @@ create` / UI / `/release`). The last column is what the workflow attaches
 | `worker@*` | ubuntu-latest | — | Fly.io `job_worker` app via `flyctl deploy --remote-only` | — |
 | `osrm@*` | ubuntu-latest | — | Fly.io `osrm` app (image only — graph on the volume rides along) | — |
 | `graph-cycle@*` | ubuntu-latest | — | Fly.io `graph-cycle` app (image only — OSM PBF stays on the `graph_cycle_data` volume; reparsed on boot) | — |
+| `graphhopper@*` | ubuntu-latest | — | Fly.io `graphhopper` app (image only — the PBF + built `graph-cache/` stay on the `graphhopper_data` volume) | — |
 
 Promoting Android + Wear from the Internal track to Beta or Production
 is done manually in the Play Console after you've smoke-tested the
@@ -218,7 +218,7 @@ For the AWS-side deploy + rotation flows (preflight, orchestrated apply, sops bo
 
 | Secret | What |
 |---|---|
-| `FLY_API_TOKEN` | Fly.io API token scoped to the `project-running` org — named to match the AWS account slug (`374902171933`), which was itself renamed from the retired `runonward` brand. Same token covers the `worker@*`, `osrm@*`, and `graph-cycle@*` workflows. |
+| `FLY_API_TOKEN` | Fly.io API token scoped to the `project-running` org — named to match the AWS account slug (`374902171933`), which was itself renamed from the retired `runonward` brand. Same token covers the `worker@*`, `osrm@*`, `graph-cycle@*`, and `graphhopper@*` workflows. |
 
 ## Rollback
 
