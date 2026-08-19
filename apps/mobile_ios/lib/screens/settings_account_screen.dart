@@ -82,6 +82,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   /// the banner has gone, and the archive itself only says so inside
   /// manifest.json.
   ServerBackupSummary? _backupShortfall;
+  LocalArchiveSummary? _backupLocalShortfall;
+  RestoreResult? _lastIncompleteRestore;
 
   String? _avatarUrl;
   bool _avatarBusy = false;
@@ -808,7 +810,13 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
             : BackupServerClient(baseUrl: serviceBase),
       ).createBackup(outputFile: file, runStore: widget.runStore);
       final short = outcome.shortfall;
-      if (mounted) setState(() => _backupShortfall = short);
+      final localShort = outcome.localShortfall;
+      if (mounted) {
+        setState(() {
+          _backupShortfall = short;
+          _backupLocalShortfall = localShort;
+        });
+      }
       await Share.shareXFiles(
         [XFile(file.path)],
         text: l10n.settingsAccountBackupShareText,
@@ -819,6 +827,14 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
         showTopBanner(
           context,
           l10n.settingsAccountBackupPartial(short.count, short.total),
+        );
+      } else if (mounted && localShort != null) {
+        showTopBanner(
+          context,
+          l10n.settingsAccountBackupTracksPartial(
+            localShort.blobsMissing,
+            localShort.blobsWanted,
+          ),
         );
       }
     } catch (e) {
@@ -876,6 +892,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
         routeStore: widget.routeStore,
       );
       if (!mounted) return;
+      setState(() =>
+          _lastIncompleteRestore = res.archiveIncomplete ? res : null);
       showTopBanner(
         context,
         l10n.settingsAccountRestoreDone(
@@ -1073,6 +1091,33 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                     ],
                   ),
                 ),
+              if (_backupShortfall == null && _backupLocalShortfall != null)
+                Padding(
+                  key: const Key('backup-tracks-shortfall'),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.settingsAccountBackupTracksPartialNotice(
+                            _backupLocalShortfall!.blobsMissing,
+                            _backupLocalShortfall!.blobsWanted,
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ListTile(
                 leading: const Icon(Icons.table_chart_outlined),
                 title: Text(l10n.settingsAccountExportCsv),
@@ -1089,6 +1134,32 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 enabled: !_accountBusy,
                 onTap: _restoreBackup,
               ),
+              if (_lastIncompleteRestore != null)
+                Padding(
+                  key: const Key('restore-incomplete-archive'),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.settingsAccountRestoreIncompleteArchive(
+                            _lastIncompleteRestore!.runsImported,
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
             if (signedIn) ...[
               const Divider(),

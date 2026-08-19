@@ -10138,6 +10138,24 @@ abstract class AppLocalizations {
   /// **'Your last export is partial: it holds {count} of the {total} runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.'**
   String settingsAccountBackupPartialNotice(int count, int total);
 
+  /// Banner shown after a locally-built backup whose GPS track downloads came up short
+  ///
+  /// In en, this message translates to:
+  /// **'Backup is missing {missing} of {total} GPS files.'**
+  String settingsAccountBackupTracksPartial(int missing, int total);
+
+  /// Persistent notice under the full-backup tile naming how many GPS track files the last local backup could not download
+  ///
+  /// In en, this message translates to:
+  /// **'Your last backup could not download {missing} of the {total} GPS track files. Every run is in the archive; export again to retry the traces. Its manifest.json says complete: false.'**
+  String settingsAccountBackupTracksPartialNotice(int missing, int total);
+
+  /// Persistent notice under the restore tile shown when the restored archive declared itself incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'That archive said it was incomplete. {runs} runs were restored and nothing was overwritten - restore from a complete backup to fill the gaps.'**
+  String settingsAccountRestoreIncompleteArchive(int runs);
+
   /// Banner shown when restore can't run because the local store is missing
   ///
   /// In en, this message translates to:

@@ -5829,6 +5829,21 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'バックアップに GPS ファイルが $total 件中 $missing 件不足しています。';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return '前回のバックアップで GPS 軌跡ファイル $total 件中 $missing 件をダウンロードできませんでした。ランはすべてアーカイブに含まれています。軌跡を取り直すにはもう一度エクスポートしてください。manifest.json には complete: false と記録されています。';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'このアーカイブは不完全であると自己申告しています。$runs 件のランを復元し、何も上書きしていません。欠落を埋めるには完全なバックアップから復元してください。';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable => 'バックアップサービスを利用できません。';
 
   @override

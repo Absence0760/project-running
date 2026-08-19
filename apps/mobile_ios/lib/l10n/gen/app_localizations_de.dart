@@ -6199,6 +6199,21 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'Im Backup fehlen $missing von $total GPS-Dateien.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'Dein letztes Backup konnte $missing von $total GPS-Streckendateien nicht herunterladen. Alle Läufe sind im Archiv; exportiere erneut, um die Strecken nachzuholen. Die manifest.json meldet complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'Dieses Archiv war nach eigener Angabe unvollständig. $runs Läufe wurden wiederhergestellt und nichts wurde überschrieben — stelle aus einem vollständigen Backup wieder her, um die Lücken zu schließen.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Backup-Dienst nicht verfügbar.';
 

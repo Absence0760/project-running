@@ -6188,6 +6188,21 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'Faltam $missing de $total ficheiros GPS na cópia de segurança.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'A tua última cópia de segurança não conseguiu transferir $missing de $total ficheiros de trajeto GPS. Todas as corridas estão no arquivo; exporta novamente para recuperar os trajetos. O respetivo manifest.json indica complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'Esse arquivo declarou-se incompleto. Foram restauradas $runs corridas e nada foi substituído — restaura a partir de uma cópia completa para preencher as lacunas.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Serviço de backup indisponível.';
 
@@ -19182,6 +19197,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String settingsAccountBackupPartialNotice(int count, int total) {
     return 'Sua última exportação está parcial: contém $count das $total corridas da sua conta. Nada foi excluído — exporte de novo para tentar outra vez. O arquivo completo da conta lista cada seção incompleta no manifest.json.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'Faltam $missing de $total arquivos GPS no backup.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'Seu último backup não conseguiu baixar $missing de $total arquivos de trajeto GPS. Todas as corridas estão no arquivo; exporte de novo para recuperar os trajetos. O manifest.json dele indica complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'Esse arquivo se declarou incompleto. $runs corridas foram restauradas e nada foi sobrescrito — restaure a partir de um backup completo para preencher as lacunas.';
   }
 
   @override

@@ -6187,6 +6187,21 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'A la copia de seguridad le faltan $missing de $total archivos GPS.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'Tu última copia de seguridad no pudo descargar $missing de $total archivos de trazado GPS. Todas las carreras están en el archivo; vuelve a exportar para recuperar los trazados. Su manifest.json indica complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'Ese archivo se declaraba incompleto. Se restauraron $runs carreras y no se sobrescribió nada: restaura desde una copia completa para rellenar los huecos.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Servicio de copia de seguridad no disponible.';
 
