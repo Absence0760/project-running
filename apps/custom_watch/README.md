@@ -16,7 +16,7 @@ Per [`performance_path.md`](../../docs/custom_watch/performance_path.md), batter
 
 **Done:**
 - **Partial display updates** — the `sharp_mip` driver tracks dirty lines and sends only changed ones (+ the VCOM-only frame when idle); a static screen costs near-nothing.
-- **DMA/async, tickless** — every task is Embassy async over EasyDMA (no busy-polling), so the executor sleeps until a real event. **GPS UART reads are burst-buffered** (`gps.rs`, `RX_BURST`) — one CPU wake per ~32 bytes instead of per byte, the doc's DMA-not-polling lever (sim-verified: 53 fixes / 51 s, distance accrues).
+- **DMA/async, tickless** — every task is Embassy async over EasyDMA (no busy-polling), so the executor sleeps until a real event. **GPS UART reads run on a `BufferedUarte` ring** (`gps.rs`, `RX_RING_LEN`) — the CPU wakes once per half-buffer instead of per byte, and the next transfer is pre-armed in hardware so a CPU halt cannot lose bytes (decisions.md § 698), the doc's DMA-not-polling lever (sim-verified: fixes flow end-to-end and distance accrues).
 - **Animations gated** — the ~1 Hz face animations freeze outside an ~8 s post-interaction window (`ANIM_WINDOW_S`), so an unattended wrist stops the per-second decorative redraw.
 - **No gratuitous wakers** — the 2 Hz liveness LED is behind the default-OFF `dev-blink` feature (the sim/flash helpers opt it back in); a plain `cargo build` carries no free-running blinker.
 - **BLE long connection interval** — the `ble` build requests a ~1 s interval on connect (`set_conn_params`), vs the 7.5 ms HID default (~100× idle-radio power). Compile-verified only.
