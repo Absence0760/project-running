@@ -291,7 +291,7 @@ app/
       gps.rs            GNSS NMEA parser task
       hr.rs             MAX30101 sampling + peak-detect task
       baro.rs           BMP581 sample task (per decisions.md § 90)
-      battery.rs        SAADC battery-voltage task (VDD channel, probe-and-park)
+      battery.rs        SAADC battery-voltage task (VDD or VDDH/5 per supply mode, probe-and-park)
       nav.rs            per-fix course projection + off-course latch
       ui.rs             screen update + liveness-LED task
       button.rs         edge detection + debounce, feeding the § 350 press grammar
