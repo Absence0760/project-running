@@ -166,7 +166,7 @@ as their DB rows.
   backup". Implemented in `apps/web/src/lib/backup/backup.ts`. Uses `JSZip`.
   Both paths require an authenticated session — there's no local
   persistence to stage into.
-- **Mobile Android / iOS** → Settings → Account → "Full backup" / "Restore from backup".
+- **Mobile Android** → Settings → Account → "Full backup" / "Restore from backup".
   Implemented in `apps/mobile_android/lib/backup.dart`. Uses the
   `archive` package. **Restore works offline** — if the user isn't
   signed in, runs + routes are hydrated into `LocalRunStore` /
@@ -179,6 +179,10 @@ as their DB rows.
   outright while anything on the device is still undrained, since the server
   can only see cloud rows. The local writer's completeness verdict surfaces as
   a banner plus a persistent notice under the Full backup tile.
+- **Mobile iOS** shares the code — `lib/` is byte-identical (decisions § 39) and
+  neither tile carries a `Platform` gate — but `parity.md` still marks the whole
+  iOS sync-and-backup column `✗`. That contradiction is unresolved; verify on a
+  device before claiming either way.
 - The watch apps do **not** offer backup — too much UI for a small screen. Use
   the phone or the web.
 
