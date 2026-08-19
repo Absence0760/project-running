@@ -82,7 +82,9 @@ test("a file missing from the served tree fails naming it", async () => {
 	});
 	await assert.rejects(
 		assertServedFilesMatch(base, dir, [REL]),
-		new RegExp(`has no ${REL.replace(/[.]/g, '\\.')} in the tree it is serving`)
+		(err: unknown) =>
+			err instanceof Error &&
+			err.message.includes(`has no ${REL} in the tree it is serving`)
 	);
 });
 
