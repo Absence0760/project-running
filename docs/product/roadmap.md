@@ -166,7 +166,7 @@ Full technical details in `backend_scaling.md`.
 
 ### Backend work (Phase 2b)
 
-✓ **Shipped.** Supabase config, seed, `mv_weekly_mileage`, full-text + composite dashboard indexes, the 15-min pg_cron refresh, and a verified sub-2s dashboard query budget at 10× target volume. Full delivery checklist in [roadmap_shipped.md](roadmap_shipped.md).
+✓ **Shipped.** Supabase config, seed, full-text + composite dashboard indexes, and a verified sub-2s dashboard query budget at 10× target volume. The `mv_weekly_mileage` matview and its 15-min pg_cron refresh also shipped here and were **dropped again in `20270530_001`**, never having been read — the measured budget above was always met without them (decisions § 690). Full delivery checklist in [roadmap_shipped.md](roadmap_shipped.md).
 
 ### Milestone: web app live at `threkir.com`
 

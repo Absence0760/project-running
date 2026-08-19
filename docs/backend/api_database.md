@@ -1255,9 +1255,16 @@ single-round-trip convenience for dashboard cards.
 
 ---
 
-#### `mv_weekly_mileage`
+#### `mv_weekly_mileage` — dropped in `20270530_001`
 
-Materialized view that pre-aggregates `runs` into `(user_id, week_start) → (total_distance_m, run_count)` so the `weekly_mileage` RPC and the dashboard's "This Week" card stay sub-millisecond as the runs table grows. Refreshed every five minutes by the `refresh-mv-weekly-mileage` pg_cron job (`refresh materialized view concurrently` — non-blocking thanks to the `mv_weekly_mileage_pk` unique index). Migrations: created in the seed-route + index pass, refresh schedule in `20260602_001_mv_weekly_mileage_refresh.sql`, EXECUTE revoke in `20260517_001_mv_weekly_mileage_revoke.sql` (callers go through the RPC, not direct SELECT).
+**This materialized view no longer exists**, and the repo now has no materialized view at all. It was created ahead of need in `20260407_001`, revoked from `anon`/`authenticated` in `20260517_001`, refreshed every 15 min by pg_cron since `20260602_001`/`20260706_001` — and never acquired a reader on any tier. Dropped along with its `mv_weekly_mileage_pk` index and its cron entry; the pgtap guard is `mv_weekly_mileage_dropped_test.sql`. Rationale and the alternatives weighed are in [decisions.md § 690](../architecture/decisions.md).
+
+An earlier revision of this section claimed the view backed "the `weekly_mileage` RPC and the dashboard's 'This Week' card". **Neither was ever true.** For the record, so nobody re-derives the same wrong picture:
+
+- `weekly_mileage(weeks_back)` aggregates `runs` directly under `user_id = auth.uid()` (`20260406_001`, re-emitted with a pinned `search_path` in `20260710_001`). It never referenced the view — and has no caller of its own on any client.
+- The dashboard's weekly chart calls `fetchWeeklyMileage`, which selects a bounded 14-week `(started_at, distance_m)` window off `runs_user_started_at` and buckets it in TypeScript (`bucketWeeklyMileage`). The `ThisWeekStrip` ribbon is fed runs already in memory. Both bucket at the runner's **local** midnight and honour the `week_start_day` preference, which is precisely what the view's `date_trunc('week', ...)` could not do.
+
+If a genuinely hot weekly aggregate ever appears, it wants a view keyed per user timezone and week-start preference — a different object, not this one revived.
 
 ### Integrations & background jobs
 
@@ -1425,7 +1432,6 @@ create table rate_limits (
 
 | Job | Schedule | What it does | Migration |
 |---|---|---|---|
-| `refresh-mv-weekly-mileage` | `*/15 * * * *` | `refresh materialized view concurrently mv_weekly_mileage`. Original schedule was `*/5` (set in `20260602_001`); bumped to `*/15` in `20260706_001` after the cost-controls audit flagged the cadence as the dominant Supabase background-compute draw. | `20260602_001` → `20260706_001` |
 | `cleanup-stale-live-run-pings` | `*/15 * * * *` | Calls `cleanup_stale_live_run_pings()` to delete `live_run_pings` rows older than the retention window — keeps the spectator feed table bounded during a multi-hour event. | `20260602_001` |
 | `cleanup-stale-rate-limits` | `0 * * * *` (hourly) | Calls `cleanup_stale_rate_limits()` to GC elapsed `rate_limits` rows. | `20260604_001` |
 | `cleanup-stale-webhook-events` | `17 4 * * *` | Deletes `webhook_events` rows older than 30 days (RevenueCat/Stripe replay-dedupe table). | `20260623_001` |
@@ -1444,7 +1450,7 @@ create table rate_limits (
 | `cleanup-stale-user-coach-usage` | `17 * * * *` | Calls `cleanup_stale_user_coach_usage()` (coach-usage counter retention). | `20261215_001` |
 | `purge-stale-checkpoint-health-data` | `47 3 * * *` | Calls `private.purge_stale_checkpoint_health_data()` — scrubs (nulls) the Art 9 weigh-in / medical columns on `checkpoint_crossings` older than 90 days (`recorded_at`); the in/out split times survive (they are race results). | `20270317_001` |
 
-The scheduled functions are EXECUTE-revoked from PUBLIC where applicable; the cron extension runs as superuser. The mv-refresh + live-run-ping cleanup live in `20260602_001_pg_cron_schedules.sql` (the mv refresh is re-scheduled in `20260706_001_pg_cron_mv_refresh_15min.sql`); the rate-limit cleanup is in `20260604_001_rate_limits.sql`. Each remaining row's migration is listed in the table.
+The scheduled functions are EXECUTE-revoked from PUBLIC where applicable; the cron extension runs as superuser. The live-run-ping cleanup lives in `20260602_001_pg_cron_schedules.sql` alongside what used to be a `refresh-mv-weekly-mileage` entry — that job is **gone** (unscheduled in `20270530_001` when the unread matview it refreshed was dropped, see above), so the table above lists no matview refresh and the repo now schedules no `refresh materialized view` anywhere. The rate-limit cleanup is in `20260604_001_rate_limits.sql`. Each remaining row's migration is listed in the table.
 
 ---
 
