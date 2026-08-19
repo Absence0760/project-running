@@ -125,7 +125,8 @@ create trigger trg_update_prs
 
 **Problem:** `weekly_mileage()` scans the `runs` table on every dashboard load. Acceptable for hundreds of users, not for thousands.
 
-**Fix:** Materialized view refreshed by `pg_cron`.
+**Fix (proposed, since reversed — do not copy this; see the Status note under
+the snippet):** Materialized view refreshed by `pg_cron`.
 
 ```sql
 create materialized view mv_weekly_mileage as
@@ -153,11 +154,25 @@ select cron.schedule('refresh-weekly-mileage', '*/15 * * * *',
 revoke select on mv_weekly_mileage from anon, authenticated;
 ```
 
-**When:** Before web dashboard launch (Phase 2b). Status: matview was
-created in `20260407_001_performance.sql`; public read was revoked in
-`20260517_001_revoke_mv_weekly_mileage.sql` after the data-isolation
-audit. The matview is currently provisioned but has no callers — the
-canonical client read path remains the `weekly_mileage()` SQL function.
+**Status: tried, and reversed — the matview above no longer exists.** It was
+created in `20260407_001_performance.sql`, revoked from public read in
+`20260517_001_revoke_mv_weekly_mileage.sql` after the data-isolation audit,
+refreshed by pg_cron from `20260602_001` (retuned to 15 min in `20260706_001`)
+— and **dropped in `20270530_001`**, having never acquired a reader across the
+422 migrations of its life. See [decisions.md § 690](../architecture/decisions.md).
+
+The premise of this section did not survive contact either. `weekly_mileage()`
+does scan `runs`, but nothing calls it, and the dashboard's weekly chart
+windows `runs` to 14 weeks off `runs_user_started_at` and buckets in
+TypeScript — a per-user index range scan over tens of rows, not the growing
+table scan this section assumed. And the matview shape above could not have
+served that surface: `date_trunc('week', ...)` is ISO Monday-start (the
+dashboard honours a Sunday-start `week_start_day` preference) and buckets a
+`timestamptz` at the *session* timezone's midnight rather than the runner's
+local one. Pre-aggregating this correctly means keying per user timezone and
+per week-start preference. Do that only once a read path is actually hot;
+provisioning it ahead of need is what produced 422 migrations' worth of
+background compute for zero reads.
 
 ### 5. OAuth tokens stored in plaintext
 
@@ -459,7 +474,7 @@ Aligned with the existing product roadmap.
 
 **Database:**
 - [x] Add `personal_records` summary table with trigger (`20260508_001`)
-- [x] Create `mv_weekly_mileage` materialized view (`20260407_001`) — refreshed by pg_cron since `20260602_001` (retuned to 15 min in `20260706_001`) and revoked from public read in `20260517_001`. **No read path exists**: nothing in any client or RPC selects from it, so it is pure refresh cost today — wire a `SECURITY DEFINER` wrapper or drop the view
+- [x] ~~Create `mv_weekly_mileage` materialized view~~ **created `20260407_001`, dropped `20270530_001`.** Refreshed by pg_cron from `20260602_001` (retuned to 15 min in `20260706_001`), revoked from public read in `20260517_001`, and never read by any client or RPC — so it was pure refresh cost for its whole life. The choice this line left open (wire a `SECURITY DEFINER` wrapper, or drop) was resolved in favour of dropping: see [decisions.md § 690](../architecture/decisions.md) for the evidence, including why a wrapper over *this* view's Monday-start / session-timezone bucketing could not have served the dashboard
 - [x] Add `jobs` table for Go worker queue (`20260609_001_run_match_pipeline.sql`)
 
 ### Phase 2b — web app
@@ -467,7 +482,7 @@ Aligned with the existing product roadmap.
 **Backend:** No new services.
 
 **Database:**
-- [ ] Ensure materialized views are performant for dashboard queries. **Genuinely still open, and blocked on a prior question:** `mv_weekly_mileage` is the only materialized view in the repo and has no read path at all (see the Phase 2 note above) — `weekly_mileage()` queries `runs` directly. There is nothing yet to grade as performant, so the first move is the decision this line assumes has been made: wire a `SECURITY DEFINER` reader or drop the view
+- [x] Ensure materialized views are performant for dashboard queries — **closed by `20270530_001`, vacuously and deliberately: there are now no materialized views.** The only one the repo ever had had no read path, so there was never a dashboard query to grade; the prior question this line was blocked on (wire a reader, or drop) was answered by dropping. Nothing about dashboard performance regressed, because nothing read it. If a matview returns, this box reopens against whatever read path justified it — [decisions.md § 690](../architecture/decisions.md) records the shape such a view would have to have
 - [x] Index `routes.name` for route library search — `20270316_001_search_trgm_indexes.sql`, as a **trigram** GIN index (`routes_name_trgm`, `gin_trgm_ops`), not the full-text index this line originally asked for. `search_public_routes` matches with `ILIKE '%term%'`, which a `to_tsvector` index cannot serve; the same migration therefore **drops** `routes_name_search`, the real FTS index `20260407_001` had added, because nothing ever queried it with `@@ tsquery` and it cost every `routes` write while reading as "already indexed"
 
 ### Phase 3 — growth and monetisation

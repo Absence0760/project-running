@@ -12974,6 +12974,31 @@
   "@clubEventLogAsWorkoutSaved": {
     "description": "Confirmation banner shown after the user saves the class as a gym workout."
   },
+  "clubEventAddToCalendar": "Add to calendar",
+  "@clubEventAddToCalendar": {
+    "description": "Button that hands a one-off club event to the phone's calendar app."
+  },
+  "clubEventAddOccurrenceToCalendar": "Add this occurrence",
+  "@clubEventAddOccurrenceToCalendar": {
+    "description": "Button that hands only the selected occurrence of a recurring club event to the phone's calendar app."
+  },
+  "clubEventAddSeriesToCalendar": "Add whole series",
+  "@clubEventAddSeriesToCalendar": {
+    "description": "Button that hands a recurring club event to the phone's calendar app as a repeating entry."
+  },
+  "clubEventCalendarUnavailable": "Couldn't open your calendar app.",
+  "@clubEventCalendarUnavailable": {
+    "description": "Banner shown when the calendar hand-off could not be opened."
+  },
+  "clubEventCalendarCancelledNote": "{count, plural, one{Your calendar can't skip called-off dates, so 1 cancelled occurrence will still appear.} other{Your calendar can't skip called-off dates, so {count} cancelled occurrences will still appear.}}",
+  "@clubEventCalendarCancelledNote": {
+    "description": "Note under the add-whole-series button naming how many called-off occurrences the repeating calendar entry will still show.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "clubEventDownloadCertificate": "Finisher certificate",
   "@clubEventDownloadCertificate": {
     "description": "Tooltip / title for the action that opens a finisher's downloadable certificate."
@@ -16713,5 +16738,118 @@
   "comebackFootnote": "Your training load ramp comes back once you have a few consistent weeks again.",
   "@comebackFootnote": {
     "description": "Note that the load-ramp card returns once the runner is consistent again"
+  },
+  "segmentCatalogueTitle": "Famous segments",
+  "@segmentCatalogueTitle": {
+    "description": "Screen title for the famous-segment catalogue browse list"
+  },
+  "segmentCatalogueIntro": "Curated climbs, bridges and park loops from around the world. Run one and your time lands on its leaderboard automatically.",
+  "@segmentCatalogueIntro": {
+    "description": "Intro line under the catalogue title"
+  },
+  "segmentCatalogueSearchLabel": "Search",
+  "@segmentCatalogueSearchLabel": {
+    "description": "Label for the catalogue search field"
+  },
+  "segmentCatalogueSearchHint": "Name or place",
+  "@segmentCatalogueSearchHint": {
+    "description": "Hint text in the catalogue search field"
+  },
+  "segmentCatalogueRegion": "Region",
+  "@segmentCatalogueRegion": {
+    "description": "Label for the catalogue region filter"
+  },
+  "segmentCatalogueAllRegions": "All regions",
+  "@segmentCatalogueAllRegions": {
+    "description": "Catalogue region filter option that clears the filter"
+  },
+  "segmentCatalogueSurface": "Surface",
+  "@segmentCatalogueSurface": {
+    "description": "Label for the catalogue surface filter"
+  },
+  "segmentCatalogueAllSurfaces": "All surfaces",
+  "@segmentCatalogueAllSurfaces": {
+    "description": "Catalogue surface filter option that clears the filter"
+  },
+  "segmentCatalogueSort": "Sort",
+  "@segmentCatalogueSort": {
+    "description": "Label for the catalogue sort selector"
+  },
+  "segmentCatalogueSortName": "Name",
+  "@segmentCatalogueSortName": {
+    "description": "Catalogue sort option — alphabetical by name"
+  },
+  "segmentCatalogueSortShortest": "Shortest first",
+  "@segmentCatalogueSortShortest": {
+    "description": "Catalogue sort option — shortest segment first"
+  },
+  "segmentCatalogueSortLongest": "Longest first",
+  "@segmentCatalogueSortLongest": {
+    "description": "Catalogue sort option — longest segment first"
+  },
+  "segmentCatalogueSortClimb": "Most climb",
+  "@segmentCatalogueSortClimb": {
+    "description": "Catalogue sort option — most elevation gain first"
+  },
+  "segmentCatalogueCount": "{count, plural, one{{count} segment} other{{count} segments}}",
+  "@segmentCatalogueCount": {
+    "description": "Count of segments currently shown by the catalogue filters",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "segmentCatalogueLoadFailed": "Couldn’t load the segment catalogue.",
+  "@segmentCatalogueLoadFailed": {
+    "description": "Error state when the catalogue fetch fails"
+  },
+  "segmentCatalogueEmpty": "No famous segments in the catalogue yet.",
+  "@segmentCatalogueEmpty": {
+    "description": "Empty state when the catalogue itself holds no segments"
+  },
+  "segmentCatalogueNoMatches": "No segments match these filters — try widening them.",
+  "@segmentCatalogueNoMatches": {
+    "description": "Empty state when the active filters match no segment"
+  },
+  "segmentCatalogueBrowseAll": "Browse all",
+  "@segmentCatalogueBrowseAll": {
+    "description": "Link from a run’s catalogue efforts to the whole catalogue"
+  },
+  "segmentCatalogueNotFoundTitle": "Segment not found",
+  "@segmentCatalogueNotFoundTitle": {
+    "description": "Title when a catalogue segment id resolves to nothing"
+  },
+  "segmentCatalogueNotFoundBody": "This segment isn’t in the catalogue, or has been retired.",
+  "@segmentCatalogueNotFoundBody": {
+    "description": "Body when a catalogue segment id resolves to nothing"
+  },
+  "segmentCatalogueDetailFailedTitle": "Couldn’t load this segment",
+  "@segmentCatalogueDetailFailedTitle": {
+    "description": "Title when the catalogue segment detail fetch fails"
+  },
+  "segmentCatalogueDetailFailedBody": "Check your connection and try again.",
+  "@segmentCatalogueDetailFailedBody": {
+    "description": "Body when the catalogue segment detail fetch fails"
+  },
+  "segmentCatalogueStatDistance": "Distance",
+  "@segmentCatalogueStatDistance": {
+    "description": "Stat label for a catalogue segment’s distance"
+  },
+  "segmentCatalogueStatElevation": "Elevation gain",
+  "@segmentCatalogueStatElevation": {
+    "description": "Stat label for a catalogue segment’s elevation gain"
+  },
+  "segmentCatalogueStatSurface": "Surface",
+  "@segmentCatalogueStatSurface": {
+    "description": "Stat label for a catalogue segment’s surface"
+  },
+  "segmentCatalogueLeaderboard": "Leaderboard",
+  "@segmentCatalogueLeaderboard": {
+    "description": "Section header for a catalogue segment’s leaderboard"
+  },
+  "runSurfaceTabSegments": "Segments",
+  "@runSurfaceTabSegments": {
+    "description": "Run-surface peer strip entry for the famous-segment catalogue"
   }
 }

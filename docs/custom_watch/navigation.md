@@ -770,8 +770,10 @@ removes.
   (§293) — the watch has no zoneinfo of its own.
 - `FIN` retains the last run's stats until dismissed — there is no summary
   page beyond the frozen dashboard.
-- The home face's battery icon is a rest-voltage estimate off the SAADC's
-  internal VDD channel (§294), not a fuel gauge: a loaded cell sags below the
+- The home face's battery icon is a rest-voltage estimate off whichever
+  internal SAADC channel the boot-time supply mode exposes the cell on — `VDD`
+  in normal-voltage mode, `VDDH/5` in high-voltage mode (§294, §691) — not a
+  fuel gauge: a loaded cell sags below the
   curve anchors, and it yields the title row's mid-band to the post-press
   BTN3 hint and the re-zero banner. The numeric `BAT n%` is diagnostics-only.
   A rail the plausibility band can't read as a 1S LiPo — the USB-powered DK

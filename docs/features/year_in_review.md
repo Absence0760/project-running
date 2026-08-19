@@ -47,10 +47,10 @@ parity pair into the house lockstep registry so it stops drifting.
   `apps/mobile_android/lib/screens/dashboard_screen.dart`. iOS twin
   byte-identical under `apps/mobile_ios/`.
 - **Aggregates available:** `personal_records` table + the
-  `gym_exercise_records`-style server roll-up pattern; `mv_weekly_mileage`
-  (materialized view, refreshed every 15 min — `20260706_001`,
-  revoked from clients in `20260517_001` so it is **server/RPC-only**, not
-  client-readable). `run_photos` table. The recap engine derives most of its
+  `gym_exercise_records`-style server roll-up pattern, and the `run_photos`
+  table. This list used to offer `mv_weekly_mileage` as a server-side
+  aggregate; **that matview was dropped in `20270530_001`** having never been
+  read, so do not plan against it. The recap engine derives most of its
   numbers from `Run` rows directly; only photo + PR counts need
   `fetchRecapExtras`.
 - **OG/share infra to copy:** `apps/web/src/lib/share/og_run_image.ts`

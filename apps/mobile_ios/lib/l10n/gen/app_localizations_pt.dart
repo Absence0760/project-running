@@ -9746,6 +9746,32 @@ class AppLocalizationsPt extends AppLocalizations {
       'Adicionado ao seu registro de academia';
 
   @override
+  String get clubEventAddToCalendar => 'Adicionar ao calendário';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Adicionar esta ocorrência';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Adicionar toda a série';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Não foi possível abrir a sua aplicação de calendário.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'O seu calendário não consegue ignorar datas canceladas: $count ocorrências canceladas vão continuar a aparecer.',
+      one:
+          'O seu calendário não consegue ignorar datas canceladas: 1 ocorrência cancelada vai continuar a aparecer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => 'Certificado de conclusão';
 
   @override
@@ -13123,6 +13149,102 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get comebackFootnote =>
       'Sua curva de carga de treino volta assim que você tiver algumas semanas consistentes de novo.';
+
+  @override
+  String get segmentCatalogueTitle => 'Segmentos famosos';
+
+  @override
+  String get segmentCatalogueIntro =>
+      'Subidas, pontes e voltas de parque selecionadas no mundo todo. Corra um deles e seu tempo entra no ranking automaticamente.';
+
+  @override
+  String get segmentCatalogueSearchLabel => 'Buscar';
+
+  @override
+  String get segmentCatalogueSearchHint => 'Nome ou lugar';
+
+  @override
+  String get segmentCatalogueRegion => 'Região';
+
+  @override
+  String get segmentCatalogueAllRegions => 'Todas as regiões';
+
+  @override
+  String get segmentCatalogueSurface => 'Piso';
+
+  @override
+  String get segmentCatalogueAllSurfaces => 'Todos os pisos';
+
+  @override
+  String get segmentCatalogueSort => 'Ordenar';
+
+  @override
+  String get segmentCatalogueSortName => 'Nome';
+
+  @override
+  String get segmentCatalogueSortShortest => 'Mais curtos primeiro';
+
+  @override
+  String get segmentCatalogueSortLongest => 'Mais longos primeiro';
+
+  @override
+  String get segmentCatalogueSortClimb => 'Mais altimetria';
+
+  @override
+  String segmentCatalogueCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count segmentos',
+      one: '$count segmento',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get segmentCatalogueLoadFailed =>
+      'Não foi possível carregar o catálogo de segmentos.';
+
+  @override
+  String get segmentCatalogueEmpty =>
+      'Ainda não há segmentos famosos no catálogo.';
+
+  @override
+  String get segmentCatalogueNoMatches =>
+      'Nenhum segmento corresponde a estes filtros — tente ampliá-los.';
+
+  @override
+  String get segmentCatalogueBrowseAll => 'Ver todos';
+
+  @override
+  String get segmentCatalogueNotFoundTitle => 'Segmento não encontrado';
+
+  @override
+  String get segmentCatalogueNotFoundBody =>
+      'Este segmento não está no catálogo ou foi removido.';
+
+  @override
+  String get segmentCatalogueDetailFailedTitle =>
+      'Não foi possível carregar este segmento';
+
+  @override
+  String get segmentCatalogueDetailFailedBody =>
+      'Verifique sua conexão e tente novamente.';
+
+  @override
+  String get segmentCatalogueStatDistance => 'Distância';
+
+  @override
+  String get segmentCatalogueStatElevation => 'Ganho de elevação';
+
+  @override
+  String get segmentCatalogueStatSurface => 'Piso';
+
+  @override
+  String get segmentCatalogueLeaderboard => 'Classificação';
+
+  @override
+  String get runSurfaceTabSegments => 'Segmentos';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -22863,6 +22985,32 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Adicionado ao seu registro de academia';
 
   @override
+  String get clubEventAddToCalendar => 'Adicionar ao calendário';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Adicionar esta ocorrência';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Adicionar toda a série';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Não foi possível abrir seu aplicativo de calendário.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Seu calendário não consegue pular datas canceladas: $count ocorrências canceladas ainda vão aparecer.',
+      one:
+          'Seu calendário não consegue pular datas canceladas: 1 ocorrência cancelada ainda vai aparecer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => 'Certificado de conclusão';
 
   @override
@@ -26237,4 +26385,100 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get comebackFootnote =>
       'Sua curva de carga de treino volta assim que você tiver algumas semanas consistentes de novo.';
+
+  @override
+  String get segmentCatalogueTitle => 'Segmentos famosos';
+
+  @override
+  String get segmentCatalogueIntro =>
+      'Subidas, pontes e voltas de parque selecionadas no mundo todo. Corra um deles e seu tempo entra no ranking automaticamente.';
+
+  @override
+  String get segmentCatalogueSearchLabel => 'Buscar';
+
+  @override
+  String get segmentCatalogueSearchHint => 'Nome ou lugar';
+
+  @override
+  String get segmentCatalogueRegion => 'Região';
+
+  @override
+  String get segmentCatalogueAllRegions => 'Todas as regiões';
+
+  @override
+  String get segmentCatalogueSurface => 'Piso';
+
+  @override
+  String get segmentCatalogueAllSurfaces => 'Todos os pisos';
+
+  @override
+  String get segmentCatalogueSort => 'Ordenar';
+
+  @override
+  String get segmentCatalogueSortName => 'Nome';
+
+  @override
+  String get segmentCatalogueSortShortest => 'Mais curtos primeiro';
+
+  @override
+  String get segmentCatalogueSortLongest => 'Mais longos primeiro';
+
+  @override
+  String get segmentCatalogueSortClimb => 'Mais altimetria';
+
+  @override
+  String segmentCatalogueCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count segmentos',
+      one: '$count segmento',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get segmentCatalogueLoadFailed =>
+      'Não foi possível carregar o catálogo de segmentos.';
+
+  @override
+  String get segmentCatalogueEmpty =>
+      'Ainda não há segmentos famosos no catálogo.';
+
+  @override
+  String get segmentCatalogueNoMatches =>
+      'Nenhum segmento corresponde a estes filtros — tente ampliá-los.';
+
+  @override
+  String get segmentCatalogueBrowseAll => 'Ver todos';
+
+  @override
+  String get segmentCatalogueNotFoundTitle => 'Segmento não encontrado';
+
+  @override
+  String get segmentCatalogueNotFoundBody =>
+      'Este segmento não está no catálogo ou foi removido.';
+
+  @override
+  String get segmentCatalogueDetailFailedTitle =>
+      'Não foi possível carregar este segmento';
+
+  @override
+  String get segmentCatalogueDetailFailedBody =>
+      'Verifique sua conexão e tente novamente.';
+
+  @override
+  String get segmentCatalogueStatDistance => 'Distância';
+
+  @override
+  String get segmentCatalogueStatElevation => 'Ganho de elevação';
+
+  @override
+  String get segmentCatalogueStatSurface => 'Piso';
+
+  @override
+  String get segmentCatalogueLeaderboard => 'Classificação';
+
+  @override
+  String get runSurfaceTabSegments => 'Segmentos';
 }

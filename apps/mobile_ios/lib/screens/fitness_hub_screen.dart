@@ -14,6 +14,7 @@ import '../settings_sync.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../widgets/surface_peer_strip.dart';
+import 'global_segments_screen.dart';
 import 'gym_screen.dart';
 import 'nutrition_screen.dart';
 import 'plans_screen.dart';
@@ -39,9 +40,10 @@ import 'runs_screen.dart';
 /// onboarding empty state, never a forced card.
 ///
 /// The Runs sub-tab additionally carries the labelled peer strip
-/// `Runs · Routes · Plans · Races` (mirroring web's `RunSurfaceTabs`), so run
-/// planning has a named destination instead of hanging off tooltip-only
-/// glyphs (decisions § 488).
+/// `Runs · Routes · Segments · Plans · Races` (mirroring web's
+/// `RunSurfaceTabs`), so run planning has a named destination instead of
+/// hanging off tooltip-only glyphs (decisions § 488).
+///
 /// The Fitness hub's sub-tabs, in strip order. Named + ordered rather than the
 /// raw int this was, for the reason § 490 records — see `SocialTab`.
 enum FitnessTab {
@@ -129,6 +131,12 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
     ));
   }
 
+  void _openSegments() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GlobalSegmentsScreen(api: widget.apiClient),
+    ));
+  }
+
   void _openPlans() {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => PlansScreen(
@@ -193,6 +201,8 @@ class _FitnessHubScreenState extends State<FitnessHubScreen>
             surfacePeers: [
               SurfacePeer(label: l10n.fitnessTabRuns),
               SurfacePeer(label: l10n.fitnessRunsRoutes, onTap: _openRoutes),
+              SurfacePeer(
+                  label: l10n.runSurfaceTabSegments, onTap: _openSegments),
               SurfacePeer(label: l10n.runSurfaceTabPlans, onTap: _openPlans),
               SurfacePeer(label: l10n.runSurfaceTabRaces, onTap: _openRaces),
             ],

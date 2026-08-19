@@ -25,6 +25,7 @@ use embassy_nrf::{bind_interrupts, peripherals, saadc, spim, twim, uarte};
 use embassy_sync::mutex::Mutex;
 use nrf52840_dk::Board;
 use static_cell::StaticCell;
+use watch_core::battery_sense::SupplySense;
 
 #[cfg(feature = "ble")]
 use nrf_softdevice::Softdevice;
@@ -100,8 +101,9 @@ async fn main(spawner: Spawner) {
     info!("custom_watch firmware booting (tier 1)");
     // Before any peripheral is driven: say which supply path the SoC came up
     // on, because one of them sets the GPIO logic level to 1.8 V by default and
-    // every breakout on this bench expects 3 V.
-    supply::report();
+    // every breakout on this bench expects 3 V. The same read decides which
+    // SAADC input the battery gauge can see the cell through.
+    let battery_sense = supply::report();
 
     let mut gps_config = uarte::Config::default();
     // The MAX-M10S's own factory default, so a receiver straight out of the bag
@@ -165,15 +167,30 @@ async fn main(spawner: Spawner) {
         unsafe { &mut *core::ptr::addr_of_mut!(BARO_TWIM_RAM) },
     );
 
-    // Battery gauge: the SAADC's internal VDD channel — the rail itself is the
-    // input, no pin to route. Driver defaults (12-bit, 0.6 V internal
-    // reference, gain 1/6 -> 3.6 V full scale) suit a supply read; the task
-    // owns the conversion maths and the plausibility park.
+    // Battery gauge: an internal SAADC channel, so there is no pin to route —
+    // but WHICH channel is not a free choice. In high-voltage mode VDD is the
+    // internal regulator's output and reads the same at every state of charge,
+    // so the cell is reachable only through VDDH/5; in normal mode the supply
+    // *is* VDD. Both the input and its range therefore come from the supply
+    // mode `supply::report` read above, and `watch_core::battery_sense` scales
+    // the conversion to match.
+    let battery_channel = match battery_sense {
+        SupplySense::VddDirect => saadc::ChannelConfig::single_ended(saadc::VddInput),
+        SupplySense::VddhDiv5 => {
+            let mut channel = saadc::ChannelConfig::single_ended(saadc::VddhDiv5Input);
+            // Gain 1/2 against the 0.6 V reference is 1200 mV at the converter,
+            // so 6000 mV of VDDH — above VDDH's own 5.8 V absolute maximum, so
+            // the input cannot saturate anywhere the SoC is allowed to run.
+            // Must stay in lockstep with `battery_sense::FULL_SCALE_VDDHDIV5_MV`.
+            channel.gain = saadc::Gain::GAIN1_2;
+            channel
+        }
+    };
     let battery_adc = saadc::Saadc::new(
         board.battery.saadc,
         Irqs,
         saadc::Config::default(),
-        [saadc::ChannelConfig::single_ended(saadc::VddInput)],
+        [battery_channel],
     );
 
     // Buttons are active-LOW with the line idle-high, so pull up and treat a
@@ -280,7 +297,7 @@ async fn main(spawner: Spawner) {
     // applies the stated precedence rule between them (§365).
     spawner.spawn(unwrap!(tasks::hr_source::run()));
     spawner.spawn(unwrap!(tasks::baro::run(baro_twim)));
-    spawner.spawn(unwrap!(tasks::battery::run(battery_adc)));
+    spawner.spawn(unwrap!(tasks::battery::run(battery_adc, battery_sense)));
     spawner.spawn(unwrap!(tasks::record::run(store)));
 
     // Phone link. Default build: UARTE1 → Renode TCP bridge, plus the BLE

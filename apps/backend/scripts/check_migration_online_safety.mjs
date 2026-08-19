@@ -148,7 +148,13 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // transaction instead of N chunked round-trips. One function body, no table DDL
 // and no constraint, so the scanner passes it with zero violations after this
 // bump too.
-export const GRANDFATHER_CUTOFF = '20270529';
+// 20270530: unschedules the refresh-mv-weekly-mileage pg_cron entry and drops
+// the unread mv_weekly_mileage matview. `drop materialized view` takes ACCESS
+// EXCLUSIVE on the matview alone (nothing reads it, its index goes with it) and
+// no lock on `runs`; the unschedule writes one row of the small cron.job table.
+// No constraint, no guarded-table DDL, so the scanner passes it with zero
+// violations after this bump too.
+export const GRANDFATHER_CUTOFF = '20270530';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

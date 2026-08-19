@@ -29,7 +29,7 @@ users exist; it buys:
 
 **Compute add-ons:** none at launch. Revisit when:
 - p95 query latency on the dashboard query exceeds 500 ms (Supabase Reports → Database → Query Performance)
-- The `mv_weekly_mileage` refresh starts taking >30 s (currently ~2 s on dev)
+- A background job's runtime becomes the dominant compute draw (this line used to name the `mv_weekly_mileage` refresh; that matview was dropped unread in `20270530_001` and the repo now runs no matview refresh at all)
 
 ---
 

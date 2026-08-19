@@ -9643,6 +9643,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clubEventLogAsWorkoutSaved => 'Added to your gym log';
 
   @override
+  String get clubEventAddToCalendar => 'Add to calendar';
+
+  @override
+  String get clubEventAddOccurrenceToCalendar => 'Add this occurrence';
+
+  @override
+  String get clubEventAddSeriesToCalendar => 'Add whole series';
+
+  @override
+  String get clubEventCalendarUnavailable =>
+      'Couldn\'t open your calendar app.';
+
+  @override
+  String clubEventCalendarCancelledNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Your calendar can\'t skip called-off dates, so $count cancelled occurrences will still appear.',
+      one:
+          'Your calendar can\'t skip called-off dates, so 1 cancelled occurrence will still appear.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get clubEventDownloadCertificate => 'Finisher certificate';
 
   @override
@@ -12987,4 +13013,99 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get comebackFootnote =>
       'Your training load ramp comes back once you have a few consistent weeks again.';
+
+  @override
+  String get segmentCatalogueTitle => 'Famous segments';
+
+  @override
+  String get segmentCatalogueIntro =>
+      'Curated climbs, bridges and park loops from around the world. Run one and your time lands on its leaderboard automatically.';
+
+  @override
+  String get segmentCatalogueSearchLabel => 'Search';
+
+  @override
+  String get segmentCatalogueSearchHint => 'Name or place';
+
+  @override
+  String get segmentCatalogueRegion => 'Region';
+
+  @override
+  String get segmentCatalogueAllRegions => 'All regions';
+
+  @override
+  String get segmentCatalogueSurface => 'Surface';
+
+  @override
+  String get segmentCatalogueAllSurfaces => 'All surfaces';
+
+  @override
+  String get segmentCatalogueSort => 'Sort';
+
+  @override
+  String get segmentCatalogueSortName => 'Name';
+
+  @override
+  String get segmentCatalogueSortShortest => 'Shortest first';
+
+  @override
+  String get segmentCatalogueSortLongest => 'Longest first';
+
+  @override
+  String get segmentCatalogueSortClimb => 'Most climb';
+
+  @override
+  String segmentCatalogueCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count segments',
+      one: '$count segment',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get segmentCatalogueLoadFailed =>
+      'Couldn’t load the segment catalogue.';
+
+  @override
+  String get segmentCatalogueEmpty =>
+      'No famous segments in the catalogue yet.';
+
+  @override
+  String get segmentCatalogueNoMatches =>
+      'No segments match these filters — try widening them.';
+
+  @override
+  String get segmentCatalogueBrowseAll => 'Browse all';
+
+  @override
+  String get segmentCatalogueNotFoundTitle => 'Segment not found';
+
+  @override
+  String get segmentCatalogueNotFoundBody =>
+      'This segment isn’t in the catalogue, or has been retired.';
+
+  @override
+  String get segmentCatalogueDetailFailedTitle => 'Couldn’t load this segment';
+
+  @override
+  String get segmentCatalogueDetailFailedBody =>
+      'Check your connection and try again.';
+
+  @override
+  String get segmentCatalogueStatDistance => 'Distance';
+
+  @override
+  String get segmentCatalogueStatElevation => 'Elevation gain';
+
+  @override
+  String get segmentCatalogueStatSurface => 'Surface';
+
+  @override
+  String get segmentCatalogueLeaderboard => 'Leaderboard';
+
+  @override
+  String get runSurfaceTabSegments => 'Segments';
 }

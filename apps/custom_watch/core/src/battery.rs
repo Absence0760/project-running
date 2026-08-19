@@ -1,7 +1,8 @@
 //! 1S LiPo supply voltage → remaining-charge percent.
 //!
-//! The app's `battery` task samples the supply rail through the SAADC's
-//! internal VDD channel and feeds the millivolts here; the idle faces render
+//! The app's `battery` task samples the supply rail through whichever internal
+//! SAADC channel the supply mode exposes the cell on (see
+//! [`crate::battery_sense`]) and feeds the millivolts here; the idle faces render
 //! the result as a gauge icon (and the diagnostics face as a `BAT n%` row).
 //! Pure and host-tested — the task owns the sampling cadence and the
 //! plausibility park, this module owns the mapping.
