@@ -11,7 +11,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 
-import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
+import {
+	buildBackupZip,
+	readAllRows,
+	BACKUP_FORMAT,
+	BACKUP_VERSION
+} from './backup_writer';
 
 function gzipOf(_payload: object): Uint8Array {
 	// Tests don't actually need real gzip — the writer treats track
@@ -257,4 +262,93 @@ test('buildBackupZip: profile id field is stripped to keep the archive re-homeab
 	const profile = JSON.parse(await zip.file('profile.json')!.async('string'));
 	assert.equal(profile.profile.username, 'tester');
 	assert.equal(profile.profile.id, undefined, 'id must be stripped');
+});
+
+// ─────────────────── readAllRows ───────────────────
+//
+// PostgREST answers an unranged SELECT with 200 and a silently clamped
+// 1000 rows. A backup built on that is short of the account and says
+// nothing about it — the exact failure decisions.md § 668 found on
+// mobile, and § 675 on web.
+
+function pagesOf(total: number, pageSize: number) {
+	return (from: number, to: number) =>
+		Promise.resolve({
+			data: Array.from(
+				{ length: Math.max(0, Math.min(to, total - 1) - from + 1) },
+				(_, i) => ({ id: `r-${from + i}` })
+			),
+			error: null
+		});
+}
+
+test('readAllRows: 2400 rows come back whole across three pages, not clamped at 1000', async () => {
+	const read = await readAllRows(pagesOf(2400, 1000));
+	assert.equal(read.rows.length, 2400);
+	assert.equal(read.complete, true);
+	assert.equal(read.rows[2399].id, 'r-2399');
+});
+
+test('readAllRows: an exactly-full last page is followed by one more (empty) page', async () => {
+	let calls = 0;
+	const read = await readAllRows((from, to) => {
+		calls++;
+		return pagesOf(2000, 1000)(from, to);
+	});
+	assert.equal(read.rows.length, 2000);
+	assert.equal(calls, 3, 'a full final page cannot be assumed to be the last');
+	assert.equal(read.complete, true);
+});
+
+test('readAllRows: an empty table is a COMPLETE read, not a short one', async () => {
+	const read = await readAllRows(pagesOf(0, 1000));
+	assert.deepEqual(read.rows, []);
+	assert.equal(read.complete, true);
+});
+
+test('readAllRows: a page that errors returns what it has, flagged short, and never throws', async () => {
+	const read = await readAllRows((from, to) =>
+		from === 0
+			? pagesOf(3000, 1000)(from, to)
+			: Promise.resolve({ data: null, error: new Error('connection reset') })
+	);
+	assert.equal(read.rows.length, 1000);
+	assert.equal(read.complete, false);
+	assert.equal((read.error as Error).message, 'connection reset');
+});
+
+test('readAllRows: the safety ceiling reports a shortfall rather than a whole read', async () => {
+	// A server that ignores `range` never returns a short page. Terminating
+	// is not the interesting part — refusing to call the result complete is.
+	const read = await readAllRows(
+		() => Promise.resolve({ data: [{ id: 'x' }, { id: 'y' }], error: null }),
+		2,
+		6
+	);
+	assert.equal(read.rows.length, 6);
+	assert.equal(read.complete, false);
+});
+
+test("buildBackupZip: a caller-reported short read joins the writer's own in the manifest", async () => {
+	const runs = [{ id: 'r-1', track_url: 'uid/r-1.json.gz' }];
+	const archive = await buildBackupZip({
+		runsOut: runs,
+		routesOut: [],
+		profile: null,
+		settingsPrefs: {},
+		userId: 'uid',
+		exportedFrom: 'test',
+		runsWithTracks: runs,
+		fetchTrackBytes: async () => {
+			throw new Error('storage offline');
+		},
+		incompleteSections: ['runs']
+	});
+
+	const zip = await JSZip.loadAsync(new Uint8Array(await archive.blob.arrayBuffer()));
+	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+	assert.equal(manifest.complete, false);
+	// Sorted + de-duplicated, matching the Go writer's manifest.
+	assert.deepEqual(manifest.incomplete, ['runs', 'tracks']);
+	assert.deepEqual(archive.incomplete, ['runs', 'tracks']);
 });

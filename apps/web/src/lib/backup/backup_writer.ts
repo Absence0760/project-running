@@ -55,6 +55,53 @@ export interface BackupArchive {
 	blobsWritten: number;
 }
 
+/// PostgREST clamps an unbounded SELECT at `db-max-rows` (1000) and answers
+/// 200 with no flag, so a 3,000-run account that took a backup was told it
+/// succeeded and got 1,000 runs — discovered at restore (the mobile half of
+/// this is decisions.md § 668). Every row read behind a backup pages through
+/// `readAllRows` instead, and there is deliberately no ceiling: the archive
+/// is what the deepest histories rely on, and a cap would only reinstate the
+/// silent truncation one order of magnitude higher.
+export const BACKUP_PAGE_SIZE = 1000;
+/// Runaway guard, not a product limit — a `fetchPage` that never returns a
+/// short page (a server that ignores `range`) must terminate. Hitting it is
+/// reported as a shortfall, never as a whole read.
+export const BACKUP_PAGE_SAFETY_MAX = 200_000;
+
+export interface PagedRead<T> {
+	rows: T[];
+	/// False when a page errored or the safety ceiling was hit — i.e. when
+	/// `rows` is known to be short of what the table holds.
+	complete: boolean;
+	/// The first page error, for a caller that treats "nothing at all" as
+	/// fatal rather than as a shortfall.
+	error: unknown;
+}
+
+/// Read every row of a table by paging `fetchPage` in `pageSize` chunks.
+///
+/// Never throws: a read that dies half-way still has rows worth archiving,
+/// and the caller has to be able to tell the difference between that and a
+/// whole read — which is the entire point of the manifest's `complete` pair.
+export async function readAllRows<T>(
+	fetchPage: (
+		from: number,
+		to: number
+	) => PromiseLike<{ data: T[] | null; error: unknown }>,
+	pageSize: number = BACKUP_PAGE_SIZE,
+	safetyMax: number = BACKUP_PAGE_SAFETY_MAX
+): Promise<PagedRead<T>> {
+	const rows: T[] = [];
+	for (let from = 0; from < safetyMax; from += pageSize) {
+		const { data, error } = await fetchPage(from, from + pageSize - 1);
+		if (error) return { rows, complete: false, error };
+		const page = data ?? [];
+		rows.push(...page);
+		if (page.length < pageSize) return { rows, complete: true, error: null };
+	}
+	return { rows, complete: false, error: null };
+}
+
 export interface BuildBackupZipOptions {
 	runsOut: Record<string, unknown>[];
 	routesOut: Record<string, unknown>[];
@@ -64,6 +111,10 @@ export interface BuildBackupZipOptions {
 	exportedFrom: string;
 	runsWithTracks: { id: string; track_url: string }[];
 	fetchTrackBytes: (trackUrl: string) => Promise<Uint8Array>;
+	/// Sections the CALLER already knows came up short — a row read that
+	/// died half-way. Merged with the writer's own findings, mirroring the
+	/// Go writer's `ExportCompleteness.Merge`.
+	incompleteSections?: string[];
 	concurrency?: number;
 	onProgress?: (p: BackupProgress) => void;
 }
@@ -138,7 +189,12 @@ export async function buildBackupZip(
 		});
 	}
 
-	const incomplete = tracksAdded < opts.runsWithTracks.length ? ['tracks'] : [];
+	const incomplete = [
+		...new Set([
+			...(opts.incompleteSections ?? []),
+			...(tracksAdded < opts.runsWithTracks.length ? ['tracks'] : [])
+		])
+	].sort();
 	const manifest = {
 		format: BACKUP_FORMAT,
 		version: BACKUP_VERSION,
