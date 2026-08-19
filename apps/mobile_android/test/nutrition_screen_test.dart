@@ -74,6 +74,16 @@ Future<void> _pumpUntil(
 Future<void> _closeUndoWindow(WidgetTester tester) =>
     tester.pump(const Duration(seconds: 9));
 
+/// Scroll the day list down to the per-entry Delete action before tapping it.
+/// The rings card carries the always-available Targets peer entry since
+/// decisions § 695, which pushes a single-entry day's delete affordance just
+/// past the bottom of the 800x600 test viewport.
+Future<void> _tapDelete(WidgetTester tester) async {
+  await tester.scrollUntilVisible(find.byTooltip('Delete'), 200);
+  await tester.pump();
+  await tester.tap(find.byTooltip('Delete'));
+}
+
 Widget _app(LocalFoodStore store, {double textScale = 1.0}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -86,7 +96,7 @@ Widget _app(LocalFoodStore store, {double textScale = 1.0}) => MaterialApp(
     );
 
 void main() {
-  group('exerciseInputsForDay', _exerciseInputsTests);
+  group('macro ring rendering', _ringRenderingTests);
   group('diary day navigation', _diaryDayTests);
 
   setUpAll(() => initializeDateFormatting());
@@ -174,7 +184,7 @@ void main() {
       await tester.pump();
       expect(find.text('Oats'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
 
       expect(find.byType(AlertDialog), findsNothing,
@@ -203,7 +213,7 @@ void main() {
     try {
       await tester.pumpWidget(_app(f.store));
       await tester.pump();
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       await tester.tap(find.text('Undo'));
       await tester.pump();
@@ -230,7 +240,7 @@ void main() {
     try {
       await tester.pumpWidget(_app(f.store));
       await tester.pump();
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       await _closeUndoWindow(tester);
       await _pumpUntil(tester, () => f.store.rows.isEmpty);
@@ -257,7 +267,7 @@ void main() {
       await tester.pumpWidget(_app(store));
       await tester.pump();
 
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       expect(find.text('Oats'), findsNothing);
 
@@ -332,7 +342,7 @@ void main() {
       // undo pill rather than a confirm dialog since round 13, but the
       // property this test exists for is unchanged: the field-less surface
       // that follows a dismissed name dialog must not resurface the IME.
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       expect(find.text('Oats removed'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
@@ -548,70 +558,10 @@ void main() {
 /// Regression: the filter compared against `'gym'`, a kind the `activities`
 /// view never emits (its gym branch is `'lift'`), so every strength session
 /// was dropped and contributed zero calories and zero hydration minutes.
-void _exerciseInputsTests() {
-  ActivityRow row(String kind, DateTime at, Map<String, dynamic> summary) =>
-      ActivityRow(id: kind, kind: kind, startedAt: at, summary: summary);
-
-  final start = DateTime(2026, 7, 24);
-  final end = DateTime(2026, 7, 25);
-
-  test('a gym workout counts toward the day, under its real kind', () {
-    final day = exerciseInputsForDay([
-      row(ActivityRow.kindLift, DateTime(2026, 7, 24, 18),
-          {'duration_s': 3600}),
-    ], start, end);
-
-    expect(day.gym.length, 1);
-    expect(day.gym.single.durationS, 3600);
-    expect(day.seconds, 3600);
-    expect(day.runs, isEmpty);
-  });
-
-  test("'gym' is not a kind the view emits and must not be matched", () {
-    final day = exerciseInputsForDay(
-      [row('gym', DateTime(2026, 7, 24, 18), {'duration_s': 3600})],
-      start,
-      end,
-    );
-    expect(day.gym, isEmpty);
-    expect(day.seconds, 0);
-  });
-
-  test('runs carry distance, meals are ignored entirely', () {
-    final day = exerciseInputsForDay([
-      row(ActivityRow.kindRun, DateTime(2026, 7, 24, 7),
-          {'duration_s': 1800, 'distance_m': 5000}),
-      row(ActivityRow.kindMeal, DateTime(2026, 7, 24, 12), {'duration_s': 60}),
-    ], start, end);
-
-    expect(day.runs.single.distanceM, 5000);
-    expect(day.gym, isEmpty);
-    expect(day.seconds, 1800, reason: 'the meal must not add to the total');
-  });
-
-  test('the window is half-open — yesterday and tomorrow are excluded', () {
-    final day = exerciseInputsForDay([
-      row(ActivityRow.kindRun, DateTime(2026, 7, 23, 23, 59),
-          {'duration_s': 600}),
-      row(ActivityRow.kindLift, end, {'duration_s': 600}),
-      row(ActivityRow.kindRun, DateTime(2026, 7, 24, 23, 59),
-          {'duration_s': 600}),
-    ], start, end);
-
-    expect(day.seconds, 600);
-    expect(day.runs.length, 1);
-    expect(day.gym, isEmpty);
-  });
-
-  test('a missing duration contributes zero rather than throwing', () {
-    final day = exerciseInputsForDay([
-      row(ActivityRow.kindLift, DateTime(2026, 7, 24, 18), const {}),
-    ], start, end);
-
-    expect(day.gym.single.durationS, isNull);
-    expect(day.seconds, 0);
-  });
-
+/// The macro rings' own rendering, which has nothing to do with the day
+/// reduction it used to be grouped under (that moved to
+/// `exercise_day_test.dart` with the helper).
+void _ringRenderingTests() {
   testWidgets(
       'the macro-ring value stays inside the 56 px arc at 2x text scale '
       '(issue #666 V12)', (tester) async {
@@ -642,22 +592,6 @@ void _exerciseInputsTests() {
       expect(at2x.width, greaterThanOrEqualTo(at1x.width));
     } finally {
       f.dir.deleteSync(recursive: true);
-    }
-  });
-
-  test('the kind constants are the literals the activities view emits', () {
-    // Ties the Dart names to the SQL so a renamed UNION branch fails here
-    // instead of silently matching nothing at a call site.
-    final sql = File(
-      '../backend/supabase/migrations/'
-      '20270413_001_activities_view_project_is_dnf.sql',
-    ).readAsStringSync();
-    for (final kind in [
-      ActivityRow.kindRun,
-      ActivityRow.kindLift,
-      ActivityRow.kindMeal,
-    ]) {
-      expect(sql, contains("'$kind'::text as kind"), reason: kind);
     }
   });
 }

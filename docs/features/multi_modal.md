@@ -704,8 +704,22 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 > point would be a second consent surface. Both surfaces deep-link
 > `/settings/preferences#body-metrics`. Deliberately **not** a new always-on
 > card on the day view: `/nutrition` keeps exactly one primary action
-> (anti-clutter checklist). Mobile is the follow-up, not drift — see the
-> parity row.
+> (anti-clutter checklist).
+
+> **Status (targets peer — mobile 2026-08-19, [decisions § 695](../architecture/decisions.md)):**
+> mirrored on the phone as `screens/nutrition_targets_screen.dart`, reached from
+> an **ungated** entry on the rings card (`nutrition_screen.dart` previously
+> reached `SettingsBodyMetricsScreen` from its untargeted empty state only,
+> § 490 — so the route vanished the moment the number became real). Same
+> derivation rows and macro split, composed only from what
+> `nutrition_targets.dart` already exported, so **no new pure logic and no
+> parity-pair change**. The two non-sensitive levers edit inline through
+> `SettingsSyncService.updateUniversal` on the same bag keys the consent-gated
+> editor writes; height / weight / DOB / sex are **read-only** here and keep
+> their single Art 9 entry point, guarded at source the way web's
+> `targets_peer_guard.test.ts` guards it. The one deliberate divergence: the
+> exercise add-on is always **today's**, not the host screen's viewed diary
+> day, which is what the peer's own copy claims.
 
 ## Cross-modality touches (Tier 1 — ship with Phase 4; this is the headline)
 
@@ -958,7 +972,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Home cards | `widgets/nutrition_rings_card.dart`, `widgets/gym_summary_card.dart` — **shipped (G5)** (run summary already lived on the dashboard) |
 | History | `screens/runs_screen.dart` (the History tab — hosts the kind chips + unified timeline) + `widgets/activity_timeline_list.dart` + the pure `activity_timeline.dart` day-grouper, assembled from the local stores via `lib/local_activities.dart` (offline-first, not `fetchActivities`) — **shipped** |
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
-| Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart` (search + the v1.1 camera barcode-scan fast-path via `mobile_scanner`), `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts + USDA search, source-merged + deduped via `searchFoodSources`, plus `lookupBarcode`/`parseOffProduct` OFF product-by-barcode lookup, pluggable-fetcher seam like `routing.dart`; TS↔Dart parity pair) |
+| Nutrition | `screens/nutrition_screen.dart`, `screens/nutrition_targets_screen.dart` (the targets peer — derivation + the two non-sensitive levers, decisions § 695), `widgets/nutrition_log_sheet.dart` (search + the v1.1 camera barcode-scan fast-path via `mobile_scanner`), `nutrition_targets.dart` (pure, parity-paired), `exercise_day.dart` (pure, **mobile-only** — buckets the `activities` view into a day's exercise inputs; web has no twin because it windows the fetch in PostgREST instead), `food_search.dart` (Open Food Facts + USDA search, source-merged + deduped via `searchFoodSources`, plus `lookupBarcode`/`parseOffProduct` OFF product-by-barcode lookup, pluggable-fetcher seam like `routing.dart`; TS↔Dart parity pair) |
 | Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
 | Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Consumers wired on both platforms**: web `web/src/lib/gym/lift_load.ts` and mobile `mobile_android/lib/lift_load.dart` (`liftsFromSetHistory`, pure + tested parity pair) feed each dashboard's load curve; `TrainingLoadChart` (web + mobile) shows the "gym sessions included" hint when `liftStress > 0` |
 | Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart` + the recent-lifts trend card (`widgets/recent_lifts_card.dart`); the **unified mobile History timeline is now shipped** (`runs_screen.dart` + `widgets/activity_timeline_list.dart`, assembled from the LOCAL stores via `lib/local_activities.dart` — offline-first, all modalities, not `fetchActivities`) |
@@ -977,7 +991,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 
 The multi-modal expansion left the nav incoherent on **where a modality's *planning tools* live**:
 
-- **Routes is mis-placed on both platforms.** On web it's a **top-level sidebar peer** of Gym/Nutrition (`+layout.svelte` nav item `/routes`), which over-weights a *run-planning tool* as if it were a fourth modality. On mobile it's **buried under Social**, conceptually wrong (a course-planning tool under the people/feed layer) and inconsistent with web. Meanwhile Gym's routines and Nutrition's targets correctly live *inside* their modality surfaces — Routes is the odd one out. *(Correction, 2026-08-05: the targets half of that sentence was not true when written and stayed untrue for over a year — targets lived in Settings on both platforms. Web closed it as the targets peer above; mobile has not. Read the status block, not this line.)*
+- **Routes is mis-placed on both platforms.** On web it's a **top-level sidebar peer** of Gym/Nutrition (`+layout.svelte` nav item `/routes`), which over-weights a *run-planning tool* as if it were a fourth modality. On mobile it's **buried under Social**, conceptually wrong (a course-planning tool under the people/feed layer) and inconsistent with web. Meanwhile Gym's routines and Nutrition's targets correctly live *inside* their modality surfaces — Routes is the odd one out. *(Correction, 2026-08-05: the targets half of that sentence was not true when written and stayed untrue for over a year — targets lived in Settings on both platforms. Web closed it as the targets peer above on 2026-08-05; mobile followed on 2026-08-19 (decisions § 695). Read the status blocks, not this line.)*
 - **Mobile modalities have no persistent front-door.** You can *capture* via `Log` and *review* via History's `View all`, but there's no "go to my running / my gym / my nutrition" home to plan or browse. `Settings` also eats a scarce top-five slot despite being low-frequency.
 
 The fix unifies the rule: **each modality owns its planning assets** — runs own routes + training plans, gym owns routines, nutrition owns targets/recipes — and they all hang off that modality's surface, never as a top-level peer and never under Social.

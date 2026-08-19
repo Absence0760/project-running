@@ -9830,6 +9830,89 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionAddBodyMetrics => '身体データを入力';
 
   @override
+  String get nutritionTargetsLink => '目標';
+
+  @override
+  String get nutritionTargetsTitle => 'カロリー・マクロの目標';
+
+  @override
+  String get nutritionTargetsSubtitle => '今日の目標がどう計算されるか、そしてそれを決める2つの設定。';
+
+  @override
+  String get nutritionTargetsTotal => '今日の摂取目標';
+
+  @override
+  String get nutritionTargetsBmr => '安静時代謝';
+
+  @override
+  String get nutritionTargetsBase => '基礎目標';
+
+  @override
+  String nutritionTargetsBaseFloored(int n) {
+    return '下限の$n kcalで止めています。これが推奨する最低の1日目標です。';
+  }
+
+  @override
+  String get nutritionTargetsExercise => '今日のワークアウト';
+
+  @override
+  String get nutritionTargetsExerciseHint => '今日記録したランやジムのセッションが上乗せされます。';
+
+  @override
+  String get nutritionTargetsMacrosHeading => 'マクロ';
+
+  @override
+  String nutritionTargetsProteinHint(String n) {
+    return '体重1 kgあたり$n g';
+  }
+
+  @override
+  String get nutritionTargetsCarbsHint => '残りすべて — あなたの燃料';
+
+  @override
+  String nutritionTargetsFatHint(int n) {
+    return 'カロリーの$n%';
+  }
+
+  @override
+  String get nutritionTargetsDefaultsHeading => '既定値';
+
+  @override
+  String get nutritionTargetsDefaultsHint =>
+      '活動レベルはワークアウトを除いた普段の一日です。記録したランやジムのセッションは別に加算されます。どちらも変更するとすぐ保存されます。';
+
+  @override
+  String get nutritionTargetsMetricsHeading => '身体データ';
+
+  @override
+  String get nutritionTargetsMetricsHint =>
+      '身長・体重・生年月日・性別は健康データのため、同意のうえ設定で編集します。';
+
+  @override
+  String get nutritionTargetsEditMetrics => '設定で編集';
+
+  @override
+  String get nutritionTargetsUnset => '未設定';
+
+  @override
+  String get nutritionTargetsEmptyTitle => 'まだ目標がありません';
+
+  @override
+  String get nutritionTargetsEmptyBody =>
+      '身長・体重・生年月日・性別を入力すると、カロリー・マクロの目標がここに表示されます。';
+
+  @override
+  String get nutritionTargetsAge => '年齢';
+
+  @override
+  String nutritionTargetsAgeYears(int n) {
+    return '$n歳';
+  }
+
+  @override
+  String get nutritionTargetsLoadError => '目標を読み込めませんでした。';
+
+  @override
   String get nutritionWeeklyTrend => '直近7日間';
 
   @override

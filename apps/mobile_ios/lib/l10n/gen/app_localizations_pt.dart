@@ -10352,6 +10352,92 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionAddBodyMetrics => 'Adicionar dados corporais';
 
   @override
+  String get nutritionTargetsLink => 'Metas';
+
+  @override
+  String get nutritionTargetsTitle => 'Metas de calorias e macros';
+
+  @override
+  String get nutritionTargetsSubtitle =>
+      'Como a meta de hoje é calculada e as duas definições que a determinam.';
+
+  @override
+  String get nutritionTargetsTotal => 'Meta de hoje';
+
+  @override
+  String get nutritionTargetsBmr => 'Metabolismo em repouso';
+
+  @override
+  String get nutritionTargetsBase => 'Meta base';
+
+  @override
+  String nutritionTargetsBaseFloored(int n) {
+    return 'Mantida no limite mínimo de $n kcal — a menor meta diária que recomendamos.';
+  }
+
+  @override
+  String get nutritionTargetsExercise => 'Treinos de hoje';
+
+  @override
+  String get nutritionTargetsExerciseHint =>
+      'As corridas e sessões de musculação que registares hoje são somadas por cima.';
+
+  @override
+  String get nutritionTargetsMacrosHeading => 'Macros';
+
+  @override
+  String nutritionTargetsProteinHint(String n) {
+    return '$n g por kg de peso corporal';
+  }
+
+  @override
+  String get nutritionTargetsCarbsHint => 'O que sobra — o teu combustível';
+
+  @override
+  String nutritionTargetsFatHint(int n) {
+    return '$n% das calorias';
+  }
+
+  @override
+  String get nutritionTargetsDefaultsHeading => 'As tuas predefinições';
+
+  @override
+  String get nutritionTargetsDefaultsHint =>
+      'O nível de atividade é o teu dia típico sem contar os treinos — as corridas e sessões de musculação registadas são somadas à parte. Ambos são guardados quando os alteras.';
+
+  @override
+  String get nutritionTargetsMetricsHeading => 'Dados corporais';
+
+  @override
+  String get nutritionTargetsMetricsHint =>
+      'Altura, peso, data de nascimento e sexo são dados de saúde, por isso são editados nas Definições atrás do consentimento.';
+
+  @override
+  String get nutritionTargetsEditMetrics => 'Editar nas Definições';
+
+  @override
+  String get nutritionTargetsUnset => 'Não indicado';
+
+  @override
+  String get nutritionTargetsEmptyTitle => 'Ainda sem metas';
+
+  @override
+  String get nutritionTargetsEmptyBody =>
+      'Indica a tua altura, peso, data de nascimento e sexo e as tuas metas de calorias e macros aparecem aqui.';
+
+  @override
+  String get nutritionTargetsAge => 'Idade';
+
+  @override
+  String nutritionTargetsAgeYears(int n) {
+    return '$n anos';
+  }
+
+  @override
+  String get nutritionTargetsLoadError =>
+      'Não foi possível carregar as tuas metas.';
+
+  @override
   String get nutritionWeeklyTrend => 'Últimos 7 dias';
 
   @override
@@ -23599,6 +23685,92 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionAddBodyMetrics => 'Adicionar dados corporais';
+
+  @override
+  String get nutritionTargetsLink => 'Metas';
+
+  @override
+  String get nutritionTargetsTitle => 'Metas de calorias e macros';
+
+  @override
+  String get nutritionTargetsSubtitle =>
+      'Como a meta de hoje é calculada e os dois ajustes que a definem.';
+
+  @override
+  String get nutritionTargetsTotal => 'Meta de hoje';
+
+  @override
+  String get nutritionTargetsBmr => 'Metabolismo em repouso';
+
+  @override
+  String get nutritionTargetsBase => 'Meta base';
+
+  @override
+  String nutritionTargetsBaseFloored(int n) {
+    return 'Mantida no piso de $n kcal — a menor meta diária que recomendamos.';
+  }
+
+  @override
+  String get nutritionTargetsExercise => 'Treinos de hoje';
+
+  @override
+  String get nutritionTargetsExerciseHint =>
+      'As corridas e sessões de musculação que você registrar hoje são somadas por cima.';
+
+  @override
+  String get nutritionTargetsMacrosHeading => 'Macros';
+
+  @override
+  String nutritionTargetsProteinHint(String n) {
+    return '$n g por kg de peso corporal';
+  }
+
+  @override
+  String get nutritionTargetsCarbsHint => 'O que sobra — seu combustível';
+
+  @override
+  String nutritionTargetsFatHint(int n) {
+    return '$n% das calorias';
+  }
+
+  @override
+  String get nutritionTargetsDefaultsHeading => 'Seus valores padrão';
+
+  @override
+  String get nutritionTargetsDefaultsHint =>
+      'O nível de atividade é o seu dia típico sem contar os treinos — as corridas e sessões de musculação registradas são somadas à parte. Ambos são salvos quando você os altera.';
+
+  @override
+  String get nutritionTargetsMetricsHeading => 'Dados corporais';
+
+  @override
+  String get nutritionTargetsMetricsHint =>
+      'Altura, peso, data de nascimento e sexo são dados de saúde, por isso são editados nas Configurações atrás do consentimento.';
+
+  @override
+  String get nutritionTargetsEditMetrics => 'Editar nas Configurações';
+
+  @override
+  String get nutritionTargetsUnset => 'Não informado';
+
+  @override
+  String get nutritionTargetsEmptyTitle => 'Ainda sem metas';
+
+  @override
+  String get nutritionTargetsEmptyBody =>
+      'Informe sua altura, peso, data de nascimento e sexo e suas metas de calorias e macros aparecerão aqui.';
+
+  @override
+  String get nutritionTargetsAge => 'Idade';
+
+  @override
+  String nutritionTargetsAgeYears(int n) {
+    return '$n anos';
+  }
+
+  @override
+  String get nutritionTargetsLoadError =>
+      'Não foi possível carregar suas metas.';
 
   @override
   String get nutritionWeeklyTrend => 'Últimos 7 dias';
