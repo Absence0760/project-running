@@ -2,18 +2,26 @@
 --
 -- The RPC replaces a client-side N+1 count-per-effort loop in
 -- fetchEffortsForRun(): given a run id it returns one (effort_id, rank)
--- row per segment effort attached to the run, where rank = 1 + the number
--- of strictly-faster efforts on the SAME segment that are visible to the
--- caller (SECURITY INVOKER → segment_efforts RLS). Tie semantics match the
--- prior `count(strictly-faster) + 1`: tied fastest times share rank 1, the
--- next ranks 3 (standard competition ranking).
+-- row per segment effort attached to the run. Ties share a rank and the next
+-- distinct time skips the ordinal slots (standard competition ranking).
+--
+-- This suite predates the per-athlete reduction. Since 20270523_001
+-- (decisions §594) rank counts the distinct OTHER ATHLETES holding a
+-- strictly-faster visible effort, not the faster effort ROWS, and it subtracts
+-- blocked athletes — so the assertions below hold only because this fixture
+-- gives every athlete at most one effort per segment. The repeat-effort,
+-- self-exclusion and block cases live in
+-- `segment_effort_ranks_per_athlete_test.sql`; keep them there rather than
+-- adding a second effort to this fixture, which would silently retarget these
+-- five.
 --
 -- Covers:
 --   1. A run with efforts on two segments gets both ranks in one call,
 --      each ranked only against its own segment.
 --   2. The fastest effort on a segment ranks 1.
 --   3. Tied fastest times both rank 1 (strictly-faster count, not row count).
---   4. The slowest effort ranks last (= total efforts on the segment).
+--   4. The slowest effort ranks last (one effort per athlete here, so
+--      = total efforts on the segment).
 --   5. A run with no efforts returns zero rows (not an error).
 
 begin;
@@ -118,7 +126,8 @@ values
    '00000000-0000-0000-0000-0000000ce004', 90, now());
 
 -- ── Assertions (read as the owner; the route is public so all efforts
---    are visible to every caller — ranks are global per segment). ──
+--    are visible to every caller, and nobody here blocks anybody — ranks are
+--    global per segment). ──
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ce001"}';
 
 -- 1. RUN1 has two efforts. S1@250 is 3rd (two 200s ahead); S2@100 is 2nd
@@ -139,7 +148,7 @@ select results_eq(
        from segment_effort_ranks('88888888-8888-8888-8888-88888888ce02'::uuid)
        order by rank $$,
   $$ values (1), (3) $$,
-  'fastest effort ranks 1; slower effort ranks by strictly-faster count'
+  'fastest effort ranks 1; slower effort ranks by strictly-faster athletes'
 );
 
 -- 3. RUN3's S1@200 ties RUN2's S1@200 — both rank 1 (no strictly-faster).
@@ -149,7 +158,7 @@ select is(
   'tied fastest times both rank 1 (strictly-faster count, not row count)'
 );
 
--- 4. RUN4's S1@300 is slowest of four → rank 4; its S2@90 is fastest → 1.
+-- 4. RUN4's S1@300 is slowest of four ATHLETES → rank 4; S2@90 is fastest → 1.
 select results_eq(
   $$ select rank
        from segment_effort_ranks('88888888-8888-8888-8888-88888888ce04'::uuid)
