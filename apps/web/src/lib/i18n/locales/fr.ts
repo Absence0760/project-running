@@ -42,6 +42,7 @@ export const messages = {
 	'runSurface.label': 'Sections de la zone de course',
 	'runSurface.tabRuns': 'Courses',
 	'runSurface.tabRoutes': 'Itinéraires',
+	'runSurface.tabSegments': 'Segments',
 	'runSurface.tabPlans': 'Plans',
 	'runSurface.tabRaces': 'Courses',
 	'shell.offline':
@@ -1407,6 +1408,9 @@ export const messages = {
 	"settingsAccount.exportPartialReady": "Export prêt, mais partiel — {count, plural, one {# course} other {# courses}} sur {total}.",
 	"settingsAccount.exportPartialNotice": "Ton dernier export est partiel : il contient {count} des {total} courses de ton compte. Rien n'a été supprimé — relance l'export pour réessayer. L'archive complète du compte indique chaque section incomplète dans son manifest.json.",
 	"settingsAccount.backupFailed": "Échec de la sauvegarde : {error}",
+	"settingsAccount.backupPartialNotice": "Il manque {missing} des {wanted} traces GPS dans cette sauvegarde : elles n'ont pas pu être téléchargées. Son manifest.json le signale. Retélécharge-la avec une connexion plus stable pour obtenir un fichier complet.",
+	"settingsAccount.restoreArchiveIncomplete": "Cette archive se déclare incomplète : {sections} étaient partielles au moment de sa création. Rien n'a été écrasé — restaure depuis une sauvegarde complète pour combler les manques.",
+	"settingsAccount.restoreArchiveIncompleteUnnamed": "Cette archive se déclare incomplète — elle ne couvrait pas tout le compte au moment de sa création. Rien n'a été écrasé.",
 	"settingsAccount.identitiesLoadFailed": "Échec du chargement des méthodes de connexion : {error}",
 	"settingsAccount.linkFailed": "Impossible de lier {provider} : {error}",
 	"settingsAccount.needOneMethod": "Il te faut au moins une méthode de connexion. Lie-en une autre avant de dissocier celle-ci.",

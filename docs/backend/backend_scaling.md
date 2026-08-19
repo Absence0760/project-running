@@ -2,7 +2,7 @@
 
 How the backend evolves from a single Supabase project to a two-service architecture (Supabase + Go) that supports live spectator tracking, training intelligence, and hundreds of thousands of users.
 
-> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds — plus the email / push / digest kinds added since (`notification_email`, `lifecycle_email`, `safety_email`, `web_push`, `weekly_digest`, with an inbound bounce/complaint webhook) — and serves the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy + DNS flip (`live.threkir.com`); clients fall back to Supabase Realtime when `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` is unset. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
+> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds — plus the email / push / digest kinds added since (`notification_email`, `lifecycle_email`, `safety_email`, `web_push`, `weekly_digest`, with an inbound bounce/complaint webhook) — and serves the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) **is deployed and serving** — the worker went out 2026-07-21 and `live.threkir.com` is a live CNAME in Terraform (`infra/dns/main.tf`). What remains is the **client** cutover, not infra: `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` are still unset, so recorders and spectators ride Supabase Realtime. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
 
 ---
 
@@ -449,7 +449,7 @@ Aligned with the existing product roadmap.
 
 **New:**
 - [x] Deploy Go service to Fly.io (`apps/job_worker/` — drains `map_match`, `token_refresh`, `strava_event`)
-- [~] WebSocket hub for live spectator tracking (`apps/job_worker/internal/livehub/` code shipped + tested; awaits `flyctl deploy` + `live.threkir.com` DNS)
+- [~] WebSocket hub for live spectator tracking (`apps/job_worker/internal/livehub/`). Code shipped + tested, **deployed 2026-07-21**, `live.threkir.com` CNAME live in `infra/dns/main.tf`. Still `[~]` for the client cutover alone — `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` unset, so nothing connects to it yet
 - [x] Move Strava webhook handler from Edge Function to Go (`apps/job_worker/internal/stravahook/`; EF kept as rollback)
 - [x] Move token refresh from Edge Function to Go cron worker (`token_refresh` job kind; EF kept as rollback)
 - [x] Move data export from Edge Function to Go background job (`POST /v1/export` via `apps/job_worker/internal/dataexport/`; EF kept as rollback)
@@ -467,8 +467,8 @@ Aligned with the existing product roadmap.
 **Backend:** No new services.
 
 **Database:**
-- [ ] Ensure materialized views are performant for dashboard queries
-- [x] Add full-text search index on `routes.name` for route library search — `20270316_001_search_trgm_indexes.sql`
+- [ ] Ensure materialized views are performant for dashboard queries. **Genuinely still open, and blocked on a prior question:** `mv_weekly_mileage` is the only materialized view in the repo and has no read path at all (see the Phase 2 note above) — `weekly_mileage()` queries `runs` directly. There is nothing yet to grade as performant, so the first move is the decision this line assumes has been made: wire a `SECURITY DEFINER` reader or drop the view
+- [x] Index `routes.name` for route library search — `20270316_001_search_trgm_indexes.sql`, as a **trigram** GIN index (`routes_name_trgm`, `gin_trgm_ops`), not the full-text index this line originally asked for. `search_public_routes` matches with `ILIKE '%term%'`, which a `to_tsvector` index cannot serve; the same migration therefore **drops** `routes_name_search`, the real FTS index `20260407_001` had added, because nothing ever queried it with `@@ tsquery` and it cost every `routes` write while reading as "already indexed"
 
 ### Phase 3 — growth and monetisation
 

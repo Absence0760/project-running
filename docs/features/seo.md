@@ -39,6 +39,8 @@ indexed anyway).
 | `/share/session/[id]` | Lambda-SSR (`share-entity`) | `share_session_meta` | `WebPage` + breadcrumb |
 | `/share/workout/[id]` | Lambda-SSR (`share-entity`) | `share_workout_meta` | `WebPage` + breadcrumb |
 | `/runs/[id]`, `/routes/[id]`, `/u/[id]`, `/races` | CSR (app shell) | generic shell + canonical | — (auth-gated) |
+| `/segments` | CSR (app shell, **anon-reachable**) | inline `<svelte:head>` title | — (in the sitemap; see below) |
+| `/segments/[id]` | CSR (app shell) | generic shell | — (auth-gated, NOT in the sitemap) |
 | `/clubs/[slug]`, `/clubs/[slug]/events/[id]`, `/events/[id]`, `/live/[id]`, `/recap/[year]` | CSR (app shell) | generic shell + canonical | — (anon-reachable, shell-only) |
 | dashboard / feed / settings / … | CSR (app shell) | generic shell | — (auth-gated) |
 
@@ -50,6 +52,15 @@ Two rows above are easy to misread, and both were wrong in this table before:
   the index because they serve the empty shell and canonical to their share
   twin, not because a gate turns the crawler away. Do not "simplify" these
   back into the auth-gated row.
+- **`/segments` is in the sitemap; `/segments/[id]` is not.** The catalogue
+  index is curated, world-readable content (`global_segments` grants select to
+  anon, migration `20270512_001`) and the page is in `anonExtraExact` so the
+  URL the manifest advertises answers with the catalogue rather than a login
+  form. A per-segment page is a leaderboard of *named runners*, which is the
+  same people-directory objection that keeps profiles out — and it is CSR, so
+  a crawler would only ever be handed the empty shell. Making one genuinely
+  indexable is the step-2 `share-entity` path below, not a sitemap append
+  (`decisions.md § 677`).
 - **`/share/session/[id]` + `/share/workout/[id]` are NOT in the sitemap**,
   unlike their four `share-entity` siblings. A public gym workout is the
   athlete's own training record, and enumerating every one of them would build
@@ -220,8 +231,10 @@ e2e-tested without standing up the Lambda.
   (`/dashboard`, `/settings`, …), points at `/sitemap.xml`. `/share/*` is
   allowed.
 - **`/sitemap.xml`** (`sitemap.xml/+server.ts` + `$lib/share/sitemap.ts`)
-  — build-time, anon-fetched: public routes + runs (popularity-weighted),
-  learn pages, and public **events + clubs + races** (`entityEntries`).
+  — build-time, anon-fetched: the top-level surfaces (`/`, `/feed`,
+  `/routes?tab=explore`, `/segments`), public routes + runs
+  (popularity-weighted), learn pages, and public **events + clubs + races**
+  (`entityEntries`).
   Graceful-degrades to top-level-only if Supabase is unreachable at build.
 - **`www` → apex 301** — a viewer-request CloudFront Function
   (`infra/modules/web-stack/functions/www_redirect.js`, gated on

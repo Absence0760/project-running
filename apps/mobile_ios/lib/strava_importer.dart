@@ -246,7 +246,15 @@ class StravaImporter {
     if (path.isNotEmpty) {
       final file = archive[path];
       if (file == null) {
-        throw FormatException('Track file not found in zip: $path');
+        // The wording is load-bearing, not decoration: classifyImportFailure
+        // buckets on the message, and neither the bare "not found" nor the
+        // bare "unknown format" matched any pattern — so the two refusals
+        // reached the report as `unknown`, which tells a migrating runner
+        // nothing about whether re-running the import can land the run. It
+        // cannot; the member is not in the file. Web throws the identical
+        // strings (decisions.md § 676).
+        throw FormatException(
+            'Malformed export: track file not found in zip: $path');
       }
 
       // Decompress if .gz
@@ -263,7 +271,7 @@ class StravaImporter {
       } else if (lower.contains('.fit')) {
         parsedRoute = FitParser.parse(Uint8List.fromList(content));
       } else {
-        throw FormatException('Unknown track format: $path');
+        throw FormatException('Unsupported file format: $path');
       }
     }
 

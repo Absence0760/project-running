@@ -24,8 +24,11 @@ import '../settings_sync.dart';
 import '../streak_card.dart';
 import '../streaks.dart';
 import '../training_load.dart';
+import '../plan_ramp.dart' show RunForVolume;
 import '../training_service.dart';
+import '../widgets/comeback_card.dart';
 import '../widgets/fitness_card.dart';
+import '../widgets/load_ramp_card.dart';
 import '../widgets/race_predictor_card.dart';
 import '../widgets/gym_summary_card.dart';
 import '../widgets/notification_bell.dart';
@@ -916,6 +919,13 @@ class _DashboardScreenState extends State<DashboardScreen>
         now: now,
         settingsSync: widget.settingsSync,
       );
+      // The runner's own load ramp, and the comeback signal for the runner
+      // whose recent history cannot carry a ratio. Both are fed the SAME
+      // reduction inputs and are mutually exclusive by construction, so both
+      // mount and at most one of them renders (decisions § 609 + § 612).
+      final volumeRuns = _runVolumeInputs(runs);
+      final loadRampCard = LoadRampCard(runs: volumeRuns, now: now);
+      final comebackCard = ComebackCard(runs: volumeRuns, now: now);
       final loadChart = _buildTrainingLoadChart(runs, now, loadSeries);
       final gymNote = _hasRecentLift(now) ? _gymReadinessNote(theme, l10n) : null;
       // Recent lifts trend list — self-hides for a pure runner (empty
@@ -952,6 +962,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         addBlock(fitnessCard);
         addBlock(predictorCard);
         addBlock(readinessCard);
+        addBlock(loadRampCard);
+        addBlock(comebackCard);
         addBlock(intensityCard);
         addBlock(Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1046,6 +1058,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             fitnessCard,
             predictorCard,
             readinessCard,
+            loadRampCard,
+            comebackCard,
             intensityCard,
             loadChart,
             if (gymNote != null) gymNote,
@@ -2131,6 +2145,19 @@ class _RunHeatmap extends StatelessWidget {
     });
   }
 }
+
+/// The runner's own runs reduced to what the load helpers grade on. One
+/// mapping for both cards: `selfLoad` and `comebackLoad` compare their windows
+/// against each other, and two conversions would let the two windows come from
+/// different run sets — the one way that comparison can silently lie.
+List<RunForVolume> _runVolumeInputs(List<Run> runs) => [
+      for (final r in runs)
+        RunForVolume(
+          startedAt: r.startedAt.toIso8601String(),
+          distanceM: r.distanceMetres,
+          activityType: r.metadata?['activity_type'] as String?,
+        ),
+    ];
 
 int _epochDay(DateTime d) {
   final local = DateTime(d.year, d.month, d.day);

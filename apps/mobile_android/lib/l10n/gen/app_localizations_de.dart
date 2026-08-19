@@ -5141,6 +5141,23 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String planNewRaceAnchored(int weeks) {
+    return 'Auf dein Rennen zugeschnitten: ein $weeks-Wochen-Plan, dessen letzte Woche die Rennwoche ist. Passe unten alles an, bevor du ihn erstellst.';
+  }
+
+  @override
+  String get planNewRacePast =>
+      'Dieses Rennen ist bereits gelaufen, daher sind die Daten unten die üblichen Standardwerte.';
+
+  @override
+  String get planNewRaceTooSoon =>
+      'Dieses Rennen ist zu nah, um einen vollständigen Plan zu erstellen, daher sind die Daten unten die üblichen Standardwerte.';
+
+  @override
+  String get planNewRaceUnreadable =>
+      'Wir konnten das Datum dieses Rennens nicht lesen, daher sind die Daten unten die üblichen Standardwerte.';
+
+  @override
   String get planNewCancel => 'Abbrechen';
 
   @override
@@ -11741,6 +11758,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get racesRegister => 'Anmelden';
 
   @override
+  String get racesTrainForThis => 'Für dieses Rennen trainieren';
+
+  @override
   String get racesViewResults => 'Ergebnisse ansehen';
 
   @override
@@ -13029,4 +13049,89 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get settingsGearUnavailable =>
       'Ausrüstung ist in diesem Build nicht verfügbar';
+
+  @override
+  String get loadRampTitle => 'Belastungsanstieg';
+
+  @override
+  String get loadRampRatioCaption => 'diese Woche vs. dein 4-Wochen-Schnitt';
+
+  @override
+  String get loadRampAcuteLabel => 'Letzte 7 Tage';
+
+  @override
+  String get loadRampChronicLabel => 'Wochenschnitt (4 Wochen)';
+
+  @override
+  String get loadRampBandLow => 'Niedrig';
+
+  @override
+  String get loadRampBandOptimal => 'Optimal';
+
+  @override
+  String get loadRampBandElevated => 'Erhöht';
+
+  @override
+  String get loadRampBandHigh => 'Hoch';
+
+  @override
+  String get loadRampMeaningLow =>
+      'Du läufst unter deiner jüngsten Basis. Für eine Tapering- oder Erholungswoche in Ordnung; dauerhaft ist es Formverlust.';
+
+  @override
+  String get loadRampMeaningOptimal =>
+      'Deine Woche liegt im Bereich mit dem besten Verletzungsschutz. Baue in diesem Tempo weiter auf.';
+
+  @override
+  String get loadRampMeaningElevated =>
+      'Du hast schneller gesteigert, als deine jüngste Basis trägt. Halte diese Woche konstant, statt mehr draufzulegen.';
+
+  @override
+  String get loadRampMeaningHigh =>
+      'Das ist ein deutlicher Sprung über deine jüngste Basis — das Muster, das am stärksten mit Verletzungen verknüpft ist. Erwäge eine leichtere Woche.';
+
+  @override
+  String get loadRampTrendRamping => 'Deine Belastung steigt.';
+
+  @override
+  String get loadRampTrendSteady => 'Deine Belastung bleibt konstant.';
+
+  @override
+  String get loadRampTrendTapering => 'Deine Belastung geht zurück.';
+
+  @override
+  String get comebackTitle => 'Rückkehr nach einer Pause';
+
+  @override
+  String get comebackVerdictEasingIn => 'Behutsamer Einstieg';
+
+  @override
+  String get comebackVerdictSteep => 'Große erste Woche';
+
+  @override
+  String comebackLayoff(int weeks) {
+    return '$weeks Wochen ohne Lauf';
+  }
+
+  @override
+  String get comebackShareCaption =>
+      'diese Woche im Vergleich zu deiner Durchschnittswoche vor der Pause';
+
+  @override
+  String get comebackMeaningEasingIn =>
+      'Diese Woche liegt deutlich unter den Wochen, die du vor der Pause gelaufen bist. Ein schrittweiser Wiederaufbau von hier aus macht die Rückkehr dauerhaft.';
+
+  @override
+  String get comebackMeaningSteep =>
+      'Diese Woche ist bereits mehr als die Hälfte dessen, was du vor der Pause gelaufen bist. Deinem Körper fehlt die Grundlage, die diese Wochen zur Routine gemacht hat – eine kürzere Woche jetzt kostet weit weniger als ein Rückschlag später.';
+
+  @override
+  String get comebackThisWeekLabel => 'Letzte 7 Tage';
+
+  @override
+  String get comebackBaseLabel => 'Wochendurchschnitt vor der Pause';
+
+  @override
+  String get comebackFootnote =>
+      'Deine Trainingsbelastungs-Kurve kehrt zurück, sobald du wieder einige konstante Wochen hast.';
 }

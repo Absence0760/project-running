@@ -229,6 +229,13 @@
 		'/delete-account',
 		'/compare',
 		'/guided',
+		// The segment catalogue: `global_segments` carries an explicit
+		// `grant select ... to anon` (migration 20270512_001) and the page
+		// takes no auth gate, so the guard was the only thing turning an
+		// anon visitor away from world-readable content — and /sitemap.xml
+		// now points crawlers at it (decisions.md § 677). The per-segment
+		// leaderboard at /segments/[id] stays gated: it names runners.
+		'/segments',
 	];
 	// `/clubs/*` paths that REQUIRE auth — keep them out of the anon-
 	// allowed set so a signed-in user lands directly in the loggedIn

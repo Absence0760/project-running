@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui_kit/ui_kit.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/plan_ramp.dart';
+import '../lib/race_plan_preset.dart';
 import '../lib/screens/plan_new_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training.dart';
@@ -667,4 +668,120 @@ void main() {
           reason: 'the phase lane must stay one line tall');
     });
   });
+
+  group('PlanNewScreen — the race the wizard was opened from', () {
+    Future<void> pumpRace(WidgetTester tester,
+        {required String raceDateIso, String? name, num? distanceM}) {
+      // The form sits in a lazy ListView; a tall surface builds every field
+      // the preset writes to so their state can be read.
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      return tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanNewScreen(
+            training: _RampTraining(null),
+            social: _FakeSocial(const []),
+            raceDateIso: raceDateIso,
+            raceName: name,
+            raceDistanceM: distanceM,
+          ),
+        ),
+      );
+    }
+
+    List<String> fieldTexts(WidgetTester tester) => tester
+        .widgetList<EditableText>(find.byType(EditableText))
+        .map((e) => e.controller.text)
+        .toList();
+
+    String isoDaysOut(int days) =>
+        toIsoDate(DateTime.now().add(Duration(days: days)));
+
+    testWidgets('a half marathon far out sizes the wizard around race week',
+        (tester) async {
+      final raceIso = isoDaysOut(220);
+      final expected = racePlanPreset(
+        raceDateIso: raceIso,
+        distanceM: 21097.5,
+        todayIso: toIsoDate(DateTime.now()),
+      ).preset!;
+      await pumpRace(tester,
+          raceDateIso: raceIso, name: 'Autumn Half', distanceM: 21097.5);
+      await tester.pump();
+
+      expect(find.byKey(const Key('plan-new-race-note')), findsOneWidget);
+      expect(find.textContaining('${expected.weeks}-week plan'), findsOneWidget);
+      expect(find.text(expected.startDate), findsOneWidget);
+      final goal = tester.widget<DropdownButtonFormField<GoalEvent>>(
+          find.byType(DropdownButtonFormField<GoalEvent>));
+      expect(goal.initialValue, GoalEvent.distanceHalf);
+      expect(fieldTexts(tester), contains('Autumn Half'));
+      expect(fieldTexts(tester), contains('${expected.weeks}'));
+    });
+
+    testWidgets('a race already run falls back to the defaults and says why',
+        (tester) async {
+      await pumpRace(tester,
+          raceDateIso: isoDaysOut(-3), name: 'Last Month 10K', distanceM: 10000);
+      await tester.pump();
+
+      expect(
+        find.text(
+            'That race has already been run, so the dates below are the usual defaults.'),
+        findsOneWidget,
+      );
+      // The name would still claim the race after the dates fell back, so it
+      // is withheld too — leaving the Create button on its own empty-name gate.
+      expect(fieldTexts(tester), isNot(contains('Last Month 10K')));
+    });
+
+    testWidgets('a race too close to plan for is refused, not squeezed',
+        (tester) async {
+      await pumpRace(tester, raceDateIso: isoDaysOut(9), distanceM: 5000);
+      await tester.pump();
+      expect(
+        find.text(
+            'That race is too close to build a full plan for, so the dates below are the usual defaults.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a distance matching no rung presets the dates but not the goal',
+        (tester) async {
+      // A 50k trail ultra: the goal dropdown has no custom-distance entry, so
+      // snapping it to the marathon rung would preselect a different race.
+      final raceIso = isoDaysOut(220);
+      final expected = racePlanPreset(
+        raceDateIso: raceIso,
+        distanceM: 50000,
+        todayIso: toIsoDate(DateTime.now()),
+      ).preset!;
+      await pumpRace(tester, raceDateIso: raceIso, distanceM: 50000);
+      await tester.pump();
+      final goal = tester.widget<DropdownButtonFormField<GoalEvent>>(
+          find.byType(DropdownButtonFormField<GoalEvent>));
+      expect(goal.initialValue, GoalEvent.distanceHalf); // the wizard default
+      expect(find.text(expected.startDate), findsOneWidget);
+    });
+
+    testWidgets('no race leaves the wizard silent', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PlanNewScreen(
+            training: _RampTraining(null),
+            social: _FakeSocial(const []),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('plan-new-race-note')), findsNothing);
+    });
+  });
 }
+

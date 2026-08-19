@@ -105,6 +105,13 @@ export function composeEntries(
 		{ loc: `${b}/feed`, changefreq: 'daily', priority: 0.5 },
 		// /routes?tab=explore is the public discovery entry point.
 		{ loc: `${b}/routes?tab=explore`, changefreq: 'daily', priority: 0.6 },
+		// The segment catalogue: world-readable curated content at a stable
+		// URL, so the INDEX is listed. The per-segment pages are not — each
+		// is a leaderboard of named runners, which is the people-directory
+		// objection that keeps profiles out, and they are CSR besides, so a
+		// crawler would only ever be handed the empty shell (decisions.md
+		// § 677).
+		{ loc: `${b}/segments`, changefreq: 'weekly', priority: 0.6 },
 	];
 	for (const r of routes) {
 		const count = runCountByRouteId?.get(r.id) ?? 0;

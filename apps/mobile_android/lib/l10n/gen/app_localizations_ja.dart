@@ -4826,6 +4826,20 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String planNewRaceAnchored(int weeks) {
+    return 'レースに合わせた$weeks週間のプランです。最終週がレース週になります。作成する前に下の内容を自由に調整してください。';
+  }
+
+  @override
+  String get planNewRacePast => 'このレースはすでに終了しているため、下の日付は通常の初期値です。';
+
+  @override
+  String get planNewRaceTooSoon => 'このレースは近すぎて完全なプランを組めないため、下の日付は通常の初期値です。';
+
+  @override
+  String get planNewRaceUnreadable => 'このレースの日付を読み取れなかったため、下の日付は通常の初期値です。';
+
+  @override
   String get planNewCancel => 'キャンセル';
 
   @override
@@ -11179,6 +11193,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get racesRegister => '登録';
 
   @override
+  String get racesTrainForThis => 'このレースに向けてトレーニング';
+
+  @override
   String get racesViewResults => '結果を見る';
 
   @override
@@ -12416,4 +12433,87 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsGearUnavailable => 'このビルドではギアを利用できません';
+
+  @override
+  String get loadRampTitle => 'トレーニング負荷の伸び';
+
+  @override
+  String get loadRampRatioCaption => '今週 vs 過去4週間の平均';
+
+  @override
+  String get loadRampAcuteLabel => '直近7日間';
+
+  @override
+  String get loadRampChronicLabel => '4週間の週平均';
+
+  @override
+  String get loadRampBandLow => '低い';
+
+  @override
+  String get loadRampBandOptimal => '最適';
+
+  @override
+  String get loadRampBandElevated => 'やや高い';
+
+  @override
+  String get loadRampBandHigh => '高い';
+
+  @override
+  String get loadRampMeaningLow =>
+      '直近のベースを下回っています。テーパリングや回復週なら問題ありませんが、続くと走力が落ちます。';
+
+  @override
+  String get loadRampMeaningOptimal =>
+      '今週は故障を最も防ぎやすい範囲にあります。このペースで積み上げていきましょう。';
+
+  @override
+  String get loadRampMeaningElevated =>
+      '直近のベースが支えられる以上に増やしています。今週はこれ以上増やさず維持しましょう。';
+
+  @override
+  String get loadRampMeaningHigh =>
+      '直近のベースからの急激な増加です。故障と最も関連が深いパターンなので、軽めの週を検討してください。';
+
+  @override
+  String get loadRampTrendRamping => '負荷は増加傾向です。';
+
+  @override
+  String get loadRampTrendSteady => '負荷は横ばいです。';
+
+  @override
+  String get loadRampTrendTapering => '負荷は減少傾向です。';
+
+  @override
+  String get comebackTitle => 'ブランクからの復帰';
+
+  @override
+  String get comebackVerdictEasingIn => '順調な立ち上げ';
+
+  @override
+  String get comebackVerdictSteep => '初週の負荷が大きい';
+
+  @override
+  String comebackLayoff(int weeks) {
+    return '$weeks週間ランなし';
+  }
+
+  @override
+  String get comebackShareCaption => '今週とブランク前の平均週との比較';
+
+  @override
+  String get comebackMeaningEasingIn =>
+      '今週はブランク前に走っていた週を十分に下回っています。ここから少しずつ積み上げることが、復帰を定着させます。';
+
+  @override
+  String get comebackMeaningSteep =>
+      '今週はすでにブランク前に走っていた量の半分を超えています。あの頃の走りを支えていた土台は失われているため、今週を短くするほうが、後で故障するよりはるかに安く済みます。';
+
+  @override
+  String get comebackThisWeekLabel => '直近7日間';
+
+  @override
+  String get comebackBaseLabel => 'ブランク前の週平均';
+
+  @override
+  String get comebackFootnote => '安定した週が数週間そろえば、トレーニング負荷の推移が再び表示されます。';
 }

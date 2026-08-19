@@ -256,7 +256,7 @@ Two orthogonal axes. **Release** is "we cut a tagged version of the product"; **
 | Mobile iOS | `mobile_ios@*` | `.ipa` uploaded to TestFlight; manual promotion to App Store from App Store Connect |
 | Wear OS | `watch_wear@*` | `.aab` uploaded to Play Internal track for the separate Wear listing |
 
-Tag → workflow → deploy is the canonical path for every Fly service except GraphHopper, which today still needs a hand-rolled `flyctl deploy` from a maintainer's laptop (no `release-graphhopper.yml` yet). See [`apps/job_worker/deployment.md`](../../apps/job_worker/deployment.md) § CI wiring.
+Tag → workflow → deploy is the canonical path for every Fly service, GraphHopper included — `release-graphhopper.yml` fires on a published `graphhopper@*` release, so no service is left on a hand-rolled `flyctl deploy` from a maintainer's laptop. See [`apps/job_worker/deployment.md`](../../apps/job_worker/deployment.md) § CI wiring.
 
 ---
 

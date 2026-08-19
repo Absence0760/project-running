@@ -18,10 +18,11 @@
  * the other way round — so the two cards are mutually exclusive by
  * construction rather than by the dashboard remembering to choose.
  *
- * Pure (no Svelte / Supabase) so it runs under `npx tsx --test`. Web-only,
- * like the `self_load` / `plan_ramp` composition it sits beside: mobile has
- * the `coach_load` twin but no self-facing load surface, so a Dart twin would
- * be dead code (mirror tracked in docs/product/followups.md).
+ * Pure (no Svelte / Supabase) so it runs under `npx tsx --test`.
+ *
+ * Dart twin: apps/mobile_android/lib/comeback.dart (parity pair — keep the
+ * algorithm, thresholds, gates, and test counts in lockstep). The surfaces are
+ * `ComebackCard.svelte` here and `widgets/comeback_card.dart` there.
  */
 
 import { kLayoffResetDays } from './training_load';

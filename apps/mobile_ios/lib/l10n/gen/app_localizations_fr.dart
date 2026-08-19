@@ -5144,6 +5144,23 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String planNewRaceAnchored(int weeks) {
+    return 'Calibré sur votre course : un plan de $weeks semaines dont la dernière semaine est celle de la course. Ajustez ce que vous voulez avant de le créer.';
+  }
+
+  @override
+  String get planNewRacePast =>
+      'Cette course a déjà eu lieu, les dates ci-dessous sont donc celles par défaut.';
+
+  @override
+  String get planNewRaceTooSoon =>
+      'Cette course est trop proche pour bâtir un plan complet, les dates ci-dessous sont donc celles par défaut.';
+
+  @override
+  String get planNewRaceUnreadable =>
+      'Nous n\'avons pas pu lire la date de cette course, les dates ci-dessous sont donc celles par défaut.';
+
+  @override
   String get planNewCancel => 'Annuler';
 
   @override
@@ -11755,6 +11772,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get racesRegister => 'S\'inscrire';
 
   @override
+  String get racesTrainForThis => 'S\'entraîner pour cette course';
+
+  @override
   String get racesViewResults => 'Voir les résultats';
 
   @override
@@ -13049,4 +13069,90 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get settingsGearUnavailable =>
       'L\'équipement n\'est pas disponible dans cette version';
+
+  @override
+  String get loadRampTitle => 'Progression de charge';
+
+  @override
+  String get loadRampRatioCaption =>
+      'cette semaine vs votre moyenne sur 4 semaines';
+
+  @override
+  String get loadRampAcuteLabel => '7 derniers jours';
+
+  @override
+  String get loadRampChronicLabel => 'Moyenne hebdo (4 semaines)';
+
+  @override
+  String get loadRampBandLow => 'Faible';
+
+  @override
+  String get loadRampBandOptimal => 'Optimale';
+
+  @override
+  String get loadRampBandElevated => 'Élevée';
+
+  @override
+  String get loadRampBandHigh => 'Forte';
+
+  @override
+  String get loadRampMeaningLow =>
+      'Vous courez sous votre base récente. Parfait pour un affûtage ou une semaine de récupération ; durable, c\'est du désentraînement.';
+
+  @override
+  String get loadRampMeaningOptimal =>
+      'Votre semaine se situe dans la plage qui protège le mieux des blessures. Continuez à progresser à ce rythme.';
+
+  @override
+  String get loadRampMeaningElevated =>
+      'Vous avez augmenté plus vite que votre base récente ne le supporte. Stabilisez cette semaine plutôt que d\'en rajouter.';
+
+  @override
+  String get loadRampMeaningHigh =>
+      'C\'est une hausse brutale par rapport à votre base récente — le schéma le plus associé aux blessures. Envisagez une semaine plus légère.';
+
+  @override
+  String get loadRampTrendRamping => 'Votre charge augmente.';
+
+  @override
+  String get loadRampTrendSteady => 'Votre charge reste stable.';
+
+  @override
+  String get loadRampTrendTapering => 'Votre charge diminue.';
+
+  @override
+  String get comebackTitle => 'Retour après une coupure';
+
+  @override
+  String get comebackVerdictEasingIn => 'Reprise en douceur';
+
+  @override
+  String get comebackVerdictSteep => 'Grosse première semaine';
+
+  @override
+  String comebackLayoff(int weeks) {
+    return '$weeks semaines sans courir';
+  }
+
+  @override
+  String get comebackShareCaption =>
+      'cette semaine par rapport à votre semaine moyenne avant la coupure';
+
+  @override
+  String get comebackMeaningEasingIn =>
+      'Cette semaine reste nettement en dessous des semaines que vous couriez avant la coupure. Reconstruire progressivement à partir d’ici, c’est ce qui rend le retour durable.';
+
+  @override
+  String get comebackMeaningSteep =>
+      'Cette semaine dépasse déjà la moitié de ce que vous couriez avant la coupure. Votre corps a perdu la base qui rendait ces semaines routinières : une semaine plus courte maintenant coûte bien moins qu’une rechute plus tard.';
+
+  @override
+  String get comebackThisWeekLabel => '7 derniers jours';
+
+  @override
+  String get comebackBaseLabel => 'Moyenne hebdomadaire avant la coupure';
+
+  @override
+  String get comebackFootnote =>
+      'Votre courbe de charge d’entraînement revient dès que vous enchaînez à nouveau quelques semaines régulières.';
 }

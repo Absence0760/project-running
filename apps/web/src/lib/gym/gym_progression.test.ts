@@ -502,3 +502,86 @@ test('a lighter set never pads the five_by_five set count, labelled or not', () 
 	assert.equal(got.reason, 'hold', 'only 3 sets at the working weight');
 	assert.equal(got.suggestedWeightKg, 100);
 });
+
+test('a back-off or drop set is not judged against the working target', () => {
+	// Both are deliberately lighter than the top set, so an `every` over the
+	// rep target reads them as a failed working set and holds the load. The
+	// top-weight narrowing already covers the weighted case; these assert the
+	// rule itself, so it survives a session where the narrowing cannot see it.
+	for (const setType of ['backoff', 'dropset']) {
+		const got = nextPrescription({
+			scheme: 'linear',
+			lastSets: [
+				{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+				{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+				{ reps: 12, weight_kg: 70, rpe: null, set_type: setType }
+			],
+			targetRepsMin: 5,
+			targetRepsMax: 5,
+			params: null
+		});
+		assert.equal(got.reason, 'increase_weight', setType);
+		assert.equal(got.suggestedWeightKg, 102.5, setType);
+	}
+});
+
+test('a bodyweight drop set does not stall the exercise forever', () => {
+	// The case the top-weight narrowing cannot reach: with no positive weight
+	// anywhere, every completed set survives it, so an assisted set of 4 after
+	// three clean sets of 8 failed the rep target and held the prescription.
+	const got = nextPrescription({
+		scheme: 'linear',
+		lastSets: [
+			{ reps: 8, weight_kg: null, rpe: null, set_type: 'working' },
+			{ reps: 8, weight_kg: null, rpe: null, set_type: 'working' },
+			{ reps: 8, weight_kg: null, rpe: null, set_type: 'working' },
+			{ reps: 4, weight_kg: null, rpe: null, set_type: 'dropset' }
+		],
+		targetRepsMin: 8,
+		targetRepsMax: 8,
+		params: null
+	});
+	assert.equal(got.reason, 'increase_reps');
+	assert.equal(got.suggestedRepsMax, 9);
+});
+
+test('back-off and drop sets do not pad the five_by_five set count', () => {
+	// The mirror of the warmup case: three working sets plus two lighter ones
+	// must not satisfy a five-set target.
+	const got = nextPrescription({
+		scheme: 'five_by_five',
+		lastSets: [
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'backoff' },
+			{ reps: 5, weight_kg: 100, rpe: null, set_type: 'dropset' }
+		],
+		targetRepsMin: 5,
+		targetRepsMax: 5,
+		params: null
+	});
+	assert.equal(got.reason, 'hold', 'only 3 sets were working sets');
+});
+
+test('amrap and failure sets stay evidence about the working weight', () => {
+	// Deliberately NOT excluded: both are performed AT the working weight, so
+	// their rep count says something real about it. A 5x5 whose last set went
+	// to failure at 3 reps is a genuine miss, not a set to look away from.
+	for (const setType of ['amrap', 'failure']) {
+		const got = nextPrescription({
+			scheme: 'five_by_five',
+			lastSets: [
+				{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+				{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+				{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+				{ reps: 5, weight_kg: 100, rpe: null, set_type: 'working' },
+				{ reps: 3, weight_kg: 100, rpe: null, set_type: setType }
+			],
+			targetRepsMin: 5,
+			targetRepsMax: 5,
+			params: null
+		});
+		assert.equal(got.reason, 'hold', setType);
+	}
+});

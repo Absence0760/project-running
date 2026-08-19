@@ -8,6 +8,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../plan_ramp.dart';
+import '../race_plan_preset.dart';
 import '../social_service.dart' show ClubView, SocialService;
 import '../starter_plans.dart';
 import '../training.dart';
@@ -41,12 +42,24 @@ class PlanNewScreen extends StatefulWidget {
   final GoalEvent? initialGoal;
   final bool initialBeginnerWalkRun;
 
+  /// The race the wizard was opened from ("train for this race" on the races
+  /// screen), as the listing's own facts rather than as derived dates — the
+  /// arithmetic has one home in [racePlanPreset] and is re-derived against
+  /// today here, so a screen built from a stale list cannot resurrect a start
+  /// date that has since passed (decisions § 606).
+  final String? raceDateIso;
+  final String? raceName;
+  final num? raceDistanceM;
+
   const PlanNewScreen({
     super.key,
     required this.training,
     this.social,
     this.initialGoal,
     this.initialBeginnerWalkRun = false,
+    this.raceDateIso,
+    this.raceName,
+    this.raceDistanceM,
   });
 
   @override
@@ -96,6 +109,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   // loaded (and on failure) — the note self-hides rather than grading against
   // a base it doesn't have.
   RecentVolume? _recentVolume;
+  // Null when the wizard was not opened from a race. A refusal is kept rather
+  // than discarded: silently falling back to the usual defaults is the one
+  // thing that could not explain itself.
+  RacePlanPresetResult? _racePreset;
 
   late final SocialService _social = widget.social ?? SocialService();
   List<_TemplateOption> _templates = const [];
@@ -119,6 +136,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     super.initState();
     if (widget.initialGoal != null) _goal = widget.initialGoal!;
     _beginnerWalkRun = widget.initialBeginnerWalkRun;
+    _applyRacePreset();
     widget.training.fetchViewerGender().then((g) {
       if (!mounted) return;
       setState(() => _viewerGender = g);
@@ -134,6 +152,28 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     _loadTemplates();
   }
 
+  /// Size the wizard around the race it was opened from. A distance matching
+  /// no standard rung leaves the goal on the wizard's own default and presets
+  /// only the dates — the goal dropdown has no custom-distance entry, so
+  /// snapping a 50k to the marathon rung would preselect a different race.
+  void _applyRacePreset() {
+    final raceDateIso = widget.raceDateIso;
+    if (raceDateIso == null) return;
+    final result = racePlanPreset(
+      raceDateIso: raceDateIso,
+      distanceM: widget.raceDistanceM,
+      todayIso: toIsoDate(DateTime.now()),
+    );
+    _racePreset = result;
+    final preset = result.preset;
+    if (preset == null) return;
+    if (preset.goalEvent != null) _goal = preset.goalEvent!;
+    final start = DateTime.tryParse(preset.startDate);
+    if (start != null) _startDate = DateTime(start.year, start.month, start.day);
+    _weekOverride = preset.weeks;
+    _weekOverrideCtrl.text = '${preset.weeks}';
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -142,9 +182,19 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     // the Create button silently disabled on arrival — a dead-end tap. Seed a
     // sensible, editable default so the preset lands ready to create. Needs a
     // localized string, so it runs here (context-ready) not in initState.
-    if (!_nameDefaulted &&
-        _nameCtrl.text.isEmpty &&
-        (widget.initialGoal != null || widget.initialBeginnerWalkRun)) {
+    if (_nameDefaulted || _nameCtrl.text.isNotEmpty) return;
+    // A race the wizard could not build for gets no name either: the name is
+    // the one field that would still claim the race after the dates fell back.
+    final raceName = widget.raceName?.trim();
+    if (_racePreset?.ok == true && raceName != null && raceName.isNotEmpty) {
+      _nameDefaulted = true;
+      // The field is `maxLength: 80`; a programmatic write bypasses that, so
+      // clamp what the listing hands us to the same budget.
+      _nameCtrl.text =
+          raceName.length > 80 ? raceName.substring(0, 80) : raceName;
+      return;
+    }
+    if (widget.initialGoal != null || widget.initialBeginnerWalkRun) {
       _nameDefaulted = true;
       final l10n = AppLocalizations.of(context);
       final goal = goalEventLabel(_goal);
@@ -405,6 +455,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final preview = _preview();
+    final raceNote = _raceNote(l10n);
     // See plans_screen.dart — Samsung's 3-button nav bar isn't auto-padded
     // on screens without a bottom nav. Include it in the ListView bottom
     // padding so the Cancel/Create row sits above the system buttons.
@@ -419,6 +470,16 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           if (_templates.isNotEmpty) ...[
             _templateCard(theme, l10n),
             const SizedBox(height: 20),
+          ],
+          if (raceNote != null) ...[
+            Text(
+              raceNote,
+              key: const Key('plan-new-race-note'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
           TextField(
             controller: _nameCtrl,
@@ -670,6 +731,21 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         ],
       ),
     );
+  }
+
+  /// What the wizard says about the race it was opened from — either that the
+  /// dates are sized to it, or why they are the usual defaults instead. Null
+  /// when there was no race.
+  String? _raceNote(AppLocalizations l10n) {
+    final result = _racePreset;
+    if (result == null) return null;
+    final preset = result.preset;
+    if (preset != null) return l10n.planNewRaceAnchored(preset.weeks);
+    return switch (result.reason!) {
+      RacePlanRefusal.past => l10n.planNewRacePast,
+      RacePlanRefusal.tooSoon => l10n.planNewRaceTooSoon,
+      RacePlanRefusal.invalid => l10n.planNewRaceUnreadable,
+    };
   }
 
   Widget _templateCard(ThemeData theme, AppLocalizations l10n) {

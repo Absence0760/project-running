@@ -418,4 +418,84 @@ void main() {
     expect(got.reason, ProgressionReason.hold, reason: 'only 3 sets at the working weight');
     expect(got.suggestedWeightKg, 100);
   });
+
+  test('a back-off or drop set is not judged against the working target', () {
+    // Both are deliberately lighter than the top set, so an `every` over the
+    // rep target reads them as a failed working set and holds the load. The
+    // top-weight narrowing already covers the weighted case; these assert the
+    // rule itself, so it survives a session where the narrowing cannot see it.
+    for (final setType in ['backoff', 'dropset']) {
+      final got = nextPrescription(ProgressionInput(
+        scheme: ProgressionScheme.linear,
+        lastSets: [
+          ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+          ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+          ProgressionSetLike(reps: 12, weightKg: 70, setType: setType),
+        ],
+        targetRepsMin: 5,
+        targetRepsMax: 5,
+      ));
+      expect(got.reason, ProgressionReason.increaseWeight, reason: setType);
+      expect(got.suggestedWeightKg, 102.5, reason: setType);
+    }
+  });
+
+  test('a bodyweight drop set does not stall the exercise forever', () {
+    // The case the top-weight narrowing cannot reach: with no positive weight
+    // anywhere, every completed set survives it, so an assisted set of 4 after
+    // three clean sets of 8 failed the rep target and held the prescription.
+    final got = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.linear,
+      lastSets: [
+        ProgressionSetLike(reps: 8, setType: 'working'),
+        ProgressionSetLike(reps: 8, setType: 'working'),
+        ProgressionSetLike(reps: 8, setType: 'working'),
+        ProgressionSetLike(reps: 4, setType: 'dropset'),
+      ],
+      targetRepsMin: 8,
+      targetRepsMax: 8,
+    ));
+    expect(got.reason, ProgressionReason.increaseReps);
+    expect(got.suggestedRepsMax, 9);
+  });
+
+  test('back-off and drop sets do not pad the five_by_five set count', () {
+    // The mirror of the warmup case: three working sets plus two lighter ones
+    // must not satisfy a five-set target.
+    final got = nextPrescription(ProgressionInput(
+      scheme: ProgressionScheme.fiveByFive,
+      lastSets: [
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'backoff'),
+        ProgressionSetLike(reps: 5, weightKg: 100, setType: 'dropset'),
+      ],
+      targetRepsMin: 5,
+      targetRepsMax: 5,
+    ));
+    expect(got.reason, ProgressionReason.hold,
+        reason: 'only 3 sets were working sets');
+  });
+
+  test('amrap and failure sets stay evidence about the working weight', () {
+    // Deliberately NOT excluded: both are performed AT the working weight, so
+    // their rep count says something real about it. A 5x5 whose last set went
+    // to failure at 3 reps is a genuine miss, not a set to look away from.
+    for (final setType in ['amrap', 'failure']) {
+      final got = nextPrescription(ProgressionInput(
+        scheme: ProgressionScheme.fiveByFive,
+        lastSets: [
+          ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+          ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+          ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+          ProgressionSetLike(reps: 5, weightKg: 100, setType: 'working'),
+          ProgressionSetLike(reps: 3, weightKg: 100, setType: setType),
+        ],
+        targetRepsMin: 5,
+        targetRepsMax: 5,
+      ));
+      expect(got.reason, ProgressionReason.hold, reason: setType);
+    }
+  });
 }

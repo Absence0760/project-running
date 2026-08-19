@@ -12,7 +12,7 @@ import { RUNNER_PUBLIC_ROUTE_ID, RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded
  *   - It exists at /sitemap.xml.
  *   - Content-Type is application/xml.
  *   - Doc shape is a valid <urlset>.
- *   - Top-level surfaces (/, /feed, /routes?tab=explore) all appear.
+ *   - Top-level surfaces (/, /feed, /routes?tab=explore, /segments) appear.
  *   - At least one seeded public run + route appear via their share URLs.
  *   - robots.txt advertises the sitemap so crawlers find it.
  */
@@ -34,12 +34,23 @@ test.describe('/sitemap.xml — prerendered SEO sitemap', () => {
 
 	test('top-level surfaces are present', async ({ request }) => {
 		const body = await (await request.get('http://localhost:7777/sitemap.xml')).text();
-		// Each of the three top-level surfaces should appear. The host
+		// Each of the four top-level surfaces should appear. The host
 		// is whatever PUBLIC_SITE_URL is set to at build time (defaults
 		// to threkir.com); match the path suffix to stay env-agnostic.
 		expect(body).toMatch(/<loc>https?:\/\/[^<]+\/<\/loc>/);
 		expect(body).toMatch(/<loc>https?:\/\/[^<]+\/feed<\/loc>/);
 		expect(body).toMatch(/<loc>https?:\/\/[^<]+\/routes\?tab=explore<\/loc>/);
+		// The segment catalogue — world-readable curated content that was
+		// crawl-invisible until decisions.md § 677.
+		expect(body).toMatch(/<loc>https?:\/\/[^<]+\/segments<\/loc>/);
+	});
+
+	test('individual segment pages are NOT enumerated', async ({ request }) => {
+		// A per-segment page is a leaderboard of named runners; enumerating
+		// them builds the people-directory that keeps profiles out of the
+		// manifest. Only the catalogue index is listed.
+		const body = await (await request.get('http://localhost:7777/sitemap.xml')).text();
+		expect(body).not.toMatch(/<loc>https?:\/\/[^<]+\/segments\/[^<]+<\/loc>/);
 	});
 
 	test('seeded public run + route appear as share URLs', async ({ request }) => {

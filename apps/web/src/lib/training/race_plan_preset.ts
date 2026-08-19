@@ -2,9 +2,12 @@
  * Derive a training-plan preset from a race on the calendar, so "train for
  * this race" lands on a plan whose final race week contains race day.
  *
- * Pure logic, no Supabase / auth. Web-only today: the mobile races screen and
- * plan wizard both exist but neither carries the bridge yet, so a Dart twin
- * would be dead code (mirror tracked in docs/product/followups.md).
+ * Pure logic, no Supabase / auth.
+ *
+ * Dart twin: apps/mobile_android/lib/race_plan_preset.dart (parity pair — keep
+ * the arithmetic, tolerances, refusals, and test counts in lockstep). The
+ * surfaces are `RaceCalendarCard` → `/plans/new` here and the races screen's
+ * "train for this race" action → `PlanNewScreen` there.
  *
  * Two constraints drive every number here:
  *

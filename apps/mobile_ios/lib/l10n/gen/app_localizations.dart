@@ -8440,6 +8440,30 @@ abstract class AppLocalizations {
   /// **'Override weeks ({count} default)'**
   String planNewOverrideLabel(int count);
 
+  /// Note shown when the plan wizard was opened from a race listing and could size the plan around it
+  ///
+  /// In en, this message translates to:
+  /// **'Sized for your race: a {weeks}-week plan whose final week is race week. Adjust anything below before creating it.'**
+  String planNewRaceAnchored(int weeks);
+
+  /// Note shown when the race the wizard was opened from has already been run
+  ///
+  /// In en, this message translates to:
+  /// **'That race has already been run, so the dates below are the usual defaults.'**
+  String get planNewRacePast;
+
+  /// Note shown when the race the wizard was opened from is too close to build a plan for
+  ///
+  /// In en, this message translates to:
+  /// **'That race is too close to build a full plan for, so the dates below are the usual defaults.'**
+  String get planNewRaceTooSoon;
+
+  /// Note shown when the race date the wizard was opened with could not be parsed
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t read that race\'s date, so the dates below are the usual defaults.'**
+  String get planNewRaceUnreadable;
+
   /// Cancel button in the new-plan wizard
   ///
   /// In en, this message translates to:
@@ -19436,6 +19460,12 @@ abstract class AppLocalizations {
   /// **'Register'**
   String get racesRegister;
 
+  /// Race card action that opens the plan wizard sized around that race
+  ///
+  /// In en, this message translates to:
+  /// **'Train for this race'**
+  String get racesTrainForThis;
+
   /// Link to a race's results page
   ///
   /// In en, this message translates to:
@@ -21661,6 +21691,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Gear isn\'t available on this build'**
   String get settingsGearUnavailable;
+
+  /// Dashboard load-ramp card title
+  ///
+  /// In en, this message translates to:
+  /// **'Training load ramp'**
+  String get loadRampTitle;
+
+  /// Caption under the acute:chronic ratio figure
+  ///
+  /// In en, this message translates to:
+  /// **'this week vs your 4-week average'**
+  String get loadRampRatioCaption;
+
+  /// Label for the last-7-days distance figure
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get loadRampAcuteLabel;
+
+  /// Label for the four-week weekly-average distance figure
+  ///
+  /// In en, this message translates to:
+  /// **'4-week weekly average'**
+  String get loadRampChronicLabel;
+
+  /// Injury-risk band chip: low
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get loadRampBandLow;
+
+  /// Injury-risk band chip: optimal
+  ///
+  /// In en, this message translates to:
+  /// **'Optimal'**
+  String get loadRampBandOptimal;
+
+  /// Injury-risk band chip: elevated
+  ///
+  /// In en, this message translates to:
+  /// **'Elevated'**
+  String get loadRampBandElevated;
+
+  /// Injury-risk band chip: high
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get loadRampBandHigh;
+
+  /// What a low band means for the runner
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re running below your recent base. Fine for a taper or a recovery week; sustained, it\'s detraining.'**
+  String get loadRampMeaningLow;
+
+  /// What an optimal band means for the runner
+  ///
+  /// In en, this message translates to:
+  /// **'Your week sits in the range that best protects against injury. Keep building at this rate.'**
+  String get loadRampMeaningOptimal;
+
+  /// What an elevated band means for the runner
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve stepped up faster than your recent base supports. Hold this week steady rather than adding more.'**
+  String get loadRampMeaningElevated;
+
+  /// What a high band means for the runner
+  ///
+  /// In en, this message translates to:
+  /// **'This is a sharp spike over your recent base — the pattern most associated with injury. Consider an easier week.'**
+  String get loadRampMeaningHigh;
+
+  /// Load-trend footnote: ramping
+  ///
+  /// In en, this message translates to:
+  /// **'Your load is ramping up.'**
+  String get loadRampTrendRamping;
+
+  /// Load-trend footnote: steady
+  ///
+  /// In en, this message translates to:
+  /// **'Your load is holding steady.'**
+  String get loadRampTrendSteady;
+
+  /// Load-trend footnote: tapering
+  ///
+  /// In en, this message translates to:
+  /// **'Your load is tapering off.'**
+  String get loadRampTrendTapering;
+
+  /// Dashboard comeback card title
+  ///
+  /// In en, this message translates to:
+  /// **'Coming back from a break'**
+  String get comebackTitle;
+
+  /// Comeback verdict chip: easing in
+  ///
+  /// In en, this message translates to:
+  /// **'Easing in'**
+  String get comebackVerdictEasingIn;
+
+  /// Comeback verdict chip: big first week
+  ///
+  /// In en, this message translates to:
+  /// **'Big first week'**
+  String get comebackVerdictSteep;
+
+  /// How long the runner was away, in whole weeks
+  ///
+  /// In en, this message translates to:
+  /// **'{weeks} weeks without a run'**
+  String comebackLayoff(int weeks);
+
+  /// Caption under the share-of-pre-break-base figure
+  ///
+  /// In en, this message translates to:
+  /// **'this week vs your average week before the break'**
+  String get comebackShareCaption;
+
+  /// What an easing-in comeback means for the runner
+  ///
+  /// In en, this message translates to:
+  /// **'This week sits comfortably under the weeks you were running before the break. Building back gradually from here is what makes the comeback stick.'**
+  String get comebackMeaningEasingIn;
+
+  /// What a steep first week back means for the runner
+  ///
+  /// In en, this message translates to:
+  /// **'This week is already more than half of what you were running before the break. Your body has lost the base that made those weeks routine, so a shorter week now costs far less than a setback later.'**
+  String get comebackMeaningSteep;
+
+  /// Label for the last-7-days distance figure
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get comebackThisWeekLabel;
+
+  /// Label for the pre-break weekly-average distance figure
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly average before the break'**
+  String get comebackBaseLabel;
+
+  /// Note that the load-ramp card returns once the runner is consistent again
+  ///
+  /// In en, this message translates to:
+  /// **'Your training load ramp comes back once you have a few consistent weeks again.'**
+  String get comebackFootnote;
 }
 
 class _AppLocalizationsDelegate

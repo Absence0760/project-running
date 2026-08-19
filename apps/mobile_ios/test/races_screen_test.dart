@@ -7,6 +7,7 @@ import '../lib/geocoding.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/race_service.dart';
+import '../lib/training.dart' show toIsoDate;
 import '../lib/screens/races_screen.dart';
 
 class _FakeRaceService extends RaceService {
@@ -58,13 +59,14 @@ RaceListingView _listing(String id, String name,
         {int? distanceM,
         double? distanceMAway,
         bool verified = true,
-        String provider = 'manual'}) =>
+        String provider = 'manual',
+        String raceDate = '2027-09-12'}) =>
     RaceListingView(
       id: id,
       provider: provider,
       providerRaceId: null,
       name: name,
-      raceDate: '2027-09-12',
+      raceDate: raceDate,
       distanceM: distanceM,
       locationLabel: 'Richmond, VA',
       entryUrl: 'https://example.com/register',
@@ -72,6 +74,12 @@ RaceListingView _listing(String id, String name,
       isVerified: verified,
       distanceMAway: distanceMAway,
     );
+
+/// A race date [days] out from today. The plan action is gated on a live
+/// `racePlanPreset` call, so a fixture pinned to a calendar date would stop
+/// exercising the gate the day it fell into the past.
+String _isoDaysOut(int days) =>
+    toIsoDate(DateTime.now().add(Duration(days: days)));
 
 Widget _app(RaceService service,
         {double textScale = 1.0, double bottomInset = 0}) =>
@@ -361,4 +369,46 @@ void main() {
       expect(find.textContaining('5.00 km away'), findsOneWidget);
     });
   });
+
+  testWidgets('a race far enough out offers to build a plan for it',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [
+        _listing('r7', 'Next Autumn Half',
+            distanceM: 21097,
+            raceDate: _isoDaysOut(220)),
+      ],
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pump();
+    expect(find.text('Train for this race'), findsOneWidget);
+  });
+
+  testWidgets('a race already run offers no plan action rather than a refusal',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [
+        _listing('r8', 'Last Month 10K',
+            distanceM: 10000, raceDate: _isoDaysOut(-30)),
+      ],
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pump();
+    expect(find.text('Last Month 10K'), findsOneWidget);
+    expect(find.text('Train for this race'), findsNothing);
+  });
+
+  testWidgets('a race too close to plan for offers no plan action',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [
+        _listing('r9', 'Parkrun Saturday',
+            distanceM: 5000, raceDate: _isoDaysOut(9)),
+      ],
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pump();
+    expect(find.text('Train for this race'), findsNothing);
+  });
 }
+

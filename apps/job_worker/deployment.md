@@ -636,24 +636,10 @@ The graph itself is on the volume, not in the image, so a redeploy doesn't touch
 
 ### `.github/workflows/release-graphhopper.yml`
 
-Triggered by `graphhopper@*`. Same shape as `release-osrm.yml` — redeploys the container (which rebuilds the jar from the pinned `GH_VERSION`) without touching the graph on the volume:
+**Shipped.** Same shape as `release-osrm.yml` — redeploys the container (which rebuilds the jar from the pinned `GH_VERSION`) without touching the graph on the volume. Read the workflow for the current text; the two things worth knowing here:
 
-```yaml
-on:
-  push:
-    tags: [ 'graphhopper@*' ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@v1
-      - run: flyctl deploy --app graphhopper --remote-only
-        working-directory: apps/job_worker/graphhopper
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-```
+- It fires on a **published GitHub Release** whose tag starts `graphhopper@`, not on a bare tag push, and the actions are SHA-pinned — the house convention every Fly release workflow follows. (An earlier sketch in this file showed `on: push: tags:` with floating `@v4` / `@v1` refs; that predates the convention and is not what shipped.)
+- After `flyctl status` it **probes the public `/health`** and fails the job if the engine has not answered 200 within 10 minutes. A cold volume imports the graph for minutes while the machine already reads healthy, so status alone can green-light a tag over an engine that is not serving. `/health` is the one path the Caddy front leaves unauthenticated, so this needs no `GRAPHHOPPER_API_KEY` — that secret stays a Fly app secret and never enters a GitHub Actions context.
 
 The graph is on the volume, so a redeploy never re-imports — image deploys are safe at any time.
 
@@ -776,4 +762,4 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 - [ ] `GRAPHHOPPER_URL` set on the generate-route Lambda (Terraform), server-only, not `PUBLIC_`
 - [ ] Health probe wired (Better Stack against the public `/health`)
 - [ ] Public-abuse posture decided (Lambda-only caller for now; CloudFront+WAF or shared-secret header is the follow-up if needed)
-- [ ] `release-graphhopper.yml` workflow merged
+- [x] `release-graphhopper.yml` workflow merged
