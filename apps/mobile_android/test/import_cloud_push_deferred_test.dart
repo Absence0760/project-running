@@ -61,11 +61,16 @@ class _SidecarRefusingStore extends LocalRunStore {
   }
 }
 
-late Directory _runsDir;
-
+/// Each store gets its own directory, removed by the tearDown registered here
+/// at creation. A file-level `_runsDir` + one shared tearDown only removes the
+/// LAST directory a test made, and names the wrong one for a test that makes
+/// none.
 Future<T> _initStore<T extends LocalRunStore>(T store) async {
-  _runsDir = Directory.systemTemp.createTempSync('import_deferred_test_');
-  await store.init(overrideDirectory: _runsDir);
+  final dir = Directory.systemTemp.createTempSync('import_deferred_test_');
+  addTearDown(() {
+    if (dir.existsSync()) dir.deleteSync(recursive: true);
+  });
+  await store.init(overrideDirectory: dir);
   return store;
 }
 
@@ -121,15 +126,41 @@ Future<void> _pump(
 }
 
 /// Drives a tap through real disk I/O — `LocalRunStore.save` writes files the
-/// fake clock cannot advance past.
+/// fake clock cannot advance past — and then waits for the SCREEN to say the
+/// work is over.
+///
+/// Draining for a fixed span of wall clock instead is a bet on how fast the
+/// host is, and a loaded CI runner loses it: the assertions read a screen still
+/// mid-import, and the tearDown above then deletes the store directory out from
+/// under the writes still in flight.
 Future<void> _tapAndDrain(WidgetTester tester, Finder button) async {
   await tester.ensureVisible(button);
   await tester.pump();
   await tester.runAsync(() async {
     await tester.tap(button);
     await tester.pump();
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await _drainUntilIdle(tester);
   });
+  await tester.pump();
+}
+
+/// The import screen renders a [CircularProgressIndicator] for exactly as long
+/// as one of its async entry points is in flight, and clears it on every exit
+/// path including the catches, so its absence is the screen's own statement
+/// that the work finished. The deadline only turns a hung screen into a named
+/// failure; nothing passes because of it.
+Future<void> _drainUntilIdle(WidgetTester tester) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (find.byType(CircularProgressIndicator).evaluate().isNotEmpty) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('the import screen was still busy 30s after the tap');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    await tester.pump();
+  }
+  // `_busy` clears one await-resume before the import path's last setState, so
+  // turn the event loop once past the microtask that carries it.
+  await Future<void>.delayed(Duration.zero);
   await tester.pump();
 }
 
@@ -141,10 +172,6 @@ Finder get _allowRoutesButton =>
 
 void main() {
   final l10n = lookupAppLocalizations(const Locale('en'));
-
-  tearDown(() {
-    if (_runsDir.existsSync()) _runsDir.deleteSync(recursive: true);
-  });
 
   group('import batch push', () {
     testWidgets('a partial push names how many runs did not reach the server',
