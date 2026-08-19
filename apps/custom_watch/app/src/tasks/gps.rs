@@ -53,59 +53,46 @@
 //! setting for about a fortnight, so a firmware that assumed anything else would
 //! work on the bench and go silent after a holiday.
 //!
-//! Reads are burst-DMA: the UARTE fills an [`RX_BURST`]-byte buffer over
-//! EasyDMA and wakes the CPU once per buffer, not once per byte. A
-//! byte-at-a-time loop woke the executor hundreds of times a second; the burst
-//! read is the same data for a fraction of the active-CPU time — the
-//! DMA-not-polling lever in `docs/custom_watch/performance_path.md`, which
-//! ports straight to tier-2.
+//! Reads are ring-DMA: the UARTE fills a [`RX_RING_LEN`]-byte ring over
+//! EasyDMA in half-buffer transfers, and `BufferedUarte` **pre-arms the next
+//! transfer and chains it over PPI** (ENDRX -> STARTRX), so the receiver is
+//! never disarmed waiting for a task to run again. A byte-at-a-time loop woke
+//! the executor hundreds of times a second; this is the same data for a
+//! fraction of the active-CPU time — the DMA-not-polling lever in
+//! `docs/custom_watch/performance_path.md`, which ports straight to tier-2.
 //!
-//! **What is still owed here is DMA *depth*, and it is not idle-line
-//! detection.** One [`RX_BURST`] transfer fills in 32 * 10 / 38400 = 8.3 ms, and
-//! once its ENDRX lands the receiver is disarmed until a task runs again. An
-//! NVMC page erase halts the CPU for ~85 ms — a bus stall, so yielding buys
-//! nothing, every other task lives in flash too — which is up to 326 bytes at
-//! this baud. So a checkpoint or a commit costs several buffers' worth of NMEA:
-//! an L4 flash write degrading L1 distance, which the layering contract forbids.
-//! The parser resyncs on the next `$`, so it costs sentences rather than the
-//! run, but it is still the wrong direction of dependency.
-//!
-//! Note what the baud does and does not change here. The receiver emits one
-//! epoch's sentences per second whatever the line rate, so a faster link packs
-//! that burst into a smaller slice of the second: a stall is proportionally
-//! *less* likely to land on live bytes, and loses proportionally *more* when it
-//! does. Expected loss is roughly baud-independent; only the worst case grew.
+//! **The ring's depth is what makes a flash write survivable, and its size is
+//! derived rather than picked.** An NVMC page erase halts the CPU for ~85 ms —
+//! a bus stall, so yielding buys nothing, every other task lives in flash too
+//! (decisions.md § 419). The old single 32-byte transfer filled in 8.3 ms at
+//! this baud and then sat disarmed, losing up to 326 bytes of NMEA per erase
+//! (§ 622): an L4 flash write degrading L1 distance, which the layering
+//! contract forbids. The hardware chain removes the disarm, so what remains is
+//! ring capacity. `BufferedUarte`'s *guaranteed* headroom is `half_len` —
+//! the pre-armed transfer's size, since the in-flight one may be about to end —
+//! so at 38400 (3840 B/s) a 512-byte ring buys 256 B = 66.7 ms and does **not**
+//! cover one erase, while [`RX_RING_LEN`] = 2048 buys 1024 B = 267 ms, three
+//! erases' worth. The 512 figure the earlier notes carried was a 9600 number,
+//! where the same ring covered three (§ 622, § 698).
 //!
 //! `split_with_idle` is **not** the tool for it, even though UARTE1's settings
-//! pipe now uses exactly that (`phone::settings_rx`, decisions.md § 407) and the
-//! claim this comment used to make — that it "can't be Renode-verified" — is
-//! false: the sim's PPI, UARTE and TIMER models all implement the pieces it
-//! needs. It is wrong here because a settings frame is a short burst delimited
-//! by silence while NMEA is continuous, so `read_until_idle` would end a
-//! transfer two byte-times into every inter-sentence gap and leave the receiver
-//! disarmed *more* often, not less. Nor is a bigger single buffer a fix: it
-//! lowers the odds of a stall landing in the disarmed window without bounding
-//! the loss, and costs both latency and a larger cancellation loss in the
-//! sleep-window `select3` below.
+//! pipe uses exactly that (`phone::settings_rx`, decisions.md § 407): a
+//! settings frame is a short burst delimited by silence while NMEA is
+//! continuous, so `read_until_idle` would end a transfer two byte-times into
+//! every inter-sentence gap and leave the receiver disarmed *more* often, not
+//! less. Nor was a bigger single buffer a fix — it lowers the odds of a stall
+//! landing in the disarmed window without bounding the loss.
 //!
-//! The right shape is `BufferedUarte`, whose ENDRX->STARTRX PPI chain keeps the
-//! next transfer armed in *hardware* across a CPU stall. **Size that ring
-//! against 38400, not the 9600 this note was first written for** (§ 622): the
-//! guaranteed headroom is `half_len` bytes, so the 512-byte ring once planned
-//! here buys 256 B = 66.7 ms and no longer covers even one 85 ms erase. A
-//! 2048-byte ring restores the intended margin — `half_len` = 1024 B = 267 ms,
-//! three erases' worth. It is blocked rather than declined: embassy derives that ring's write
-//! position from a TIMER byte-counter which wraps via `SHORTS.COMPARE1_CLEAR`,
-//! and Renode's `NRF52840_Timer` does not model SHORTS at all, so the counter
-//! would climb past `2 * rx_len` and then read as zero — GPS dead about a second
-//! into every sim run, which `ci_smoke.py`'s fix assertions would catch as a CI
-//! failure. Unblocking it means a `sim/` timer model carrying SHORTS, the same
-//! move `NRF52840_RTC_Overflow.cs` and `NRF52840_TWIM.cs` already make for
-//! registers the stock models omit.
-
+//! One thing the ring fixes that the old read could not: cancellation. The
+//! sleep-window `select3` below drops its read future on every wake, and
+//! `UarteRx::read` resolves only when its buffer is full, so a cancelled read
+//! discarded whatever had already landed in it. `BufferedUarteRx::read` has a
+//! single await point — the ring fill — with the copy-out and `consume` after
+//! it, so a future dropped while pending leaves every byte in the ring.
+//!
 use defmt::{debug, info, unwrap, warn};
 use embassy_futures::select::{select3, Either3};
-use embassy_nrf::uarte::{UarteRx, UarteTx};
+use embassy_nrf::buffered_uarte::{BufferedUarteRx, BufferedUarteTx, Error as BufferedError};
 use embassy_sync::watch::DynSender;
 use embassy_time::{Duration, Instant, Timer};
 use ublox_nmea::{ubx, Parser, Sentence};
@@ -120,11 +107,21 @@ use watch_core::record::RecordState;
 
 use crate::state;
 
-/// Burst-read size. Small enough to bound the tail latency (a partly-filled
-/// buffer waits for the next bytes to top it off) while cutting UART wakes ~30x
-/// versus one byte per read. The parser is byte-stateful, so a sentence split
-/// across two reads is fine.
-const RX_BURST: usize = 32;
+/// The DMA ring behind the receiver, sized so its guaranteed `half_len`
+/// headroom (1024 B = 267 ms at 38400) covers the ~85 ms CPU halt an NVMC page
+/// erase costs — see the module header for the derivation. `BufferedUarte`
+/// requires an even length.
+pub const RX_RING_LEN: usize = 2048;
+
+/// Transmit ring. Only ever carries one UBX frame at a time: a 24-byte
+/// `pmreq_backup` or the single wake byte, at most one per fix interval.
+pub const TX_RING_LEN: usize = 32;
+
+/// How much of the ring one `read` copies out. Not a DMA transfer size any
+/// more — the hardware chain owns those — just the staging chunk the parser is
+/// fed in. The parser is byte-stateful, so a sentence split across two reads is
+/// fine.
+const RX_CHUNK: usize = 32;
 
 /// The parse→merge→publish pipeline both loop branches feed: byte assembly +
 /// sentence parsing (`ublox_nmea`), best-effort GSV/GSA side channels, RMC/GGA
@@ -199,12 +196,25 @@ impl Pipeline {
     }
 }
 
+/// Queue a whole frame into the transmit ring. A buffered `write` reports how
+/// many bytes it took rather than writing them all, so a single call would
+/// silently truncate a frame that met a partly-drained ring — the same trap
+/// § 407 named on the read side. It cannot spin: an empty push slice yields
+/// `Pending` rather than `Ok(0)`.
+async fn write_frame(tx: &mut BufferedUarteTx<'static>, frame: &[u8]) -> Result<(), BufferedError> {
+    let mut sent = 0;
+    while sent < frame.len() {
+        sent += tx.write(&frame[sent..]).await?;
+    }
+    Ok(())
+}
+
 /// Wake a sleeping receiver: any RX-line activity does it, and 0xFF is the
 /// documented dummy byte it consumes without parsing. Best-effort — the
 /// PMREQ's bounded duration is the self-wake backstop if this write fails.
-async fn wake_receiver(tx: &mut UarteTx<'static>, why: &str) {
+async fn wake_receiver(tx: &mut BufferedUarteTx<'static>, why: &str) {
     let wake = [ubx::WAKE_BYTE];
-    match tx.write(&wake).await {
+    match write_frame(tx, &wake).await {
         Ok(()) => info!("gps: wake byte sent ({=str})", why),
         Err(e) => warn!(
             "gps: wake byte failed {:?} ({=str}); PMREQ backstop will self-wake the receiver",
@@ -214,7 +224,7 @@ async fn wake_receiver(tx: &mut UarteTx<'static>, why: &str) {
 }
 
 #[embassy_executor::task]
-pub async fn run(mut tx: UarteTx<'static>, mut rx: UarteRx<'static>) {
+pub async fn run(mut tx: BufferedUarteTx<'static>, mut rx: BufferedUarteRx<'static>) {
     let mut pipe = Pipeline {
         parser: Parser::new(),
         acc: FixAccumulator::new(),
@@ -226,7 +236,7 @@ pub async fn run(mut tx: UarteTx<'static>, mut rx: UarteRx<'static>) {
     };
     let mut rec_rx = unwrap!(state::RECORD.receiver());
     let mut mode_rx = unwrap!(state::GNSS_MODE.receiver());
-    let mut buf = [0u8; RX_BURST];
+    let mut buf = [0u8; RX_CHUNK];
     let mut rec_state = RecordState::Idle;
     let mut mode = GnssMode::default();
     // The window a sent PMREQ opened, `None` while the receiver is (believed)
@@ -270,8 +280,8 @@ pub async fn run(mut tx: UarteTx<'static>, mut rx: UarteRx<'static>) {
                     wake_receiver(&mut tx, "window over").await;
                     sleep = None;
                 }
-                Either3::Second(Ok(())) => {
-                    pipe.feed(&buf, min_interval_s(rec_state, mode));
+                Either3::Second(Ok(n)) => {
+                    pipe.feed(&buf[..n], min_interval_s(rec_state, mode));
                 }
                 Either3::Second(Err(e)) => {
                     warn!("gps: uart read error {:?}, backing off", e);
@@ -292,15 +302,15 @@ pub async fn run(mut tx: UarteTx<'static>, mut rx: UarteRx<'static>) {
         }
 
         match rx.read(&mut buf).await {
-            Ok(()) => {
-                let published = pipe.feed(&buf, min_interval_s(rec_state, mode));
+            Ok(n) => {
+                let published = pipe.feed(&buf[..n], min_interval_s(rec_state, mode));
                 let window = published.and_then(|at_s| earned_sleep_window(rec_state, mode, at_s));
                 if let Some(w) = window {
                     // Power the receiver down until the next fix is owed.
                     // Best-effort (L4): a failed send leaves it on — the
                     // status-quo full-rate draw, never a lost fix.
                     let frame = ubx::pmreq_backup(w.duration_ms);
-                    match tx.write(&frame).await {
+                    match write_frame(&mut tx, &frame).await {
                         Ok(()) => {
                             info!(
                                 "gps: receiver to backup until {=u32}s ({=u32} ms backstop)",

@@ -9,23 +9,45 @@
 //! port", not as a list of pin numbers. Breakout wiring below is the
 //! breadboard plan; revisit against the physical build at bench time.
 //!
+//! **TIMER / PPI budget.** The two DMA-assisted UART paths are the only
+//! consumers, and both are claimed here rather than `steal()`n at the call
+//! site: UARTE1's idle-line receiver takes TIMER1 + PPI 0/1 ([`PhonePort`]),
+//! UARTE0's `BufferedUarte` RX ring takes TIMER2 + PPI 2/3 + PPI group 0
+//! ([`GpsPort`]). Everything claimed sits outside the S140 SoftDevice's
+//! reservations — TIMER0, PPI channels 17-31, PPI groups 4-5 — and Embassy's
+//! time driver is on RTC1, so it spends no TIMER. TIMER3/TIMER4, PPI channels
+//! 4-16 and PPI groups 1-3 are still free.
+//!
 //! Reference: <https://infocenter.nordicsemi.com/topic/ug_nrf52840_dk/UG/dk/intro.html>
 
 #![no_std]
 
 use embassy_nrf::gpio::AnyPin;
 use embassy_nrf::peripherals::{
-    NVMC, P0_14, P0_15, P0_16, PPI_CH0, PPI_CH1, PWM0, SAADC, SPI3, TIMER1, TWISPI0, TWISPI1,
-    UARTE0, UARTE1,
+    NVMC, P0_14, P0_15, P0_16, PPI_CH0, PPI_CH1, PPI_CH2, PPI_CH3, PPI_GROUP0, PWM0, SAADC, SPI3,
+    TIMER1, TIMER2, TWISPI0, TWISPI1, UARTE0, UARTE1,
 };
 use embassy_nrf::{Peri, Peripherals};
 
 /// u-blox MAX-M10S breakout on UARTE0. NMEA flows watch<-GPS on `rx`;
-/// `tx` is only used for UBX config commands (none at tier 1).
+/// `tx` carries the UBX-RXM-PMREQ power-down frames + the wake byte.
 pub struct GpsPort {
     pub uarte: Peri<'static, UARTE0>,
     pub rx: Peri<'static, AnyPin>,
     pub tx: Peri<'static, AnyPin>,
+    /// Byte counter for `BufferedUarte`'s RX ring: EVENTS_RXDRDY drives
+    /// TASKS_COUNT over [`Self::ring_ppi`]`.0`, and the driver reads the count
+    /// back to derive the ring's write position. Bounded only by
+    /// `SHORTS.COMPARE1_CLEAR`, which is why the sim needs
+    /// `sim/NRF52840_Timer_Shorts.cs` (decisions.md § 421).
+    pub ring_timer: Peri<'static, TIMER2>,
+    /// The two channels the ring needs: RXDRDY -> TASKS_COUNT, and
+    /// ENDRX -> STARTRX so the next half-transfer is armed in *hardware* and a
+    /// CPU halt (an NVMC page erase, § 419) cannot leave the receiver disarmed.
+    pub ring_ppi: (Peri<'static, PPI_CH2>, Peri<'static, PPI_CH3>),
+    /// The group the ENDRX -> STARTRX channel disables itself through once it
+    /// has fired.
+    pub ring_ppi_group: Peri<'static, PPI_GROUP0>,
 }
 
 /// Sharp Memory LCD breakout on SPIM3 — the dedicated high-speed SPIM
@@ -159,6 +181,9 @@ impl Board {
                 uarte: p.UARTE0,
                 rx: p.P1_01.into(),
                 tx: p.P1_02.into(),
+                ring_timer: p.TIMER2,
+                ring_ppi: (p.PPI_CH2, p.PPI_CH3),
+                ring_ppi_group: p.PPI_GROUP0,
             },
             display: DisplayPort {
                 spim: p.SPI3,
