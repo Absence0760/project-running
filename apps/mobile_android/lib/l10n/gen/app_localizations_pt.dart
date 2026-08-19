@@ -11572,6 +11572,38 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get challengesStandingTitle => 'A tua posição';
+
+  @override
+  String get challengesStandingTitleTeam => 'Posição da tua equipa';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '#$rank de $total';
+  }
+
+  @override
+  String get challengesStandingTiedOne => 'Empatado com mais 1';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return 'Empatado com mais $n';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$gap atrás de $name';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$gap à frente de $name';
+  }
+
+  @override
+  String get challengesStandingLeading => 'Na liderança';
+
+  @override
   String challengesParticipants(int n) {
     return '$n participantes';
   }
@@ -24534,6 +24566,38 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String challengesLeaderboardRank(int rank) {
     return '#$rank';
   }
+
+  @override
+  String get challengesStandingTitle => 'Sua posição';
+
+  @override
+  String get challengesStandingTitleTeam => 'Posição da sua equipe';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '#$rank de $total';
+  }
+
+  @override
+  String get challengesStandingTiedOne => 'Empatado com mais 1';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return 'Empatado com mais $n';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$gap atrás de $name';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$gap à frente de $name';
+  }
+
+  @override
+  String get challengesStandingLeading => 'Na liderança';
 
   @override
   String challengesParticipants(int n) {
