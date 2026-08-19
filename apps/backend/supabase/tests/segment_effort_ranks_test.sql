@@ -164,7 +164,7 @@ select results_eq(
        from segment_effort_ranks('88888888-8888-8888-8888-88888888ce04'::uuid)
        order by rank $$,
   $$ values (1), (4) $$,
-  'slowest effort ranks last (= total efforts on its segment)'
+  'slowest effort ranks last (one per athlete here, so = total efforts)'
 );
 
 -- 5. A run with no efforts returns zero rows, not an error.
