@@ -14,6 +14,7 @@ import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/fitness_hub_screen.dart';
+import '../lib/screens/global_segments_screen.dart';
 import '../lib/screens/gym_screen.dart';
 import '../lib/screens/nutrition_screen.dart';
 import '../lib/screens/plans_screen.dart';
@@ -152,7 +153,7 @@ void main() {
     // Every run-planning surface is a named peer, not a tooltip-only glyph.
     final strip = find.byType(SurfacePeerStrip);
     expect(strip, findsOneWidget);
-    for (final label in ['Runs', 'Routes', 'Plans', 'Races']) {
+    for (final label in ['Runs', 'Routes', 'Segments', 'Plans', 'Races']) {
       expect(find.descendant(of: strip, matching: find.text(label)),
           findsOneWidget);
     }
@@ -180,6 +181,19 @@ void main() {
         of: find.byType(SurfacePeerStrip), matching: find.text('Routes')));
     await tester.pumpAndSettle();
     expect(find.byType(RoutesScreen), findsOneWidget);
+  });
+
+  testWidgets('the Segments peer opens the famous-segment catalogue',
+      (tester) async {
+    await pump(tester, runs: [runRow('r1')]);
+    await tester.tap(find.text('Runs').first);
+    await tester.pumpAndSettle();
+    final peer = find.descendant(
+        of: find.byType(SurfacePeerStrip), matching: find.text('Segments'));
+    await tester.ensureVisible(peer);
+    await tester.tap(peer);
+    await tester.pumpAndSettle();
+    expect(find.byType(GlobalSegmentsScreen), findsOneWidget);
   });
 
   testWidgets('the Plans peer opens the training plan library', (tester) async {

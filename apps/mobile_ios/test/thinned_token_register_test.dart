@@ -50,6 +50,13 @@ const _register = <String, int>{
   // ICON, `onSurfaceVariant@0.7` on the page — 3.861/5.899, clears 3:1. The
   // 48 px empty-state glyph, with its title and body text beside it.
   'lib/screens/people_screen.dart': 1,
+  // The catalogue leaderboard's viewer row — the same `primaryContainer@0.5`
+  // fill as `segments_panel`'s, and the same numbers (1.078/1.013) rather than
+  // a fresh measurement, because `cardTheme.color` IS `surface` in both themes,
+  // so the bare ListView here composites the tint over exactly the colour that
+  // entry's derivation already used. Not the cue: the row carries a `navYou`
+  // label beside the name and the name goes w700.
+  'lib/screens/global_segments_screen.dart': 1,
   // The plan-detail "today" row fill (1.003/1.140). Not the cue: the row's
   // leading slot carries a dot labelled `planDetailToday` and its weekday
   // abbreviation goes w700.

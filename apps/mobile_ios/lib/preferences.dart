@@ -1217,6 +1217,21 @@ String formatPaceForPref(double secPerKm) => secPerKm <= 0
     ? '—'
     : '${UnitFormat.pace(secPerKm, activeDistanceUnit)} ${UnitFormat.paceLabel(activeDistanceUnit)}';
 
+/// A segment effort time as `h:mm:ss` past the hour and `m:ss` below it.
+/// Unit-independent (a clock is a clock in km and mi alike), but it lives beside
+/// the other pref-free formatters because every surface that shows an effort
+/// time also shows a distance from here.
+String formatEffortTime(double seconds) {
+  final total = seconds.round();
+  final h = total ~/ 3600;
+  final m = (total % 3600) ~/ 60;
+  final s = total % 60;
+  if (h > 0) {
+    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+  return '$m:${s.toString().padLeft(2, '0')}';
+}
+
 /// Current user weight-unit pref. Returns kg when no Preferences has
 /// been registered (host-test runner, very early app start). Used by
 /// gym surfaces that don't carry a Preferences dep (the compose sheet,

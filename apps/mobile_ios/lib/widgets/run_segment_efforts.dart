@@ -5,10 +5,13 @@ import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, AppTheme, StatusPill
 
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
+import '../screens/global_segments_screen.dart';
 import '../segments.dart';
 
 /// Per-run segment-effort chips on `run_detail_screen`. Mirrors the
-/// web `RunSegmentEfforts.svelte` component (decisions §37).
+/// web `RunSegmentEfforts.svelte` component (decisions §37), including its
+/// second list: the efforts this run earned on the free-standing famous-segment
+/// catalogue (decisions §233), each row opening that segment's catalogue page.
 class RunSegmentEfforts extends StatefulWidget {
   final ApiClient api;
   final String runId;
@@ -32,6 +35,7 @@ class RunSegmentEfforts extends StatefulWidget {
 class _RunSegmentEffortsState extends State<RunSegmentEfforts> {
   bool _loading = true;
   List<SegmentEffortWithSegment> _efforts = const [];
+  List<GlobalSegmentEffortWithSegment> _globalEfforts = const [];
 
   @override
   void initState() {
@@ -67,6 +71,36 @@ class _RunSegmentEffortsState extends State<RunSegmentEfforts> {
       if (!mounted) return;
       setState(() => _loading = false);
     }
+    await _loadCatalogueEfforts();
+  }
+
+  /// Catalogue efforts are read in their own guarded pass so a failure there
+  /// cannot cost the run its route-segment chips — the catalogue list is the
+  /// additive layer of this panel, not its floor.
+  Future<void> _loadCatalogueEfforts() async {
+    if (widget.api.userId == null) return;
+    try {
+      final globals = await widget.api.fetchGlobalEffortsForRun(widget.runId);
+      if (!mounted) return;
+      setState(() => _globalEfforts = globals);
+    } catch (e) {
+      debugPrint('run_segment_efforts: catalogue efforts unavailable: $e');
+    }
+  }
+
+  void _openCatalogue() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GlobalSegmentsScreen(api: widget.api),
+    ));
+  }
+
+  void _openCatalogueSegment(String segmentId) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GlobalSegmentDetailScreen(
+        api: widget.api,
+        segmentId: segmentId,
+      ),
+    ));
   }
 
   @override
@@ -86,7 +120,7 @@ class _RunSegmentEffortsState extends State<RunSegmentEfforts> {
       );
     }
 
-    if (_efforts.isEmpty) {
+    if (_efforts.isEmpty && _globalEfforts.isEmpty) {
       final hint = widget.routeId == null
           ? l10n.runSegEffortsNoRoute
           : l10n.runSegEffortsEmpty;
@@ -107,6 +141,37 @@ class _RunSegmentEffortsState extends State<RunSegmentEfforts> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final e in _efforts) _EffortRow(entry: e),
+          if (_globalEfforts.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.segmentCatalogueTitle,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _openCatalogue,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text(l10n.segmentCatalogueBrowseAll),
+                  ),
+                ],
+              ),
+            ),
+            for (final e in _globalEfforts)
+              _CatalogueEffortRow(
+                entry: e,
+                onTap: () => _openCatalogueSegment(e.segment.id),
+              ),
+          ],
         ],
       ),
     );
@@ -151,7 +216,7 @@ class _EffortRow extends StatelessWidget {
             _RankPill(rank: entry.rank),
             const SizedBox(width: 12),
             Text(
-              _fmtTime(entry.effort.timeSeconds),
+              formatEffortTime(entry.effort.timeSeconds),
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -178,16 +243,68 @@ class _EffortRow extends StatelessWidget {
     if (m >= 1000) return UnitFormat.distance(m, unit);
     return '${m.round()} m';
   }
+}
 
-  static String _fmtTime(double seconds) {
-    final total = seconds.round();
-    final h = total ~/ 3600;
-    final m = (total % 3600) ~/ 60;
-    final s = total % 60;
-    if (h > 0) {
-      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-    }
-    return '$m:${s.toString().padLeft(2, '0')}';
+/// One catalogue-segment effort. Tappable, unlike the route-segment row above:
+/// a famous segment has a page of its own to open.
+class _CatalogueEffortRow extends StatelessWidget {
+  final GlobalSegmentEffortWithSegment entry;
+  final VoidCallback onTap;
+
+  const _CatalogueEffortRow({required this.entry, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final region = entry.segment.region;
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.segment.name,
+                      style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        formatDistanceForPref(entry.segment.distanceM),
+                        if (region != null && region.trim().isNotEmpty) region,
+                      ].join(' · '),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              _RankPill(rank: entry.rank),
+              const SizedBox(width: 12),
+              Text(
+                formatEffortTime(entry.effort.timeSeconds),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

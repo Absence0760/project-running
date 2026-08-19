@@ -4144,6 +4144,14 @@ class ApiClient {
         .toList();
   }
 
+  /// A catalogue segment's own polyline. Public curated geometry, NOT any
+  /// athlete's GPS track, so it needs no privacy clip on the way to a renderer.
+  /// A malformed waypoint is dropped rather than crashing the whole read.
+  static List<Waypoint> globalSegmentGeometry(GlobalSegmentRow segment) => [
+        for (final w in segment.waypoints)
+          if (w['lat'] is num && w['lng'] is num) _waypointFromJson(w),
+      ];
+
   /// One catalogue segment, or null when it is absent or deactivated.
   Future<GlobalSegmentRow?> fetchGlobalSegment(String id) async {
     final data = await _client
