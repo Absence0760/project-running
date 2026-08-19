@@ -435,11 +435,11 @@ Aligned with the existing product roadmap.
 **Backend:** Supabase only.
 
 **Fixes to apply now:**
-- [ ] Move GPS tracks from JSONB to Storage (`track_url` column)
-- [ ] Add rate limiting to Edge Function endpoints
-- [ ] Validate Strava webhook signatures
-- [ ] Encrypt OAuth tokens with pgcrypto
-- [ ] Create `.env.local` template for backend secrets
+- [x] Move GPS tracks from JSONB to Storage (`track_url` column) — `20260410_001_runs_to_storage.sql`
+- [x] Add rate limiting to Edge Function endpoints — `functions/_shared/rate_limit.ts`
+- [x] Validate Strava webhook callers — `functions/strava-webhook/`. Strava does not sign payloads, so this landed as a constant-time shared-secret check rather than a signature check
+- [x] Encrypt OAuth tokens — `20260603_001_integrations_vault.sql`. Done with Supabase Vault (libsodium, platform-managed key) rather than the pgcrypto this line asked for
+- [x] Create an env template for backend secrets — `apps/backend/.env.example`
 
 **No new services.** Edge Functions handle Strava, parkrun, and token refresh. The 150s timeout is fine because backfills are small (new users only).
 
@@ -459,7 +459,7 @@ Aligned with the existing product roadmap.
 
 **Database:**
 - [x] Add `personal_records` summary table with trigger (`20260508_001`)
-- [x] Create `mv_weekly_mileage` materialized view (`20260407_001`) — pg_cron refresh + read-path wrapper still TODO; revoked from public read in `20260517_001`
+- [x] Create `mv_weekly_mileage` materialized view (`20260407_001`) — refreshed by pg_cron since `20260602_001` (retuned to 15 min in `20260706_001`) and revoked from public read in `20260517_001`. **No read path exists**: nothing in any client or RPC selects from it, so it is pure refresh cost today — wire a `SECURITY DEFINER` wrapper or drop the view
 - [x] Add `jobs` table for Go worker queue (`20260609_001_run_match_pipeline.sql`)
 
 ### Phase 2b — web app
@@ -468,22 +468,22 @@ Aligned with the existing product roadmap.
 
 **Database:**
 - [ ] Ensure materialized views are performant for dashboard queries
-- [ ] Add full-text search index on `routes.name` for route library search
+- [x] Add full-text search index on `routes.name` for route library search — `20270316_001_search_trgm_indexes.sql`
 
 ### Phase 3 — growth and monetisation
 
 **Backend:** Supabase + Go service (premium features added to Go).
 
 **New:**
-- [ ] Add premium endpoints to Go service (training plan, VO2 max, race predictor, recovery)
-- [ ] Gate premium endpoints by `subscription_tier = 'premium'` in Supabase JWT
-- [ ] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles`
+- [x] Add premium endpoints to Go service (training plan, VO2 max, race predictor, recovery) — `internal/premium/`, mounted in `main.go`
+- [x] Gate premium endpoints by subscription tier — `main.go` `premiumBackend.FetchUserSubscriptionTier`. Resolved server-side against `user_profiles` rather than read off the JWT, so a stale token cannot buy access
+- [x] Connect RevenueCat webhook to update `subscription_tier` in `user_profiles` — `functions/revenuecat-webhook/` (HMAC-verified)
 
 **Database:**
-- [ ] Enable PostGIS extension
-- [ ] Add `geom` column to `routes` with spatial index
-- [ ] Add `training_plans` table for generated plans
-- [ ] Add `fitness_snapshots` table for VO2 max history
+- [x] Enable PostGIS extension — `20260415_001_postgis_nearby_routes.sql`
+- [x] Add a geography column to `routes` with a spatial index — `20260415_001_postgis_nearby_routes.sql` shipped it as `start_point geography(Point, 4326)` + `routes_start_point_gist`, not the `geom` name this line proposed
+- [x] Add `training_plans` table — `20260419_001_training_plans.sql` for generated plans
+- [x] Add `fitness_snapshots` table — `20260507_001_fitness_snapshots.sql` for VO2 max history
 
 ```sql
 create table training_plans (
