@@ -50,6 +50,30 @@ void main() {
       }
     });
 
+    test('weekly emits the startsAt week when startsAt carries milliseconds', () {
+      // Mirror of web's `expandInstances — weekly emits the starts_at week when
+      // starts_at carries milliseconds`. The stamp rebuilds the instant from
+      // whole seconds, so a startsAt of ...:18.132Z produced a first candidate
+      // of ...:18.000 that lost `stamped < startsAt` — the series' own first
+      // occurrence vanished from the picker, the listings and every RSVP key.
+      final from = DateTime.utc(2026, 8, 17);
+      final to = DateTime.utc(2026, 8, 30, 23, 59, 59);
+      final withMs = EventRecurrence(
+        startsAt: DateTime.utc(2026, 8, 23, 2, 49, 18, 132),
+        freq: RecurrenceFreq.weekly,
+        timezone: 'UTC',
+      );
+      final withoutMs = EventRecurrence(
+        startsAt: DateTime.utc(2026, 8, 23, 2, 49, 18),
+        freq: RecurrenceFreq.weekly,
+        timezone: 'UTC',
+      );
+
+      final out = expandInstances(withMs, from, to);
+      expect(out.first, DateTime.utc(2026, 8, 23, 2, 49, 18));
+      expect(out, expandInstances(withoutMs, from, to));
+    });
+
     test('biweekly event produces fewer instances than weekly in the same window', () {
       final utcStart = DateTime.utc(2026, 4, 1, 8, 0, 0);
       final weekly = EventRecurrence(

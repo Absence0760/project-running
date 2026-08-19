@@ -41,7 +41,7 @@ void main() {
       );
       // saveRunsBatch's per-row map.
       expect(
-        src.contains('return _runUpsertBody(RunRow('),
+        src.contains('return _runUpsertBody(runRowFromRun('),
         isTrue,
         reason: 'saveRunsBatch must build each row through _runUpsertBody',
       );

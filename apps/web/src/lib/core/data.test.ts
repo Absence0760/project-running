@@ -294,13 +294,25 @@ test('api_client.dart round-trips runs.route_id on read and both write paths', (
 	assert.match(
 		source,
 		/routeId:\s*r\.routeId/,
-		'_runFromRow (read) + saveRunsBatch (write) must set routeId: r.routeId.',
+		'_runFromRow (read) must set routeId: r.routeId.',
 	);
+	// The write half moved: runRowFromRun in core_models is now the only
+	// place a Run becomes a runs row, so the link is carried there and the
+	// writers are checked for delegating to it rather than for the literal.
+	const shaper = read('../../packages/core_models/lib/src/run_row_shape.dart');
 	assert.match(
-		source,
+		shaper,
 		/routeId:\s*run\.routeId/,
-		'saveRun (write) must set routeId: run.routeId — omitting it re-writes route_id = null on upsert.',
+		'runRowFromRun must set routeId: run.routeId — omitting it re-writes route_id = null on upsert.',
 	);
+	for (const writer of ['saveRun', 'saveRunsBatch']) {
+		const start = source.search(new RegExp(`Future<[\\w<>, ]*>\\s+${writer}\\(`));
+		assert.ok(start >= 0, `Could not locate ${writer} in api_client.dart — rename?`);
+		assert.ok(
+			source.slice(start, start + 4000).includes('runRowFromRun('),
+			`${writer} must build its row through runRowFromRun, or route_id stops round-tripping.`,
+		);
+	}
 });
 
 test('fetchRouteById anon/public branch assembles waypoints from the server clip', () => {
@@ -435,23 +447,45 @@ test('enrichClubs reads the trigger-maintained member_count cache, not a per-mem
 	);
 });
 
-test('deleteNotifications batches into one .in() delete, guards empty, surfaces errors', () => {
-	// Reason: bulk-dismissing a collapsed notification group used to await
-	// deleteNotification(id) in a for-loop — one DELETE round-trip per
-	// member, so dismissing a 20-member group fired 20 sequential requests
-	// (issue #350). The batched path must delete all ids in ONE query via
-	// .in('id', ids), short-circuit an empty list (an empty .in() would
-	// match nothing but still round-trips), and throw the supabase error
-	// (supabase-js resolves {error}, never throws — dropping the check
-	// silently swallows a failed bulk-dismiss while the row vanishes).
+test('deleteNotifications is one delete_notifications RPC call, guards empty, surfaces errors', () => {
+	// Reason: bulk-dismissing a collapsed group used to await
+	// deleteNotification(id) in a for-loop — one DELETE per member (issue
+	// #350). Batching it into `.in('id', ids)` fixed the N+1 and inherited a
+	// worse failure: PostgREST serialises an `in` filter into the request
+	// URL, so a large dismiss is at the mercy of the gateway's request-line
+	// budget — a 414 refusal on the local stack past roughly 200 ids, an
+	// empty 200 on the gateway decisions § 653 observed. Chunking to dodge
+	// that bound is not the fix either; it trades the failure for a partial
+	// dismiss, and the undo offer is already spent by the time chunk 3 of 5
+	// fails.
+	//
+	// The array rides the RPC's POST body, which has no such bound, so the
+	// whole dismiss is ONE statement in ONE transaction (migration
+	// 20270529_001). That atomicity is what this file can observe: a single
+	// awaited call with the full id list, never a loop and never a re-chunk.
 	const source = read('src/lib/core/data.ts');
 	const fnMatch = source.match(/export async function deleteNotifications[\s\S]*?\n}/);
 	assert.ok(fnMatch, 'Could not locate deleteNotifications — rename?');
 	const body = fnMatch![0];
 	assert.match(
 		body,
-		/\.in\('id', ids\)/,
-		'deleteNotifications must delete every id in ONE query via .in(\'id\', ids) — a per-id loop is the N+1 issue #350 fixed.',
+		/supabase\.rpc\('delete_notifications', \{ p_ids: ids \}\)/,
+		'deleteNotifications must hand the whole id list to the delete_notifications RPC — that is what makes the dismiss one transaction.',
+	);
+	assert.doesNotMatch(
+		body,
+		/\.in\(/,
+		'deleteNotifications must not go back to an `in` filter — past the gateway request-line budget it fails, and which way it fails is a property of the deployment (decisions § 653).',
+	);
+	assert.doesNotMatch(
+		body,
+		/for \(|\.map\(|while \(|chunk/i,
+		'deleteNotifications must not loop or chunk — either shape can leave the dismiss partial, which is the whole reason the RPC exists.',
+	);
+	assert.equal(
+		(body.match(/await /g) ?? []).length,
+		1,
+		'deleteNotifications must await exactly one call — a second round-trip is a second transaction.',
 	);
 	assert.match(
 		body,
@@ -461,7 +495,7 @@ test('deleteNotifications batches into one .in() delete, guards empty, surfaces 
 	assert.match(
 		body,
 		/if \(error\) throw error;/,
-		'deleteNotifications must throw the supabase error — a swallowed failure leaves the row gone from the UI but present in the DB.',
+		'deleteNotifications must throw the supabase error — a swallowed failure leaves the row gone from the UI but present in the DB. The RPC also RAISES past its 1000-id cap rather than truncating, and that refusal must reach the caller.',
 	);
 });
 
@@ -935,4 +969,81 @@ test('the exercise-calorie surfaces decide day membership by instant, never by s
 			`${name} must not re-introduce the string-compare isToday predicate.`
 		);
 	}
+});
+test('setEventPricing names the one non-partial arbiter and keeps a single branch', () => {
+	// Reason: event_pricing shipped with two PARTIAL unique indexes, and
+	// Postgres only infers a partial index as an ON CONFLICT arbiter when the
+	// statement carries a matching WHERE clause — which PostgREST never emits.
+	// Every call raised 42P10, so no event could ever be priced and the whole
+	// paid-registration rail was unreachable (decisions §580). Migration
+	// 20270518_001 replaced both with one non-partial `nulls not distinct`
+	// index on (event_id, instance_start); the caller must name exactly that
+	// pair. Naming `event_id` alone — the old series branch — is the specific
+	// regression that reintroduces 42P10, because no index is keyed on it.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function setEventPricing');
+	assert.ok(start >= 0, 'Could not locate setEventPricing — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+
+	assert.match(
+		body,
+		/onConflict:\s*'event_id,instance_start'/,
+		'setEventPricing must arbitrate on (event_id, instance_start) — the only unique on the table.'
+	);
+	assert.doesNotMatch(
+		body,
+		/onConflict:\s*'event_id'/,
+		"the 'event_id' branch names no index and raises 42P10 — the arbiter is non-partial, so one branch covers both shapes."
+	);
+	// A NULL instance_start is the series price. Coercing it away (or dropping
+	// the key) would make every series write land as a per-instance override.
+	assert.match(
+		body,
+		/instance_start:\s*input\.instance_start\s*\?\?\s*null/,
+		'setEventPricing must send instance_start (null = the series price), not omit it.'
+	);
+});
+
+test('fetchGymRoutineHistory aggregates on the server, never re-windows gym_workouts', () => {
+	// Reason: the routine-history panel used to read up to 500 gym_workouts
+	// rows carrying `metadata.routine_id` and reduce them client-side just to
+	// show a count. A count is an aggregate — an unbounded PostgREST select
+	// truncates at db.max-rows and still answers 200, so any client window
+	// silently under-reports a lifter who has run one routine for years. The
+	// read must stay on the gym_routine_history RPC; a `.from(gym_workouts)`
+	// select with a `.limit()` here is the regression.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function fetchGymRoutineHistory');
+	assert.ok(start >= 0, 'Could not locate fetchGymRoutineHistory — rename?');
+	const next = source.indexOf('\nexport ', start + 1);
+	const body = source.slice(start, next > start ? next : undefined);
+	assert.match(
+		body,
+		/supabase\.rpc\('gym_routine_history'/,
+		'fetchGymRoutineHistory must read the server-side aggregate RPC.'
+	);
+	assert.doesNotMatch(
+		body,
+		/\.from\(/,
+		'fetchGymRoutineHistory must not fall back to a windowed gym_workouts select.'
+	);
+	assert.match(
+		body,
+		/if \(error\) throw error;/,
+		'a failed read must throw so the panel offers a retry — never an empty history.'
+	);
+	// The panel asks for exactly the rows it lists, and reads the count off the
+	// aggregate rather than off the page it renders.
+	const panel = read('src/lib/components/GymRoutineHistory.svelte');
+	assert.match(
+		panel,
+		/fetchGymRoutineHistory\(routineId, RECENT_LIMIT\)/,
+		'the panel must bound its page explicitly, not take whatever arrives.'
+	);
+	assert.doesNotMatch(
+		panel,
+		/recentSessions\.length/,
+		'the count shown must be the aggregate sessionCount, never the bounded page length.'
+	);
 });

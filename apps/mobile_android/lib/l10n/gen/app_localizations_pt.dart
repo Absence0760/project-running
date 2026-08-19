@@ -306,6 +306,83 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades não foram importadas',
+      one: '1 atividade não foi importada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Volte a executar a importação para tentar novamente — o que já entrou é ignorado, por isso nada é duplicado.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mais $count falhas não foram registadas.',
+      one: 'Mais 1 falha não foi registada.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Ver cada atividade';
+
+  @override
+  String get importFailuresShare => 'Partilhar relatório (CSV)';
+
+  @override
+  String get importFailuresShareFailed =>
+      'Não foi possível partilhar o relatório.';
+
+  @override
+  String get importFailuresDismiss => 'Dispensar';
+
+  @override
+  String get importFailuresNoDate => 'Data desconhecida';
+
+  @override
+  String get importFailuresReasonNetwork => 'Ligação interrompida';
+
+  @override
+  String get importFailuresReasonAuth => 'Sessão terminada';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Limite de pedidos';
+
+  @override
+  String get importFailuresReasonTooLarge => 'Ficheiro demasiado grande';
+
+  @override
+  String get importFailuresReasonUnparseable =>
+      'Não foi possível ler o ficheiro';
+
+  @override
+  String get importFailuresReasonRejected => 'Recusado pelo servidor';
+
+  @override
+  String get importFailuresReasonUnknown => 'Erro desconhecido';
+
+  @override
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count corridas estão guardadas neste dispositivo — o envio para a nuvem não foi concluído. Será tentado novamente na próxima sincronização.',
+      one:
+          '1 corrida está guardada neste dispositivo — o envio para a nuvem não foi concluído. Será tentado novamente na próxima sincronização.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get importHealthSubtitleIos =>
       'Importe treinos gravados no Apple Watch, Nike Run Club, Strava e outros apps que gravam no Apple Saúde';
 
@@ -1632,8 +1709,8 @@ class AppLocalizationsPt extends AppLocalizations {
       'Sem GPS — o rastreamento começará quando a permissão for concedida.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Defina a Localização como \"Permitir o tempo todo\" — as corridas param de gravar quando você troca de app sem permissão em segundo plano.';
+  String get runBackgroundLocationPaused =>
+      'O registo foi pausado enquanto esteve fora — o tempo continuou a contar e nada se perdeu, mas a distância percorrida fora do ecrã não foi contabilizada. Defina a Localização como \"Permitir sempre\" para continuar a registar em segundo plano.';
 
   @override
   String get runGpsSensorFailed =>
@@ -2298,6 +2375,56 @@ class AppLocalizationsPt extends AppLocalizations {
   String runDetailRunTooShortSplit(String unit) {
     return 'Corrida curta demais para um parcial completo de $unit';
   }
+
+  @override
+  String get runDetailPacing => 'Ritmo por metades';
+
+  @override
+  String get runDetailPacingFirstHalf => 'Primeira metade';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Segunda metade';
+
+  @override
+  String get runDetailPacingNegative => 'Split negativo';
+
+  @override
+  String get runDetailPacingEven => 'Ritmo constante';
+
+  @override
+  String get runDetailPacingPositive => 'Split positivo';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta mais rápido na segunda metade';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta mais lento na segunda metade';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Constante nas duas metades';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Ajustado pelo relevo, você acelerou na segunda metade.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Ajustado pelo relevo, seu esforço foi igual nas duas metades.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Ajustado pelo relevo, você desacelerou na segunda metade.';
+
+  @override
+  String get runDetailGapColumn => 'Ajustado';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'O ritmo ajustado é o ritmo no plano que teria custado o mesmo esforço que as subidas que você realmente correu.';
 
   @override
   String get runDetailSectionSegments => 'Segmentos';
@@ -4785,6 +4912,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Sem movimento — $n min no mesmo ponto';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Sem movimento — pelo menos $n min no mesmo ponto';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Corrida concluída';
 
   @override
@@ -5029,6 +5166,24 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String planNewVdot(String value) {
     return 'VDOT de Daniels: $value';
+  }
+
+  @override
+  String get planNewRampLabel => 'O plano em relação ao seu treino recente';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'Este plano chega no máximo a $peak por semana, abaixo dos $recent por semana que você correu em média nas últimas quatro semanas. Uma prova-alvo mais longa ou mais dias de treino aproveitariam melhor essa base.';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return 'A semana 1 pede $opening contra os $recent por semana que você correu em média nas últimas quatro semanas — é um degrau real. Entre com calma ou tire um dia de treino.';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return 'A semana 1 pede $opening, bem acima dos $recent por semana que você correu em média nas últimas quatro semanas. Menos dias de treino, uma prova-alvo mais curta ou algumas semanas de base antes deixariam esse primeiro passo mais seguro.';
   }
 
   @override
@@ -6023,6 +6178,31 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Exportação parcial — $count de $total corridas.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Sua última exportação está parcial: contém $count das $total corridas da sua conta. Nada foi excluído — exporte de novo para tentar outra vez. O arquivo completo da conta lista cada seção incompleta no manifest.json.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'Faltam $missing de $total ficheiros GPS na cópia de segurança.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'A tua última cópia de segurança não conseguiu transferir $missing de $total ficheiros de trajeto GPS. Todas as corridas estão no arquivo; exporta novamente para recuperar os trajetos. O respetivo manifest.json indica complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'Esse arquivo declarou-se incompleto. Foram restauradas $runs corridas e nada foi substituído — restaura a partir de uma cópia completa para preencher as lacunas.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Serviço de backup indisponível.';
 
@@ -6923,6 +7103,34 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gearRotationDone => 'Concluído';
+
+  @override
+  String gearRotationNextUp(String name) {
+    return 'Próximo: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'O menos desgastado deste rodízio.';
+
+  @override
+  String get gearRotationMakeCurrent => 'Definir como atual';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return 'Definir $name como o par atual — as novas corridas serão marcadas automaticamente com ele';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'Já é o par atual.';
+
+  @override
+  String get gearRotationAllWorn =>
+      'Todos os pares aqui atingiram ou ultrapassaram a meta de substituição.';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return 'Não foi possível alterar o par atual: $error';
+  }
 
   @override
   String get privacyZonesSaved => 'Zonas de privacidade salvas.';
@@ -9700,6 +9908,36 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gymRoutinePublishFailed => 'Não foi possível publicar a rotina.';
 
   @override
+  String get gymRoutineHistoryTitle => 'Histórico da rotina';
+
+  @override
+  String get gymRoutineHistoryRecent => 'Sessões recentes';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Feita há $days dias',
+      one: 'Feita ontem',
+      zero: 'Feita hoje',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$completed de $graded concluídas';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => 'Sem avaliação';
+
+  @override
+  String get gymRoutineHistoryLoadError =>
+      'Não foi possível carregar o histórico desta rotina.';
+
+  @override
   String get gymRoutineClubTemplateBadge => 'Modelo do clube';
 
   @override
@@ -9957,6 +10195,43 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nutritionTitle => 'Nutrição';
 
   @override
+  String get nutritionDayNavLabel => 'Dia do diário';
+
+  @override
+  String get nutritionDayPrevious => 'Dia anterior';
+
+  @override
+  String get nutritionDayNext => 'Próximo dia';
+
+  @override
+  String get nutritionDayToday => 'Hoje';
+
+  @override
+  String get nutritionDayYesterday => 'Ontem';
+
+  @override
+  String get nutritionDayBackfillHint =>
+      'Tudo o que você registrar aqui é adicionado a este dia.';
+
+  @override
+  String get nutritionDayEmptyPast => 'Nada registrado neste dia.';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas nesse dia';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '7 dias até $date';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return 'Registrar comida — $date';
+  }
+
+  @override
   String get nutritionLogFood => 'Registrar comida';
 
   @override
@@ -9985,6 +10260,37 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get nutritionCholesterol => 'Colesterol';
+
+  @override
+  String get nutritionNutrients => 'Nutrientes';
+
+  @override
+  String get nutritionNutrientsHint =>
+      'Valores de referência. Cada total conta apenas os alimentos registados que indicam esse nutriente.';
+
+  @override
+  String get nutritionNutrientAtLeast => 'pelo menos';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '$reported de $total alimentos registados indicam $nutrient';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit acima';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return 'Faltam $n $unit';
+  }
+
+  @override
+  String get nutritionNutrientReached => 'Objetivo atingido';
+
+  @override
+  String get nutritionNutrientUntargeted => 'Sem objetivo diário';
 
   @override
   String get nutritionWater => 'Água';
@@ -11086,6 +11392,21 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get roadbookColTarget => 'Meta';
+
+  @override
+  String get roadbookColLegPace => 'Ritmo do troço';
+
+  @override
+  String get roadbookTargetAhead => 'adiantado';
+
+  @override
+  String get roadbookTargetOn => 'no plano';
+
+  @override
+  String get roadbookTargetBehind => 'atrasado';
+
+  @override
   String get checkpointCheckinAction => 'Check-in no ponto de controlo';
 
   @override
@@ -11264,6 +11585,38 @@ class AppLocalizationsPt extends AppLocalizations {
   String challengesLeaderboardRank(int rank) {
     return '#$rank';
   }
+
+  @override
+  String get challengesStandingTitle => 'A tua posição';
+
+  @override
+  String get challengesStandingTitleTeam => 'Posição da tua equipa';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '#$rank de $total';
+  }
+
+  @override
+  String get challengesStandingTiedOne => 'Empatado com mais 1';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return 'Empatado com mais $n';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$gap atrás de $name';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$gap à frente de $name';
+  }
+
+  @override
+  String get challengesStandingLeading => 'Na liderança';
 
   @override
   String challengesParticipants(int n) {
@@ -12969,6 +13322,83 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades não foram importadas',
+      one: '1 atividade não foi importada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Refaça a importação para tentar de novo — o que já entrou é ignorado, então nada é duplicado.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mais $count falhas não foram registradas.',
+      one: 'Mais 1 falha não foi registrada.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Ver cada atividade';
+
+  @override
+  String get importFailuresShare => 'Compartilhar relatório (CSV)';
+
+  @override
+  String get importFailuresShareFailed =>
+      'Não foi possível compartilhar o relatório.';
+
+  @override
+  String get importFailuresDismiss => 'Dispensar';
+
+  @override
+  String get importFailuresNoDate => 'Data desconhecida';
+
+  @override
+  String get importFailuresReasonNetwork => 'Conexão interrompida';
+
+  @override
+  String get importFailuresReasonAuth => 'Sessão encerrada';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Limite de requisições';
+
+  @override
+  String get importFailuresReasonTooLarge => 'Arquivo grande demais';
+
+  @override
+  String get importFailuresReasonUnparseable =>
+      'Não foi possível ler o arquivo';
+
+  @override
+  String get importFailuresReasonRejected => 'Recusado pelo servidor';
+
+  @override
+  String get importFailuresReasonUnknown => 'Erro desconhecido';
+
+  @override
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count corridas estão salvas neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.',
+      one:
+          '1 corrida está salva neste dispositivo — o envio para a nuvem não foi concluído. Vai tentar de novo na próxima sincronização.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get importHealthSubtitleIos =>
       'Importe treinos gravados no Apple Watch, Nike Run Club, Strava e outros apps que gravam no Apple Saúde';
 
@@ -14294,8 +14724,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Sem GPS — o rastreamento começará quando a permissão for concedida.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Defina a Localização como \"Permitir o tempo todo\" — as corridas param de gravar quando você troca de app sem permissão em segundo plano.';
+  String get runBackgroundLocationPaused =>
+      'O rastreamento pausou enquanto você esteve fora — o tempo continuou correndo e nada foi perdido, mas a distância percorrida fora da tela não foi contada. Defina a Localização como \"Permitir o tempo todo\" para continuar rastreando em segundo plano.';
 
   @override
   String get runGpsSensorFailed =>
@@ -14960,6 +15390,56 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String runDetailRunTooShortSplit(String unit) {
     return 'Corrida curta demais para um parcial completo de $unit';
   }
+
+  @override
+  String get runDetailPacing => 'Ritmo por metades';
+
+  @override
+  String get runDetailPacingFirstHalf => 'Primeira metade';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Segunda metade';
+
+  @override
+  String get runDetailPacingNegative => 'Split negativo';
+
+  @override
+  String get runDetailPacingEven => 'Ritmo constante';
+
+  @override
+  String get runDetailPacingPositive => 'Split positivo';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta mais rápido na segunda metade';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta mais lento na segunda metade';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Constante nas duas metades';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Ajustado pelo relevo, você acelerou na segunda metade.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Ajustado pelo relevo, seu esforço foi igual nas duas metades.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Ajustado pelo relevo, você desacelerou na segunda metade.';
+
+  @override
+  String get runDetailGapColumn => 'Ajustado';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'O ritmo ajustado é o ritmo no plano que teria custado o mesmo esforço que as subidas que você realmente correu.';
 
   @override
   String get runDetailSectionSegments => 'Segmentos';
@@ -17447,6 +17927,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Sem movimento — $n min no mesmo ponto';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Sem movimento — pelo menos $n min no mesmo ponto';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Corrida concluída';
 
   @override
@@ -17691,6 +18181,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String planNewVdot(String value) {
     return 'VDOT de Daniels: $value';
+  }
+
+  @override
+  String get planNewRampLabel => 'O plano em relação ao seu treino recente';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'Este plano chega no máximo a $peak por semana, abaixo dos $recent por semana que você correu em média nas últimas quatro semanas. Uma prova-alvo mais longa ou mais dias de treino aproveitariam melhor essa base.';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return 'A semana 1 pede $opening contra os $recent por semana que você correu em média nas últimas quatro semanas — é um degrau real. Entre com calma ou tire um dia de treino.';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return 'A semana 1 pede $opening, bem acima dos $recent por semana que você correu em média nas últimas quatro semanas. Menos dias de treino, uma prova-alvo mais curta ou algumas semanas de base antes deixariam esse primeiro passo mais seguro.';
   }
 
   @override
@@ -18682,6 +19190,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Exportação parcial — $count de $total corridas.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Sua última exportação está parcial: contém $count das $total corridas da sua conta. Nada foi excluído — exporte de novo para tentar outra vez. O arquivo completo da conta lista cada seção incompleta no manifest.json.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'Faltam $missing de $total arquivos GPS no backup.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'Seu último backup não conseguiu baixar $missing de $total arquivos de trajeto GPS. Todas as corridas estão no arquivo; exporte de novo para recuperar os trajetos. O manifest.json dele indica complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'Esse arquivo se declarou incompleto. $runs corridas foram restauradas e nada foi sobrescrito — restaure a partir de um backup completo para preencher as lacunas.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable =>
       'Serviço de backup indisponível.';
 
@@ -19582,6 +20115,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gearRotationDone => 'Concluído';
+
+  @override
+  String gearRotationNextUp(String name) {
+    return 'Próximo: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'O menos desgastado deste rodízio.';
+
+  @override
+  String get gearRotationMakeCurrent => 'Definir como atual';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return 'Definir $name como o par atual — as novas corridas serão marcadas automaticamente com ele';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'Já é o par atual.';
+
+  @override
+  String get gearRotationAllWorn =>
+      'Todos os pares aqui atingiram ou ultrapassaram a meta de substituição.';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return 'Não foi possível alterar o par atual: $error';
+  }
 
   @override
   String get privacyZonesSaved => 'Zonas de privacidade salvas.';
@@ -22359,6 +22920,36 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get gymRoutinePublishFailed => 'Não foi possível publicar a rotina.';
 
   @override
+  String get gymRoutineHistoryTitle => 'Histórico da rotina';
+
+  @override
+  String get gymRoutineHistoryRecent => 'Sessões recentes';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Feita há $days dias',
+      one: 'Feita ontem',
+      zero: 'Feita hoje',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$completed de $graded concluídas';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => 'Sem avaliação';
+
+  @override
+  String get gymRoutineHistoryLoadError =>
+      'Não foi possível carregar o histórico desta rotina.';
+
+  @override
   String get gymRoutineClubTemplateBadge => 'Modelo do clube';
 
   @override
@@ -22616,6 +23207,43 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get nutritionTitle => 'Nutrição';
 
   @override
+  String get nutritionDayNavLabel => 'Dia do diário';
+
+  @override
+  String get nutritionDayPrevious => 'Dia anterior';
+
+  @override
+  String get nutritionDayNext => 'Próximo dia';
+
+  @override
+  String get nutritionDayToday => 'Hoje';
+
+  @override
+  String get nutritionDayYesterday => 'Ontem';
+
+  @override
+  String get nutritionDayBackfillHint =>
+      'Tudo o que você registrar aqui é adicionado a este dia.';
+
+  @override
+  String get nutritionDayEmptyPast => 'Nada registrado neste dia.';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return 'Meta $base + $exercise kcal queimadas nesse dia';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '7 dias até $date';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return 'Registrar comida — $date';
+  }
+
+  @override
   String get nutritionLogFood => 'Registrar comida';
 
   @override
@@ -22644,6 +23272,37 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nutritionCholesterol => 'Colesterol';
+
+  @override
+  String get nutritionNutrients => 'Nutrientes';
+
+  @override
+  String get nutritionNutrientsHint =>
+      'Valores de referência. Cada total conta apenas os alimentos registrados que informam esse nutriente.';
+
+  @override
+  String get nutritionNutrientAtLeast => 'pelo menos';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '$reported de $total alimentos registrados informam $nutrient';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit acima';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return '$n $unit restantes';
+  }
+
+  @override
+  String get nutritionNutrientReached => 'Meta atingida';
+
+  @override
+  String get nutritionNutrientUntargeted => 'Sem meta diária';
 
   @override
   String get nutritionWater => 'Água';
@@ -23744,6 +24403,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get roadbookColTarget => 'Meta';
+
+  @override
+  String get roadbookColLegPace => 'Ritmo do trecho';
+
+  @override
+  String get roadbookTargetAhead => 'adiantado';
+
+  @override
+  String get roadbookTargetOn => 'no plano';
+
+  @override
+  String get roadbookTargetBehind => 'atrasado';
+
+  @override
   String get checkpointCheckinAction => 'Check-in no posto de controle';
 
   @override
@@ -23922,6 +24596,38 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String challengesLeaderboardRank(int rank) {
     return '#$rank';
   }
+
+  @override
+  String get challengesStandingTitle => 'Sua posição';
+
+  @override
+  String get challengesStandingTitleTeam => 'Posição da sua equipe';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '#$rank de $total';
+  }
+
+  @override
+  String get challengesStandingTiedOne => 'Empatado com mais 1';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return 'Empatado com mais $n';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$gap atrás de $name';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$gap à frente de $name';
+  }
+
+  @override
+  String get challengesStandingLeading => 'Na liderança';
 
   @override
   String challengesParticipants(int n) {

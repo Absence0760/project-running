@@ -575,6 +575,102 @@ abstract class AppLocalizations {
   /// **'... and {count} more'**
   String importErrorsMore(Object count);
 
+  /// Heading above the import failure report, counting the activities that did not import
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 activity didn\'t import} other{{count} activities didn\'t import}}'**
+  String importFailuresHeading(int count);
+
+  /// Explains that re-running the import retries the failures without duplicating
+  ///
+  /// In en, this message translates to:
+  /// **'Re-run the import to retry these — anything that already landed is skipped, so nothing is duplicated.'**
+  String get importFailuresIntro;
+
+  /// Shown when the failure log hit its recording cap
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 further failure was not recorded.} other{{count} further failures were not recorded.}}'**
+  String importFailuresTruncated(int count);
+
+  /// Expander label revealing each failed activity
+  ///
+  /// In en, this message translates to:
+  /// **'Show each activity'**
+  String get importFailuresShowDetail;
+
+  /// Button that shares the failure report as a CSV file
+  ///
+  /// In en, this message translates to:
+  /// **'Share report (CSV)'**
+  String get importFailuresShare;
+
+  /// Banner when sharing the failure report CSV failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not share the report.'**
+  String get importFailuresShareFailed;
+
+  /// Button that hides the import failure report
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get importFailuresDismiss;
+
+  /// Placeholder when a failed activity has no known start date
+  ///
+  /// In en, this message translates to:
+  /// **'Date unknown'**
+  String get importFailuresNoDate;
+
+  /// Import failure reason: the connection dropped
+  ///
+  /// In en, this message translates to:
+  /// **'Connection dropped'**
+  String get importFailuresReasonNetwork;
+
+  /// Import failure reason: the session was signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out'**
+  String get importFailuresReasonAuth;
+
+  /// Import failure reason: rate limited
+  ///
+  /// In en, this message translates to:
+  /// **'Rate limited'**
+  String get importFailuresReasonRateLimited;
+
+  /// Import failure reason: the file was too large
+  ///
+  /// In en, this message translates to:
+  /// **'File too large'**
+  String get importFailuresReasonTooLarge;
+
+  /// Import failure reason: the file could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'File could not be read'**
+  String get importFailuresReasonUnparseable;
+
+  /// Import failure reason: the server refused the write
+  ///
+  /// In en, this message translates to:
+  /// **'Rejected by the server'**
+  String get importFailuresReasonRejected;
+
+  /// Import failure reason: unrecognised error
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown error'**
+  String get importFailuresReasonUnknown;
+
+  /// Shown when imported runs saved locally but the upload to the cloud failed for some or all of them
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 run is saved on this device — its upload to the cloud didn\'t go through. It will retry on the next sync.} other{{count} runs are saved on this device — their upload to the cloud didn\'t go through. They will retry on the next sync.}}'**
+  String importStatusCloudPushDeferred(int count);
+
   /// iOS subtitle naming apps that write to Apple Health
   ///
   /// In en, this message translates to:
@@ -2867,11 +2963,11 @@ abstract class AppLocalizations {
   /// **'No GPS — tracking will start when permission is granted.'**
   String get runGpsPermissionPending;
 
-  /// Banner shown when only while-in-use location permission is granted at run start
+  /// Banner shown on returning to a recording run after the app was backgrounded under a foreground-only location grant and no fix arrived while away
   ///
   /// In en, this message translates to:
-  /// **'Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.'**
-  String get runGpsAllowAllTheTime;
+  /// **'Tracking paused while you were away — your run kept timing and nothing was lost, but distance covered off screen wasn’t counted. Set Location to \"Allow all the time\" to track in the background.'**
+  String get runBackgroundLocationPaused;
 
   /// Banner shown when the GPS sensor could not start for an unknown reason
   ///
@@ -3934,6 +4030,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Run too short for a full {unit} split'**
   String runDetailRunTooShortSplit(String unit);
+
+  /// Heading of the first-half vs second-half pacing card on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Pacing'**
+  String get runDetailPacing;
+
+  /// Label for the first half's pace in the pacing card
+  ///
+  /// In en, this message translates to:
+  /// **'First half'**
+  String get runDetailPacingFirstHalf;
+
+  /// Label for the second half's pace in the pacing card
+  ///
+  /// In en, this message translates to:
+  /// **'Second half'**
+  String get runDetailPacingSecondHalf;
+
+  /// Verdict chip when the second half was faster than the first
+  ///
+  /// In en, this message translates to:
+  /// **'Negative split'**
+  String get runDetailPacingNegative;
+
+  /// Verdict chip when both halves were paced the same
+  ///
+  /// In en, this message translates to:
+  /// **'Even split'**
+  String get runDetailPacingEven;
+
+  /// Verdict chip when the second half was slower than the first
+  ///
+  /// In en, this message translates to:
+  /// **'Positive split'**
+  String get runDetailPacingPositive;
+
+  /// Pacing card summary when the second half was faster; delta is a seconds figure such as 14s
+  ///
+  /// In en, this message translates to:
+  /// **'{delta} faster over the second half'**
+  String runDetailPacingFaster(String delta);
+
+  /// Pacing card summary when the second half was slower; delta is a seconds figure such as 14s
+  ///
+  /// In en, this message translates to:
+  /// **'{delta} slower over the second half'**
+  String runDetailPacingSlower(String delta);
+
+  /// Pacing card summary when both halves were paced the same
+  ///
+  /// In en, this message translates to:
+  /// **'Steady across both halves'**
+  String get runDetailPacingHeld;
+
+  /// Pacing card note when grade-adjusted effort rose over the second half
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted for the terrain, you sped up over the second half.'**
+  String get runDetailPacingGapNegative;
+
+  /// Pacing card note when grade-adjusted effort was even across both halves
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted for the terrain, your effort was even across both halves.'**
+  String get runDetailPacingGapEven;
+
+  /// Pacing card note when grade-adjusted effort fell over the second half
+  ///
+  /// In en, this message translates to:
+  /// **'Adjusted for the terrain, you slowed over the second half.'**
+  String get runDetailPacingGapPositive;
+
+  /// Header of the grade-adjusted pace column in the splits list
+  ///
+  /// In en, this message translates to:
+  /// **'Grade-adj.'**
+  String get runDetailGapColumn;
+
+  /// Explanation shown under the splits list when the grade-adjusted column is visible
+  ///
+  /// In en, this message translates to:
+  /// **'Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.'**
+  String get runDetailGapColumnHint;
 
   /// Section header for the segment-efforts panel on run-detail
   ///
@@ -7924,6 +8104,18 @@ abstract class AppLocalizations {
   /// **'{p}% of route'**
   String liveSpectatorCourseProgress(int p);
 
+  /// Spectator chip: the runner is still pinging but has not left this spot for n minutes
+  ///
+  /// In en, this message translates to:
+  /// **'Not moving — {n} min in the same spot'**
+  String liveSpectatorMotionStopped(int n);
+
+  /// Same chip when the stop reaches the start of the observed window, so n is a floor
+  ///
+  /// In en, this message translates to:
+  /// **'Not moving — at least {n} min in the same spot'**
+  String liveSpectatorMotionStoppedAtLeast(int n);
+
   /// Heading of the spectator conclusion card shown when the broadcast has concluded
   ///
   /// In en, this message translates to:
@@ -8313,6 +8505,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Daniels VDOT: {value}'**
   String planNewVdot(String value);
+
+  /// Plan-wizard ramp-note section label
+  ///
+  /// In en, this message translates to:
+  /// **'Plan vs. your recent training'**
+  String get planNewRampLabel;
+
+  /// Ramp note when the plan's peak week sits below the runner's recent weekly average
+  ///
+  /// In en, this message translates to:
+  /// **'This plan peaks at {peak} a week, below the {recent} a week you\'ve averaged over the last four weeks. A longer goal race or more training days would make better use of that base.'**
+  String planNewRampUnder(String peak, String recent);
+
+  /// Ramp note when the plan's opening week is an elevated step above the runner's recent weekly average
+  ///
+  /// In en, this message translates to:
+  /// **'Week 1 asks for {opening} against the {recent} a week you\'ve averaged over the last four weeks — a real step up. Ease into it, or drop a training day.'**
+  String planNewRampElevated(String opening, String recent);
+
+  /// Ramp note when the plan's opening week is far above the runner's recent weekly average
+  ///
+  /// In en, this message translates to:
+  /// **'Week 1 asks for {opening}, well above the {recent} a week you\'ve averaged over the last four weeks. Fewer training days, a shorter goal race, or a few weeks of base building first would make that first step safer.'**
+  String planNewRampHigh(String opening, String recent);
 
   /// Week-outline preview section label
   ///
@@ -9910,6 +10126,36 @@ abstract class AppLocalizations {
   /// **'Backup failed: {error}'**
   String settingsAccountBackupFailed(Object error);
 
+  /// Banner shown after a server-built export that came back short of the account run history
+  ///
+  /// In en, this message translates to:
+  /// **'Export is partial — {count} of {total} runs.'**
+  String settingsAccountBackupPartial(int count, int total);
+
+  /// Persistent notice under the full-backup tile naming how short the last export was
+  ///
+  /// In en, this message translates to:
+  /// **'Your last export is partial: it holds {count} of the {total} runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.'**
+  String settingsAccountBackupPartialNotice(int count, int total);
+
+  /// Banner shown after a locally-built backup whose GPS track downloads came up short
+  ///
+  /// In en, this message translates to:
+  /// **'Backup is missing {missing} of {total} GPS files.'**
+  String settingsAccountBackupTracksPartial(int missing, int total);
+
+  /// Persistent notice under the full-backup tile naming how many GPS track files the last local backup could not download
+  ///
+  /// In en, this message translates to:
+  /// **'Your last backup could not download {missing} of the {total} GPS track files. Every run is in the archive; export again to retry the traces. Its manifest.json says complete: false.'**
+  String settingsAccountBackupTracksPartialNotice(int missing, int total);
+
+  /// Persistent notice under the restore tile shown when the restored archive declared itself incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'That archive said it was incomplete. {runs} runs were restored and nothing was overwritten - restore from a complete backup to fill the gaps.'**
+  String settingsAccountRestoreIncompleteArchive(int runs);
+
   /// Banner shown when restore can't run because the local store is missing
   ///
   /// In en, this message translates to:
@@ -11330,6 +11576,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Done'**
   String get gearRotationDone;
+
+  /// Which pair of a rotation comes out next, on the rotation row
+  ///
+  /// In en, this message translates to:
+  /// **'Next up: {name}'**
+  String gearRotationNextUp(String name);
+
+  /// Why that pair was picked, beside the next-up read-out
+  ///
+  /// In en, this message translates to:
+  /// **'Least worn in this rotation.'**
+  String get gearRotationNextUpWhy;
+
+  /// Button moving the current-pair star onto the next-up pair
+  ///
+  /// In en, this message translates to:
+  /// **'Make current'**
+  String get gearRotationMakeCurrent;
+
+  /// Accessibility label for the make-current button
+  ///
+  /// In en, this message translates to:
+  /// **'Make {name} the current pair — new runs will auto-tag with it'**
+  String gearRotationMakeCurrentLabel(String name);
+
+  /// Shown when the next-up pair already holds the star
+  ///
+  /// In en, this message translates to:
+  /// **'Already the current pair.'**
+  String get gearRotationNextUpIsCurrent;
+
+  /// Warning when every pair in a rotation is at or past its target
+  ///
+  /// In en, this message translates to:
+  /// **'Every pair here is at or past its replacement target.'**
+  String get gearRotationAllWorn;
+
+  /// Banner shown when moving the current-pair star fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change the current pair: {error}'**
+  String gearRotationMakeCurrentFailed(Object error);
 
   /// Banner shown after saving privacy zones
   ///
@@ -16028,6 +16316,42 @@ abstract class AppLocalizations {
   /// **'Couldn\'t publish the routine.'**
   String get gymRoutinePublishFailed;
 
+  /// Routine detail: heading of the past-sessions panel
+  ///
+  /// In en, this message translates to:
+  /// **'Routine history'**
+  String get gymRoutineHistoryTitle;
+
+  /// Routine detail: sub-heading above the recent session list
+  ///
+  /// In en, this message translates to:
+  /// **'Recent sessions'**
+  String get gymRoutineHistoryRecent;
+
+  /// Routine detail: how long ago the routine was last performed
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =0{Done today} =1{Done yesterday} other{Done {days} days ago}}'**
+  String gymRoutineHistoryLastDone(int days);
+
+  /// Routine detail: how many graded sessions of the routine were completed
+  ///
+  /// In en, this message translates to:
+  /// **'{completed} of {graded} completed'**
+  String gymRoutineHistoryCompletedRate(int completed, int graded);
+
+  /// Routine detail: verdict badge for a session saved without an adherence grade
+  ///
+  /// In en, this message translates to:
+  /// **'Not graded'**
+  String get gymRoutineHistoryVerdictUngraded;
+
+  /// Routine detail: the past-sessions panel could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load this routine’s history.'**
+  String get gymRoutineHistoryLoadError;
+
   /// Badge shown on a routine that is already a club-owned template
   ///
   /// In en, this message translates to:
@@ -16496,6 +16820,66 @@ abstract class AppLocalizations {
   /// **'Nutrition'**
   String get nutritionTitle;
 
+  /// No description provided for @nutritionDayNavLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Diary day'**
+  String get nutritionDayNavLabel;
+
+  /// No description provided for @nutritionDayPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous day'**
+  String get nutritionDayPrevious;
+
+  /// No description provided for @nutritionDayNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next day'**
+  String get nutritionDayNext;
+
+  /// No description provided for @nutritionDayToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get nutritionDayToday;
+
+  /// No description provided for @nutritionDayYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get nutritionDayYesterday;
+
+  /// No description provided for @nutritionDayBackfillHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Anything you log here is added to this day.'**
+  String get nutritionDayBackfillHint;
+
+  /// No description provided for @nutritionDayEmptyPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing logged on this day.'**
+  String get nutritionDayEmptyPast;
+
+  /// Calorie goal breakdown on a past diary day: base goal + exercise kcal burned that day
+  ///
+  /// In en, this message translates to:
+  /// **'Goal {base} + {exercise} kcal burned that day'**
+  String nutritionDayGoalBreakdown(int base, int exercise);
+
+  /// Trend-card heading when the diary is showing a past day
+  ///
+  /// In en, this message translates to:
+  /// **'7 days to {date}'**
+  String nutritionDayTrendEnding(String date);
+
+  /// Log-food composer title when the diary is showing a past day
+  ///
+  /// In en, this message translates to:
+  /// **'Log food — {date}'**
+  String nutritionDayLogHeadingFor(String date);
+
   /// No description provided for @nutritionLogFood.
   ///
   /// In en, this message translates to:
@@ -16555,6 +16939,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cholesterol'**
   String get nutritionCholesterol;
+
+  /// Section title for the nutrition day's extended-nutrient roll-up
+  ///
+  /// In en, this message translates to:
+  /// **'Nutrients'**
+  String get nutritionNutrients;
+
+  /// Footnote under the nutrients section explaining partial coverage
+  ///
+  /// In en, this message translates to:
+  /// **'Reference intakes. Each total counts only the logged items that report that nutrient.'**
+  String get nutritionNutrientsHint;
+
+  /// Prefix on a nutrient total that only some logged items reported
+  ///
+  /// In en, this message translates to:
+  /// **'at least'**
+  String get nutritionNutrientAtLeast;
+
+  /// Accessible explanation of a partially-covered nutrient total
+  ///
+  /// In en, this message translates to:
+  /// **'{reported} of {total} logged items report {nutrient}'**
+  String nutritionNutrientPartial(int reported, int total, String nutrient);
+
+  /// Nutrient chip: amount past a ceiling nutrient's daily reference
+  ///
+  /// In en, this message translates to:
+  /// **'{n} {unit} over'**
+  String nutritionNutrientOver(String n, String unit);
+
+  /// Nutrient chip: amount still within a nutrient's daily reference
+  ///
+  /// In en, this message translates to:
+  /// **'{n} {unit} left'**
+  String nutritionNutrientLeft(String n, String unit);
+
+  /// Nutrient chip: a floor nutrient has met its daily reference
+  ///
+  /// In en, this message translates to:
+  /// **'Goal reached'**
+  String get nutritionNutrientReached;
+
+  /// Nutrient chip: this nutrient is reported but deliberately ungraded
+  ///
+  /// In en, this message translates to:
+  /// **'No daily target'**
+  String get nutritionNutrientUntargeted;
 
   /// No description provided for @nutritionWater.
   ///
@@ -18422,6 +18854,36 @@ abstract class AppLocalizations {
   /// **'carry {gels} gels · {fluid} ml'**
   String roadbookCarryHint(String gels, String fluid);
 
+  /// Label on the roadbook target-time verdict chip
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get roadbookColTarget;
+
+  /// Roadbook per-leg pace label - the pace this stretch has to be run at to hold the goal
+  ///
+  /// In en, this message translates to:
+  /// **'Leg pace'**
+  String get roadbookColLegPace;
+
+  /// Roadbook target verdict: the projection is ahead of the planned time
+  ///
+  /// In en, this message translates to:
+  /// **'ahead'**
+  String get roadbookTargetAhead;
+
+  /// Roadbook target verdict: the projection is within the on-schedule band
+  ///
+  /// In en, this message translates to:
+  /// **'on plan'**
+  String get roadbookTargetOn;
+
+  /// Roadbook target verdict: the projection is behind the planned time
+  ///
+  /// In en, this message translates to:
+  /// **'behind'**
+  String get roadbookTargetBehind;
+
   /// Organiser action on event detail opening the aid-station check-in screen
   ///
   /// In en, this message translates to:
@@ -18733,6 +19195,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'#{rank}'**
   String challengesLeaderboardRank(int rank);
+
+  /// Heading of the viewer standing card above the challenge leaderboard
+  ///
+  /// In en, this message translates to:
+  /// **'Your standing'**
+  String get challengesStandingTitle;
+
+  /// Heading of the standing card on a club-vs-club leaderboard
+  ///
+  /// In en, this message translates to:
+  /// **'Your team\'s standing'**
+  String get challengesStandingTitleTeam;
+
+  /// Viewer rank out of the board size
+  ///
+  /// In en, this message translates to:
+  /// **'#{rank} of {total}'**
+  String challengesStandingRank(int rank, int total);
+
+  /// Standing card: exactly one other entrant shares the viewer rank
+  ///
+  /// In en, this message translates to:
+  /// **'Tied with 1 other'**
+  String get challengesStandingTiedOne;
+
+  /// Standing card: several other entrants share the viewer rank
+  ///
+  /// In en, this message translates to:
+  /// **'Tied with {n} others'**
+  String challengesStandingTiedMany(int n);
+
+  /// Standing card: metric gap to the nearest entrant ranked above
+  ///
+  /// In en, this message translates to:
+  /// **'{gap} behind {name}'**
+  String challengesStandingBehind(String gap, String name);
+
+  /// Standing card: metric margin over the nearest entrant ranked below
+  ///
+  /// In en, this message translates to:
+  /// **'{gap} ahead of {name}'**
+  String challengesStandingAhead(String gap, String name);
+
+  /// Standing card: the viewer leads the board outright
+  ///
+  /// In en, this message translates to:
+  /// **'Leading'**
+  String get challengesStandingLeading;
 
   /// Participant count
   ///

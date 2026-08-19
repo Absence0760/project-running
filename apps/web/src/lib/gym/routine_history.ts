@@ -4,9 +4,17 @@
 // it per-routine, so a lifter could not see when they last ran a routine or
 // whether they were finishing it.
 //
+// The tallies arrive already reduced, from the `gym_routine_history` RPC
+// (migration 20270528_001): a count is an aggregate, and a windowed client read
+// cannot serve one honestly — the previous 500-row window silently under-
+// reported a decade of weekly sessions. What stays here is the display shaping
+// the server has no business deciding: which verdict each row of the bounded
+// recent page carries, its order, the floored days-since-last against the
+// READER's clock, and the completed-of-graded ratio.
+//
 // Pure — no Svelte / Supabase dependencies, so it runs under `npx tsx --test`.
-// Web-only: mobile's routine detail screen reads its own LocalRoutineStore and
-// has no consumer for this shaping, so there is deliberately no Dart twin.
+// TS↔Dart parity pair with `apps/mobile_android/lib/routine_history.dart` —
+// keep the algorithm, edge cases, outputs, and test counts in lockstep.
 
 import { hasSessionDraft } from './gym_session_draft';
 import type { RoutineVerdict } from './gym_adherence';
@@ -25,6 +33,17 @@ export interface RoutineSessionRow {
 	metadata?: unknown;
 }
 
+/// One `gym_routine_history` row: complete tallies over every session the
+/// routine has ever been run as, plus the explicitly bounded page of the most
+/// recent ones the panel lists.
+export interface RoutineHistoryAggregate {
+	sessionCount: number;
+	lastPerformedAt: string | null;
+	gradedCount: number;
+	completedCount: number;
+	recentRows: readonly RoutineSessionRow[];
+}
+
 export interface RoutineSession {
 	id: string;
 	startedAt: string;
@@ -34,7 +53,9 @@ export interface RoutineSession {
 }
 
 export interface RoutineHistory {
-	sessions: RoutineSession[];
+	/// Only the page the aggregate carried — never the whole history. Named for
+	/// what it is so no surface can present it as everything.
+	recentSessions: RoutineSession[];
 	sessionCount: number;
 	lastPerformedAt: string | null;
 	daysSinceLast: number | null;
@@ -53,22 +74,23 @@ function verdictOf(metadata: unknown): RoutineSessionVerdict {
 	return typeof v === 'string' && VERDICTS.includes(v) ? (v as RoutineVerdict) : 'ungraded';
 }
 
-/// Reduce the workout rows linked to one routine into its performance history.
+/// Shape one routine's server-side aggregate into what the history panel reads.
 ///
-/// Rows still carrying a `gym_session_draft` snapshot are dropped: an in-flight
-/// session is not a session performed, and counting one would let a page
-/// refresh inflate the routine's usage.
-export function summariseRoutineHistory(
-	rows: readonly RoutineSessionRow[],
+/// Rows still carrying a `gym_session_draft` snapshot are dropped from the
+/// page: an in-flight session is not a session performed. The RPC applies the
+/// same exclusion to the tallies, so filtering here keeps the listed rows from
+/// ever contradicting the count they sit under.
+export function routineHistoryFromAggregate(
+	agg: RoutineHistoryAggregate,
 	nowMs: number,
 ): RoutineHistory {
-	const sessions: RoutineSession[] = [];
-	for (const row of rows) {
+	const recentSessions: RoutineSession[] = [];
+	for (const row of agg.recentRows) {
 		if (!row || typeof row.id !== 'string' || row.id === '') continue;
 		if (hasSessionDraft(row.metadata)) continue;
 		const ms = Date.parse(row.started_at);
 		if (!Number.isFinite(ms)) continue;
-		sessions.push({
+		recentSessions.push({
 			id: row.id,
 			startedAt: row.started_at,
 			startedAtMs: ms,
@@ -76,21 +98,23 @@ export function summariseRoutineHistory(
 			verdict: verdictOf(row.metadata),
 		});
 	}
-	sessions.sort((a, b) => b.startedAtMs - a.startedAtMs);
+	recentSessions.sort((a, b) => b.startedAtMs - a.startedAtMs);
 
-	const graded = sessions.filter((s) => s.verdict !== 'ungraded');
-	const completedCount = sessions.filter((s) => s.verdict === 'completed').length;
-	const last = sessions[0] ?? null;
+	// Taken from the aggregate, not from the page: a bounded page can be empty
+	// while the routine has been run hundreds of times.
+	const lastMs = agg.lastPerformedAt == null ? NaN : Date.parse(agg.lastPerformedAt);
+	const graded = Math.max(0, agg.gradedCount);
+	const completed = Math.max(0, agg.completedCount);
 
 	return {
-		sessions,
-		sessionCount: sessions.length,
-		lastPerformedAt: last?.startedAt ?? null,
+		recentSessions,
+		sessionCount: Math.max(0, agg.sessionCount),
+		lastPerformedAt: agg.lastPerformedAt,
 		// A row stamped ahead of the reader's clock reads as today, never as a
 		// negative "in -2 days".
-		daysSinceLast: last == null ? null : Math.max(0, Math.floor((nowMs - last.startedAtMs) / DAY_MS)),
-		gradedCount: graded.length,
-		completedCount,
-		completedRate: graded.length === 0 ? null : completedCount / graded.length,
+		daysSinceLast: Number.isFinite(lastMs) ? Math.max(0, Math.floor((nowMs - lastMs) / DAY_MS)) : null,
+		gradedCount: graded,
+		completedCount: completed,
+		completedRate: graded === 0 ? null : completed / graded,
 	};
 }

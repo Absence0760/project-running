@@ -1403,6 +1403,8 @@ export const messages = {
 	"settingsAccount.resetLinkSent": "Link de redefinição enviado. Confira seu e-mail para definir uma nova senha.",
 	"settingsAccount.exportFailed": "Falha na exportação: {error}",
 	"settingsAccount.exportReady": "Exportação pronta ({count, plural, one {# corrida} other {# corridas}}). A aba de download fechará assim que o arquivo chegar.",
+	"settingsAccount.exportPartialReady": "Exportação pronta, mas parcial — {count, plural, one {# corrida} other {# corridas}} de {total}.",
+	"settingsAccount.exportPartialNotice": "Sua última exportação está parcial: contém {count} das {total} corridas da sua conta. Nada foi excluído — exporte de novo para tentar outra vez. O arquivo completo da conta lista cada seção incompleta no manifest.json.",
 	"settingsAccount.backupFailed": "Falha no backup: {error}",
 	"settingsAccount.identitiesLoadFailed": "Falha ao carregar os métodos de login: {error}",
 	"settingsAccount.linkFailed": "Não foi possível vincular {provider}: {error}",

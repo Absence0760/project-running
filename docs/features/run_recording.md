@@ -39,6 +39,8 @@ idle ──prepare()──▶ prepared ──begin()──▶ recording ──st
 
 `prepare()` is async (permission check + stream subscription + foreground service startup). `begin()` is synchronous — it just flips bits and starts the 1-second elapsed-time timer. `stop()` closes the stream and returns a `Run`.
 
+`dispose()` is **terminal**, not a return to `idle`: it clears `_prepared` / `_recording` and latches a disposed flag that blocks the GPS retry loop from ever opening a stream again, and `prepare()` on a disposed recorder throws a `StateError`. Without the latch a retry callback parked on its async service/permission precheck when `dispose()` ran would resume afterwards and re-subscribe — a position stream nothing is left to cancel, holding the GPS radio and the foreground service for the life of the process while every fix raised on the closed snapshot sink. Each run builds a fresh `RunRecorder`.
+
 A `start()` convenience method exists that calls `prepare()` then `begin()` in sequence, for callers that don't need the split.
 
 ### Countdown preload
@@ -56,13 +58,14 @@ What runs when (`run_screen.dart`):
 - **Countdown timer ticks t=1, t=2**: UI only; no background work
 - **`_begin` (t=3, countdown ends)**:
   - `await _prepareFuture`, then read `_prepareError` — if prepare failed (location services off, permission denied) `_notifyGpsUnavailable` shows a non-blocking snackbar with a Settings shortcut. The recorder is still `prepared` so the run proceeds as an indoor / time-only session: the stopwatch ticks, distance stays 0, `currentPosition` snapshots are null, and the live map falls back to "Waiting for GPS...". If GPS later becomes available via a restart the run populates normally.
-  - With no prepare error but `_recorder.backgroundLocationLimited` set (Android granted only "While using the app"), `_notifyBackgroundLocationLimited` shows the same style of banner. This is a **disclosure about a recording run, not a failure** — GPS, the map, and distance all work in the foreground; only background delivery is at risk. Refusing that grant outright (May–Aug 2026) meant the default Android runner — the initial dialog cannot grant more than "while in use" — recorded nothing at all: no fixes, a map stuck on "Waiting for GPS", distance frozen at 0, and the run saved as indoor. See `decisions.md § 611`.
+  - `_recorder.backgroundLocationLimited` (Android granted only "While using the app") is **not** disclosed here. Nothing has gone wrong at run start — GPS, the map, and distance all work in the foreground — and a warning at that moment read as "recording is broken" (#784). `_begin` only clears the per-run disclosure state; the telling happens on the real event, below. Refusing that grant outright (May–Aug 2026) meant the default Android runner — the initial dialog cannot grant more than "while in use" — recorded nothing at all: no fixes, a map stuck on "Waiting for GPS", distance frozen at 0, and the run saved as indoor. See `decisions.md § 611`.
   - `_recorder.begin()` — synchronous, flips `_recording = true`, starts elapsed-time timer
   - Generate stable `_runId` (UUID) and `_runStartedAtWall` (wall clock)
   - Reset the pedometer baseline to `_latestPedometerSteps` so any steps taken during the countdown don't count toward the run
   - Start the auto-pause, GPS-lost, incremental-save, and permission watchdog timers
   - Speak the start audio cue
   - Flip state to `_ScreenState.recording`
+- **App backgrounded mid-run under a foreground-only grant**: `didChangeAppLifecycleState` stamps `_leftForegroundAt` when a recording (not manually paused) run leaves the screen, and on `resumed` runs `shouldDiscloseBackgroundLocationLimit`. It requires evidence, never a guess: foreground-only grant, still recording, away for at least `kBackgroundLocationDisclosureMinAway` (15 s — one fix interval plus margin), and **no fix accepted while away** (`_lastSnapshotAt` no newer than the moment of leaving). Only then does `_notifyBackgroundLocationLimited` state what actually happened — the clock kept running, nothing already recorded was lost, the ground covered off screen was not counted — with the Settings shortcut to "Allow all the time". Once per run, and never for a run that has had no fix at all (indoor / treadmill) or one that kept receiving fixes in the background, where the claim would be false (#785). The whole path is L4: its own try/catch, so a disclosure failure cannot touch recording.
 
 ### Why snapshots are emitted during `prepared`
 
@@ -192,6 +195,7 @@ If the local save throws (disk full, isolate crash, plugin failure), `_stop` del
 Immediately after `LocalRunStore.init()` and before `runApp`, the app checks for a leftover `in_progress.json`. `evaluateInProgressPartial` returns one of three outcomes (decisions §230):
 
 - **`resumable`** — the partial has **≥ 3 waypoints and ≥ 50 m** *and* was last saved within the 48 h `kResumableWindow` (`in_progress_saved_at`). Cold start jumps to the run screen and offers **Resume** / **Finish now** / **Discard**. Resume calls `RunRecorder.resumeSession(...)`, which re-hydrates the track, distance, prior elapsed (`_elapsedOffset`), original `startedAt`, and restored laps (`lapsFromCanonicalJson`), then continues appending to the *same* NDJSON file — one continuous run, not a second record. The dead-process gap is deliberately **not** credited to elapsed (monotonic-clock honesty). This is the fix for a multi-day ultra whose process is killed mid-run.
+  The monotonic route floor (`_minMatchedSegmentIdx`, the reason distance-remaining cannot climb back up on a loop or an out-and-back) is **rebuilt** on resume by replaying the seeded track through the same closest-segment search, within a fixed projection budget. `prepare()` resets the floor to 1, so without the rebuild the resumed matcher had no memory of the ground already covered: on a route that doubles back the segment under the runner's feet is the outbound one, distance-remaining roughly doubles, and — the floor being by design never lowered — it never self-corrects.
 - **`recovered`** — the partial clears the size floor but is stale (older than the window, or has no timestamp — the safe default). It's promoted to a completed run (tagged `metadata.recovered_from_crash = true`), saved via `store.save()`, and a first-frame snackbar reads *"Recovered unfinished run — X.XX km, Y min"*. "Finish now" from the resumable prompt takes this same path.
 - **`discarded`** — below the size floor (filters out "tap Start then background" noise).
 
@@ -433,7 +437,7 @@ The app's own `<service>` override for `com.baseflow.geolocator.GeolocatorLocati
 
 Practical requirements on the device:
 
-- Location permission should be granted as **"Allow all the time"**. "While using the app" records normally on screen but can stop feeding fixes once the app is backgrounded, regardless of the foreground service — the app records under it anyway and discloses the limitation (`RunRecorder.backgroundLocationLimited`, `decisions.md § 611`), because it is what Android's first-run dialog grants and refusing it recorded nothing at all.
+- Location permission should be granted as **"Allow all the time"**. "While using the app" records normally on screen but can stop feeding fixes once the app is backgrounded, regardless of the foreground service — the app records under it anyway and discloses the limitation (`RunRecorder.backgroundLocationLimited`, `decisions.md § 611`) — on return from a background stretch that really did miss every fix, not at run start (#784 / #785) — because it is what Android's first-run dialog grants and refusing it recorded nothing at all.
 - Battery optimisation must be **Unrestricted** for the app — aggressive OEM battery managers (Samsung, Xiaomi, Huawei) can kill foreground services otherwise.
 - A persistent notification showing live time / distance / pace (posted by `RunNotificationBridge` on geolocator's foreground-service channel) must be visible in the shade whenever recording is active. If it's absent, the foreground service (`geolocator_android`) did not start.
 

@@ -223,12 +223,29 @@ test('handleOsrmProxy uses the community demo only under allowDemoFallback (dev 
 	assert.ok(upstreamUrl.startsWith(OSRM_DEMO_URL));
 });
 
-test('handleOsrmProxy collapses upstream failures to 502', async () => {
-	const upstream400 = await handleOsrmProxy(AUTH, '/nearest/v1/foot/1,1', {}, CONFIG, {
-		fetcher: async () => new Response('{"code":"InvalidQuery"}', { status: 400 }),
-		authChecker: okAuth,
-	});
-	assert.equal(upstream400.status, 502);
+// An OSRM 4xx is the engine answering "not these coordinates" (NoSegment on a
+// pin outside the loaded extract). The Lambda logs `engine_unreachable` on
+// every 502, and that line drives a page-the-on-call alarm, so collapsing a
+// user's geography into 502 made one misplaced pin read as a total outage.
+test('an OSRM 4xx is a caller-actionable 422, not an engine outage', async () => {
+	for (const status of [400, 404, 429]) {
+		const res = await handleOsrmProxy(AUTH, '/nearest/v1/foot/1,1', {}, CONFIG, {
+			fetcher: async () => new Response('{"code":"NoSegment"}', { status }),
+			authChecker: okAuth,
+		});
+		assert.equal(res.status, 422, `upstream ${status} should not read as an outage`);
+		assert.deepEqual(res.body, { error: 'no_route_for_coordinates' });
+	}
+});
+
+test('handleOsrmProxy collapses real engine failures to 502', async () => {
+	for (const status of [500, 502, 503]) {
+		const res = await handleOsrmProxy(AUTH, '/nearest/v1/foot/1,1', {}, CONFIG, {
+			fetcher: async () => new Response('upstream down', { status }),
+			authChecker: okAuth,
+		});
+		assert.equal(res.status, 502);
+	}
 
 	const upstreamThrow = await handleOsrmProxy(AUTH, '/nearest/v1/foot/1,1', {}, CONFIG, {
 		fetcher: async () => {

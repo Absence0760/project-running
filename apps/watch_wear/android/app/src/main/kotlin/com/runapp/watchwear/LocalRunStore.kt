@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.runapp.watchwear.recording.migrateQueuedTracks
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -47,30 +48,65 @@ data class QueuedRun(
 private val Context.dataStore by preferencesDataStore(name = "watch_wear")
 private val KEY_QUEUE: Preferences.Key<String> = stringPreferencesKey("queued_runs_v2")
 
+private val queueJson = Json { ignoreUnknownKeys = true }
+private val queueSerializer = ListSerializer(QueuedRun.serializer())
+
+internal fun decodeQueue(raw: String?): List<QueuedRun> = runCatching {
+    queueJson.decodeFromString(queueSerializer, raw ?: "[]")
+}.getOrDefault(emptyList())
+
+internal fun encodeQueue(runs: List<QueuedRun>): String =
+    queueJson.encodeToString(queueSerializer, runs)
+
+/// The three queue mutations, as pure `raw JSON -> raw JSON` reductions.
+///
+/// They exist so the read half of each read-modify-write can happen against
+/// the `Preferences` snapshot **inside** DataStore's `edit` transaction. The
+/// previous shape read through `queue.first()` outside it, so a drain that
+/// removed an uploaded run and a concurrent `save` could each write a whole
+/// list built from a stale snapshot: the removed run reappeared after its
+/// track file had already been deleted, and every later drain then failed on
+/// the missing payload with the entry stuck in the queue forever.
+internal fun queueAfterSave(raw: String?, run: QueuedRun): String =
+    encodeQueue(decodeQueue(raw).filter { it.id != run.id } + run)
+
+internal fun queueAfterRemove(raw: String?, id: String): String =
+    encodeQueue(decodeQueue(raw).filter { it.id != id })
+
 /// DataStore-backed queue of finished runs awaiting upload.
 class LocalRunStore(private val context: Context) {
-    private val json = Json { ignoreUnknownKeys = true }
-    private val listSerializer = ListSerializer(QueuedRun.serializer())
 
     val queue: Flow<List<QueuedRun>> = context.dataStore.data.map { prefs ->
-        val raw = prefs[KEY_QUEUE] ?: "[]"
-        runCatching {
-            json.decodeFromString(listSerializer, raw)
-        }.getOrDefault(emptyList())
+        decodeQueue(prefs[KEY_QUEUE])
     }
 
     suspend fun save(run: QueuedRun) {
-        val current = queue.first().filter { it.id != run.id } + run
-        write(current)
+        context.dataStore.edit { prefs ->
+            prefs[KEY_QUEUE] = queueAfterSave(prefs[KEY_QUEUE], run)
+        }
     }
 
     suspend fun remove(id: String) {
-        val current = queue.first().filter { it.id != id }
-        write(current)
+        context.dataStore.edit { prefs ->
+            prefs[KEY_QUEUE] = queueAfterRemove(prefs[KEY_QUEUE], id)
+        }
     }
 
     suspend fun contains(id: String): Boolean =
         queue.first().any { it.id == id }
+
+    /// Move any queued run whose track still sits in the pre-migration cache
+    /// directory into [durableDir], rewriting the queue entry in the same
+    /// transaction so the pair can never disagree about where the payload is.
+    /// Returns the queue as it stands afterwards.
+    suspend fun migrateTrackFiles(legacyDir: File, durableDir: File): List<QueuedRun> {
+        var migrated: List<QueuedRun> = emptyList()
+        context.dataStore.edit { prefs ->
+            migrated = migrateQueuedTracks(decodeQueue(prefs[KEY_QUEUE]), legacyDir, durableDir)
+            prefs[KEY_QUEUE] = encodeQueue(migrated)
+        }
+        return migrated
+    }
 
     /// Wipe the entire upload queue, including the on-disk track files
     /// the queued runs reference.
@@ -85,18 +121,15 @@ class LocalRunStore(private val context: Context) {
     /// practice the queue is drained on every run-stop and every
     /// offline→online edge, so it's normally empty before a deliberate
     /// sign-out. Deleting the track files too keeps the previous user's
-    /// traces from lingering recoverably in the cache dir.
+    /// traces from lingering recoverably on disk.
     suspend fun clear() {
-        val current = queue.first()
-        for (run in current) {
-            runCatching { File(run.trackFilePath).delete() }
-        }
-        context.dataStore.edit { prefs -> prefs.remove(KEY_QUEUE) }
-    }
-
-    private suspend fun write(runs: List<QueuedRun>) {
+        var dropped: List<QueuedRun> = emptyList()
         context.dataStore.edit { prefs ->
-            prefs[KEY_QUEUE] = json.encodeToString(listSerializer, runs)
+            dropped = decodeQueue(prefs[KEY_QUEUE])
+            prefs.remove(KEY_QUEUE)
+        }
+        for (run in dropped) {
+            runCatching { File(run.trackFilePath).delete() }
         }
     }
 }

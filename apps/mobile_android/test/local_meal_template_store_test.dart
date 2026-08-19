@@ -139,4 +139,58 @@ void main() {
       f.dir.deleteSync(recursive: true);
     }
   });
+
+  test('a write before init() refuses loudly and leaves no in-memory row',
+      () async {
+    final store = LocalMealTemplateStore();
+    await expectLater(
+      store.createLocal(name: 'Never saved', items: [_item('Oats')]),
+      throwsA(isA<StateError>().having((e) => e.message, 'message',
+          allOf(contains('local_meal_template_store'), contains('init()')))),
+    );
+    expect(store.templates, isEmpty,
+        reason: 'a row that could never reach disk must not appear saved');
+  });
+
+  test('rewriteAll before init() refuses instead of returning silently',
+      () async {
+    final store = LocalMealTemplateStore();
+    await expectLater(
+      store.rewriteAll(),
+      throwsA(isA<StateError>().having((e) => e.message, 'message',
+          allOf(contains('local_meal_template_store'), contains('init()')))),
+    );
+    expect(store.rowsById, isEmpty);
+  });
+
+  test('replaceFromServer before init() leaves the resident rows alone',
+      () async {
+    final f = await _store('replace_gate');
+    try {
+      final local =
+          await f.store.createLocal(name: 'Local', items: [_item('Toast')]);
+      f.store.dir = null;
+      await expectLater(
+        f.store.replaceFromServer([
+          (
+            template: <String, dynamic>{
+              'id': 't-server',
+              'name': 'Server',
+              'item_count': 1,
+              'last_modified_at': DateTime.utc(2026, 4, 1).toIso8601String(),
+              'created_at': DateTime.utc(2026, 4, 1).toIso8601String(),
+            },
+            items: [_item('Apple')],
+          ),
+        ]),
+        throwsA(isA<StateError>().having((e) => e.message, 'message',
+            contains('replaceFromServer'))),
+      );
+      expect(f.store.rowsById.keys, [local.id],
+          reason: 'a cache fill that cannot reach disk must not half-replace '
+              'the resident rows');
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
 }

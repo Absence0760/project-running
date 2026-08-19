@@ -41,14 +41,17 @@ test.describe('/challenges — My-challenges load failure', () => {
 	});
 
 	test('Retry re-fetches and clears the error on a healthy response', async ({ page }) => {
-		let failNext = true;
+		// Fail every GET until the retry is armed, rather than arming a
+		// one-shot `failNext`: /challenges' loadMine runs inside an $effect
+		// that reads `auth.user`, so it re-runs when auth hydrates and a
+		// one-shot flag was consumed by whichever load won the race.
+		let healthy = false;
 		await page.route('**/rest/v1/challenges?*', async (route) => {
 			if (route.request().method() !== 'GET') {
 				await route.continue();
 				return;
 			}
-			if (failNext) {
-				failNext = false;
+			if (!healthy) {
 				await route.fulfill({
 					status: 500,
 					contentType: 'application/json',
@@ -67,6 +70,7 @@ test.describe('/challenges — My-challenges load failure', () => {
 		const banner = page.getByRole('alert').filter({ hasText: "Couldn't load challenges." });
 		await expect(banner).toBeVisible({ timeout: 10_000 });
 
+		healthy = true;
 		await banner.getByRole('button', { name: 'Retry' }).click();
 
 		// The retry succeeds (empty result): the error clears and the friendly

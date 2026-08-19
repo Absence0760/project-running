@@ -15,6 +15,7 @@ import {
 	buildBackupManifest,
 	buildBackupSpecs,
 	isSafeStoragePath,
+	orderForTable,
 	orphanStorageEntries,
 	PROFILE_SELECT,
 	shapeExportRoute,
@@ -592,9 +593,38 @@ Deno.test('buildBackupManifest matches the run-app-backup v1 shape', () => {
 		exported_by_user_id: TEST_UID,
 		exported_from: 'edge-function',
 		counts: { runs: 2, routes: 1, tracks: 2, hr_series: 0, photos: 1 },
+		complete: true,
+		incomplete: [],
 	});
 	assertEquals(BACKUP_FORMAT, 'run-app-backup');
 	assertEquals(BACKUP_VERSION, 1);
+});
+
+Deno.test('buildBackupManifest refuses to claim completeness for a short section', () => {
+	const manifest = buildBackupManifest({
+		userId: TEST_UID,
+		counts: { runs: 12000, food_log: 4000 },
+		incomplete: ['food_log', 'runs'],
+		exportedAt: '2026-08-18T00:00:00.000Z',
+	});
+	assertEquals(manifest.complete, false);
+	assertEquals(manifest.incomplete, ['food_log', 'runs']);
+	// The count is the database's total, so a consumer counting the rows
+	// in runs.json sees the shortfall instead of a matching lie.
+	assertEquals((manifest.counts as Record<string, number>).runs, 12000);
+});
+
+Deno.test('every spec is read under a total order so offset paging cannot skip a row', () => {
+	for (const spec of buildBackupSpecs(TEST_UID)) {
+		assertMatch(orderForTable(spec.table), /^[a-z_]+(,[a-z_]+)*$/);
+	}
+	// The tables whose primary key is not a bare `id`.
+	assertEquals(orderForTable('user_follows'), 'follower_id,followee_id');
+	assertEquals(orderForTable('run_kudos'), 'user_id,run_id');
+	assertEquals(orderForTable('run_gear'), 'run_id,gear_id');
+	assertEquals(orderForTable('personal_records'), 'user_id,distance');
+	assertEquals(orderForTable('event_attendees'), 'event_id,user_id,instance_start');
+	assertEquals(orderForTable('food_log'), 'id');
 });
 
 Deno.test('avatarCandidatePaths enumerates the stable per-extension avatar set', () => {

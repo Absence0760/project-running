@@ -6,10 +6,19 @@
 //! announces *geometric* bends ("turn left"), not road-name-aware instructions.
 //! That is the deliberate trade for an always-works offline cue list.
 //!
+//! A turn is the NET direction change accumulated within `merge_within_m`
+//! metres of where the turning starts, reported at the vertex where that
+//! turning passes its halfway point. The two knobs then read as one sentence:
+//! at least `min_turn_angle_deg` of direction change within `merge_within_m`
+//! metres is a turn; anything slacker is a curve and is not announced. Every
+//! bearing is measured on a segment that TOUCHES the vertex it is measured at,
+//! never one that spans it: a segment drawn across a corner carries half that
+//! corner's angle and none of its position.
+//!
 //! Parity port of web `routes/turn_cues.ts` `generateTurnCues` (twin of
 //! `apps/mobile_android/lib/turn_cues.dart`) — keep the algorithm, edge cases,
-//! and the ten twin tests in lockstep. The turn direction is carried as the
-//! [`TurnDirection`] enum, not an English display string.
+//! and the fourteen twin tests in lockstep. The turn direction is carried as
+//! the [`TurnDirection`] enum, not an English display string.
 //!
 //! Pure logic, no peripherals, no allocator — like the rest of `core`.
 
@@ -21,9 +30,17 @@ const DEFAULT_MIN_TURN_ANGLE_DEG: f64 = 30.0;
 const DEFAULT_MERGE_WITHIN_M: f64 = 15.0;
 const SLIGHT_MAX_DEG: f64 = 45.0;
 const UTURN_MIN_DEG: f64 = 150.0;
+/// A leg shorter than this carries no usable bearing, so its far vertex is
+/// dropped. Far below any route's vertex resolution, so dropping it cannot move
+/// a corner.
+const MIN_LEG_M: f64 = 0.05;
+/// A vertex bending less than this does not open a turn window. A corner built
+/// from bends this small would need more vertices inside one window than any
+/// drawn or imported route carries.
+const TURN_EPSILON_DEG: f64 = 0.5;
 
-/// Interior-vertex bound for the collapse pass; a route with more waypoints is
-/// truncated at this many surviving vertices.
+/// Interior-vertex bound; a route with more waypoints is truncated at this many
+/// surviving vertices.
 pub const MAX_TURN_CUE_WAYPOINTS: usize = 256;
 /// Emitted-cue bound (at most `waypoints - 2` interior vertices fire).
 pub const MAX_TURN_CUES: usize = 256;
@@ -62,26 +79,33 @@ pub struct TurnCue {
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct TurnCueOptions {
-    /// Suppress vertices whose absolute bearing change is below this — GPS /
+    /// Suppress turns whose accumulated direction change is below this — GPS /
     /// drawing noise on a roughly-straight line. `None` = default 30°.
     pub min_turn_angle_deg: Option<f64>,
-    /// Merge a vertex into the previous cue when it falls within this many
-    /// metres of it (coincident / densely-sampled vertices). `None` = 15 m.
+    /// The window one turn is accumulated over: vertices within this many
+    /// metres of where the turning starts belong to the same turn, so a
+    /// densely-sampled or rounded corner fires once at its full angle.
+    /// `None` = 15 m.
     pub merge_within_m: Option<f64>,
 }
 
 #[derive(Clone, Copy)]
-struct Collapsed {
+struct Vertex {
     wp: TurnCueWaypoint,
     cum_m: f64,
 }
 
-/// Generate an ordered list of turn cues from `waypoints`. A cue is emitted at
-/// each interior vertex whose bearing change exceeds `min_turn_angle_deg`,
-/// classified by signed turn angle into left/right/slight/uturn. Coincident
-/// vertices and vertices within `merge_within_m` of the previous cue are merged
-/// so a densely-sampled corner produces one cue, not a burst. Returns an empty
-/// list for a straight line or fewer than 3 waypoints.
+#[derive(Clone, Copy)]
+struct Bend {
+    position_m: f64,
+    bearing_in_deg: f64,
+    bearing_out_deg: f64,
+    delta_deg: f64,
+}
+
+/// Generate an ordered list of turn cues from `waypoints`. Returns an empty
+/// list for a straight line or fewer than 3 waypoints (no interior vertex to
+/// turn at).
 pub fn generate_turn_cues(
     waypoints: &[TurnCueWaypoint],
     options: TurnCueOptions,
@@ -95,16 +119,12 @@ pub fn generate_turn_cues(
         return cues;
     }
 
-    // Collapse coincident / sub-merge-distance vertices first, carrying the
-    // cumulative distance of each surviving vertex along the ORIGINAL line, so a
-    // densely-sampled corner fires one cue instead of a burst of zero-length-leg
-    // skips.
-    let mut collapsed: Vec<Collapsed, MAX_TURN_CUE_WAYPOINTS> = Vec::new();
-    let mut cum = 0.0_f64;
-    let _ = collapsed.push(Collapsed {
+    let mut pts: Vec<Vertex, MAX_TURN_CUE_WAYPOINTS> = Vec::new();
+    let _ = pts.push(Vertex {
         wp: waypoints[0],
         cum_m: 0.0,
     });
+    let mut cum = 0.0_f64;
     for i in 1..waypoints.len() {
         cum += haversine_metres(
             waypoints[i - 1].lat,
@@ -112,14 +132,13 @@ pub fn generate_turn_cues(
             waypoints[i].lat,
             waypoints[i].lng,
         );
-        if let Some(prev) = collapsed.last_mut() {
-            if cum - prev.cum_m <= merge_within {
-                prev.wp = waypoints[i];
+        if let Some(prev) = pts.last() {
+            if cum - prev.cum_m < MIN_LEG_M {
                 continue;
             }
         }
-        if collapsed
-            .push(Collapsed {
+        if pts
+            .push(Vertex {
                 wp: waypoints[i],
                 cum_m: cum,
             })
@@ -128,30 +147,70 @@ pub fn generate_turn_cues(
             break;
         }
     }
-    if collapsed.len() < 3 {
+    if pts.len() < 3 {
         return cues;
     }
 
-    for i in 1..collapsed.len() - 1 {
-        let bearing_in = bearing_deg(&collapsed[i - 1].wp, &collapsed[i].wp);
-        let bearing_out = bearing_deg(&collapsed[i].wp, &collapsed[i + 1].wp);
-        let delta = signed_turn(bearing_in, bearing_out);
-        if delta.abs() < min_angle {
+    let mut bends: Vec<Bend, MAX_TURN_CUE_WAYPOINTS> = Vec::new();
+    for i in 1..pts.len() - 1 {
+        let bearing_in_deg = bearing_deg(&pts[i - 1].wp, &pts[i].wp);
+        let bearing_out_deg = bearing_deg(&pts[i].wp, &pts[i + 1].wp);
+        if bends
+            .push(Bend {
+                position_m: pts[i].cum_m,
+                bearing_in_deg,
+                bearing_out_deg,
+                delta_deg: signed_turn(bearing_in_deg, bearing_out_deg),
+            })
+            .is_err()
+        {
+            break;
+        }
+    }
+
+    let mut i = 0;
+    while i < bends.len() {
+        if libm::fabs(bends[i].delta_deg) < TURN_EPSILON_DEG {
+            i += 1;
             continue;
         }
-        let position_m = collapsed[i].cum_m;
+        let mut net = 0.0_f64;
+        let mut swept = 0.0_f64;
+        let mut end = i;
+        while end < bends.len() && bends[end].position_m - bends[i].position_m <= merge_within {
+            net += bends[end].delta_deg;
+            swept += libm::fabs(bends[end].delta_deg);
+            end += 1;
+        }
+        if libm::fabs(net) < min_angle {
+            // Not a turn over this window. Slide by one rather than consuming
+            // the window, so a corner that starts just inside it still opens
+            // its own.
+            i += 1;
+            continue;
+        }
+        let mut run = 0.0_f64;
+        let mut position_m = bends[i].position_m;
+        for k in i..end {
+            run += libm::fabs(bends[k].delta_deg);
+            if run * 2.0 >= swept {
+                position_m = bends[k].position_m;
+                break;
+            }
+        }
         if cues
             .push(TurnCue {
                 position_m,
-                bearing_in_deg: bearing_in,
-                bearing_out_deg: bearing_out,
-                direction: classify(delta),
+                bearing_in_deg: bends[i].bearing_in_deg,
+                bearing_out_deg: bends[end - 1].bearing_out_deg,
+                direction: classify(net),
                 distance_from_start_m: position_m,
             })
             .is_err()
         {
             break;
         }
+        i = end;
     }
     cues
 }
@@ -226,8 +285,8 @@ pub fn direction_code(d: TurnDirection) -> u8 {
 mod tests {
     use super::*;
 
-    /// Mirror of `apps/web/src/lib/routes/turn_cues.test.ts` — same ten inputs,
-    /// same expected directions, so the ports can't drift. Coordinates are built
+    /// Mirror of `apps/web/src/lib/routes/turn_cues.test.ts` — same fourteen
+    /// inputs, same expected directions, so the ports can't drift. Coordinates are built
     /// at a low latitude (~0) where 0.01° lng ≈ 0.01° lat in metres, so an
     /// axis-aligned right-angle reads as a clean 90° turn.
     fn wp(lat: f64, lng: f64) -> TurnCueWaypoint {
@@ -317,6 +376,112 @@ mod tests {
         let cues = gen(&w);
         assert_eq!(cues.len(), 1);
         assert_eq!(cues[0].direction, TurnDirection::Left);
+    }
+
+    const M_PER_DEG: f64 = 111_320.0;
+
+    /// A course that runs `corner_at_m` metres due north, turns `turn_deg` to
+    /// the left over `corner_length_m` metres, then runs `tail_m` metres on the
+    /// new heading — every leg sampled at `spacing_m`. The densely-sampled
+    /// corner is what a pushed course actually looks like.
+    fn cornering_course(
+        spacing_m: f64,
+        corner_at_m: f64,
+        tail_m: f64,
+        turn_deg: f64,
+        corner_length_m: f64,
+    ) -> Vec<TurnCueWaypoint, MAX_TURN_CUE_WAYPOINTS> {
+        let mut pts: Vec<TurnCueWaypoint, MAX_TURN_CUE_WAYPOINTS> = Vec::new();
+        let mut north = -corner_at_m;
+        let mut east = 0.0_f64;
+        let mut heading_deg = 0.0_f64;
+        let _ = pts.push(wp(north / M_PER_DEG, east / M_PER_DEG));
+        let steps = libm::round(corner_length_m / spacing_m) as usize;
+        let mut legs: Vec<f64, MAX_TURN_CUE_WAYPOINTS> = Vec::new();
+        let mut d = spacing_m;
+        while d <= corner_at_m {
+            let _ = legs.push(0.0);
+            d += spacing_m;
+        }
+        for _ in 0..steps {
+            let _ = legs.push(turn_deg / steps as f64);
+        }
+        if steps == 0 {
+            let _ = legs.push(turn_deg);
+        }
+        d = spacing_m;
+        while d <= tail_m {
+            let _ = legs.push(0.0);
+            d += spacing_m;
+        }
+        for bend in legs.iter() {
+            heading_deg -= bend;
+            let rad = heading_deg * core::f64::consts::PI / 180.0;
+            north += spacing_m * libm::cos(rad);
+            east += spacing_m * libm::sin(rad);
+            let _ = pts.push(wp(north / M_PER_DEG, east / M_PER_DEG));
+        }
+        pts
+    }
+
+    /// The round-1/round-2 bug: a single 90° corner at 100 m sampled every 10 m
+    /// used to collapse onto a segment drawn ACROSS the corner, so the one turn
+    /// was announced twice (SlightLeft at 80 m AND SlightLeft at 100 m) — both
+    /// under-classified, the first 20 m early, and "turns remaining" reading 2.
+    #[test]
+    fn a_densely_sampled_90_degree_corner_fires_exactly_one_left_cue_at_the_corner() {
+        let cues = gen(&cornering_course(10.0, 100.0, 100.0, 90.0, 0.0));
+        assert_eq!(cues.len(), 1);
+        assert_eq!(cues[0].direction, TurnDirection::Left);
+        assert!(libm::fabs(cues[0].position_m - 100.0) < 1.0);
+        assert_eq!(cues[0].position_m, cues[0].distance_from_start_m);
+        // "Turns remaining" on a one-corner course is 1, not 2.
+        let (turn, remaining) = next_turn_ahead(&cues, 0.0).unwrap();
+        assert_eq!(turn.direction, TurnDirection::Left);
+        assert_eq!(remaining, 1);
+    }
+
+    #[test]
+    fn a_densely_sampled_40_degree_bend_still_fires_its_slight_cue() {
+        // Split across the collapsed segment this was two sub-threshold 20°
+        // halves and vanished entirely.
+        let cues = gen(&cornering_course(10.0, 100.0, 100.0, 40.0, 0.0));
+        assert_eq!(cues.len(), 1);
+        assert_eq!(cues[0].direction, TurnDirection::SlightLeft);
+        assert!(libm::fabs(cues[0].position_m - 100.0) < 1.0);
+    }
+
+    #[test]
+    fn a_corner_rounded_over_several_vertices_fires_one_cue_at_its_full_angle() {
+        // 90° spread over three 30° vertices 5 m apart: one corner, not three
+        // sub-threshold fragments and not a 30° slight.
+        let cues = gen(&cornering_course(5.0, 100.0, 100.0, 90.0, 15.0));
+        assert_eq!(cues.len(), 1);
+        assert_eq!(cues[0].direction, TurnDirection::Left);
+        assert!(cues[0].position_m > 100.0 && cues[0].position_m < 115.0);
+    }
+
+    #[test]
+    fn a_90_degree_corner_reports_once_at_any_sampling() {
+        // The old collapse's answer depended on where the corner fell relative
+        // to the 15 m merge window, so a different spacing produced a different
+        // (and differently wrong) cue list for the same course. 120 m is a whole
+        // number of every spacing, so the corner sits at the same distance in
+        // all five courses.
+        for spacing_m in [4.0_f64, 6.0, 8.0, 10.0, 12.0] {
+            let cues = gen(&cornering_course(spacing_m, 120.0, 120.0, 90.0, 0.0));
+            assert_eq!(cues.len(), 1, "spacing {spacing_m}");
+            assert_eq!(
+                cues[0].direction,
+                TurnDirection::Left,
+                "spacing {spacing_m}"
+            );
+            assert!(
+                libm::fabs(cues[0].position_m - 120.0) < 1.0,
+                "spacing {spacing_m}: {}",
+                cues[0].position_m
+            );
+        }
     }
 
     fn cue_at(position_m: f64, direction: TurnDirection) -> TurnCue {

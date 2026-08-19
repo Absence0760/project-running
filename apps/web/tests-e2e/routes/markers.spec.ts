@@ -252,6 +252,20 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(detail).toContainText('Target 1:45:00');
 	});
 
+	test('schedule shows a Target chip for a clock-only target', async ({ page }) => {
+		routeId = await insertOwnedRoute();
+		await insertMarker(routeId, 'note', 'Turn', 51.5005, -0.1205, {
+			note: 'Sharp left',
+			target_clock: '14:30'
+		});
+
+		await page.goto(`/routes/${routeId}`);
+
+		const detail = page.locator('.markers-list .marker-row .marker-detail');
+		await expect(detail).toContainText('Sharp left');
+		await expect(detail).toContainText('Target 14:30');
+	});
+
 	test('owner sets a target time via the editor and it persists across reload', async ({ page }) => {
 		routeId = await insertOwnedRoute();
 		await insertMarker(routeId, 'cutoff', 'Gate', 51.5005, -0.1205, {

@@ -275,6 +275,7 @@ class LocalSessionStore extends OfflineSyncStore<StoredSessionPlan> {
     List<({Map<String, dynamic> plan, List<StoredSessionBlock> blocks})>
         serverPlans,
   ) async {
+    requireInitialised('replaceFromServer');
     final preserved = <String, StoredSessionPlan>{};
     final syncedLocal = <String, StoredSessionPlan>{};
     for (final entry in rowsById.entries) {

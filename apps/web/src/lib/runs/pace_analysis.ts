@@ -19,8 +19,11 @@ import { haversineMetres, type Split } from './run_stats';
  * halfway mark short of it on any run that faded. Durations are elapsed
  * within the half, matching how the splits table times its own boundaries.
  *
- * Web-only: mobile has no pacing surface to consume it, and a Dart twin with
- * no caller is dead code the parity guard would then police forever.
+ * Twin of `apps/mobile_android/lib/pace_analysis.dart` — keep the algorithm,
+ * constants, edge cases, and test count in lockstep. `gradeAdjustedSplitPaces`
+ * takes the splits themselves here and reads `distance_m` off each; mobile's
+ * `RunSplit` carries only a tick and a duration, so the Dart side takes the
+ * lengths directly.
  */
 
 export type PacingVerdict = 'negative' | 'even' | 'positive';

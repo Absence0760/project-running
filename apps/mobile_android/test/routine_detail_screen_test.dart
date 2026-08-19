@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,12 +22,12 @@ Future<({LocalRoutineStore store, LocalGymStore gym, Directory dir})> _fixture(
 }
 
 Widget _app(LocalRoutineStore store, LocalGymStore gym, String id,
-        {SocialService? social, String? viewerId}) =>
+        {SocialService? social, String? viewerId, ApiClient? api}) =>
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: RoutineDetailScreen(
-          api: null,
+          api: api,
           store: store,
           gymStore: gym,
           routineId: id,
@@ -39,6 +40,67 @@ class _FakeSocial extends SocialService {
   _FakeSocial(this.clubs);
   @override
   Future<List<ClubView>> fetchMyClubs() async => clubs;
+}
+
+class _HistoryApi extends ApiClient {
+  _HistoryApi({this.aggregate, this.throwUntilCall = 0});
+
+  final Map<String, dynamic>? aggregate;
+  final int throwUntilCall;
+  int calls = 0;
+  int? lastRecentLimit;
+
+  @override
+  Future<Map<String, dynamic>> fetchGymRoutineHistory(
+    String routineId, {
+    int recentLimit = 5,
+  }) async {
+    calls++;
+    lastRecentLimit = recentLimit;
+    if (calls <= throwUntilCall) throw StateError('offline');
+    return aggregate ?? _aggregate(const []);
+  }
+}
+
+Map<String, dynamic> _session(String id, String startedAt,
+        {String? title, Object? metadata}) =>
+    <String, dynamic>{
+      'id': id,
+      'started_at': startedAt,
+      'title': title,
+      'metadata': metadata ?? <String, dynamic>{},
+    };
+
+/// One `gym_routine_history` row. The tallies default to what the RPC would
+/// report for exactly these rows, so a case that only cares about rendering
+/// doesn't have to restate them; a case about the count outrunning the page
+/// overrides them.
+Map<String, dynamic> _aggregate(
+  List<Map<String, dynamic>> recent, {
+  int? sessionCount,
+  String? lastPerformedAt,
+  int? gradedCount,
+  int? completedCount,
+}) {
+  const graded = {'completed', 'partial', 'abandoned'};
+  final performed = [
+    for (final r in recent)
+      if ((r['metadata'] as Map?)?['gym_session_draft'] is! Map) r,
+  ]..sort((a, b) =>
+      (b['started_at'] as String).compareTo(a['started_at'] as String));
+  final verdicts = [
+    for (final r in performed) (r['metadata'] as Map?)?['gym_adherence'],
+  ];
+  return <String, dynamic>{
+    'session_count': sessionCount ?? performed.length,
+    'last_performed_at': lastPerformedAt ??
+        (performed.isEmpty ? null : performed.first['started_at']),
+    'graded_count':
+        gradedCount ?? verdicts.where(graded.contains).length,
+    'completed_count':
+        completedCount ?? verdicts.where((v) => v == 'completed').length,
+    'recent_sessions': recent,
+  };
 }
 
 ClubView _club(String id, String name, String role) => ClubView(
@@ -274,6 +336,182 @@ void main() {
       await tester.pumpWidget(_app(f.store, f.gym, 'r-1', viewerId: 'me'));
       await tester.pump();
       expect(find.text('Publish to public library'), findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('past sessions render as the routine history panel',
+      (tester) async {
+    final f = await _fixture('history_render');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(
+        aggregate: _aggregate([
+      _session('w-1', now.subtract(const Duration(days: 2)).toIso8601String(),
+          title: 'Push day A', metadata: {'gym_adherence': 'completed'}),
+      _session('w-2', now.subtract(const Duration(days: 9)).toIso8601String(),
+          metadata: {'gym_adherence': 'partial'}),
+      _session('w-3', now.subtract(const Duration(days: 16)).toIso8601String(),
+          metadata: {'routine_id': 'r-1'}),
+    ]));
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Routine history'), findsOneWidget);
+      expect(find.text('3 sessions'), findsOneWidget);
+      // Only the two graded sessions reach the rate denominator.
+      expect(find.text('Done 2 days ago  ·  1 of 2 completed'), findsOneWidget);
+      expect(find.text('Recent sessions'), findsOneWidget);
+      expect(find.text('Push day A'), findsOneWidget);
+      expect(find.text('Untitled workout'), findsNWidgets(2));
+      expect(find.text('Completed'), findsOneWidget);
+      expect(find.text('Partly done'), findsOneWidget);
+      expect(find.text('Not graded'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('an in-flight draft session is not counted as performed',
+      (tester) async {
+    final f = await _fixture('history_draft');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(
+        aggregate: _aggregate([
+      _session('draft', now.toIso8601String(), metadata: {
+        'routine_id': 'r-1',
+        'gym_session_draft': {'saved_at': now.toIso8601String(), 'results': []},
+      }),
+      _session('done', now.subtract(const Duration(days: 1)).toIso8601String(),
+          title: 'Push day A', metadata: {'gym_adherence': 'completed'}),
+    ]));
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('1 session'), findsOneWidget);
+      expect(find.text('Done yesterday  ·  1 of 1 completed'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the count is the aggregate while the list stays a bounded page',
+      (tester) async {
+    final f = await _fixture('history_paged');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(
+        aggregate: _aggregate([
+          for (var i = 0; i < 5; i++)
+            _session('w-$i', now.subtract(Duration(days: i + 1)).toIso8601String(),
+                metadata: {'gym_adherence': 'completed'}),
+        ],
+            sessionCount: 812,
+            gradedCount: 800,
+            completedCount: 600));
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      // The panel renders five rows but must claim the server's complete
+      // total, not the length of the page it happens to hold.
+      expect(find.text('812 sessions'), findsOneWidget);
+      expect(find.text('Done yesterday  ·  600 of 800 completed'),
+          findsOneWidget);
+      expect(find.text('Untitled workout'), findsNWidgets(5));
+      // The page it asked for is exactly the page it lists.
+      expect(api.lastRecentLimit, 5);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a routine never run renders no history panel', (tester) async {
+    final f = await _fixture('history_empty');
+    final api = _HistoryApi();
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Routine history'), findsNothing);
+      expect(find.text('Couldn’t load this routine’s history.'),
+          findsNothing);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('a failed history read shows a retry, and the retry recovers',
+      (tester) async {
+    final f = await _fixture('history_error');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(
+        throwUntilCall: 1,
+        aggregate: _aggregate([
+          _session('w-1', now.toIso8601String(),
+              title: 'Push day A', metadata: {'gym_adherence': 'completed'}),
+        ]));
+    try {
+      await tester.runAsync(() => f.store
+          .replaceFromServer(_seed(_row('r-1', 'Push day', authorId: 'me'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Couldn’t load this routine’s history.'),
+          findsOneWidget);
+      expect(find.text('Routine history'), findsNothing);
+
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(api.calls, 2);
+      expect(find.text('Couldn’t load this routine’s history.'),
+          findsNothing);
+      expect(find.text('Routine history'), findsOneWidget);
+      expect(find.text('Done today  ·  1 of 1 completed'), findsOneWidget);
+    } finally {
+      f.dir.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('the history panel is not read for a non-author', (tester) async {
+    final f = await _fixture('history_nonauthor');
+    final now = DateTime.now().toUtc();
+    final api = _HistoryApi(
+        aggregate: _aggregate([
+      _session('w-1', now.toIso8601String(),
+          metadata: {'gym_adherence': 'completed'}),
+    ]));
+    try {
+      await tester.runAsync(() => f.store.replaceFromServer(
+          _seed(_row('r-1', 'Push day', authorId: 'someone-else'))));
+      await tester.pumpWidget(
+          _app(f.store, f.gym, 'r-1', viewerId: 'me', api: api));
+      await tester.pump();
+      await tester.pump();
+
+      expect(api.calls, 0);
+      expect(find.text('Routine history'), findsNothing);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

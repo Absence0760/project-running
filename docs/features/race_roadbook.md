@@ -142,8 +142,11 @@ proportional** — `max(60 s, 1 % of the target)` — because two minutes down a
 every 10K one on it. Web renders a **Target** column beside Arrival that appears
 only once a checkpoint carries one (no empty column on an unplanned route),
 states the verdict in words rather than by colour alone, and carries into
-copy-as-text and the printed sheet. This closes the loop on "Save as marker
-targets": save the projections, change the goal or the pacing model, and the
+copy-as-text and the printed sheet. Mobile renders the same verdict as a chip
+on the checkpoint row, above the cut-off chip and in the same words, and
+carries it into share-as-text; on-plan is neutral there rather than a third
+alert colour, so a row that needs looking at is the only coloured one. This
+closes the loop on "Save as marker targets": save the projections, change the goal or the pacing model, and the
 sheet says how far the new plan has drifted from the one the crew agreed.
 
 ## Deferred (follow-ups)

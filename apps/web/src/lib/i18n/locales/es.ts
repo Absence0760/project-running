@@ -1404,6 +1404,8 @@ export const messages = {
 	"settingsAccount.resetLinkSent": "Enlace de restablecimiento enviado. Revisa tu correo para establecer una nueva contraseña.",
 	"settingsAccount.exportFailed": "Error en la exportación: {error}",
 	"settingsAccount.exportReady": "Exportación lista ({count, plural, one {# carrera} other {# carreras}}). La pestaña de descarga se cerrará cuando llegue el archivo.",
+	"settingsAccount.exportPartialReady": "Exportación lista, pero parcial: {count, plural, one {# carrera} other {# carreras}} de {total}.",
+	"settingsAccount.exportPartialNotice": "Tu última exportación es parcial: contiene {count} de las {total} carreras de tu cuenta. No se borró nada; vuelve a exportar para reintentarlo. El archivo completo de la cuenta indica cada sección incompleta en su manifest.json.",
 	"settingsAccount.backupFailed": "Error en la copia: {error}",
 	"settingsAccount.identitiesLoadFailed": "No se pudieron cargar los métodos de inicio de sesión: {error}",
 	"settingsAccount.linkFailed": "No se pudo vincular {provider}: {error}",

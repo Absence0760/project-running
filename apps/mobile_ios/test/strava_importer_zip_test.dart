@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/import_failures.dart';
 import '../lib/strava_importer.dart';
 
 const _gpxOnePoint = '''<?xml version="1.0"?>
@@ -167,10 +168,16 @@ void main() {
       final zip = await writeZip(tmpDir, csvContent: csv([_stravaHeader]));
       final r = await StravaImporter.importFromZip(zip);
       expect(r.runs, isEmpty);
-      expect(r.errors, isEmpty);
+      expect(r.failures.items, isEmpty);
     });
 
-    test('row with empty filename is silently skipped', () async {
+    // Strava leaves `Filename` empty for a manually-entered or indoor
+    // activity — there is no track file, but the row IS the activity. This
+    // used to `continue` before any counter, so a migrating runner's whole
+    // treadmill history vanished from an import that reported cleanly; web's
+    // importer keeps the same rows, trackless, off the CSV's own numbers.
+    test('row with empty filename imports trackless from the CSV row',
+        () async {
       final zip = await writeZip(
         tmpDir,
         csvContent: csv([
@@ -179,8 +186,11 @@ void main() {
         ]),
       );
       final r = await StravaImporter.importFromZip(zip);
-      expect(r.runs, isEmpty);
-      expect(r.errors, isEmpty);
+      expect(r.runs, hasLength(1));
+      expect(r.runs.first.track, isEmpty);
+      expect(r.runs.first.distanceMetres, 5000);
+      expect(r.runs.first.duration, const Duration(seconds: 1500));
+      expect(r.failures.items, isEmpty);
     });
 
     test('"distance (km)" header variant is recognised', () async {
@@ -314,8 +324,13 @@ void main() {
 
       expect(r.runs, hasLength(1));
       expect(r.runs.single.externalId, 'strava:2');
-      expect(r.errors, hasLength(1));
-      expect(r.errors.single.filename, 'activities/missing.gpx');
+      expect(r.failures.items, hasLength(1));
+      // The report names the ACTIVITY, not the archive path — the path is
+      // carried in the classified detail.
+      expect(r.failures.items.single.name, 'A');
+      expect(r.failures.items.single.startedAt, isNotNull);
+      expect(r.failures.items.single.detail, contains('activities/missing.gpx'));
+      expect(r.failures.items.single.reason, ImportFailureReason.unknown);
     });
 
     test('unknown track extension is reported as a per-file error', () async {
@@ -332,8 +347,9 @@ void main() {
       final r = await StravaImporter.importFromZip(zip);
 
       expect(r.runs, isEmpty);
-      expect(r.errors, hasLength(1));
-      expect(r.errors.single.message, contains('Unknown'));
+      expect(r.failures.items, hasLength(1));
+      expect(r.failures.items.single.name, 'A');
+      expect(r.failures.items.single.detail, contains('Unknown'));
     });
   });
 

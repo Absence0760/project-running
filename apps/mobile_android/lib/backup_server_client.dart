@@ -18,8 +18,9 @@ import 'dart:io';
 
 /// Performs the `POST /v1/export` round-trip. Returns the parsed JSON
 /// response body + the HTTP status code. Caller decides what's
-/// success — the server returns 200 with `{url, count, format}` on
-/// the happy path, JSON-encoded error bodies otherwise.
+/// success — the server returns 200 with
+/// `{url, count, total, complete, format}` on the happy path,
+/// JSON-encoded error bodies otherwise.
 typedef BackupRequestFetcher = Future<({int statusCode, Map<String, dynamic> body})>
     Function(Uri url, String accessToken, Map<String, dynamic> requestBody);
 
@@ -104,13 +105,13 @@ class BackupServerClient {
   bool get isConfigured => baseUrl.isNotEmpty;
 
   /// Run the full `POST /v1/export → GET signed URL → streamed write`
-  /// pipeline. Returns the run count the server says it included
-  /// (so the caller can warn "only 5 000 of your 10 000 runs were
-  /// captured — use the local backup instead").
+  /// pipeline. Returns what the server said about the archive it
+  /// built, so the caller can tell the runner "5 000 of your 10 000
+  /// runs" rather than only "your export is ready".
   ///
   /// Throws [BackupServerError] on any non-200 response or
   /// IO failure — the caller catches and falls back to local.
-  Future<int> fetchBackupToFile({
+  Future<ServerBackupSummary> fetchBackupToFile({
     required String accessToken,
     required File outputFile,
   }) async {
@@ -134,15 +135,53 @@ class BackupServerClient {
       );
     }
     final signedUrl = res.body['url'];
-    final count = res.body['count'];
     if (signedUrl is! String || signedUrl.isEmpty) {
       throw const BackupServerError('export response missing signed url');
     }
     await downloadFetcher(Uri.parse(signedUrl), outputFile);
-    if (count is int) return count;
-    if (count is num) return count.toInt();
-    return 0;
+    return ServerBackupSummary.fromJson(res.body);
   }
+}
+
+/// What the server said about the archive it just built: how many runs
+/// the zip carries, how many the account actually holds, and whether
+/// the two agree. `count` alone cannot say "this is short" — a runner
+/// past the server's per-export ceiling gets a truncated Art. 20
+/// archive whose only other disclosure is inside `manifest.json`.
+class ServerBackupSummary {
+  final int count;
+  final int total;
+  final bool complete;
+
+  const ServerBackupSummary({
+    required this.count,
+    required this.total,
+    required this.complete,
+  });
+
+  /// Read the completeness fields out of a `/v1/export` 200 body.
+  ///
+  /// Only an explicit `complete: false` claims a shortfall: a body
+  /// without the field (an older deployment of either transport) is
+  /// not evidence of truncation, and warning on every export would be
+  /// its own dishonesty. `total` is floored at `count` so a malformed
+  /// pair can never read "12 of 3".
+  factory ServerBackupSummary.fromJson(Map<String, dynamic> body) {
+    final count = _asInt(body['count']);
+    final total = _asInt(body['total']);
+    final complete = body['complete'];
+    return ServerBackupSummary(
+      count: count,
+      total: total > count ? total : count,
+      complete: complete is bool ? complete : true,
+    );
+  }
+}
+
+int _asInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return 0;
 }
 
 /// Thin wrapper so [BackupService.createBackup] can `catch

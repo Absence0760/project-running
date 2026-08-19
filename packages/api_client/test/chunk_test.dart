@@ -40,4 +40,69 @@ void main() {
       expect(() => chunkList([1, 2], -1), throwsArgumentError);
     });
   });
+
+  group('readChunked', () {
+    test('queries once per chunk and concatenates in chunk order', () async {
+      final ids = List.generate(250, (i) => 'id-$i');
+      final seen = <List<String>>[];
+      final out = await readChunked(ids, (chunk) async {
+        seen.add(chunk);
+        return chunk.map((id) => 'row:$id').toList();
+      });
+      expect(seen.map((c) => c.length).toList(), [100, 100, 50]);
+      expect(out, ids.map((id) => 'row:$id').toList());
+    });
+
+    test('an empty id list runs no query at all', () async {
+      var calls = 0;
+      final out = await readChunked<String>([], (chunk) async {
+        calls++;
+        return const [];
+      });
+      expect(calls, 0);
+      expect(out, isEmpty);
+    });
+  });
+
+  group('topByRecency', () {
+    ({String id, DateTime at}) row(String id, String iso) =>
+        (id: id, at: DateTime.parse(iso));
+
+    test('dedupes by id, sorts recency desc then id desc, trims to limit', () {
+      final merged = topByRecency(
+        [
+          row('b', '2026-01-02T00:00:00Z'),
+          row('a', '2026-01-03T00:00:00Z'),
+          row('b', '2026-01-02T00:00:00Z'),
+          row('c', '2026-01-01T00:00:00Z'),
+        ],
+        limit: 2,
+        idOf: (r) => r.id,
+        recencyOf: (r) => r.at,
+      );
+      expect(merged.map((r) => r.id).toList(), ['a', 'b']);
+    });
+
+    test('ties on recency break by id descending', () {
+      final merged = topByRecency(
+        [
+          row('a', '2026-01-01T00:00:00Z'),
+          row('c', '2026-01-01T00:00:00Z'),
+          row('b', '2026-01-01T00:00:00Z'),
+        ],
+        limit: 3,
+        idOf: (r) => r.id,
+        recencyOf: (r) => r.at,
+      );
+      expect(merged.map((r) => r.id).toList(), ['c', 'b', 'a']);
+    });
+
+    test('a non-positive limit yields nothing', () {
+      expect(
+        topByRecency([row('a', '2026-01-01T00:00:00Z')],
+            limit: 0, idOf: (r) => r.id, recencyOf: (r) => r.at),
+        isEmpty,
+      );
+    });
+  });
 }

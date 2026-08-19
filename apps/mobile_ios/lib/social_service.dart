@@ -7,8 +7,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'challenge_progress.dart';
 import 'event_category.dart';
+import 'event_occurrence.dart';
 import 'event_gym_template.dart';
 import 'geocoding.dart';
+import 'leaderboard_standing.dart';
 import 'l10n/date_format.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'l10n/locale_support.dart';
@@ -82,6 +84,10 @@ class ClubView {
   bool get isMember => viewerRole != null;
 }
 
+/// How many `going` RSVPs the upcoming-event card walks before giving up.
+/// Mirrors web's `RSVP_CANDIDATE_LIMIT` — the nearest one may be called off.
+const int _rsvpCandidateLimit = 10;
+
 class EventView {
   final EventRow row;
   final List<Weekday>? byday;
@@ -89,12 +95,21 @@ class EventView {
   final String? viewerRsvp; // 'going' | 'maybe' | 'declined' | null
   final DateTime nextInstanceStart;
 
+  /// False once every remaining occurrence of the series has been called off
+  /// (`event_exceptions`) — the non-nullable encoding of web's null
+  /// `next_instance_start`. [nextInstanceStart] then falls back to the series
+  /// start so the attendee count still has a key, exactly as web's count map
+  /// does; the upcoming lists drop the event instead of advertising a
+  /// cancelled occurrence.
+  final bool hasLiveOccurrence;
+
   const EventView({
     required this.row,
     required this.byday,
     required this.attendeeCount,
     required this.viewerRsvp,
     required this.nextInstanceStart,
+    this.hasLiveOccurrence = true,
   });
 
   RecurrenceFreq? get freq => recurrenceFromString(row.recurrenceFreq);
@@ -158,6 +173,11 @@ class ChallengeView {
   final int participantCount;
   final DateTime? completedAt;
 
+  /// On a `club_vs_club` board the viewer's entrant is the club they JOINED
+  /// UNDER, off their own `challenge_participants` row — not whichever of
+  /// their clubs happens to be on the board (decisions § 615).
+  final String? myTeamClubId;
+
   const ChallengeView({
     required this.id,
     required this.creatorId,
@@ -176,14 +196,18 @@ class ChallengeView {
     this.myRank,
     this.participantCount = 0,
     this.completedAt,
+    this.myTeamClubId,
   });
 }
 
 /// One row from the `challenge_leaderboard` RPC (not a table, so hand-modelled).
-class ChallengeLeaderboardEntry {
+class ChallengeLeaderboardEntry implements StandingEntry {
+  @override
   final String? userId;
   final String? displayName;
+  @override
   final String? teamClubId;
+  @override
   final num value;
   final int rank;
   const ChallengeLeaderboardEntry({
@@ -1076,7 +1100,7 @@ class SocialService extends ChangeNotifier {
     final events = await _enrichEvents(rows as List);
     final now = DateTime.now();
     return events
-        .where((e) => !e.nextInstanceStart.isBefore(now))
+        .where((e) => e.hasLiveOccurrence && !e.nextInstanceStart.isBefore(now))
         .toList(growable: false)
       ..sort((a, b) => a.nextInstanceStart.compareTo(b.nextInstanceStart));
   }
@@ -1107,7 +1131,8 @@ class SocialService extends ChangeNotifier {
   }
 
   /// Events that the current user is going to (status='going') in the next N
-  /// hours. Used by the Run tab's "upcoming event" card. Returns the nearest.
+  /// hours. Used by the Run tab's "upcoming event" card. Returns the nearest
+  /// one that has not been called off. Mirrors web's `fetchNextRsvpedEvent`.
   Future<EventView?> fetchNextRsvpedEvent({Duration window = const Duration(hours: 48)}) async {
     final uid = _uid;
     if (uid == null) return null;
@@ -1121,21 +1146,33 @@ class SocialService extends ChangeNotifier {
         .gte('instance_start', now.toUtc().toIso8601String())
         .lte('instance_start', end.toUtc().toIso8601String())
         .order('instance_start', ascending: true)
-        .limit(1);
-    final rows = rsvps as List;
+        .limit(_rsvpCandidateLimit);
+    final rows = (rsvps as List).cast<Map<String, dynamic>>();
     if (rows.isEmpty) return null;
-    final row = rows.first as Map<String, dynamic>;
-    final event = row['events'] as Map<String, dynamic>?;
-    if (event == null) return null;
-    final instanceIso = row['instance_start'] as String;
-    final er = EventRow.fromJson(event);
-    return EventView(
-      row: er,
-      byday: _parseByday(event['recurrence_byday']),
-      attendeeCount: 0, // not needed for the card
-      viewerRsvp: 'going',
-      nextInstanceStart: DateTime.parse(instanceIso),
+
+    // An RSVP row survives its occurrence being called off — the organiser can
+    // reinstate it — so the card has to subtract `event_exceptions` itself
+    // rather than trust that a `going` row means the run is on. Fail-closed on
+    // a run of cancellations: show nothing rather than a cancelled event.
+    final cancelledByEvent = await fetchCancelledInstancesForEvents(
+      [for (final r in rows) r['event_id'] as String],
+      now,
     );
+    for (final row in rows) {
+      final event = row['events'] as Map<String, dynamic>?;
+      if (event == null) continue;
+      final instance = DateTime.parse(row['instance_start'] as String);
+      final cancelled = cancelledByEvent[row['event_id'] as String] ?? const [];
+      if (isOccurrenceCancelled(cancelled, instance)) continue;
+      return EventView(
+        row: EventRow.fromJson(event),
+        byday: _parseByday(event['recurrence_byday']),
+        attendeeCount: 0, // not needed for the card
+        viewerRsvp: 'going',
+        nextInstanceStart: instance,
+      );
+    }
+    return null;
   }
 
   Future<List<EventView>> _enrichEvents(List<dynamic> rawRows) async {
@@ -1147,23 +1184,30 @@ class SocialService extends ChangeNotifier {
       ids.add(r['id'] as String);
       byRawId[r['id'] as String] = r;
     }
+    // Called-off occurrences have to be known BEFORE the next instance is
+    // picked, so this read can't join the parallel batch below — the counts are
+    // keyed on the instant it resolves to. One query for the whole list, not
+    // one per event.
+    final now = DateTime.now();
+    final cancelledByEvent = await fetchCancelledInstancesForEvents(ids, now);
     final nexts = <String, DateTime>{};
+    final live = <String, bool>{};
     for (final r in rows) {
       final er = EventRow.fromJson(r);
-      final byday = _parseByday(r['recurrence_byday']);
-      final freq = recurrenceFromString(er.recurrenceFreq);
-      final next = freq == null
-          ? er.startsAt
-          : (nextInstanceAfter(EventRecurrence(
-                  startsAt: er.startsAt,
-                  freq: freq,
-                  byday: byday,
-                  until: er.recurrenceUntil,
-                  count: er.recurrenceCount,
-                  timezone: er.timezone,
-                )) ??
-              er.startsAt);
-      nexts[er.id] = next;
+      final next = nextLiveInstance(
+        EventRecurrence(
+          startsAt: er.startsAt,
+          freq: recurrenceFromString(er.recurrenceFreq),
+          byday: _parseByday(r['recurrence_byday']),
+          until: er.recurrenceUntil,
+          count: er.recurrenceCount,
+          timezone: er.timezone,
+        ),
+        cancelledByEvent[er.id] ?? const [],
+        now,
+      );
+      nexts[er.id] = next ?? er.startsAt;
+      live[er.id] = next != null;
     }
 
     // Fetch going counts for each (event_id, instance_start) pair.
@@ -1207,6 +1251,7 @@ class SocialService extends ChangeNotifier {
           attendeeCount: counts[r['id']] ?? 0,
           viewerRsvp: myRsvps[r['id']],
           nextInstanceStart: nexts[r['id']]!,
+          hasLiveOccurrence: live[r['id']] ?? true,
         ),
     ];
   }
@@ -1251,6 +1296,42 @@ class SocialService extends ChangeNotifier {
       'p_attendance': attendance,
     });
     notifyListeners();
+  }
+
+  /// Cancelled instance starts for MANY events at once, keyed by event id.
+  /// One batched query for the whole list — a per-event read would be an N+1
+  /// on the club Events tab. Only occurrences at or after [since] can move a
+  /// "next occurrence" answer, so the scan stays small. Fails closed to "none
+  /// cancelled" like [fetchCancelledInstances]: a read error must not hide a
+  /// live occurrence.
+  Future<Map<String, List<DateTime>>> fetchCancelledInstancesForEvents(
+    List<String> eventIds,
+    DateTime since,
+  ) async {
+    if (eventIds.isEmpty) return const {};
+    try {
+      final pages = await Future.wait([
+        for (final c in chunkList(eventIds))
+          _c
+              .from('event_exceptions')
+              .select('event_id, instance_start')
+              .inFilter('event_id', c)
+              .gte('instance_start', since.toUtc().toIso8601String()),
+      ]);
+      final out = <String, List<DateTime>>{};
+      for (final rows in pages) {
+        for (final r in (rows as List)) {
+          final id = (r as Map)['event_id'];
+          final at = DateTime.tryParse('${r['instance_start']}');
+          if (id is! String || at == null) continue;
+          (out[id] ??= <DateTime>[]).add(at.toUtc());
+        }
+      }
+      return out;
+    } catch (e) {
+      debugPrint('fetchCancelledInstancesForEvents failed: $e');
+      return const {};
+    }
   }
 
   /// Instance starts of this event's CANCELLED occurrences
@@ -1784,7 +1865,8 @@ class SocialService extends ChangeNotifier {
       num? myValue,
       int? myRank,
       int participantCount = 0,
-      DateTime? completedAt}) {
+      DateTime? completedAt,
+      String? myTeamClubId}) {
     return ChallengeView(
       id: r['id'] as String,
       creatorId: r['creator_id'] as String?,
@@ -1803,6 +1885,7 @@ class SocialService extends ChangeNotifier {
       myRank: myRank,
       participantCount: participantCount,
       completedAt: completedAt,
+      myTeamClubId: myTeamClubId,
     );
   }
 
@@ -1842,7 +1925,7 @@ class SocialService extends ChangeNotifier {
     if (row == null) return null;
     final parts = await _c
         .from('challenge_participants')
-        .select('user_id, completed_at')
+        .select('user_id, completed_at, team_club_id')
         .eq('challenge_id', id) as List;
     final uid = _uid;
     Map? mineRow;
@@ -1855,6 +1938,7 @@ class SocialService extends ChangeNotifier {
       joined: mineRow != null,
       participantCount: parts.length,
       completedAt: completedRaw == null ? null : DateTime.parse(completedRaw),
+      myTeamClubId: mineRow?['team_club_id'] as String?,
     );
   }
 

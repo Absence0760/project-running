@@ -12,8 +12,9 @@ backlog #13 (C3). **Mobile-only, no recorder change, no migration.**
 
 ## What already exists to build on (verified)
 - **Recorder seam (shipped).** `packages/run_recorder/lib/src/run_recorder.dart`:
-  - `void setTreadmillSample(double speedMps, {double? totalDistanceMetres})` (line ~613) — first call flips `_treadmillMode = true`; belt distance overrides GPS; wrapped in its own try/catch (L1/L4 contract honoured inside the recorder); no-op until `begin()`; excludes paused advance.
-  - `void clearTreadmillMode()` (line ~657) — reverts to the GPS distance path.
+  - `void setTreadmillSample(double speedMps, {double? totalDistanceMetres})` — first call flips `_treadmillMode = true` and **carries the distance already run across** (the belt then adds to it, rather than restarting the headline at the belt's own zero); wrapped in its own try/catch (L1/L4 contract honoured inside the recorder); no-op until `begin()`; excludes paused advance.
+  - `void clearTreadmillMode()` — hands the accumulated total back to the GPS accumulator, the mirror of the carry on the way in.
+  - **The run distance is one continuous total handed between sources, not two rival accumulators.** Mid-run is the only way the belt ever engages (open question 3 below), so every activation lands on an already-accumulating run: anchoring at the belt's own total used to zero the headline distance the instant the belt engaged and make the next lap split a negative delta, which `lapsToCanonicalJson` clamped into a silent 0 m lap. Both directions of the switch are continuous, and both are pinned in `packages/run_recorder/test/run_recorder_test.dart`.
   - `bool get treadmillMode` (line ~218) — current mode.
   - On `stop()` the recorder (when it was in treadmill mode) writes `metadata['indoor'] = true` + `metadata['indoor_source'] = 'treadmill'` + `metadata['distance_source'] = 'treadmill'` — already done, no UI work needed for persistence. (`indoor: true` is what keeps a belt-measured run out of the VDOT ceiling, same as the pedometer-estimated path.)
 - **BLE reader (shipped).** `apps/mobile_android/lib/ble_treadmill.dart` — `BleTreadmill` with:

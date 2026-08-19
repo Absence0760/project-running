@@ -410,7 +410,26 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     await persist(asSynced(existing));
   }
 
+  /// Refuse a write on a store that was never [init]ed.
+  ///
+  /// [dir] is null only in that case, and every write path then dies on a bare
+  /// `dir!` — an opaque "Null check operator used on a null value" that reads
+  /// like a bug in the caller. Worse, the in-memory mutation happened first, so
+  /// the row appeared in the list, the screen reported a failure over the top
+  /// of it, and nothing was ever written to disk or drained to the server
+  /// (`NutritionScreen` shipped in exactly that state). Raising here, BEFORE
+  /// `rowsById` is touched, keeps the resident state honest: a write that
+  /// cannot be durable leaves no trace that says it was.
+  @protected
+  void requireInitialised(String op) {
+    if (dir != null) return;
+    throw StateError(
+        '$debugLabel: $op before init() — the store has no directory, so this '
+        'write could never reach disk or the server');
+  }
+
   Future<void> dropRow(String id) async {
+    requireInitialised('dropRow');
     rowsById.remove(id);
     _writtenJson.remove(id);
     final file = File('${dir!.path}/$id.json');
@@ -432,6 +451,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// not a live row) but still writes its on-disk file so the drain can push
   /// the server DELETE.
   Future<void> _persistRow(S stored) async {
+    requireInitialised('persist');
     rowsById[stored.id] = stored;
     final file = File('${dir!.path}/${stored.id}.json');
     final json = stored.toJson();
@@ -454,9 +474,15 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// longer exist. Both passes isolate per-file failures so one bad row can't
   /// abort the rest; a row whose write throws is still kept so its prior file
   /// (left intact by the atomic write) isn't then deleted as an orphan.
+  ///
+  /// Refuses on an uninitialised store like every other write path (§ 660).
+  /// The callers are the subclasses' `replaceFromServer`, which have already
+  /// rebuilt `rowsById` from the fetch by the time they get here, so each of
+  /// them re-checks BEFORE that rebuild — a silent return here left the
+  /// resident rows replaced and nothing on disk agreeing with them.
   Future<void> rewriteAll() async {
-    final d = dir;
-    if (d == null) return;
+    requireInitialised('rewriteAll');
+    final d = dir!;
     final keep = <String>{};
     for (final stored in rowsById.values) {
       final file = File('${d.path}/${stored.id}.json');

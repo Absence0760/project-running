@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'training.dart' show TrainingGender;
 
+import 'plan_ramp.dart';
 import 'plan_week.dart';
 import 'relink_candidates.dart';
 import 'training.dart';
@@ -102,6 +103,40 @@ class TrainingService extends ChangeNotifier {
       /* L4 best-effort — fall back to null on any failure,
          including the not-yet-initialised StateError thrown by
          the _c getter in widget tests. */
+    }
+    return null;
+  }
+
+  /// The viewer's chronic weekly running volume over the ramp check's
+  /// trailing window, so the plan wizard can say whether the plan it just
+  /// generated is a step the runner's current training supports. Same L4
+  /// best-effort contract as [fetchViewerGender]: null on any failure, and
+  /// the note then self-hides rather than grading against a base it doesn't
+  /// have.
+  Future<RecentVolume?> fetchRecentRunVolume() async {
+    try {
+      final uid = _uid;
+      if (uid == null) return null;
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final from = DateTime.fromMillisecondsSinceEpoch(
+        nowMs - kChronicWindowWeeks * 7 * 86400000,
+        isUtc: true,
+      );
+      final rows = await _c
+          .from('runs')
+          .select('started_at, distance_m, activity_type')
+          .eq('user_id', uid)
+          .gte('started_at', from.toIso8601String());
+      final runs = (rows as List).cast<Map<String, dynamic>>().map((r) {
+        return RunForVolume(
+          startedAt: r['started_at'] as String? ?? '',
+          distanceM: (r['distance_m'] as num?)?.toDouble(),
+          activityType: r['activity_type'] as String?,
+        );
+      }).toList();
+      return recentRunVolume(runs, nowMs);
+    } catch (_) {
+      /* L4 best-effort — null on any failure. */
     }
     return null;
   }
@@ -748,7 +783,8 @@ class TrainingService extends ChangeNotifier {
     await _c.from('plan_workouts').update({
       'completed_run_id': runId,
       'manually_completed': manual,
-      'completed_at': isCompleting ? DateTime.now().toIso8601String() : null,
+      'completed_at':
+          isCompleting ? DateTime.now().toUtc().toIso8601String() : null,
       // Completing clears any prior skip — the two states are mutually
       // exclusive. Un-completing leaves the skip flag untouched.
       if (isCompleting) 'skipped_at': null,
@@ -764,7 +800,7 @@ class TrainingService extends ChangeNotifier {
     await _c.from('plan_workouts').update(
       skipped
           ? {
-              'skipped_at': DateTime.now().toIso8601String(),
+              'skipped_at': DateTime.now().toUtc().toIso8601String(),
               'completed_run_id': null,
               'manually_completed': false,
               'completed_at': null,

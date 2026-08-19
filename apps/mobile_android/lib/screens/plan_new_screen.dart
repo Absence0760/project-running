@@ -7,6 +7,7 @@ import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
+import '../plan_ramp.dart';
 import '../social_service.dart' show ClubView, SocialService;
 import '../starter_plans.dart';
 import '../training.dart';
@@ -90,6 +91,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   // calibration (72h hard-day spacing + 3-week cycle). Null → standard
   // schedule.
   int? _viewerAge;
+  // The runner's chronic weekly volume, so the preview can say whether the
+  // plan's opening week is a step their current training supports. Null until
+  // loaded (and on failure) — the note self-hides rather than grading against
+  // a base it doesn't have.
+  RecentVolume? _recentVolume;
 
   late final SocialService _social = widget.social ?? SocialService();
   List<_TemplateOption> _templates = const [];
@@ -120,6 +126,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     widget.training.fetchViewerAge().then((a) {
       if (!mounted) return;
       setState(() => _viewerAge = a);
+    });
+    widget.training.fetchRecentRunVolume().then((v) {
+      if (!mounted) return;
+      setState(() => _recentVolume = v);
     });
     _loadTemplates();
   }
@@ -709,6 +719,36 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     );
   }
 
+  /// How the plan compares with what the runner has actually been running,
+  /// or null when there is nothing worth saying. Recomputed on every build,
+  /// so dropping a training day shows the ramp easing in real time.
+  String? _rampMessage(
+      AppLocalizations l10n, GeneratedPlan p, bool isWalkRun) {
+    final recent = _recentVolume;
+    if (recent == null) return null;
+    final weeks = [
+      for (final w in p.weeks)
+        PlanWeekVolume(weekIndex: w.weekIndex, targetVolumeM: w.targetVolumeM),
+    ];
+    final check = planRampCheck(
+      openingWeekVolumeM(weeks),
+      peakWeekVolumeM(weeks),
+      recent,
+    );
+    if (!shouldSurfaceRampNote(check, beginnerWalkRun: isWalkRun)) return null;
+    final recentKm = fmtKm(check.recentWeeklyM, 0);
+    // Each verdict quotes the week it was graded on: the safety warnings are
+    // about the first step, the under-cooked one about the peak.
+    if (check.verdict == PlanRampVerdict.under) {
+      return l10n.planNewRampUnder(fmtKm(check.peakWeekM, 0), recentKm);
+    }
+    final opening = fmtKm(check.openingWeekM, 0);
+    if (check.verdict == PlanRampVerdict.elevated) {
+      return l10n.planNewRampElevated(opening, recentKm);
+    }
+    return l10n.planNewRampHigh(opening, recentKm);
+  }
+
   Widget _buildPreview(
       ThemeData theme, AppLocalizations l10n, GeneratedPlan p) {
     // A beginner walk-run plan is duration-based intervals, not pace-based —
@@ -717,6 +757,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     // (every session is a walk_run workout) and hide the pace panel for it.
     final isWalkRun = p.weeks
         .any((w) => w.workouts.any((wo) => wo.kind == WorkoutKind.walkRun));
+    final rampMessage = _rampMessage(l10n, p, isWalkRun);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -759,6 +800,25 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
             ],
+          ],
+          if (rampMessage != null) ...[
+            const SizedBox(height: 12),
+            Semantics(
+              liveRegion: true,
+              container: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.planNewRampLabel,
+                      style: theme.textTheme.labelMedium
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(rampMessage,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.onSurface)),
+                ],
+              ),
+            ),
           ],
           const SizedBox(height: 10),
           Text(l10n.planNewWeekOutline,

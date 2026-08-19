@@ -645,17 +645,52 @@ void main() {
           reason: 'pre-run belt distance must not be credited');
     });
 
-    test('belt distance overrides GPS distance once in treadmill mode', () {
+    test('the belt drives distance from the switch on, GPS up to it', () {
       final r = RunRecorder()..debugPrepareWithoutStream();
       r.begin();
       r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
       r.debugInjectPosition(makePosition(metresEast: 30, secondsFromStart: 10));
-      // A spurious GPS fix exists, but the belt is authoritative now.
       r.setTreadmillSample(3.0, totalDistanceMetres: 1000);
       r.setTreadmillSample(3.0, totalDistanceMetres: 1500);
-      expect(r.debugReportedDistanceMetres, 500.0);
+      expect(r.debugReportedDistanceMetres, closeTo(530, 0.5),
+          reason: 'the 30 m already run is carried across, then the belt adds '
+              'its own 500 m');
       expect(r.debugDistanceMetres, greaterThan(0),
           reason: 'GPS accumulator keeps running underneath, untouched');
+    });
+
+    test('enabling treadmill mode mid-run keeps the distance already run', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 60, secondsFromStart: 20));
+      expect(r.debugReportedDistanceMetres, closeTo(60, 0.5));
+      // Mid-run is the ONLY way to enable treadmill mode, so the switch always
+      // lands on an already-accumulating run. Anchoring at the belt's own total
+      // zeroed the headline distance the instant the belt engaged.
+      r.setTreadmillSample(3.0, totalDistanceMetres: 0);
+      expect(r.debugReportedDistanceMetres, closeTo(60, 0.5),
+          reason: 'the switch must not discard the 60 m already run');
+      r.setTreadmillSample(3.0, totalDistanceMetres: 100);
+      expect(r.debugReportedDistanceMetres, closeTo(160, 0.5),
+          reason: '60 m of GPS plus 100 m of belt is 160 m, not 100 m');
+      // The lap split is a delta off the same total, so the discard used to
+      // clamp a negative into a silent 0 m lap in metadata.laps.
+      r.lap();
+      expect(r.laps.last.cumulativeDistanceMetres, closeTo(160, 0.5));
+    });
+
+    test('a speed-only belt also carries the distance already run', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(makePosition(metresEast: 60, secondsFromStart: 20));
+      r.setTreadmillSample(2.0);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      r.setTreadmillSample(2.0);
+      expect(r.debugReportedDistanceMetres, greaterThan(60),
+          reason: 'integration continues from the carried total');
+      expect(r.debugReportedDistanceMetres, lessThan(62));
     });
 
     test('speed integration when the belt reports no total distance', () async {
@@ -762,17 +797,23 @@ void main() {
           reason: 'a single glitch reading must not inject phantom distance');
     });
 
-    test('clearTreadmillMode reverts to the GPS distance', () {
+    test('clearTreadmillMode hands the accumulated total back to GPS', () {
       final r = RunRecorder()..debugPrepareWithoutStream();
       r.begin();
       r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
       r.debugInjectPosition(makePosition(metresEast: 20, secondsFromStart: 8));
       r.setTreadmillSample(3.0, totalDistanceMetres: 1000);
       r.setTreadmillSample(3.0, totalDistanceMetres: 1200);
-      expect(r.debugReportedDistanceMetres, 200.0);
+      expect(r.debugReportedDistanceMetres, closeTo(220, 0.5));
       r.clearTreadmillMode();
       expect(r.debugTreadmillMode, isFalse);
-      expect(r.debugReportedDistanceMetres, closeTo(20, 0.5));
+      // Switching back mid-run must be as continuous as switching on: the run
+      // distance is one total handed between sources, so leaving the belt
+      // cannot walk the headline back to the GPS-only figure.
+      expect(r.debugReportedDistanceMetres, closeTo(220, 0.5));
+      r.debugInjectPosition(makePosition(metresEast: 40, secondsFromStart: 16));
+      expect(r.debugReportedDistanceMetres, closeTo(240, 0.5),
+          reason: 'GPS resumes accumulating from the handed-over total');
     });
 
     test('stop() tags an indoor treadmill run in metadata', () async {
@@ -806,8 +847,9 @@ void main() {
       r.setTreadmillSample(3.0, totalDistanceMetres: 1000);
       r.setTreadmillSample(3.0, totalDistanceMetres: 1400);
       r.lap();
-      expect(r.laps.last.cumulativeDistanceMetres, 400.0,
-          reason: 'a treadmill lap split must use belt distance, not GPS');
+      expect(r.laps.last.cumulativeDistanceMetres, closeTo(415, 0.5),
+          reason: 'a treadmill lap split runs off the belt total (the 15 m run '
+              'before the switch carried across), not the GPS accumulator');
     });
 
     test('belt distance accrued while paused is not credited', () {

@@ -52,6 +52,7 @@
     <string name="activity_walk">Caminar</string>
     <string name="activity_hike">Senderismo</string>
     <string name="activity_cycle">Ciclismo</string>
+    <string name="activity_stroller">Cochecito</string>
     <string name="sign_in">Iniciar sesión</string>
     <string name="sign_out">Cerrar sesión</string>
     <string name="cd_cancel_countdown">Cancelar la cuenta atrás</string>

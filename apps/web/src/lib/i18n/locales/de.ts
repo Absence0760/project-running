@@ -1404,6 +1404,8 @@ export const messages = {
 	"settingsAccount.resetLinkSent": "Zurücksetzungslink gesendet. Prüfe deine E-Mails, um ein neues Passwort festzulegen.",
 	"settingsAccount.exportFailed": "Export fehlgeschlagen: {error}",
 	"settingsAccount.exportReady": "Export bereit ({count, plural, one {# Lauf} other {# Läufe}}). Der Download-Tab wird geschlossen, sobald die Datei angekommen ist.",
+	"settingsAccount.exportPartialReady": "Export fertig, aber unvollständig — {count, plural, one {# Lauf} other {# Läufe}} von {total}.",
+	"settingsAccount.exportPartialNotice": "Dein letzter Export ist unvollständig: Er enthält {count} der {total} Läufe in deinem Konto. Es wurde nichts gelöscht — exportiere erneut, um es noch einmal zu versuchen. Das vollständige Kontoarchiv nennt jeden unvollständigen Abschnitt in seiner manifest.json.",
 	"settingsAccount.backupFailed": "Backup fehlgeschlagen: {error}",
 	"settingsAccount.identitiesLoadFailed": "Anmeldemethoden konnten nicht geladen werden: {error}",
 	"settingsAccount.linkFailed": "{provider} konnte nicht verknüpft werden: {error}",

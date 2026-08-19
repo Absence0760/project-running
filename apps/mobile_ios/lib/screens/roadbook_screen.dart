@@ -394,14 +394,37 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     final unit = activeDistanceUnit;
     final rb = _roadbook;
     final lines = <String>['${widget.route.name} — ${l10n.roadbookTitle}', ''];
-    for (final leg in rb.legs) {
+    for (var i = 0; i < rb.legs.length; i++) {
+      final leg = rb.legs[i];
       final name = _checkpointLabel(l10n, leg);
       final arrival = _elapsedLabel(leg.projectedElapsedS) +
           (leg.projectedClockMin != null ? ' (${_clockLabel(leg.projectedClockMin!)})' : '');
       final cut = leg.cutoff != null ? '  ⏱ ${_marginLabel(leg.cutoff!.marginS)}' : '';
-      lines.add('${UnitFormat.distance(leg.cumDistM, unit)}  $name  $arrival$cut');
+      final tgt = leg.target != null
+          ? '  ${l10n.roadbookColTarget} ${_elapsedLabel(leg.target!.targetElapsedS.toDouble())}'
+              ' ${_marginLabel(leg.target!.marginS)} ${_targetStatusLabel(l10n, leg.target!.status)}'
+          : '';
+      final pace =
+          '${l10n.roadbookColLegPace} ${_legPace(rb.legs, i, unit)}';
+      lines.add(
+          '${UnitFormat.distance(leg.cumDistM, unit)}  $name  $pace  $arrival$tgt$cut');
     }
     Share.share(lines.join('\n'));
+  }
+
+  /// Seconds the pacing model allocated to the leg arriving at [i]. The start
+  /// row has no preceding leg.
+  static double _legSeconds(List<RoadbookLeg> legs, int i) =>
+      i <= 0 ? 0 : legs[i].projectedElapsedS - legs[i - 1].projectedElapsedS;
+
+  /// The pace this leg has to be run at to hold the goal. Under the effort
+  /// model this is the number that differs between a climb and a flat — the
+  /// whole point of the model, and invisible from cumulative arrivals alone.
+  static String _legPace(List<RoadbookLeg> legs, int i, DistanceUnit unit) {
+    final leg = legs[i];
+    if (i <= 0 || leg.legDistM <= 0) return '—';
+    final secPerKm = _legSeconds(legs, i) / (leg.legDistM / 1000);
+    return '${UnitFormat.pace(secPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
   }
 
   String _checkpointLabel(AppLocalizations l10n, RoadbookLeg leg) {
@@ -523,7 +546,8 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
             ),
             const SizedBox(height: 4),
             for (var i = 0; i < rb.legs.length; i++)
-              _legRow(context, l10n, rb.legs[i], unit, fuel?.legs[i]),
+              _legRow(context, l10n, rb.legs[i], unit, fuel?.legs[i],
+                  _legPace(rb.legs, i, unit)),
           ],
         ],
       ),
@@ -531,9 +555,10 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
   }
 
   Widget _legRow(BuildContext context, AppLocalizations l10n, RoadbookLeg leg,
-      DistanceUnit unit, FuelLeg? fuelLeg) {
+      DistanceUnit unit, FuelLeg? fuelLeg, String legPace) {
     final theme = Theme.of(context);
     final cutoff = leg.cutoff;
+    final target = leg.target;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -567,24 +592,33 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
                   ].join(' · '),
                   style: theme.textTheme.bodySmall,
                 ),
+                Padding(
+                  key: const Key('roadbook-leg-pace'),
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '${l10n.roadbookColLegPace} $legPace',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                if (target != null)
+                  _verdictChip(
+                    context,
+                    key: const Key('roadbook-target'),
+                    color: _targetColor(
+                        AppSemanticColors.of(context), theme, target.status),
+                    text: '${l10n.roadbookColTarget} '
+                        '${_elapsedLabel(target.targetElapsedS.toDouble())} · '
+                        '${_marginLabel(target.marginS)} '
+                        '${_targetStatusLabel(l10n, target.status)}',
+                  ),
                 if (cutoff != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _cutoffColor(AppSemanticColors.of(context),
-                                cutoff.status)
-                            .withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
+                  _verdictChip(
+                    context,
+                    color: _cutoffColor(
+                        AppSemanticColors.of(context), cutoff.status),
+                    text:
                         '${l10n.routeMarkerKindCutoff} ${_marginLabel(cutoff.marginS)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: _cutoffColor(
-                                AppSemanticColors.of(context), cutoff.status)),
-                      ),
-                    ),
                   ),
                 if (leg.services.isNotEmpty)
                   Padding(
@@ -637,11 +671,48 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     ];
   }
 
+  Widget _verdictChip(BuildContext context,
+      {Key? key, required Color color, required String text}) {
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.only(top: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          text,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+        ),
+      ),
+    );
+  }
+
   Color _cutoffColor(AppSemanticColors semantic, CutoffStatus s) =>
       switch (s) {
         CutoffStatus.miss => semantic.danger,
         CutoffStatus.tight => semantic.warning,
         CutoffStatus.safe => semantic.success,
+      };
+
+  /// On-plan is deliberately neutral rather than a third alert colour: a
+  /// checkpoint inside the band is the schedule working, and colouring it
+  /// would leave nothing on the row that reads as "look here".
+  Color _targetColor(
+          AppSemanticColors semantic, ThemeData theme, TargetStatus s) =>
+      switch (s) {
+        TargetStatus.behind => semantic.danger,
+        TargetStatus.ahead => semantic.success,
+        TargetStatus.on => theme.colorScheme.onSurfaceVariant,
+      };
+
+  static String _targetStatusLabel(AppLocalizations l10n, TargetStatus s) =>
+      switch (s) {
+        TargetStatus.ahead => l10n.roadbookTargetAhead,
+        TargetStatus.on => l10n.roadbookTargetOn,
+        TargetStatus.behind => l10n.roadbookTargetBehind,
       };
 
   static String _serviceLabel(AppLocalizations l10n, String s) => switch (s) {

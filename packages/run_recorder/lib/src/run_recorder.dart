@@ -129,6 +129,13 @@ class RunRecorder {
   static const _gpsRetryInterval = Duration(seconds: 3);
 
   final _controller = StreamController<RunSnapshot>.broadcast();
+  // Set by [dispose] and never cleared. The GPS retry callback awaits its
+  // service/permission precheck, so one already in flight when the recorder is
+  // disposed resumes afterwards and would re-open the position stream — a
+  // subscription nothing is left to cancel, holding the GPS radio and the
+  // foreground service for the life of the process while every fix raises on
+  // the closed snapshot sink.
+  bool _disposed = false;
   StreamSubscription<Position>? _positionSub;
   Timer? _timer;
   Timer? _gpsRetryTimer;
@@ -223,6 +230,10 @@ class RunRecorder {
   // distance. ~10 s matches the "GPS lost" mental model and is long enough
   // that a 1 Hz corrupt outlier (dt≈1 s) still fails closed. See #330.
   static const double _gpsReanchorAfterSeconds = 10;
+  // Point-onto-segment projections [_reseedRouteFloor] may spend replaying a
+  // resumed track. A few milliseconds' worth — the resume path runs on the UI
+  // isolate, ahead of the first post-resume fix.
+  static const int _resumeFloorProjectionBudget = 200000;
   // Rate-limits the "fix dropped for accuracy" log. An always-bad stream
   // would otherwise spam at ~1 Hz for the entire run.
   DateTime? _lastAccuracyDropLogAt;
@@ -348,6 +359,9 @@ class RunRecorder {
     LocationAccuracy accuracy = LocationAccuracy.high,
     double accuracyGateMetres = 20,
   }) async {
+    if (_disposed) {
+      throw StateError('RunRecorder.prepare() called after dispose()');
+    }
     // Reset state first and flip _prepared = true unconditionally. If GPS
     // setup below throws, the recorder is still usable for a time-only
     // (indoor / treadmill) run — begin() will start the stopwatch, the
@@ -444,6 +458,7 @@ class RunRecorder {
   /// subscription and clears [_positionSub] — the retry loop picks it back
   /// up once services are available again.
   void _openPositionStream() {
+    if (_disposed) return;
     _positionSub?.cancel();
     _positionSub = Geolocator.getPositionStream(
       locationSettings: _platformLocationSettings(),
@@ -663,6 +678,32 @@ class RunRecorder {
     _laps
       ..clear()
       ..addAll(laps);
+    _reseedRouteFloor();
+  }
+
+  /// Rebuild the monotonic route floor from the seeded track.
+  ///
+  /// [prepare] resets [_minMatchedSegmentIdx] to 1, which hands a resumed run a
+  /// route matcher with no memory of the ground already covered: on a loop or
+  /// an out-and-back the closest segment to the runner is then one they passed
+  /// hours ago, so distance-remaining jumps back up and — the floor being by
+  /// design never lowered — never self-corrects. The seeded track holds exactly
+  /// the fixes the live run advanced the floor on, so replaying it through the
+  /// same closest-segment search restores the floor the killed process had.
+  void _reseedRouteFloor() {
+    final route = _route;
+    if (route == null || route.waypoints.length < 2 || _track.isEmpty) return;
+    // Every probe scans the route tail, so replaying a multi-day track against
+    // a dense route in one burst is the whole run's route maths at once. Probe
+    // an evenly spaced subset within a fixed budget: the floor advances by the
+    // ORDER points are matched in, not by how densely they are sampled.
+    final probes =
+        max(1, _resumeFloorProjectionBudget ~/ (route.waypoints.length - 1));
+    final step = max(1, (_track.length / probes).ceil());
+    for (var i = 0; i < _track.length; i += step) {
+      _routeProgress(_track[i]);
+    }
+    _routeProgress(_track.last);
   }
 
   /// [begin]-equivalent for [resumeSession]: starts the clock + 1 s snapshot
@@ -885,7 +926,18 @@ class RunRecorder {
   /// is kept. No-op until [begin] (distance only accumulates while recording).
   void setTreadmillSample(double speedMps, {double? totalDistanceMetres}) {
     try {
-      _treadmillMode = true;
+      if (!_treadmillMode) {
+        _treadmillMode = true;
+        // Mid-run is the only way the belt ever engages, so every activation
+        // lands on an already-accumulating run: hand the running total to the
+        // source taking over instead of restarting it at the belt's own zero,
+        // which dropped the GPS kilometres already run and made the next lap
+        // split a negative (clamped to 0 m) delta. Arming the re-anchor makes
+        // the first cumulative-total sample baseline onto the carried value,
+        // the same formula the pause and console-reset re-anchors use.
+        _treadmillDistanceMetres = _distanceMetres;
+        _treadmillNeedsRebaseline = true;
+      }
       if (!_recording) return;
       final now = DateTime.now();
       if (totalDistanceMetres != null) {
@@ -952,10 +1004,16 @@ class RunRecorder {
     }
   }
 
-  /// Leave treadmill mode and revert the headline distance to the GPS path.
+  /// Leave treadmill mode and hand the headline distance back to the GPS path.
   /// Called when the user turns treadmill mode off or the belt is forgotten
   /// mid-session.
+  ///
+  /// The accumulated total moves onto the GPS accumulator, the mirror of the
+  /// carry [setTreadmillSample] does on the way in: one continuous run
+  /// distance, handed between sources, never two rival accumulators one of
+  /// which is discarded at the switch.
   void clearTreadmillMode() {
+    if (_treadmillMode) _distanceMetres = _treadmillDistanceMetres;
     _treadmillMode = false;
     _resetTreadmillAccumulators();
   }
@@ -1472,11 +1530,19 @@ class RunRecorder {
     );
   }
 
-  /// Clean up resources.
+  /// Clean up resources. Terminal: the recorder cannot record again, and
+  /// [prepare] on a disposed recorder throws rather than handing back one that
+  /// silently never opens a stream.
   void dispose() {
+    _disposed = true;
+    _recording = false;
+    _prepared = false;
     _timer?.cancel();
+    _timer = null;
     _gpsRetryTimer?.cancel();
+    _gpsRetryTimer = null;
     _positionSub?.cancel();
+    _positionSub = null;
     _controller.close();
   }
 }

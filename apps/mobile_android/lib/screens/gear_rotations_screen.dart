@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ListSkeleton;
 
 import '../auth_error.dart';
+import '../gear_rotation_pick.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../widgets/top_banner.dart';
@@ -33,15 +34,38 @@ class GearRotationsScreen extends StatefulWidget {
   State<GearRotationsScreen> createState() => _GearRotationsScreenState();
 }
 
+/// One rotation's answer to "which pair comes out next", within one gear kind.
+/// The `is_default` star is scoped to (owner, kind), so a rotation holding both
+/// shoes and a bike gets one of these per kind.
+class _NextUp {
+  final Map<String, dynamic> gear;
+  final bool isCurrent;
+  final bool allWorn;
+
+  const _NextUp(this.gear, this.isCurrent, this.allWorn);
+}
+
 class _GearRotationsScreenState extends State<GearRotationsScreen> {
   List<GearRotationWithMembers> _rotations = [];
   bool _loading = true;
   bool _busy = false;
+  bool _movingStar = false;
 
   @override
   void initState() {
     super.initState();
+    widget.gearStore.addListener(_onStoreChange);
     _load();
+  }
+
+  @override
+  void dispose() {
+    widget.gearStore.removeListener(_onStoreChange);
+    super.dispose();
+  }
+
+  void _onStoreChange() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -137,6 +161,60 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
     if (saved == true) await _load();
   }
 
+  List<_NextUp> _nextUpFor(GearRotationWithMembers r) {
+    final memberIds = r.gearIds.toSet();
+    final members = widget.gearStore.rows
+        .where((g) => memberIds.contains(g['id']))
+        .toList(growable: false);
+    final kinds = members.map((g) => g['kind'] as String? ?? '').toSet().toList()
+      ..sort();
+    final out = <_NextUp>[];
+    for (final kind in kinds) {
+      final ofKind =
+          members.where((g) => g['kind'] == kind).toList(growable: false);
+      final pick = rotationPick(ofKind
+          .map((g) => RotationMember(
+                id: g['id'] as String,
+                totalDistanceM: g['total_distance_m'] as num?,
+                targetDistanceM: g['target_distance_m'] as num?,
+                retiredAt: g['retired_at'] as String?,
+                isCurrent: g['is_default'] as bool? ?? false,
+              ))
+          .toList(growable: false));
+      // Fewer than two pairs still in service is not a rotation — there is
+      // nothing to choose between. Gate on what the pick actually ranked, not
+      // on the membership count: a retired member is dropped by the pick, so
+      // counting memberships offers a "next up" for a single usable pair.
+      if (pick.ranked.length < 2) continue;
+      for (final g in ofKind) {
+        if (g['id'] == pick.pickId) {
+          out.add(_NextUp(g, pick.pickIsCurrent, pick.allWorn));
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  Future<void> _makeCurrent(Map<String, dynamic> gear) async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _movingStar = true);
+    try {
+      await widget.api
+          .setDefaultGear(gear['id'] as String, gear['kind'] as String);
+      final fresh = await widget.api.fetchMyGearWithDistance();
+      await widget.gearStore.replaceFromServer(fresh);
+    } catch (e) {
+      debugPrint('gear make current failed: $e');
+      if (mounted) {
+        showTopBanner(
+            context, l10n.gearRotationMakeCurrentFailed(friendlyError(l10n, e)));
+      }
+    } finally {
+      if (mounted) setState(() => _movingStar = false);
+    }
+  }
+
   Future<String?> _promptName(
       {required String title, required String initial}) {
     final l10n = AppLocalizations.of(context);
@@ -210,23 +288,84 @@ class _GearRotationsScreenState extends State<GearRotationsScreen> {
 
   Widget _rotationTile(
       GearRotationWithMembers r, ThemeData theme, AppLocalizations l10n) {
+    final nextUps = _nextUpFor(r);
     return Card(
-      child: ListTile(
-        title: Text(r.name, style: theme.textTheme.titleSmall),
-        subtitle: Text(l10n.gearRotationMemberCount(r.gearIds.length)),
-        onTap: () => _editMembers(r),
-        trailing: PopupMenuButton<String>(
-          onSelected: (v) {
-            if (v == 'members') _editMembers(r);
-            if (v == 'rename') _rename(r);
-            if (v == 'delete') _delete(r);
-          },
-          itemBuilder: (_) => [
-            PopupMenuItem(value: 'members', child: Text(l10n.gearRotationManage)),
-            PopupMenuItem(value: 'rename', child: Text(l10n.gearRotationRename)),
-            PopupMenuItem(value: 'delete', child: Text(l10n.gearDelete)),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            title: Text(r.name, style: theme.textTheme.titleSmall),
+            subtitle: Text(l10n.gearRotationMemberCount(r.gearIds.length)),
+            onTap: () => _editMembers(r),
+            trailing: PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'members') _editMembers(r);
+                if (v == 'rename') _rename(r);
+                if (v == 'delete') _delete(r);
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                    value: 'members', child: Text(l10n.gearRotationManage)),
+                PopupMenuItem(
+                    value: 'rename', child: Text(l10n.gearRotationRename)),
+                PopupMenuItem(value: 'delete', child: Text(l10n.gearDelete)),
+              ],
+            ),
+          ),
+          for (final n in nextUps) _nextUpBlock(n, theme, l10n),
+        ],
+      ),
+    );
+  }
+
+  Widget _nextUpBlock(_NextUp n, ThemeData theme, AppLocalizations l10n) {
+    final name = n.gear['name'] as String? ?? '';
+    final muted = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(l10n.gearRotationNextUp(name),
+                  style: theme.textTheme.bodyMedium),
+              if (n.isCurrent)
+                Text(l10n.gearRotationNextUpIsCurrent, style: muted)
+              else
+                OutlinedButton(
+                  onPressed: _movingStar ? null : () => _makeCurrent(n.gear),
+                  child: Text(
+                    l10n.gearRotationMakeCurrent,
+                    semanticsLabel: l10n.gearRotationMakeCurrentLabel(name),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(l10n.gearRotationNextUpWhy, style: muted),
+          if (n.allWorn)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.change_circle,
+                      size: 18, color: AppSemanticColors.of(context).warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(l10n.gearRotationAllWorn,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppSemanticColors.of(context).warning)),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

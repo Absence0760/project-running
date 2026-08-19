@@ -70,6 +70,7 @@ apps/watch_wear/
             │   ├── SessionBridge.kt         # Wearable Data Layer listener for phone-handed session
             │   ├── RoutesBridge.kt          # Wearable Data Layer listener for phone-pushed starred routes
             │   ├── SessionStore.kt          # EncryptedSharedPreferences cache of the auth session (tokens encrypted at rest)
+            │   ├── SingleFlight.kt          # coalesces concurrent token refreshes (rotating refresh token)
             │   ├── RaceSessionClient.kt     # live race-mode ping client (`race_pings`)
             │   ├── ui/RunWatchApp.kt        # Compose-for-Wear screens
             │   ├── ui/RouteMiniMap.kt       # Polyline + position-dot + track-so-far + raster tiles
@@ -82,6 +83,7 @@ apps/watch_wear/
             │   │   ├── CheckpointStore.kt       # in-progress recovery snapshot
             │   │   ├── CheckpointRecovery.kt    # grade a survivor before offering it
             │   │   ├── TrackWriter.kt           # streaming GPS to disk JSON
+            │   │   ├── TrackStorage.kt          # durable track dir + cache migration + orphan sweep
             │   │   ├── ElapsedMath.kt           # pure pause/resume elapsed-time math
             │   │   ├── RouteMath.kt             # off-route distance + remaining km
             │   │   ├── TtsAnnouncer.kt          # split + pace-alert TTS
@@ -328,9 +330,17 @@ pieces extend that to all-day efforts without drifting into O(n) memory
 or hammering the NotificationManager:
 
 - `recording/TrackWriter.kt` streams GPS points to a JSON array on disk
-  (cache dir, `tracks/{runId}.json`) with a flush every 32 points. The
-  in-memory point list is gone — `RecordingRepository.Metrics` carries
-  only `trackPointCount` + `latestPoint` + `trackFilePath`.
+  (`filesDir/tracks/{runId}.json`, resolved by `recording/TrackStorage.kt`)
+  with a flush every 32 points. The in-memory point list is gone —
+  `RecordingRepository.Metrics` carries only `trackPointCount` +
+  `latestPoint` + `trackFilePath`. **`filesDir`, not `cacheDir`**: until the
+  run has uploaded that file is the only copy of the trace, and the platform
+  reclaims the cache dir under storage pressure without asking.
+  `TrackStorage` also owns the cache→files migration for an install that
+  already had runs queued, and the orphan sweep that replaces the platform's
+  own reclamation — `RunViewModel.reconcileTrackStorage` runs both once per
+  process, under the drain mutex, keeping the queue and the pending crash
+  checkpoint and the live recording.
 - Rolling HR. `RunRecordingService` tracks `bpmSum: Long` + `bpmCount:
   Long` instead of a list; avg is O(1) regardless of sample count.
   `Checkpoint` carries the same rolling pair, so recovery works without
@@ -338,8 +348,15 @@ or hammering the NotificationManager:
 - Notification refresh is throttled to every 10 tickerJob iterations (~5s).
   The UI still gets its 500ms elapsed tick, but NotificationManager only
   sees a fraction of the churn.
-- `SupabaseClient.saveRun` takes a `File` and gzips disk-to-disk into a
-  sibling temp file before uploading — peak memory is one 8 KiB buffer.
+- `SupabaseClient.saveRun` takes a `File?` and gzips disk-to-disk into a
+  sibling temp file before uploading — peak memory is one 8 KiB buffer. A
+  null means the payload is genuinely gone (purged out of the pre-migration
+  cache dir), and the row is posted with a null `track_url` — the same shape
+  an indoor recording takes — rather than the run sticking in the queue
+  promising a sync that can never happen. `drainQueue` deletes the track file
+  only **after** the queue entry is removed, so a missing file always means
+  the track was never uploaded and the null cannot erase one already in
+  Storage.
 - `system/BatteryStatus.kt` reads `BATTERY_PROPERTY_CAPACITY` and the
   pre-run screen surfaces a warning below 40%. A 10-hour run on a half-
   charged watch is the single most common way to lose an ultra attempt.

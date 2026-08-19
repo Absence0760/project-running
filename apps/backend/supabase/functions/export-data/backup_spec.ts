@@ -11,6 +11,34 @@ export interface BackupTableSpec {
 	redact?: (row: Record<string, unknown>) => Record<string, unknown>;
 }
 
+/// Offset paging is only stable under a total order, and PostgREST
+/// applies none by default — two pages of an unordered read can repeat
+/// a row and skip another, which in an Art 20 export means a row the
+/// subject never receives. Every table is therefore read ordered by its
+/// primary key; this is the set whose key isn't a bare `id`. Keep in
+/// lockstep with `orderForTable` in the Go worker's supabase.go.
+const ORDER_BY_TABLE: Record<string, string> = {
+	challenge_participants: 'challenge_id,user_id',
+	club_members: 'club_id,user_id',
+	event_attendees: 'event_id,user_id,instance_start',
+	event_exceptions: 'event_id,instance_start',
+	event_pricing: 'event_id,instance_start',
+	instructor_payout_accounts: 'user_id',
+	personal_records: 'user_id,distance',
+	run_gear: 'run_id,gear_id',
+	run_kudos: 'user_id,run_id',
+	saved_routes: 'user_id,route_id',
+	user_blocks: 'blocker_id,blocked_id',
+	user_coach_usage: 'user_id,usage_date',
+	user_device_settings: 'user_id,device_id',
+	user_follows: 'follower_id,followee_id',
+	user_settings: 'user_id',
+};
+
+export function orderForTable(table: string): string {
+	return ORDER_BY_TABLE[table] ?? 'id';
+}
+
 /// Build the full table-spec list. Pure — only takes the caller's
 /// user id. Mirrors the Go worker's `FetchExportPersonalDataTables`
 /// shape so the EF rollback path is functionally equivalent. See
@@ -498,12 +526,19 @@ export function orphanStorageEntries(input: {
 
 /// Build `manifest.json` — same field set as the Go worker's
 /// BuildBackupZip manifest. `counts` carries runs/routes/tracks/
-/// hr_series/photos plus one count per extra-table entry.
+/// hr_series/photos plus one count per extra-table entry, and each is
+/// the AUTHORITATIVE row count the database holds — not the number of
+/// rows this archive happens to carry. `incomplete` names every section
+/// whose file is short of its count, and `complete` is the single flag a
+/// consumer gates on, so a truncated export cannot present itself as
+/// whole.
 export function buildBackupManifest(input: {
 	userId: string;
 	counts: Record<string, number>;
+	incomplete?: string[];
 	exportedAt?: string;
 }): Record<string, unknown> {
+	const incomplete = [...(input.incomplete ?? [])].sort();
 	return {
 		format: BACKUP_FORMAT,
 		version: BACKUP_VERSION,
@@ -511,6 +546,8 @@ export function buildBackupManifest(input: {
 		exported_by_user_id: input.userId,
 		exported_from: 'edge-function',
 		counts: input.counts,
+		complete: incomplete.length === 0,
+		incomplete,
 	};
 }
 

@@ -305,6 +305,81 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count activities didn\'t import',
+      one: '1 activity didn\'t import',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'Re-run the import to retry these — anything that already landed is skipped, so nothing is duplicated.';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count further failures were not recorded.',
+      one: '1 further failure was not recorded.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => 'Show each activity';
+
+  @override
+  String get importFailuresShare => 'Share report (CSV)';
+
+  @override
+  String get importFailuresShareFailed => 'Could not share the report.';
+
+  @override
+  String get importFailuresDismiss => 'Dismiss';
+
+  @override
+  String get importFailuresNoDate => 'Date unknown';
+
+  @override
+  String get importFailuresReasonNetwork => 'Connection dropped';
+
+  @override
+  String get importFailuresReasonAuth => 'Signed out';
+
+  @override
+  String get importFailuresReasonRateLimited => 'Rate limited';
+
+  @override
+  String get importFailuresReasonTooLarge => 'File too large';
+
+  @override
+  String get importFailuresReasonUnparseable => 'File could not be read';
+
+  @override
+  String get importFailuresReasonRejected => 'Rejected by the server';
+
+  @override
+  String get importFailuresReasonUnknown => 'Unknown error';
+
+  @override
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count runs are saved on this device — their upload to the cloud didn\'t go through. They will retry on the next sync.',
+      one:
+          '1 run is saved on this device — its upload to the cloud didn\'t go through. It will retry on the next sync.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get importHealthSubtitleIos =>
       'Pull workouts you\'ve recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health';
 
@@ -1618,8 +1693,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'No GPS — tracking will start when permission is granted.';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      'Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.';
+  String get runBackgroundLocationPaused =>
+      'Tracking paused while you were away — your run kept timing and nothing was lost, but distance covered off screen wasn’t counted. Set Location to \"Allow all the time\" to track in the background.';
 
   @override
   String get runGpsSensorFailed =>
@@ -2280,6 +2355,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String runDetailRunTooShortSplit(String unit) {
     return 'Run too short for a full $unit split';
   }
+
+  @override
+  String get runDetailPacing => 'Pacing';
+
+  @override
+  String get runDetailPacingFirstHalf => 'First half';
+
+  @override
+  String get runDetailPacingSecondHalf => 'Second half';
+
+  @override
+  String get runDetailPacingNegative => 'Negative split';
+
+  @override
+  String get runDetailPacingEven => 'Even split';
+
+  @override
+  String get runDetailPacingPositive => 'Positive split';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '$delta faster over the second half';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '$delta slower over the second half';
+  }
+
+  @override
+  String get runDetailPacingHeld => 'Steady across both halves';
+
+  @override
+  String get runDetailPacingGapNegative =>
+      'Adjusted for the terrain, you sped up over the second half.';
+
+  @override
+  String get runDetailPacingGapEven =>
+      'Adjusted for the terrain, your effort was even across both halves.';
+
+  @override
+  String get runDetailPacingGapPositive =>
+      'Adjusted for the terrain, you slowed over the second half.';
+
+  @override
+  String get runDetailGapColumn => 'Grade-adj.';
+
+  @override
+  String get runDetailGapColumnHint =>
+      'Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.';
 
   @override
   String get runDetailSectionSegments => 'Segments';
@@ -4739,6 +4864,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return 'Not moving — $n min in the same spot';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return 'Not moving — at least $n min in the same spot';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'Run complete';
 
   @override
@@ -4980,6 +5115,24 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String planNewVdot(String value) {
     return 'Daniels VDOT: $value';
+  }
+
+  @override
+  String get planNewRampLabel => 'Plan vs. your recent training';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'This plan peaks at $peak a week, below the $recent a week you\'ve averaged over the last four weeks. A longer goal race or more training days would make better use of that base.';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return 'Week 1 asks for $opening against the $recent a week you\'ve averaged over the last four weeks — a real step up. Ease into it, or drop a training day.';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return 'Week 1 asks for $opening, well above the $recent a week you\'ve averaged over the last four weeks. Fewer training days, a shorter goal race, or a few weeks of base building first would make that first step safer.';
   }
 
   @override
@@ -5960,6 +6113,31 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'Export is partial — $count of $total runs.';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return 'Your last export is partial: it holds $count of the $total runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'Backup is missing $missing of $total GPS files.';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return 'Your last backup could not download $missing of the $total GPS track files. Every run is in the archive; export again to retry the traces. Its manifest.json says complete: false.';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'That archive said it was incomplete. $runs runs were restored and nothing was overwritten - restore from a complete backup to fill the gaps.';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable => 'Backup service unavailable.';
 
   @override
@@ -6848,6 +7026,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gearRotationDone => 'Done';
+
+  @override
+  String gearRotationNextUp(String name) {
+    return 'Next up: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'Least worn in this rotation.';
+
+  @override
+  String get gearRotationMakeCurrent => 'Make current';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return 'Make $name the current pair — new runs will auto-tag with it';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'Already the current pair.';
+
+  @override
+  String get gearRotationAllWorn =>
+      'Every pair here is at or past its replacement target.';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return 'Couldn\'t change the current pair: $error';
+  }
 
   @override
   String get privacyZonesSaved => 'Privacy zones saved.';
@@ -9597,6 +9803,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gymRoutinePublishFailed => 'Couldn\'t publish the routine.';
 
   @override
+  String get gymRoutineHistoryTitle => 'Routine history';
+
+  @override
+  String get gymRoutineHistoryRecent => 'Recent sessions';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Done $days days ago',
+      one: 'Done yesterday',
+      zero: 'Done today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$completed of $graded completed';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => 'Not graded';
+
+  @override
+  String get gymRoutineHistoryLoadError =>
+      'Couldn’t load this routine’s history.';
+
+  @override
   String get gymRoutineClubTemplateBadge => 'Club template';
 
   @override
@@ -9853,6 +10089,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionTitle => 'Nutrition';
 
   @override
+  String get nutritionDayNavLabel => 'Diary day';
+
+  @override
+  String get nutritionDayPrevious => 'Previous day';
+
+  @override
+  String get nutritionDayNext => 'Next day';
+
+  @override
+  String get nutritionDayToday => 'Today';
+
+  @override
+  String get nutritionDayYesterday => 'Yesterday';
+
+  @override
+  String get nutritionDayBackfillHint =>
+      'Anything you log here is added to this day.';
+
+  @override
+  String get nutritionDayEmptyPast => 'Nothing logged on this day.';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return 'Goal $base + $exercise kcal burned that day';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '7 days to $date';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return 'Log food — $date';
+  }
+
+  @override
   String get nutritionLogFood => 'Log food';
 
   @override
@@ -9881,6 +10154,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nutritionCholesterol => 'Cholesterol';
+
+  @override
+  String get nutritionNutrients => 'Nutrients';
+
+  @override
+  String get nutritionNutrientsHint =>
+      'Reference intakes. Each total counts only the logged items that report that nutrient.';
+
+  @override
+  String get nutritionNutrientAtLeast => 'at least';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '$reported of $total logged items report $nutrient';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit over';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return '$n $unit left';
+  }
+
+  @override
+  String get nutritionNutrientReached => 'Goal reached';
+
+  @override
+  String get nutritionNutrientUntargeted => 'No daily target';
 
   @override
   String get nutritionWater => 'Water';
@@ -10972,6 +11276,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get roadbookColTarget => 'Target';
+
+  @override
+  String get roadbookColLegPace => 'Leg pace';
+
+  @override
+  String get roadbookTargetAhead => 'ahead';
+
+  @override
+  String get roadbookTargetOn => 'on plan';
+
+  @override
+  String get roadbookTargetBehind => 'behind';
+
+  @override
   String get checkpointCheckinAction => 'Checkpoint check-in';
 
   @override
@@ -11148,6 +11467,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String challengesLeaderboardRank(int rank) {
     return '#$rank';
   }
+
+  @override
+  String get challengesStandingTitle => 'Your standing';
+
+  @override
+  String get challengesStandingTitleTeam => 'Your team\'s standing';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '#$rank of $total';
+  }
+
+  @override
+  String get challengesStandingTiedOne => 'Tied with 1 other';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return 'Tied with $n others';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$gap behind $name';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$gap ahead of $name';
+  }
+
+  @override
+  String get challengesStandingLeading => 'Leading';
 
   @override
   String challengesParticipants(int n) {

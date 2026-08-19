@@ -46,9 +46,18 @@ import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { publishableKey, secretKey, secretKeyHeaders } from '../_shared/api_keys.ts';
 import { EXPORT_FETCH_CONCURRENCY, pooledPipeline } from './pooled.ts';
+import {
+	EXPORT_PAGE_SIZE,
+	fetchAllPages,
+	type PagedRows,
+	parseContentRangeTotal,
+} from './paging.ts';
 
 const MAX_RUNS = 5000;
 const SIGNED_URL_TTL_S = 600; // 10 minutes
+
+const RUNS_SELECT =
+	'id, user_id, started_at, duration_s, distance_m, source, activity_type, is_dnf, external_id, metadata, track_url, hr_series_url, is_public, event_id, route_id, created_at, updated_at';
 
 type RunRow = {
 	id: string;
@@ -128,19 +137,31 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	// Pull every run for the user. The authedSupabase client respects
 	// RLS so `eq('user_id', user.id)` is belt-and-braces — but it also
 	// keeps the query plan honest about which user owns the rows.
-	const { data: runs, error: runsErr } = await authedSupabase
-		.from('runs')
-		.select(
-			'id, user_id, started_at, duration_s, distance_m, source, activity_type, is_dnf, external_id, metadata, track_url, hr_series_url, is_public, event_id, route_id, created_at, updated_at',
-		)
-		.eq('user_id', user.id)
-		.order('started_at', { ascending: false })
-		.limit(MAX_RUNS);
+	//
+	// Paged: a bare `.limit(MAX_RUNS)` is clamped by PostgREST to
+	// `db-max-rows` (1000), so every runner past their thousandth run
+	// silently received a fraction of their history. `id` is the
+	// tiebreaker because two runs can share a `started_at`, and offset
+	// paging under a non-total order repeats one row and drops another.
+	const runsPaged = await fetchAllPages<RunRow>(async (offset, limit) => {
+		const { data, error, count } = await authedSupabase
+			.from('runs')
+			.select(RUNS_SELECT, offset === 0 ? { count: 'exact' } : {})
+			.eq('user_id', user.id)
+			.order('started_at', { ascending: false })
+			.order('id', { ascending: true })
+			.range(offset, offset + limit - 1);
+		if (error) {
+			console.error('export-data: runs select failed:', error.message ?? String(error));
+			return null;
+		}
+		return { rows: (data ?? []) as unknown as RunRow[], total: count ?? null };
+	}, EXPORT_PAGE_SIZE, MAX_RUNS);
 
-	if (runsErr) {
-		console.error('export-data: runs select failed:', runsErr?.message ?? String(runsErr));
+	if (!runsPaged.complete && runsPaged.rows.length === 0) {
 		return Response.json({ error: 'run fetch failed' }, { status: 500 });
 	}
+	const runs = runsPaged.rows;
 
 	const ts = new Date().toISOString().replace(/[:.]/g, '-');
 	const ext = format === 'csv' ? 'csv' : 'zip';
@@ -149,13 +170,13 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	let body_: Uint8Array;
 	let contentType: string;
 	if (format === 'csv') {
-		body_ = new TextEncoder().encode(buildCsv(runs ?? []));
+		body_ = new TextEncoder().encode(buildCsv(runs));
 		contentType = 'text/csv';
 	} else if (format === 'gpx') {
-		body_ = await buildGpxZip(adminSupabase, runs ?? []);
+		body_ = await buildGpxZip(adminSupabase, runs);
 		contentType = 'application/zip';
 	} else {
-		body_ = await buildBackupZip(adminSupabase, user.id, runs ?? []);
+		body_ = await buildBackupZip(adminSupabase, user.id, runsPaged);
 		contentType = 'application/zip';
 	}
 
@@ -186,10 +207,16 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	// where it could land in browser history / dev-tools / logs and
 	// later be re-used (within owner-folder Storage SELECT) without
 	// the time-bounded signed URL. /audit/all storage Low.
+	// `count` is what the archive carries; `total` is what the database
+	// holds and `complete` whether the two agree. A runner past MAX_RUNS
+	// gets a truncated CSV/GPX and has to be told so — the backup format
+	// says the same thing in manifest.json, in more detail.
 	return Response.json({
 		url: signed.signedUrl,
 		expires_in: SIGNED_URL_TTL_S,
-		count: runs?.length ?? 0,
+		count: runs.length,
+		total: runsPaged.total,
+		complete: runsPaged.complete,
 		format,
 	});
 }));
@@ -446,6 +473,7 @@ import {
 	buildBackupManifest,
 	buildBackupSpecs,
 	isSafeStoragePath,
+	orderForTable,
 	orphanStorageEntries,
 	PROFILE_SELECT,
 	shapeExportRoute,
@@ -456,95 +484,113 @@ import {
 async function buildBackupZip(
 	supabase: ReturnType<typeof createClient>,
 	userId: string,
-	runs: RunRow[],
+	runsPaged: PagedRows<RunRow>,
 ): Promise<Uint8Array> {
+	const runs = runsPaged.rows;
 	const blobWriter = new BlobWriter('application/zip');
 	const zip = new ZipWriter(blobWriter);
 
 	const specs = buildBackupSpecs(userId);
 	const counts: Record<string, number> = {};
+	const incomplete: string[] = [];
 	const fetchedRows: Record<string, Record<string, unknown>[]> = {};
+
+	// The count published for a section is the database's own total, so a
+	// short file reads as a shortfall instead of as the whole set. An
+	// empty table stays absent from `counts` (the convention both export
+	// paths share), but a section that FAILED short is recorded even at
+	// zero rows — an absent key must not be readable as "the subject has
+	// none of these".
+	const note = (key: string, fetched: number, paged: { total: number; complete: boolean }) => {
+		const short = !paged.complete || fetched < paged.total;
+		if (fetched > 0 || short) counts[key] = Math.max(paged.total, fetched);
+		if (short) incomplete.push(key);
+	};
 
 	await pooledPipeline(
 		specs,
 		EXPORT_FETCH_CONCURRENCY,
-		async (spec) => {
-			try {
-				const rows = await fetchBackupTable(supabase, spec);
-				if (!rows || rows.length === 0) return null;
-				return spec.redact ? rows.map(spec.redact) : rows;
-			} catch (e) {
-				console.error(
-					`export-data backup: ${spec.entry} fetch failed:`,
-					e instanceof Error ? e.message : String(e),
-				);
-				// Per-table tolerance — the rest of the export still ships.
-				return null;
-			}
-		},
-		async (spec, projected) => {
+		(spec) => fetchBackupTable(spec),
+		async (spec, paged) => {
+			const projected = spec.redact ? paged.rows.map(spec.redact) : paged.rows;
 			fetchedRows[spec.entry] = projected;
+			note(spec.entry.replace(/\.json$/, ''), projected.length, paged);
+			if (projected.length === 0) return;
 			await zip.add(spec.entry, new TextReader(JSON.stringify(projected, null, 2)));
-			counts[spec.entry.replace(/\.json$/, '')] = projected.length;
 		},
 	);
 
 	// run_gear — two-step fetch mirroring the Go worker: PostgREST's
 	// `in.()` takes a literal value list, not a subselect, so pull the
 	// already-fetched gear ids and filter run_gear by that list.
-	try {
-		const gearIds = (fetchedRows['gear.json'] ?? [])
-			.map((g) => g.id)
-			.filter((id): id is string => typeof id === 'string' && id !== '');
-		if (gearIds.length > 0) {
-			const rows = await fetchBackupTable(supabase, {
-				entry: 'run_gear.json',
-				table: 'run_gear',
-				filter: `gear_id=in.(${gearIds.join(',')})`,
-				select: '*',
-			});
-			if (rows && rows.length > 0) {
-				await zip.add('run_gear.json', new TextReader(JSON.stringify(rows, null, 2)));
-				counts['run_gear'] = rows.length;
-			}
+	const gearIds = (fetchedRows['gear.json'] ?? [])
+		.map((g) => g.id)
+		.filter((id): id is string => typeof id === 'string' && id !== '');
+	if (gearIds.length > 0) {
+		const paged = await fetchBackupTable({
+			entry: 'run_gear.json',
+			table: 'run_gear',
+			filter: `gear_id=in.(${gearIds.join(',')})`,
+			select: '*',
+		});
+		note('run_gear', paged.rows.length, paged);
+		if (paged.rows.length > 0) {
+			await zip.add('run_gear.json', new TextReader(JSON.stringify(paged.rows, null, 2)));
 		}
-	} catch (e) {
-		console.error(
-			'export-data backup: run_gear fetch failed:',
-			e instanceof Error ? e.message : String(e),
-		);
 	}
 
 	// jobs summary — count by kind. Audit's preferred shape over the
 	// raw payload (which would leak internal retry state). Aggregation
 	// helper lives in backup_spec.ts so it can be unit-tested.
-	try {
-		const { data: jobsRows } = await supabase
-			.from('jobs')
-			.select('kind')
-			.filter('payload->>user_id', 'eq', userId);
-		if (jobsRows && jobsRows.length > 0) {
-			const summary = summariseJobsByKind(jobsRows as Array<{ kind: string }>);
-			await zip.add('jobs_summary.json', new TextReader(JSON.stringify(summary, null, 2)));
-			counts['jobs_summary'] = summary.length;
+	const jobsPaged = await fetchAllPages<{ kind: string }>(async (offset, limit) => {
+		try {
+			const { data, error, count } = await supabase
+				.from('jobs')
+				.select('kind', offset === 0 ? { count: 'exact' } : {})
+				.filter('payload->>user_id', 'eq', userId)
+				.order('id', { ascending: true })
+				.range(offset, offset + limit - 1);
+			if (error) {
+				console.error('export-data backup: jobs summary failed:', error.message);
+				return null;
+			}
+			return { rows: (data ?? []) as unknown as Array<{ kind: string }>, total: count ?? null };
+		} catch (e) {
+			console.error(
+				'export-data backup: jobs summary failed:',
+				e instanceof Error ? e.message : String(e),
+			);
+			return null;
 		}
-	} catch (e) {
-		console.error(
-			'export-data backup: jobs summary failed:',
-			e instanceof Error ? e.message : String(e),
-		);
+	});
+	if (jobsPaged.rows.length > 0) {
+		const summary = summariseJobsByKind(jobsPaged.rows);
+		await zip.add('jobs_summary.json', new TextReader(JSON.stringify(summary, null, 2)));
+		// One row per kind, not one per job — but the aggregate is only
+		// trustworthy if every job row was scanned.
+		counts['jobs_summary'] = summary.length;
 	}
+	if (!jobsPaged.complete) incomplete.push('jobs_summary');
 
 	// routes.json — the user's own created routes (geometry included),
 	// shaped like the Go worker's ExportRoute projection.
-	const { data: routeRows, error: routesErr } = await supabase
-		.from('routes')
-		.select('*')
-		.eq('user_id', userId);
-	if (routesErr) {
-		throw new Error(`routes fetch failed: ${routesErr.message}`);
+	const routesPaged = await fetchAllPages<Record<string, unknown>>(async (offset, limit) => {
+		const { data, error, count } = await supabase
+			.from('routes')
+			.select('*', offset === 0 ? { count: 'exact' } : {})
+			.eq('user_id', userId)
+			.order('id', { ascending: true })
+			.range(offset, offset + limit - 1);
+		if (error) {
+			console.error('export-data backup: routes fetch failed:', error.message);
+			return null;
+		}
+		return { rows: (data ?? []) as Record<string, unknown>[], total: count ?? null };
+	});
+	if (!routesPaged.complete && routesPaged.rows.length === 0) {
+		throw new Error('routes fetch failed');
 	}
-	const routesOut = ((routeRows ?? []) as Record<string, unknown>[]).map(shapeExportRoute);
+	const routesOut = routesPaged.rows.map(shapeExportRoute);
 	await zip.add('routes.json', new TextReader(JSON.stringify(routesOut, null, 2)));
 
 	// profile.json — user_profiles projection (incl. the subscription
@@ -720,8 +766,11 @@ async function buildBackupZip(
 	}
 
 	// manifest.json last so the counts reflect what actually made it in.
-	counts['runs'] = runs.length;
-	counts['routes'] = routesOut.length;
+	// `runs` / `routes` carry the database's own total; the storage
+	// sections carry what was archived, a per-object download failure
+	// being tolerated by contract.
+	note('runs', runs.length, runsPaged);
+	note('routes', routesOut.length, routesPaged);
 	counts['tracks'] = tracksAdded;
 	counts['hr_series'] = hrAdded;
 	counts['photos'] = photosAdded;
@@ -729,7 +778,7 @@ async function buildBackupZip(
 	counts['storage_orphans'] = orphansAdded;
 	await zip.add(
 		'manifest.json',
-		new TextReader(JSON.stringify(buildBackupManifest({ userId, counts }), null, 2)),
+		new TextReader(JSON.stringify(buildBackupManifest({ userId, counts, incomplete }), null, 2)),
 	);
 
 	await zip.close();
@@ -776,26 +825,48 @@ async function listAllObjects(
 	}
 }
 
-async function fetchBackupTable(
-	supabase: ReturnType<typeof createClient>,
+function fetchBackupTable(
 	spec: BackupTableSpec,
-): Promise<Record<string, unknown>[]> {
+): Promise<PagedRows<Record<string, unknown>>> {
 	// Run a raw PostgREST query so the `target_kind=eq.user&target_id=eq.X`
 	// filter (two params) works the same way the Go worker passes it.
 	// Using `from(...).select(...)` doesn't natively combine arbitrary
 	// `&`-joined filter strings, so go through the auth-bound client's
 	// REST URL directly.
-	const url =
-		`${Deno.env.get('SUPABASE_URL')!}/rest/v1/${spec.table}?select=${encodeURIComponent(spec.select)}&${spec.filter}`;
-	const r = await fetch(url, {
-		headers: {
-			...secretKeyHeaders(),
-			Accept: 'application/json',
-		},
+	//
+	// `order` is the table's primary key (see orderForTable) — offset
+	// paging needs a total order or two pages can repeat one row and drop
+	// another. Only the first page asks for `count=exact`, so the
+	// authoritative total costs one COUNT per table rather than one per
+	// page.
+	const order = orderForTable(spec.table);
+	return fetchAllPages<Record<string, unknown>>(async (offset, limit) => {
+		const url = `${Deno.env.get('SUPABASE_URL')!}/rest/v1/${spec.table}` +
+			`?select=${encodeURIComponent(spec.select)}&order=${order}` +
+			`&limit=${limit}&offset=${offset}&${spec.filter}`;
+		try {
+			const r = await fetch(url, {
+				headers: {
+					...secretKeyHeaders(),
+					Accept: 'application/json',
+					...(offset === 0 ? { Prefer: 'count=exact' } : {}),
+				},
+			});
+			if (!r.ok) {
+				console.error(`export-data backup: ${spec.entry} REST ${r.status}`);
+				return null;
+			}
+			return {
+				rows: (await r.json()) as Record<string, unknown>[],
+				total: parseContentRangeTotal(r.headers.get('content-range')),
+			};
+		} catch (e) {
+			console.error(
+				`export-data backup: ${spec.entry} fetch failed:`,
+				e instanceof Error ? e.message : String(e),
+			);
+			return null;
+		}
 	});
-	if (!r.ok) {
-		throw new Error(`${spec.table} REST ${r.status}`);
-	}
-	return (await r.json()) as Record<string, unknown>[];
 }
 

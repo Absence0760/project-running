@@ -103,12 +103,26 @@ pub struct BackyardView {
 }
 
 /// How long after the bell a corral press can still be the runner walking in
-/// from the loop the backstop banked.
+/// from the loop the backstop banked — equivalently, the shortest time in which
+/// a *new* loop could have been run, since those are the same question asked
+/// from two sides.
 ///
-/// The loop itself takes most of an hour — a 6.7 km lap inside five minutes is
-/// not a thing a human does — so a press this soon can only be the previous
-/// loop arriving late, and a press later than this can only be a new one.
-pub const BANK_CONSUME_WINDOW_S: u32 = 300;
+/// Sized as the second: 6.706 km in fifteen minutes is 2:14/km, faster than the
+/// 10 km world record, so no press this soon can be a loop nobody has counted
+/// yet. The old five minutes was sized only as "a late walk-in", which left the
+/// ten minutes after it counting a bell-banked loop a second time — the runner
+/// crossing at bell+7 min and pressing as they always do added a loop they had
+/// not run.
+pub const BANK_CONSUME_WINDOW_S: u32 = 900;
+
+/// How far into the window the clock must step back before it is a bell rather
+/// than a clock.
+///
+/// Half a window. The fold runs at 1 Hz for as long as a run is live, so a real
+/// rollover always presents as a drop of nearly [`BELL_INTERVAL_S`] and no two
+/// bells can hide between two folds; anything smaller is the local-time
+/// extrapolation being re-disciplined, which no runner should be eliminated by.
+pub const BELL_ROLLOVER_MIN_DROP_S: u32 = BELL_INTERVAL_S / 2;
 
 /// The mode's state machine. Armed from the idle settings menu, so a run
 /// starts either wholly inside the mode or wholly outside it.
@@ -125,8 +139,8 @@ pub struct Backyard {
     distance_at_close_m: f64,
     last_return: Option<Return>,
     /// Seconds into the bell window at the last fold. A new window is
-    /// detected by this going backwards, which needs no date and cannot be
-    /// confused by midnight — a backyard runs for days.
+    /// detected by this going backwards by most of a window, which needs no
+    /// date and cannot be confused by midnight — a backyard runs for days.
     since_bell_s: u32,
     /// Whether any local clock has ever been folded in.
     clock_seen: bool,
@@ -227,9 +241,19 @@ impl Backyard {
     ///
     /// Only the modulus of `local_tod_s` matters, so it needs no date and
     /// survives midnight, a leap second, and a multi-day race. A window is
-    /// recognised by that modulus going backwards, which is sound because the
-    /// recorder folds this at 1 Hz for as long as a run is live (through both
-    /// pause kinds) — no window can pass unobserved.
+    /// recognised by that modulus dropping by at least
+    /// [`BELL_ROLLOVER_MIN_DROP_S`], which is sound because the recorder folds
+    /// this at 1 Hz for as long as a run is live (through both pause kinds) —
+    /// no window can pass unobserved, so a real rollover always drops by nearly
+    /// a whole window.
+    ///
+    /// The size of the drop is load-bearing, not decoration. `local_tod_s` is
+    /// an extrapolation off the last receiver clock, so it retreats a second
+    /// whenever the oscillator is re-disciplined — about seven times over a
+    /// 100-hour backyard at 20 ppm. Reading *any* backward step as a bell rang
+    /// a phantom one: it cleared `closed_this_window`, so the return the runner
+    /// had already marked was forgotten and the real bell banked the same
+    /// physical loop a second time, and it re-armed the whistles.
     pub fn on_clock(&mut self, local_tod_s: u32) -> bool {
         if !self.armed {
             return false;
@@ -238,7 +262,8 @@ impl Backyard {
         let mut bell_lap_due = false;
         if !self.clock_seen {
             self.clock_seen = true;
-        } else if since < self.since_bell_s {
+            self.since_bell_s = since;
+        } else if self.since_bell_s.saturating_sub(since) >= BELL_ROLLOVER_MIN_DROP_S {
             // The window rolled over: the bell rang between the last fold and
             // this one.
             bell_lap_due = !self.closed_this_window;
@@ -248,10 +273,14 @@ impl Backyard {
             self.bell_banked_pending = false;
             self.bank_consumed_this_window = false;
             self.warned_min = 0;
+            self.since_bell_s = since;
+        } else {
+            // Held monotonic inside the window: a clock that stepped back a
+            // second is not a countdown that gained one.
+            self.since_bell_s = self.since_bell_s.max(since);
         }
-        self.since_bell_s = since;
 
-        let to_bell = BELL_INTERVAL_S - since;
+        let to_bell = BELL_INTERVAL_S - self.since_bell_s;
         // Tightest level first (the array reads longest-first for the reader),
         // so a fold that has passed several announces the one it reached.
         let due = BELL_WARNING_MIN
@@ -406,6 +435,15 @@ mod tests {
         b
     }
 
+    /// Fold across a bell the way the recorder does — at 1 Hz, so the window's
+    /// modulus drops by nearly a whole window rather than by a handful of
+    /// seconds. `into_s` is seconds into the new window; the return is the
+    /// backstop verdict for the window that just ended.
+    fn roll(b: &mut Backyard, hour: u32, into_s: u32) -> bool {
+        b.on_clock(hour * H - 1);
+        b.on_clock(hour * H + into_s)
+    }
+
     #[test]
     fn an_unarmed_mode_ignores_every_feed() {
         let mut b = Backyard::new();
@@ -501,10 +539,7 @@ mod tests {
         // loop.
         let mut b = armed();
         b.on_clock(9 * H + 5);
-        assert!(
-            b.on_clock(10 * H + 1),
-            "runner still out: the backstop is due"
-        );
+        assert!(roll(&mut b, 10, 1), "runner still out: the backstop is due");
         b.on_bell_lap(6_706.0);
         assert_eq!(b.view(6_706.0, None, 3_600).loops, 1);
 
@@ -520,12 +555,77 @@ mod tests {
     }
 
     #[test]
+    fn a_one_second_clock_retreat_is_not_a_bell() {
+        // local_tod_s is extrapolated off the last receiver clock, so it steps
+        // back a second whenever the oscillator is re-disciplined — about seven
+        // times over a 100-hour backyard at 20 ppm. Reading that as a bell
+        // forgot the return the runner had already marked, and the real bell
+        // then banked the same physical loop a second time.
+        let mut b = armed();
+        b.on_clock(9 * H + 5);
+        b.on_corral_return(100, 6_706.0);
+        assert_eq!(b.view(6_706.0, None, 100).loops, 1);
+
+        let before = b.view(6_706.0, None, 100).to_bell_s;
+        b.on_clock(9 * H + 1_800);
+        b.on_clock(9 * H + 1_799);
+        assert_eq!(
+            b.view(6_706.0, None, 1_799).loops,
+            1,
+            "a retreating clock rang a phantom bell"
+        );
+        assert!(
+            b.view(6_706.0, None, 1_799).to_bell_s < before,
+            "and the countdown must not gain a second back"
+        );
+
+        // The real bell now stands down, because the runner did close the
+        // window — which the phantom had erased.
+        assert!(
+            !roll(&mut b, 10, 1),
+            "the marked return survived the retreat"
+        );
+        assert_eq!(b.view(6_706.0, None, 3_601).loops, 1);
+    }
+
+    #[test]
+    fn a_late_walk_in_from_a_banked_loop_is_never_a_second_loop() {
+        // bell-then-press, past the old five-minute bound. The runner crosses
+        // seven minutes after the bell that banked their loop and presses as
+        // they always do. They cannot have run a 6.7 km loop in seven minutes,
+        // so this is the banked loop arriving late — the guard has to be sized
+        // as "the fastest a loop could be run", not as "how long a walk-in
+        // takes".
+        let mut b = armed();
+        b.on_clock(9 * H + 5);
+        assert!(roll(&mut b, 10, 1));
+        b.on_bell_lap(6_706.0);
+        assert_eq!(b.view(6_706.0, None, 3_600).loops, 1);
+
+        b.on_clock(10 * H + 7 * 60);
+        b.on_corral_return(4_020, 6_760.0);
+        let v = b.view(6_760.0, None, 4_020);
+        assert_eq!(v.loops, 1, "a loop nobody ran was counted");
+        assert_eq!(
+            v.loop_distance_m,
+            Some(6_706.0),
+            "and the learned loop is not halved"
+        );
+        assert!(v.in_corral, "the return still registers");
+
+        // ...while the loop they go on to run still counts on its own return.
+        b.on_clock(10 * H + 55 * 60);
+        b.on_corral_return(6_900, 13_418.0);
+        assert_eq!(b.view(13_418.0, None, 6_900).loops, 2);
+    }
+
+    #[test]
     fn the_loop_after_a_banked_one_still_counts_on_its_own_return() {
         // The consumed bank must not stand in for the NEXT loop's close, or a
         // runner who takes the bell backstop once would stop being counted.
         let mut b = armed();
         b.on_clock(9 * H + 5);
-        assert!(b.on_clock(10 * H + 1));
+        assert!(roll(&mut b, 10, 1));
         b.on_bell_lap(6_706.0);
         b.on_corral_return(3_629, 6_712.0); // walks in from the banked loop
         assert_eq!(b.view(6_712.0, None, 3_629).loops, 1);
@@ -536,7 +636,7 @@ mod tests {
         assert_eq!(b.view(13_418.0, None, 6_900).loops, 2);
 
         // The runner closed that window themselves, so the backstop stands down.
-        assert!(!b.on_clock(11 * H + 1), "no backstop after a real return");
+        assert!(!roll(&mut b, 11, 1), "no backstop after a real return");
     }
 
     #[test]
@@ -546,15 +646,13 @@ mod tests {
         // and must count.
         let mut b = armed();
         b.on_clock(9 * H + 5);
-        assert!(b.on_clock(10 * H + 1));
+        assert!(roll(&mut b, 10, 1));
         b.on_bell_lap(6_706.0);
         assert_eq!(b.view(6_706.0, None, 3_600).loops, 1);
 
-        // No press at all this window; the bell banks again. (A mid-window
-        // fold first — a rollover is recognised by the modulus going
-        // backwards, and the recorder folds this at 1 Hz.)
+        // No press at all this window; the bell banks again.
         b.on_clock(10 * H + 30 * 60);
-        assert!(b.on_clock(11 * H + 1));
+        assert!(roll(&mut b, 11, 1));
         b.on_bell_lap(13_412.0);
         assert_eq!(b.view(13_412.0, None, 7_200).loops, 2);
 
@@ -579,10 +677,7 @@ mod tests {
         let mut b = armed();
         b.on_clock(9 * H + 5);
         b.on_clock(9 * H + 30 * 60);
-        assert!(
-            b.on_clock(10 * H + 1),
-            "no press in window 1: backstop is due"
-        );
+        assert!(roll(&mut b, 10, 1), "no press in window 1: backstop is due");
         b.on_bell_lap(6_706.0);
         assert_eq!(b.view(6_706.0, None, 3_600).loops, 1);
 
@@ -597,7 +692,7 @@ mod tests {
 
         // ...and because it closed the window, the backstop stands down.
         assert!(
-            !b.on_clock(11 * H + 1),
+            !roll(&mut b, 11, 1),
             "the runner closed window 2 themselves"
         );
     }
@@ -611,7 +706,7 @@ mod tests {
         // seconds a double press is most likely.
         let mut b = armed();
         b.on_clock(9 * H + 5);
-        assert!(b.on_clock(10 * H + 1));
+        assert!(roll(&mut b, 10, 1));
         b.on_bell_lap(6_706.0);
         b.on_corral_return(3_629, 6_712.0); // walks in from the bank
         assert_eq!(b.view(6_712.0, None, 3_629).loops, 1);
@@ -664,6 +759,7 @@ mod tests {
         );
         b.on_corral_return(3_100, 6_700.0);
         assert_eq!(b.view(6_700.0, None, 3_100).loop_distance_m, Some(6_700.0));
+        roll(&mut b, 10, 1);
         b.on_clock(10 * H + 50 * 60);
         b.on_corral_return(6_800, 13_420.0);
         // The mean over both loops, so one long GPS loop does not become the

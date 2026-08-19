@@ -233,6 +233,7 @@ class LocalRecipeStore extends OfflineSyncStore<StoredRecipe> {
     List<({Map<String, dynamic> recipe, List<StoredRecipeIngredient> ingredients})>
         serverRecipes,
   ) async {
+    requireInitialised('replaceFromServer');
     final preserved = <String, StoredRecipe>{};
     final syncedLocal = <String, StoredRecipe>{};
     for (final entry in rowsById.entries) {

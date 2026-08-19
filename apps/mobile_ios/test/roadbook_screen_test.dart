@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/preferences.dart';
 import '../lib/screens/roadbook_screen.dart';
 
 Route _route() {
@@ -64,6 +65,25 @@ Future<void> _settleStore(WidgetTester tester) async {
   );
   await tester.pump();
 }
+
+/// The leg-pace line of every schedule row, in course order.
+List<String> _paceTexts(WidgetTester tester) => tester
+    .widgetList<Text>(find.descendant(
+      of: find.byKey(const Key('roadbook-leg-pace')),
+      matching: find.byType(Text),
+    ))
+    .map((t) => t.data ?? '')
+    .toList();
+
+/// The same lines parsed back to seconds per unit, so an assertion can
+/// compare two legs without pinning a formatted string. An unpriceable leg
+/// reads as null.
+List<double?> _paceSeconds(WidgetTester tester) => _paceTexts(tester).map((s) {
+      final value = s.split(' ').where((p) => p.contains(':')).firstOrNull;
+      if (value == null) return null;
+      final parts = value.split(':').map(double.parse).toList();
+      return parts[0] * 60 + parts[1];
+    }).toList();
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -134,6 +154,127 @@ void main() {
 
     expect(find.text('Gate'), findsOneWidget);
     expect(find.textContaining('Cut-off'), findsNothing);
+  });
+
+  testWidgets('a checkpoint target renders its time, margin and verdict',
+      (tester) async {
+    // The 2 km course at the seeded 6:30/km goal projects the halfway
+    // checkpoint around 6:30, so a 20 min target is comfortably ahead and a
+    // 60 s one comfortably behind. Both verdicts must reach the row — the
+    // engine has computed them since the target twin landed, and the screen
+    // rendered only the cutoff column.
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, {'target_elapsed_s': 1200}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.byKey(const Key('roadbook-target')), findsOneWidget);
+    expect(find.textContaining('Target 20:00'), findsOneWidget);
+    expect(find.textContaining('ahead'), findsOneWidget);
+  });
+
+  testWidgets('a target the projection misses reads behind, not on plan',
+      (tester) async {
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, {'target_elapsed_s': 60}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.textContaining('behind'), findsOneWidget);
+    expect(find.textContaining('ahead'), findsNothing);
+  });
+
+  testWidgets('a checkpoint with no target time grows no target chip',
+      (tester) async {
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+
+    expect(find.byKey(const Key('roadbook-target')), findsNothing);
+  });
+
+  testWidgets('every leg states the pace it has to be run at', (tester) async {
+    // A crew chief reading cumulative arrivals alone cannot tell whether the
+    // next leg asks for a jog or a march — the leg pace is the only place the
+    // pacing model's output is visible as a pace.
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+
+    // start / Aid 1 / finish.
+    expect(_paceTexts(tester).length, 3);
+    expect(_paceTexts(tester).skip(1), everyElement(contains('/km')));
+  });
+
+  testWidgets('the start row is priced as unknown, not as a confident number',
+      (tester) async {
+    // There is no leg arriving at the start, so there is no pace to state.
+    // Rendering the goal pace there would read as a real instruction.
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+
+    expect(_paceTexts(tester).first, 'Leg pace —');
+  });
+
+  testWidgets('a zero-length leg is priced as unknown', (tester) async {
+    // Two markers on the same spot leave the second leg no distance to
+    // divide by; web renders the same em-dash rather than an infinite pace.
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+      _marker('aid_station', 'Aid 2', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+
+    expect(_paceTexts(tester)[2], 'Leg pace —');
+  });
+
+  testWidgets('even pacing prices the climb and the flat the same',
+      (tester) async {
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+    await tester.tap(find.text('Even'));
+    await _settleStore(tester);
+
+    final paces = _paceSeconds(tester);
+    expect((paces[1]! - paces[2]!).abs(), lessThanOrEqualTo(2));
+  });
+
+  testWidgets('the effort model prices the climb slower than the flat',
+      (tester) async {
+    // The seeded course climbs 270 m over its back half, so the effort model
+    // must give that leg materially more time per kilometre than the flat
+    // one. Mirrors web's roadbook.spec.ts leg-pace assertions — and it is the
+    // whole reason the column is worth a row on a phone.
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+
+    final paces = _paceSeconds(tester);
+    expect(paces[2]!, greaterThan(paces[1]! * 2));
+  });
+
+  testWidgets('the leg pace is stated in the runner\'s own unit',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'use_miles': true});
+    final prefs = Preferences();
+    await prefs.init();
+    registerActivePreferences(prefs);
+    addTearDown(resetActivePreferencesForTest);
+
+    await tester.pumpWidget(_host([
+      _marker('aid_station', 'Aid 1', 1000, const {}),
+    ]));
+    await _settleStore(tester);
+
+    expect(_paceTexts(tester).skip(1), everyElement(contains('/mi')));
+    expect(_paceTexts(tester), everyElement(isNot(contains('/km'))));
   });
 
   testWidgets('editing the goal is persisted for the watch push',

@@ -382,4 +382,115 @@ void main() {
       }
     });
   });
+
+  group('resumeSession restores the monotonic route floor', () {
+    const metrePerDegLng = 111320.0;
+
+    // 500 m east and back, sampled every 50 m: the return leg lies on top of
+    // the outbound one, so the closest segment to a runner on the way home is
+    // ambiguous and only the floor tells the two apart.
+    Route outAndBack() => route([
+          for (var m = 0; m <= 500; m += 50) [0.0, m / metrePerDegLng],
+          for (var m = 450; m >= 0; m -= 50) [0.0, m / metrePerDegLng],
+        ]);
+
+    Position fix(double metresEast, int seconds) => Position(
+          longitude: metresEast / metrePerDegLng,
+          latitude: 0,
+          timestamp: DateTime(2026, 4, 10, 10, 0, seconds),
+          accuracy: 5,
+          altitude: 100,
+          altitudeAccuracy: 2,
+          heading: 90,
+          headingAccuracy: 5,
+          speed: 2.5,
+          speedAccuracy: 1,
+        );
+
+    /// Out to the turnaround, then back west as far as [returnToMetresEast].
+    List<Position> outAndBackFixes({double returnToMetresEast = 300}) => [
+          for (var m = 0; m <= 500; m += 50) fix(m.toDouble(), m ~/ 50 * 10),
+          for (var m = 450; m >= returnToMetresEast; m -= 50)
+            fix(m.toDouble(), (1000 - m) ~/ 50 * 10),
+        ];
+
+    test('a resumed run reports the same distance-remaining as a fresh one',
+        () {
+      final fixes = outAndBackFixes();
+      final fresh = RunRecorder()
+        ..debugPrepareWithoutStream(route: outAndBack());
+      addTearDown(fresh.dispose);
+      fresh.begin();
+      for (final f in fixes) {
+        fresh.debugInjectPosition(f);
+      }
+      final last = fresh.debugCurrentWaypoint!;
+      final freshRemaining = fresh.debugRouteRemaining(last)!;
+      expect(freshRemaining, closeTo(300, 5),
+          reason: 'on the way home, 300 m out means 300 m to run');
+
+      // The process is killed here and the partial resumed: same track, same
+      // route. prepare() resets the floor to 1, so without a rebuild the
+      // closest segment is the OUTBOUND one under the runner's feet and
+      // remaining nearly doubles — permanently, the floor never being lowered.
+      final resumed = RunRecorder();
+      addTearDown(resumed.dispose);
+      resumed.debugResumeWithoutStream(
+        track: fresh.debugTrack,
+        distanceMetres: fresh.debugDistanceMetres,
+        elapsed: const Duration(minutes: 4),
+        startedAt: DateTime(2026, 4, 10, 10, 0, 0),
+        route: outAndBack(),
+      );
+      resumed.debugInjectPosition(fix(300, 200));
+      expect(
+        resumed.debugRouteRemaining(resumed.debugCurrentWaypoint!),
+        closeTo(freshRemaining, 5),
+        reason: 'resuming must not hand the route matcher back the ground '
+            'already covered',
+      );
+    });
+
+    test('the restored floor still cannot walk backwards', () {
+      final fresh = RunRecorder()
+        ..debugPrepareWithoutStream(route: outAndBack());
+      addTearDown(fresh.dispose);
+      fresh.begin();
+      for (final f in outAndBackFixes()) {
+        fresh.debugInjectPosition(f);
+      }
+      final resumed = RunRecorder();
+      addTearDown(resumed.dispose);
+      resumed.debugResumeWithoutStream(
+        track: fresh.debugTrack,
+        distanceMetres: fresh.debugDistanceMetres,
+        elapsed: const Duration(minutes: 4),
+        startedAt: DateTime(2026, 4, 10, 10, 0, 0),
+        route: outAndBack(),
+      );
+      var previous = double.infinity;
+      for (var m = 300; m >= 0; m -= 50) {
+        resumed.debugInjectPosition(fix(m.toDouble(), 200 + (300 - m) ~/ 50 * 10));
+        final remaining =
+            resumed.debugRouteRemaining(resumed.debugCurrentWaypoint!)!;
+        expect(remaining, lessThanOrEqualTo(previous + 1e-6),
+            reason: 'distance remaining climbed back up at ${m}m');
+        previous = remaining;
+      }
+      expect(previous, closeTo(0, 5));
+    });
+
+    test('a resumed run with no route loaded is unaffected', () {
+      final r = RunRecorder();
+      addTearDown(r.dispose);
+      r.debugResumeWithoutStream(
+        track: [Waypoint(lat: 0, lng: 0)],
+        distanceMetres: 100,
+        elapsed: const Duration(minutes: 1),
+        startedAt: DateTime(2026, 4, 10, 10, 0, 0),
+      );
+      expect(r.recording, isTrue);
+      expect(r.debugRouteRemaining(at(0, 0)), isNull);
+    });
+  });
 }

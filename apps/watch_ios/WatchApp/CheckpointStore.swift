@@ -98,24 +98,14 @@ class CheckpointStore {
     private var pointsSinceSync = 0
 
     init(runId: String) {
-        let dir = CheckpointStore.checkpointDirectory
         // A failure here means every subsequent track append silently drops
-        // (the file can't be created), so surface it rather than swallowing
-        // with `try?` — matches the logging in `appendTrackPoints`.
-        do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        } catch {
-            #if DEBUG
-            print("CheckpointStore: failed to create checkpoint dir \(dir.path): \(error)")
-            #endif
-        }
+        // (the file can't be created); `createDirectory` logs it rather than
+        // swallowing with `try?` — matches the logging in `appendTrackPoints`.
+        RunPayloadStorage.createDirectory(at: CheckpointStore.checkpointDirectory)
         trackFileURL = CheckpointStore.trackFile(runId: runId)
     }
 
-    private static var checkpointDirectory: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("run_checkpoint", isDirectory: true)
-    }
+    private static var checkpointDirectory: URL { RunPayloadStorage.directory }
 
     /// Where a run's NDJSON track lives, without touching the filesystem —
     /// so a caller that only needs the path (a finished run's payload) does
@@ -263,8 +253,8 @@ class CheckpointStore {
     /// The NDJSON now outlives the UserDefaults checkpoint — a finished run
     /// streams its payload straight from the file, so `stop()` can no longer
     /// delete it — which means a discarded recovery, or a process kill
-    /// between stop and reset, can strand one in Caches. Starting a new run
-    /// is the moment nothing can still want the old ones.
+    /// between stop and reset, can strand one. Starting a new run is the
+    /// moment nothing can still want the old ones.
     static func purgeTrackFiles(except keep: URL) {
         guard let entries = try? FileManager.default.contentsOfDirectory(
             at: checkpointDirectory,

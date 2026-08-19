@@ -4997,6 +4997,7 @@ export type Database = {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: string
       }
+      delete_notifications: { Args: { p_ids: string[] }; Returns: number }
       delete_user_integration_secrets: {
         Args: { p_user_id: string }
         Returns: number
@@ -5303,6 +5304,16 @@ export type Database = {
         }[]
       }
       gym_has_weighted_sets: { Args: never; Returns: boolean }
+      gym_routine_history: {
+        Args: { p_recent_limit?: number; p_routine_id: string }
+        Returns: {
+          completed_count: number
+          graded_count: number
+          last_performed_at: string
+          recent_sessions: Json
+          session_count: number
+        }[]
+      }
       gym_workout_summaries: {
         Args: { p_limit?: number }
         Returns: {
@@ -5551,12 +5562,20 @@ export type Database = {
       }
       record_coach_consent: { Args: never; Returns: string }
       redeem_coach_invite: { Args: { token: string }; Returns: string }
+      refresh_club_member_count: {
+        Args: { p_club_id: string }
+        Returns: undefined
+      }
       refresh_gym_workout_totals: {
         Args: { p_workout_id: string }
         Returns: undefined
       }
       refresh_personal_records_for_user: {
         Args: { p_user_id: string }
+        Returns: undefined
+      }
+      refresh_route_run_count: {
+        Args: { p_route_id: string }
         Returns: undefined
       }
       resolve_target_reports: {

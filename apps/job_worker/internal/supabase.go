@@ -88,27 +88,35 @@ func (e *HTTPError) Error() string {
 }
 
 func (c *SupabaseClient) do(ctx context.Context, req *http.Request) ([]byte, error) {
+	body, _, err := c.doWithHeaders(ctx, req)
+	return body, err
+}
+
+// doWithHeaders is `do` plus the response headers, which the export
+// pager needs: PostgREST reports the authoritative row count of a
+// filtered set only in `Content-Range`, never in the body.
+func (c *SupabaseClient) doWithHeaders(ctx context.Context, req *http.Request) ([]byte, http.Header, error) {
 	supakey.SetAuthHeaders(req.Header, c.ServiceKey)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &HTTPError{
+		return nil, resp.Header, &HTTPError{
 			StatusCode: resp.StatusCode,
 			Method:     req.Method,
 			Endpoint:   req.URL.Path,
 			Body:       string(body),
 		}
 	}
-	return body, nil
+	return body, resp.Header, nil
 }
 
 // rpc invokes a PostgREST function endpoint with the supplied JSON body
@@ -1291,32 +1299,183 @@ func (c *SupabaseClient) CheckRateLimitTiered(ctx context.Context, userID, bucke
 	return !rows[0].Allowed, rows[0].RetryAfterSeconds, nil
 }
 
+// ─────────────────── Art 20 export paging ───────────────────
+//
+// PostgREST clamps every response to `db-max-rows` (1000 on Supabase)
+// and signals the truncation nowhere in the body: an unbounded SELECT
+// returns the first 1000 rows, and an explicit `limit=5000` is clamped
+// to the same 1000. Every export read therefore walks pages, and every
+// section carries whether the walk actually finished — a data-subject
+// export that is short must say so rather than assert completeness.
+
+// exportPageSize matches PostgREST's server-side cap; asking for more
+// per request buys nothing.
+const exportPageSize = 1000
+
+// exportRowCeiling bounds a single section. Both export paths assemble
+// the whole archive in memory before uploading it, so an unbounded walk
+// of a high-cardinality table (`live_run_pings` runs into the millions
+// on a deep history) is an OOM, not a slow export. Reaching it marks the
+// section incomplete rather than silently truncating it. Keep in
+// lockstep with EXPORT_ROW_CEILING in the EF's paging.ts.
+const exportRowCeiling = 50_000
+
+// orderByTable holds the export tables whose primary key is not a bare
+// `id`. Offset paging is only stable under a total order and PostgREST
+// applies none by default — two pages of an unordered read can repeat
+// one row and skip another, which in an Art 20 export is a row the
+// subject never receives. Keep in lockstep with ORDER_BY_TABLE in the
+// EF's backup_spec.ts.
+var orderByTable = map[string]string{
+	schema.TableChallengeParticipants:    "challenge_id,user_id",
+	schema.TableClubMembers:              "club_id,user_id",
+	schema.TableEventAttendees:           "event_id,user_id,instance_start",
+	schema.TableEventExceptions:          "event_id,instance_start",
+	schema.TableEventPricing:             "event_id,instance_start",
+	schema.TableInstructorPayoutAccounts: "user_id",
+	schema.TablePersonalRecords:          "user_id,distance",
+	schema.TableRunGear:                  "run_id,gear_id",
+	schema.TableRunKudos:                 "user_id,run_id",
+	schema.TableSavedRoutes:              "user_id,route_id",
+	schema.TableUserBlocks:               "blocker_id,blocked_id",
+	schema.TableUserCoachUsage:           "user_id,usage_date",
+	schema.TableUserDeviceSettings:       "user_id,device_id",
+	schema.TableUserFollows:              "follower_id,followee_id",
+	schema.TableUserSettings:             "user_id",
+}
+
+func orderForExportTable(table string) string {
+	if o, ok := orderByTable[table]; ok {
+		return o
+	}
+	return "id"
+}
+
+// parseContentRangeTotal reads the total out of a PostgREST
+// `Content-Range` (`0-999/1212`). Returns -1 for the countless form
+// (`0-999/*`) and for anything unparseable — an unknown total must
+// never be mistaken for a small one.
+func parseContentRangeTotal(v string) int {
+	i := strings.LastIndex(v, "/")
+	if i < 0 {
+		return -1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v[i+1:]))
+	if err != nil || n < 0 {
+		return -1
+	}
+	return n
+}
+
+// ExportCompleteness is the honesty ledger a paged export carries beside
+// its rows: the authoritative row count the database holds for each
+// section, and the sections whose pages could not all be read. It is
+// what keeps manifest.json from presenting a truncated archive as whole.
+type ExportCompleteness struct {
+	Totals     map[string]int
+	Incomplete []string
+}
+
+func newExportCompleteness() ExportCompleteness {
+	return ExportCompleteness{Totals: map[string]int{}}
+}
+
+// note records one section. An empty table stays absent from Totals (the
+// convention both export paths share), but a section that FAILED short
+// is recorded even at zero rows — an absent key must not be readable as
+// "the subject has none of these".
+func (e *ExportCompleteness) note(key string, fetched, total int, complete bool) {
+	short := !complete || fetched < total
+	if fetched > 0 || short {
+		if total < fetched {
+			total = fetched
+		}
+		e.Totals[key] = total
+	}
+	if short {
+		e.Incomplete = append(e.Incomplete, key)
+	}
+}
+
+// fetchExportPages walks `baseURL` (a PostgREST query already carrying
+// select + filter + order, and no limit/offset) in exportPageSize
+// chunks. Returns the rows read, the authoritative count the server
+// reported, and whether the two agree. A failing page returns the rows
+// already read alongside the error, so a caller that tolerates the
+// failure still ships what it has — flagged incomplete, never counted
+// as whole. Only the first page asks for `count=exact`, so the total
+// costs one COUNT per section rather than one per page.
+func fetchExportPages[T any](ctx context.Context, c *SupabaseClient, baseURL string, ceiling int) ([]T, int, bool, error) {
+	rows := []T{}
+	total := -1
+	complete := false
+	report := func() (int, bool) {
+		if total >= 0 {
+			if len(rows) < total {
+				return total, false
+			}
+			return len(rows), true
+		}
+		return len(rows), complete
+	}
+	for offset := 0; offset < ceiling; offset += exportPageSize {
+		want := exportPageSize
+		if left := ceiling - offset; left < want {
+			want = left
+		}
+		u := fmt.Sprintf("%s&limit=%d&offset=%d", baseURL, want, offset)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			t, cp := report()
+			return rows, t, cp, err
+		}
+		if offset == 0 {
+			req.Header.Set("Prefer", "count=exact")
+		}
+		body, hdr, err := c.doWithHeaders(ctx, req)
+		if err != nil {
+			t, cp := report()
+			return rows, t, cp, err
+		}
+		if offset == 0 && hdr != nil {
+			if n := parseContentRangeTotal(hdr.Get("Content-Range")); n >= 0 {
+				total = n
+			}
+		}
+		var page []T
+		if err := json.Unmarshal(body, &page); err != nil {
+			t, cp := report()
+			return rows, t, cp, err
+		}
+		rows = append(rows, page...)
+		if len(page) < want {
+			complete = true
+			break
+		}
+	}
+	t, cp := report()
+	return rows, t, cp, nil
+}
+
 // FetchExportRuns reads the user's runs with the column projection
 // the GDPR export needs. Service role bypasses RLS; the userID
 // filter is the only access gate. Ordered most-recent-first, capped
 // at `limit`. Returns dataexport.ExportRun rows so the adapter
 // doesn't need to translate fields.
-func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, limit int) ([]dataexportRow, error) {
+func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, limit int) ([]dataexportRow, ExportCompleteness, error) {
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
 	q.Set("select",
 		"id,user_id,started_at,duration_s,distance_m,source,activity_type,is_dnf,external_id,metadata,track_url,hr_series_url,is_public,event_id,route_id,created_at,updated_at")
-	q.Set("order", "started_at.desc")
-	q.Set("limit", strconv.Itoa(limit))
+	// `id` is the tiebreaker: two runs can share a `started_at`, and
+	// offset paging under a non-total order repeats one row and drops
+	// another.
+	q.Set("order", "started_at.desc,id.asc")
 	u := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?" + q.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	body, err := c.do(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	var rows []dataexportRow
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	rows, total, complete, err := fetchExportPages[dataexportRow](ctx, c, u, limit)
+	comp := newExportCompleteness()
+	comp.note("runs", len(rows), total, complete)
+	return rows, comp, err
 }
 
 // dataexportRow mirrors dataexport.ExportRun. We don't import the
@@ -1398,24 +1557,16 @@ func (c *SupabaseClient) CreateSignedURL(ctx context.Context, path string, ttlSe
 // export format. Service role bypasses RLS; the userID filter is
 // the only access gate. Mirrors the column shape mobile + web
 // backup writers archive.
-func (c *SupabaseClient) FetchExportRoutes(ctx context.Context, userID string) ([]exportRouteRow, error) {
+func (c *SupabaseClient) FetchExportRoutes(ctx context.Context, userID string) ([]exportRouteRow, ExportCompleteness, error) {
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
 	q.Set("select", "*")
+	q.Set("order", orderForExportTable(schema.TableRoutes))
 	u := c.BaseURL + "/rest/v1/" + schema.TableRoutes + "?" + q.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	body, err := c.do(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	var rows []exportRouteRow
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, err
-	}
-	return rows, nil
+	rows, total, complete, err := fetchExportPages[exportRouteRow](ctx, c, u, exportRowCeiling)
+	comp := newExportCompleteness()
+	comp.note("routes", len(rows), total, complete)
+	return rows, comp, err
 }
 
 // exportRouteRow mirrors dataexport.ExportRoute. Same leaf-package
@@ -2326,7 +2477,7 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 func (c *SupabaseClient) FetchExportPersonalDataTables(
 	ctx context.Context,
 	userID string,
-) (map[string][]map[string]interface{}, error) {
+) (map[string][]map[string]interface{}, ExportCompleteness, error) {
 	// Each spec is (zip entry name, table, filter param, select clause).
 	// The filter param is the column the table joins on; almost all are
 	// `user_id`, with a few exceptions (run_comments, run_kudos use
@@ -2341,34 +2492,30 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 	specs := exportPersonalDataSpecs(uid)
 
 	out := make(map[string][]map[string]interface{}, len(specs))
+	comp := newExportCompleteness()
 	for _, s := range specs {
 		q := url.Values{}
 		// `filter` is a pre-built KV like `user_id=eq.<uid>` or with
 		// the `in.(select ...)` form — pass through verbatim.
 		q.Set("select", s.sel)
+		// A total order, so offset paging can't repeat one row and skip
+		// another. See orderForExportTable.
+		q.Set("order", orderForExportTable(s.table))
 		// Strip the explicit user-id filter from `q` since it's
 		// already in the raw filter param; append the filter at the
 		// end of the URL string instead of through url.Values so
 		// nested-query commas aren't escaped.
 		u := c.BaseURL + "/rest/v1/" + s.table + "?" + q.Encode() + "&" + s.filter
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		// Tolerate per-table failure: the audit notes "partial export
+		// with a manifest count" beats no export. The rows already read
+		// still ship — the section is recorded short rather than
+		// silently dropped.
+		rows, total, complete, err := fetchExportPages[map[string]interface{}](ctx, c, u, exportRowCeiling)
 		if err != nil {
-			// A single table failing is logged + skipped; the rest
-			// of the export still ships. Falls through the loop's
-			// error swallow below.
-			continue
+			complete = false
 		}
-		body, err := c.do(ctx, req)
-		if err != nil {
-			// Tolerate per-table failure; the audit notes "partial
-			// export with a manifest count" is better than no
-			// export.
-			continue
-		}
-		var rows []map[string]interface{}
-		if err := json.Unmarshal(body, &rows); err != nil {
-			continue
-		}
+		key := strings.TrimSuffix(s.name, ".json")
+		comp.note(key, len(rows), total, complete)
 		if len(rows) == 0 {
 			continue
 		}
@@ -2396,31 +2543,33 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 	{
 		jq := url.Values{}
 		jq.Set("select", "kind")
+		jq.Set("order", orderForExportTable(schema.TableJobs))
 		u := c.BaseURL + "/rest/v1/" + schema.TableJobs + "?" + jq.Encode() +
 			"&payload->>user_id=eq." + uid
-		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil); err == nil {
-			if body, err := c.do(ctx, req); err == nil {
-				var rows []struct {
-					Kind string `json:"kind"`
-				}
-				if json.Unmarshal(body, &rows) == nil && len(rows) > 0 {
-					counts := make(map[string]int, len(rows))
-					for _, r := range rows {
-						counts[r.Kind]++
-					}
-					summary := make([]map[string]interface{}, 0, len(counts))
-					for kind, n := range counts {
-						summary = append(summary, map[string]interface{}{
-							"kind":  kind,
-							"count": n,
-						})
-					}
-					if len(summary) > 0 {
-						out["jobs_summary.json"] = summary
-					}
-				}
-			}
+		type jobKindRow struct {
+			Kind string `json:"kind"`
 		}
+		rows, _, complete, err := fetchExportPages[jobKindRow](ctx, c, u, exportRowCeiling)
+		if err != nil {
+			complete = false
+		}
+		counts := make(map[string]int, len(rows))
+		for _, r := range rows {
+			counts[r.Kind]++
+		}
+		summary := make([]map[string]interface{}, 0, len(counts))
+		for kind, n := range counts {
+			summary = append(summary, map[string]interface{}{
+				"kind":  kind,
+				"count": n,
+			})
+		}
+		if len(summary) > 0 {
+			out["jobs_summary.json"] = summary
+		}
+		// One entry per kind, not one per job — but the aggregate is
+		// only trustworthy if every job row was scanned.
+		comp.note("jobs_summary", len(summary), len(summary), complete)
 	}
 
 	// Two-step fetch for run_gear: PostgREST's `in.()` filter takes
@@ -2441,21 +2590,21 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			// don't need URL-encoding but join with commas only.
 			q := url.Values{}
 			q.Set("select", "*")
+			q.Set("order", orderForExportTable(schema.TableRunGear))
 			u := c.BaseURL + "/rest/v1/" + schema.TableRunGear + "?" + q.Encode() +
 				"&gear_id=in.(" + strings.Join(ids, ",") + ")"
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-			if err == nil {
-				if body, err := c.do(ctx, req); err == nil {
-					var rows []map[string]interface{}
-					if err := json.Unmarshal(body, &rows); err == nil && len(rows) > 0 {
-						out["run_gear.json"] = rows
-					}
-				}
+			rows, total, complete, err := fetchExportPages[map[string]interface{}](ctx, c, u, exportRowCeiling)
+			if err != nil {
+				complete = false
+			}
+			comp.note("run_gear", len(rows), total, complete)
+			if len(rows) > 0 {
+				out["run_gear.json"] = rows
 			}
 		}
 	}
 
-	return out, nil
+	return out, comp, nil
 }
 
 // DownloadRawTrackBytes pulls the **gzipped** bytes from Storage

@@ -1255,6 +1255,91 @@ void main() {
           lessThanOrEqualTo(at1x.wanted * (pct.lane / at1x.lane) + 0.05));
     });
   });
+
+  group('pacing halves + grade-adjusted split column', () {
+    testWidgets('a steady run reads as an even split with no terrain note',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, _run(track: _straightTrack(4)));
+
+      expect(find.text('Pacing'), findsOneWidget);
+      expect(find.text('First half'), findsOneWidget);
+      expect(find.text('Second half'), findsOneWidget);
+      expect(find.text('Even split'), findsOneWidget);
+      expect(find.text('Steady across both halves'), findsOneWidget);
+      expect(find.text('Grade-adj.'), findsNothing);
+    });
+
+    testWidgets('a fading run reads as a positive split with the delta',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, _run(track: _pacedTrack(30, 40)));
+
+      expect(find.text('Positive split'), findsOneWidget);
+      expect(find.text('100s slower over the second half'), findsOneWidget);
+    });
+
+    testWidgets('a climbing second half adds the terrain note + the column',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await _pump(tester, _run(track: _pacedTrack(30, 37, climbPerStep: 4)));
+
+      expect(find.text('Positive split'), findsOneWidget);
+      expect(
+        find.text(
+            'Adjusted for the terrain, your effort was even across both halves.'),
+        findsOneWidget,
+      );
+      expect(find.text('Grade-adj.'), findsOneWidget);
+      expect(
+        find.text(
+            'Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.'),
+        findsOneWidget,
+      );
+    });
+  });
+}
+
+/// A due-north 4 km track sampled every 100 m, taking [firstStepS] seconds per
+/// step over the first half and [secondStepS] over the second. [climbPerStep]
+/// raises the second half by that many metres per step (the first half is
+/// flat), so the run fades in raw pace while effort holds.
+List<Waypoint> _pacedTrack(int firstStepS, int secondStepS,
+    {double? climbPerStep}) {
+  const metresPerDegreeLat = 111320.0;
+  const stepsPerHalf = 20;
+  var t = DateTime.utc(2026, 4, 15, 7, 30);
+  var ele = climbPerStep == null ? null : 100.0;
+  final out = <Waypoint>[];
+  for (var half = 0; half < 2; half++) {
+    for (var i = 0; i < stepsPerHalf; i++) {
+      final idx = half * stepsPerHalf + i;
+      out.add(Waypoint(
+        lat: -37.8136 + (idx * 100) / metresPerDegreeLat,
+        lng: 144.9631,
+        elevationMetres: ele,
+        timestamp: t,
+      ));
+      t = t.add(Duration(seconds: half == 0 ? firstStepS : secondStepS));
+      if (ele != null && half == 1) ele += climbPerStep!;
+    }
+  }
+  out.add(Waypoint(
+    lat: -37.8136 + (2 * stepsPerHalf * 100) / metresPerDegreeLat,
+    lng: 144.9631,
+    elevationMetres: ele,
+    timestamp: t,
+  ));
+  return out;
 }
 
 /// A run whose track carries elevation, so the elevation section renders.

@@ -68,6 +68,32 @@ test('expandInstances — weekly emits the starts_at week even when start has a 
 	assert.equal(firstDay, '2026-04-07', `first instance should be Apr 7, got ${firstDay}`);
 });
 
+test('expandInstances — weekly emits the starts_at week when starts_at carries milliseconds', () => {
+	// Regression: `stamp()` rebuilds the instant with a zero millisecond, so a
+	// starts_at of ...:18.132Z produced a first candidate of ...:18.000 that
+	// lost `stamped < start` — the series' own first occurrence vanished from
+	// the picker, the listings and every RSVP key.
+	const withMs = ev({
+		starts_at: '2026-08-23T02:49:18.132Z', // Sun
+		recurrence_freq: 'weekly',
+		timezone: 'UTC',
+	});
+	const from = new Date('2026-08-17T00:00:00Z');
+	const to = new Date('2026-09-30T23:59:59Z');
+	const out = expandInstances(withMs, from, to);
+	assert.equal(out[0]?.toISOString(), '2026-08-23T02:49:18.000Z');
+
+	const withoutMs = ev({
+		starts_at: '2026-08-23T02:49:18.000Z',
+		recurrence_freq: 'weekly',
+		timezone: 'UTC',
+	});
+	assert.deepEqual(
+		out.map((d) => d.toISOString()),
+		expandInstances(withoutMs, from, to).map((d) => d.toISOString()),
+	);
+});
+
 test('expandInstances — biweekly produces fewer instances than weekly in the same window', () => {
 	const start = '2026-04-01T08:00:00Z';
 	const weekly = ev({ starts_at: start, recurrence_freq: 'weekly' });

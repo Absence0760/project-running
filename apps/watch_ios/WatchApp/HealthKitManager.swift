@@ -10,6 +10,17 @@ class HealthKitManager: NSObject, ObservableObject {
     @Published var currentBPM: Int?
     @Published var averageBPM: Double?
 
+    /// Drives the "heart rate unavailable" notice on the run and summary
+    /// screens once the workout session has died. See `handleSessionFailure`.
+    @Published private(set) var heartRateUnavailable = false
+
+    /// The same fact as `heartRateUnavailable`, readable without waiting for
+    /// a main-queue hop: HealthKit delivers `didFailWithError` on whatever
+    /// queue it pleases, while `WorkoutManager.stop()` reads the summary
+    /// synchronously, so a flag set only inside the hop can land after the
+    /// run has already been stamped.
+    private(set) var sessionDidFail = false
+
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
@@ -72,9 +83,40 @@ class HealthKitManager: NSObject, ObservableObject {
     }
 
     func reset() {
+        sessionDidFail = false
         DispatchQueue.main.async {
             self.currentBPM = nil
             self.averageBPM = nil
+            self.heartRateUnavailable = false
+        }
+    }
+
+    /// The average a finished run may carry. A failed session's average
+    /// covers only the minutes before the sensor stream died, so it is
+    /// withheld rather than written to the row as the whole run's — 20
+    /// minutes of a 4-hour run is a wrong number, not a partial one.
+    var summaryAverageBPM: Double? {
+        sessionDidFail ? nil : averageBPM
+    }
+
+    /// A workout session that reports a failure is dead: it delivers no
+    /// further samples, so without this the last reading stays on screen as
+    /// a plausible live heart rate for the rest of the run and its average
+    /// is stamped on the run as if it had covered all of it.
+    ///
+    /// Drops the session, the reading and the average, and raises the flag
+    /// the run / summary screens render. Deliberately touches nothing else:
+    /// the GPS stream, the distance, the on-disk track and the timers are
+    /// all `WorkoutManager`'s and keep recording, because losing the heart
+    /// rate must never cost the run.
+    func handleSessionFailure() {
+        sessionDidFail = true
+        session = nil
+        builder = nil
+        DispatchQueue.main.async {
+            self.currentBPM = nil
+            self.averageBPM = nil
+            self.heartRateUnavailable = true
         }
     }
 }
@@ -85,9 +127,16 @@ extension HealthKitManager: HKWorkoutSessionDelegate {
         didChangeTo toState: HKWorkoutSessionState,
         from fromState: HKWorkoutSessionState,
         date: Date
-    ) {}
+    ) {
+        // Left empty on purpose. `.ended` is not a failure: `stopWorkout()`
+        // ends the session itself, so discarding the average here would wipe
+        // it moments before `WorkoutManager.stop()` reads it into the
+        // finished run.
+    }
 
-    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {}
+    func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        handleSessionFailure()
+    }
 }
 
 extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
@@ -97,6 +146,9 @@ extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
         _ workoutBuilder: HKLiveWorkoutBuilder,
         didCollectDataOf collectedTypes: Set<HKSampleType>
     ) {
+        // A sample arriving after the session failed would put a number back
+        // on a screen that has already told the runner it has none.
+        guard !sessionDidFail else { return }
         let hrType = HKQuantityType(.heartRate)
         guard collectedTypes.contains(hrType),
               let stats = workoutBuilder.statistics(for: hrType) else { return }

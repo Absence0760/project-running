@@ -163,7 +163,7 @@ enum _ScreenState { idle, countdown, recording, paused, finished }
 /// partial: continue the same run, finalize it as-is, or drop it.
 enum _ResumeChoice { resume, finish, discard }
 
-class _RunScreenState extends State<RunScreen> {
+class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
   _ScreenState _state = _ScreenState.idle;
 
   /// Single write path for [_state] so the cross-widget [runRecordingActive]
@@ -520,6 +520,13 @@ class _RunScreenState extends State<RunScreen> {
   bool _weakGpsLatest = false;
   bool _weakGps = false;
 
+  // Foreground-only ("While using the app") location disclosure state.
+  // `_leftForegroundAt` is the wall-clock moment the app left the screen
+  // during an active recording; `_backgroundLimitDisclosed` keeps the
+  // telling to once per run so an app switch every kilometre doesn't nag.
+  DateTime? _leftForegroundAt;
+  bool _backgroundLimitDisclosed = false;
+
   // Permission watchdog — polls Geolocator.checkPermission() so we can
   // warn the runner if location permission is revoked mid-run in Android
   // settings.
@@ -658,6 +665,7 @@ class _RunScreenState extends State<RunScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.preferences.addListener(_onPrefsChange);
     widget.runStore.addListener(_onPrefsChange);
     widget.social.addListener(_onSocialChange);
@@ -688,6 +696,42 @@ class _RunScreenState extends State<RunScreen> {
         if (!mounted) return;
         _promptResume(resumable);
       });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // L4 auxiliary: this only ever decides whether to show a disclosure.
+    // Nothing in here may touch recording state, so it carries its own
+    // catch rather than riding any recording path's.
+    try {
+      if (state == AppLifecycleState.paused ||
+          state == AppLifecycleState.hidden) {
+        if (_state == _ScreenState.recording && !_manualPaused) {
+          _leftForegroundAt = DateTime.now();
+        }
+        return;
+      }
+      if (state != AppLifecycleState.resumed) return;
+      final leftAt = _leftForegroundAt;
+      _leftForegroundAt = null;
+      if (leftAt == null) return;
+      if (!shouldDiscloseBackgroundLocationLimit(
+        limitedGrant: _recorder?.backgroundLocationLimited == true,
+        recording: _state == _ScreenState.recording,
+        manualPaused: _manualPaused,
+        alreadyDisclosed: _backgroundLimitDisclosed,
+        leftForegroundAt: leftAt,
+        returnedAt: DateTime.now(),
+        lastFixAt: _lastSnapshotAt,
+      )) {
+        return;
+      }
+      _backgroundLimitDisclosed = true;
+      _notifyBackgroundLocationLimited();
+    } catch (e) {
+      debugPrint('background-location disclosure failed: $e');
     }
   }
 
@@ -1579,9 +1623,9 @@ class _RunScreenState extends State<RunScreen> {
     final prepareError = _prepareError;
     if (prepareError != null) {
       _notifyGpsUnavailable(prepareError);
-    } else if (_recorder?.backgroundLocationLimited == true) {
-      _notifyBackgroundLocationLimited();
     }
+    _leftForegroundAt = null;
+    _backgroundLimitDisclosed = false;
 
     if (!mounted || _recorder == null) return;
 
@@ -2000,11 +2044,8 @@ class _RunScreenState extends State<RunScreen> {
     } catch (e) {
       _notifyGpsUnavailable(e);
     }
-    // A resume follows a process death — the very failure a foreground-only
-    // grant makes likelier — so disclose it here too.
-    if (_recorder?.backgroundLocationLimited == true) {
-      _notifyBackgroundLocationLimited();
-    }
+    _leftForegroundAt = null;
+    _backgroundLimitDisclosed = false;
 
     if (!mounted || _recorder == null) {
       _startRequested = false;
@@ -2866,15 +2907,17 @@ class _RunScreenState extends State<RunScreen> {
     );
   }
 
-  /// Disclose that this run records under a foreground-only location grant
-  /// ("While using the app"): GPS, the map, and distance all work while the
-  /// run screen is up, but Android may stop delivering fixes once another
-  /// app takes focus. Not an error — the run is recording — so it never
-  /// suppresses GPS the way refusing the grant outright did.
+  /// Explain what the runner just lost: under a foreground-only location
+  /// grant ("While using the app") Android stopped feeding fixes while the
+  /// app was off screen, so the clock kept running and the ground they
+  /// covered while away was not counted. The run itself never stopped and
+  /// nothing already recorded was lost, which is what the copy says — and
+  /// it is only ever shown once the gap is evidenced by a stale fix
+  /// (see [shouldDiscloseBackgroundLocationLimit]), never at run start.
   void _notifyBackgroundLocationLimited() {
     if (!mounted) return;
     _showTopBanner(
-      _l10n.runGpsAllowAllTheTime,
+      _l10n.runBackgroundLocationPaused,
       duration: const Duration(seconds: 6),
       actionLabel: _l10n.runSettings,
       onAction: () => Geolocator.openAppSettings(),
@@ -3361,6 +3404,8 @@ class _RunScreenState extends State<RunScreen> {
     _gpsLost = false;
     _weakGps = false;
     _weakGpsLatest = false;
+    _leftForegroundAt = null;
+    _backgroundLimitDisclosed = false;
     // Strategy choice survives into the next run; the built plan and the
     // per-recording cue trackers do not.
     _phasePlan = const [];
@@ -3414,6 +3459,7 @@ class _RunScreenState extends State<RunScreen> {
     // nav-shell swipe lock (issue #490) — leaving it latched would trap the
     // shell in non-swipeable state.
     runRecordingActive.value = false;
+    WidgetsBinding.instance.removeObserver(this);
     pendingStartWorkout.removeListener(_onPendingStartWorkout);
     widget.preferences.removeListener(_onPrefsChange);
     widget.runStore.removeListener(_onPrefsChange);
@@ -5428,6 +5474,42 @@ String _formatAgo(BuildContext context, DateTime when) {
   }
   final months = (diff.inDays / 30).floor();
   return l10n.runAgoMonths(months);
+}
+
+/// How long the app must have been off screen before an absent GPS fix is
+/// evidence that Android cut location delivery, rather than simply the gap
+/// between two fixes. One fix interval plus margin.
+const kBackgroundLocationDisclosureMinAway = Duration(seconds: 15);
+
+/// Whether returning to a recording run should disclose that a
+/// foreground-only location grant cost it the stretch spent off screen.
+///
+/// Requires evidence, not a guess: the grant is foreground-only, the run was
+/// recording and not manually paused across the whole absence, the absence
+/// was long enough for a fix to be due ([kBackgroundLocationDisclosureMinAway]),
+/// and no fix arrived while away. A run that has never had a fix at all
+/// (indoor / treadmill) is not evidence of anything and is left alone, as is
+/// a run that kept receiving fixes in the background — telling that runner
+/// their tracking paused would be false.
+@visibleForTesting
+bool shouldDiscloseBackgroundLocationLimit({
+  required bool limitedGrant,
+  required bool recording,
+  required bool manualPaused,
+  required bool alreadyDisclosed,
+  required DateTime leftForegroundAt,
+  required DateTime returnedAt,
+  required DateTime? lastFixAt,
+}) {
+  if (!limitedGrant || !recording || manualPaused || alreadyDisclosed) {
+    return false;
+  }
+  if (returnedAt.difference(leftForegroundAt) <
+      kBackgroundLocationDisclosureMinAway) {
+    return false;
+  }
+  if (lastFixAt == null) return false;
+  return !lastFixAt.isAfter(leftForegroundAt);
 }
 
 /// Whether the run-start wiring should (re)attach the live broadcast: either

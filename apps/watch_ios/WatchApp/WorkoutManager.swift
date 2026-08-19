@@ -99,9 +99,14 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// Bytes buffered before `writeTrackJSON` flushes to the output handle.
     private static let trackJSONFlushBytes = 64 * 1024
 
-    /// Write the finished run's track to a JSON file in the app's caches
+    /// Write the finished run's track to a JSON file in the durable payload
     /// directory and return the URL, suitable for `WCSession.transferFile`.
     /// The phone gzips + uploads to Supabase Storage on receipt.
+    ///
+    /// Durable rather than `Caches` because `WCSession` reads this file off
+    /// disk for as long as the transfer is outstanding — which can be days
+    /// with the phone switched off — and by then `reset()` has deleted the
+    /// NDJSON it was built from, so a purge here loses the run.
     ///
     /// Streams NDJSON line → wire point → output handle, so the peak is one
     /// buffer rather than the whole track plus its encoding. Assembled in a
@@ -111,9 +116,10 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard let run = finishedRun else {
             throw NSError(domain: "WorkoutManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "No finished run"])
         }
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let url = caches.appendingPathComponent("\(run.id).json")
-        let tmp = caches.appendingPathComponent("\(run.id).json.tmp")
+        let dir = RunPayloadStorage.directory
+        RunPayloadStorage.createDirectory(at: dir)
+        let url = dir.appendingPathComponent("\(run.id).json")
+        let tmp = dir.appendingPathComponent("\(run.id).json.tmp")
 
         try? FileManager.default.removeItem(at: tmp)
         guard FileManager.default.createFile(atPath: tmp.path, contents: nil) else {
@@ -168,6 +174,10 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     override init() {
         super.init()
+        // Before anything reads a payload: create the durable directory and
+        // carry across whatever an older build left in Caches, so an upgrade
+        // over an install with an unsynced run does not orphan it.
+        RunPayloadStorage.prepare()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.activityType = .fitness
@@ -206,6 +216,9 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let store = CheckpointStore(runId: runId)
         checkpointStore = store
         CheckpointStore.purgeTrackFiles(except: store.trackFileURL)
+        RunPayloadStorage.sweepStaleExports(
+            pending: WatchConnectivityManager.shared.pendingTransferURLs()
+        )
 
         locationManager.requestWhenInUseAuthorization()
         locationManager.allowsBackgroundLocationUpdates = true
@@ -292,7 +305,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             distanceMetres: distanceMetres,
             trackFileURL: store?.trackFileURL ?? CheckpointStore.trackFile(runId: runId),
             trackPointCount: trackPointCount,
-            averageBPM: healthKit.averageBPM
+            averageBPM: healthKit.summaryAverageBPM
         )
 
         state = .finished
@@ -512,7 +525,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             pausedIntervalSeconds: totalPausedInterval,
             trackPointCount: trackPointCount,
             cacheFileURL: store.trackFileURL,
-            averageBPM: healthKit.averageBPM
+            averageBPM: healthKit.summaryAverageBPM
         )
         store.write(checkpoint: cp)
         // Match the track's crash-durability window to the checkpoint's.

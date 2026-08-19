@@ -4,14 +4,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../fab_clearance.dart';
 import '../gym_routine.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
 import '../local_routine_store.dart';
 import '../preferences.dart';
+import '../routine_history.dart';
 import '../social_service.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/pending_sync_banner.dart';
 import '../widgets/top_banner.dart';
+import 'gym_detail_screen.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
 import 'gym_session_screen.dart';
 
@@ -51,12 +55,17 @@ class RoutineDetailScreen extends StatefulWidget {
 }
 
 class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
+  static const int _recentSessionLimit = 5;
+
   bool _isOnline = true;
+  bool _isAuthor = false;
   bool _isOwner = false;
   List<ClubView> _adminClubs = const [];
   String _publishingTo = '';
   bool _publishBusy = false;
   bool _publicBusy = false;
+  RoutineHistory? _history;
+  bool _historyError = false;
 
   @override
   void initState() {
@@ -64,14 +73,17 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     widget.store.addListener(_onStoreChange);
     _computeOwner();
     _loadAdminClubs();
+    _loadHistory();
   }
 
-  /// Whether the viewer authors this personal (non-club) routine — gates the
-  /// public publish/unpublish toggle. Independent of [_loadAdminClubs] (which
+  /// [_isAuthor] is whoever wrote the routine, club-owned or not — the gate
+  /// the history panel wears, mirroring web's `isOwner` on `/gym/routines/[id]`.
+  /// [_isOwner] narrows that to a PERSONAL routine, which is what the public
+  /// publish/unpublish toggle needs. Independent of [_loadAdminClubs] (which
   /// additionally needs a SocialService for the club publish-row).
   void _computeOwner() {
     final r = widget.store.byId(widget.routineId);
-    if (r == null || r.clubId != null) return;
+    if (r == null) return;
     String? uid = widget.viewerIdOverride;
     if (uid == null) {
       try {
@@ -81,9 +93,69 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
         return;
       }
     }
-    if (uid != null && r.row['author_id'] == uid) {
-      _isOwner = true;
+    if (uid == null || r.row['author_id'] != uid) return;
+    _isAuthor = true;
+    _isOwner = r.clubId == null;
+  }
+
+  /// The routine's own past sessions, read from the server rather than the
+  /// local gym store: that store holds only the most recent page of workouts,
+  /// so a routine last run months ago would read as never run at all.
+  Future<void> _loadHistory() async {
+    final api = widget.api;
+    if (api == null || !_isAuthor) return;
+    setState(() {
+      _history = null;
+      _historyError = false;
+    });
+    try {
+      final agg = await api.fetchGymRoutineHistory(
+        widget.routineId,
+        recentLimit: _recentSessionLimit,
+      );
+      if (!mounted) return;
+      final recent = agg['recent_sessions'];
+      setState(() {
+        _history = routineHistoryFromAggregate(
+          RoutineHistoryAggregate(
+            sessionCount: (agg['session_count'] as num?)?.toInt() ?? 0,
+            lastPerformedAt: agg['last_performed_at'] as String?,
+            gradedCount: (agg['graded_count'] as num?)?.toInt() ?? 0,
+            completedCount: (agg['completed_count'] as num?)?.toInt() ?? 0,
+            recentRows: [
+              if (recent is List)
+                for (final row in recent.whereType<Map>())
+                  RoutineSessionRow(
+                    id: row['id'] as String? ?? '',
+                    startedAt: row['started_at'] as String? ?? '',
+                    title: row['title'] as String?,
+                    metadata: row['metadata'],
+                  ),
+            ],
+          ),
+          DateTime.now().millisecondsSinceEpoch,
+        );
+      });
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('routine history load failed: $e');
+      setState(() {
+        _history = null;
+        _historyError = true;
+      });
     }
+  }
+
+  void _openSession(String workoutId) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GymDetailScreen(
+          api: widget.api,
+          store: widget.gymStore,
+          workoutId: workoutId,
+        ),
+      ),
+    );
   }
 
   @override
@@ -365,8 +437,151 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           _publicRow(r, theme, l10n),
         ],
         const SizedBox(height: 16),
+        if (_historyError)
+          _historyErrorCard(theme, l10n)
+        else if (_history case final h? when h.sessionCount > 0)
+          _historyCard(h, theme, l10n),
         for (final ex in r.exercises) _exerciseCard(ex, theme, l10n),
       ],
+    );
+  }
+
+  Widget _historyErrorCard(ThemeData theme, AppLocalizations l10n) => Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.gymRoutineHistoryLoadError,
+                  style: theme.textTheme.bodyMedium),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: _loadHistory,
+                  child: Text(l10n.errorStateRetry),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _historyCard(
+      RoutineHistory h, ThemeData theme, AppLocalizations l10n) {
+    final tag = localeToTag(Localizations.localeOf(context));
+    final lastDone = l10n.gymRoutineHistoryLastDone(h.daysSinceLast ?? 0);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: Text(l10n.gymRoutineHistoryTitle,
+                      style: theme.textTheme.titleSmall),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.gymRecordsSessions(h.sessionCount),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              h.gradedCount > 0
+                  ? '$lastDone  ·  ${l10n.gymRoutineHistoryCompletedRate(h.completedCount, h.gradedCount)}'
+                  : lastDone,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l10n.gymRoutineHistoryRecent,
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 4),
+            for (final s in h.recentSessions)
+              InkWell(
+                onTap: () => _openSession(s.id),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Text(
+                        formatDateMed(DateTime.parse(s.startedAt), tag),
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          (s.title ?? '').trim().isEmpty
+                              ? l10n.gymUntitled
+                              : s.title!,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _verdictChip(s.verdict, theme, l10n),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _verdictChip(
+      RoutineSessionVerdict v, ThemeData theme, AppLocalizations l10n) {
+    final (String label, Color fg, Color bg) = switch (v) {
+      RoutineSessionVerdict.completed => (
+          l10n.gymReviewVerdictCompleted,
+          theme.colorScheme.onPrimaryContainer,
+          theme.colorScheme.primaryContainer,
+        ),
+      RoutineSessionVerdict.partial => (
+          l10n.gymReviewVerdictPartial,
+          theme.colorScheme.onTertiaryContainer,
+          theme.colorScheme.tertiaryContainer,
+        ),
+      RoutineSessionVerdict.abandoned => (
+          l10n.gymReviewVerdictAbandoned,
+          theme.colorScheme.onSurfaceVariant,
+          theme.colorScheme.surfaceContainerHighest,
+        ),
+      RoutineSessionVerdict.ungraded => (
+          l10n.gymRoutineHistoryVerdictUngraded,
+          theme.colorScheme.onSurfaceVariant,
+          Colors.transparent,
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: v == RoutineSessionVerdict.ungraded
+            ? Border.all(color: theme.colorScheme.outlineVariant)
+            : null,
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall
+            ?.copyWith(color: fg, fontWeight: FontWeight.w700),
+      ),
     );
   }
 

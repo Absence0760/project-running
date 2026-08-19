@@ -67,7 +67,7 @@ internal fun buildSaveRunRowMap(
     startedAtIso: String,
     durationS: Int,
     distanceM: Double,
-    trackPath: String,
+    trackPath: String?,
     metadata: JsonObject?,
     isPublic: Boolean?,
 ): Map<String, Any?> = buildMap {
@@ -339,10 +339,20 @@ class SupabaseClient(
         this.anonKey = anonKey
     }
 
+    private val refreshFlight = SingleFlight<RefreshedSession>()
+
     /// Exchange the cached refresh token for a fresh access token. Returns
     /// the new access + refresh token pair and the absolute expiry (ms since
     /// epoch); the caller persists them back to `SessionStore`.
-    suspend fun refreshAccessToken(): RefreshedSession {
+    ///
+    /// Single-flighted: GoTrue rotates the refresh token, so a second
+    /// concurrent call would present one the first has already spent and get
+    /// a 400 back — see [SingleFlight].
+    suspend fun refreshAccessToken(): RefreshedSession = refreshFlight.run {
+        refreshAccessTokenOnce()
+    }
+
+    private suspend fun refreshAccessTokenOnce(): RefreshedSession {
         val refresh = refreshToken
             ?: throw IllegalStateException("no refresh token cached")
 
@@ -514,7 +524,13 @@ class SupabaseClient(
         startedAtIso: String,
         durationS: Int,
         distanceM: Double,
-        trackFile: File,
+        /// Null when the recorded track is gone — the platform purged it
+        /// from the pre-migration cache directory, or the process died
+        /// between a successful upload and the queue entry's removal. The
+        /// run row still carries everything else the runner recorded, so it
+        /// is posted with a null `track_url` (the same shape an indoor
+        /// recording takes) rather than left stuck in the queue forever.
+        trackFile: File?,
         metadata: JsonObject?,
         /// Snapshot of the user's `privacy_default` at run-stop time,
         /// mapped to a boolean: `public → true`, `followers / private
@@ -528,10 +544,13 @@ class SupabaseClient(
         val token = accessToken ?: throw IllegalStateException("not authenticated")
         val uid = userId ?: throw IllegalStateException("not authenticated")
 
-        val gzFile = withContext(Dispatchers.IO) { gzipToTempFile(trackFile) }
+        val gzFile = trackFile?.let { withContext(Dispatchers.IO) { gzipToTempFile(it) } }
         try {
-            val path = "$uid/$runId.json.gz"
-            uploadTrack(path, gzFile, token)
+            var path: String? = null
+            if (gzFile != null) {
+                path = "$uid/$runId.json.gz"
+                uploadTrack(path, gzFile, token)
+            }
 
             val rowMap = buildSaveRunRowMap(
                 runId = runId,
@@ -556,7 +575,7 @@ class SupabaseClient(
 
             execute(req)
         } finally {
-            gzFile.delete()
+            gzFile?.delete()
         }
     }
 

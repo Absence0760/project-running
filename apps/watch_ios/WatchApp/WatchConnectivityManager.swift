@@ -71,6 +71,12 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
 
     func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        if error == nil {
+            // Only now is the run somewhere other than this watch. Deleting
+            // the export any earlier — at reset(), say — would pull the file
+            // out from under a transfer WCSession is still reading.
+            try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
+        }
         DispatchQueue.main.async {
             if self.queuedCount > 0 { self.queuedCount -= 1 }
             if let error = error {
@@ -79,6 +85,13 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
                 self.transferState = .completed
             }
         }
+    }
+
+    /// Files WCSession is still holding for delivery. Survives app launches,
+    /// so it is the authoritative keep-set for the stale-export sweep.
+    func pendingTransferURLs() -> Set<URL> {
+        guard WCSession.isSupported() else { return [] }
+        return Set(WCSession.default.outstandingFileTransfers.map { $0.file.fileURL })
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {

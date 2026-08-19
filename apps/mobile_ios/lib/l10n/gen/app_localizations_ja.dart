@@ -300,6 +300,76 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String importFailuresHeading(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のアクティビティを取り込めませんでした',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresIntro =>
+      'インポートをやり直すと再試行できます。取り込み済みのものはスキップされるため、重複は発生しません。';
+
+  @override
+  String importFailuresTruncated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'さらに $count 件の失敗は記録されていません。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get importFailuresShowDetail => '各アクティビティを表示';
+
+  @override
+  String get importFailuresShare => 'レポートを共有 (CSV)';
+
+  @override
+  String get importFailuresShareFailed => 'レポートを共有できませんでした。';
+
+  @override
+  String get importFailuresDismiss => '閉じる';
+
+  @override
+  String get importFailuresNoDate => '日付不明';
+
+  @override
+  String get importFailuresReasonNetwork => '接続が切断されました';
+
+  @override
+  String get importFailuresReasonAuth => 'サインアウト済み';
+
+  @override
+  String get importFailuresReasonRateLimited => 'レート制限';
+
+  @override
+  String get importFailuresReasonTooLarge => 'ファイルが大きすぎます';
+
+  @override
+  String get importFailuresReasonUnparseable => 'ファイルを読み取れません';
+
+  @override
+  String get importFailuresReasonRejected => 'サーバーに拒否されました';
+
+  @override
+  String get importFailuresReasonUnknown => '不明なエラー';
+
+  @override
+  String importStatusCloudPushDeferred(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件のランをこの端末に保存しました。クラウドへのアップロードは完了していません。次回の同期時に再試行します。',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get importHealthSubtitleIos =>
       'Apple Watch、Nike Run Club、Strava など、Apple Health に書き込む各アプリで記録したワークアウトを取り込みます';
 
@@ -1557,8 +1627,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runGpsPermissionPending => 'GPSなし — 権限が許可されると記録が始まります。';
 
   @override
-  String get runGpsAllowAllTheTime =>
-      '位置情報を「常に許可」に設定してください — バックグラウンド権限がないと、アプリを切り替えた時点で記録が停止します。';
+  String get runBackgroundLocationPaused =>
+      'アプリを離れている間、位置情報の記録が一時停止しました — タイムは計測を続け、記録済みのデータは失われていませんが、画面外で進んだ距離は加算されていません。バックグラウンドでも記録するには、位置情報を「常に許可」に設定してください。';
 
   @override
   String get runGpsSensorFailed => 'GPSなしで記録中 — センサーを開始できませんでした。';
@@ -2188,6 +2258,52 @@ class AppLocalizationsJa extends AppLocalizations {
   String runDetailRunTooShortSplit(String unit) {
     return 'ランが短すぎて $unit の完全なスプリットを作成できません';
   }
+
+  @override
+  String get runDetailPacing => 'ペース配分';
+
+  @override
+  String get runDetailPacingFirstHalf => '前半';
+
+  @override
+  String get runDetailPacingSecondHalf => '後半';
+
+  @override
+  String get runDetailPacingNegative => 'ネガティブスプリット';
+
+  @override
+  String get runDetailPacingEven => 'イーブンペース';
+
+  @override
+  String get runDetailPacingPositive => 'ポジティブスプリット';
+
+  @override
+  String runDetailPacingFaster(String delta) {
+    return '後半が$delta速い';
+  }
+
+  @override
+  String runDetailPacingSlower(String delta) {
+    return '後半が$delta遅い';
+  }
+
+  @override
+  String get runDetailPacingHeld => '前半と後半で安定したペース';
+
+  @override
+  String get runDetailPacingGapNegative => '勾配を調整すると、後半はペースを上げています。';
+
+  @override
+  String get runDetailPacingGapEven => '勾配を調整すると、前半と後半の負荷は同じでした。';
+
+  @override
+  String get runDetailPacingGapPositive => '勾配を調整すると、後半はペースが落ちています。';
+
+  @override
+  String get runDetailGapColumn => '勾配調整';
+
+  @override
+  String get runDetailGapColumnHint => '勾配調整ペースは、実際に走った起伏と同じ負荷になる平地でのペースです。';
 
   @override
   String get runDetailSectionSegments => 'セグメント';
@@ -4499,6 +4615,16 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String liveSpectatorMotionStopped(int n) {
+    return '動きなし — 同じ地点に$n分';
+  }
+
+  @override
+  String liveSpectatorMotionStoppedAtLeast(int n) {
+    return '動きなし — 同じ地点に少なくとも$n分';
+  }
+
+  @override
   String get liveSpectatorConcludedTitle => 'ランが完了しました';
 
   @override
@@ -4733,6 +4859,24 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String planNewVdot(String value) {
     return 'ダニエルズ VDOT：$value';
+  }
+
+  @override
+  String get planNewRampLabel => 'プランと最近のトレーニングの比較';
+
+  @override
+  String planNewRampUnder(String peak, String recent) {
+    return 'このプランの最大週は$peakで、過去4週間の平均である週$recentを下回ります。目標レースを長くするか、トレーニング日を増やすと、その土台をより活かせます。';
+  }
+
+  @override
+  String planNewRampElevated(String opening, String recent) {
+    return '第1週は$openingで、過去4週間の平均である週$recentからはっきり上がります。無理せず入るか、トレーニング日を1日減らしましょう。';
+  }
+
+  @override
+  String planNewRampHigh(String opening, String recent) {
+    return '第1週は$openingで、過去4週間の平均である週$recentを大きく上回ります。トレーニング日を減らす、目標レースを短くする、または数週間かけて土台を作ってから始めると、最初の一歩が安全になります。';
   }
 
   @override
@@ -5675,6 +5819,31 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String settingsAccountBackupPartial(int count, int total) {
+    return 'エクスポートは一部のみです — $total 件中 $count 件のラン。';
+  }
+
+  @override
+  String settingsAccountBackupPartialNotice(int count, int total) {
+    return '前回のエクスポートは一部のみです。アカウントにある $total 件のランのうち $count 件を含んでいます。データは削除されていません — もう一度エクスポートしてください。アカウント全体のアーカイブでは、不完全なセクションが manifest.json に記載されます。';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartial(int missing, int total) {
+    return 'バックアップに GPS ファイルが $total 件中 $missing 件不足しています。';
+  }
+
+  @override
+  String settingsAccountBackupTracksPartialNotice(int missing, int total) {
+    return '前回のバックアップで GPS 軌跡ファイル $total 件中 $missing 件をダウンロードできませんでした。ランはすべてアーカイブに含まれています。軌跡を取り直すにはもう一度エクスポートしてください。manifest.json には complete: false と記録されています。';
+  }
+
+  @override
+  String settingsAccountRestoreIncompleteArchive(int runs) {
+    return 'このアーカイブは不完全であると自己申告しています。$runs 件のランを復元し、何も上書きしていません。欠落を埋めるには完全なバックアップから復元してください。';
+  }
+
+  @override
   String get settingsAccountRestoreUnavailable => 'バックアップサービスを利用できません。';
 
   @override
@@ -6531,6 +6700,33 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gearRotationDone => '完了';
+
+  @override
+  String gearRotationNextUp(String name) {
+    return '次に使うペア: $name';
+  }
+
+  @override
+  String get gearRotationNextUpWhy => 'このローテーションで最も摩耗が少ないペアです。';
+
+  @override
+  String get gearRotationMakeCurrent => '現在のペアにする';
+
+  @override
+  String gearRotationMakeCurrentLabel(String name) {
+    return '$name を現在のペアにします — 新しいランに自動でタグ付けされます';
+  }
+
+  @override
+  String get gearRotationNextUpIsCurrent => 'すでに現在のペアです。';
+
+  @override
+  String get gearRotationAllWorn => 'ここにあるすべてのペアが交換の目安に達しています。';
+
+  @override
+  String gearRotationMakeCurrentFailed(Object error) {
+    return '現在のペアを変更できませんでした: $error';
+  }
 
   @override
   String get privacyZonesSaved => 'プライバシーゾーンを保存しました。';
@@ -9207,6 +9403,35 @@ class AppLocalizationsJa extends AppLocalizations {
   String get gymRoutinePublishFailed => 'ルーティンを公開できませんでした。';
 
   @override
+  String get gymRoutineHistoryTitle => 'ルーティン履歴';
+
+  @override
+  String get gymRoutineHistoryRecent => '最近のセッション';
+
+  @override
+  String gymRoutineHistoryLastDone(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days日前に実施',
+      one: '昨日実施',
+      zero: '今日実施',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymRoutineHistoryCompletedRate(int completed, int graded) {
+    return '$graded件中$completed件を完了';
+  }
+
+  @override
+  String get gymRoutineHistoryVerdictUngraded => '評価なし';
+
+  @override
+  String get gymRoutineHistoryLoadError => 'このルーティンの履歴を読み込めませんでした。';
+
+  @override
   String get gymRoutineClubTemplateBadge => 'クラブテンプレート';
 
   @override
@@ -9457,6 +9682,42 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nutritionTitle => '栄養';
 
   @override
+  String get nutritionDayNavLabel => '記録する日';
+
+  @override
+  String get nutritionDayPrevious => '前の日';
+
+  @override
+  String get nutritionDayNext => '次の日';
+
+  @override
+  String get nutritionDayToday => '今日';
+
+  @override
+  String get nutritionDayYesterday => '昨日';
+
+  @override
+  String get nutritionDayBackfillHint => 'ここで記録した内容はこの日に追加されます。';
+
+  @override
+  String get nutritionDayEmptyPast => 'この日は何も記録されていません。';
+
+  @override
+  String nutritionDayGoalBreakdown(int base, int exercise) {
+    return '目標 $base + この日の消費 $exercise kcal';
+  }
+
+  @override
+  String nutritionDayTrendEnding(String date) {
+    return '$date までの7日間';
+  }
+
+  @override
+  String nutritionDayLogHeadingFor(String date) {
+    return '食事を記録 — $date';
+  }
+
+  @override
   String get nutritionLogFood => '食事を記録';
 
   @override
@@ -9485,6 +9746,37 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get nutritionCholesterol => 'コレステロール';
+
+  @override
+  String get nutritionNutrients => '栄養素';
+
+  @override
+  String get nutritionNutrientsHint =>
+      '参考摂取量です。各合計には、その栄養素の値がある記録済みの食品のみが含まれます。';
+
+  @override
+  String get nutritionNutrientAtLeast => '少なくとも';
+
+  @override
+  String nutritionNutrientPartial(int reported, int total, String nutrient) {
+    return '記録した$total件中$reported件に$nutrientの値があります';
+  }
+
+  @override
+  String nutritionNutrientOver(String n, String unit) {
+    return '$n $unit 超過';
+  }
+
+  @override
+  String nutritionNutrientLeft(String n, String unit) {
+    return '残り $n $unit';
+  }
+
+  @override
+  String get nutritionNutrientReached => '目標達成';
+
+  @override
+  String get nutritionNutrientUntargeted => '1日の目標なし';
 
   @override
   String get nutritionWater => '水分';
@@ -10556,6 +10848,21 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get roadbookColTarget => '目標';
+
+  @override
+  String get roadbookColLegPace => '区間ペース';
+
+  @override
+  String get roadbookTargetAhead => '前倒し';
+
+  @override
+  String get roadbookTargetOn => '予定どおり';
+
+  @override
+  String get roadbookTargetBehind => '遅れ';
+
+  @override
   String get checkpointCheckinAction => 'チェックポイント受付';
 
   @override
@@ -10730,6 +11037,38 @@ class AppLocalizationsJa extends AppLocalizations {
   String challengesLeaderboardRank(int rank) {
     return '#$rank';
   }
+
+  @override
+  String get challengesStandingTitle => 'あなたの順位';
+
+  @override
+  String get challengesStandingTitleTeam => 'チームの順位';
+
+  @override
+  String challengesStandingRank(int rank, int total) {
+    return '$total中$rank位';
+  }
+
+  @override
+  String get challengesStandingTiedOne => '同順位: 1';
+
+  @override
+  String challengesStandingTiedMany(int n) {
+    return '同順位: $n';
+  }
+
+  @override
+  String challengesStandingBehind(String gap, String name) {
+    return '$name まで $gap';
+  }
+
+  @override
+  String challengesStandingAhead(String gap, String name) {
+    return '$name に $gap リード';
+  }
+
+  @override
+  String get challengesStandingLeading => '首位';
 
   @override
   String challengesParticipants(int n) {

@@ -19,9 +19,12 @@
 ///   - capacity is not already full counting going + non-expired pending.
 ///
 /// PCI: Checkout is fully Stripe-hosted — SAQ A. No card form here.
-/// Idempotency: the Stripe create call carries a stable idempotency key
-/// derived from (buyer, event, instance) so a double-click reuses the
-/// same session instead of opening a second hold.
+/// Idempotency: the Stripe create call is keyed on the pending ORDER, and
+/// every field of its body is derived from that order's persisted
+/// creation instant. A double-click inside the live 15-min hold therefore
+/// replays byte-identically and Stripe returns the session already open;
+/// a hold that has lapsed is expired at Stripe and replaced under a fresh
+/// key, so no key is ever reused against a body that has moved.
 ///
 /// TEST MODE ONLY in P1: STRIPE_SECRET_KEY must be an sk_test_ key.
 
@@ -35,10 +38,13 @@ import { withSentry } from '../_shared/sentry.ts';
 import {
   buildCheckoutSessionParams,
   capacityDecision,
+  checkoutExpiresAtUnix,
   checkoutIdempotencyKey,
   computeApplicationFeeCents,
   isSalesWindowOpen,
+  type PendingOrderRow,
   reservationExpiry,
+  resolveHold,
 } from './lib.ts';
 import { validateReturnUrl } from '../events-connect-onboard/lib.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
@@ -219,34 +225,43 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
   }
   const hostAccountId = hostAccount.stripe_connect_account_id as string;
 
-  // Capacity precheck (service role — counts every buyer's pending
-  // reservation, not just the caller's). going + non-expired pending.
-  const capacityOutcome = await precheckCapacity(
-    service,
-    eventId,
-    instanceStart,
-    (event.capacity as number | null) ?? null,
-  );
-  if (capacityOutcome === 'full') {
-    return Response.json({ error: 'event_full' }, { status: 409 });
-  }
-
-  // Idempotent order insert: a retried checkout for the same
-  // (buyer, event, instance) reuses the existing live pending order
-  // rather than stacking a second hold.
+  // The buyer's newest pending order for this instance. A still-live
+  // reservation is reused (same order, same session); a lapsed one is
+  // superseded below.
   const nowMs = Date.now();
   const reservedUntil = reservationExpiry(nowMs);
-  const { data: livePending } = await service
+  const { data: newestPending } = await service
     .from('event_orders')
-    .select('id, stripe_checkout_session_id')
+    .select('id, created_at, reserved_until, stripe_checkout_session_id')
     .eq('buyer_user_id', user.id)
     .eq('event_id', eventId)
     .eq('instance_start', instanceStart)
     .eq('status', 'pending')
-    .gt('reserved_until', new Date(nowMs).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  const orderId = livePending?.id as string | undefined ?? crypto.randomUUID();
+  const hold = resolveHold((newestPending ?? null) as PendingOrderRow | null, nowMs);
+  const orderId = hold.orderId ?? crypto.randomUUID();
+  const anchorMs = hold.anchorMs ?? nowMs;
+
+  // Capacity precheck (service role — counts every buyer's pending
+  // reservation, not just the caller's). going + non-expired pending.
+  // Skipped when reusing a live hold: that reservation is the caller's
+  // own and is already inside the count, so re-checking it would 409 a
+  // double-click on any class the caller has themselves filled.
+  if (!hold.orderId) {
+    const capacityOutcome = await precheckCapacity(
+      service,
+      eventId,
+      instanceStart,
+      (event.capacity as number | null) ?? null,
+    );
+    if (capacityOutcome === 'full') {
+      return Response.json({ error: 'event_full' }, { status: 409 });
+    }
+  }
+
   const applicationFee = computeApplicationFeeCents(pricing.price_cents, pricing.platform_fee_bps);
 
   const successUrl = body.success_url && validateReturnUrl(body.success_url, allowlist)
@@ -259,6 +274,21 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
   const stripe = new Stripe(stripeSecretKey, {
     httpClient: Stripe.createFetchHttpClient(),
   });
+
+  if (hold.supersedeSessionId) {
+    // The old hold released its seat 15 min in but its session stays
+    // payable for another 15 — two open sessions would let one buyer be
+    // charged twice for one registration. Best-effort: an already
+    // expired / completed session throws and the webhook reconciles.
+    try {
+      await stripe.checkout.sessions.expire(hold.supersedeSessionId);
+    } catch (e) {
+      console.error(
+        'superseded checkout session expire failed:',
+        e instanceof Error ? e.message : 'unknown',
+      );
+    }
+  }
 
   let session;
   try {
@@ -277,26 +307,27 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
           buyer_user_id: user.id,
           order_id: orderId,
         },
-        // Stripe requires expires_at >= now + 30 min; the local
-        // reservation is tighter (15 min) and the webhook releases on
-        // the definitive checkout.session.expired.
-        expiresAtUnix: Math.floor(nowMs / 1000) + 30 * 60,
+        // Anchored on the ORDER, never on the clock — a body that moves
+        // between attempts is what makes a reused key an error rather
+        // than a replay.
+        expiresAtUnix: checkoutExpiresAtUnix(anchorMs),
       }),
-      { idempotencyKey: checkoutIdempotencyKey(user.id, eventId, instanceStart) },
+      { idempotencyKey: checkoutIdempotencyKey(orderId) },
     );
   } catch (e) {
     console.error('stripe checkout create failed:', e instanceof Error ? e.message : 'unknown');
     return Response.json({ error: 'stripe_checkout_failed' }, { status: 502 });
   }
 
-  if (livePending) {
-    // Refresh the existing hold's session id + extend the reservation.
+  if (hold.orderId) {
+    // Repair the session id if the first attempt died between the Stripe
+    // create and this write. `reserved_until` is deliberately NOT
+    // extended: the hold is 15 min from the FIRST click, so it can never
+    // outlive the session backing it, and re-clicking cannot hold a seat
+    // indefinitely.
     const { error: updErr } = await service
       .from('event_orders')
-      .update({
-        stripe_checkout_session_id: session.id,
-        reserved_until: reservedUntil.toISOString(),
-      })
+      .update({ stripe_checkout_session_id: session.id })
       .eq('id', orderId);
     if (updErr) {
       console.error('order refresh failed (code):', updErr?.code ?? 'unknown');
@@ -306,6 +337,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
       .from('event_orders')
       .insert({
         id: orderId,
+        created_at: new Date(nowMs).toISOString(),
         event_id: eventId,
         instance_start: instanceStart,
         buyer_user_id: user.id,

@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/csv_run_importer.dart';
+import '../lib/import_failures.dart';
 
 void main() {
   // Helper — build the 5-column CSV the mobile + web Settings screens
@@ -30,7 +31,7 @@ void main() {
         }
       ]);
       final result = CsvRunImporter.parse(csv);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
       expect(result.runs, hasLength(1));
       final run = result.runs.single;
       expect(run.startedAt.toUtc().toIso8601String(), '2026-05-20T08:15:30.000Z');
@@ -189,7 +190,7 @@ void main() {
         }
       ]);
       final result = CsvRunImporter.parse(csv);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
       final run = result.runs.single;
       expect(run.id, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
       expect(run.externalId, 'strava:1234567890');
@@ -218,7 +219,7 @@ void main() {
         }
       ]);
       final result = CsvRunImporter.parse(csv);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
       final run = result.runs.single;
       expect(run.metadata!['title'], 'Hello, world "quoted"');
       expect(run.metadata!['notes'], 'comma, inside');
@@ -231,8 +232,10 @@ void main() {
           'r-1,2026-05-20T08:00:00Z,5000,1500,app,"{not json"\n';
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, hasLength(1));
-      expect(result.errors, hasLength(1));
-      expect(result.errors.single.message, contains('metadata'));
+      expect(result.failures.items, hasLength(1));
+      expect(result.failures.items.single.name, 'Row 2');
+      expect(result.failures.items.single.reason,
+          ImportFailureReason.unparseable);
       // activity_type default still lands so the DB CHECK passes.
       expect(result.runs.single.metadata!['activity_type'], 'run');
     });
@@ -243,8 +246,11 @@ void main() {
       final csv = 'foo,bar\n1,2\n';
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, isEmpty);
-      expect(result.errors, hasLength(1));
-      expect(result.errors.single.message, contains('missing required columns'));
+      expect(result.failures.items, hasLength(1));
+      expect(result.failures.items.single.detail,
+          contains('missing required columns'));
+      expect(result.failures.items.single.reason,
+          ImportFailureReason.unparseable);
     });
 
     test('invalid date is skipped and reported', () {
@@ -254,9 +260,9 @@ void main() {
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, hasLength(1));
       expect(result.runs.single.distanceMetres, 10000);
-      expect(result.errors, hasLength(1));
-      expect(result.errors.single.row, 2);
-      expect(result.errors.single.message, contains('Invalid date'));
+      expect(result.failures.items, hasLength(1));
+      expect(result.failures.items.single.name, 'Row 2');
+      expect(result.failures.items.single.detail, contains('parse the date'));
     });
 
     test('invalid numeric is skipped and reported', () {
@@ -264,14 +270,15 @@ void main() {
           '2026-05-20T08:00:00Z,not-a-number,1500,300,app\n';
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, isEmpty);
-      expect(result.errors, hasLength(1));
-      expect(result.errors.single.message, contains('Invalid distance'));
+      expect(result.failures.items, hasLength(1));
+      expect(result.failures.items.single.detail,
+          contains('parse the distance'));
     });
 
     test('empty input returns empty result', () {
       final result = CsvRunImporter.parse('');
       expect(result.runs, isEmpty);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
     });
 
     test('header-only input returns empty result', () {
@@ -279,7 +286,7 @@ void main() {
         'date,distance_m,duration_s,pace_s_per_km,source\n',
       );
       expect(result.runs, isEmpty);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
     });
 
     test('skips blank lines between rows', () {
@@ -289,7 +296,7 @@ void main() {
           '2026-05-21T08:00:00Z,10000,3000,300,app\n';
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, hasLength(2));
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
     });
 
     test('row shorter than header is reported, not parsed', () {
@@ -299,8 +306,8 @@ void main() {
       final csv = 'date,distance_m,duration_s,pace_s_per_km,source\n'
           '2026-05-20T08:00:00Z\n';
       final result = CsvRunImporter.parse(csv);
-      expect(result.errors, hasLength(1));
-      expect(result.errors.single.message, contains('fewer columns'));
+      expect(result.failures.items, hasLength(1));
+      expect(result.failures.items.single.detail, contains('fewer columns'));
     });
   });
 
@@ -319,7 +326,7 @@ void main() {
       final result = CsvRunImporter.parse(buf.toString());
       sw.stop();
       expect(result.runs, hasLength(1000));
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
       expect(sw.elapsedMilliseconds, lessThan(1000),
           reason: '1000-row parse took ${sw.elapsedMilliseconds}ms — '
               'check for an O(n²) regression in the parser');
@@ -331,7 +338,7 @@ void main() {
           // catch any UTF-8 truncation in the row splitter.
           '"2026-05-20T08:00:00Z","5000","1500","app","run","早朝ラン 🏃‍♂️ Müller"\n';
       final result = CsvRunImporter.parse(csv);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
       final r = result.runs.single;
       expect(r.metadata!['title'], '早朝ラン 🏃‍♂️ Müller');
     });
@@ -340,7 +347,7 @@ void main() {
       final csv = 'started_at,distance_m,duration_s,source,title\n'
           '"2026-05-20T08:00:00Z","5000","1500","app","Run, then ""sprint""!"\n';
       final result = CsvRunImporter.parse(csv);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
       expect(result.runs.single.metadata!['title'], 'Run, then "sprint"!');
     });
 
@@ -355,9 +362,9 @@ void main() {
       expect(result.runs, hasLength(2));
       expect(result.runs.first.distanceMetres, 5000);
       expect(result.runs.last.distanceMetres, 10000);
-      expect(result.errors, hasLength(2));
-      expect(result.errors.first.row, 3);
-      expect(result.errors.last.row, 4);
+      expect(result.failures.items, hasLength(2));
+      expect(result.failures.items.first.name, 'Row 3');
+      expect(result.failures.items.last.name, 'Row 4');
     });
 
     test('CRLF line endings are accepted', () {
@@ -369,7 +376,7 @@ void main() {
           '2026-05-21T08:00:00Z,7500,2250,300,app\r\n';
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, hasLength(2));
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
     });
 
     test('negative distance / duration are still parsed (DB rejects on upsert)',
@@ -401,7 +408,7 @@ void main() {
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, hasLength(1));
       expect(result.runs.single.duration.inSeconds, 1500);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
     });
 
     test('17-column metadata with deeply-nested objects round-trips', () {
@@ -409,7 +416,7 @@ void main() {
       final csv = 'id,started_at,distance_m,duration_s,source,metadata\n'
           'r-1,2026-05-20T08:00:00Z,5000,1500,app,"${nested.replaceAll('"', '""')}"\n';
       final result = CsvRunImporter.parse(csv);
-      expect(result.errors, isEmpty);
+      expect(result.failures.items, isEmpty);
       final laps = result.runs.single.metadata!['laps'] as List;
       expect(laps, hasLength(2));
       expect((laps.first as Map)['index'], 1);

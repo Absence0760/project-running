@@ -56,5 +56,8 @@ Output: `lambda/share-entity/dist/share-entity.zip` (esbuild-bundled
 ## Fail-open posture
 
 A private / missing / deleted entity returns a **404 HTML** with a
-`noindex` robots tag (a clean crawler signal), never a 5xx. An unhandled
-error returns 503. There is no image endpoint to fall back on.
+`noindex` robots tag (a clean crawler signal), never a 5xx. A path whose
+segment carries a malformed percent-escape (`/share/club/%zz`) takes the
+same 404 — it is an entity we cannot find, and a 503 there would tell a
+crawler to retry a link that can never resolve. Only an unhandled error
+returns 503. There is no image endpoint to fall back on.

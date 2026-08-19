@@ -301,7 +301,10 @@ test('handleGenerate falls back to round_trip when the sidecar errors', async ()
 	assert.equal(rtCalled, true, 'an unreachable sidecar must fall back, not fail the request');
 });
 
-test('handleGenerate → 502 when graph-cycle is loop-poor and no fallback engine is configured', async () => {
+test('handleGenerate → 422 when graph-cycle is loop-poor and no fallback engine is configured', async () => {
+	// The sidecar ANSWERED — this start simply has no loop. A 502 here would
+	// reach the Lambda's engine_unreachable log line and page the on-call over
+	// a runner's street layout.
 	const fetcher: Fetcher = async () => gcResponse(false);
 	const res = await handleGenerate(
 		AUTH,
@@ -309,13 +312,15 @@ test('handleGenerate → 502 when graph-cycle is loop-poor and no fallback engin
 		{ ...GATE_CFG, graphCycleUrl: GC, graphhopperUrl: undefined },
 		{ fetcher, proChecker: asPro },
 	);
-	assert.equal(res.status, 502);
+	assert.equal(res.status, 422);
+	assert.deepEqual(res.body, { error: 'no usable route' });
 });
 
 test('handleGenerate → 502 when the sidecar THROWS and no fallback engine is configured', async () => {
 	// Distinct path from the loop-poor (found:false → null) case above: here the
 	// sidecar errors, fetchGraphCycle throws, the catch swallows it, and with no
-	// GraphHopper to fall back to the handler must still 502 (not crash).
+	// GraphHopper to fall back to this IS an outage — the one branch here that
+	// should page anyone.
 	const fetcher: Fetcher = async () => new Response('down', { status: 503 });
 	const res = await handleGenerate(
 		AUTH,
@@ -324,6 +329,7 @@ test('handleGenerate → 502 when the sidecar THROWS and no fallback engine is c
 		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 502);
+	assert.deepEqual(res.body, { error: 'route engine unavailable' });
 });
 
 test('handleGenerate serves graph-cycle alone (no GraphHopper) on a clean loop', async () => {

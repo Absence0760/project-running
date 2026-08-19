@@ -78,7 +78,8 @@ import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
 import type { RecapPeriodKind } from '../types';
 import { normaliseExerciseName } from '../gym/gym_prs';
-import { GYM_SESSION_DRAFT_KEY } from '../gym/gym_session_draft';
+import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
+import type { RoutineHistoryAggregate, RoutineSessionRow } from '../gym/routine_history';
 import type { YearInRunningRecap } from '../runs/recap';
 import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
 import type {
@@ -8312,9 +8313,15 @@ export async function markAllNotificationsRead(): Promise<void> {
 	if (error) throw error;
 }
 
+// Dismissing a group is ONE intent, so it is one statement in one
+// transaction. An `in` filter rides the request URL, which leaves a large
+// dismiss at the mercy of the gateway's request-line budget (decisions
+// § 653), and chunking to dodge that only trades the failure for a partial
+// dismiss the spent undo offer can no longer take back. The RPC takes the
+// array in the POST body and refuses past its own cap rather than truncating.
 export async function deleteNotifications(ids: string[]): Promise<void> {
 	if (ids.length === 0) return;
-	const { error } = await supabase.from(TABLES.notifications).delete().in('id', ids);
+	const { error } = await supabase.rpc('delete_notifications', { p_ids: ids });
 	if (error) throw error;
 }
 
@@ -9012,9 +9019,14 @@ export async function fetchGymWorkoutWithSets(
 }
 
 /// The newest in-flight guided-session draft for a routine — the row a refresh
-/// mid-session resumes from (decisions.md § 483). Owner-scoped by RLS; the
-/// `metadata ? key` existence filter is what distinguishes a draft from a
-/// finished workout, whose bag carries the execution trio instead.
+/// mid-session resumes from (decisions.md § 483). Owner-scoped by RLS.
+///
+/// The server-side key-existence filter is a cheap prefilter, not the
+/// predicate: PostgREST cannot ask `jsonb_typeof`, so it also matches a bag
+/// whose key carries JSON null or an array. `hasSessionDraft` is what decides,
+/// so this agrees with the resume card and the routine-history exclusion
+/// instead of adopting — and overwriting the sets of — a row they both count
+/// as a session performed.
 export async function fetchGymSessionDraft(routineId: string): Promise<GymWorkout | null> {
 	const userId = auth.user?.id;
 	if (!userId || !routineId) return null;
@@ -9030,7 +9042,8 @@ export async function fetchGymSessionDraft(routineId: string): Promise<GymWorkou
 		console.error('fetchGymSessionDraft failed', error);
 		return null;
 	}
-	return (data?.[0] as GymWorkout | undefined) ?? null;
+	const row = (data?.[0] as GymWorkout | undefined) ?? null;
+	return row && hasSessionDraft(row.metadata) ? row : null;
 }
 
 /// Sets the user has logged, joined to their workout start time. Owner-scoped.
@@ -9593,41 +9606,48 @@ export async function fetchGymRoutineDetail(id: string): Promise<GymRoutineDetai
 	};
 }
 
-/// The workout rows this routine has been run as, newest first — the read-back
-/// of `gym_workouts.metadata.routine_id`. Owner-scoped by RLS.
+/// One routine's own performance history: complete tallies over every session
+/// it has ever been run as, plus a bounded page of the most recent for the
+/// panel's list — all from the `gym_routine_history` RPC in one round trip.
 ///
-/// Includes in-flight drafts and ungraded "save as is" rows; classifying them
-/// is `gym/routine_history.ts`'s job, not the query's, so the shaping rules
-/// stay unit-testable in one place.
-///
-/// The window is generous rather than all-time: PostgREST caps an unbounded
-/// SELECT at 1000 rows, so "no limit" would silently truncate at a number
-/// nothing in the code states. 500 sessions is ~10 years of running one routine
-/// weekly; past it the count under-reports. An honest all-time figure is a
-/// server-side aggregate (the shape `gym_exercise_records` took), which is a
-/// migration this surface does not need yet.
-export async function fetchGymRoutineSessions(
+/// A count is an aggregate, so no client-side window can serve it honestly:
+/// the previous read pulled up to 500 rows just to reduce them, and past that
+/// silently under-reported (an unbounded PostgREST select truncates at
+/// `db.max-rows` and still answers 200). The RPC applies the draft / ungraded
+/// exclusions to BOTH the tallies and the page in one snapshot, so the listed
+/// rows can never contradict the count above them; classifying each listed row
+/// is still `gym/routine_history.ts`'s job.
+export async function fetchGymRoutineHistory(
 	routineId: string,
-	limit = 500,
-): Promise<Array<{ id: string; started_at: string; title: string | null; metadata: unknown }>> {
+	recentLimit = 5,
+): Promise<RoutineHistoryAggregate> {
+	const empty: RoutineHistoryAggregate = {
+		sessionCount: 0,
+		lastPerformedAt: null,
+		gradedCount: 0,
+		completedCount: 0,
+		recentRows: [],
+	};
 	const userId = auth.user?.id;
-	if (!userId || !routineId) return [];
-	const { data, error } = await supabase
-		.from(TABLES.gym_workouts)
-		.select('id, started_at, title, metadata')
-		.eq('user_id', userId)
-		.eq('metadata->>routine_id', routineId)
-		.order('started_at', { ascending: false })
-		.limit(limit);
+	if (!userId || !routineId) return empty;
+	const { data, error } = await supabase.rpc('gym_routine_history', {
+		p_routine_id: routineId,
+		p_recent_limit: recentLimit,
+	});
 	// A failed read is not "you have never run this" — the caller shows a retry
 	// rather than an empty history.
 	if (error) throw error;
-	return (data ?? []) as Array<{
-		id: string;
-		started_at: string;
-		title: string | null;
-		metadata: unknown;
-	}>;
+	const row = data?.[0];
+	if (!row) return empty;
+	return {
+		sessionCount: row.session_count ?? 0,
+		lastPerformedAt: row.last_performed_at ?? null,
+		gradedCount: row.graded_count ?? 0,
+		completedCount: row.completed_count ?? 0,
+		recentRows: Array.isArray(row.recent_sessions)
+			? (row.recent_sessions as RoutineSessionRow[])
+			: [],
+	};
 }
 
 /// Insert a routine + its exercises + their planned sets. Blank-named

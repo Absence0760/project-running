@@ -262,3 +262,86 @@ func balancedParenBody(s string, openIdx int) string {
 	}
 	return ""
 }
+
+// ─────────────────── paging order guard ───────────────────
+//
+// Offset paging is only stable under a TOTAL order, and PostgREST
+// applies none by default: two pages of an unordered read can repeat one
+// row and skip another, and a skipped row is one the data subject never
+// receives. Every export read is therefore ordered by the table's
+// primary key, defaulting to `id` with orderByTable holding the
+// exceptions. A new export table whose key is not `id` has to be added
+// there — this test fails the build until it is.
+
+var (
+	reIDCol = regexp.MustCompile(`(?:^|[\s,(])id\s`)
+	// A column added after the fact — `event_results.id` arrived that way
+	// (20261028_001), so a create-table-only scan reads it as key-less.
+	reAddColumn = regexp.MustCompile(
+		`(?is)alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+add\s+column\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?`)
+)
+
+// createTableBodies parses every migration and returns table -> the text
+// inside its CREATE TABLE parens, with any later-added columns appended.
+func createTableBodies(t *testing.T) map[string]string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(migrationsDir(t), "*.sql"))
+	if err != nil {
+		t.Fatalf("glob migrations: %v", err)
+	}
+	out := map[string]string{}
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		sql := reLineComment.ReplaceAllString(string(raw), "")
+		sql = reDollarBody.ReplaceAllString(sql, "")
+		lower := strings.ToLower(sql)
+		for _, m := range reCreateTable.FindAllStringSubmatchIndex(lower, -1) {
+			out[lower[m[2]:m[3]]] = balancedParenBody(lower, m[1]-1)
+		}
+		for _, m := range reAddColumn.FindAllStringSubmatch(lower, -1) {
+			if _, ok := out[m[1]]; ok {
+				out[m[1]] += ", " + m[2] + " "
+			}
+		}
+	}
+	return out
+}
+
+func TestExportPaging_EveryExportedTableIsOrderedByItsKey(t *testing.T) {
+	bodies := createTableBodies(t)
+	if len(bodies) == 0 {
+		t.Fatal("parsed no create-table bodies")
+	}
+	missing := []string{}
+	for table := range exportSpecCoveredTables() {
+		body, parsed := bodies[table]
+		if !parsed {
+			continue
+		}
+		if _, overridden := orderByTable[table]; overridden {
+			continue
+		}
+		if !reIDCol.MatchString(body) {
+			missing = append(missing, table)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Errorf("exported tables with no `id` column and no orderByTable entry — "+
+			"offset paging over them can skip rows: %v", missing)
+	}
+
+	stale := []string{}
+	for table := range orderByTable {
+		if body, parsed := bodies[table]; parsed && reIDCol.MatchString(body) {
+			stale = append(stale, table)
+		}
+	}
+	sort.Strings(stale)
+	if len(stale) > 0 {
+		t.Errorf("orderByTable overrides tables that do have an `id`: %v", stale)
+	}
+}

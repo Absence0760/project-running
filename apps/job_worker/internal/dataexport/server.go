@@ -78,7 +78,10 @@ type Backend interface {
 	// pulled — id, started_at, duration_s, distance_m, source,
 	// external_id, metadata, track_url, is_public, event_id,
 	// route_id, created_at, updated_at.
-	FetchExportRuns(ctx context.Context, userID string, limit int) ([]ExportRun, error)
+	// Returns the rows read alongside an ExportCompleteness naming the
+	// authoritative row count — a fetch stopped short by the per-section
+	// ceiling must be visible in manifest.json, not silently truncated.
+	FetchExportRuns(ctx context.Context, userID string, limit int) ([]ExportRun, ExportCompleteness, error)
 
 	// DownloadTrackBytes pulls the gzipped track from Storage and
 	// returns the decompressed JSON bytes. Used by the GPX zip
@@ -106,7 +109,7 @@ type Backend interface {
 	// `format=backup` path. Service role bypasses RLS; the
 	// caller's userID filter is the only access gate. Mirrors the
 	// `routes` selection the mobile / web backup writers do.
-	FetchExportRoutes(ctx context.Context, userID string) ([]ExportRoute, error)
+	FetchExportRoutes(ctx context.Context, userID string) ([]ExportRoute, ExportCompleteness, error)
 
 	// FetchExportProfile returns the user's profile via a direct
 	// service-role select on `user_profiles` (NOT `get_my_profile`,
@@ -175,7 +178,32 @@ type Backend interface {
 	// to keep the fake-backend surface small and avoid leaking the
 	// per-table fan-out into the Server handler. Single Backend
 	// method = one fake stub for tests.
-	FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, error)
+	FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, ExportCompleteness, error)
+}
+
+// ExportCompleteness is the honesty ledger a paged export carries beside
+// its rows: the authoritative row count the database holds for each
+// section, and the sections whose pages could not all be read. It is
+// what keeps manifest.json from presenting a truncated archive as whole.
+// Mirrors the `internal` type of the same name; the adapter in main.go
+// translates, same leaf-package reasoning as ExportRun.
+type ExportCompleteness struct {
+	Totals     map[string]int
+	Incomplete []string
+}
+
+// IsComplete reports whether every section was read in full.
+func (e ExportCompleteness) IsComplete() bool { return len(e.Incomplete) == 0 }
+
+// Merge folds another section's ledger into this one.
+func (e *ExportCompleteness) Merge(other ExportCompleteness) {
+	if e.Totals == nil {
+		e.Totals = map[string]int{}
+	}
+	for k, v := range other.Totals {
+		e.Totals[k] = v
+	}
+	e.Incomplete = append(e.Incomplete, other.Incomplete...)
 }
 
 // ExportRoute is the routes-table projection for the backup format.
@@ -321,7 +349,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runs, err := s.Backend.FetchExportRuns(r.Context(), userID, MaxRunsPerExport)
+	runs, runsComp, err := s.Backend.FetchExportRuns(r.Context(), userID, MaxRunsPerExport)
 	if err != nil {
 		s.log().Error("dataexport: runs select failed", "err", err, "user_id", userID)
 		http.Error(w, `{"error":"runs_fetch_failed"}`, http.StatusInternalServerError)
@@ -353,7 +381,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// Fetch the extra inputs only needed for the backup format —
 		// routes + profile + user_settings.prefs. None of these are
 		// huge so a single batch fetch is fine inside the EF timeout.
-		routes, rerr := s.Backend.FetchExportRoutes(r.Context(), userID)
+		routes, routesComp, rerr := s.Backend.FetchExportRoutes(r.Context(), userID)
 		if rerr != nil {
 			s.log().Error("dataexport: routes fetch failed", "err", rerr, "user_id", userID)
 			http.Error(w, `{"error":"routes_fetch_failed"}`, http.StatusInternalServerError)
@@ -376,11 +404,19 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// ship a partial export rather than 500 — losing the runs
 		// + routes export over a single optional table being slow
 		// would be a worse outcome.
-		extras, extrasErr := s.Backend.FetchExportPersonalDataTables(r.Context(), userID)
+		extras, extrasComp, extrasErr := s.Backend.FetchExportPersonalDataTables(r.Context(), userID)
 		if extrasErr != nil {
 			s.log().Warn("dataexport: extra-tables fetch failed; shipping partial",
 				"err", extrasErr, "user_id", userID)
 			extras = nil
+		}
+		completeness := ExportCompleteness{}
+		completeness.Merge(runsComp)
+		completeness.Merge(routesComp)
+		completeness.Merge(extrasComp)
+		if !completeness.IsComplete() {
+			s.log().Warn("dataexport: export is short of the database; manifest says so",
+				"user_id", userID, "incomplete", completeness.Incomplete)
 		}
 		zipped, err := BuildBackupZip(r.Context(), BuildBackupZipInput{
 			Runs:          runs,
@@ -390,6 +426,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			UserID:        userID,
 			ExportedFrom:  "go-service",
 			ExtraTables:   extras,
+			Completeness:  completeness,
 		}, BackupFetchers{
 			RawTrack:    s.Backend.DownloadRawTrackBytes,
 			Photo:       s.Backend.DownloadPhoto,
@@ -418,10 +455,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"signed_url_failed"}`, http.StatusInternalServerError)
 		return
 	}
+	// `count` is what the archive carries, `total` what the database
+	// holds and `complete` whether the two agree. A runner past
+	// MaxRunsPerExport gets a truncated CSV/GPX and has to be told so.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"url":        signed,
 		"expires_in": SignedURLTTLSec,
 		"count":      len(runs),
+		"total":      runsComp.Totals["runs"],
+		"complete":   runsComp.IsComplete(),
 		"format":     format,
 	})
 }
@@ -663,6 +705,10 @@ type BuildBackupZipInput struct {
 	// export-completeness (May 2026) — every personal-data table
 	// the subject has an Art 20 right to receive lives here.
 	ExtraTables map[string][]map[string]interface{}
+	// Completeness carries the authoritative per-section row counts and
+	// the sections that came up short. manifest.json publishes both, so
+	// a truncated archive can't present itself as whole.
+	Completeness ExportCompleteness
 }
 
 // RawTrackFetcher pulls the **gzipped** bytes for a Storage path
@@ -1074,6 +1120,18 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 	for k, v := range extraCounts {
 		counts[k] = v
 	}
+	// A section's published count is the database's own total, so a file
+	// short of it reads as a shortfall instead of as the whole set. A
+	// section that failed short is counted even at zero rows — an absent
+	// key must not be readable as "the subject has none of these".
+	for k, total := range in.Completeness.Totals {
+		if fetched, ok := counts[k].(int); ok && fetched > total {
+			continue
+		}
+		counts[k] = total
+	}
+	incomplete := append([]string{}, in.Completeness.Incomplete...)
+	sort.Strings(incomplete)
 	manifest := map[string]interface{}{
 		"format":              BackupFormatName,
 		"version":             BackupFormatVersion,
@@ -1081,6 +1139,8 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 		"exported_by_user_id": in.UserID,
 		"exported_from":       in.ExportedFrom,
 		"counts":              counts,
+		"complete":            len(incomplete) == 0,
+		"incomplete":          incomplete,
 	}
 	if err := writeJSONEntry(zw, "manifest.json", manifest); err != nil {
 		return nil, err

@@ -81,19 +81,36 @@ retention cron referenced in a comment that was never created.
   runs are deliberately excluded so a public viewer can't infer that private
   activity occurred against a route (`20260716_001`).
 - **Authoritative recompute:** `count(*) from runs where route_id = <route> and
-  is_public = true and is_route_visible_to(route_id, user_id)`.
+  is_public = true and private.is_route_visible_to(route_id, user_id)`.
 - **Maintained by:** `routes_run_count_trigger()` (AFTER INSERT/DELETE/UPDATE OF
   route_id on `runs`), gated on `is_public = true` + route visibility
-  (`20260628_001` + `20260716_001`).
+  (`20260628_001` + `20260716_001`). Since `20270526_001` it calls
+  `refresh_route_run_count(route_id)` for each affected route — the
+  authoritative query above, run from scratch — instead of applying a ±1 delta.
+  The delta form could not be made correct: it decided whether a decrement was
+  owed by re-evaluating `is_route_visible_to` on the OLD row at trigger time,
+  which reads the route's **current** visibility, not the visibility in force
+  when the increment happened. A route that had since gone private answered
+  "was never counted", so the run detached without giving the count back and
+  the counter stayed permanently high with nothing to revisit it. That answer
+  is not derivable from the row's own OLD image, so recompute is the only
+  correct read.
 - **Known drift (accepted):** the trigger fires on `route_id` change, not on an
   `is_public` flip, so a run toggled public↔private after creation does not
-  re-count until its `route_id` is next touched (`20260716_001`). The function
-  carries the flip delta logic defensively, but the watch-list intentionally
-  omits `is_public`.
-- **Manual rebuild:** `update routes r set run_count = (select count(*) from runs
-  where route_id = r.id and is_public = true);` (a bare `count(*)` would
-  overcount by including private runs and leave the cache permanently above
-  what the trigger maintains).
+  re-count until its `route_id` is next touched (`20260716_001`); a flip on the
+  *route* is likewise unwatched. Since the trigger recomputes rather than
+  increments, that drift **heals** on the next `route_id` touch instead of
+  compounding on top of a stale value.
+- **Manual rebuild:** `select refresh_route_run_count(id) from routes;` (batch it
+  by id range on a populated database — `20270526_001`'s backfill is the worked
+  form). A bare `count(*)` would overcount by including private runs and runs
+  whose author cannot see the route, leaving the cache permanently above what
+  the trigger maintains.
+- **Pinned by:** `routes_run_count_test.sql` (match, private-run exclusion, move
+  between routes, delete, the went-private-then-detached decrement, the
+  visibility gate, and the self-heal on the next touch — each asserted against
+  the authoritative query, on a route the earlier assertions have not already
+  skewed).
 
 ## `routes.geom_public`
 
@@ -246,17 +263,24 @@ retention cron referenced in a comment that was never created.
   as `supabase_auth_admin`, which lacks UPDATE on `clubs`, so the count UPDATE
   must run as the function owner (a club owner was otherwise undeletable). The
   owner is auto-enrolled active by `enroll_club_owner_trigger`, so a fresh club
-  is `member_count = 1`.
-- **Known drift risk (accepted):** the trigger increments/decrements per row
-  rather than recomputing from `count(*)`, so a bare-body rewrite that drops a
-  branch (e.g. the status-flip UPDATE) would let the cache drift silently.
-  `clubs_member_count_test.sql` guards every branch against the authoritative
-  query.
-- **Manual rebuild:** `update clubs c set member_count = (select count(*) from
-  club_members m where m.club_id = c.id and m.status = 'active');`
+  is `member_count = 1`. Since `20270526_001` it calls
+  `refresh_club_member_count(club_id)` for the affected club(s) — the
+  authoritative query above, run from scratch — instead of applying a ±1 delta.
+  The delta form had two non-exclusive `if` blocks on UPDATE (status changed,
+  club_id changed) and the trigger's own watch list is `OF status, club_id`, so
+  a statement changing both ran both: approving a pending member into another
+  club in one UPDATE incremented the destination twice, and demoting an active
+  member while moving them decremented the source twice.
+- **Manual rebuild:** `select refresh_club_member_count(id) from clubs;`
 - **Pinned by:** `clubs_member_count_test.sql` (mutate `club_members` through
-  insert-active / insert-pending / approve / leave / demote and assert the cache
-  equals the authoritative active-count each time).
+  insert-active / insert-pending / approve / leave / demote / move club /
+  move-and-approve / move-and-demote and assert the cache equals the
+  authoritative active-count each time). The `club_id` half was added by
+  `20270526_001`: this file previously claimed the suite "guards every branch"
+  while it never changed `club_id` at all, which is how the double-count
+  survived. The two combined-UPDATE cases run on their own clubs, because a
+  double increment followed by a double decrement on one club cancels out and
+  lets a broken trigger pass.
 
 ---
 

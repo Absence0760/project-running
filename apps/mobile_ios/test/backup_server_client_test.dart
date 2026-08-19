@@ -84,12 +84,12 @@ void main() {
         requestFetcher: request,
         downloadFetcher: download,
       );
-      final count = await c.fetchBackupToFile(
+      final summary = await c.fetchBackupToFile(
         accessToken: 'tok-abc',
         outputFile: outputFile,
       );
 
-      expect(count, 42);
+      expect(summary.count, 42);
       expect(capturedExportUrl.toString(),
           'https://live.threkir.com/v1/export');
       expect(capturedToken, 'tok-abc');
@@ -185,7 +185,7 @@ void main() {
     });
   });
 
-  group('fetchBackupToFile — count extraction', () {
+  group('fetchBackupToFile — completeness extraction', () {
     test('count: int round-trips', () async {
       final c = BackupServerClient(
         baseUrl: 'https://x.example',
@@ -198,11 +198,11 @@ void main() {
           return 1;
         },
       );
-      final count = await c.fetchBackupToFile(
+      final summary = await c.fetchBackupToFile(
         accessToken: 't',
         outputFile: outputFile,
       );
-      expect(count, 99);
+      expect(summary.count, 99);
     });
 
     test('count: double (some JSON parsers emit num) coerces to int', () async {
@@ -217,11 +217,11 @@ void main() {
           return 1;
         },
       );
-      final count = await c.fetchBackupToFile(
+      final summary = await c.fetchBackupToFile(
         accessToken: 't',
         outputFile: outputFile,
       );
-      expect(count, 7);
+      expect(summary.count, 7);
     });
 
     test('missing count defaults to 0', () async {
@@ -236,11 +236,73 @@ void main() {
           return 1;
         },
       );
-      final count = await c.fetchBackupToFile(
+      final summary = await c.fetchBackupToFile(
         accessToken: 't',
         outputFile: outputFile,
       );
-      expect(count, 0);
+      expect(summary.count, 0);
+    });
+  });
+
+  // The completeness fields the screen discloses. `count` alone cannot
+  // say "this archive is short" — a runner past the server's per-export
+  // run ceiling otherwise sees only "your export is ready".
+  group('ServerBackupSummary.fromJson', () {
+    test('a whole archive reports complete', () {
+      final s = ServerBackupSummary.fromJson(
+        <String, dynamic>{'count': 12, 'total': 12, 'complete': true},
+      );
+      expect(s.count, 12);
+      expect(s.total, 12);
+      expect(s.complete, isTrue);
+    });
+
+    test('a truncated archive carries both counts', () {
+      final s = ServerBackupSummary.fromJson(
+        <String, dynamic>{'count': 5000, 'total': 7412, 'complete': false},
+      );
+      expect(s.count, 5000);
+      expect(s.total, 7412);
+      expect(s.complete, isFalse);
+    });
+
+    test('a body without `complete` claims nothing', () {
+      // An older deployment of either transport omits the field.
+      // Absence is not evidence of truncation, and a shortfall banner
+      // on every export would be its own lie.
+      final s = ServerBackupSummary.fromJson(
+        <String, dynamic>{'count': 12},
+      );
+      expect(s.complete, isTrue);
+    });
+
+    test('a non-bool `complete` claims nothing either', () {
+      final s = ServerBackupSummary.fromJson(
+        <String, dynamic>{'count': 12, 'complete': 'no'},
+      );
+      expect(s.complete, isTrue);
+    });
+
+    test('total is floored at count so it can never read "12 of 3"', () {
+      final s = ServerBackupSummary.fromJson(
+        <String, dynamic>{'count': 12, 'total': 3, 'complete': false},
+      );
+      expect(s.total, 12);
+    });
+
+    test('a missing total falls back to the archive count', () {
+      final s = ServerBackupSummary.fromJson(
+        <String, dynamic>{'count': 40, 'complete': false},
+      );
+      expect(s.total, 40);
+    });
+
+    test('a num total coerces to int', () {
+      final s = ServerBackupSummary.fromJson(
+        <String, dynamic>{'count': 7.0, 'total': 9.0, 'complete': false},
+      );
+      expect(s.count, 7);
+      expect(s.total, 9);
     });
   });
 }

@@ -64,7 +64,8 @@ class BackupService {
   /// and a typical phone's connection pool isn't saturated.
   static const _kTrackDownloadConcurrency = 6;
 
-  /// Build a `.zip` and write it to [outputFile]. Returns the file.
+  /// Build a `.zip` and write it to [outputFile]. Returns the file plus
+  /// whatever the server said about the archive's completeness.
   ///
   /// Tracks are archived in their raw gzipped form — the same bytes
   /// that live in the `runs` Storage bucket — so restore can upload
@@ -84,7 +85,7 @@ class BackupService {
   /// from the device. They exist ONLY in `<appDocs>/runs/<id>.json`; without
   /// this the archive is a backup of the cloud, not of the phone, and a
   /// wipe-and-restore silently loses whatever hadn't synced.
-  Future<File> createBackup({
+  Future<BackupOutcome> createBackup({
     required File outputFile,
     LocalRunStore? runStore,
     LocalGymStore? gymStore,
@@ -113,25 +114,31 @@ class BackupService {
     // the archive from the cloud rows and cannot see this device's undrained
     // runs, so taking it would produce an archive missing them.
     final localOnly = runStore?.unsyncedRuns ?? const <cm.Run>[];
-    final didServer = localOnly.isNotEmpty
-        ? false
+    final serverSummary = localOnly.isNotEmpty
+        ? null
         : await tryServerBackup(
             serverClient: _serverClient,
             accessToken: client.auth.currentSession?.accessToken,
             outputFile: outputFile,
             onProgress: onProgress,
           );
-    if (didServer) return outputFile;
+    if (serverSummary != null) {
+      return BackupOutcome(outputFile, server: serverSummary);
+    }
 
     onProgress?.call(const BackupProgress.stage('runs'));
     final runs = await api.fetchRunRowsRaw();
 
     onProgress?.call(const BackupProgress.stage('routes'));
-    final routesData = await client
-        .from('routes')
-        .select()
-        .eq('user_id', userId);
-    final routes = (routesData as List).cast<Map<String, dynamic>>();
+    final routes = await readAllPages<Map<String, dynamic>>((from, to) async {
+      final routesData = await client
+          .from('routes')
+          .select()
+          .eq('user_id', userId)
+          .order('id', ascending: true)
+          .range(from, to);
+      return (routesData as List).cast<Map<String, dynamic>>();
+    });
 
     onProgress?.call(const BackupProgress.stage('profile'));
     // Self-read via RPC — sensitive columns are column-level revoked from
@@ -182,7 +189,7 @@ class BackupService {
         (prefsRow != null && prefsRow['prefs'] is Map)
             ? Map<String, dynamic>.from(prefsRow['prefs'] as Map)
             : const <String, dynamic>{};
-    return writeBackupZipStreaming(
+    final written = await writeBackupZipStreaming(
       outputFile: outputFile,
       runsOut: runsOut,
       routesOut: routesOut,
@@ -199,15 +206,16 @@ class BackupService {
       concurrency: _kTrackDownloadConcurrency,
       onProgress: onProgress,
     );
+    return BackupOutcome(written.file, local: written);
   }
 
   /// Server-first attempt + partial-file cleanup, pulled out as a
   /// static helper so the orchestration is unit-testable without a
   /// live Supabase session.
   ///
-  /// Returns `true` when the server path was attempted **and**
-  /// succeeded — the caller treats the [outputFile] as a finished
-  /// backup. Returns `false` when:
+  /// Returns the server's completeness verdict when the server path
+  /// was attempted **and** succeeded — the caller treats the
+  /// [outputFile] as a finished backup. Returns null when:
   ///
   /// * the server is unconfigured (null client or empty baseUrl),
   /// * the access token is null or empty,
@@ -219,22 +227,22 @@ class BackupService {
   /// either way, so a transient server hiccup can't block a
   /// power-user backup.
   @visibleForTesting
-  static Future<bool> tryServerBackup({
+  static Future<ServerBackupSummary?> tryServerBackup({
     required BackupServerClient? serverClient,
     required String? accessToken,
     required File outputFile,
     void Function(BackupProgress)? onProgress,
   }) async {
-    if (serverClient == null || !serverClient.isConfigured) return false;
-    if (accessToken == null || accessToken.isEmpty) return false;
+    if (serverClient == null || !serverClient.isConfigured) return null;
+    if (accessToken == null || accessToken.isEmpty) return null;
     onProgress?.call(const BackupProgress.stage('server'));
     try {
-      await serverClient.fetchBackupToFile(
+      final summary = await serverClient.fetchBackupToFile(
         accessToken: accessToken,
         outputFile: outputFile,
       );
       onProgress?.call(const BackupProgress.done());
-      return true;
+      return summary;
     } catch (e) {
       debugPrint('[backup] server path failed, falling back to local: $e');
       // Clean up any partial download so the local writer doesn't
@@ -248,7 +256,7 @@ class BackupService {
           debugPrint('backup: partial-download cleanup failed: $e2');
         }
       }
-      return false;
+      return null;
     }
   }
 
@@ -259,8 +267,13 @@ class BackupService {
   /// returns the gzipped bytes for a given storage path. The writer
   /// owns the `ZipFileEncoder` lifecycle, the bounded-concurrency
   /// download loop, and the manifest.
+  ///
+  /// Returns what it managed to write. A blob whose download failed is
+  /// skipped rather than aborting the archive, so the returned summary — and
+  /// the manifest's `complete` / `incomplete` fields — are the only record
+  /// that the file is short of what was asked for.
   @visibleForTesting
-  static Future<File> writeBackupZipStreaming({
+  static Future<LocalArchiveSummary> writeBackupZipStreaming({
     required File outputFile,
     required List<Map<String, dynamic>> runsOut,
     required List<Map<String, dynamic>> routesOut,
@@ -289,6 +302,7 @@ class BackupService {
     final encoder = ZipFileEncoder();
     encoder.create(outputFile.path);
     var tracksAdded = 0;
+    LocalArchiveSummary? summary;
     try {
       // JSON metadata first — small + cheap.
       _writeJsonEntry(encoder, 'runs.json', runsOut);
@@ -381,6 +395,22 @@ class BackupService {
         }
       }
 
+      // Every blob the caller asked for versus what actually landed. The
+      // per-blob catch above keeps one dead download from sinking the
+      // archive, which is the right trade — but it is also the only way a
+      // local archive can now come up short, so the shortfall has to leave
+      // this function rather than stop at a `debugPrint`.
+      final tracksWanted = runsWithTracks.length + localTracks.length;
+      final blobsWanted = tracksWanted + runsWithHrSeries.length;
+      final blobsWritten = tracksAdded + hrAdded;
+      // Section identifiers, sorted, matching the Go writer's manifest
+      // vocabulary (`BuildBackupZip` in dataexport/server.go) so one reader
+      // understands an archive from any writer.
+      final incomplete = <String>[
+        if (hrAdded < runsWithHrSeries.length) 'hr_series',
+        if (tracksAdded < tracksWanted) 'tracks',
+      ];
+
       _writeJsonEntry(encoder, 'manifest.json', {
         'format': _format,
         'version': _version,
@@ -396,14 +426,22 @@ class BackupService {
           'gym_workouts': gymWorkoutsOut.length,
           'food_log': foodLogOut.length,
         },
+        'complete': incomplete.isEmpty,
+        'incomplete': incomplete,
       });
 
       onProgress?.call(const BackupProgress.stage('writing'));
+      summary = LocalArchiveSummary(
+        outputFile,
+        incomplete: incomplete,
+        blobsWanted: blobsWanted,
+        blobsWritten: blobsWritten,
+      );
     } finally {
       await encoder.close();
     }
     onProgress?.call(const BackupProgress.done());
-    return outputFile;
+    return summary;
   }
 
   /// Read [zipFile] and restore its contents.
@@ -476,7 +514,7 @@ class BackupService {
 
     try {
     if (offline) {
-      return await _restoreOffline(
+      final offlineResult = await _restoreOffline(
         archive: archive,
         runStore: runStore,
         routeStore: routeStore,
@@ -485,6 +523,8 @@ class BackupService {
         generateNewIds: generateNewIds,
         onProgress: onProgress,
       );
+      noteIncompleteArchive(manifest, offlineResult);
+      return offlineResult;
     }
 
     // Online path — we're signed in. `offline` is false here, which
@@ -594,10 +634,9 @@ class BackupService {
         }
 
         // Re-home the HR sidecar (indoor/treadmill runs, decisions §116).
-        // ALWAYS overwrite hr_series_url: the archived value is the OLD
-        // owner/run path, which the runs_hr_series_url_path_shape CHECK would
-        // reject for the new uid/newId — so a stale value left in place fails
-        // the whole upsert. Null when there's no sidecar file in the archive.
+        // The archived value is the OLD owner/run path, which the
+        // runs_hr_series_url_path_shape CHECK would reject for the new
+        // uid/newId, so it never survives as-is.
         String? hrSeriesUrl;
         final hrFile = archive.findFile('hr/$origId.hr.json.gz');
         if (hrFile != null) {
@@ -620,8 +659,15 @@ class BackupService {
         r['id'] = newId;
         r['user_id'] = uid;
         r['event_id'] = eventId;
-        r['track_url'] = trackUrl;
-        r['hr_series_url'] = hrSeriesUrl;
+        // A blob the archive does not carry leaves the column OUT of the
+        // payload rather than nulling it. PostgREST's upsert only SETs the
+        // columns it is handed, so an existing row keeps the path it already
+        // has; writing null instead orphaned the Storage object and cost a
+        // run its trace on a restore of a track-short archive into the very
+        // account it was taken from. A fresh insert still lands with the
+        // column null, which is the truthful value there.
+        _setOrDrop(r, 'track_url', trackUrl);
+        _setOrDrop(r, 'hr_series_url', hrSeriesUrl);
 
         try {
           await apiNonNull.upsertRunRowRaw(r);
@@ -662,10 +708,42 @@ class BackupService {
     await _restoreGymFood(archive, gymStore, foodStore, result, generateNewIds);
 
     onProgress?.call(const RestoreProgress.done());
+    noteIncompleteArchive(manifest, result);
     return result;
     } finally {
       await fileStream.close();
     }
+  }
+
+  /// Carry an archive's own completeness verdict into the restore result.
+  ///
+  /// Restore is additive on every path — the online upsert re-homes rows and
+  /// the offline path skips an id already on the device — so a short archive
+  /// cannot delete anything. What it CAN do is read as a full history to
+  /// someone about to wipe a phone on the strength of it, which is why the
+  /// verdict has to reach the runner rather than stopping at the manifest.
+  ///
+  /// Only an explicit `complete: false` claims a shortfall, matching
+  /// [ServerBackupSummary.fromJson]: an archive from a writer that predates
+  /// the field says nothing about its own completeness, and warning on every
+  /// one of those would be its own dishonesty.
+  @visibleForTesting
+  static void noteIncompleteArchive(dynamic manifest, RestoreResult result) {
+    if (manifest is! Map || manifest['complete'] != false) return;
+    final sections = (manifest['incomplete'] as List?)
+            ?.whereType<String>()
+            .toList(growable: false) ??
+        const <String>[];
+    result.archiveIncomplete = true;
+    result.archiveIncompleteSections = sections;
+    result.warnings.insert(
+      0,
+      sections.isEmpty
+          ? 'This archive says it is incomplete — it was short of the account '
+              'when it was written. Nothing was overwritten.'
+          : 'This archive says it is incomplete: ${sections.join(', ')} were '
+              'short when it was written. Nothing was overwritten.',
+    );
   }
 
   /// Hydrate the local gym + food stores from `gym_workouts.json` /
@@ -882,53 +960,15 @@ class BackupService {
   }
 
   /// Serialise a device-only [run] into the raw `runs.json` row shape the
-  /// restore paths upsert. `user_id` is omitted (restore stamps the new
-  /// owner), `track_url` is null (the blob rides in `tracks/<id>.json.gz`),
-  /// and the promoted columns are lifted out of the metadata bag exactly as
-  /// `ApiClient.saveRun` does — the column is the only stored copy, so a bag
-  /// left carrying them would shadow a later edit after restore.
+  /// restore paths upsert, through the same shaper `ApiClient.saveRun` uses.
+  /// `user_id` is omitted (restore stamps the new owner) and `track_url` is
+  /// dropped (the blob rides in `tracks/<id>.json.gz` and the archived URL
+  /// names the old owner's path).
   @visibleForTesting
-  static Map<String, dynamic> rawRunRowForBackup(cm.Run run) {
-    final meta = run.metadata;
-    int? best(String key) {
-      final v = meta?[key];
-      final secs = v is int ? v : (v is num ? v.toInt() : null);
-      return (secs == null || secs < 0) ? null : secs;
-    }
-
-    final bag = meta == null
-        ? null
-        : (Map<String, dynamic>.from(meta)
-          ..remove('activity_type')
-          ..remove('is_dnf')
-          ..remove('fastest_5k_s')
-          ..remove('fastest_10k_s')
-          ..remove('fastest_half_marathon_s')
-          ..remove('fastest_marathon_s')
-          ..remove('track_url'));
-    final row = cm.RunRow(
-      id: run.id,
-      // Stripped below — RunRow requires it, the archive must not carry it.
-      userId: '',
-      startedAt: run.startedAt.toUtc(),
-      durationS: run.duration.inSeconds,
-      distanceM: run.distanceMetres,
-      routeId: run.routeId,
-      source: run.source.name,
-      externalId: run.externalId,
-      metadata: (bag == null || bag.isEmpty) ? null : bag,
-      createdAt: run.createdAt,
-      activityType: (meta?['activity_type'] as String?) ?? 'run',
-      isDnf: meta?['is_dnf'] == true,
-      fastest5kS: best('fastest_5k_s'),
-      fastest10kS: best('fastest_10k_s'),
-      fastestHalfMarathonS: best('fastest_half_marathon_s'),
-      fastestMarathonS: best('fastest_marathon_s'),
-    );
-    return row.toJson()
-      ..remove('user_id')
-      ..remove('track_url');
-  }
+  static Map<String, dynamic> rawRunRowForBackup(cm.Run run) =>
+      cm.runRowFromRun(run, userId: '', createdAt: run.createdAt).toJson()
+        ..remove('user_id')
+        ..remove('track_url');
 
   static Map<String, dynamic> _backupWaypointJson(cm.Waypoint w) => {
         'lat': w.lat,
@@ -988,6 +1028,14 @@ class BackupService {
     return copy;
   }
 
+  static void _setOrDrop(Map<String, dynamic> row, String key, String? value) {
+    if (value == null) {
+      row.remove(key);
+    } else {
+      row[key] = value;
+    }
+  }
+
   dynamic _readJson(Archive archive, String path) {
     final file = archive.findFile(path);
     if (file == null) return null;
@@ -996,6 +1044,52 @@ class BackupService {
   }
 
   String _randomUuid() => const Uuid().v4();
+}
+
+/// What the local writer put in an archive it just finished. The run and
+/// route reads are paged and uncapped, so the only way this file can be short
+/// of the account is a blob the writer could not download; [incomplete] names
+/// the sections that happened to, in the same vocabulary the Go writer
+/// publishes, and [blobsWanted] / [blobsWritten] is what the UI states.
+class LocalArchiveSummary {
+  final File file;
+  final List<String> incomplete;
+  final int blobsWanted;
+  final int blobsWritten;
+  const LocalArchiveSummary(
+    this.file, {
+    this.incomplete = const [],
+    this.blobsWanted = 0,
+    this.blobsWritten = 0,
+  });
+
+  bool get complete => incomplete.isEmpty;
+  int get blobsMissing => blobsWanted - blobsWritten;
+}
+
+/// A finished archive plus what its writer said about it. [server] is
+/// null whenever the local writer built the file, [local] whenever the
+/// server did — exactly one of the two is set.
+class BackupOutcome {
+  final File file;
+  final ServerBackupSummary? server;
+  final LocalArchiveSummary? local;
+  const BackupOutcome(this.file, {this.server, this.local});
+
+  /// The server built this archive and told us it is short of the
+  /// account's run history. Null when the archive is whole, or when
+  /// there is no server verdict to read.
+  ServerBackupSummary? get shortfall {
+    final s = server;
+    return s != null && !s.complete ? s : null;
+  }
+
+  /// The local writer built this archive and could not download every blob it
+  /// asked for. Null when the archive is whole, or when the server built it.
+  LocalArchiveSummary? get localShortfall {
+    final l = local;
+    return l != null && !l.complete ? l : null;
+  }
 }
 
 class BackupProgress {
@@ -1024,6 +1118,11 @@ class RestoreProgress {
 }
 
 class RestoreResult {
+  /// The archive's manifest declared itself short of the account it came from.
+  bool archiveIncomplete = false;
+  /// Which sections the archive named as short, in the writers' shared
+  /// vocabulary (`runs`, `routes`, `tracks`, `hr_series`, …).
+  List<String> archiveIncompleteSections = const [];
   int runsImported = 0;
   int routesImported = 0;
   int tracksUploaded = 0;

@@ -276,9 +276,17 @@ web-only, Supabase Free) — see [deployment_lean.md](../ops/deployment_lean.md)
    `share_<x>_meta` (pure builder + `render<X>HeadTags`), a
    `/share/<x>/[id]` route (`prerender = false`), and a branch in the
    `share-entity` Lambda dispatcher + a CloudFront `/share/<x>/*` behavior.
-3. Add it to `sitemap.xml` via a `sitemap.ts` builder (unless it's a
+3. **Make an outage on it visible.** The lookup must inspect Supabase's
+   `error` and log `[share-<x>] upstream_unreachable`, and `<x>` must be
+   registered in `share_log_groups` in `infra/modules/web-stack/alarms.tf`.
+   Every fallback here is a *handled* response, so the AWS `Errors` metric
+   never moves: without both halves a Supabase outage degrades the surface
+   silently and pages nobody, which is how `/share/session` and
+   `/share/workout` shipped. `share_upstream_alarm_guard.test.ts` derives the
+   surface set from the lookups and fails when either half is missing.
+4. Add it to `sitemap.xml` via a `sitemap.ts` builder (unless it's a
    people-directory — don't enumerate those).
-4. Unit-test the meta builder; e2e the not-found head (deterministic).
+5. Unit-test the meta builder; e2e the not-found head (deterministic).
 
 **Export a `build<X>ShareCanonical(base, id)` and never spell the path
 again.** Every consumer of a share URL passes the base its use needs and

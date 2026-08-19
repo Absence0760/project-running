@@ -14,12 +14,58 @@ operator process, not a legal opinion. Counsel review before EU launch.
 | Right | Article | How it's satisfied | Surface |
 |---|---|---|---|
 | Access / copy | 15 | Machine-readable export of personal-data tables + run-photo bytes + tracks, on both paths (`export-data/backup_spec.ts` + the job_worker `exportPersonalDataSpecs`/`buildBackupSpecs`). **Owner-FK gap closed (2026-06-20):** the export previously keyed most tables off a literal `user_id` column, so tables owned via a differently-named column were missing — `session_plans` (`author_id`), `event_orders` (`buyer_user_id`/`host_user_id`), `route_photos` (`owner_id`), and `event_pricing` (`event_id` → host). All four are now exported on both paths, and the completeness guard (`personal_data_export_guard_test.go`) was widened to key on ANY owner-style FK to `auth.users` (`user_id`/`author_id`/`owner_id`/`buyer_user_id`/`host_user_id`/`contact_user_id`), so the next such table can't slip past silently. Widening the guard also surfaced five pre-existing plain-`user_id` gaps now wired in too: `achievements`, `challenge_participants`, `challenge_badges`, `public_recaps`, and `route_conditions` (the user's own community route-condition reports, migration `20270215_001`). | Settings → "Export data" → `data-export` (Go worker `/v1/export`) |
-| Portability | 20 | Same machine-readable export (JSON + GPX + zip); the owner-FK gap above is closed on both paths | as above |
+| Portability | 20 | Same machine-readable export (JSON + GPX + zip); the owner-FK gap above is closed on both paths, and every table read pages past PostgREST's 1000-row cap — see [Export completeness](#export-completeness--paging-and-what-the-manifest-count-means) | as above |
 | Rectification | 16 | Profile + preference edits; run title/notes edit | Settings, run detail |
 | Erasure | 17 | Account deletion: FK cascade + mandatory Storage drain of every user-content bucket (`runs`, `run-photos`, `route-photos`, `club-photos`; best-effort `avatars`) + third-party deauth (Strava, Garmin placeholder, RevenueCat, FCM, Stripe Connect Express account) + audit log. **route-photos/club-photos drain gap closed 2026-07-03** (audit/storage) — buckets added after the original drain code shipped had retained photo bytes post-deletion. | Settings → Delete account (email re-entry challenge) → `delete-account` EF |
 | Restriction | 18 | **No self-service toggle** — manual SOP below | operator |
 | Objection | 21 | **No self-service toggle** — manual SOP below | operator |
 | Withdraw consent | 7(3) | Disconnect integrations; **AI-features consent is self-service withdrawable** (Settings → Account → AI features consent → Withdraw, backed by the `withdraw_ai_disclosure_consent()` RPC — clears the whole record, `coach_consent_at` **and** `ai_disclosure_version`, after which every AI endpoint's 403 gate re-engages: the Coach and both AI route-assistant endpoints). **Mobile's withdrawal control was unreachable until 2026-08-09** — it rendered only when a consent read succeeded, and that read selected `coach_consent_at` directly off `user_profiles`, a column revoked from the `authenticated` grant since 20260707_001, so the read always errored and the tile never appeared (decisions § 573). The read now goes through `get_my_profile()`; web was unaffected. Telemetry opt-out in Settings | Settings (web **and** mobile) |
+
+## Export completeness — paging, and what the manifest count means
+
+**Paging guarantee (2026-08-18).** Every table the export reads is read
+in full. PostgREST clamps a response to `db-max-rows` (1000 on Supabase)
+and reports the truncation nowhere in the body — even an explicit
+`limit=5000` comes back with 1000 rows — so until this was fixed a
+runner past their thousandth run, photo, food-log row or gym set
+received a silently short archive. Both paths (the Go worker's
+`/v1/export`, and the deprecated `export-data` Edge Function) now walk
+1000-row pages until the server returns a short one, ordered by each
+table's primary key so offset paging cannot repeat one row and skip
+another.
+
+**What `manifest.json` asserts.** Each entry in `counts` is the
+**authoritative row count the database holds** for that section, not the
+number of rows this archive happens to carry. So the completeness check
+a data subject (or a regulator) runs is a real one: count the rows in
+`food_log.json` and compare them to `counts.food_log`. Two fields make
+any shortfall explicit:
+
+- `complete` — `true` only when every section was read in full.
+- `incomplete` — the sorted list of sections whose file is short of its
+  count.
+
+A section that failed part-way keeps the rows that were read and is
+named in `incomplete`; it is never silently dropped, and never counted
+as whole. The CSV and GPX formats carry the same signal in the endpoint's
+JSON response (`count` / `total` / `complete`).
+
+**Known bounds, stated rather than hidden.** Two caps can legitimately
+produce `complete: false`, and both are visible in the manifest:
+
+- **5000 runs per export** (`MaxRunsPerExport` / `MAX_RUNS`) — the
+  archive bundles every run's GPS track and HR sidecar, so the cap is a
+  time/memory bound, not a data-minimisation one.
+- **50,000 rows per section** (`exportRowCeiling` / `EXPORT_ROW_CEILING`)
+  — both paths assemble the whole archive in memory before uploading it,
+  so an unbounded walk of a high-cardinality table (`live_run_pings` runs
+  into the millions on a deep history) is an OOM rather than a slow
+  export.
+
+A subject who hits either cap has not received everything, and the
+manifest says so. Art 20 is satisfied by re-running or by an operator
+export; a streaming (chunked-upload) builder that removes both caps is
+the durable fix and is tracked as a follow-up.
 
 ## Art 18 (restriction) + Art 21 (objection) — operator SOP
 

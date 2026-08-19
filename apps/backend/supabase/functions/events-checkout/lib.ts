@@ -64,16 +64,88 @@ export function capacityDecision(
 }
 
 /// Stripe request-idempotency key for the Checkout Session create call.
-/// A buyer double-click or a retried events-checkout must reuse the SAME
-/// session instead of opening a second hold — so the key is a stable
-/// function of (buyer, event, instance). Different buyer / event /
-/// instance → different key.
-export function checkoutIdempotencyKey(
-  buyerId: string,
-  eventId: string,
-  instanceStartIso: string,
-): string {
-  return `events-checkout:${buyerId}:${eventId}:${instanceStartIso}`;
+///
+/// Keyed on the pending order — the hold the session belongs to — and
+/// NOT on (buyer, event, instance). Stripe's idempotency contract is
+/// joint: a key replayed with a different request body is rejected with
+/// `idempotency_error`, never replayed, and the key is retained ~24 h. A
+/// (buyer, event, instance) key spans every hold that pair will ever
+/// open, and each hold necessarily carries its own `order_id` and its own
+/// expiry, so the key was guaranteed to be reused against a changed body:
+/// every retry 502'd for a day. The order id is the widest scope over
+/// which the WHOLE body is constant — a double-click inside a live hold
+/// resolves to the same order and replays the session already open, and a
+/// lapsed hold mints a fresh order id, so a fresh key that cannot collide.
+export function checkoutIdempotencyKey(orderId: string): string {
+  return `events-checkout:${orderId}`;
+}
+
+/// The Checkout Session's `expires_at`, anchored on the order's creation
+/// instead of on the wall clock. A `Date.now()`-derived value moved the
+/// request body every second, which is what turned the reused key into an
+/// `idempotency_error` rather than a replay. Stripe requires at least
+/// 30 min ahead at create time; the local soft reservation is the tighter
+/// 15 min (`reservationExpiry`) and the webhook's
+/// `checkout.session.expired` releases the slot definitively.
+export function checkoutExpiresAtUnix(
+  orderCreatedAtMs: number,
+  ttlMinutes = 30,
+): number {
+  return Math.floor(orderCreatedAtMs / 1000) + ttlMinutes * 60;
+}
+
+export interface PendingOrderRow {
+  id: string;
+  created_at: string;
+  reserved_until: string | null;
+  stripe_checkout_session_id: string | null;
+}
+
+export interface HoldPlan {
+  /// The order to reuse, or null to mint a new one.
+  orderId: string | null;
+  /// That order's creation instant — the anchor both the idempotency key
+  /// and `expires_at` are reproduced from. Null when there is no order.
+  anchorMs: number | null;
+  /// A superseded hold's Checkout Session that must be expired at Stripe
+  /// before a replacement is opened.
+  supersedeSessionId: string | null;
+}
+
+/// What to do with the buyer's newest pending order for this (event,
+/// instance) before opening a Checkout Session.
+///
+/// A still-live reservation is REUSED: same order id, same anchor, so the
+/// key and the whole body reproduce byte for byte and Stripe hands back
+/// the session already open — which is what "a double-click reuses the
+/// same session" has to mean.
+///
+/// A lapsed reservation is SUPERSEDED, not reused. Its Stripe session
+/// outlives the 15 min hold by another 15, so leaving it open alongside a
+/// replacement lets one buyer be charged twice for one registration.
+/// Expiring it at Stripe makes the webhook — still the sole status
+/// writer — CAS that order pending->canceled off the resulting
+/// `checkout.session.expired`.
+export function resolveHold(
+  order: PendingOrderRow | null,
+  nowMs: number,
+): HoldPlan {
+  if (!order) return { orderId: null, anchorMs: null, supersedeSessionId: null };
+  const reservedUntilMs = order.reserved_until === null
+    ? Number.NaN
+    : Date.parse(order.reserved_until);
+  const createdAtMs = Date.parse(order.created_at);
+  if (
+    Number.isFinite(reservedUntilMs) && reservedUntilMs > nowMs &&
+    Number.isFinite(createdAtMs)
+  ) {
+    return { orderId: order.id, anchorMs: createdAtMs, supersedeSessionId: null };
+  }
+  return {
+    orderId: null,
+    anchorMs: null,
+    supersedeSessionId: order.stripe_checkout_session_id,
+  };
 }
 
 export interface CheckoutSessionMetadata {

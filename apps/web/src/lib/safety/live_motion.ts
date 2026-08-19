@@ -27,11 +27,9 @@
 /// buffer at a 5 s cadence spans twenty seconds and every runner alive
 /// stands still for twenty seconds at a road crossing.
 ///
-/// Web-only: this is a spectator-surface derivation with no mobile
-/// consumer today (the Flutter `live_spectator_screen` renders the same
-/// pings but has no motion readout). It is NOT a registered parity pair —
-/// a Dart twin nothing calls is dead code the parity guard polices
-/// forever.
+/// TS↔Dart parity pair with `apps/mobile_android/lib/live_motion.dart` —
+/// keep in lockstep. The Dart side's `atMs` is an `int` epoch-ms rather
+/// than a `number`, so its non-finite guard covers only the odometer.
 
 /// The window must span at least this much WALL CLOCK before any claim is
 /// made. Three minutes is past every ordinary pause a moving runner takes

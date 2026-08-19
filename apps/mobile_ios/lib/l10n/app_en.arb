@@ -480,6 +480,81 @@
       }
     }
   },
+  "importFailuresHeading": "{count, plural, one{1 activity didn't import} other{{count} activities didn't import}}",
+  "@importFailuresHeading": {
+    "description": "Heading above the import failure report, counting the activities that did not import",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importFailuresIntro": "Re-run the import to retry these — anything that already landed is skipped, so nothing is duplicated.",
+  "@importFailuresIntro": {
+    "description": "Explains that re-running the import retries the failures without duplicating"
+  },
+  "importFailuresTruncated": "{count, plural, one{1 further failure was not recorded.} other{{count} further failures were not recorded.}}",
+  "@importFailuresTruncated": {
+    "description": "Shown when the failure log hit its recording cap",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importFailuresShowDetail": "Show each activity",
+  "@importFailuresShowDetail": {
+    "description": "Expander label revealing each failed activity"
+  },
+  "importFailuresShare": "Share report (CSV)",
+  "@importFailuresShare": {
+    "description": "Button that shares the failure report as a CSV file"
+  },
+  "importFailuresShareFailed": "Could not share the report.",
+  "@importFailuresShareFailed": {
+    "description": "Banner when sharing the failure report CSV failed"
+  },
+  "importFailuresDismiss": "Dismiss",
+  "@importFailuresDismiss": {
+    "description": "Button that hides the import failure report"
+  },
+  "importFailuresNoDate": "Date unknown",
+  "@importFailuresNoDate": {
+    "description": "Placeholder when a failed activity has no known start date"
+  },
+  "importFailuresReasonNetwork": "Connection dropped",
+  "@importFailuresReasonNetwork": {
+    "description": "Import failure reason: the connection dropped"
+  },
+  "importFailuresReasonAuth": "Signed out",
+  "@importFailuresReasonAuth": {
+    "description": "Import failure reason: the session was signed out"
+  },
+  "importFailuresReasonRateLimited": "Rate limited",
+  "@importFailuresReasonRateLimited": {
+    "description": "Import failure reason: rate limited"
+  },
+  "importFailuresReasonTooLarge": "File too large",
+  "@importFailuresReasonTooLarge": {
+    "description": "Import failure reason: the file was too large"
+  },
+  "importFailuresReasonUnparseable": "File could not be read",
+  "@importFailuresReasonUnparseable": {
+    "description": "Import failure reason: the file could not be read"
+  },
+  "importFailuresReasonRejected": "Rejected by the server",
+  "@importFailuresReasonRejected": {
+    "description": "Import failure reason: the server refused the write"
+  },
+  "importFailuresReasonUnknown": "Unknown error",
+  "@importFailuresReasonUnknown": {
+    "description": "Import failure reason: unrecognised error"
+  },
+  "importStatusCloudPushDeferred": "{count, plural, one{1 run is saved on this device — its upload to the cloud didn't go through. It will retry on the next sync.} other{{count} runs are saved on this device — their upload to the cloud didn't go through. They will retry on the next sync.}}",
+  "@importStatusCloudPushDeferred": {
+    "description": "Shown when imported runs saved locally but the upload to the cloud failed for some or all of them",
+    "placeholders": {"count": {"type": "int"}}
+  },
   "importHealthSubtitleIos": "Pull workouts you've recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health",
   "@importHealthSubtitleIos": {
     "description": "iOS subtitle naming apps that write to Apple Health"
@@ -2130,9 +2205,9 @@
   "@runGpsPermissionPending": {
     "description": "Banner shown when location permission is denied (not permanently) at run start"
   },
-  "runGpsAllowAllTheTime": "Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.",
-  "@runGpsAllowAllTheTime": {
-    "description": "Banner shown when only while-in-use location permission is granted at run start"
+  "runBackgroundLocationPaused": "Tracking paused while you were away — your run kept timing and nothing was lost, but distance covered off screen wasn’t counted. Set Location to \"Allow all the time\" to track in the background.",
+  "@runBackgroundLocationPaused": {
+    "description": "Banner shown on returning to a recording run after the app was backgrounded under a foreground-only location grant and no fix arrived while away"
   },
   "runGpsSensorFailed": "Recording without GPS — could not start the sensor.",
   "@runGpsSensorFailed": {
@@ -3033,6 +3108,72 @@
         "type": "String"
       }
     }
+  },
+  "runDetailPacing": "Pacing",
+  "@runDetailPacing": {
+    "description": "Heading of the first-half vs second-half pacing card on run-detail"
+  },
+  "runDetailPacingFirstHalf": "First half",
+  "@runDetailPacingFirstHalf": {
+    "description": "Label for the first half's pace in the pacing card"
+  },
+  "runDetailPacingSecondHalf": "Second half",
+  "@runDetailPacingSecondHalf": {
+    "description": "Label for the second half's pace in the pacing card"
+  },
+  "runDetailPacingNegative": "Negative split",
+  "@runDetailPacingNegative": {
+    "description": "Verdict chip when the second half was faster than the first"
+  },
+  "runDetailPacingEven": "Even split",
+  "@runDetailPacingEven": {
+    "description": "Verdict chip when both halves were paced the same"
+  },
+  "runDetailPacingPositive": "Positive split",
+  "@runDetailPacingPositive": {
+    "description": "Verdict chip when the second half was slower than the first"
+  },
+  "runDetailPacingFaster": "{delta} faster over the second half",
+  "@runDetailPacingFaster": {
+    "description": "Pacing card summary when the second half was faster; delta is a seconds figure such as 14s",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailPacingSlower": "{delta} slower over the second half",
+  "@runDetailPacingSlower": {
+    "description": "Pacing card summary when the second half was slower; delta is a seconds figure such as 14s",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailPacingHeld": "Steady across both halves",
+  "@runDetailPacingHeld": {
+    "description": "Pacing card summary when both halves were paced the same"
+  },
+  "runDetailPacingGapNegative": "Adjusted for the terrain, you sped up over the second half.",
+  "@runDetailPacingGapNegative": {
+    "description": "Pacing card note when grade-adjusted effort rose over the second half"
+  },
+  "runDetailPacingGapEven": "Adjusted for the terrain, your effort was even across both halves.",
+  "@runDetailPacingGapEven": {
+    "description": "Pacing card note when grade-adjusted effort was even across both halves"
+  },
+  "runDetailPacingGapPositive": "Adjusted for the terrain, you slowed over the second half.",
+  "@runDetailPacingGapPositive": {
+    "description": "Pacing card note when grade-adjusted effort fell over the second half"
+  },
+  "runDetailGapColumn": "Grade-adj.",
+  "@runDetailGapColumn": {
+    "description": "Header of the grade-adjusted pace column in the splits list"
+  },
+  "runDetailGapColumnHint": "Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.",
+  "@runDetailGapColumnHint": {
+    "description": "Explanation shown under the splits list when the grade-adjusted column is visible"
   },
   "runDetailSectionSegments": "Segments",
   "@runDetailSectionSegments": {
@@ -6435,6 +6576,20 @@
       "p": { "type": "int" }
     }
   },
+  "liveSpectatorMotionStopped": "Not moving — {n} min in the same spot",
+  "@liveSpectatorMotionStopped": {
+    "description": "Spectator chip: the runner is still pinging but has not left this spot for n minutes",
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "liveSpectatorMotionStoppedAtLeast": "Not moving — at least {n} min in the same spot",
+  "@liveSpectatorMotionStoppedAtLeast": {
+    "description": "Same chip when the stop reaches the start of the observed window, so n is a floor",
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
   "liveSpectatorConcludedTitle": "Run complete",
   "@liveSpectatorConcludedTitle": {
     "description": "Heading of the spectator conclusion card shown when the broadcast has concluded"
@@ -6786,6 +6941,46 @@
     "description": "VDOT preview line",
     "placeholders": {
       "value": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewRampLabel": "Plan vs. your recent training",
+  "@planNewRampLabel": {
+    "description": "Plan-wizard ramp-note section label"
+  },
+  "planNewRampUnder": "This plan peaks at {peak} a week, below the {recent} a week you've averaged over the last four weeks. A longer goal race or more training days would make better use of that base.",
+  "@planNewRampUnder": {
+    "description": "Ramp note when the plan's peak week sits below the runner's recent weekly average",
+    "placeholders": {
+      "peak": {
+        "type": "String"
+      },
+      "recent": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewRampElevated": "Week 1 asks for {opening} against the {recent} a week you've averaged over the last four weeks — a real step up. Ease into it, or drop a training day.",
+  "@planNewRampElevated": {
+    "description": "Ramp note when the plan's opening week is an elevated step above the runner's recent weekly average",
+    "placeholders": {
+      "opening": {
+        "type": "String"
+      },
+      "recent": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewRampHigh": "Week 1 asks for {opening}, well above the {recent} a week you've averaged over the last four weeks. Fewer training days, a shorter goal race, or a few weeks of base building first would make that first step safer.",
+  "@planNewRampHigh": {
+    "description": "Ramp note when the plan's opening week is far above the runner's recent weekly average",
+    "placeholders": {
+      "opening": {
+        "type": "String"
+      },
+      "recent": {
         "type": "String"
       }
     }
@@ -8066,6 +8261,16 @@
       }
     }
   },
+  "settingsAccountBackupPartial": "Export is partial — {count} of {total} runs.",
+  "@settingsAccountBackupPartial": { "description": "Banner shown after a server-built export that came back short of the account run history", "placeholders": { "count": { "type": "int" }, "total": { "type": "int" } } },
+  "settingsAccountBackupPartialNotice": "Your last export is partial: it holds {count} of the {total} runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.",
+  "@settingsAccountBackupPartialNotice": { "description": "Persistent notice under the full-backup tile naming how short the last export was", "placeholders": { "count": { "type": "int" }, "total": { "type": "int" } } },
+  "settingsAccountBackupTracksPartial": "Backup is missing {missing} of {total} GPS files.",
+  "@settingsAccountBackupTracksPartial": { "description": "Banner shown after a locally-built backup whose GPS track downloads came up short", "placeholders": { "missing": { "type": "int" }, "total": { "type": "int" } } },
+  "settingsAccountBackupTracksPartialNotice": "Your last backup could not download {missing} of the {total} GPS track files. Every run is in the archive; export again to retry the traces. Its manifest.json says complete: false.",
+  "@settingsAccountBackupTracksPartialNotice": { "description": "Persistent notice under the full-backup tile naming how many GPS track files the last local backup could not download", "placeholders": { "missing": { "type": "int" }, "total": { "type": "int" } } },
+  "settingsAccountRestoreIncompleteArchive": "That archive said it was incomplete. {runs} runs were restored and nothing was overwritten - restore from a complete backup to fill the gaps.",
+  "@settingsAccountRestoreIncompleteArchive": { "description": "Persistent notice under the restore tile shown when the restored archive declared itself incomplete", "placeholders": { "runs": { "type": "int" } } },
   "settingsAccountRestoreUnavailable": "Backup service unavailable.",
   "@settingsAccountRestoreUnavailable": {
     "description": "Banner shown when restore can't run because the local store is missing"
@@ -9239,6 +9444,49 @@
   "gearRotationDone": "Done",
   "@gearRotationDone": {
     "description": "Save/confirm button in the rotation member-edit sheet"
+  },
+  "gearRotationNextUp": "Next up: {name}",
+  "@gearRotationNextUp": {
+    "description": "Which pair of a rotation comes out next, on the rotation row",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gearRotationNextUpWhy": "Least worn in this rotation.",
+  "@gearRotationNextUpWhy": {
+    "description": "Why that pair was picked, beside the next-up read-out"
+  },
+  "gearRotationMakeCurrent": "Make current",
+  "@gearRotationMakeCurrent": {
+    "description": "Button moving the current-pair star onto the next-up pair"
+  },
+  "gearRotationMakeCurrentLabel": "Make {name} the current pair — new runs will auto-tag with it",
+  "@gearRotationMakeCurrentLabel": {
+    "description": "Accessibility label for the make-current button",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gearRotationNextUpIsCurrent": "Already the current pair.",
+  "@gearRotationNextUpIsCurrent": {
+    "description": "Shown when the next-up pair already holds the star"
+  },
+  "gearRotationAllWorn": "Every pair here is at or past its replacement target.",
+  "@gearRotationAllWorn": {
+    "description": "Warning when every pair in a rotation is at or past its target"
+  },
+  "gearRotationMakeCurrentFailed": "Couldn't change the current pair: {error}",
+  "@gearRotationMakeCurrentFailed": {
+    "description": "Banner shown when moving the current-pair star fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "privacyZonesTitle": "Privacy zones",
   "@privacyZonesTitle": {
@@ -12830,6 +13078,43 @@
   "@gymRoutinePublishFailed": {
     "description": "Error after a failed publish-as-template"
   },
+  "gymRoutineHistoryTitle": "Routine history",
+  "@gymRoutineHistoryTitle": {
+    "description": "Routine detail: heading of the past-sessions panel"
+  },
+  "gymRoutineHistoryRecent": "Recent sessions",
+  "@gymRoutineHistoryRecent": {
+    "description": "Routine detail: sub-heading above the recent session list"
+  },
+  "gymRoutineHistoryLastDone": "{days, plural, =0{Done today} =1{Done yesterday} other{Done {days} days ago}}",
+  "@gymRoutineHistoryLastDone": {
+    "description": "Routine detail: how long ago the routine was last performed",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "gymRoutineHistoryCompletedRate": "{completed} of {graded} completed",
+  "@gymRoutineHistoryCompletedRate": {
+    "description": "Routine detail: how many graded sessions of the routine were completed",
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "graded": {
+        "type": "int"
+      }
+    }
+  },
+  "gymRoutineHistoryVerdictUngraded": "Not graded",
+  "@gymRoutineHistoryVerdictUngraded": {
+    "description": "Routine detail: verdict badge for a session saved without an adherence grade"
+  },
+  "gymRoutineHistoryLoadError": "Couldn’t load this routine’s history.",
+  "@gymRoutineHistoryLoadError": {
+    "description": "Routine detail: the past-sessions panel could not be read"
+  },
   "gymRoutineClubTemplateBadge": "Club template",
   "@gymRoutineClubTemplateBadge": {
     "description": "Badge shown on a routine that is already a club-owned template"
@@ -13021,6 +13306,43 @@
     }
   },
   "nutritionTitle": "Nutrition",
+  "nutritionDayNavLabel": "Diary day",
+  "nutritionDayPrevious": "Previous day",
+  "nutritionDayNext": "Next day",
+  "nutritionDayToday": "Today",
+  "nutritionDayYesterday": "Yesterday",
+  "nutritionDayBackfillHint": "Anything you log here is added to this day.",
+  "nutritionDayEmptyPast": "Nothing logged on this day.",
+  "nutritionDayGoalBreakdown": "Goal {base} + {exercise} kcal burned that day",
+  "@nutritionDayGoalBreakdown": {
+    "description": "Calorie goal breakdown on a past diary day: base goal + exercise kcal burned that day",
+    "placeholders": {
+      "base": {
+        "type": "int"
+      },
+      "exercise": {
+        "type": "int"
+      }
+    }
+  },
+  "nutritionDayTrendEnding": "7 days to {date}",
+  "@nutritionDayTrendEnding": {
+    "description": "Trend-card heading when the diary is showing a past day",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionDayLogHeadingFor": "Log food — {date}",
+  "@nutritionDayLogHeadingFor": {
+    "description": "Log-food composer title when the diary is showing a past day",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "nutritionLogFood": "Log food",
   "nutritionCalories": "Calories",
   "nutritionProtein": "Protein",
@@ -13031,6 +13353,65 @@
   "nutritionSodium": "Sodium",
   "nutritionSaturatedFat": "Saturated fat",
   "nutritionCholesterol": "Cholesterol",
+  "nutritionNutrients": "Nutrients",
+  "@nutritionNutrients": {
+    "description": "Section title for the nutrition day's extended-nutrient roll-up"
+  },
+  "nutritionNutrientsHint": "Reference intakes. Each total counts only the logged items that report that nutrient.",
+  "@nutritionNutrientsHint": {
+    "description": "Footnote under the nutrients section explaining partial coverage"
+  },
+  "nutritionNutrientAtLeast": "at least",
+  "@nutritionNutrientAtLeast": {
+    "description": "Prefix on a nutrient total that only some logged items reported"
+  },
+  "nutritionNutrientPartial": "{reported} of {total} logged items report {nutrient}",
+  "@nutritionNutrientPartial": {
+    "description": "Accessible explanation of a partially-covered nutrient total",
+    "placeholders": {
+      "reported": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "nutrient": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionNutrientOver": "{n} {unit} over",
+  "@nutritionNutrientOver": {
+    "description": "Nutrient chip: amount past a ceiling nutrient's daily reference",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionNutrientLeft": "{n} {unit} left",
+  "@nutritionNutrientLeft": {
+    "description": "Nutrient chip: amount still within a nutrient's daily reference",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionNutrientReached": "Goal reached",
+  "@nutritionNutrientReached": {
+    "description": "Nutrient chip: a floor nutrient has met its daily reference"
+  },
+  "nutritionNutrientUntargeted": "No daily target",
+  "@nutritionNutrientUntargeted": {
+    "description": "Nutrient chip: this nutrient is reported but deliberately ungraded"
+  },
   "nutritionWater": "Water",
   "nutritionWaterAdd": "Add water",
   "nutritionWaterRemove": "Remove water",
@@ -14457,6 +14838,26 @@
       }
     }
   },
+  "roadbookColTarget": "Target",
+  "@roadbookColTarget": {
+    "description": "Label on the roadbook target-time verdict chip"
+  },
+  "roadbookColLegPace": "Leg pace",
+  "@roadbookColLegPace": {
+    "description": "Roadbook per-leg pace label - the pace this stretch has to be run at to hold the goal"
+  },
+  "roadbookTargetAhead": "ahead",
+  "@roadbookTargetAhead": {
+    "description": "Roadbook target verdict: the projection is ahead of the planned time"
+  },
+  "roadbookTargetOn": "on plan",
+  "@roadbookTargetOn": {
+    "description": "Roadbook target verdict: the projection is within the on-schedule band"
+  },
+  "roadbookTargetBehind": "behind",
+  "@roadbookTargetBehind": {
+    "description": "Roadbook target verdict: the projection is behind the planned time"
+  },
   "checkpointCheckinAction": "Checkpoint check-in",
   "@checkpointCheckinAction": {
     "description": "Organiser action on event detail opening the aid-station check-in screen"
@@ -14715,6 +15116,67 @@
         "type": "int"
       }
     }
+  },
+  "challengesStandingTitle": "Your standing",
+  "@challengesStandingTitle": {
+    "description": "Heading of the viewer standing card above the challenge leaderboard"
+  },
+  "challengesStandingTitleTeam": "Your team's standing",
+  "@challengesStandingTitleTeam": {
+    "description": "Heading of the standing card on a club-vs-club leaderboard"
+  },
+  "challengesStandingRank": "#{rank} of {total}",
+  "@challengesStandingRank": {
+    "description": "Viewer rank out of the board size",
+    "placeholders": {
+      "rank": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesStandingTiedOne": "Tied with 1 other",
+  "@challengesStandingTiedOne": {
+    "description": "Standing card: exactly one other entrant shares the viewer rank"
+  },
+  "challengesStandingTiedMany": "Tied with {n} others",
+  "@challengesStandingTiedMany": {
+    "description": "Standing card: several other entrants share the viewer rank",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "challengesStandingBehind": "{gap} behind {name}",
+  "@challengesStandingBehind": {
+    "description": "Standing card: metric gap to the nearest entrant ranked above",
+    "placeholders": {
+      "gap": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "challengesStandingAhead": "{gap} ahead of {name}",
+  "@challengesStandingAhead": {
+    "description": "Standing card: metric margin over the nearest entrant ranked below",
+    "placeholders": {
+      "gap": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "challengesStandingLeading": "Leading",
+  "@challengesStandingLeading": {
+    "description": "Standing card: the viewer leads the board outright"
   },
   "challengesParticipants": "{n} joined",
   "@challengesParticipants": {

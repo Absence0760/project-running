@@ -2,7 +2,7 @@ import XCTest
 @testable import WatchApp
 
 /// `WorkoutManager.writeTrackJSON()` serialises a finished run's track to a
-/// file in Caches keyed by the run id — the exact file the watch hands to the
+/// file in the durable payload directory keyed by the run id — the exact file the watch hands to the
 /// phone via `WCSession.transferFile`. The phone gzips + uploads it, so the
 /// on-disk shape is a cross-device contract. Since the read path became
 /// streaming, the source is the run's NDJSON file rather than an in-memory
@@ -48,6 +48,23 @@ final class WorkoutManagerTrackJSONTests: XCTestCase {
         XCTAssertThrowsError(try wm.writeTrackJSON()) { error in
             XCTAssertTrue("\(error)".contains("No finished run") || (error as NSError).code == 1)
         }
+    }
+
+    func testWriteTrackJSONWritesIntoTheDurablePayloadDirectory() throws {
+        // WCSession reads this file off disk for as long as the transfer is
+        // outstanding — days, with the phone switched off — and by then
+        // `reset()` has deleted the NDJSON it was built from. In Caches a
+        // purge in that window loses the run outright.
+        let id = "durable-\(UUID().uuidString.lowercased())"
+        let wm = WorkoutManager()
+        wm.finishedRun = makeRun(id: id, points: [
+            TrackPointRecord(lat: 51.4513, lng: -0.1962, ele: 12.0, ts: "2026-04-15T07:30:01Z"),
+        ])
+        let url = try wm.writeTrackJSON()
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertEqual(url.deletingLastPathComponent().path, RunPayloadStorage.directory.path)
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        XCTAssertFalse(url.path.hasPrefix(caches.path))
     }
 
     func testWriteTrackJSONNamesFileByRunId() throws {

@@ -146,12 +146,18 @@ pub fn bpm_u8(bpm: Option<u16>) -> Option<u8> {
 /// and the freshest barometric altitude.
 ///
 /// The barometer is preferred over the fix's own GPS altitude — it is the
-/// steadier of the two over a climb — but each candidate narrows through
-/// [`ele_dm_from_m`] on its own, so an out-of-range barometric reading falls
-/// THROUGH to the fix's GPS altitude rather than discarding the elevation
-/// entirely: a wild baro value is a bad sensor reading, while the GPS altitude
-/// beside it is a real measurement, and storing it beats storing nothing. Only
-/// when neither candidate is storable does the point carry no elevation.
+/// steadier of the two over a climb — but each candidate narrows on its own,
+/// so an unusable barometric reading falls THROUGH to the fix's GPS altitude
+/// rather than discarding the elevation entirely: a wild baro value is a bad
+/// sensor reading, while the GPS altitude beside it is a real measurement, and
+/// storing it beats storing nothing. Only when neither candidate is storable
+/// does the point carry no elevation.
+///
+/// Both candidates narrow through [`crate::elevation::plausible_alt`] before
+/// [`ele_dm_from_m`]. Representability is not plausibility: the decimetre field
+/// spans -3276.8..=3276.7 m, so on its own it stores a receiver altitude 3 km
+/// below the sea floor and — since the barometer is preferred — every stuck
+/// sensor read the wire format happens to fit.
 pub fn track_point(
     fix: &Fix,
     start_uptime_s: u32,
@@ -163,8 +169,9 @@ pub fn track_point(
         lon_e7: (fix.lon_deg * 1e7) as i32,
         t_offset_s: fix.uptime_s.saturating_sub(start_uptime_s),
         ele_dm: baro_alt_m
+            .and_then(crate::elevation::plausible_alt)
             .and_then(ele_dm_from_m)
-            .or_else(|| fix.alt_m.and_then(ele_dm_from_m)),
+            .or_else(|| crate::elevation::plausible_gps(fix.alt_m).and_then(ele_dm_from_m)),
         bpm: bpm_u8(bpm),
     }
 }
@@ -450,6 +457,22 @@ mod tests {
             track_point(&fix, 1_000, None, Some(f32::NAN)).ele_dm,
             Some(15_000)
         );
+    }
+
+    #[test]
+    fn a_storable_but_implausible_altitude_is_still_refused() {
+        // Representability is not plausibility. -3,000 m fits the decimetre
+        // field exactly, so the wire format alone stored it — and since the
+        // barometer is PREFERRED, a stuck sensor read outranked the receiver's
+        // real altitude and went to flash as the point's elevation.
+        let fix = fix_at(40.0, -105.0, Some(1_500.0), 1_000);
+        assert_eq!(
+            track_point(&fix, 1_000, None, Some(-3_000.0)).ele_dm,
+            Some(15_000)
+        );
+        // Same window on the receiver's own altitude, from the other side.
+        let deep = fix_at(40.0, -105.0, Some(-3_000.0), 1_000);
+        assert_eq!(track_point(&deep, 1_000, None, None).ele_dm, None);
     }
 
     #[test]
