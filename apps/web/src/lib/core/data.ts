@@ -7789,10 +7789,11 @@ export async function fetchEffortsForRunWithError(
 	// Rank every effort in ONE round-trip via segment_effort_ranks (migration
 	// 20261223_001) instead of a serial count-per-effort loop — a run over a
 	// 30-segment route used to fire 30 sequential queries before the panel
-	// rendered. The RPC is SECURITY INVOKER so RLS gates the comparison set
-	// identically to the old client count; rank = 1 + strictly-faster visible
-	// efforts. On RPC failure ranks fall back to null so the panel still shows
-	// the efforts (degraded, not blank).
+	// rendered. rank = 1 + the distinct OTHER athletes holding a strictly-faster
+	// visible, non-blocked effort — the per-athlete population the board this
+	// chip links to ranks over (20270523_001, decisions §594), not a count of
+	// effort rows. On RPC failure ranks fall back to 1, so the panel still shows
+	// the efforts (degraded, not blank) — at the cost of a false crown.
 	const { data: rankRows, error: rankErr } = await supabase.rpc('segment_effort_ranks', {
 		p_run_id: runId,
 	});
