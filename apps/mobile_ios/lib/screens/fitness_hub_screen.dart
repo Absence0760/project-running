@@ -43,7 +43,7 @@ import 'runs_screen.dart';
 /// `Runs · Routes · Segments · Plans · Races` (mirroring web's
 /// `RunSurfaceTabs`), so run planning has a named destination instead of
 /// hanging off tooltip-only glyphs (decisions § 488).
-
+///
 /// The Fitness hub's sub-tabs, in strip order. Named + ordered rather than the
 /// raw int this was, for the reason § 490 records — see `SocialTab`.
 enum FitnessTab {
