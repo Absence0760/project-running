@@ -183,6 +183,12 @@ jobs:
         run: |
           node scripts/check_toolchain_pins.mjs
           node --test scripts/check_toolchain_pins.test.mjs
+      # The stack-start wait loop is shell inside a composite action, so it
+      # runs in no job's test suite. Its accounting (a wall-clock deadline the
+      # error string can be trusted to report) and its failure forensics are
+      # pinned here by driving it with stub curl/docker on PATH.
+      - name: Supabase stack sidecar wait loop
+        run: node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs
 
   test-packages:
     needs: changes

@@ -244,68 +244,15 @@ runs:
           fi
         done
 
-    # `supabase start` returns before its sidecars can serve. This wait
-    # used to be three byte-identical copies inline in ci.yml (e2e-web,
-    # the OAuth lane, the SSO lane) and every one of them was vacuous:
-    # they polled with `-X POST` and treated ANY status other than curl's
-    # `000` as ready, on the stated theory that "kong routed + the
-    # upstream answered". kong answers on its own when it CANNOT reach an
-    # upstream — 503 `{"message":"name resolution failed"}` with the edge
-    # runtime down, 503 `{"code":"BOOT_ERROR"}` while a worker is failing
-    # to boot — and the function it probed (refresh-tokens) returns 503
-    # `cron_not_configured` in CI anyway, so the two were indistinguish-
-    # able. The loop therefore passed on its first poll against a stack
-    # that was still cold, which is how CI run 31361094964 (e2e shard 4)
-    # spent its first 2.5 minutes timing out every delete-account-guards
-    # request at 30s and then ran green for the rest of the shard. The
-    # same comment already blamed an earlier instance of that exact
-    # failure (run 26478978751, same spec, same shard).
-    #
-    # So each probe below names the answer that only the upstream itself
-    # can give:
-    #   - the edge runtime by clip-public-track's own 405 (verify_jwt is
-    #     false, so a GET reaches the handler; the 405 is pinned by
-    #     clip-public-track-guards.spec.ts),
-    #   - GoTrue by a real password grant rather than /health, because
-    #     what the suites open with is minting a token, and
-    #   - Storage REST by any answer of its own.
+    # The probe loop + its forensics live in wait_for_sidecars.sh rather
+    # than inline here so they can be unit-tested (wait_for_sidecars.test.mjs
+    # drives them with stub curl/docker on PATH); the incident history that
+    # shaped them is in that file's header.
     - name: Wait for the stack's sidecars to actually serve
       shell: bash
       working-directory: apps/backend
       run: |
         set -uo pipefail
         ANON_KEY=$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')
-        if [ -z "$ANON_KEY" ]; then
-          echo "::error::could not read ANON_KEY from supabase status"
-          exit 1
-        fi
-
-        # <label> <ready-status-regex> <curl args...>
-        probe() {
-          local label=$1 want=$2 code=000
-          shift 2
-          for i in $(seq 1 45); do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$@" || echo 000)
-            if printf '%s' "$code" | grep -qE "$want"; then
-              echo "ready: $label -> $code"
-              return 0
-            fi
-            echo "wait: $label -> $code (attempt $i)"
-            sleep 2
-          done
-          echo "::error::$label never became ready within 90s (last status $code)"
-          return 1
-        }
-
-        probe "storage REST" '^[234][0-9][0-9]$' \
-          -X POST "http://127.0.0.1:54321/storage/v1/bucket" \
-          -H "apikey: $ANON_KEY" -H "authorization: Bearer $ANON_KEY" || exit 1
-
-        probe "edge runtime (clip-public-track)" '^405$' \
-          -X GET "http://127.0.0.1:54321/functions/v1/clip-public-track" \
-          -H "apikey: $ANON_KEY" || exit 1
-
-        probe "auth password grant" '^200$' \
-          -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
-          -H "apikey: $ANON_KEY" -H 'content-type: application/json' \
-          -d '{"email":"runner@test.com","password":"testtest"}' || exit 1
+        export ANON_KEY
+        bash "$GITHUB_ACTION_PATH/wait_for_sidecars.sh"
