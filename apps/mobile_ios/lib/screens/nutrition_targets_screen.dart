@@ -7,6 +7,7 @@ import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../diary_day.dart';
 import '../exercise_calories.dart';
+import '../exercise_day.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -15,7 +16,6 @@ import '../preferences.dart';
 import '../settings_sync.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
-import 'nutrition_screen.dart' show exerciseInputsForDay;
 import 'settings_body_metrics_screen.dart';
 
 /// Nutrition → Targets, the mobile mirror of web `/nutrition/targets`

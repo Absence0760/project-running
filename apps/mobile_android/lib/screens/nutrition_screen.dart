@@ -10,6 +10,7 @@ import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../diary_day.dart';
 import '../exercise_calories.dart';
+import '../exercise_day.dart';
 import '../extended_nutrients.dart';
 import '../food_search.dart' show FoodMacros;
 import '../hydration.dart';
@@ -69,43 +70,6 @@ Future<NutritionTargets?> loadNutritionTargets(
   } catch (_) {
     return null;
   }
-}
-
-/// Split the `activities` view rows falling inside `[start, end)` local time
-/// into the inputs the exercise-calorie and hydration add-ons consume.
-///
-/// Match on [ActivityRow.kindRun] / [ActivityRow.kindLift], never on a bare
-/// string: the view's gym branch emits `lift`, so a filter written against
-/// `'gym'` silently matched nothing and every strength session contributed
-/// zero calories and zero hydration minutes.
-///
-/// Pulled out of the screen so the day-window and kind selection are
-/// testable without booting Nutrition and signing a user in — the reason the
-/// original bug had no coverage.
-({List<RunForCalories> runs, List<GymSessionForCalories> gym, double seconds})
-    exerciseInputsForDay(
-  List<ActivityRow> activities,
-  DateTime start,
-  DateTime end,
-) {
-  var seconds = 0.0;
-  final runs = <RunForCalories>[];
-  final gym = <GymSessionForCalories>[];
-  for (final a in activities) {
-    if (a.kind != ActivityRow.kindRun && a.kind != ActivityRow.kindLift) {
-      continue;
-    }
-    final at = a.startedAt.toLocal();
-    if (at.isBefore(start) || !at.isBefore(end)) continue;
-    final durationS = (a.summary['duration_s'] as num?)?.toDouble();
-    seconds += durationS ?? 0;
-    if (a.kind == ActivityRow.kindRun) {
-      runs.add(RunForCalories((a.summary['distance_m'] as num?)?.toDouble()));
-    } else {
-      gym.add(GymSessionForCalories(durationS));
-    }
-  }
-  return (runs: runs, gym: gym, seconds: seconds);
 }
 
 /// Phase 4 multi-modal Nutrition (decisions §63, multi_modal.md § Nutrition).
