@@ -74,6 +74,16 @@ Future<void> _pumpUntil(
 Future<void> _closeUndoWindow(WidgetTester tester) =>
     tester.pump(const Duration(seconds: 9));
 
+/// Scroll the day list down to the per-entry Delete action before tapping it.
+/// The rings card carries the always-available Targets peer entry since
+/// decisions § 695, which pushes a single-entry day's delete affordance just
+/// past the bottom of the 800x600 test viewport.
+Future<void> _tapDelete(WidgetTester tester) async {
+  await tester.scrollUntilVisible(find.byTooltip('Delete'), 200);
+  await tester.pump();
+  await tester.tap(find.byTooltip('Delete'));
+}
+
 Widget _app(LocalFoodStore store, {double textScale = 1.0}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -174,7 +184,7 @@ void main() {
       await tester.pump();
       expect(find.text('Oats'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
 
       expect(find.byType(AlertDialog), findsNothing,
@@ -203,7 +213,7 @@ void main() {
     try {
       await tester.pumpWidget(_app(f.store));
       await tester.pump();
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       await tester.tap(find.text('Undo'));
       await tester.pump();
@@ -230,7 +240,7 @@ void main() {
     try {
       await tester.pumpWidget(_app(f.store));
       await tester.pump();
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       await _closeUndoWindow(tester);
       await _pumpUntil(tester, () => f.store.rows.isEmpty);
@@ -257,7 +267,7 @@ void main() {
       await tester.pumpWidget(_app(store));
       await tester.pump();
 
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       expect(find.text('Oats'), findsNothing);
 
@@ -332,7 +342,7 @@ void main() {
       // undo pill rather than a confirm dialog since round 13, but the
       // property this test exists for is unchanged: the field-less surface
       // that follows a dismissed name dialog must not resurface the IME.
-      await tester.tap(find.byTooltip('Delete'));
+      await _tapDelete(tester);
       await tester.pump();
       expect(find.text('Oats removed'), findsOneWidget);
       expect(find.byType(TextField), findsNothing);

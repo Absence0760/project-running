@@ -10378,6 +10378,92 @@ class AppLocalizationsFr extends AppLocalizations {
   String get nutritionAddBodyMetrics => 'Ajouter mes données corporelles';
 
   @override
+  String get nutritionTargetsLink => 'Objectifs';
+
+  @override
+  String get nutritionTargetsTitle => 'Objectifs de calories et de macros';
+
+  @override
+  String get nutritionTargetsSubtitle =>
+      'Comment l\'objectif du jour est calculé, et les deux réglages qui le déterminent.';
+
+  @override
+  String get nutritionTargetsTotal => 'Objectif du jour';
+
+  @override
+  String get nutritionTargetsBmr => 'Métabolisme de repos';
+
+  @override
+  String get nutritionTargetsBase => 'Objectif de base';
+
+  @override
+  String nutritionTargetsBaseFloored(int n) {
+    return 'Maintenu au plancher de $n kcal — l\'objectif quotidien le plus bas que nous recommandons.';
+  }
+
+  @override
+  String get nutritionTargetsExercise => 'Entraînements du jour';
+
+  @override
+  String get nutritionTargetsExerciseHint =>
+      'Les courses et séances de muscu enregistrées aujourd\'hui s\'ajoutent par-dessus.';
+
+  @override
+  String get nutritionTargetsMacrosHeading => 'Macros';
+
+  @override
+  String nutritionTargetsProteinHint(String n) {
+    return '$n g par kg de poids corporel';
+  }
+
+  @override
+  String get nutritionTargetsCarbsHint => 'Ce qui reste — ton carburant';
+
+  @override
+  String nutritionTargetsFatHint(int n) {
+    return '$n% des calories';
+  }
+
+  @override
+  String get nutritionTargetsDefaultsHeading => 'Tes valeurs par défaut';
+
+  @override
+  String get nutritionTargetsDefaultsHint =>
+      'Le niveau d\'activité correspond à ta journée type hors entraînements — les courses et séances de muscu enregistrées sont ajoutées séparément. Les deux sont enregistrés dès que tu les modifies.';
+
+  @override
+  String get nutritionTargetsMetricsHeading => 'Mesures corporelles';
+
+  @override
+  String get nutritionTargetsMetricsHint =>
+      'La taille, le poids, la date de naissance et le sexe sont des données de santé : ils se modifient dans les réglages, derrière leur consentement.';
+
+  @override
+  String get nutritionTargetsEditMetrics => 'Modifier dans les réglages';
+
+  @override
+  String get nutritionTargetsUnset => 'Non renseigné';
+
+  @override
+  String get nutritionTargetsEmptyTitle => 'Pas encore d\'objectifs';
+
+  @override
+  String get nutritionTargetsEmptyBody =>
+      'Renseigne ta taille, ton poids, ta date de naissance et ton sexe et tes objectifs de calories et de macros apparaîtront ici.';
+
+  @override
+  String get nutritionTargetsAge => 'Âge';
+
+  @override
+  String nutritionTargetsAgeYears(int n) {
+    return '$n ans';
+  }
+
+  @override
+  String get nutritionTargetsLoadError =>
+      'Impossible de charger tes objectifs.';
+
+  @override
   String get nutritionWeeklyTrend => '7 derniers jours';
 
   @override

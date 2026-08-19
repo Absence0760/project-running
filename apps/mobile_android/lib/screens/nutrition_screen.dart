@@ -35,6 +35,7 @@ import '../widgets/pending_sync_banner.dart';
 import '../widgets/top_banner.dart';
 import '../widgets/undo_bar.dart';
 import 'nutrition_meal_detail_screen.dart';
+import 'nutrition_targets_screen.dart';
 import 'settings_body_metrics_screen.dart';
 
 /// Daily calorie + macro targets for the signed-in user, or null when a
@@ -277,6 +278,21 @@ class _NutritionScreenState extends State<NutritionScreen> {
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
+  }
+
+  /// The always-available route to the number the rings are measured against.
+  /// Deliberately ungated: a runner with no targets yet is precisely the one
+  /// who needs the derivation and the two levers (decisions § 695).
+  Future<void> _openTargets() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NutritionTargetsScreen(
+          api: widget.api,
+          settingsSync: widget.settingsSync,
+        ),
+      ),
+    );
+    await _refresh();
   }
 
   Future<void> _openBodyMetrics() async {
@@ -1224,6 +1240,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 ),
               ],
             ],
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: _openTargets,
+                icon: const Icon(Icons.tune, size: 18),
+                label: Text(l10n.nutritionTargetsLink),
+              ),
+            ),
           ],
         ),
       ),
