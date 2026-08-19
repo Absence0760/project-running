@@ -1,9 +1,12 @@
 /// Conservative chunk size for `.inFilter(col, ids)` id lists. PostgREST
 /// serialises an `in` filter into the request URL, so a list of many hundreds
-/// of ids overflows the gateway's request-line limit and the query silently
-/// returns an empty result. A UUID serialises to ~38 chars inside `in(...)`, so
-/// 100 ids keep the clause well under the header budget alongside the other
-/// query params. Mirrors web's `feed_merge.ts` `FEED_FOLLOWEE_CHUNK`.
+/// of ids overflows the request-line budget of whatever gateway fronts it and
+/// the read is lost. HOW it is lost is a property of the deployment, not of
+/// this code — the local stack answers `414` past an 8 KiB request line
+/// (~208 uuids), where decisions § 653 recorded a gateway that answered 200
+/// with an empty match instead. A UUID serialises to ~38 chars inside
+/// `in(...)`, so 100 ids keep the clause well under either bound alongside the
+/// other query params. Mirrors web's `feed_merge.ts` `FEED_FOLLOWEE_CHUNK`.
 const int kInFilterChunk = 100;
 
 /// Split [items] into consecutive sublists of at most [size]. The caller runs
