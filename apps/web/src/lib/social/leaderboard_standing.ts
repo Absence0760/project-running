@@ -9,9 +9,9 @@
 /// the ENTRY, not a label, so unit formatting and name/team resolution stay one
 /// concern at the UI edge.
 ///
-/// Web-only by design, like `challenge_list.ts`: the mobile challenge detail
-/// renders the raw board with no standing summary, so a Dart twin would be a
-/// helper with no caller. NOT part of the `challenge_progress` parity pair.
+/// TS↔Dart parity pair with `apps/mobile_android/lib/leaderboard_standing.dart`
+/// — keep the two in lockstep: algorithm, edge cases, outputs, test counts.
+/// Distinct from the `challenge_progress` pair, which shapes the board itself.
 
 /** The shape any board row must carry. `ChallengeLeaderboardRow` satisfies it
  * structurally; `rank` is deliberately NOT required — see `standingFor`. */
