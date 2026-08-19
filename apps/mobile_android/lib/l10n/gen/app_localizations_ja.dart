@@ -4826,6 +4826,20 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String planNewRaceAnchored(int weeks) {
+    return 'レースに合わせた$weeks週間のプランです。最終週がレース週になります。作成する前に下の内容を自由に調整してください。';
+  }
+
+  @override
+  String get planNewRacePast => 'このレースはすでに終了しているため、下の日付は通常の初期値です。';
+
+  @override
+  String get planNewRaceTooSoon => 'このレースは近すぎて完全なプランを組めないため、下の日付は通常の初期値です。';
+
+  @override
+  String get planNewRaceUnreadable => 'このレースの日付を読み取れなかったため、下の日付は通常の初期値です。';
+
+  @override
   String get planNewCancel => 'キャンセル';
 
   @override
@@ -11177,6 +11191,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get racesRegister => '登録';
+
+  @override
+  String get racesTrainForThis => 'このレースに向けてトレーニング';
 
   @override
   String get racesViewResults => '結果を見る';

@@ -5082,6 +5082,23 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String planNewRaceAnchored(int weeks) {
+    return 'Sized for your race: a $weeks-week plan whose final week is race week. Adjust anything below before creating it.';
+  }
+
+  @override
+  String get planNewRacePast =>
+      'That race has already been run, so the dates below are the usual defaults.';
+
+  @override
+  String get planNewRaceTooSoon =>
+      'That race is too close to build a full plan for, so the dates below are the usual defaults.';
+
+  @override
+  String get planNewRaceUnreadable =>
+      'We couldn\'t read that race\'s date, so the dates below are the usual defaults.';
+
+  @override
   String get planNewCancel => 'Cancel';
 
   @override
@@ -11609,6 +11626,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get racesRegister => 'Register';
+
+  @override
+  String get racesTrainForThis => 'Train for this race';
 
   @override
   String get racesViewResults => 'View results';

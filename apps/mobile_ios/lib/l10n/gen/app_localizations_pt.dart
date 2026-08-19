@@ -5133,6 +5133,23 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String planNewRaceAnchored(int weeks) {
+    return 'Ajustado à sua corrida: um plano de $weeks semanas cuja última semana é a da prova. Altere o que quiser antes de criar.';
+  }
+
+  @override
+  String get planNewRacePast =>
+      'Essa corrida já aconteceu, então as datas abaixo são as padrão.';
+
+  @override
+  String get planNewRaceTooSoon =>
+      'Essa corrida está próxima demais para montar um plano completo, então as datas abaixo são as padrão.';
+
+  @override
+  String get planNewRaceUnreadable =>
+      'Não conseguimos ler a data dessa corrida, então as datas abaixo são as padrão.';
+
+  @override
   String get planNewCancel => 'Cancelar';
 
   @override
@@ -11729,6 +11746,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get racesRegister => 'Inscrever-se';
 
   @override
+  String get racesTrainForThis => 'Treinar para esta corrida';
+
+  @override
   String get racesViewResults => 'Ver resultados';
 
   @override
@@ -18146,6 +18166,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planNewOverrideLabel(int count) {
     return 'Substituir semanas (padrão: $count)';
   }
+
+  @override
+  String planNewRaceAnchored(int weeks) {
+    return 'Ajustado à sua corrida: um plano de $weeks semanas cuja última semana é a da prova. Altere o que quiser antes de criar.';
+  }
+
+  @override
+  String get planNewRacePast =>
+      'Essa corrida já aconteceu, então as datas abaixo são as padrão.';
+
+  @override
+  String get planNewRaceTooSoon =>
+      'Essa corrida está próxima demais para montar um plano completo, então as datas abaixo são as padrão.';
+
+  @override
+  String get planNewRaceUnreadable =>
+      'Não conseguimos ler a data dessa corrida, então as datas abaixo são as padrão.';
 
   @override
   String get planNewCancel => 'Cancelar';
@@ -24738,6 +24775,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get racesRegister => 'Inscrever-se';
+
+  @override
+  String get racesTrainForThis => 'Treinar para esta corrida';
 
   @override
   String get racesViewResults => 'Ver resultados';

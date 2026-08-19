@@ -7,9 +7,13 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../fab_clearance.dart';
 import '../preferences.dart' show formatDistanceForPref;
+import '../race_plan_preset.dart';
 import '../race_service.dart';
+import '../training.dart' show toIsoDate;
+import '../training_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
+import 'plan_new_screen.dart';
 
 /// Race calendar discovery (race_calendar.md). Mirrors the web `/races` page:
 /// a name search + distance-band chips + "near a place" geocode over the
@@ -29,7 +33,16 @@ class RacesScreen extends StatefulWidget {
   final RaceService service;
   final String? mapTilerKey;
 
-  const RacesScreen({super.key, required this.service, this.mapTilerKey});
+  /// Test-only DI seam for the plan wizard the "train for this race" action
+  /// opens; production callsites let the screen build its own.
+  final TrainingService? training;
+
+  const RacesScreen({
+    super.key,
+    required this.service,
+    this.mapTilerKey,
+    this.training,
+  });
 
   @override
   State<RacesScreen> createState() => _RacesScreenState();
@@ -51,6 +64,8 @@ class _RacesScreenState extends State<RacesScreen> {
   bool _error = false;
   List<RaceListingView> _results = const [];
   bool _runSignUpAvailable = false;
+
+  late final TrainingService _training = widget.training ?? TrainingService();
 
   @override
   void initState() {
@@ -128,6 +143,22 @@ class _RacesScreenState extends State<RacesScreen> {
   Future<void> _openSubmit() async {
     final created = await showRaceListingForm(context, widget.service);
     if (created == true) _run();
+  }
+
+  /// Open the plan wizard sized around this race. The listing's own facts go
+  /// across, not the derived dates — the wizard re-derives them against today,
+  /// so the arithmetic has one home (decisions § 606).
+  Future<void> _trainForRace(RaceListingView race) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => PlanNewScreen(
+          training: _training,
+          raceDateIso: race.raceDate,
+          raceName: race.name,
+          raceDistanceM: race.distanceM,
+        ),
+      ),
+    );
   }
 
   Future<void> _openImport(RaceListingView race) async {
@@ -231,6 +262,7 @@ class _RacesScreenState extends State<RacesScreen> {
       itemBuilder: (context, i) => _RaceCard(
         race: _results[i],
         onImport: () => _openImport(_results[i]),
+        onTrainFor: () => _trainForRace(_results[i]),
       ),
     );
   }
@@ -239,12 +271,26 @@ class _RacesScreenState extends State<RacesScreen> {
 class _RaceCard extends StatelessWidget {
   final RaceListingView race;
   final VoidCallback onImport;
+  final VoidCallback onTrainFor;
 
-  const _RaceCard({required this.race, required this.onImport});
+  const _RaceCard({
+    required this.race,
+    required this.onImport,
+    required this.onTrainFor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    // Only offer to build a plan when one can actually be built for this race
+    // — a past or too-close race gets no action rather than one that lands on
+    // a refusal. The wizard re-derives from the same helper, so a list left
+    // open across midnight is caught there too.
+    final canTrainFor = racePlanPreset(
+      raceDateIso: race.raceDate,
+      distanceM: race.distanceM,
+      todayIso: toIsoDate(DateTime.now()),
+    ).ok;
     final meta = <String>[
       _formatRaceDate(race.raceDate),
       if (race.distanceM != null)
@@ -279,6 +325,11 @@ class _RaceCard extends StatelessWidget {
               runSpacing: 4,
               alignment: WrapAlignment.end,
               children: [
+                if (canTrainFor)
+                  OutlinedButton(
+                    onPressed: onTrainFor,
+                    child: Text(l.racesTrainForThis),
+                  ),
                 if (race.entryUrl != null)
                   OutlinedButton(
                     onPressed: () => _launch(context, race.entryUrl!),

@@ -5129,6 +5129,23 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String planNewRaceAnchored(int weeks) {
+    return 'Ajustado a tu carrera: un plan de $weeks semanas cuya última semana es la de la carrera. Cambia lo que quieras antes de crearlo.';
+  }
+
+  @override
+  String get planNewRacePast =>
+      'Esa carrera ya se celebró, así que las fechas de abajo son las predeterminadas.';
+
+  @override
+  String get planNewRaceTooSoon =>
+      'Esa carrera está demasiado cerca para preparar un plan completo, así que las fechas de abajo son las predeterminadas.';
+
+  @override
+  String get planNewRaceUnreadable =>
+      'No pudimos leer la fecha de esa carrera, así que las fechas de abajo son las predeterminadas.';
+
+  @override
   String get planNewCancel => 'Cancelar';
 
   @override
@@ -11728,6 +11745,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get racesRegister => 'Inscribirse';
+
+  @override
+  String get racesTrainForThis => 'Entrenar para esta carrera';
 
   @override
   String get racesViewResults => 'Ver resultados';

@@ -8440,6 +8440,30 @@ abstract class AppLocalizations {
   /// **'Override weeks ({count} default)'**
   String planNewOverrideLabel(int count);
 
+  /// Note shown when the plan wizard was opened from a race listing and could size the plan around it
+  ///
+  /// In en, this message translates to:
+  /// **'Sized for your race: a {weeks}-week plan whose final week is race week. Adjust anything below before creating it.'**
+  String planNewRaceAnchored(int weeks);
+
+  /// Note shown when the race the wizard was opened from has already been run
+  ///
+  /// In en, this message translates to:
+  /// **'That race has already been run, so the dates below are the usual defaults.'**
+  String get planNewRacePast;
+
+  /// Note shown when the race the wizard was opened from is too close to build a plan for
+  ///
+  /// In en, this message translates to:
+  /// **'That race is too close to build a full plan for, so the dates below are the usual defaults.'**
+  String get planNewRaceTooSoon;
+
+  /// Note shown when the race date the wizard was opened with could not be parsed
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t read that race\'s date, so the dates below are the usual defaults.'**
+  String get planNewRaceUnreadable;
+
   /// Cancel button in the new-plan wizard
   ///
   /// In en, this message translates to:
@@ -19435,6 +19459,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Register'**
   String get racesRegister;
+
+  /// Race card action that opens the plan wizard sized around that race
+  ///
+  /// In en, this message translates to:
+  /// **'Train for this race'**
+  String get racesTrainForThis;
 
   /// Link to a race's results page
   ///

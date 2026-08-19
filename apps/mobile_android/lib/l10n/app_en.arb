@@ -6896,6 +6896,27 @@
       }
     }
   },
+  "planNewRaceAnchored": "Sized for your race: a {weeks}-week plan whose final week is race week. Adjust anything below before creating it.",
+  "@planNewRaceAnchored": {
+    "description": "Note shown when the plan wizard was opened from a race listing and could size the plan around it",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "planNewRacePast": "That race has already been run, so the dates below are the usual defaults.",
+  "@planNewRacePast": {
+    "description": "Note shown when the race the wizard was opened from has already been run"
+  },
+  "planNewRaceTooSoon": "That race is too close to build a full plan for, so the dates below are the usual defaults.",
+  "@planNewRaceTooSoon": {
+    "description": "Note shown when the race the wizard was opened from is too close to build a plan for"
+  },
+  "planNewRaceUnreadable": "We couldn't read that race's date, so the dates below are the usual defaults.",
+  "@planNewRaceUnreadable": {
+    "description": "Note shown when the race date the wizard was opened with could not be parsed"
+  },
   "planNewCancel": "Cancel",
   "@planNewCancel": {
     "description": "Cancel button in the new-plan wizard"
@@ -15338,6 +15359,10 @@
   "racesRegister": "Register",
   "@racesRegister": {
     "description": "Link to a race's registration page"
+  },
+  "racesTrainForThis": "Train for this race",
+  "@racesTrainForThis": {
+    "description": "Race card action that opens the plan wizard sized around that race"
   },
   "racesViewResults": "View results",
   "@racesViewResults": {
