@@ -148,9 +148,19 @@ class _CapturingOnlineApi extends ApiClient {
   final String _uid;
   final List<Map<String, dynamic>> upsertedRuns = [];
   final List<(String userId, String runId)> hrUploads = [];
+  final List<(String userId, String runId)> trackUploads = [];
 
   @override
   String? get userId => _uid;
+
+  @override
+  Future<void> uploadTrackBytes({
+    required String userId,
+    required String runId,
+    required Uint8List gzippedBytes,
+  }) async {
+    trackUploads.add((userId, runId));
+  }
 
   @override
   Future<void> uploadHrSeriesBytes({
@@ -250,8 +260,10 @@ void main() {
 
       expect(result.runsImported, 1);
       expect(api.hrUploads, isEmpty);
-      // Stale path MUST be nulled — otherwise the path-shape CHECK 23514s.
-      expect(api.upsertedRuns.single['hr_series_url'], isNull);
+      // The stale path must never survive — it would fail the path-shape
+      // CHECK (23514). It leaves as an OMITTED column rather than an explicit
+      // null, so an existing row's own valid sidecar path is left alone.
+      expect(api.upsertedRuns.single.containsKey('hr_series_url'), isFalse);
     });
 
     test('generateNewIds re-stamps hr_series_url to the new id', () async {
@@ -1636,6 +1648,344 @@ void main() {
 
       expect(res.runsImported, 1);
       expect(runStore.summaries, hasLength(2));
+    });
+  });
+
+  // ---- archive completeness disclosure ---------------------------------
+  //
+  // The run + route reads are paged and uncapped, so a local archive is the
+  // whole account by construction. The one thing that can still come up short
+  // is a blob download the writer swallows to keep the rest of the backup
+  // alive — and a swallow nobody is told about is how a runner finds out at
+  // restore time. The manifest states the verdict in the same `complete` /
+  // `incomplete` vocabulary the Go writer publishes.
+  group('local archive completeness', () {
+    final Map<String, Uint8List> blobs = {};
+    Future<Uint8List> fetcher(String path) async {
+      final bytes = blobs[path];
+      if (bytes == null) throw StateError('no blob for $path');
+      return bytes;
+    }
+
+    setUp(blobs.clear);
+
+    Uint8List gz(Object body) =>
+        Uint8List.fromList(GZipEncoder().encode(utf8.encode(jsonEncode(body))));
+
+    Map<String, dynamic> manifestOf(File f) {
+      final archive = ZipDecoder().decodeBytes(f.readAsBytesSync());
+      return jsonDecode(utf8
+          .decode(archive.findFile('manifest.json')!.content as List<int>)) as Map<String, dynamic>;
+    }
+
+    test('a whole archive says so', () async {
+      const url = 'uid/r-1.json.gz';
+      blobs[url] = gz(const [
+        {'lat': 1.0, 'lng': 2.0},
+      ]);
+      final out = File('${tempDir.path}/whole.zip');
+      final summary = await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [runRow(id: 'r-1', trackUrl: url)],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: [runRow(id: 'r-1', trackUrl: url)],
+        fetchTrackBytes: fetcher,
+      );
+
+      expect(summary.complete, isTrue);
+      expect(summary.blobsMissing, 0);
+      final manifest = manifestOf(out);
+      expect(manifest['complete'], isTrue);
+      expect(manifest['incomplete'], isEmpty);
+    });
+
+    test('a failed track download makes the archive say it is incomplete',
+        () async {
+      blobs['uid/r-2.json.gz'] = gz(const [
+        {'lat': 1.0, 'lng': 2.0},
+      ]);
+      final runs = [
+        runRow(id: 'r-1', trackUrl: 'uid/missing.json.gz'),
+        runRow(id: 'r-2', trackUrl: 'uid/r-2.json.gz'),
+      ];
+      final out = File('${tempDir.path}/short.zip');
+      final summary = await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: runs,
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: runs,
+        fetchTrackBytes: fetcher,
+      );
+
+      expect(summary.complete, isFalse);
+      expect(summary.incomplete, ['tracks']);
+      expect(summary.blobsWanted, 2);
+      expect(summary.blobsWritten, 1);
+      expect(summary.blobsMissing, 1);
+      final manifest = manifestOf(out);
+      expect(manifest['complete'], isFalse,
+          reason: 'an archive short of what was asked for must never read '
+              'as whole — restore is the only other place it surfaces');
+      expect(manifest['incomplete'], ['tracks']);
+      // The count stays what the file actually holds, matching the Go
+      // writer's `tracks` key.
+      expect((manifest['counts'] as Map)['tracks'], 1);
+    });
+
+    test('a failed HR sidecar names its own section', () async {
+      final out = File('${tempDir.path}/hrshort.zip');
+      final summary = await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [runRow(id: 'r-1')],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        runsWithHrSeries: const [
+          {'id': 'r-1', 'hr_series_url': 'uid/r-1.hr.json.gz'},
+        ],
+        fetchTrackBytes: fetcher,
+      );
+
+      expect(summary.incomplete, ['hr_series']);
+      expect(manifestOf(out)['incomplete'], ['hr_series']);
+    });
+
+    test('both sections short are both named, in the shared sort order',
+        () async {
+      final runs = [runRow(id: 'r-1', trackUrl: 'uid/gone.json.gz')];
+      final out = File('${tempDir.path}/bothshort.zip');
+      final summary = await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: runs,
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: runs,
+        runsWithHrSeries: const [
+          {'id': 'r-1', 'hr_series_url': 'uid/gone.hr.json.gz'},
+        ],
+        fetchTrackBytes: fetcher,
+      );
+
+      expect(summary.incomplete, ['hr_series', 'tracks']);
+      expect(summary.blobsMissing, 2);
+    });
+
+    test('a device-only track cannot fail, so it never marks the archive short',
+        () async {
+      final out = File('${tempDir.path}/localonly-complete.zip');
+      final summary = await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [runRow(id: 'local-1')],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        localTracks: {'local-1': gz(const [{'lat': 1.0, 'lng': 2.0}])},
+        fetchTrackBytes: fetcher,
+      );
+
+      expect(summary.complete, isTrue);
+      expect(summary.blobsWanted, 1);
+      expect(summary.blobsWritten, 1);
+      expect((manifestOf(out)['counts'] as Map)['tracks'], 1);
+    });
+
+    // The bug this whole change exists for: `fetchRunRowsRaw` issued an
+    // unranged select, so PostgREST clamped it to db-max-rows (1000) and the
+    // archive silently held the newest page. The read is paged now — this
+    // pins that the WRITER carries whatever it is handed across that
+    // boundary, at a count that is genuinely past it.
+    test('an archive of more than one PostgREST page holds every run',
+        () async {
+      const total = kPostgrestPageSize + 500; // 1500 — two full pages and a bit
+      expect(total, greaterThan(kPostgrestPageSize),
+          reason: 'the point of this test is crossing the page boundary');
+      final runs = [
+        for (var i = 0; i < total; i++)
+          runRow(
+            id: 'r-$i',
+            startedAt: DateTime.utc(2026, 1, 1)
+                .add(Duration(minutes: i))
+                .toIso8601String(),
+          ),
+      ];
+      final out = File('${tempDir.path}/big.zip');
+      final summary = await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: runs,
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        fetchTrackBytes: fetcher,
+      );
+
+      expect(summary.complete, isTrue);
+      final archive = ZipDecoder().decodeBytes(out.readAsBytesSync());
+      final archived = jsonDecode(utf8
+          .decode(archive.findFile('runs.json')!.content as List<int>)) as List;
+      expect(archived, hasLength(total));
+      expect((archived.first as Map)['id'], 'r-0');
+      expect((archived.last as Map)['id'], 'r-${total - 1}');
+      expect((manifestOf(out)['counts'] as Map)['runs'], total);
+    });
+
+    test('a mid-read failure produces no archive at all, never a whole-looking one',
+        () async {
+      var page = 0;
+      Future<List<int>> failOnSecondPage(int from, int to) async {
+        if (page++ == 0) return List<int>.generate(kPostgrestPageSize, (i) => i);
+        throw StateError('network died mid-read');
+      }
+
+      // `readAllPages` rethrows rather than returning the pages it managed,
+      // so `createBackup` never reaches the writer and no file is left behind
+      // for the runner to mistake for a backup.
+      await expectLater(
+        readAllPages<int>(failOnSecondPage),
+        throwsA(isA<StateError>()),
+      );
+      expect(File('${tempDir.path}/never-written.zip').existsSync(), isFalse);
+    });
+  });
+
+  group('restore of an archive that declares itself incomplete', () {
+    Map<String, dynamic> manifest({
+      bool? complete,
+      List<String>? incomplete,
+    }) =>
+        <String, dynamic>{
+          'format': 'run-app-backup',
+          'version': 1,
+          'exported_at': '2026-08-18T10:00:00Z',
+          if (complete != null) 'complete': complete,
+          if (incomplete != null) 'incomplete': incomplete,
+        };
+
+    test('surfaces the verdict and names the short sections', () async {
+      final res = await restoreFromBytes(buildBackupZip(
+        manifestOverride: manifest(complete: false, incomplete: ['tracks']),
+        runs: [runRow(id: 'r-1')],
+      ));
+
+      expect(res.runsImported, 1, reason: 'a short archive still restores');
+      expect(res.archiveIncomplete, isTrue);
+      expect(res.archiveIncompleteSections, ['tracks']);
+      expect(res.warnings.first, contains('incomplete'));
+      expect(res.warnings.first, contains('tracks'));
+    });
+
+    test('a short archive with no section list still discloses', () async {
+      final res = await restoreFromBytes(buildBackupZip(
+        manifestOverride: manifest(complete: false),
+        runs: const [],
+      ));
+
+      expect(res.archiveIncomplete, isTrue);
+      expect(res.archiveIncompleteSections, isEmpty);
+      expect(res.warnings.first, contains('incomplete'));
+    });
+
+    test('a whole archive claims nothing', () async {
+      final res = await restoreFromBytes(buildBackupZip(
+        manifestOverride: manifest(complete: true, incomplete: const []),
+        runs: const [],
+      ));
+
+      expect(res.archiveIncomplete, isFalse);
+      expect(res.warnings.any((w) => w.contains('incomplete')), isFalse);
+    });
+
+    test('an archive from a writer that predates the field claims nothing',
+        () async {
+      // Only an explicit `complete: false` is evidence of a shortfall —
+      // warning on every older / web-built archive would be its own
+      // dishonesty. Mirrors ServerBackupSummary.fromJson.
+      final res = await restoreFromBytes(buildBackupZip(
+        manifestOverride: manifest(),
+        runs: const [],
+      ));
+
+      expect(res.archiveIncomplete, isFalse);
+      expect(res.warnings.any((w) => w.contains('incomplete')), isFalse);
+    });
+
+    test('the whole-archive round trip carries its own verdict into restore',
+        () async {
+      final out = File('${tempDir.path}/roundtrip.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [runRow(id: 'r-1', trackUrl: 'uid/gone.json.gz')],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: [runRow(id: 'r-1', trackUrl: 'uid/gone.json.gz')],
+        fetchTrackBytes: (_) async => throw StateError('offline'),
+      );
+
+      final res = await BackupService(api: _OfflineApi())
+          .restore(zipFile: out, runStore: runStore);
+      expect(res.archiveIncomplete, isTrue);
+      expect(res.archiveIncompleteSections, ['tracks']);
+    });
+  });
+
+  group('online restore — a blob the archive lacks keeps the row\'s own path',
+      () {
+    const uid = 'aaaaaaaa-0000-0000-0000-0000000000a2';
+
+    test('track_url is omitted, not nulled, when the archive has no track',
+        () async {
+      final api = _CapturingOnlineApi(uid);
+      final bytes = buildBackupZip(runs: [
+        {...runRow(id: 'run-1'), 'track_url': 'old-owner/old-run.json.gz'},
+      ]);
+      await zipFile.writeAsBytes(bytes);
+      await BackupService(api: api).restore(zipFile: zipFile);
+
+      // Restoring a track-short archive over the account it came from used to
+      // set track_url = null, orphaning the Storage object and costing the run
+      // its trace. An omitted column is left alone by the upsert.
+      expect(api.upsertedRuns.single.containsKey('track_url'), isFalse);
+      expect(api.trackUploads, isEmpty);
+    });
+
+    test('track_url is re-stamped when the archive does carry the track',
+        () async {
+      final api = _CapturingOnlineApi(uid);
+      final bytes = buildBackupZip(
+        runs: [runRow(id: 'run-1')],
+        tracksByRunId: {
+          'run-1': const [
+            {'lat': 47.37, 'lng': 8.54},
+          ],
+        },
+      );
+      await zipFile.writeAsBytes(bytes);
+      await BackupService(api: api).restore(zipFile: zipFile);
+
+      expect(api.trackUploads, [(uid, 'run-1')]);
+      expect(api.upsertedRuns.single['track_url'], '$uid/run-1.json.gz');
     });
   });
 }
