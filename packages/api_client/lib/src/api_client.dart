@@ -5423,6 +5423,15 @@ class ApiClient {
 
   /// Per-run segment efforts joined to their parent segment + a rank
   /// against the segment's leaderboard. Backs the chips on run-detail.
+  ///
+  /// The ranks come from `segment_effort_ranks` (migration `20270523_001`,
+  /// decisions §594) rather than a count of strictly-faster effort ROWS: a
+  /// rival who has run the segment twice holds two rows, so a raw count
+  /// reports a rank the per-athlete leaderboard the chip links to does not
+  /// give — and it counts the caller's own faster efforts against them. The
+  /// RPC also subtracts blocked athletes, which `segment_efforts` RLS cannot.
+  /// Same contract as [fetchGlobalEffortsForRun] and the web
+  /// `fetchEffortsForRun`, including the `?? 1` degrade on a missing row.
   Future<List<SegmentEffortWithSegment>> fetchEffortsForRunWithSegments(
     String runId,
   ) async {
@@ -5442,24 +5451,27 @@ class ApiClient {
         s['id'] as String: SegmentRow.fromJson(s),
     };
 
-    final out = <SegmentEffortWithSegment>[];
-    for (final eff in efforts) {
-      final seg = segById[eff.segmentId];
-      if (seg == null) continue;
-      // Rank = (count of efforts on this segment with strictly faster
-      // time) + 1. The (segment_id, time_seconds) index covers it.
-      final faster = await _client
-          .from(SegmentEffortRow.table)
-          .count(CountOption.exact)
-          .eq(SegmentEffortRow.colSegmentId, eff.segmentId)
-          .lt(SegmentEffortRow.colTimeSeconds, eff.timeSeconds);
-      out.add(SegmentEffortWithSegment(
-        effort: eff,
-        segment: seg,
-        rank: faster + 1,
-      ));
+    final rankRows = await _client.rpc(
+      'segment_effort_ranks',
+      params: {'p_run_id': runId},
+    );
+    final rankByEffort = <String, int>{};
+    if (rankRows is List) {
+      for (final r in rankRows) {
+        final map = (r as Map).cast<String, dynamic>();
+        rankByEffort[map['effort_id'] as String] = (map['rank'] as num).toInt();
+      }
     }
-    return out;
+
+    return [
+      for (final eff in efforts)
+        if (segById[eff.segmentId] != null)
+          SegmentEffortWithSegment(
+            effort: eff,
+            segment: segById[eff.segmentId]!,
+            rank: rankByEffort[eff.id] ?? 1,
+          ),
+    ];
   }
 
   // -- Row mapping (generated RunRow/RouteRow → domain Run/Route) --
