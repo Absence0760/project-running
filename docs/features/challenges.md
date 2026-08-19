@@ -191,7 +191,7 @@ Components (`apps/web/src/lib/components/`):
 
 Pure logic (`apps/web/src/lib/social/`):
 - `challenge_progress.ts` — see parity section.
-- `leaderboard_standing.ts` — `standingFor(rows, viewerKey)` → the viewer's rank, the board size, how many share their rank, and the nearest entry strictly above / strictly below with the metric units separating them. Rank is derived as one plus the number of strictly better values, which *is* `rank() over (order by value desc)`, so it cannot disagree with the rank the SQL sent and the list renders. Neighbours tie-break on `entryKey` ascending, mirroring the board's `order by rank, <key> nulls last`, so two refreshes name the same entrant. Returns entries, not labels — unit formatting and name/team resolution stay at the UI edge. A pure re-shape of rows the caller already holds: no new query, no new data, and nothing on screen the board below doesn't already show. **Web-only** like `challenge_list.ts` (the mobile challenge detail renders the raw board with no standing summary, so a Dart twin would have no caller). A mobile mirror is owed if that screen ever grows the same card — it is NOT a registered parity pair today, so `check_parity_pair_registry.mjs` does not police it.
+- `leaderboard_standing.ts` — `standingFor(rows, viewerKey)` → the viewer's rank, the board size, how many share their rank, and the nearest entry strictly above / strictly below with the metric units separating them. Rank is derived as one plus the number of strictly better values, which *is* `rank() over (order by value desc)`, so it cannot disagree with the rank the SQL sent and the list renders. Neighbours tie-break on `entryKey` ascending, mirroring the board's `order by rank, <key> nulls last`, so two refreshes name the same entrant. Returns entries, not labels — unit formatting and name/team resolution stay at the UI edge. A pure re-shape of rows the caller already holds: no new query, no new data, and nothing on screen the board below doesn't already show. Twinned by `leaderboard_standing.dart` and registered in both parity registries, as `challenge_list.ts` now is (`challenge_list.dart`, ADR §694) — `check_parity_pair_registry.mjs` polices both.
 
 types.ts overlays (`apps/web/src/lib/types.ts`):
 ```ts
@@ -211,8 +211,9 @@ export type ChallengeWithMeta = Challenge & { participant_count: number; my_valu
 Mirror after web lands. The mobile nav is at its 5-slot ceiling (`Home / Fitness / Log / Social / You`) — **do not add a 6th tab.** Mount challenges as a **sub-tab inside the Social hub** (`social_screen.dart`), matching how web puts it in `/social`, plus a self-hiding card on the Home dashboard.
 
 Files (under `apps/mobile_android/lib/`, then mirror byte-identical to `apps/mobile_ios/lib/` in the **same commit**):
-- `screens/challenges_screen.dart` — Social hub's new Challenges sub-tab (`embedded: true` mode, body-only). Browse + My challenges.
-- `screens/challenge_detail_screen.dart` — hero + progress bar + leaderboard + Join/Leave; admin/creator edit + delete behind `AlertDialog` (destructive-confirm idiom).
+- `screens/challenges_screen.dart` — Social hub's new Challenges sub-tab (`embedded: true` mode, body-only). Browse + My challenges. The joined rows carry the caller's own value, bar, rank and earned badge, folded in from `my_active_challenges` by `mergeMyProgress` and gated by `myProgressView`: a challenge outside that RPC's live-plus-7-day window renders "Progress unavailable" rather than a 0 % bar (ADR §694).
+- `screens/challenge_detail_screen.dart` — hero + progress bar + leaderboard + Join/Leave; admin/creator edit + delete behind `AlertDialog` (destructive-confirm idiom). The caller's value comes off the board the page already holds — `fetchChallengeById` carries none — and the club-vs-club team column resolves through `teamLabel`, never printing a raw club uuid.
+- `widgets/challenge_progress_bar.dart` — the shared bar (value/goal label, complete chip, `ProgressBar`, on-pace hint) plus `challengeValueLabel`, rendered by both screens exactly as web shares `ChallengeProgressBar.svelte`.
 - `widgets/challenge_form_sheet.dart` — create/edit bottom sheet (mirror `club_form_sheet.dart` / `event_form_sheet.dart`).
 - `widgets/challenge_progress_card.dart` — the self-hiding Home dashboard card; renders nothing when `myActiveChallenges` is empty (data-presence self-hide, matching the gym/nutrition cards).
 - `social_service.dart` — add `fetchChallenges`, `fetchChallengeById`, `createChallenge`, `joinChallenge`, `leaveChallenge`, `fetchChallengeLeaderboard`, `myActiveChallenges`, `recomputeChallengeCompletion` (route through `packages/api_client`, not direct `.from`).
@@ -227,6 +228,7 @@ Verify twin parity: `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` empty
 
 One new pair (register it in the conventions parity list + watch with `shared-library-syncer`):
 - **`challenge_progress`** — web `apps/web/src/lib/social/challenge_progress.ts` ↔ mobile `apps/mobile_android/lib/challenge_progress.dart`. Pure functions: `progressFraction(value, goal)` (clamp 0..1, null-goal → null), `formatProgressLabel`-feeding parts (locale/unit-agnostic structured parts, NOT formatted strings — the caller localises), `rankParticipants(entries)` (deterministic sort mirroring `compareLeaderboard`: value desc → user_id asc, assigning dense ranks), and `metricFromActivity(summary, metric, activityTypeFilter)` (the SAME metric-extraction math the SQL aggregate uses — so an offline-optimistic client estimate from local stores can't drift from the server board). Matching test counts both sides (target ~12 each, keep identical).
+- **`challenge_list`** (added 2026-08-19, ADR §694) — web `apps/web/src/lib/social/challenge_list.ts` ↔ mobile `apps/mobile_android/lib/challenge_list.dart`. `mergeMyProgress` folds the `my_active_challenges` aggregate onto a joined-challenge list, `myProgressView` decides what a row may claim (`known` / `notStarted` — the one true zero, the window has not opened — / `unknown`, which must NOT render a bar), and `teamLabel` resolves a club-vs-club row's club without ever falling back to the raw uuid. 18 web / 17 Dart tests: the web unparseable-`starts_at` guard has no analogue against a typed `DateTime`.
 - Reuse the existing `streaks` pair for the `streak_days` metric — do not re-implement streak math.
 
 ## Tests
@@ -251,7 +253,8 @@ pgtap (`apps/backend/supabase/tests/`):
 Mobile (Flutter, in the same commit as each Dart piece, mirrored to iOS twin):
 - `test/challenge_progress_test.dart` — the parity helper (count matches the TS side).
 - `test/challenges_screen_test.dart` — list renders, self-hide when empty (use `tester.runAsync` for store I/O; dialog-scoped finders for duplicate labels per the mobile-test gotchas).
-- `test/challenge_detail_screen_test.dart` — progress bar + Join/Leave + destructive-confirm dialog.
+- `test/challenge_list_test.dart` — the `challenge_list` parity helper (17 Dart against 18 web).
+- `test/challenge_detail_screen_test.dart` — progress bar + Join/Leave + destructive-confirm dialog; plus the board-derived value (never a fabricated zero) and the two `teamLabel` fallbacks.
 - `test/social_service_test.dart` — extend with challenge methods (the file is already in the modified set).
 
 Web unit (`apps/web/src/lib/social/challenge_progress.test.ts`) — `npx tsx --test`, count matches Dart.

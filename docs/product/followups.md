@@ -566,13 +566,32 @@ Two items remain open, deliberately:
 
 ## Challenges: two things this round deliberately did not ship (2026-08-13)
 
-- [ ] **Mobile has no per-challenge progress signal at all.** `challenges_screen.dart`
-  lists joined challenges as plain rows — no bar, no value, no rank — so it does
-  not carry the web list's false-zero bug and needs no urgent mirror. When the
-  mobile list does grow a progress bar, mirror `myProgressView`'s contract with
-  it: the value comes from `my_active_challenges`, and a challenge outside that
-  RPC's live-plus-7-day window has an *unknown* value, not a zero one.
-  `apps/web/src/lib/social/challenge_list.ts` is web-only until then.
+- [x] **CLOSED 2026-08-19 — the mobile list grew the progress signal, and
+  `challenge_list.ts` is a registered parity pair.** `challenge_list.dart`
+  mirrors all three exports (`mergeMyProgress` / `myProgressView` / `teamLabel`)
+  with a case-for-case suite — 17 Dart against 18 web, the odd one out being the
+  unparseable-`starts_at` guard a typed `DateTime` cannot reach — and the pair is
+  registered in **both** registries (`CLAUDE.md` + the syncer table), verified
+  with `node scripts/check_parity_pair_registry.mjs`. `myProgressView`'s contract
+  is mirrored exactly: `SocialService.fetchChallenges` folds
+  `my_active_challenges` onto the joined rows (best-effort — a failed enrichment
+  leaves `myValue` null), a challenge outside the RPC's live-plus-7-day window
+  renders "Progress unavailable — open for your result" instead of a 0 % bar, and
+  the one *known* zero is a window that has not opened yet. Two shape differences
+  are documented rather than smoothed over: Dart has no object spread, so
+  `mergeMyProgress` returns each row paired with its resolved values for
+  `ChallengeView.withProgress` to apply, and the structurally-satisfied
+  `MyProgressRow` bound is a declared abstract interface.
+
+  **One correction to the original claim.** "It does not carry the web list's
+  false-zero bug" was true of the list and false of the screen behind it: the
+  detail screen's bar read `c.myValue ?? 0` while `fetchChallengeById` never
+  fills `myValue`, so every participant was shown a confident zero. It now reads
+  the caller's own row off the board it already holds, like web. Porting
+  `teamLabel` closed a second one the entry did not mention — the club-vs-club
+  board rendered `_clubNames[id] ?? id`, i.e. a raw uuid for any club RLS did not
+  let the viewer read. Both are pinned by widget tests; see
+  [decisions.md § 694](../architecture/decisions.md).
 - [x] **CLOSED 2026-08-13 — `rankParticipants` brokeaks ties in the opposite
   direction to the SQL when
   the tie-break key is null.** `challenge_leaderboard`'s
