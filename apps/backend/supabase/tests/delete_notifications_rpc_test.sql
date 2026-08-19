@@ -1,12 +1,13 @@
 -- delete_notifications(uuid[]) — one dismiss, one transaction.
 --
 -- The client used to serialise the id list into a PostgREST `in` filter, which
--- rides the request URL: past the gateway's request-line budget the DELETE
--- matched nothing and still answered 200, so a >100-row dismiss silently
--- deleted nothing (decisions § 653). Chunking that list fixed the no-op and
--- bought partiality — chunk 3 of 5 can fail with the undo offer already spent.
--- The RPC's array argument travels in the POST body, so there is nothing left
--- to chunk, and one call is one statement in one transaction.
+-- rides the request URL and so left a bulk dismiss at the mercy of the
+-- gateway's request-line budget — a 414 refusal on the local stack past roughly
+-- 200 ids, an empty 200 on the gateway decisions § 653 observed. Chunking that
+-- list dodged the bound and bought partiality instead: chunk 3 of 5 can fail
+-- with the undo offer already spent. The RPC's array argument travels in the
+-- POST body, so there is nothing left to chunk, and one call is one statement
+-- in one transaction.
 --
 -- What is pinned here: the >100 case that started it, the RLS boundary that
 -- keeps the function SECURITY INVOKER honest, all-or-nothing under a failure

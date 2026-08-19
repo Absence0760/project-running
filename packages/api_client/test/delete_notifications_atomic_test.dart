@@ -5,11 +5,12 @@ import 'package:test/test.dart';
 /// Pins that a bulk dismiss stays ONE transaction.
 ///
 /// The method used to hand its id list to `.inFilter`, which PostgREST
-/// serialises into the request URL: past the gateway's request-line budget the
-/// DELETE matched nothing and still answered 200, so a >100-row dismiss
-/// silently deleted zero rows. Chunking that list closed the no-op and opened a
-/// partial one — chunk 3 of 5 can fail with the rows already gone from the list
-/// and the undo offer already spent.
+/// serialises into the request URL, leaving a large dismiss at the mercy of the
+/// gateway's request-line budget — a 414 refusal on the local stack past
+/// roughly 200 ids, an empty 200 on the gateway decisions § 653 observed.
+/// Chunking to dodge that bound opened a partial dismiss instead — chunk 3 of 5
+/// can fail with the rows already gone from the list and the undo offer already
+/// spent.
 ///
 /// `delete_notifications(uuid[])` takes the array in the RPC's POST body, so
 /// there is nothing left to chunk. Atomicity itself is a server property (the
@@ -30,8 +31,9 @@ void main() {
       reason: 'the whole id array must reach the server in one call',
     );
     expect(body, isNot(contains('.inFilter(')),
-        reason: 'an `in` filter past the request-line budget matches nothing '
-            'and still answers 200 — that is the bug the RPC closes');
+        reason: 'an `in` filter past the gateway request-line budget fails, '
+            'and which way it fails is a property of the deployment — that is '
+            'the bug the RPC closes');
   });
 
   test('nothing chunks or loops the id list', () {

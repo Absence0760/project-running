@@ -1,11 +1,15 @@
 -- Dismissing a notification group is ONE transaction again.
 --
 -- The client used to hand the whole id list to a single PostgREST `in` filter.
--- That filter is serialised into the request URL, so a list past the gateway's
--- request-line budget came back EMPTY with a 200 — a >100-row dismiss silently
--- deleted nothing (decisions § 653). The fix chunked the list, which traded the
--- silent no-op for a partial one: chunk 3 of 5 can fail and leave the inbox
--- half-dismissed, with the undo offer already spent.
+-- That filter is serialised into the request URL, which puts a bulk dismiss at
+-- the mercy of whatever request-line budget the gateway in front of PostgREST
+-- happens to enforce: measured against the local stack the request is REFUSED
+-- with a 414 past roughly 200 ids, while decisions § 653 records a gateway that
+-- answered 200 with an empty match instead. Either way the rows survive a large
+-- dismiss, and which of the two you get is a property of the deployment rather
+-- than of the code. The fix chunked the list, which bought a third failure:
+-- chunk 3 of 5 can fail and leave the inbox half-dismissed, with the undo offer
+-- already spent.
 --
 -- Neither shape is right, because the client was choosing between them at all.
 -- An array argument travels in the RPC's POST body, which carries no such

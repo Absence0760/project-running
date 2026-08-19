@@ -8314,11 +8314,11 @@ export async function markAllNotificationsRead(): Promise<void> {
 }
 
 // Dismissing a group is ONE intent, so it is one statement in one
-// transaction. An `in` filter would ride the request URL and come back
-// matching nothing past the gateway's budget (decisions § 653), and
-// chunking the list only trades that silent no-op for a partial dismiss
-// the spent undo offer can no longer take back. The RPC takes the array in
-// the POST body and refuses past its own cap rather than truncating.
+// transaction. An `in` filter rides the request URL, which leaves a large
+// dismiss at the mercy of the gateway's request-line budget (decisions
+// § 653), and chunking to dodge that only trades the failure for a partial
+// dismiss the spent undo offer can no longer take back. The RPC takes the
+// array in the POST body and refuses past its own cap rather than truncating.
 export async function deleteNotifications(ids: string[]): Promise<void> {
 	if (ids.length === 0) return;
 	const { error } = await supabase.rpc('delete_notifications', { p_ids: ids });

@@ -452,11 +452,12 @@ test('deleteNotifications is one delete_notifications RPC call, guards empty, su
 	// deleteNotification(id) in a for-loop — one DELETE per member (issue
 	// #350). Batching it into `.in('id', ids)` fixed the N+1 and inherited a
 	// worse failure: PostgREST serialises an `in` filter into the request
-	// URL, so a list past the gateway's request-line budget matched NOTHING
-	// and still answered 200 — a >100-row dismiss silently deleted zero rows
-	// (decisions § 653). Chunking the list is not the fix either; it trades
-	// the silent no-op for a partial dismiss, and the undo offer is already
-	// spent by the time chunk 3 of 5 fails.
+	// URL, so a large dismiss is at the mercy of the gateway's request-line
+	// budget — a 414 refusal on the local stack past roughly 200 ids, an
+	// empty 200 on the gateway decisions § 653 observed. Chunking to dodge
+	// that bound is not the fix either; it trades the failure for a partial
+	// dismiss, and the undo offer is already spent by the time chunk 3 of 5
+	// fails.
 	//
 	// The array rides the RPC's POST body, which has no such bound, so the
 	// whole dismiss is ONE statement in ONE transaction (migration
@@ -474,7 +475,7 @@ test('deleteNotifications is one delete_notifications RPC call, guards empty, su
 	assert.doesNotMatch(
 		body,
 		/\.in\(/,
-		"deleteNotifications must not go back to an `in` filter — past the request-line budget it matches nothing and still answers 200 (decisions § 653).",
+		'deleteNotifications must not go back to an `in` filter — past the gateway request-line budget it fails, and which way it fails is a property of the deployment (decisions § 653).',
 	);
 	assert.doesNotMatch(
 		body,

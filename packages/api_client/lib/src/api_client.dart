@@ -3030,10 +3030,11 @@ class ApiClient {
   /// Dismiss one or more notifications in a single statement. Dismissing a
   /// collapsed group is one user intent, so it is one transaction: the RPC
   /// takes the whole id array in its POST body, which carries none of the
-  /// request-line bound an `inFilter` would have hit, and chunking would only
-  /// trade that silent no-op for a partial dismiss the spent undo offer can no
-  /// longer take back. Ownership is the RLS delete policy's job — the RPC is
-  /// SECURITY INVOKER — so no `user_id` filter is repeated here.
+  /// gateway request-line bound an `inFilter` would have been subject to, and
+  /// chunking to dodge that bound only trades the failure for a partial
+  /// dismiss the spent undo offer can no longer take back. Ownership is the
+  /// RLS delete policy's job — the RPC is SECURITY INVOKER — so no `user_id`
+  /// filter is repeated here.
   /// Mirrors web `deleteNotifications`.
   Future<void> deleteNotifications(List<String> ids) async {
     if (ids.isEmpty) return;
