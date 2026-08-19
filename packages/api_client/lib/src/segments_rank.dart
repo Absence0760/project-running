@@ -57,6 +57,14 @@ const kSegmentAgeBands = <String>[
   '75+',
 ];
 
+/// How much of the famous-segment catalogue one read pulls (decisions §233).
+/// This is the catalogue BOUND, not a page size: the browse surface filters,
+/// searches and sorts the whole set client-side, so a smaller number would
+/// silently drop the alphabetical tail. Mirrors
+/// `GLOBAL_SEGMENT_SCORING_LIMIT` in `apps/web/src/lib/core/data_normalise.ts`,
+/// which bounds the same table for the same reason.
+const int kGlobalSegmentCatalogueLimit = 500;
+
 /// Tooltip / accessibility label for the KOM/QOM crown badge.
 /// Describes which tier the rank-1 holder owns ("Fastest woman 35-39",
 /// "Fastest overall", etc.) given the active filter. Mirrors

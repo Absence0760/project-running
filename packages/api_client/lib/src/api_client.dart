@@ -4121,6 +4121,148 @@ class ApiClient {
     );
   }
 
+  // ────── Global / famous-segment catalogue (decisions §233) ──────
+
+  /// Browse the curated catalogue. Filtering, searching and sorting happen
+  /// client-side over the whole fetched set (`catalogue_browse.dart`) because
+  /// the v1 catalogue is bounded by [kGlobalSegmentCatalogueLimit].
+  ///
+  /// Throws on failure rather than degrading to `[]`, so the browse screen can
+  /// tell an outage from a genuinely empty catalogue — the same contract web's
+  /// `fetchGlobalSegmentsWithError` carries in its return type.
+  Future<List<GlobalSegmentRow>> fetchGlobalSegments({
+    int limit = kGlobalSegmentCatalogueLimit,
+  }) async {
+    final data = await _client
+        .from(GlobalSegmentRow.table)
+        .select()
+        .eq(GlobalSegmentRow.colIsActive, true)
+        .order(GlobalSegmentRow.colName, ascending: true)
+        .limit(limit);
+    return data
+        .map<GlobalSegmentRow>((r) => GlobalSegmentRow.fromJson(r))
+        .toList();
+  }
+
+  /// One catalogue segment, or null when it is absent or deactivated.
+  Future<GlobalSegmentRow?> fetchGlobalSegment(String id) async {
+    final data = await _client
+        .from(GlobalSegmentRow.table)
+        .select()
+        .eq(GlobalSegmentRow.colId, id)
+        .eq(GlobalSegmentRow.colIsActive, true)
+        .maybeSingle();
+    return data == null ? null : GlobalSegmentRow.fromJson(data);
+  }
+
+  /// Block-guarded catalogue-segment leaderboard. Mirrors
+  /// [fetchSegmentLeaderboardTiered] but calls `global_segment_leaderboard`
+  /// (migration 20270411_001) — no per-route visibility branch, since the
+  /// catalogue is public; per-effort run privacy plus the block graph are
+  /// applied server-side. The RPC returns already-ordered rows; the client
+  /// assigns standard competition ranks.
+  Future<List<GlobalSegmentLeaderboardEntry>> fetchGlobalSegmentLeaderboard(
+    String segmentId, {
+    String? gender,
+    String? ageBand,
+    String? clubId,
+    int limit = 50,
+  }) async {
+    final rows = await _client.rpc(
+      'global_segment_leaderboard',
+      params: {
+        'p_segment_id': segmentId,
+        'p_gender': gender,
+        'p_age_band': ageBand,
+        'p_limit': limit,
+        'p_club_id': clubId,
+      },
+    );
+    if (rows is! List || rows.isEmpty) return const [];
+    final maps = [
+      for (final r in rows) (r as Map).cast<String, dynamic>(),
+    ];
+    final ranks = assignCompetitionRanks(
+      maps,
+      (r) => (r['time_seconds'] as num),
+    );
+    return [
+      for (var i = 0; i < maps.length; i++)
+        GlobalSegmentLeaderboardEntry(
+          effort: GlobalSegmentEffortRow(
+            id: maps[i]['effort_id'] as String,
+            globalSegmentId: segmentId,
+            runId: maps[i]['run_id'] as String,
+            userId: maps[i]['user_id'] as String,
+            timeSeconds: (maps[i]['time_seconds'] as num).toDouble(),
+            startedAt: DateTime.parse(maps[i]['started_at'] as String),
+            createdAt: DateTime.parse(maps[i]['started_at'] as String),
+          ),
+          athlete: PublicProfile(
+            id: maps[i]['user_id'] as String,
+            displayName: maps[i]['display_name'] as String?,
+            avatarUrl: maps[i]['avatar_url'] as String?,
+          ),
+          rank: ranks[i],
+        ),
+    ];
+  }
+
+  /// Catalogue-segment efforts a run earned, joined to the segment and ranked
+  /// in one round-trip via `global_segment_effort_ranks`. The catalogue twin of
+  /// [fetchEffortsForRunWithSegments], and cheaper: the ranks arrive from the
+  /// RPC rather than one count query per effort.
+  ///
+  /// An effort whose segment row is missing (deactivated between the two reads)
+  /// is dropped rather than rendered nameless.
+  Future<List<GlobalSegmentEffortWithSegment>> fetchGlobalEffortsForRun(
+    String runId,
+  ) async {
+    final effortRows = await _client
+        .from(GlobalSegmentEffortRow.table)
+        .select()
+        .eq(GlobalSegmentEffortRow.colRunId, runId);
+    if (effortRows.isEmpty) return const [];
+    final efforts = effortRows
+        .map<GlobalSegmentEffortRow>((r) => GlobalSegmentEffortRow.fromJson(r))
+        .toList();
+
+    final segmentIds = efforts.map((e) => e.globalSegmentId).toSet().toList();
+    final segRows = await readChunked(
+      segmentIds,
+      (chunk) async => _client
+          .from(GlobalSegmentRow.table)
+          .select()
+          .inFilter(GlobalSegmentRow.colId, chunk),
+    );
+    final segById = {
+      for (final s in segRows)
+        s['id'] as String: GlobalSegmentRow.fromJson(s),
+    };
+
+    final rankRows = await _client.rpc(
+      'global_segment_effort_ranks',
+      params: {'p_run_id': runId},
+    );
+    final rankByEffort = <String, int>{};
+    if (rankRows is List) {
+      for (final r in rankRows) {
+        final map = (r as Map).cast<String, dynamic>();
+        rankByEffort[map['effort_id'] as String] = (map['rank'] as num).toInt();
+      }
+    }
+
+    return [
+      for (final e in efforts)
+        if (segById[e.globalSegmentId] != null)
+          GlobalSegmentEffortWithSegment(
+            effort: e,
+            segment: segById[e.globalSegmentId]!,
+            rank: rankByEffort[e.id] ?? 1,
+          ),
+    ];
+  }
+
   // ──────────────────── Privacy zones (P1.C) ────────────────────
 
   /// Server-side privacy-zone clipping. The zones never reach the
