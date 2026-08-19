@@ -170,11 +170,31 @@ Future<void> _pumpUntil(
   }
 }
 
+/// Sentinel for "leave the draft marker at its well-formed shape" — null is a
+/// value a caller wants to seed, so it cannot double as the default.
+const Object _defaultMarker = Object();
+
+const Map<String, Object?> _draftSnapshot = {
+  'saved_at': '2026-03-01T10:05:00Z',
+  'results': [
+    {
+      'step_index': 0,
+      'status': 'completed',
+      'reps': 5,
+      'weight_kg': 80.0,
+      'rpe': null,
+      'duration_s': null,
+      'distance_m': null,
+    },
+  ],
+};
+
 /// A store pair seeded with an in-flight guided-session draft (one logged
 /// bench set of a two-set routine) plus the routine it came from — the state
 /// a mid-session process kill leaves behind.
 Future<({LocalGymStore store, LocalRoutineStore routines, Directory dir})>
-    _seedDraft(WidgetTester tester, {bool withRoutine = true}) async {
+    _seedDraft(WidgetTester tester,
+        {bool withRoutine = true, Object? draftMarker = _defaultMarker}) async {
   late LocalGymStore store;
   late LocalRoutineStore routines;
   late Directory dir;
@@ -201,20 +221,8 @@ Future<({LocalGymStore store, LocalRoutineStore routines, Directory dir})>
       ],
       metadata: {
         'routine_id': 'routine-1',
-        'gym_session_draft': {
-          'saved_at': '2026-03-01T10:05:00Z',
-          'results': [
-            {
-              'step_index': 0,
-              'status': 'completed',
-              'reps': 5,
-              'weight_kg': 80.0,
-              'rpe': null,
-              'duration_s': null,
-              'distance_m': null,
-            },
-          ],
-        },
+        'gym_session_draft':
+            identical(draftMarker, _defaultMarker) ? _draftSnapshot : draftMarker,
       },
     );
     if (withRoutine) {
@@ -666,6 +674,25 @@ void main() {
       await tester.pump();
 
       expect(find.text('Workout in progress'), findsNothing);
+    });
+
+    // decisions.md § 662: the marker is a draft only when it is a JSON
+    // object. A bare presence check offered a resume the runner's own routine
+    // history — and the RPC behind it — both count as a session performed.
+    testWidgets('a non-object under the draft key surfaces no resume card',
+        (tester) async {
+      for (final marker in <Object?>[<dynamic>[], 'draft', 7, null]) {
+        final s = await _seedDraft(tester, draftMarker: marker);
+        addTearDown(() => s.dir.deleteSync(recursive: true));
+
+        await tester.pumpWidget(_gymScreen(s.store, s.routines));
+        await tester.pump();
+
+        expect(find.text('Workout in progress'), findsNothing,
+            reason: 'marker $marker is not a JSON object, so not a draft');
+        expect(find.text('Bench routine'), findsOneWidget,
+            reason: 'the row still lists as a plain performed workout');
+      }
     });
 
     testWidgets('no card when the draft routine no longer exists',

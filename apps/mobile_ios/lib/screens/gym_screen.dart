@@ -6,6 +6,7 @@ import 'package:ui_kit/ui_kit.dart';
 import '../adaptive_width.dart';
 import '../exercise_records.dart';
 import '../gym_prs.dart';
+import '../gym_session_draft.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -330,10 +331,8 @@ class _GymScreenState extends State<GymScreen> {
       if (!_routineStoreReady) return null;
       for (final w in widget.store.workouts) {
         final meta = w.row['metadata'];
-        if (meta is! Map || meta[MetadataKeys.gymSessionDraft] == null) {
-          continue;
-        }
-        final rid = meta[MetadataKeys.routineId];
+        if (!hasGymSessionDraft(meta)) continue;
+        final rid = (meta as Map)[MetadataKeys.routineId];
         final routine = rid is String ? _routineStore.byId(rid) : null;
         if (routine == null) continue;
         return (draft: w, routine: routine);
