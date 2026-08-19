@@ -11,10 +11,10 @@
 -- chunk 3 of 5 can fail and leave the inbox half-dismissed, with the undo offer
 -- already spent.
 --
--- Neither shape is right, because the client was choosing between them at all.
--- An array argument travels in the RPC's POST body, which carries no such
--- bound, and one function call is one statement in one transaction: every id
--- goes, or none does.
+-- The mistake was having the client choose between those shapes at all. An
+-- array argument travels in the RPC's POST body, which carries no such bound,
+-- and one function call is one statement in one transaction: every id goes, or
+-- none does.
 --
 -- SECURITY INVOKER, and the RLS policy is the whole authorisation story. The
 -- "users delete their own notifications" policy (20260528000001) already reads
