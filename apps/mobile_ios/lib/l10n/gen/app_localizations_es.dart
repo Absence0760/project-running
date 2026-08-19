@@ -13124,4 +13124,100 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get comebackFootnote =>
       'Tu curva de carga de entrenamiento volverá cuando encadenes de nuevo unas semanas constantes.';
+
+  @override
+  String get segmentCatalogueTitle => 'Segmentos famosos';
+
+  @override
+  String get segmentCatalogueIntro =>
+      'Subidas, puentes y vueltas al parque seleccionados de todo el mundo. Corre uno y tu tiempo entrará automáticamente en su clasificación.';
+
+  @override
+  String get segmentCatalogueSearchLabel => 'Buscar';
+
+  @override
+  String get segmentCatalogueSearchHint => 'Nombre o lugar';
+
+  @override
+  String get segmentCatalogueRegion => 'Región';
+
+  @override
+  String get segmentCatalogueAllRegions => 'Todas las regiones';
+
+  @override
+  String get segmentCatalogueSurface => 'Superficie';
+
+  @override
+  String get segmentCatalogueAllSurfaces => 'Todas las superficies';
+
+  @override
+  String get segmentCatalogueSort => 'Ordenar';
+
+  @override
+  String get segmentCatalogueSortName => 'Nombre';
+
+  @override
+  String get segmentCatalogueSortShortest => 'Más cortos primero';
+
+  @override
+  String get segmentCatalogueSortLongest => 'Más largos primero';
+
+  @override
+  String get segmentCatalogueSortClimb => 'Más desnivel';
+
+  @override
+  String segmentCatalogueCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count segmentos',
+      one: '$count segmento',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get segmentCatalogueLoadFailed =>
+      'No se pudo cargar el catálogo de segmentos.';
+
+  @override
+  String get segmentCatalogueEmpty =>
+      'Aún no hay segmentos famosos en el catálogo.';
+
+  @override
+  String get segmentCatalogueNoMatches =>
+      'Ningún segmento coincide con estos filtros: prueba a ampliarlos.';
+
+  @override
+  String get segmentCatalogueBrowseAll => 'Ver todos';
+
+  @override
+  String get segmentCatalogueNotFoundTitle => 'Segmento no encontrado';
+
+  @override
+  String get segmentCatalogueNotFoundBody =>
+      'Este segmento no está en el catálogo o ha sido retirado.';
+
+  @override
+  String get segmentCatalogueDetailFailedTitle =>
+      'No se pudo cargar este segmento';
+
+  @override
+  String get segmentCatalogueDetailFailedBody =>
+      'Comprueba tu conexión e inténtalo de nuevo.';
+
+  @override
+  String get segmentCatalogueStatDistance => 'Distancia';
+
+  @override
+  String get segmentCatalogueStatElevation => 'Desnivel positivo';
+
+  @override
+  String get segmentCatalogueStatSurface => 'Superficie';
+
+  @override
+  String get segmentCatalogueLeaderboard => 'Clasificación';
+
+  @override
+  String get runSurfaceTabSegments => 'Segmentos';
 }

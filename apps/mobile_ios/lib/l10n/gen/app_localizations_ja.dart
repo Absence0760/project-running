@@ -12516,4 +12516,94 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get comebackFootnote => '安定した週が数週間そろえば、トレーニング負荷の推移が再び表示されます。';
+
+  @override
+  String get segmentCatalogueTitle => '有名なセグメント';
+
+  @override
+  String get segmentCatalogueIntro =>
+      '世界中から選んだ坂、橋、公園の周回コース。走るだけで、あなたのタイムが自動でランキングに登録されます。';
+
+  @override
+  String get segmentCatalogueSearchLabel => '検索';
+
+  @override
+  String get segmentCatalogueSearchHint => '名前または場所';
+
+  @override
+  String get segmentCatalogueRegion => '地域';
+
+  @override
+  String get segmentCatalogueAllRegions => 'すべての地域';
+
+  @override
+  String get segmentCatalogueSurface => '路面';
+
+  @override
+  String get segmentCatalogueAllSurfaces => 'すべての路面';
+
+  @override
+  String get segmentCatalogueSort => '並べ替え';
+
+  @override
+  String get segmentCatalogueSortName => '名前';
+
+  @override
+  String get segmentCatalogueSortShortest => '短い順';
+
+  @override
+  String get segmentCatalogueSortLongest => '長い順';
+
+  @override
+  String get segmentCatalogueSortClimb => '獲得標高が多い順';
+
+  @override
+  String segmentCatalogueCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件のセグメント',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get segmentCatalogueLoadFailed => 'セグメントカタログを読み込めませんでした。';
+
+  @override
+  String get segmentCatalogueEmpty => 'カタログにはまだ有名なセグメントがありません。';
+
+  @override
+  String get segmentCatalogueNoMatches =>
+      'これらのフィルターに一致するセグメントはありません。条件を広げてみてください。';
+
+  @override
+  String get segmentCatalogueBrowseAll => 'すべて見る';
+
+  @override
+  String get segmentCatalogueNotFoundTitle => 'セグメントが見つかりません';
+
+  @override
+  String get segmentCatalogueNotFoundBody => 'このセグメントはカタログにないか、削除されています。';
+
+  @override
+  String get segmentCatalogueDetailFailedTitle => 'このセグメントを読み込めませんでした';
+
+  @override
+  String get segmentCatalogueDetailFailedBody => '接続を確認してもう一度お試しください。';
+
+  @override
+  String get segmentCatalogueStatDistance => '距離';
+
+  @override
+  String get segmentCatalogueStatElevation => '獲得標高';
+
+  @override
+  String get segmentCatalogueStatSurface => '路面';
+
+  @override
+  String get segmentCatalogueLeaderboard => 'ランキング';
+
+  @override
+  String get runSurfaceTabSegments => 'セグメント';
 }

@@ -21841,6 +21841,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your training load ramp comes back once you have a few consistent weeks again.'**
   String get comebackFootnote;
+
+  /// Screen title for the famous-segment catalogue browse list
+  ///
+  /// In en, this message translates to:
+  /// **'Famous segments'**
+  String get segmentCatalogueTitle;
+
+  /// Intro line under the catalogue title
+  ///
+  /// In en, this message translates to:
+  /// **'Curated climbs, bridges and park loops from around the world. Run one and your time lands on its leaderboard automatically.'**
+  String get segmentCatalogueIntro;
+
+  /// Label for the catalogue search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get segmentCatalogueSearchLabel;
+
+  /// Hint text in the catalogue search field
+  ///
+  /// In en, this message translates to:
+  /// **'Name or place'**
+  String get segmentCatalogueSearchHint;
+
+  /// Label for the catalogue region filter
+  ///
+  /// In en, this message translates to:
+  /// **'Region'**
+  String get segmentCatalogueRegion;
+
+  /// Catalogue region filter option that clears the filter
+  ///
+  /// In en, this message translates to:
+  /// **'All regions'**
+  String get segmentCatalogueAllRegions;
+
+  /// Label for the catalogue surface filter
+  ///
+  /// In en, this message translates to:
+  /// **'Surface'**
+  String get segmentCatalogueSurface;
+
+  /// Catalogue surface filter option that clears the filter
+  ///
+  /// In en, this message translates to:
+  /// **'All surfaces'**
+  String get segmentCatalogueAllSurfaces;
+
+  /// Label for the catalogue sort selector
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get segmentCatalogueSort;
+
+  /// Catalogue sort option — alphabetical by name
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get segmentCatalogueSortName;
+
+  /// Catalogue sort option — shortest segment first
+  ///
+  /// In en, this message translates to:
+  /// **'Shortest first'**
+  String get segmentCatalogueSortShortest;
+
+  /// Catalogue sort option — longest segment first
+  ///
+  /// In en, this message translates to:
+  /// **'Longest first'**
+  String get segmentCatalogueSortLongest;
+
+  /// Catalogue sort option — most elevation gain first
+  ///
+  /// In en, this message translates to:
+  /// **'Most climb'**
+  String get segmentCatalogueSortClimb;
+
+  /// Count of segments currently shown by the catalogue filters
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} segment} other{{count} segments}}'**
+  String segmentCatalogueCount(int count);
+
+  /// Error state when the catalogue fetch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load the segment catalogue.'**
+  String get segmentCatalogueLoadFailed;
+
+  /// Empty state when the catalogue itself holds no segments
+  ///
+  /// In en, this message translates to:
+  /// **'No famous segments in the catalogue yet.'**
+  String get segmentCatalogueEmpty;
+
+  /// Empty state when the active filters match no segment
+  ///
+  /// In en, this message translates to:
+  /// **'No segments match these filters — try widening them.'**
+  String get segmentCatalogueNoMatches;
+
+  /// Link from a run’s catalogue efforts to the whole catalogue
+  ///
+  /// In en, this message translates to:
+  /// **'Browse all'**
+  String get segmentCatalogueBrowseAll;
+
+  /// Title when a catalogue segment id resolves to nothing
+  ///
+  /// In en, this message translates to:
+  /// **'Segment not found'**
+  String get segmentCatalogueNotFoundTitle;
+
+  /// Body when a catalogue segment id resolves to nothing
+  ///
+  /// In en, this message translates to:
+  /// **'This segment isn’t in the catalogue, or has been retired.'**
+  String get segmentCatalogueNotFoundBody;
+
+  /// Title when the catalogue segment detail fetch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load this segment'**
+  String get segmentCatalogueDetailFailedTitle;
+
+  /// Body when the catalogue segment detail fetch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Check your connection and try again.'**
+  String get segmentCatalogueDetailFailedBody;
+
+  /// Stat label for a catalogue segment’s distance
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get segmentCatalogueStatDistance;
+
+  /// Stat label for a catalogue segment’s elevation gain
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation gain'**
+  String get segmentCatalogueStatElevation;
+
+  /// Stat label for a catalogue segment’s surface
+  ///
+  /// In en, this message translates to:
+  /// **'Surface'**
+  String get segmentCatalogueStatSurface;
+
+  /// Section header for a catalogue segment’s leaderboard
+  ///
+  /// In en, this message translates to:
+  /// **'Leaderboard'**
+  String get segmentCatalogueLeaderboard;
+
+  /// Run-surface peer strip entry for the famous-segment catalogue
+  ///
+  /// In en, this message translates to:
+  /// **'Segments'**
+  String get runSurfaceTabSegments;
 }
 
 class _AppLocalizationsDelegate
