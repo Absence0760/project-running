@@ -36,6 +36,25 @@ export interface BackupProgress {
  */
 export const TRACK_DOWNLOAD_CONCURRENCY = 6;
 
+/**
+ * What the writer put in an archive it just finished.
+ *
+ * The row reads that feed the writer are uncapped, so the only way a
+ * web archive can come up short of the account is a blob whose download
+ * failed. `incomplete` names the sections that did, in the same
+ * vocabulary the Go writer publishes (`BuildBackupZip` in
+ * `apps/job_worker/internal/dataexport/server.go`) and the mobile writer
+ * mirrors ([decisions.md § 668](../../../../docs/architecture/decisions.md)),
+ * so one reader understands an archive from any writer.
+ */
+export interface BackupArchive {
+	blob: Blob;
+	/** Sorted section identifiers that came up short. Empty when whole. */
+	incomplete: string[];
+	blobsWanted: number;
+	blobsWritten: number;
+}
+
 export interface BuildBackupZipOptions {
 	runsOut: Record<string, unknown>[];
 	routesOut: Record<string, unknown>[];
@@ -49,7 +68,9 @@ export interface BuildBackupZipOptions {
 	onProgress?: (p: BackupProgress) => void;
 }
 
-export async function buildBackupZip(opts: BuildBackupZipOptions): Promise<Blob> {
+export async function buildBackupZip(
+	opts: BuildBackupZipOptions
+): Promise<BackupArchive> {
 	const concurrency = opts.concurrency ?? TRACK_DOWNLOAD_CONCURRENCY;
 	if (concurrency < 1) {
 		throw new Error('concurrency must be >= 1');
@@ -91,10 +112,12 @@ export async function buildBackupZip(opts: BuildBackupZipOptions): Promise<Blob>
 		);
 		for (const result of pulls) {
 			if (result.status !== 'fulfilled') {
-				// Swallow individual download failures — the run row
-				// still ships in `runs.json`, restore will land it
-				// without a track (`r.track = []`). Same partial-
-				// success contract the old loop had.
+				// One dead download must not sink the archive — the run
+				// row still ships in `runs.json` and restore lands it
+				// trackless. But that is also the only way this file can
+				// now be short of the account, so the shortfall leaves
+				// the function in the returned summary and in the
+				// manifest rather than stopping at a console line.
 				console.warn('track download failed', result.reason);
 				continue;
 			}
@@ -115,6 +138,7 @@ export async function buildBackupZip(opts: BuildBackupZipOptions): Promise<Blob>
 		});
 	}
 
+	const incomplete = tracksAdded < opts.runsWithTracks.length ? ['tracks'] : [];
 	const manifest = {
 		format: BACKUP_FORMAT,
 		version: BACKUP_VERSION,
@@ -126,14 +150,21 @@ export async function buildBackupZip(opts: BuildBackupZipOptions): Promise<Blob>
 			routes: opts.routesOut.length,
 			goals: 0,
 			tracks: tracksAdded
-		}
+		},
+		complete: incomplete.length === 0,
+		incomplete
 	};
 	await zipWriter.add('manifest.json', new TextReader(JSON.stringify(manifest, null, 2)));
 
 	onProgress?.({ stage: 'writing', current: 0, total: 1 });
 	const blob = await zipWriter.close();
 	onProgress?.({ stage: 'done', current: 1, total: 1 });
-	return blob;
+	return {
+		blob,
+		incomplete,
+		blobsWanted: opts.runsWithTracks.length,
+		blobsWritten: tracksAdded
+	};
 }
 
 function stripId(row: Record<string, unknown>): Record<string, unknown> {

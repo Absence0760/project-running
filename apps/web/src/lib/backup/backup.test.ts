@@ -20,7 +20,7 @@ function gzipOf(_payload: object): Uint8Array {
 }
 
 test('buildBackupZip: writes a valid archive with all four metadata files', async () => {
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: [{ id: 'r-1', distance_m: 5000 }],
 		routesOut: [{ id: 'rt-1', name: 'Park loop' }],
 		profile: { username: 'tester' },
@@ -33,7 +33,7 @@ test('buildBackupZip: writes a valid archive with all four metadata files', asyn
 
 	// Round-trip via JSZip (the existing restore path uses it; pinning
 	// this proves the new writer hasn't drifted from what restore reads).
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
 
 	const manifestRaw = await zip.file('manifest.json')!.async('string');
@@ -114,7 +114,7 @@ test('buildBackupZip: a single download failure does not sink the rest', async (
 		{ id: 'r-good-2', track_url: 'uid/r-good-2.json.gz' }
 	];
 
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: runs,
 		routesOut: [],
 		profile: null,
@@ -126,16 +126,54 @@ test('buildBackupZip: a single download failure does not sink the rest', async (
 		concurrency: 4
 	});
 
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
-	// Healthy runs land in the archive; the bad one is silently absent.
+	// Healthy runs land in the archive; the bad one is absent.
 	assert.ok(zip.file('tracks/r-good-1.json.gz'), 'r-good-1 track must be present');
 	assert.ok(zip.file('tracks/r-good-2.json.gz'), 'r-good-2 track must be present');
 	assert.equal(zip.file('tracks/r-bad.json.gz'), null);
 
-	// Manifest counts reflect only the tracks actually added.
+	// Manifest counts reflect only the tracks actually added — and, since
+	// the skip is the ONLY way this file can be short of the account, the
+	// manifest says outright that it is.
 	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
 	assert.equal(manifest.counts.tracks, 2);
+	assert.equal(manifest.complete, false);
+	assert.deepEqual(manifest.incomplete, ['tracks']);
+
+	// The same verdict reaches the caller, which is what the download
+	// surface discloses without re-reading the zip it just built.
+	assert.equal(archive.incomplete.length, 1);
+	assert.equal(archive.blobsWanted, 3);
+	assert.equal(archive.blobsWritten, 2);
+});
+
+test('buildBackupZip: a whole archive declares itself complete', async () => {
+	const runs = [
+		{ id: 'r-1', track_url: 'uid/r-1.json.gz' },
+		{ id: 'r-2', track_url: 'uid/r-2.json.gz' }
+	];
+	const archive = await buildBackupZip({
+		runsOut: runs,
+		routesOut: [],
+		profile: null,
+		settingsPrefs: {},
+		userId: 'uid',
+		exportedFrom: 'test',
+		runsWithTracks: runs,
+		fetchTrackBytes: async () => gzipOf([])
+	});
+
+	const zip = await JSZip.loadAsync(new Uint8Array(await archive.blob.arrayBuffer()));
+	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+	// Both halves are emitted on the happy path too: a reader must be able
+	// to tell "this writer says it is whole" from "this writer says
+	// nothing", which is what an older archive does.
+	assert.equal(manifest.complete, true);
+	assert.deepEqual(manifest.incomplete, []);
+	assert.deepEqual(archive.incomplete, []);
+	assert.equal(archive.blobsWanted, 2);
+	assert.equal(archive.blobsWritten, 2);
 });
 
 test('buildBackupZip: empty runsWithTracks produces a valid manifest-only archive', async () => {
@@ -145,7 +183,7 @@ test('buildBackupZip: empty runsWithTracks produces a valid manifest-only archiv
 		return gzipOf([]);
 	};
 
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: [],
 		routesOut: [],
 		profile: null,
@@ -157,10 +195,13 @@ test('buildBackupZip: empty runsWithTracks produces a valid manifest-only archiv
 	});
 
 	assert.equal(calls, 0, 'no tracks → no fetcher calls');
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
 	const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
 	assert.equal(manifest.counts.tracks, 0);
+	// An account with nothing to download is whole, not short.
+	assert.equal(manifest.complete, true);
+	assert.deepEqual(manifest.incomplete, []);
 });
 
 test('buildBackupZip: rejects concurrency < 1', async () => {
@@ -201,7 +242,7 @@ test('buildBackupZip: emits stage + tracks + done progress events in order', asy
 });
 
 test('buildBackupZip: profile id field is stripped to keep the archive re-homeable', async () => {
-	const blob = await buildBackupZip({
+	const archive = await buildBackupZip({
 		runsOut: [],
 		routesOut: [],
 		profile: { id: 'old-user-uuid', username: 'tester' },
@@ -211,7 +252,7 @@ test('buildBackupZip: profile id field is stripped to keep the archive re-homeab
 		runsWithTracks: [],
 		fetchTrackBytes: async () => new Uint8Array()
 	});
-	const buf = new Uint8Array(await blob.arrayBuffer());
+	const buf = new Uint8Array(await archive.blob.arrayBuffer());
 	const zip = await JSZip.loadAsync(buf);
 	const profile = JSON.parse(await zip.file('profile.json')!.async('string'));
 	assert.equal(profile.profile.username, 'tester');

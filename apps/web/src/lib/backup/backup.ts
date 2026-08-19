@@ -2,7 +2,7 @@ import { supabase } from '../core/supabase';
 import { TABLES, BUCKETS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
 import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
-import type { BackupProgress } from './backup_writer';
+import type { BackupArchive, BackupProgress } from './backup_writer';
 import { parseBackupArchive } from './backup_reader';
 import {
 	restoreOrchestrate,
@@ -29,13 +29,23 @@ import {
  */
 
 export { BACKUP_FORMAT, BACKUP_VERSION };
-export type { BackupProgress };
+export type { BackupArchive, BackupProgress };
 
 export type { RestoreProgress, RestoreResult } from './restore_orchestrator';
 
+/**
+ * Build the account's local backup archive.
+ *
+ * Returns the writer's own verdict alongside the bytes, not just the
+ * bytes: a track whose download failed is skipped so one dead blob
+ * can't sink the file, which makes the returned `incomplete` and the
+ * archive's manifest the only record that it is short. The caller has
+ * to disclose that — an archive that reads as whole is what someone
+ * wipes a device on.
+ */
 export async function createBackup(
 	onProgress?: (p: BackupProgress) => void
-): Promise<Blob> {
+): Promise<BackupArchive> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 

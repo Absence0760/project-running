@@ -30,6 +30,39 @@ export interface RestoreResult {
 	tracksUploaded: number;
 	profileRestored: boolean;
 	warnings: string[];
+	/** The archive's own `complete: false` verdict, carried to the UI. */
+	archiveIncomplete: boolean;
+	/** Section identifiers the archive named as short. May be empty. */
+	archiveIncompleteSections: string[];
+}
+
+/**
+ * Carry an archive's own completeness verdict into the restore result.
+ *
+ * Restore is additive — the upsert re-homes rows rather than replacing an
+ * account — so a short archive cannot delete anything. What it CAN do is
+ * read as a full history to someone about to wipe a device on the strength
+ * of it, which is why the verdict has to reach the runner rather than
+ * stopping at the manifest.
+ *
+ * Only an explicit `complete: false` claims a shortfall, matching
+ * `cloudExportShortfall` and the mobile reader
+ * ([decisions.md § 668](../../../../docs/architecture/decisions.md)): an
+ * archive from a writer that predates the field says nothing about its own
+ * completeness, and warning on every one of those would be its own
+ * dishonesty.
+ */
+export function noteIncompleteArchive(
+	manifest: unknown,
+	result: RestoreResult
+): void {
+	if (!manifest || typeof manifest !== 'object') return;
+	const m = manifest as { complete?: unknown; incomplete?: unknown };
+	if (m.complete !== false) return;
+	result.archiveIncomplete = true;
+	result.archiveIncompleteSections = Array.isArray(m.incomplete)
+		? m.incomplete.filter((s): s is string => typeof s === 'string')
+		: [];
 }
 
 /**
@@ -77,8 +110,11 @@ export async function restoreOrchestrate(
 		routesImported: 0,
 		tracksUploaded: 0,
 		profileRestored: false,
-		warnings: []
+		warnings: [],
+		archiveIncomplete: false,
+		archiveIncompleteSections: []
 	};
+	noteIncompleteArchive(parsed.manifest, result);
 
 	// Profile + settings first — later rows may reference preferences.
 	if (parsed.profile) {
@@ -114,7 +150,7 @@ export async function restoreOrchestrate(
 			const origId = r.id as string;
 			const newId = opts.generateNewIds ? newUUID() : origId;
 
-			let trackUrl: string | null = null;
+			let trackUrl: string | undefined;
 			const trackBytes = await parsed.getTrackBytes(origId);
 			if (trackBytes) {
 				const path = `${userId}/${newId}.json.gz`;
@@ -133,15 +169,29 @@ export async function restoreOrchestrate(
 					: null;
 
 			const { activity_type, metadata } = coalesceRunActivity(r);
-			const row = {
+			const row: Record<string, unknown> = {
 				...r,
 				id: newId,
 				user_id: userId,
 				event_id: eventId,
-				track_url: trackUrl,
 				activity_type,
 				metadata
 			};
+			// A storage path is OMITTED, never nulled and never carried over
+			// from the archive, when this restore uploaded no blob for it.
+			// Nulling cost the run its trace whenever a track-short archive
+			// was restored into the account it came from — the row's own
+			// valid path was overwritten and the Storage object orphaned —
+			// while letting the archived value through re-homes a path that
+			// names the previous owner and run id. PostgREST leaves a column
+			// absent from the payload untouched on the update leg, so an
+			// existing row keeps its own path and a fresh insert still lands
+			// null. `hr_series_url` is always in that case: no web archive
+			// carries hr blobs, so its archived value can only be a foreign
+			// path (and would fail `runs_hr_series_url_path_shape`, § 116).
+			if (trackUrl !== undefined) row.track_url = trackUrl;
+			else delete row.track_url;
+			delete row.hr_series_url;
 
 			try {
 				await backend.upsertRun(row);
