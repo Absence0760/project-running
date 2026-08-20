@@ -1335,6 +1335,15 @@ with a reason (promote durable ones to `roadmap.md` / `followups.md`); and
 delete a file once every finding is resolved or its references have gone stale.
 Full lifecycle: [`reviews/README.md`](../../reviews/README.md).
 
+## A merge gate and an agent name each have exactly one definition
+
+Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/security_guards.test.ts` because both fail *green*:
+
+- **Only `ci.yml` may declare a job named `CI gate`.** That job name is the required status check on `main`. GitHub does not require every check sharing a name to pass, so a second, trivially-passing emitter can satisfy branch protection while the real jobs are still queued — observed on #457, removed by #577. If `ci.yml` ever needs to skip work on a docs-only diff, skip the heavy *jobs* and let the gate job still report from `ci.yml`.
+- **An agent's `name:` is unique across `.claude/agents/**`.** Claude resolves a subagent by that frontmatter name, never by path, so two files declaring one name are two definitions of one agent and which answers is unpredictable. Putting a copy in a different directory does not separate them.
+
+Both have been breached by an automated sync from the `templates` repo, which is additive by path and therefore blind to a name it collides with, so neither rule can rely on review alone.
+
 ## Exceptions
 
 Every rule here has escape hatches for the cases where it genuinely doesn't fit. If you're about to violate one of these rules:
