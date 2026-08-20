@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/challenge_list.dart';
 import '../lib/event_gym_template.dart';
 import '../lib/recurrence.dart';
 import '../lib/social_service.dart';
@@ -436,6 +437,69 @@ void main() {
       expect(rec.freq, RecurrenceFreq.weekly);
       expect(rec.byday, const [Weekday.tu]);
       expect(rec.startsAt, v.row.startsAt);
+    });
+  });
+
+  group('ChallengeView.withProgress', () {
+    ChallengeView ch({num? myValue, int? myRank, DateTime? completedAt}) =>
+        ChallengeView(
+          id: 'c1',
+          creatorId: 'creator',
+          clubId: null,
+          title: 'June 100k',
+          description: 'desc',
+          metric: 'distance',
+          scope: 'individual',
+          goalValue: 100000,
+          activityType: 'run',
+          startsAt: DateTime.utc(2026, 6, 1),
+          endsAt: DateTime.utc(2026, 7, 1),
+          isPublic: true,
+          joined: true,
+          myValue: myValue,
+          myRank: myRank,
+          participantCount: 7,
+          completedAt: completedAt,
+          myTeamClubId: 'club-1',
+        );
+
+    test('replaces only the caller-relative half of the row', () {
+      final before = ch();
+      final after = before.withProgress(MergedProgress(
+        row: before,
+        myValue: 42000,
+        myRank: 3,
+        completedAt: DateTime.utc(2026, 6, 20),
+      ));
+      expect(after.myValue, 42000);
+      expect(after.myRank, 3);
+      expect(after.completedAt, DateTime.utc(2026, 6, 20));
+      expect(after.id, 'c1');
+      expect(after.title, 'June 100k');
+      expect(after.description, 'desc');
+      expect(after.metric, 'distance');
+      expect(after.scope, 'individual');
+      expect(after.goalValue, 100000);
+      expect(after.activityType, 'run');
+      expect(after.startsAt, DateTime.utc(2026, 6, 1));
+      expect(after.endsAt, DateTime.utc(2026, 7, 1));
+      expect(after.isPublic, isTrue);
+      expect(after.joined, isTrue);
+      expect(after.participantCount, 7);
+      expect(after.myTeamClubId, 'club-1');
+    });
+
+    test('carries a null value through rather than defaulting it to zero', () {
+      final before = ch(myValue: 5);
+      final after = before.withProgress(MergedProgress(
+        row: before,
+        myValue: null,
+        myRank: null,
+        completedAt: null,
+      ));
+      expect(after.myValue, isNull);
+      expect(after.myRank, isNull);
+      expect(after.completedAt, isNull);
     });
   });
 

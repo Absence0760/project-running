@@ -7,9 +7,9 @@
 /// decide what the row is allowed to claim, so a missing value renders as
 /// missing rather than as a confident zero next to the goal.
 ///
-/// Web-only by design: the mobile challenges screen renders no progress bar, so
-/// a Dart twin would be dead code. NOT part of the `challenge_progress` parity
-/// pair.
+/// Twinned by `apps/mobile_android/lib/challenge_list.dart`; keep the two in
+/// lockstep (algorithm, edge cases, outputs, test counts). Distinct from the
+/// `challenge_progress` pair, which shapes a value already in hand.
 
 /** The caller-relative fields `my_active_challenges` can fill in. */
 export interface MyProgressRow {

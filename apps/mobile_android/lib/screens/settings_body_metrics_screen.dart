@@ -11,6 +11,25 @@ import '../typed_decimal.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
+/// Localized label for a `nutrition_activity_level` bag value. Shared with
+/// `NutritionTargetsScreen`, which shows the same lever, so the two surfaces
+/// cannot name the same stored value differently.
+String activityLevelLabel(AppLocalizations l10n, String key) => switch (key) {
+      'sedentary' => l10n.activitySedentary,
+      'light' => l10n.activityLight,
+      'active' => l10n.activityVeryActive,
+      'very_active' => l10n.activityExtraActive,
+      _ => l10n.activityModerate,
+    };
+
+/// Localized label for a `nutrition_goal` bag value. See
+/// [activityLevelLabel].
+String weightGoalLabel(AppLocalizations l10n, String key) => switch (key) {
+      'lose' => l10n.goalLose,
+      'gain' => l10n.goalGain,
+      _ => l10n.goalMaintain,
+    };
+
 /// Settings → Body metrics (multi_modal.md § "Body metrics & sensitive
 /// data"). Height + weight are special-category health data (GDPR Art 9):
 /// they are gated behind an explicit consent toggle and saved through the
@@ -189,26 +208,12 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     if (mounted) setState(() {});
   }
 
-  String _activityLabel(AppLocalizations l10n, String key) => switch (key) {
-        'sedentary' => l10n.activitySedentary,
-        'light' => l10n.activityLight,
-        'active' => l10n.activityVeryActive,
-        'very_active' => l10n.activityExtraActive,
-        _ => l10n.activityModerate,
-      };
-
-  String _goalLabel(AppLocalizations l10n, String key) => switch (key) {
-        'lose' => l10n.goalLose,
-        'gain' => l10n.goalGain,
-        _ => l10n.goalMaintain,
-      };
-
   Future<void> _pickActivity() async {
     final l10n = AppLocalizations.of(context);
     final picked = await _pick(
       title: l10n.bodyMetricsActivityLevel,
       options: [for (final a in activityLevels) a.key],
-      labels: [for (final a in activityLevels) _activityLabel(l10n, a.key)],
+      labels: [for (final a in activityLevels) activityLevelLabel(l10n, a.key)],
       current: _activity,
     );
     if (picked != null) {
@@ -223,7 +228,7 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     final picked = await _pick(
       title: l10n.bodyMetricsGoal,
       options: keys,
-      labels: [for (final k in keys) _goalLabel(l10n, k)],
+      labels: [for (final k in keys) weightGoalLabel(l10n, k)],
       current: _goal,
     );
     if (picked != null) {
@@ -310,13 +315,13 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
                 ],
                 ListTile(
                   title: Text(l10n.bodyMetricsActivityLevel),
-                  subtitle: Text(_activityLabel(l10n, _activity)),
+                  subtitle: Text(activityLevelLabel(l10n, _activity)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _pickActivity,
                 ),
                 ListTile(
                   title: Text(l10n.bodyMetricsGoal),
-                  subtitle: Text(_goalLabel(l10n, _goal)),
+                  subtitle: Text(weightGoalLabel(l10n, _goal)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _pickGoal,
                 ),

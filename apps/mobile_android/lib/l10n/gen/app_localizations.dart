@@ -17072,6 +17072,150 @@ abstract class AppLocalizations {
   /// **'Add body metrics'**
   String get nutritionAddBodyMetrics;
 
+  /// Label of the always-available entry from the Nutrition rings card to the targets screen
+  ///
+  /// In en, this message translates to:
+  /// **'Targets'**
+  String get nutritionTargetsLink;
+
+  /// Nutrition targets screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Calorie & macro targets'**
+  String get nutritionTargetsTitle;
+
+  /// Nutrition targets screen subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'How today\'s goal is worked out, and the two settings that shape it.'**
+  String get nutritionTargetsSubtitle;
+
+  /// Heading over the derived daily calorie goal
+  ///
+  /// In en, this message translates to:
+  /// **'Eat-to goal today'**
+  String get nutritionTargetsTotal;
+
+  /// Derivation row: Mifflin-St Jeor resting metabolic rate
+  ///
+  /// In en, this message translates to:
+  /// **'Resting metabolism'**
+  String get nutritionTargetsBmr;
+
+  /// Derivation subtotal: the non-exercise calorie goal
+  ///
+  /// In en, this message translates to:
+  /// **'Base goal'**
+  String get nutritionTargetsBase;
+
+  /// Note shown when the base goal is held at the safety floor. {n} is that floor in kcal.
+  ///
+  /// In en, this message translates to:
+  /// **'Held at the {n} kcal floor — the lowest daily goal we\'ll suggest.'**
+  String nutritionTargetsBaseFloored(int n);
+
+  /// Derivation row: today's logged workouts added on top
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s workouts'**
+  String get nutritionTargetsExercise;
+
+  /// Hint under the workout add-on row
+  ///
+  /// In en, this message translates to:
+  /// **'Runs and gym sessions you log today are added on top.'**
+  String get nutritionTargetsExerciseHint;
+
+  /// Heading of the macro-split card
+  ///
+  /// In en, this message translates to:
+  /// **'Macros'**
+  String get nutritionTargetsMacrosHeading;
+
+  /// Hint under the protein target. {n} is grams per kg of bodyweight.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} g per kg of bodyweight'**
+  String nutritionTargetsProteinHint(String n);
+
+  /// Hint under the carbohydrate target
+  ///
+  /// In en, this message translates to:
+  /// **'Whatever\'s left — your fuel'**
+  String get nutritionTargetsCarbsHint;
+
+  /// Hint under the fat target. {n} is a percentage of calories.
+  ///
+  /// In en, this message translates to:
+  /// **'{n}% of calories'**
+  String nutritionTargetsFatHint(int n);
+
+  /// Heading of the card holding the two non-sensitive target levers
+  ///
+  /// In en, this message translates to:
+  /// **'Your defaults'**
+  String get nutritionTargetsDefaultsHeading;
+
+  /// Hint explaining that activity level excludes logged workouts and both levers auto-save
+  ///
+  /// In en, this message translates to:
+  /// **'Activity level is your typical day excluding workouts — the runs and gym sessions you log are added separately. Both save as you change them.'**
+  String get nutritionTargetsDefaultsHint;
+
+  /// Heading of the read-only body-metrics card
+  ///
+  /// In en, this message translates to:
+  /// **'Body metrics'**
+  String get nutritionTargetsMetricsHeading;
+
+  /// Hint explaining that body metrics are health data edited in Settings behind the consent gate
+  ///
+  /// In en, this message translates to:
+  /// **'Height, weight, date of birth and sex are health data, so they\'re edited in Settings behind their consent gate.'**
+  String get nutritionTargetsMetricsHint;
+
+  /// Action opening the consent-gated body-metrics editor in Settings
+  ///
+  /// In en, this message translates to:
+  /// **'Edit in Settings'**
+  String get nutritionTargetsEditMetrics;
+
+  /// Placeholder for a body metric the user has not provided
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get nutritionTargetsUnset;
+
+  /// Title of the no-targets-yet state on the targets screen
+  ///
+  /// In en, this message translates to:
+  /// **'No targets yet'**
+  String get nutritionTargetsEmptyTitle;
+
+  /// Body of the no-targets-yet state on the targets screen
+  ///
+  /// In en, this message translates to:
+  /// **'Add your height, weight, date of birth and sex and your calorie + macro targets appear here.'**
+  String get nutritionTargetsEmptyBody;
+
+  /// Body-metrics row label for age
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get nutritionTargetsAge;
+
+  /// Age in whole years. {n} is the age.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} years'**
+  String nutritionTargetsAgeYears(int n);
+
+  /// Error state when the targets screen's read fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your targets.'**
+  String get nutritionTargetsLoadError;
+
   /// No description provided for @nutritionWeeklyTrend.
   ///
   /// In en, this message translates to:
@@ -19375,6 +19519,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load challenges.'**
   String get challengesLoadFailed;
+
+  /// Shown on a joined-challenge row whose per-caller value is not in the my_active_challenges window — never a zero bar
+  ///
+  /// In en, this message translates to:
+  /// **'Progress unavailable — open for your result'**
+  String get challengesProgressUnavailable;
+
+  /// Club-vs-club leaderboard label for the unaffiliated participant group
+  ///
+  /// In en, this message translates to:
+  /// **'No club'**
+  String get challengesTeamNoClub;
+
+  /// Club-vs-club leaderboard label for a club the viewer cannot read
+  ///
+  /// In en, this message translates to:
+  /// **'Private club'**
+  String get challengesTeamPrivateClub;
 
   /// Thermometer raised-of-goal label
   ///

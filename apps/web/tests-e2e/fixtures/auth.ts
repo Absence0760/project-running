@@ -51,7 +51,7 @@ export default async function globalSetup(config: FullConfig) {
 	const baseURL =
 		config.projects[0]?.use?.baseURL ?? 'http://localhost:7777';
 
-	// A reused dev server from another checkout serves its own bundle.
+	// A reused dev server can be serving a bundle that is not this tree's.
 	await assertServedTreeMatches(baseURL);
 
 	for (const user of ALL_USERS) {

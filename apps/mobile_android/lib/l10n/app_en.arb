@@ -13466,6 +13466,122 @@
   "@nutritionAddBodyMetrics": {
     "description": "CTA on the nutrition rings card that opens Settings > Body metrics"
   },
+  "nutritionTargetsLink": "Targets",
+  "@nutritionTargetsLink": {
+    "description": "Label of the always-available entry from the Nutrition rings card to the targets screen"
+  },
+  "nutritionTargetsTitle": "Calorie & macro targets",
+  "@nutritionTargetsTitle": {
+    "description": "Nutrition targets screen title"
+  },
+  "nutritionTargetsSubtitle": "How today's goal is worked out, and the two settings that shape it.",
+  "@nutritionTargetsSubtitle": {
+    "description": "Nutrition targets screen subtitle"
+  },
+  "nutritionTargetsTotal": "Eat-to goal today",
+  "@nutritionTargetsTotal": {
+    "description": "Heading over the derived daily calorie goal"
+  },
+  "nutritionTargetsBmr": "Resting metabolism",
+  "@nutritionTargetsBmr": {
+    "description": "Derivation row: Mifflin-St Jeor resting metabolic rate"
+  },
+  "nutritionTargetsBase": "Base goal",
+  "@nutritionTargetsBase": {
+    "description": "Derivation subtotal: the non-exercise calorie goal"
+  },
+  "nutritionTargetsBaseFloored": "Held at the {n} kcal floor — the lowest daily goal we'll suggest.",
+  "@nutritionTargetsBaseFloored": {
+    "description": "Note shown when the base goal is held at the safety floor. {n} is that floor in kcal.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "nutritionTargetsExercise": "Today's workouts",
+  "@nutritionTargetsExercise": {
+    "description": "Derivation row: today's logged workouts added on top"
+  },
+  "nutritionTargetsExerciseHint": "Runs and gym sessions you log today are added on top.",
+  "@nutritionTargetsExerciseHint": {
+    "description": "Hint under the workout add-on row"
+  },
+  "nutritionTargetsMacrosHeading": "Macros",
+  "@nutritionTargetsMacrosHeading": {
+    "description": "Heading of the macro-split card"
+  },
+  "nutritionTargetsProteinHint": "{n} g per kg of bodyweight",
+  "@nutritionTargetsProteinHint": {
+    "description": "Hint under the protein target. {n} is grams per kg of bodyweight.",
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "nutritionTargetsCarbsHint": "Whatever's left — your fuel",
+  "@nutritionTargetsCarbsHint": {
+    "description": "Hint under the carbohydrate target"
+  },
+  "nutritionTargetsFatHint": "{n}% of calories",
+  "@nutritionTargetsFatHint": {
+    "description": "Hint under the fat target. {n} is a percentage of calories.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "nutritionTargetsDefaultsHeading": "Your defaults",
+  "@nutritionTargetsDefaultsHeading": {
+    "description": "Heading of the card holding the two non-sensitive target levers"
+  },
+  "nutritionTargetsDefaultsHint": "Activity level is your typical day excluding workouts — the runs and gym sessions you log are added separately. Both save as you change them.",
+  "@nutritionTargetsDefaultsHint": {
+    "description": "Hint explaining that activity level excludes logged workouts and both levers auto-save"
+  },
+  "nutritionTargetsMetricsHeading": "Body metrics",
+  "@nutritionTargetsMetricsHeading": {
+    "description": "Heading of the read-only body-metrics card"
+  },
+  "nutritionTargetsMetricsHint": "Height, weight, date of birth and sex are health data, so they're edited in Settings behind their consent gate.",
+  "@nutritionTargetsMetricsHint": {
+    "description": "Hint explaining that body metrics are health data edited in Settings behind the consent gate"
+  },
+  "nutritionTargetsEditMetrics": "Edit in Settings",
+  "@nutritionTargetsEditMetrics": {
+    "description": "Action opening the consent-gated body-metrics editor in Settings"
+  },
+  "nutritionTargetsUnset": "Not set",
+  "@nutritionTargetsUnset": {
+    "description": "Placeholder for a body metric the user has not provided"
+  },
+  "nutritionTargetsEmptyTitle": "No targets yet",
+  "@nutritionTargetsEmptyTitle": {
+    "description": "Title of the no-targets-yet state on the targets screen"
+  },
+  "nutritionTargetsEmptyBody": "Add your height, weight, date of birth and sex and your calorie + macro targets appear here.",
+  "@nutritionTargetsEmptyBody": {
+    "description": "Body of the no-targets-yet state on the targets screen"
+  },
+  "nutritionTargetsAge": "Age",
+  "@nutritionTargetsAge": {
+    "description": "Body-metrics row label for age"
+  },
+  "nutritionTargetsAgeYears": "{n} years",
+  "@nutritionTargetsAgeYears": {
+    "description": "Age in whole years. {n} is the age.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "nutritionTargetsLoadError": "Couldn't load your targets.",
+  "@nutritionTargetsLoadError": {
+    "description": "Error state when the targets screen's read fails"
+  },
   "nutritionWeeklyTrend": "Last 7 days",
   "nutritionCaloriesLeft": "{n} kcal left",
   "@nutritionCaloriesLeft": {
@@ -15290,6 +15406,18 @@
   "challengesLoadFailed": "Couldn't load challenges.",
   "@challengesLoadFailed": {
     "description": "Load failure banner"
+  },
+  "challengesProgressUnavailable": "Progress unavailable — open for your result",
+  "@challengesProgressUnavailable": {
+    "description": "Shown on a joined-challenge row whose per-caller value is not in the my_active_challenges window — never a zero bar"
+  },
+  "challengesTeamNoClub": "No club",
+  "@challengesTeamNoClub": {
+    "description": "Club-vs-club leaderboard label for the unaffiliated participant group"
+  },
+  "challengesTeamPrivateClub": "Private club",
+  "@challengesTeamPrivateClub": {
+    "description": "Club-vs-club leaderboard label for a club the viewer cannot read"
   },
   "fundraiserRaisedOfGoal": "{raised} of {goal} raised",
   "@fundraiserRaisedOfGoal": {

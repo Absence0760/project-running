@@ -10366,6 +10366,92 @@ class AppLocalizationsDe extends AppLocalizations {
   String get nutritionAddBodyMetrics => 'Körperdaten hinzufügen';
 
   @override
+  String get nutritionTargetsLink => 'Ziele';
+
+  @override
+  String get nutritionTargetsTitle => 'Kalorien- und Makro-Ziele';
+
+  @override
+  String get nutritionTargetsSubtitle =>
+      'Wie das heutige Ziel berechnet wird und welche zwei Einstellungen es beeinflussen.';
+
+  @override
+  String get nutritionTargetsTotal => 'Heutiges Essensziel';
+
+  @override
+  String get nutritionTargetsBmr => 'Grundumsatz';
+
+  @override
+  String get nutritionTargetsBase => 'Basisziel';
+
+  @override
+  String nutritionTargetsBaseFloored(int n) {
+    return 'Auf der Untergrenze von $n kcal gehalten — das niedrigste Tagesziel, das wir empfehlen.';
+  }
+
+  @override
+  String get nutritionTargetsExercise => 'Heutige Workouts';
+
+  @override
+  String get nutritionTargetsExerciseHint =>
+      'Heute protokollierte Läufe und Gym-Einheiten werden zusätzlich addiert.';
+
+  @override
+  String get nutritionTargetsMacrosHeading => 'Makros';
+
+  @override
+  String nutritionTargetsProteinHint(String n) {
+    return '$n g pro kg Körpergewicht';
+  }
+
+  @override
+  String get nutritionTargetsCarbsHint => 'Der Rest — dein Brennstoff';
+
+  @override
+  String nutritionTargetsFatHint(int n) {
+    return '$n% der Kalorien';
+  }
+
+  @override
+  String get nutritionTargetsDefaultsHeading => 'Deine Standardwerte';
+
+  @override
+  String get nutritionTargetsDefaultsHint =>
+      'Das Aktivitätsniveau ist dein typischer Tag ohne Workouts — protokollierte Läufe und Gym-Einheiten werden separat addiert. Beide werden beim Ändern gespeichert.';
+
+  @override
+  String get nutritionTargetsMetricsHeading => 'Körperdaten';
+
+  @override
+  String get nutritionTargetsMetricsHint =>
+      'Größe, Gewicht, Geburtsdatum und Geschlecht sind Gesundheitsdaten und werden daher in den Einstellungen hinter der Einwilligung bearbeitet.';
+
+  @override
+  String get nutritionTargetsEditMetrics => 'In Einstellungen bearbeiten';
+
+  @override
+  String get nutritionTargetsUnset => 'Nicht angegeben';
+
+  @override
+  String get nutritionTargetsEmptyTitle => 'Noch keine Ziele';
+
+  @override
+  String get nutritionTargetsEmptyBody =>
+      'Gib Größe, Gewicht, Geburtsdatum und Geschlecht an, dann erscheinen hier deine Kalorien- und Makro-Ziele.';
+
+  @override
+  String get nutritionTargetsAge => 'Alter';
+
+  @override
+  String nutritionTargetsAgeYears(int n) {
+    return '$n Jahre';
+  }
+
+  @override
+  String get nutritionTargetsLoadError =>
+      'Deine Ziele konnten nicht geladen werden.';
+
+  @override
   String get nutritionWeeklyTrend => 'Letzte 7 Tage';
 
   @override
@@ -11719,6 +11805,16 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get challengesLoadFailed => 'Challenges konnten nicht geladen werden.';
+
+  @override
+  String get challengesProgressUnavailable =>
+      'Fortschritt nicht verfügbar – zum Ergebnis öffnen';
+
+  @override
+  String get challengesTeamNoClub => 'Kein Club';
+
+  @override
+  String get challengesTeamPrivateClub => 'Privater Club';
 
   @override
   String fundraiserRaisedOfGoal(String raised, String goal) {

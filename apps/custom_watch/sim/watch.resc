@@ -125,6 +125,40 @@ timer4: Timers.NRF52840_Timer_Shorts @ sysbus 0x4001B000
     -> nvic@27
 """
 
+# UARTE0/UARTE1 that publish their EVENTS_* to the PPI matrix. Renode's PPI
+# resolves an event endpoint by casting the peripheral that owns the address in
+# EVENTP[n] to INRFEventProvider, and the v1.16.1 UART model does not implement
+# it — so every PPI channel sourced from a UARTE event is refused outright:
+#
+#   [ERROR] ppi: Failed to register PPI from 0x40002108 for channel 2
+#
+# Two firmware paths ride exactly those chains. UARTE1's settings receiver puts
+# EVENTS_RXDRDY on TIMER1's TASKS_COUNT so a read can end at the sender's gap
+# and still report a byte count (decisions.md § 407 / § 420 — that chain has
+# never actually fired under the sim, which is why the software gap timeout
+# carried it). UARTE0's BufferedUarte RX ring needs both EVENTS_RXDRDY ->
+# TASKS_COUNT, because its ring write index IS that counter, and EVENTS_ENDRX ->
+# TASKS_STARTRX, the hardware pre-arm that makes the ~85 ms NVMC page-erase CPU
+# halt survivable (§ 419 / § 698). With the counter frozen at 0 the ring delivers
+# nothing at all, so § 421's SHORTS model was necessary and not sufficient.
+# sim/NRF52840_UARTE_Events.cs is the v1.16.1 model plus UPSTREAM'S OWN
+# event-provider delta; everything else in it is verbatim. Both instances are
+# replaced, not just UARTE0, so the two chains cannot disagree about whether a
+# UARTE event exists.
+include @NRF52840_UARTE_Events.cs
+machine UnregisterFromParent sysbus.uart0
+machine UnregisterFromParent sysbus.uart1
+machine LoadPlatformDescriptionFromString
+"""
+uart0: UART.NRF52840_UARTE_Events @ sysbus 0x40002000
+    easyDMA: true
+    -> nvic@2
+
+uart1: UART.NRF52840_UARTE_Events @ sysbus 0x40028000
+    easyDMA: true
+    -> nvic@40
+"""
+
 # Board LEDs. We declare these inline instead of loading
 # platforms/boards/nrf52840dk_nrf52840.repl because that repl also declares the
 # four user buttons as Miscellaneous.Button peripherals that drive their pins

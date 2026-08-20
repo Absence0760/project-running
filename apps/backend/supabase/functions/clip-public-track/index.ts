@@ -1,4 +1,10 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+// `?target=deno` is load-bearing, not cosmetic: every stack-using CI job's
+// setup probes THIS function's 405 to prove the edge runtime really serves,
+// and esm.sh's default (denonext) build imports `node:buffer` / `node:process`,
+// which makes the runtime resolve `@types/node` from registry.npmjs.org before
+// a worker can boot. When that fetch fails the worker never starts, the probe
+// hangs to its timeout, and the job dies before one test runs (decisions § 699).
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0?target=deno';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';

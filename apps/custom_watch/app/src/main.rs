@@ -21,7 +21,7 @@ use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 #[cfg(not(feature = "ble"))]
 use embassy_nrf::nvmc::Nvmc;
-use embassy_nrf::{bind_interrupts, peripherals, saadc, spim, twim, uarte};
+use embassy_nrf::{bind_interrupts, buffered_uarte, peripherals, saadc, spim, twim, uarte};
 use embassy_sync::mutex::Mutex;
 use nrf52840_dk::Board;
 use static_cell::StaticCell;
@@ -65,7 +65,7 @@ unsafe fn HardFault(frame: &cortex_m_rt::ExceptionFrame) -> ! {
 }
 
 bind_interrupts!(struct Irqs {
-    UARTE0 => uarte::InterruptHandler<peripherals::UARTE0>;
+    UARTE0 => buffered_uarte::InterruptHandler<peripherals::UARTE0>;
     UARTE1 => uarte::InterruptHandler<peripherals::UARTE1>;
     SPIM3 => spim::InterruptHandler<peripherals::SPI3>;
     TWISPI0 => twim::InterruptHandler<peripherals::TWISPI0>;
@@ -111,16 +111,30 @@ async fn main(spawner: Spawner) {
     // while the breakout's backup cell holds (~2 weeks), so anything other than
     // the factory value is a setting that silently lapses in a drawer.
     gps_config.baudrate = uarte::Baudrate::BAUD38400;
-    let gps_uart = uarte::Uarte::new(
+    // `BufferedUarte`, not a plain `Uarte`: the ring's next half-transfer is
+    // pre-armed and chained over PPI, so the ~85 ms CPU halt an NVMC page erase
+    // costs (decisions.md § 419) no longer leaves the receiver disarmed. The
+    // ring's *guaranteed* depth is half its length — 1 KiB, 267 ms at 38400 —
+    // which is what sizes it at 2048 rather than the 512 the earlier notes
+    // specified (§ 622, § 698).
+    static GPS_RX_RING: StaticCell<[u8; tasks::gps::RX_RING_LEN]> = StaticCell::new();
+    static GPS_TX_RING: StaticCell<[u8; tasks::gps::TX_RING_LEN]> = StaticCell::new();
+    let gps_uart = buffered_uarte::BufferedUarte::new(
         board.gps.uarte,
+        board.gps.ring_timer,
+        board.gps.ring_ppi.0,
+        board.gps.ring_ppi.1,
+        board.gps.ring_ppi_group,
         board.gps.rx,
         board.gps.tx,
         Irqs,
         gps_config,
+        GPS_RX_RING.init([0u8; tasks::gps::RX_RING_LEN]),
+        GPS_TX_RING.init([0u8; tasks::gps::TX_RING_LEN]),
     );
     // TX carries the UBX-RXM-PMREQ power-down frames + the 0xFF wake byte the
     // gps task sends to duty-cycle the receiver in throttled recording modes.
-    let (gps_tx, gps_rx) = gps_uart.split();
+    let (gps_rx, gps_tx) = gps_uart.split();
 
     // Sharp MIP wants LSB-first (datasheet bit M0 leads) and mode 0; the
     // panel tops out at 2 MHz.

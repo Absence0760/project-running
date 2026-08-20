@@ -1168,6 +1168,44 @@ Still not bench-verified, and one item is now owed that was not before: step 5 o
 **negative control** — force the LED drive to zero and watch the new line fire — because a
 guard nobody has seen fire is a guard nobody knows works.
 
+## 2026-08-19 — The GPS link gets DMA depth, and the simulator gets the UARTE event provider it was missing
+
+`gps.rs` had re-armed one 32-byte EasyDMA read since GNSS bring-up, which fills in 8.3 ms at
+the factory 38400 baud and then leaves the receiver disarmed until a task runs again — while an
+NVMC page erase halts the CPU for ~85 ms and cannot be divided ([§ 419](../architecture/decisions.md)).
+Up to 326 bytes of NMEA per checkpoint, which is an L4 flash write degrading L1 distance. The
+receiver now runs on `BufferedUarte`, whose ENDRX -> STARTRX PPI chain keeps the next transfer
+armed in hardware across the stall. The ring is **2048 bytes**, derived rather than picked: the
+guaranteed headroom is `half_len`, so 1024 B = 267 ms at this baud against an 85 ms erase, where
+the 512 bytes the earlier notes specified buys 66.7 ms and covers none — a sizing that was right
+at 9600 and wrong by 4x after [§ 622](../architecture/decisions.md). The peripherals it needs
+(TIMER2, PPI channels 2/3, PPI group 0) are claimed in the board crate beside UARTE1's TIMER1 +
+PPI 0/1, all of it outside the S140's TIMER0 / PPI 17-31 / group 4-5 reservations, and the board
+crate's header now carries the whole budget.
+
+**The interesting half is that [§ 421](../architecture/decisions.md)'s timer model turned out to
+be necessary and not sufficient, and only running it showed that.** With SHORTS in place the swap
+delivered not one byte and the guest died at ~16 s. Renode's PPI resolves an event endpoint by
+casting the owning peripheral to `INRFEventProvider`, and v1.16.1's `NRF52840_UART` does not
+implement it, so every PPI channel sourced from a UARTE event was refused at configuration time
+with an error in `renode.log` that nothing had ever read. Both of `BufferedUarte`'s UARTE chains
+are exactly that. The same error is present in a run of unmodified `main` for UARTE1 — so
+§ 420's hardware idle-line chain has never fired under the simulator either, and the software gap
+timeout was carrying the settings pipe alone. `sim/NRF52840_UARTE_Events.cs` closes it with
+upstream's own event-provider delta, plus one fix: v1.16.1 never disarms the receiver at
+RXD.MAXCNT, so once the guest clears ENDRX the RX pointer walks past the driver's buffer without
+limit. That is what killed the first attempt, and it presented as `RefCell already borrowed`
+inside `embassy_sync::watch` — **issue #713's signature**, reproduced deterministically for the
+first time. Not a diagnosis of #713, but the first mechanism candidate that comes with a
+reproduction.
+
+Evidence: workspace host tests unchanged and green; all three feature sets build clippy-clean for
+`thumbv7em-none-eabihf`; **all nine Renode scenarios pass**, including `smoke`, `dropout` and
+`workout` — the three that drive this code path hardest. Bench-verified: nothing. Renode models no
+NVMC at all, so the stall the ring is sized against has never been produced; the step-7 item in
+[`quality_standards.md`](quality_standards.md) keeps its pass criterion and changes only its
+expectation, from up to 326 bytes lost to zero. See [§ 698](../architecture/decisions.md).
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md), now fully

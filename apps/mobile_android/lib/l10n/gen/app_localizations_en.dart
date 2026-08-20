@@ -10246,6 +10246,91 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nutritionAddBodyMetrics => 'Add body metrics';
 
   @override
+  String get nutritionTargetsLink => 'Targets';
+
+  @override
+  String get nutritionTargetsTitle => 'Calorie & macro targets';
+
+  @override
+  String get nutritionTargetsSubtitle =>
+      'How today\'s goal is worked out, and the two settings that shape it.';
+
+  @override
+  String get nutritionTargetsTotal => 'Eat-to goal today';
+
+  @override
+  String get nutritionTargetsBmr => 'Resting metabolism';
+
+  @override
+  String get nutritionTargetsBase => 'Base goal';
+
+  @override
+  String nutritionTargetsBaseFloored(int n) {
+    return 'Held at the $n kcal floor — the lowest daily goal we\'ll suggest.';
+  }
+
+  @override
+  String get nutritionTargetsExercise => 'Today\'s workouts';
+
+  @override
+  String get nutritionTargetsExerciseHint =>
+      'Runs and gym sessions you log today are added on top.';
+
+  @override
+  String get nutritionTargetsMacrosHeading => 'Macros';
+
+  @override
+  String nutritionTargetsProteinHint(String n) {
+    return '$n g per kg of bodyweight';
+  }
+
+  @override
+  String get nutritionTargetsCarbsHint => 'Whatever\'s left — your fuel';
+
+  @override
+  String nutritionTargetsFatHint(int n) {
+    return '$n% of calories';
+  }
+
+  @override
+  String get nutritionTargetsDefaultsHeading => 'Your defaults';
+
+  @override
+  String get nutritionTargetsDefaultsHint =>
+      'Activity level is your typical day excluding workouts — the runs and gym sessions you log are added separately. Both save as you change them.';
+
+  @override
+  String get nutritionTargetsMetricsHeading => 'Body metrics';
+
+  @override
+  String get nutritionTargetsMetricsHint =>
+      'Height, weight, date of birth and sex are health data, so they\'re edited in Settings behind their consent gate.';
+
+  @override
+  String get nutritionTargetsEditMetrics => 'Edit in Settings';
+
+  @override
+  String get nutritionTargetsUnset => 'Not set';
+
+  @override
+  String get nutritionTargetsEmptyTitle => 'No targets yet';
+
+  @override
+  String get nutritionTargetsEmptyBody =>
+      'Add your height, weight, date of birth and sex and your calorie + macro targets appear here.';
+
+  @override
+  String get nutritionTargetsAge => 'Age';
+
+  @override
+  String nutritionTargetsAgeYears(int n) {
+    return '$n years';
+  }
+
+  @override
+  String get nutritionTargetsLoadError => 'Couldn\'t load your targets.';
+
+  @override
   String get nutritionWeeklyTrend => 'Last 7 days';
 
   @override
@@ -11589,6 +11674,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get challengesLoadFailed => 'Couldn\'t load challenges.';
+
+  @override
+  String get challengesProgressUnavailable =>
+      'Progress unavailable — open for your result';
+
+  @override
+  String get challengesTeamNoClub => 'No club';
+
+  @override
+  String get challengesTeamPrivateClub => 'Private club';
 
   @override
   String fundraiserRaisedOfGoal(String raised, String goal) {

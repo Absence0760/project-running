@@ -6,7 +6,7 @@ Rules are grouped by area below. (Section anchors are deep-linked from `CLAUDE.m
 
 **Code style** — [Comments](#comments) · [Naming](#naming) · [Logging](#logging)
 
-**Error handling & architecture** — [Error handling](#error-handling) · [Layered resilience](#layered-resilience) · [Pagination](#pagination--first-page--load-more) · [Dependency discipline](#dependency-discipline) · [Preemptive abstractions — don't](#preemptive-abstractions--dont) · [Backwards compatibility](#backwards-compatibility)
+**Error handling & architecture** — [Mobile pure helpers](#mobile-pure-helpers-live-in-lib-and-a-screen-is-never-another-screens-library) · [Error handling](#error-handling) · [Layered resilience](#layered-resilience) · [Pagination](#pagination--first-page--load-more) · [Dependency discipline](#dependency-discipline) · [Preemptive abstractions — don't](#preemptive-abstractions--dont) · [Backwards compatibility](#backwards-compatibility)
 
 **Bug & quality discipline** — [Fix bugs, don't code around them](#fix-bugs-dont-code-around-them) · [If you see something wrong, fix it](#if-you-see-something-wrong-fix-it)
 
@@ -212,6 +212,26 @@ become a flat dumping ground: `core/` (Supabase queries + client),
 `src/lib/lib_structure_guards.test.ts` enforces all of the above (root
 cleanliness, parity-path existence, and the recursive `src/lib/**/*.test.ts`
 unit-test glob) so the structure can't silently erode.
+
+## Mobile pure helpers live in `lib/`, and a screen is never another screen's library
+
+Mobile's `lib/` root is deliberately flat (the web subfolder rule above is
+web-only), so the rule here is about *which layer*, not which folder:
+
+- **A pure function belongs in a `lib/<topic>.dart` module, never in a
+  `lib/screens/` or `lib/widgets/` file** — even when only one screen calls it
+  today. A reduction parked in a widget file is only reusable by importing a
+  screen, and the second consumer then has no good option.
+- **A screen may import another screen to navigate to it** (`MaterialPageRoute`
+  needs the widget class) **but never for a non-widget symbol.** If you find
+  yourself writing `import 'other_screen.dart' show someHelper;`, the helper is
+  in the wrong file — move it, don't import it. An import cycle between two
+  screens is the symptom; misplaced logic is the cause (decisions.md § 695).
+- **Tests follow the code.** Cases that never mount a widget belong in the
+  helper's own `test/<topic>_test.dart`, not in a screen's widget-test file.
+- Mobile-only glue is fine and common — it is **not** automatically a TS↔Dart
+  parity pair. Only register a pair when web genuinely has the same reduction;
+  see the parity-registry bullet above.
 
 ## Error handling
 
