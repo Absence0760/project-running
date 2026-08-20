@@ -1,0 +1,43 @@
+# Base-owned paths from the `templates` repo that this project has declined.
+#
+# `templates/scripts/sync-projects.sh` is additive: it treats any base-owned
+# file this repo lacks as a gap and copies it in. A file this repo DELETED on
+# purpose is indistinguishable from one it never had, so record the decision
+# here or the next sweep proposes it again. One path per line; `#` comments and
+# blank lines ignored.
+
+# Deleted in #577. The required status check on `main` is a job NAMED "CI gate",
+# and GitHub does not require every check sharing a name to pass — a second,
+# trivially-passing emitter satisfies branch protection while ci.yml's real jobs
+# are still queued (#457: mergeStateStatus=UNSTABLE, 40 checks pending). ci.yml
+# now always runs and its heavy jobs skip on a docs-only diff instead, so
+# nothing is left pending for a companion workflow to rescue. Re-proposed by the
+# sync in #794; guarded by `apps/web/src/lib/security_guards.test.ts` and
+# decisions.md § 700.
+.github/workflows/ci-gate-docs.yml
+
+# This repo's auditors live under `.claude/agents/auditors/`. A subagent
+# resolves by its frontmatter `name:`, never by path, so a top-level copy is a
+# second definition of the same agent rather than an addition — and base's
+# copies describe a different application (a `<CMS>` webhook, a DynamoDB orders
+# store) while dropping the `Write` tool the `/audit/*` commands need to persist
+# findings to `reviews/`. Same guard file, same ADR.
+.claude/agents/compliance-auditor.md
+.claude/agents/repo-security-auditor.md
+
+# Personas here are running-specific and live under `.claude/agents/personas/`
+# (40+ of them, e.g. `runner-new`, `runner-pro`, `runner-privacy-conscious`).
+# Base's generic set overlaps them without adding a lens this repo lacks, and
+# lands flat in `.claude/agents/` plus a top-level `.claude/personas/`.
+.claude/agents/persona-accessibility-user.md
+.claude/agents/persona-admin.md
+.claude/agents/persona-adversary.md
+.claude/agents/persona-data-subject.md
+.claude/agents/persona-integrator.md
+.claude/agents/persona-international-user.md
+.claude/agents/persona-new-user.md
+.claude/agents/persona-power-user.md
+.claude/personas/README.md
+
+# This repo has ten real `release-*.yml` workflows; a generic example is noise.
+.github/workflows/deploy.yml.example
