@@ -28,7 +28,7 @@ Deno.test('the archive is streamed, never buffered into a Blob', () => {
 			'allocation the 5000-run and 50,000-row caps existed to protect',
 	);
 	assert(
-		!SRC.includes("storage\n\t\t.from('runs')\n\t\t.upload(") && !SRC.includes('.upload('),
+		!SRC.includes('.upload('),
 		'a single-shot Storage upload needs the whole body resident',
 	);
 });
