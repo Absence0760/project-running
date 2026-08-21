@@ -346,10 +346,18 @@ select isnt(
 -- its 10-minute signed URL and nothing else; an owner SELECT policy
 -- here would reverse that. service_role is the only reader and writer
 -- and it bypasses RLS, so any policy naming this bucket is a widening.
+-- The literal already appears in a policy that is the OPPOSITE of a
+-- widening: the runs-bucket owner SELECT carries
+-- `foldername(name)[2] <> 'exports'`, which is how 20260816_001 keeps an
+-- export out of the owner-readable path. A bare `like '%''exports''%'`
+-- therefore counted that carve-out as the thing it exists to forbid. So
+-- the exclusion form is subtracted, and every other mention —
+-- `= 'exports'`, `in ('exports', …)` — still fails this.
 select is(
   (select count(*) from pg_policies
      where schemaname = 'storage' and tablename = 'objects'
-       and coalesce(qual, '') || coalesce(with_check, '') like '%''exports''%')::int,
+       and coalesce(qual, '') || coalesce(with_check, '') like '%''exports''%'
+       and coalesce(qual, '') || coalesce(with_check, '') not like '%<> ''exports''%')::int,
   0::int,
   'exports bucket MUST carry no storage.objects policy — signed-URL-only '
   'access is what 20260816_001 established and service_role needs none'
