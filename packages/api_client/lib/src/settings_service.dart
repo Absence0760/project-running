@@ -28,6 +28,15 @@ class SettingsKeys {
   /// `search_user_profiles` RPC (migration 20261015_001) reads
   /// this key.
   static const discoverableInSearch = 'discoverable_in_search';
+  /// Opt-IN (default absent/false) for coarse-location "runners nearby"
+  /// discovery (issue #466, migration `20270424000005`). Read SERVER-SIDE by
+  /// the `discoverable_runners_near` SECURITY DEFINER reader, which also
+  /// requires a `user_settings.discoverable_area` centroid to be set and
+  /// honours [discoverableInSearch] — a search opt-out also removes you from
+  /// nearby. Fail-closed: absent/false and nobody appears. The client surfaces
+  /// are additionally gated behind the default-off `ENABLE_NEARBY_RUNNERS`
+  /// deploy flag pending owner + CISO/counsel sign-off (decisions §270).
+  static const discoverableNearby = 'discoverable_nearby';
   /// DEPRECATED (2026-07-06, docs/features/safety.md): the inert
   /// trusted-contacts scaffold was removed — `safety_contacts` (double
   /// opt-in, real delivery) is the single contact list, and the overdue

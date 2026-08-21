@@ -2261,6 +2261,89 @@ class ApiClient {
     }).toList();
   }
 
+  /// Opt-in coarse-location "runners nearby" discovery (issue #466). Calls the
+  /// `discoverable_runners_near` SECURITY DEFINER RPC, which centres on the
+  /// CALLER's own stored coarse area and applies every eligibility filter
+  /// (opt-in, minor exclusion, shadow_hidden, search opt-out, blocks)
+  /// server-side, returning only a coarse distance BUCKET per runner — never a
+  /// coordinate. Mirrors `fetchNearbyRunners` in
+  /// `apps/web/src/lib/core/data.ts`.
+  ///
+  /// Inert (returns `[]`) for a signed-out caller and for anyone who has not
+  /// opted in with an area set — the reciprocity the RPC enforces. The client
+  /// surfaces are additionally gated behind the default-off
+  /// `ENABLE_NEARBY_RUNNERS` deploy flag (`nearby_flag.dart`).
+  Future<List<NearbyRunner>> fetchNearbyRunners({
+    double radiusM = 25000,
+  }) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return const [];
+
+    final rows = await _client.rpc('discoverable_runners_near', params: {
+      'p_radius_m': radiusM,
+    });
+    final list = (rows as List<dynamic>?) ?? const [];
+    if (list.isEmpty) return const [];
+
+    final ids = list
+        .map<String>((r) => (r as Map<String, dynamic>)['id'] as String)
+        .toList();
+    final followedRows = await readChunked(
+      ids,
+      (chunk) async => _client
+          .from(UserFollowRow.table)
+          .select(UserFollowRow.colFolloweeId)
+          .eq(UserFollowRow.colFollowerId, viewerId)
+          .inFilter(UserFollowRow.colFolloweeId, chunk),
+    );
+    final follows = <String>{
+      for (final r in followedRows)
+        r[UserFollowRow.colFolloweeId] as String,
+    };
+
+    return list.map<NearbyRunner>((r) {
+      final row = r as Map<String, dynamic>;
+      final id = row['id'] as String;
+      return NearbyRunner(
+        id: id,
+        displayName: row['display_name'] as String?,
+        avatarUrl: row['avatar_url'] as String?,
+        bucket: (row['bucket'] as num?)?.toInt() ?? 0,
+        viewerFollows: follows.contains(id),
+      );
+    }).toList();
+  }
+
+  /// Store the caller's coarse discoverable area — a geocoded city / area
+  /// centroid, rounded server-side to ~1 km. Never live GPS. Returns the
+  /// stored label so the settings surface can echo it back. Mirrors
+  /// `setDiscoverableArea` on web.
+  Future<String?> setDiscoverableArea(
+    double lng,
+    double lat,
+    String? label,
+  ) async {
+    final stored = await _client.rpc('set_discoverable_area', params: {
+      'p_lng': lng,
+      'p_lat': lat,
+      'p_label': label,
+    });
+    return stored as String?;
+  }
+
+  /// Forget the caller's stored coarse area — removes them from nearby
+  /// discovery regardless of the `discoverable_nearby` pref.
+  Future<void> clearDiscoverableArea() async {
+    await _client.rpc('clear_discoverable_area');
+  }
+
+  /// The caller's own stored area LABEL (never the coordinate), for the
+  /// settings surface. Null when no area is set.
+  Future<String?> fetchMyDiscoverableArea() async {
+    final label = await _client.rpc('my_discoverable_area');
+    return label as String?;
+  }
+
   /// Best-effort auto-link of a freshly-saved run to a plan workout
   /// scheduled for the same calendar date, matched within 25% of the
   /// workout's target distance. Client-side mirror of
