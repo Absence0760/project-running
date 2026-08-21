@@ -2,7 +2,7 @@
 
 How the backend evolves from a single Supabase project to a two-service architecture (Supabase + Go) that supports live spectator tracking, training intelligence, and hundreds of thousands of users.
 
-> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds — plus the email / push / digest kinds added since (`notification_email`, `lifecycle_email`, `safety_email`, `web_push`, `weekly_digest`, with an inbound bounce/complaint webhook) — and serves the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) **is deployed and serving** — the worker went out 2026-07-21 and `live.threkir.com` is a live CNAME in Terraform (`infra/dns/main.tf`). What remains is the **client** cutover, not infra: `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` are still unset, so recorders and spectators ride Supabase Realtime. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
+> **Status as of August 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds — plus the email / push / digest kinds added since (`notification_email`, `lifecycle_email`, `safety_email`, `web_push`, `weekly_digest`, with an inbound bounce/complaint webhook) — and serves the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) **is deployed and serving** — the worker went out 2026-07-21 and `live.threkir.com` is a live CNAME in Terraform (`infra/dns/main.tf`). What remains is the **client** cutover, not infra: `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` are still unset, so recorders and spectators ride Supabase Realtime. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent — treat every SQL snippet as plan-of-record, not current state. Each of the six numbered sections now carries a **Shipped** note recording what actually landed and where it diverged from the sketch, and every box in the migration timeline is ticked with the migration or file that closed it. **Exactly one box is still open**, and it is the WebSocket-hub row under Phase 2: `[~]`, waiting on the client cutover alone.
 
 ---
 
@@ -15,7 +15,7 @@ The plan below starts from the Phase 1 backend: a single Supabase project. (For 
 - **Storage** — GPX files, data exports, avatars
 - **Edge Functions** — Strava sync, parkrun import, token refresh, data export
 
-This was the right choice for Phase 1: it handles CRUD, auth, and storage with zero ops. The issues below become real at scale — they didn't need fixing on day one, but the architecture anticipated them, and the May 2026 landings (Go worker + job queue + live hub) are the first tranche of this plan made real.
+This was the right choice for Phase 1: it handles CRUD, auth, and storage with zero ops. The issues below become real at scale — they didn't need fixing on day one, but the architecture anticipated them, and the Go worker + job queue (May 2026) and the live hub (deployed 2026-07-21) are this plan made real.
 
 ---
 
@@ -36,6 +36,14 @@ alter table runs add column track_url text;
 ```
 
 **When:** Before public beta (end of Phase 1).
+
+**Shipped** in `20260410_001_runs_to_storage.sql`, which drops `runs.track`
+outright (`alter table runs drop column track`, line 15 — the repo had no
+production data to backfill) and adds `track_url text`. One difference from the
+sketch above: the stored object is gzipped JSON at `{user_id}/{run_id}.json.gz`
+in a `runs` bucket, not `tracks/{user_id}/{run_id}.geojson` — see the
+`runs.track` note in the root [`CLAUDE.md`](../../CLAUDE.md). The same migration
+adds the four owner-scoped Storage RLS policies.
 
 ### 2. No PostGIS for spatial queries
 
@@ -65,6 +73,22 @@ and ST_DWithin(geom, ST_Point(-0.1278, 51.5074)::geography, 10000);
 ```
 
 **When:** Before Phase 3 community library launch.
+
+**Shipped, in two halves — and the `geom` column above is one of them.**
+`20260415_001_postgis_nearby_routes.sql` enables PostGIS and adds
+`routes.start_point geography(Point, 4326)` + `routes_start_point_gist` + a
+`nearby_routes(lat, lng, radius_m)` RPC + a trigger that populates the point
+from the first waypoint. That answers "routes *starting* near me", not "routes
+that *pass* near me", so `20260607_001_routes_geom_linestring.sql` then added
+the exact column this section proposed —
+`routes.geom geography(LineString, 4326)` + `routes_geom_gist`, populated from
+`waypoints` by an `ST_MakeLine` trigger — with `20260608_001` /
+`20260610_001` / `20270509_001` layering the box, track-intersection, and
+public-read paths on top of it. **This corrects an earlier correction:** the
+Phase 3 checkbox below used to read that PostGIS "shipped it as `start_point`
+…, not the `geom` name this line proposed", which was true of `20260415_001`
+alone and stopped being true two months later. Both columns exist; they answer
+different questions.
 
 ### 3. `personal_records()` function does a full table scan
 
@@ -120,6 +144,14 @@ create trigger trg_update_prs
 ```
 
 **When:** Before web dashboard launch (Phase 2b).
+
+**Shipped** in `20260508_001_personal_records_cache.sql`: the
+`personal_records` table, a `personal_records_distance_time` index, and three
+triggers rather than the one sketched here — `runs_personal_records_insert`,
+`_update` and `_delete`. The extra two are the point: an insert-only trigger
+leaves a PR standing after the run that set it is edited or deleted, which is
+the cache-versus-authoritative-query contract now written down in
+[`derived_state.md`](derived_state.md).
 
 ### 4. Dashboard aggregations hit raw tables every time
 
@@ -204,6 +236,18 @@ $$;
 
 **When:** Before Strava integration goes live.
 
+**Shipped — but not with the `pgcrypto` above, and the difference matters.**
+`20260603_001_integrations_vault.sql` moves both tokens into **Supabase Vault**
+(libsodium, platform-managed key), replacing the two plaintext columns with
+`access_token_secret_id` / `refresh_token_secret_id` FKs into `vault.secrets`
+and then `drop column`-ing the originals (lines 56–57). The
+`get_integration_tokens` reader below did land, near-verbatim, as a
+`SECURITY DEFINER` function over `vault.decrypted_secrets`. What did *not* land
+is the `current_setting('app.encryption_key')` half: a passphrase read from a
+GUC lives in `postgresql.conf`, gets logged by `log_statement`, and is visible
+to anything that can `show` it — so the key never sits where a breach of this
+same database would find it. Do not copy the snippet above.
+
 ### 6. No rate limiting or webhook validation
 
 **Problem:** Edge Function endpoints are publicly accessible with no rate limiting. Strava webhooks aren't signature-verified.
@@ -214,6 +258,21 @@ $$;
 - Add per-user rate limiting for import endpoints (max 10 calls/hour)
 
 **When:** Before public beta.
+
+**Shipped, and the middle bullet was wrong when it was written.** Per-user
+rate limiting is `20260604_001_rate_limits.sql` (a `SECURITY DEFINER`
+`check_rate_limit` doing an atomic fixed-window increment) behind
+`functions/_shared/rate_limit.ts`, whose posture is per-caller: fail-open by
+default so a transient DB blip doesn't 429 everyone, `{ failClosed: true }` on
+the destructive and expensive paths (`delete-account`, `export-data`, OAuth
+code exchange). The Strava bullet asked for **signature** verification, which
+Strava cannot satisfy — it does not sign webhook payloads. `strava-webhook`
+therefore authenticates the caller with a constant-time shared-secret compare
+(`timingSafeEqual`, header `X-Webhook-Secret` winning over the `?secret=`
+query fallback) and refuses every POST outright when
+`STRAVA_WEBHOOK_SECRET` is unset. `revenuecat-webhook` *is* HMAC-verified
+(`x-revenuecat-hmac`, constant-time compare, plus replay protection), because
+RevenueCat does sign.
 
 ---
 
@@ -445,11 +504,11 @@ The architecture intentionally avoids:
 
 Aligned with the existing product roadmap.
 
-### Phase 1 — MVP (current)
+### Phase 1 — MVP (complete)
 
 **Backend:** Supabase only.
 
-**Fixes to apply now:**
+**Fixes to apply now** — all five landed; "now" here means Phase 1, not today:
 - [x] Move GPS tracks from JSONB to Storage (`track_url` column) — `20260410_001_runs_to_storage.sql`
 - [x] Add rate limiting to Edge Function endpoints — `functions/_shared/rate_limit.ts`
 - [x] Validate Strava webhook callers — `functions/strava-webhook/`. Strava does not sign payloads, so this landed as a constant-time shared-secret check rather than a signature check
@@ -470,7 +529,9 @@ Aligned with the existing product roadmap.
 - [x] Move data export from Edge Function to Go background job (`POST /v1/export` via `apps/job_worker/internal/dataexport/`; EF kept as rollback)
 - [x] Set up Upstash Redis for live position streams (`RedisHub` in `internal/livehub/`; activates on hub deploy)
 
-**Migrate from Edge Functions:** Strava webhook, token refresh, data export. Only parkrun import remains as an Edge Function (simple, infrequent).
+**Migrate from Edge Functions:** Strava webhook, token refresh, data export. All three moved, and all three are still deployed as the rollback path.
+
+The "only parkrun import remains" this line used to carry was never true and is now wrong by an order of magnitude: **sixteen** Edge Functions ship today (`auth-email`, `clip-public-track`, `delete-account`, `donations-checkout`, `events-cancel`, `events-checkout`, `events-connect-onboard`, `export-data`, `parkrun-import`, `race-listings-sync`, `race-results-import`, `refresh-tokens`, `revenuecat-webhook`, `strava-import`, `strava-webhook`, `stripe-events-webhook`). Migrating three jobs to Go did not make Edge Functions a residue — everything webhook-shaped, Stripe-shaped, or auth-shaped since has landed as one, because a function that must answer a third party's HTTP callback wants Supabase's JWT + service-role context far more than it wants the worker's queue.
 
 **Database:**
 - [x] Add `personal_records` summary table with trigger (`20260508_001`)
@@ -496,7 +557,7 @@ Aligned with the existing product roadmap.
 
 **Database:**
 - [x] Enable PostGIS extension — `20260415_001_postgis_nearby_routes.sql`
-- [x] Add a geography column to `routes` with a spatial index — `20260415_001_postgis_nearby_routes.sql` shipped it as `start_point geography(Point, 4326)` + `routes_start_point_gist`, not the `geom` name this line proposed
+- [x] Add a geography column to `routes` with a spatial index — **two** of them, and one is the `geom` this line proposed. `20260415_001_postgis_nearby_routes.sql` shipped `start_point geography(Point, 4326)` + `routes_start_point_gist` (answering "routes *starting* near me"), then `20260607_001_routes_geom_linestring.sql` shipped `geom geography(LineString, 4326)` + `routes_geom_gist`, trigger-populated from `waypoints` by `ST_MakeLine` exactly as § 2 sketched. An earlier pass through this checklist recorded that the `geom` name did *not* ship, which was true of `20260415_001` alone and had already stopped being true; see § 2 above
 - [x] Add `training_plans` table — `20260419_001_training_plans.sql` for generated plans
 - [x] Add `fitness_snapshots` table — `20260507_001_fitness_snapshots.sql` for VO2 max history
 
@@ -575,4 +636,4 @@ Map tile costs are minimal — MapTiler has a generous free tier, and Protomaps 
 
 ---
 
-*Last updated: May 2026*
+*Last updated: August 2026*
