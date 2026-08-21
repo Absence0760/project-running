@@ -90,6 +90,20 @@ carries both caps* because it still assembles the archive in one
   a high-cardinality table (`live_run_pings` runs into the millions on a
   deep history) is an OOM rather than a slow export.
 
+**Corrected 2026-08-21, and it had been wrong on both rails since before
+either cap mattered:** `profile.json` shipped as `null` and
+`reports_against_me.json` was absent from every `backup` export, because
+both rails projected columns `user_profiles` and `reports` do not have
+(`bio`, `location`, `hr_zones`, `activity_default`, `privacy_default`,
+and `resolved_at` for `reviewed_at`). PostgREST rejects the whole read
+when any projected column is absent, and a failed section is tolerated by
+design, so the shortfall appeared only as a log line. The three
+prefs-bag columns were always exported separately as `settings_prefs`;
+`bio` and `location` exist nowhere, so nothing was lost by dropping them.
+Both rails now project only columns the generated row types contain, and
+a test checks every backup projection and filter against those types
+rather than against a list of known-bad names.
+
 A subject who hits either cap, or the Edge Function's clock, has not
 received everything, and the manifest says so. Art 20 is satisfied by
 re-running or by an operator export. Giving the Go rail the same
