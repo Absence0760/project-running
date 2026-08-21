@@ -677,6 +677,117 @@
       }
     }
   },
+  "peopleNearbyHeader": "Runners nearby",
+  "@peopleNearbyHeader": {
+    "description": "Section heading for the opt-in coarse-location runners-nearby list on the People screen"
+  },
+  "peopleNearbySubtitle": "Runners who opted in near the area you set. Approximate distance only \u2014 never a live location.",
+  "@peopleNearbySubtitle": {
+    "description": "Explanatory subtitle under the runners-nearby heading"
+  },
+  "peopleNearbyEmptyTitle": "Nobody nearby yet",
+  "@peopleNearbyEmptyTitle": {
+    "description": "Empty-state title when the runners-nearby list comes back with no one"
+  },
+  "peopleNearbyEmptyBody": "Turn on \"Show me to runners nearby\" in Settings \u2192 Preferences \u2192 Privacy and set your area. Only runners who did the same can find you.",
+  "@peopleNearbyEmptyBody": {
+    "description": "Empty-state body for the runners-nearby list, pointing at the opt-in and area setter"
+  },
+  "peopleNearbyLoadFailed": "Could not load runners nearby.",
+  "@peopleNearbyLoadFailed": {
+    "description": "Error-state message when the runners-nearby list fails to load"
+  },
+  "peopleNearbyWithin": "Within {distance}",
+  "@peopleNearbyWithin": {
+    "description": "Coarse distance label for a nearby runner \u2014 the bucket's upper bound, never an exact distance",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "peopleNearbyBeyond": "Beyond {distance}",
+  "@peopleNearbyBeyond": {
+    "description": "Coarse distance label for the open-ended furthest bucket",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "prefsDiscoverableNearby": "Show me to runners nearby",
+  "@prefsDiscoverableNearby": {
+    "description": "Toggle title for opting in to coarse-location runners-nearby discovery"
+  },
+  "prefsDiscoverableNearbySubtitle": "Off by default. When on, other runners who also opted in can see that you are roughly nearby \u2014 an approximate distance from the area you set, never your location.",
+  "@prefsDiscoverableNearbySubtitle": {
+    "description": "Subtitle for the runners-nearby opt-in toggle"
+  },
+  "nearbyAreaTitle": "Your area",
+  "@nearbyAreaTitle": {
+    "description": "Title of the coarse-area setter screen and of the Settings row that opens it"
+  },
+  "nearbyAreaExplainer": "Pick the city or neighbourhood you run in. It is stored rounded to about a kilometre and is never your live location. Other runners only ever see an approximate distance, never the area itself.",
+  "@nearbyAreaExplainer": {
+    "description": "Explanatory paragraph at the top of the coarse-area setter"
+  },
+  "nearbyAreaNone": "No area set",
+  "@nearbyAreaNone": {
+    "description": "Shown when the runner has not set a coarse area"
+  },
+  "nearbyAreaCurrent": "Current area: {label}",
+  "@nearbyAreaCurrent": {
+    "description": "Shows the coarse area the runner has set",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "nearbyAreaSearchHint": "Search for a city or neighbourhood",
+  "@nearbyAreaSearchHint": {
+    "description": "Hint text of the place-search field on the coarse-area setter"
+  },
+  "nearbyAreaSearchUnavailable": "Place search is unavailable right now.",
+  "@nearbyAreaSearchUnavailable": {
+    "description": "Shown when the geocoding provider fails \u2014 distinct from no matches"
+  },
+  "nearbyAreaNoResults": "No places matched that search.",
+  "@nearbyAreaNoResults": {
+    "description": "Shown when the place search returns no matches"
+  },
+  "nearbyAreaSaved": "Area saved",
+  "@nearbyAreaSaved": {
+    "description": "Confirmation banner after the coarse area is stored"
+  },
+  "nearbyAreaSaveFailed": "Could not save your area.",
+  "@nearbyAreaSaveFailed": {
+    "description": "Failure banner when storing the coarse area fails"
+  },
+  "nearbyAreaLoadFailed": "Could not load your area.",
+  "@nearbyAreaLoadFailed": {
+    "description": "Error-state message when reading the stored coarse-area label fails"
+  },
+  "nearbyAreaForget": "Forget my area",
+  "@nearbyAreaForget": {
+    "description": "Destructive action that clears the stored coarse area"
+  },
+  "nearbyAreaForgetConfirmTitle": "Forget your area?",
+  "@nearbyAreaForgetConfirmTitle": {
+    "description": "Confirm-dialog title for clearing the stored coarse area"
+  },
+  "nearbyAreaForgetConfirmBody": "You will stop appearing to runners nearby until you set an area again.",
+  "@nearbyAreaForgetConfirmBody": {
+    "description": "Confirm-dialog body for clearing the stored coarse area"
+  },
+  "nearbyAreaForgotten": "Area forgotten",
+  "@nearbyAreaForgotten": {
+    "description": "Confirmation banner after the coarse area is cleared"
+  },
+  "nearbyAreaForgetFailed": "Could not forget your area.",
+  "@nearbyAreaForgetFailed": {
+    "description": "Failure banner when clearing the coarse area fails"
+  },
   "peopleFallbackDisplayName": "Runner",
   "@peopleFallbackDisplayName": {
     "description": "Fallback display name for a person with no name set"

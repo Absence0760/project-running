@@ -516,6 +516,91 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => 'Corredores por perto';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Corredores que optaram por participar perto da área que definiu. Apenas distância aproximada, nunca uma localização em tempo real.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Ainda não há ninguém por perto';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Ative «Mostrar-me a corredores por perto» em Configurações → Preferências → Privacidade e defina a sua área. Só os corredores que fizeram o mesmo o podem encontrar.';
+
+  @override
+  String get peopleNearbyLoadFailed =>
+      'Não foi possível carregar os corredores por perto.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'A menos de $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'A mais de $distance';
+  }
+
+  @override
+  String get prefsDiscoverableNearby => 'Mostrar-me a corredores por perto';
+
+  @override
+  String get prefsDiscoverableNearbySubtitle =>
+      'Desativado por predefinição. Quando ativado, outros corredores que também optaram por participar veem que está aproximadamente por perto — uma distância aproximada à área que definiu, nunca a sua localização.';
+
+  @override
+  String get nearbyAreaTitle => 'A sua área';
+
+  @override
+  String get nearbyAreaExplainer =>
+      'Escolha a cidade ou o bairro onde corre. É guardada arredondada a cerca de um quilómetro e nunca é a sua localização em tempo real. Os outros corredores só veem uma distância aproximada, nunca a área em si.';
+
+  @override
+  String get nearbyAreaNone => 'Nenhuma área definida';
+
+  @override
+  String nearbyAreaCurrent(String label) {
+    return 'Área atual: $label';
+  }
+
+  @override
+  String get nearbyAreaSearchHint => 'Procurar uma cidade ou bairro';
+
+  @override
+  String get nearbyAreaSearchUnavailable =>
+      'A pesquisa de locais está indisponível neste momento.';
+
+  @override
+  String get nearbyAreaNoResults => 'Nenhum local corresponde a essa pesquisa.';
+
+  @override
+  String get nearbyAreaSaved => 'Área guardada';
+
+  @override
+  String get nearbyAreaSaveFailed => 'Não foi possível guardar a sua área.';
+
+  @override
+  String get nearbyAreaLoadFailed => 'Não foi possível carregar a sua área.';
+
+  @override
+  String get nearbyAreaForget => 'Esquecer a minha área';
+
+  @override
+  String get nearbyAreaForgetConfirmTitle => 'Esquecer a sua área?';
+
+  @override
+  String get nearbyAreaForgetConfirmBody =>
+      'Deixará de aparecer a corredores por perto até definir novamente uma área.';
+
+  @override
+  String get nearbyAreaForgotten => 'Área esquecida';
+
+  @override
+  String get nearbyAreaForgetFailed => 'Não foi possível esquecer a sua área.';
+
+  @override
   String get peopleFallbackDisplayName => 'Corredor';
 
   @override
@@ -13860,6 +13945,92 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$_temp0';
   }
+
+  @override
+  String get peopleNearbyHeader => 'Corredores por perto';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Corredores que optaram por participar perto da área que você definiu. Apenas distância aproximada, nunca uma localização em tempo real.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Ainda não há ninguém por perto';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Ative “Mostrar meu perfil a corredores por perto” em Configurações → Preferências → Privacidade e defina sua área. Só os corredores que fizeram o mesmo podem te encontrar.';
+
+  @override
+  String get peopleNearbyLoadFailed =>
+      'Não foi possível carregar os corredores por perto.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'A menos de $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'A mais de $distance';
+  }
+
+  @override
+  String get prefsDiscoverableNearby =>
+      'Mostrar meu perfil a corredores por perto';
+
+  @override
+  String get prefsDiscoverableNearbySubtitle =>
+      'Desativado por padrão. Quando ativado, outros corredores que também optaram por participar veem que você está aproximadamente por perto — uma distância aproximada da área que você definiu, nunca sua localização.';
+
+  @override
+  String get nearbyAreaTitle => 'Sua área';
+
+  @override
+  String get nearbyAreaExplainer =>
+      'Escolha a cidade ou o bairro onde você corre. Ela é salva arredondada para cerca de um quilômetro e nunca é sua localização em tempo real. Os outros corredores só veem uma distância aproximada, nunca a área em si.';
+
+  @override
+  String get nearbyAreaNone => 'Nenhuma área definida';
+
+  @override
+  String nearbyAreaCurrent(String label) {
+    return 'Área atual: $label';
+  }
+
+  @override
+  String get nearbyAreaSearchHint => 'Buscar uma cidade ou bairro';
+
+  @override
+  String get nearbyAreaSearchUnavailable =>
+      'A busca de locais está indisponível neste momento.';
+
+  @override
+  String get nearbyAreaNoResults => 'Nenhum local corresponde a essa busca.';
+
+  @override
+  String get nearbyAreaSaved => 'Área salva';
+
+  @override
+  String get nearbyAreaSaveFailed => 'Não foi possível salvar sua área.';
+
+  @override
+  String get nearbyAreaLoadFailed => 'Não foi possível carregar sua área.';
+
+  @override
+  String get nearbyAreaForget => 'Esquecer minha área';
+
+  @override
+  String get nearbyAreaForgetConfirmTitle => 'Esquecer sua área?';
+
+  @override
+  String get nearbyAreaForgetConfirmBody =>
+      'Você deixará de aparecer para corredores por perto até definir uma área novamente.';
+
+  @override
+  String get nearbyAreaForgotten => 'Área esquecida';
+
+  @override
+  String get nearbyAreaForgetFailed => 'Não foi possível esquecer sua área.';
 
   @override
   String get peopleFallbackDisplayName => 'Corredor';

@@ -839,6 +839,150 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{1 club together} other{{count} clubs together}}'**
   String peopleSharedClubsCount(num count);
 
+  /// Section heading for the opt-in coarse-location runners-nearby list on the People screen
+  ///
+  /// In en, this message translates to:
+  /// **'Runners nearby'**
+  String get peopleNearbyHeader;
+
+  /// Explanatory subtitle under the runners-nearby heading
+  ///
+  /// In en, this message translates to:
+  /// **'Runners who opted in near the area you set. Approximate distance only — never a live location.'**
+  String get peopleNearbySubtitle;
+
+  /// Empty-state title when the runners-nearby list comes back with no one
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody nearby yet'**
+  String get peopleNearbyEmptyTitle;
+
+  /// Empty-state body for the runners-nearby list, pointing at the opt-in and area setter
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on \"Show me to runners nearby\" in Settings → Preferences → Privacy and set your area. Only runners who did the same can find you.'**
+  String get peopleNearbyEmptyBody;
+
+  /// Error-state message when the runners-nearby list fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load runners nearby.'**
+  String get peopleNearbyLoadFailed;
+
+  /// Coarse distance label for a nearby runner — the bucket's upper bound, never an exact distance
+  ///
+  /// In en, this message translates to:
+  /// **'Within {distance}'**
+  String peopleNearbyWithin(String distance);
+
+  /// Coarse distance label for the open-ended furthest bucket
+  ///
+  /// In en, this message translates to:
+  /// **'Beyond {distance}'**
+  String peopleNearbyBeyond(String distance);
+
+  /// Toggle title for opting in to coarse-location runners-nearby discovery
+  ///
+  /// In en, this message translates to:
+  /// **'Show me to runners nearby'**
+  String get prefsDiscoverableNearby;
+
+  /// Subtitle for the runners-nearby opt-in toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Off by default. When on, other runners who also opted in can see that you are roughly nearby — an approximate distance from the area you set, never your location.'**
+  String get prefsDiscoverableNearbySubtitle;
+
+  /// Title of the coarse-area setter screen and of the Settings row that opens it
+  ///
+  /// In en, this message translates to:
+  /// **'Your area'**
+  String get nearbyAreaTitle;
+
+  /// Explanatory paragraph at the top of the coarse-area setter
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the city or neighbourhood you run in. It is stored rounded to about a kilometre and is never your live location. Other runners only ever see an approximate distance, never the area itself.'**
+  String get nearbyAreaExplainer;
+
+  /// Shown when the runner has not set a coarse area
+  ///
+  /// In en, this message translates to:
+  /// **'No area set'**
+  String get nearbyAreaNone;
+
+  /// Shows the coarse area the runner has set
+  ///
+  /// In en, this message translates to:
+  /// **'Current area: {label}'**
+  String nearbyAreaCurrent(String label);
+
+  /// Hint text of the place-search field on the coarse-area setter
+  ///
+  /// In en, this message translates to:
+  /// **'Search for a city or neighbourhood'**
+  String get nearbyAreaSearchHint;
+
+  /// Shown when the geocoding provider fails — distinct from no matches
+  ///
+  /// In en, this message translates to:
+  /// **'Place search is unavailable right now.'**
+  String get nearbyAreaSearchUnavailable;
+
+  /// Shown when the place search returns no matches
+  ///
+  /// In en, this message translates to:
+  /// **'No places matched that search.'**
+  String get nearbyAreaNoResults;
+
+  /// Confirmation banner after the coarse area is stored
+  ///
+  /// In en, this message translates to:
+  /// **'Area saved'**
+  String get nearbyAreaSaved;
+
+  /// Failure banner when storing the coarse area fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save your area.'**
+  String get nearbyAreaSaveFailed;
+
+  /// Error-state message when reading the stored coarse-area label fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your area.'**
+  String get nearbyAreaLoadFailed;
+
+  /// Destructive action that clears the stored coarse area
+  ///
+  /// In en, this message translates to:
+  /// **'Forget my area'**
+  String get nearbyAreaForget;
+
+  /// Confirm-dialog title for clearing the stored coarse area
+  ///
+  /// In en, this message translates to:
+  /// **'Forget your area?'**
+  String get nearbyAreaForgetConfirmTitle;
+
+  /// Confirm-dialog body for clearing the stored coarse area
+  ///
+  /// In en, this message translates to:
+  /// **'You will stop appearing to runners nearby until you set an area again.'**
+  String get nearbyAreaForgetConfirmBody;
+
+  /// Confirmation banner after the coarse area is cleared
+  ///
+  /// In en, this message translates to:
+  /// **'Area forgotten'**
+  String get nearbyAreaForgotten;
+
+  /// Failure banner when clearing the coarse area fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not forget your area.'**
+  String get nearbyAreaForgetFailed;
+
   /// Fallback display name for a person with no name set
   ///
   /// In en, this message translates to:

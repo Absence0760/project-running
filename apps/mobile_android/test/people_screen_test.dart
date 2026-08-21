@@ -4,11 +4,13 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart' show IdentityAvatar;
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/nearby_flag.dart';
 import '../lib/screens/people_screen.dart';
 import '../lib/widgets/error_state.dart';
 import '../lib/widgets/sign_in_required_state.dart';
@@ -55,6 +57,7 @@ class _FakeApi extends ApiClient {
     this.searchError,
     this.suggestionsError,
     this.signedIn = true,
+    this.nearby = const [],
   });
   List<PeopleSuggestion> suggestions;
   List<PeopleSuggestion> results;
@@ -63,6 +66,9 @@ class _FakeApi extends ApiClient {
   Object? searchError;
   Object? suggestionsError;
   bool signedIn;
+  List<NearbyRunner> nearby;
+  Object? nearbyError;
+  int nearbyCalls = 0;
   int followCalls = 0;
   int unfollowCalls = 0;
   int searchCalls = 0;
@@ -92,6 +98,14 @@ class _FakeApi extends ApiClient {
   }
 
   @override
+  Future<List<NearbyRunner>> fetchNearbyRunners({double radiusM = 25000}) async {
+    nearbyCalls++;
+    final err = nearbyError;
+    if (err != null) throw err;
+    return nearby;
+  }
+
+  @override
   Future<void> followUser(String targetUserId) async {
     followCalls++;
     if (followShouldThrow) throw Exception('follow down');
@@ -100,6 +114,30 @@ class _FakeApi extends ApiClient {
   @override
   Future<void> unfollowUser(String targetUserId) async {
     unfollowCalls++;
+  }
+}
+
+NearbyRunner _nearbyRunner({
+  String id = 'n-1',
+  String? name = 'Nearby Nia',
+  int bucket = 0,
+  bool follows = false,
+}) =>
+    NearbyRunner(
+      id: id,
+      displayName: name,
+      avatarUrl: null,
+      bucket: bucket,
+      viewerFollows: follows,
+    );
+
+/// The nearby surface is gated on a dotenv flag, so a test that wants it has to
+/// turn it on explicitly — which is also what pins the default-off contract.
+void _setNearbyGate(bool on) {
+  if (on) {
+    dotenv.env[kNearbyRunnersEnvKey] = 'true';
+  } else {
+    dotenv.env.remove(kNearbyRunnersEnvKey);
   }
 }
 
@@ -429,4 +467,124 @@ void main() {
       expect(find.byType(ErrorState), findsNothing);
     });
   });
+  group('PeopleScreen — runners nearby (issue #466)', () {
+    setUpAll(() async {
+      await _ensureSupabase();
+      dotenv.loadFromString(isOptional: true);
+    });
+
+    setUp(() => _setNearbyGate(false));
+    tearDown(() => _setNearbyGate(false));
+
+    testWidgets('with the gate off the surface is wholly inert', (tester) async {
+      final api = _FakeApi(
+        suggestions: [_person(id: 'a', name: 'Casey Marathon')],
+        // A populated list the screen must never ask for.
+        nearby: [_nearbyRunner()],
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      // No RPC call is the load-bearing half: person-location must not be read
+      // at all before the owner + CISO/counsel sign-off flips the flag.
+      expect(api.nearbyCalls, 0);
+      expect(find.text('Runners nearby'), findsNothing);
+      expect(find.text('Nearby Nia'), findsNothing);
+      expect(find.byIcon(Icons.near_me), findsNothing);
+    });
+
+    testWidgets('with the gate on the list renders coarse buckets only',
+        (tester) async {
+      _setNearbyGate(true);
+      final api = _FakeApi(
+        suggestions: const [],
+        nearby: [
+          _nearbyRunner(id: 'n-1', name: 'Nearby Nia', bucket: 0),
+          _nearbyRunner(id: 'n-2', name: 'Middling Mo', bucket: 2),
+          _nearbyRunner(id: 'n-3', name: 'Distant Dee', bucket: 4),
+        ],
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      expect(api.nearbyCalls, 1);
+      expect(find.text('Runners nearby'), findsOneWidget);
+      expect(find.text('Nearby Nia'), findsOneWidget);
+      // Bucket UPPER BOUNDS, formatted in the reader's unit — never the exact
+      // distance, which the RPC deliberately never sends.
+      expect(find.text('Within 2.00 km'), findsOneWidget);
+      expect(find.text('Within 10.00 km'), findsOneWidget);
+      expect(find.text('Beyond 25.00 km'), findsOneWidget);
+    });
+
+    testWidgets('an empty nearby list shows its own empty state',
+        (tester) async {
+      _setNearbyGate(true);
+      final api = _FakeApi(suggestions: const [], nearby: const []);
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      expect(find.byIcon(Icons.near_me), findsOneWidget);
+      expect(find.text('Nobody nearby yet'), findsOneWidget);
+    });
+
+    testWidgets('a failed nearby load shows a retry error state', (tester) async {
+      _setNearbyGate(true);
+      final api = _FakeApi(suggestions: const [], nearby: const []);
+      api.nearbyError = Exception('nearby down');
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      // A failed load is not the same claim as "nobody is nearby".
+      expect(find.text('Could not load runners nearby.'), findsOneWidget);
+      expect(find.byIcon(Icons.near_me), findsNothing);
+      expect(api.nearbyCalls, 1);
+
+      api.nearbyError = null;
+      api.nearby = [_nearbyRunner(name: 'Recovered Rae')];
+      await tester.tap(find.text('Retry'));
+      await _settle(tester);
+      expect(find.text('Recovered Rae'), findsOneWidget);
+      expect(api.nearbyCalls, 2);
+    });
+
+    testWidgets('following from a nearby row flips the label + calls follow',
+        (tester) async {
+      _setNearbyGate(true);
+      final api = _FakeApi(
+        suggestions: const [],
+        nearby: [_nearbyRunner(follows: false)],
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      expect(find.text('Follow'), findsOneWidget);
+      await tester.tap(find.text('Follow'));
+      await tester.pump();
+      expect(find.text('Following'), findsOneWidget);
+      await _settle(tester);
+      expect(api.followCalls, 1);
+    });
+
+    testWidgets('an active search hides the nearby section', (tester) async {
+      _setNearbyGate(true);
+      final api = _FakeApi(
+        suggestions: const [],
+        results: [_person(id: 's-1', name: 'Searched Sam')],
+        nearby: [_nearbyRunner()],
+      );
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+      expect(find.text('Runners nearby'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'sam');
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+
+      expect(find.text('Searched Sam'), findsOneWidget);
+      expect(find.text('Runners nearby'), findsNothing);
+      expect(find.text('Nearby Nia'), findsNothing);
+    });
+  });
+
 }

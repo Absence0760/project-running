@@ -514,6 +514,92 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => 'Coureurs à proximité';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Coureurs inscrits près de la zone que vous avez définie. Distance approximative uniquement, jamais une position en direct.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Personne à proximité pour l’instant';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Activez « Me montrer aux coureurs à proximité » dans Réglages → Préférences → Confidentialité et définissez votre zone. Seuls les coureurs ayant fait de même peuvent vous trouver.';
+
+  @override
+  String get peopleNearbyLoadFailed =>
+      'Impossible de charger les coureurs à proximité.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'À moins de $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'À plus de $distance';
+  }
+
+  @override
+  String get prefsDiscoverableNearby => 'Me montrer aux coureurs à proximité';
+
+  @override
+  String get prefsDiscoverableNearbySubtitle =>
+      'Désactivé par défaut. Une fois activé, les autres coureurs qui se sont aussi inscrits voient que vous êtes approximativement à proximité : une distance approximative par rapport à la zone que vous avez définie, jamais votre position.';
+
+  @override
+  String get nearbyAreaTitle => 'Votre zone';
+
+  @override
+  String get nearbyAreaExplainer =>
+      'Choisissez la ville ou le quartier où vous courez. Elle est enregistrée arrondie à environ un kilomètre et n’est jamais votre position en direct. Les autres coureurs ne voient qu’une distance approximative, jamais la zone elle-même.';
+
+  @override
+  String get nearbyAreaNone => 'Aucune zone définie';
+
+  @override
+  String nearbyAreaCurrent(String label) {
+    return 'Zone actuelle : $label';
+  }
+
+  @override
+  String get nearbyAreaSearchHint => 'Rechercher une ville ou un quartier';
+
+  @override
+  String get nearbyAreaSearchUnavailable =>
+      'La recherche de lieux est indisponible pour le moment.';
+
+  @override
+  String get nearbyAreaNoResults =>
+      'Aucun lieu ne correspond à cette recherche.';
+
+  @override
+  String get nearbyAreaSaved => 'Zone enregistrée';
+
+  @override
+  String get nearbyAreaSaveFailed => 'Impossible d’enregistrer votre zone.';
+
+  @override
+  String get nearbyAreaLoadFailed => 'Impossible de charger votre zone.';
+
+  @override
+  String get nearbyAreaForget => 'Oublier ma zone';
+
+  @override
+  String get nearbyAreaForgetConfirmTitle => 'Oublier votre zone ?';
+
+  @override
+  String get nearbyAreaForgetConfirmBody =>
+      'Vous n’apparaîtrez plus aux coureurs à proximité jusqu’à ce que vous définissiez à nouveau une zone.';
+
+  @override
+  String get nearbyAreaForgotten => 'Zone oubliée';
+
+  @override
+  String get nearbyAreaForgetFailed => 'Impossible d’oublier votre zone.';
+
+  @override
   String get peopleFallbackDisplayName => 'Coureur';
 
   @override
