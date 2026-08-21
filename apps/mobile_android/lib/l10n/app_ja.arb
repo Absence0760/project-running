@@ -468,6 +468,8 @@
   "runTreadmillReconnected": "トレッドミルに再接続しました",
   "runTreadmillLostFallback": "トレッドミルとの接続が切れました — 距離はGPSに戻ります",
   "runTreadmillNotFound": "トレッドミルに接続できませんでした",
+  "runTreadmillConnecting": "トレッドミルに接続中…",
+  "runTreadmillNoBeltData": "ベルトのデータなし — 距離はGPSから",
   "runSaveFailedRelaunch": "ローカルに保存できませんでした。アプリを再起動して復元してください。",
   "runSyncFailedSaveOffline": "オフラインで保存しました。ランから同期してください。",
   "runSavedOffline": "オフラインで保存しました。",

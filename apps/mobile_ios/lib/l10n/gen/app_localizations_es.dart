@@ -1680,6 +1680,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo conectar con la cinta de correr';
 
   @override
+  String get runTreadmillConnecting => 'Conectando con la cinta de correr…';
+
+  @override
+  String get runTreadmillNoBeltData =>
+      'Sin datos de la cinta — distancia por GPS';
+
+  @override
   String get runSaveFailedRelaunch =>
       'No se pudo guardar localmente. Reinicia la app para recuperar.';
 

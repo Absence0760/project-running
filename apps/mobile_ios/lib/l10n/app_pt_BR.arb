@@ -468,6 +468,8 @@
   "runTreadmillReconnected": "Esteira reconectada",
   "runTreadmillLostFallback": "Esteira perdida — distância voltando para o GPS",
   "runTreadmillNotFound": "Não foi possível conectar à esteira",
+  "runTreadmillConnecting": "Conectando à esteira…",
+  "runTreadmillNoBeltData": "Sem dados da esteira — distância pelo GPS",
   "runSaveFailedRelaunch": "Não foi possível salvar localmente. Reinicie o app para recuperar.",
   "runSyncFailedSaveOffline": "Salva offline. Sincronize em Corridas.",
   "runSavedOffline": "Salva offline.",

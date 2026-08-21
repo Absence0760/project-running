@@ -23,6 +23,7 @@ import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/turn_cues.dart';
+import '../lib/widgets/top_banner.dart';
 
 /// Drives the full RunScreen UI flow: tap START → countdown → recording.
 ///
@@ -1220,6 +1221,300 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
       }
       tester.takeException();
+    });
+  });
+
+  group('RunScreen — treadmill live-mode toggle', () {
+    // The belt is an L4 auxiliary distance source layered on the live
+    // recording. Every case below drives the REAL screen through the real
+    // `_toggleTreadmillMode` / status-listener wiring using the
+    // `@visibleForTesting` BleTreadmill emit seams, so no BLE stack is
+    // needed and a regression in the screen (rather than in a replica of
+    // its guards) is what fails.
+
+    /// Pump the run screen with a belt already paired, returning the shared
+    /// `BleTreadmill` the screen reads so the test can drive it.
+    ///
+    /// The pairing keys must be seeded AFTER `makeStores` (which resets the
+    /// mock store) and BEFORE the first frame, because `_loadTreadmillPairing`
+    /// reads them in a post-frame callback.
+    Future<BleTreadmill> pumpWithPairedBelt(WidgetTester tester,
+        {bool paired = true}) async {
+      final s = await makeStores();
+      if (paired) {
+        SharedPreferences.setMockInitialValues({
+          'treadmill_device_id': 'AA:BB:CC:DD:EE:FF',
+          'treadmill_device_name': 'NordicTrack T9',
+        });
+      }
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunScreen(
+            apiClient: null,
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+            treadmill: s.treadmill,
+          ),
+        ),
+      );
+      await tester.pump();
+      // Drain the pairedName() read the post-frame callback kicked off.
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      });
+      await tester.pump();
+      return s.treadmill;
+    }
+
+    /// Tap START and walk the 3-2-1 countdown into the recording view.
+    Future<void> reachRecording(WidgetTester tester) async {
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // LiveRunMap tile-fetch noise
+    }
+
+    /// Let a fired `showTopBanner` reach its own auto-dismiss. Its timer
+    /// lives in the root Overlay, not the screen, so screen dispose does
+    /// not cancel it and leaving it pending fails the test teardown.
+    Future<void> drainBanner(WidgetTester tester) async {
+      await tester.pump(kTopBannerMaxDuration + const Duration(seconds: 1));
+      tester.takeException();
+    }
+
+    /// Flip the toggle on with the belt reporting connected, then push one
+    /// sample through. Leaves the screen showing the live belt speed.
+    Future<void> engageBelt(WidgetTester tester, BleTreadmill treadmill,
+        {double kmh = 10}) async {
+      treadmill.debugEmitStatus(BleTreadmillStatus.connected);
+      await tester.pump();
+      await tester.tap(find.text('Treadmill mode'));
+      await tester.pump();
+      treadmill.debugEmitSample(TreadmillSample(instantaneousSpeedKmh: kmh));
+      await tester.pump();
+    }
+
+    testWidgets('is absent while recording when no belt is paired',
+        (tester) async {
+      await pumpWithPairedBelt(tester, paired: false);
+      await reachRecording(tester);
+      expect(find.text('Treadmill mode'), findsNothing,
+          reason: 'an unpaired belt makes the toggle a no-op — Settings is '
+              'where the runner is pointed instead');
+    });
+
+    testWidgets('renders off by default once a belt is paired', (tester) async {
+      await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      expect(find.text('Treadmill mode'), findsOneWidget);
+      final sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(sw.value, isFalse,
+          reason: 'a belt in range must never hijack an outdoor GPS run — '
+              'treadmill mode only engages on an explicit tap');
+      expect(sw.subtitle, isNull,
+          reason: 'nothing is claimed about a belt the runner has not engaged');
+    });
+
+    testWidgets('turning it on feeds the belt speed into the readout',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill, kmh: 12);
+
+      expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+          isTrue);
+      expect(find.text('Belt 12.0 km/h'), findsOneWidget,
+          reason: 'a connected belt states the speed it is reporting');
+    });
+
+    testWidgets('turning it off drops the belt readout', (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+      expect(find.text('Belt 10.0 km/h'), findsOneWidget);
+
+      await tester.tap(find.text('Treadmill mode'));
+      // The off path awaits the live subscription's cancel before its
+      // setState, and that future only completes on the real event loop.
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      });
+      await tester.pump();
+
+      final sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(sw.value, isFalse);
+      expect(sw.subtitle, isNull,
+          reason: 'clearTreadmillMode handed distance back to GPS — the belt '
+              'figure must not linger beside a disengaged toggle');
+    });
+
+    testWidgets('a mid-run disconnect says the belt is not feeding',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+      expect(find.text('Belt 10.0 km/h'), findsOneWidget);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.disconnected);
+      await tester.pump();
+
+      expect(find.text('Belt 10.0 km/h'), findsNothing,
+          reason: 'never a belt-derived figure while the belt is gone');
+      expect(find.text('No belt data — distance from GPS'), findsOneWidget,
+          reason: 'an engaged toggle with a blank subtitle reads identically '
+              'to "connected, first sample pending" — the drop must stay '
+              'disclosed after the banner expires');
+    });
+
+    testWidgets('a mid-run disconnect leaves the recording running',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.disconnected);
+      await tester.pump(const Duration(seconds: 2));
+      tester.takeException();
+
+      // L1/L0 intact: the recording surface is still mounted and the core
+      // controls a runner needs are still reachable.
+      expect(
+          tester.allWidgets
+              .where((w) => w.runtimeType.toString() == 'LiveRunMap'),
+          isNotEmpty,
+          reason: 'a belt failure must never tear down the recording view');
+      expect(
+          find
+              .byWidgetPredicate(
+                  (w) => w.runtimeType.toString() == 'HoldToStopButton')
+              .hitTestable(),
+          findsOneWidget,
+          reason: 'Finish must stay reachable through an auxiliary failure');
+    });
+
+    testWidgets('reconnecting is disclosed rather than a frozen speed',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.reconnecting);
+      await tester.pump();
+
+      expect(find.text('Belt 10.0 km/h'), findsNothing);
+      expect(find.text('Treadmill lost, reconnecting…'), findsWidgets,
+          reason: 'the toggle states the belt is being chased, and does not '
+              'hold the last speed as if it were current');
+      await drainBanner(tester);
+    });
+
+    testWidgets('a connect failure is disclosed on the toggle', (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      // A belt that was off at launch reports connectFailed and never
+      // auto-retries, so the toggle itself has to carry the state.
+      treadmill.debugEmitStatus(BleTreadmillStatus.connectFailed);
+      await tester.pump();
+      await tester.tap(find.text('Treadmill mode'));
+      await tester.pump();
+
+      expect(find.text('No belt data — distance from GPS'), findsOneWidget);
+      expect(find.text('Reconnect'), findsOneWidget,
+          reason: 'connectFailed never retries itself — the runner is offered '
+              'the one-tap reconnect, mirroring the HR strap');
+      await drainBanner(tester);
+    });
+
+    testWidgets('connecting is disclosed on the toggle', (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.connecting);
+      await tester.pump();
+
+      expect(find.text('Connecting to the treadmill…'), findsOneWidget);
+      expect(find.text('Belt 10.0 km/h'), findsNothing);
+    });
+
+    testWidgets('a belt sample fault does not disturb the recording',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+
+      treadmill.debugEmitSampleError(StateError('belt fault'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(tester.takeException(), isNull,
+          reason: 'the screen-side onError absorbs the fault — nothing may '
+              'escape into the widget error zone');
+      expect(
+          tester.allWidgets
+              .where((w) => w.runtimeType.toString() == 'LiveRunMap'),
+          isNotEmpty);
+    });
+
+    testWidgets('the belt keeps feeding across a pause and resume',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+
+      await tester.tap(find.bySemanticsLabel('Pause run'));
+      await tester.pump();
+      expect(find.bySemanticsLabel('Resume run'), findsOneWidget,
+          reason: 'the run is manually paused');
+      // The recorder excludes paused belt advance itself; the screen keeps
+      // the subscription rather than tearing it down and re-arming.
+      treadmill.debugEmitSample(
+          const TreadmillSample(instantaneousSpeedKmh: 3));
+      await tester.pump();
+      expect(find.text('Belt 3.0 km/h'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Resume run'));
+      await tester.pump();
+      treadmill.debugEmitSample(
+          const TreadmillSample(instantaneousSpeedKmh: 11));
+      await tester.pump();
+      expect(find.text('Belt 11.0 km/h'), findsOneWidget,
+          reason: 'a pause/resume cycle must not silently drop the belt '
+              'subscription — the toggle would then lie about being on');
+      tester.takeException();
+    });
+
+    testWidgets('finishing the run cancels the belt subscription',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill);
+
+      await holdFinish(tester);
+      tester.takeException();
+
+      // The recording view (and its toggle) is gone, and a late belt sample
+      // arriving after the stop path cancelled the subscription is inert.
+      expect(find.text('Treadmill mode'), findsNothing);
+      treadmill.debugEmitSample(
+          const TreadmillSample(instantaneousSpeedKmh: 9));
+      await tester.pump();
+      expect(tester.takeException(), isNull,
+          reason: 'a sample landing after stop must not reach a dead '
+              'recorder or a disposed screen');
     });
   });
 }

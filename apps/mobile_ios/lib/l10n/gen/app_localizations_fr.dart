@@ -1687,6 +1687,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runTreadmillNotFound => 'Impossible de joindre le tapis de course';
 
   @override
+  String get runTreadmillConnecting => 'Connexion au tapis de course…';
+
+  @override
+  String get runTreadmillNoBeltData =>
+      'Aucune donnée du tapis — distance via GPS';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Impossible d\'enregistrer localement. Relancez l\'app pour récupérer.';
 

@@ -1666,6 +1666,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runTreadmillNotFound => 'Couldn\'t reach the treadmill';
 
   @override
+  String get runTreadmillConnecting => 'Connecting to the treadmill…';
+
+  @override
+  String get runTreadmillNoBeltData => 'No belt data — distance from GPS';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Couldn\'t save locally. Relaunch the app to recover.';
 

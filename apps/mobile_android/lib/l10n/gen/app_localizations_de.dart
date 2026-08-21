@@ -1684,6 +1684,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get runTreadmillNotFound => 'Laufband nicht erreichbar';
 
   @override
+  String get runTreadmillConnecting => 'Verbindung zum Laufband…';
+
+  @override
+  String get runTreadmillNoBeltData => 'Keine Banddaten — Distanz per GPS';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Lokales Speichern fehlgeschlagen. Starte die App neu, um wiederherzustellen.';
 
