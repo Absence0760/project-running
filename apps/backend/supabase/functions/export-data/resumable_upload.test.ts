@@ -329,3 +329,81 @@ Deno.test('tens of thousands of tiny writes stay linear and byte-exact', async (
 	for (const n of rec.received.slice(0, -1)) assertEquals(n, 4096);
 	assert(Date.now() - started < 10_000, 'the pending queue is not linear');
 });
+
+// A gateway that reports its own internal origin in `Location` is not a
+// hypothetical: the local stack answers `http://kong:54321/...`, which the
+// function container cannot connect to, so following it verbatim turned a
+// 201 create into ECONNREFUSED on the first PATCH — the whole export 500ing
+// after the archive was already built.
+Deno.test('the assigned Location keeps its path but our reachable origin', async () => {
+	const rec: Call[] = [];
+	const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+		const url = String(input);
+		const method = init?.method ?? 'GET';
+		rec.push({ method, url, headers: {}, bytes: 0 });
+		if (method === 'POST') {
+			return new Response(null, {
+				status: 201,
+				// Same path, foreign origin — exactly what a proxied
+				// Storage reports.
+				headers: {
+					Location: 'http://kong:54321/storage/v1/upload/resumable/abc123',
+				},
+			});
+		}
+		return new Response(null, { status: 204, headers: { 'Upload-Offset': '4' } });
+	}) as unknown as typeof fetch;
+
+	const up = createResumableUpload({
+		supabaseUrl: 'https://proj.supabase.co',
+		bucket: 'exports',
+		objectPath: 'user-1/exports/2026-08-21.zip',
+		contentType: 'application/zip',
+		headers: { apikey: 'k' },
+		chunkBytes: 16,
+		fetchImpl,
+	});
+	await up.write(new Uint8Array([1, 2, 3, 4]));
+	await up.finish();
+
+	const patch = rec.find((c) => c.method === 'PATCH');
+	assert(patch, 'the tail chunk must be PATCHed');
+	assertEquals(
+		patch.url,
+		'https://proj.supabase.co/storage/v1/upload/resumable/abc123',
+		'the PATCH must go to the origin we reached create on, carrying the assigned path',
+	);
+});
+
+Deno.test('abort follows the same reachable origin as the PATCHes', async () => {
+	const rec: string[] = [];
+	const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+		const method = init?.method ?? 'GET';
+		rec.push(`${method} ${String(input)}`);
+		if (method === 'POST') {
+			return new Response(null, {
+				status: 201,
+				headers: { Location: 'http://kong:54321/storage/v1/upload/resumable/zz' },
+			});
+		}
+		if (method === 'PATCH') return new Response(null, { status: 500 });
+		return new Response(null, { status: 204 });
+	}) as unknown as typeof fetch;
+
+	const up = createResumableUpload({
+		supabaseUrl: 'https://proj.supabase.co',
+		bucket: 'exports',
+		objectPath: 'user-1/exports/x.zip',
+		contentType: 'application/zip',
+		headers: { apikey: 'k' },
+		chunkBytes: 4,
+		fetchImpl,
+	});
+	await assertRejects(() => up.write(new Uint8Array(10)));
+	await up.abort();
+
+	assert(
+		rec.some((c) => c === 'DELETE https://proj.supabase.co/storage/v1/upload/resumable/zz'),
+		`abort must terminate the session on the reachable origin, got ${rec.join(' | ')}`,
+	);
+});

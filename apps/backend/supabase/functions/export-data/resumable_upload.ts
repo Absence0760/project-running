@@ -155,7 +155,15 @@ export function createResumableUpload(init: ResumableUploadInit): ResumableUploa
 		await res.body?.cancel();
 		const loc = res.headers.get('location');
 		if (!loc) throw new Error('resumable create returned no Location');
-		location = new URL(loc, createUrl).toString();
+		// Keep the PATH the server assigned, but the ORIGIN we already
+		// reached it on. Storage sits behind a gateway and reports its
+		// own internal origin here (`http://kong:54321/...` on the local
+		// stack), which is not routable from the function container — so
+		// following the Location verbatim fails every PATCH with
+		// ECONNREFUSED after a create that returned 201.
+		const assigned = new URL(loc, createUrl);
+		const base = new URL(createUrl);
+		location = `${base.origin}${assigned.pathname}${assigned.search}`;
 	};
 
 	const patch = async (chunk: Uint8Array, declareTotal: number | null): Promise<void> => {
