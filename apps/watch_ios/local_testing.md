@@ -78,6 +78,16 @@ End to end: pick a route on the iPhone, follow it on the wrist.
 3. Expect a banner: "Route sent to Apple Watch (N points)", or "…thinned from M points to N to fit" on a route over the 512-point budget. A route with fewer than two positions is refused outright with "This route has too few points to follow on Apple Watch" — nothing is queued.
 4. On the watch, `PreRunView` now shows **Route**, the route name, and its total distance, with a **Clear route** button. The push is `transferUserInfo`, so it may take a few seconds and it survives the watch app being closed — background delivery is normal.
 5. Start a run. Under the stat row the run screen shows **X.XX km to go**, counting down as you move along the line.
+
+### In-run mini-map
+
+The run screen is two pages: stats + controls on page one, the live-position mini-map on page two. Swipe left to reach it.
+
+1. Start a run **before** the simulator has a location (Features → Location → None). The map page shows "Waiting for GPS" on an empty field — **not** a position dot, and not a dot in the middle of the map.
+2. Set Features → Location → City Run (or Freeway Drive for a faster trail). The dot appears and a coral track grows behind it, the frame re-fitting as the run spreads out. A short run stays a stub near the centre rather than filling the screen with jitter — the frame floors at a 200 m ground span.
+3. With a route armed (see above), the route draws as a lilac line with a filled marker at the start; a point-to-point route also carries a hollow marker at the finish, a loop only the one.
+4. Swipe back to page one: the elapsed clock, the stats and Pause/Stop are unmoved. Nothing on the map page can stop the recording, and there is no map control there by design.
+5. There are **no map tiles** and there is no network call — the map is a `Canvas` polyline, so it behaves identically with the phone simulator shut down. See [decisions.md § 702](../../docs/architecture/decisions.md).
 6. Drive the simulated location off the route by more than 40 m (iOS simulator → **Features → Location → Custom Location**): the line turns into a red **Off route · N m** warning. Come back inside 20 m and it clears. On a physical watch the transition also fires one `WKInterfaceDevice` haptic (haptics are no-ops in the simulator).
 7. Feed the watch a location it can't project (or arm a degenerate route) and the screen reads **Route position unknown** rather than silently claiming you're on route.
 8. Tap **Clear route** on `PreRunView` — the next run records with no guidance block at all.

@@ -210,6 +210,27 @@ class PeopleSuggestion extends PublicProfile {
   });
 }
 
+/// One row of the opt-in "runners nearby" coarse discovery list (issue #466):
+/// a runner's public identity plus a coarse distance BUCKET. Never a
+/// coordinate and never exact metres — the bucket is computed server-side by
+/// `discoverable_runners_near`, which is what stops a caller triangulating
+/// someone who opted in. Mirror of web's `NearbyRunner` in
+/// `apps/web/src/lib/core/data.ts`.
+class NearbyRunner extends PublicProfile {
+  /// Index into the shared bucket ladder (`nearby.dart` / `nearby.ts`), not a
+  /// distance. Render it through `nearbyBucketUpperBoundM` — never as a number.
+  final int bucket;
+  final bool viewerFollows;
+
+  const NearbyRunner({
+    required super.id,
+    super.displayName,
+    super.avatarUrl,
+    required this.bucket,
+    required this.viewerFollows,
+  });
+}
+
 /// A discoverable public-club event returned by `search_public_events`
 /// (the cross-club activity Discover surface — web `/social?tab=discover`,
 /// mobile the Social Discover tab). Mirror of the web `PublicEventResult`

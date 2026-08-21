@@ -578,6 +578,26 @@
           }
         }
       }
+    },
+    "Run map" : {
+      "comment" : "VoiceOver label for the in-run mini-map showing the track so far and the current position.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Laufkarte" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mapa de la carrera" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Carte de la course" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ランのマップ" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mapa da corrida" } }
+      }
+    },
+    "Waiting for GPS" : {
+      "comment" : "Shown on the in-run mini-map while no usable GPS fix has arrived, so no position dot is drawn.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Warte auf GPS" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esperando el GPS" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "En attente du GPS" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "GPSを待っています" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Aguardando o GPS" } }
+      }
     }
   }
 }

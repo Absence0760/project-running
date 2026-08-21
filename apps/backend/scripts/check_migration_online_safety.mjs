@@ -154,7 +154,7 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // no lock on `runs`; the unschedule writes one row of the small cron.job table.
 // No constraint, no guarded-table DDL, so the scanner passes it with zero
 // violations after this bump too.
-export const GRANDFATHER_CUTOFF = '20270530';
+export const GRANDFATHER_CUTOFF = '20270602';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

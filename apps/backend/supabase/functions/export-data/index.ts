@@ -12,21 +12,37 @@
 ///     primary. Added per audit/data-export-completeness May 2026
 ///     High; brought to full layout parity per the 2026-07-02 High.
 ///
-/// Output is uploaded to the `runs` Storage bucket under the caller's
-/// user-id-prefixed path (`{user_id}/exports/<ts>.<ext>`) so the
-/// existing path-based RLS still gates direct reads. The returned
-/// URL is a signed URL with a 10-minute expiry — the user can
-/// download once without re-authenticating.
+/// Output is streamed to the `exports` Storage bucket under the
+/// caller's user-id-prefixed path (`{user_id}/exports/<ts>.<ext>`) so
+/// the same path-based RLS gates direct reads. The returned URL is a
+/// signed URL with a 10-minute expiry — the user can download once
+/// without re-authenticating. Its own bucket because `file_size_limit`
+/// is per bucket and `runs` caps an object at 25 MB, which was a far
+/// tighter ceiling on a full-history archive than either cap below.
 ///
-/// Caps:
-///   - 5000 runs per export. A serious power-user would still see
-///     every run; a runaway loop on a corrupt account doesn't run
-///     forever.
-///   - 150s function timeout (Supabase platform default). For GPX and
-///     backup, the per-run Storage fetch is the dominant cost, so the
-///     download sweeps run `EXPORT_FETCH_CONCURRENCY`-wide through
-///     `pooledPipeline` — serially, 5000 tracks alone overran the
-///     budget and the runner could never complete an Art 20 export.
+/// Nothing is assembled in memory. The archive goes out through the
+/// chunked tus sink in `resumable_upload.ts` and each section is
+/// serialised page by page (`stream_section.ts`), so peak memory is one
+/// 6 MiB chunk plus the `EXPORT_FETCH_CONCURRENCY` blob window — flat in
+/// the size of the subject's history. That is what removed the two caps
+/// this function used to apologise for in `manifest.json`: a 5000-run
+/// ceiling and 50,000 rows per section, both of which existed only to
+/// keep one enormous Blob alive.
+///
+/// The bound that survives is real: the platform kills the request at
+/// `EXPORT_FUNCTION_TIMEOUT_MS`, and for GPX and backup the per-run
+/// Storage fetch dominates. So the builders run against an explicit
+/// `ExportBudget`, stop opening new work when it is spent, and name what
+/// they skipped in `manifest.json` (`complete` / `incomplete`) and in
+/// the response's `complete`. The download sweeps still run
+/// `EXPORT_FETCH_CONCURRENCY`-wide through `pooledPipeline` so the round
+/// trips overlap. A deep history that cannot finish inside one request
+/// belongs on the Go worker's `/v1/export`, which has no such clock.
+///
+/// Fail-closed: tus materialises the object only once the declared
+/// length arrives, so any build failure aborts the upload and answers
+/// 500 with no artifact at all. A truncated archive can never be
+/// presented as a complete one.
 ///
 /// Rate limit: free 2/h, pro 8/h via `check_rate_limit_tiered`. Heavy
 /// op (zip-and-ship of every run + track) so even Pro doesn't get
@@ -36,7 +52,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import {
-	BlobWriter,
 	TextReader,
 	Uint8ArrayReader,
 	ZipWriter,
@@ -46,15 +61,28 @@ import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { publishableKey, secretKey, secretKeyHeaders } from '../_shared/api_keys.ts';
 import { EXPORT_FETCH_CONCURRENCY, pooledPipeline } from './pooled.ts';
+import { parseContentRangeTotal } from './paging.ts';
+import { createExportBudget, type ExportBudget } from './export_budget.ts';
 import {
-	EXPORT_PAGE_SIZE,
-	fetchAllPages,
-	type PagedRows,
-	parseContentRangeTotal,
-} from './paging.ts';
+	openJsonSection,
+	type SectionPage,
+	type SectionSummary,
+	walkPages,
+} from './stream_section.ts';
+import {
+	createResumableUpload,
+	type ResumableUpload,
+	resumableWritable,
+} from './resumable_upload.ts';
 
-const MAX_RUNS = 5000;
 const SIGNED_URL_TTL_S = 600; // 10 minutes
+
+/// Export artifacts live in their own bucket because `file_size_limit`
+/// is per bucket: `runs` caps an object at 25 MB (20260620_001), which
+/// is right for one gzipped track and is a tighter ceiling on a
+/// full-history archive than either cap this function used to carry.
+/// Migration `20270602_001`, decisions §703.
+const EXPORT_BUCKET = 'exports';
 
 const RUNS_SELECT =
 	'id, user_id, started_at, duration_s, distance_m, source, activity_type, is_dnf, external_id, metadata, track_url, hr_series_url, is_public, event_id, route_id, created_at, updated_at';
@@ -86,6 +114,28 @@ type TrackPoint = {
 	ts?: string;
 	bpm?: number;
 };
+
+/// A Storage object the archive still owes, kept instead of the whole
+/// row so the object sweeps don't reintroduce a per-run memory cost.
+type BlobRef = { id: string; key: string };
+
+/// What a per-run GPX needs, and nothing else.
+type GpxRef = { id: string; startedAt: string; title: string; key: string };
+
+type PageFetcher<T> = (offset: number, limit: number) => Promise<SectionPage<T> | null>;
+
+/// The runs read failed outright — no page came back at all. Distinct
+/// from a short read: there is nothing to ship, so the caller answers
+/// 500 rather than uploading an archive with no runs in it.
+class RunFetchError extends Error {}
+
+interface BuildResult {
+	runs: SectionSummary;
+	/// Sections that are systematically short (a failed page, or the
+	/// wall clock). A single failed object download is tolerated by
+	/// contract and does not land here.
+	incomplete: string[];
+}
 
 Deno.serve(withSentry('export-data', async (req: Request) => {
 	if (req.method !== 'POST') {
@@ -134,16 +184,16 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 		);
 	}
 
-	// Pull every run for the user. The authedSupabase client respects
-	// RLS so `eq('user_id', user.id)` is belt-and-braces — but it also
-	// keeps the query plan honest about which user owns the rows.
+	// The authedSupabase client respects RLS so `eq('user_id', user.id)`
+	// is belt-and-braces — but it also keeps the query plan honest about
+	// which user owns the rows.
 	//
-	// Paged: a bare `.limit(MAX_RUNS)` is clamped by PostgREST to
-	// `db-max-rows` (1000), so every runner past their thousandth run
-	// silently received a fraction of their history. `id` is the
-	// tiebreaker because two runs can share a `started_at`, and offset
-	// paging under a non-total order repeats one row and drops another.
-	const runsPaged = await fetchAllPages<RunRow>(async (offset, limit) => {
+	// Paged: a bare `.limit(n)` is clamped by PostgREST to `db-max-rows`
+	// (1000), so every runner past their thousandth run silently received
+	// a fraction of their history. `id` is the tiebreaker because two runs
+	// can share a `started_at`, and offset paging under a non-total order
+	// repeats one row and drops another.
+	const runsPage: PageFetcher<RunRow> = async (offset, limit) => {
 		const { data, error, count } = await authedSupabase
 			.from('runs')
 			.select(RUNS_SELECT, offset === 0 ? { count: 'exact' } : {})
@@ -156,43 +206,47 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 			return null;
 		}
 		return { rows: (data ?? []) as unknown as RunRow[], total: count ?? null };
-	}, EXPORT_PAGE_SIZE, MAX_RUNS);
-
-	if (!runsPaged.complete && runsPaged.rows.length === 0) {
-		return Response.json({ error: 'run fetch failed' }, { status: 500 });
-	}
-	const runs = runsPaged.rows;
+	};
 
 	const ts = new Date().toISOString().replace(/[:.]/g, '-');
 	const ext = format === 'csv' ? 'csv' : 'zip';
 	const path = `${user.id}/exports/${ts}.${ext}`;
+	const contentType = format === 'csv' ? 'text/csv' : 'application/zip';
 
-	let body_: Uint8Array;
-	let contentType: string;
-	if (format === 'csv') {
-		body_ = new TextEncoder().encode(buildCsv(runs));
-		contentType = 'text/csv';
-	} else if (format === 'gpx') {
-		body_ = await buildGpxZip(adminSupabase, runs);
-		contentType = 'application/zip';
-	} else {
-		body_ = await buildBackupZip(adminSupabase, user.id, runsPaged);
-		contentType = 'application/zip';
-	}
+	const budget = createExportBudget();
+	const upload = createResumableUpload({
+		supabaseUrl: Deno.env.get('SUPABASE_URL')!,
+		bucket: EXPORT_BUCKET,
+		objectPath: path,
+		contentType,
+		headers: secretKeyHeaders(),
+	});
 
-	const { error: upErr } = await adminSupabase.storage
-		.from('runs')
-		.upload(path, new Blob([new Uint8Array(body_)], { type: contentType }), {
-			contentType,
-			upsert: false,
-		});
-	if (upErr) {
-		console.error('export-data: storage upload failed:', upErr?.message ?? String(upErr));
-		return Response.json({ error: 'upload failed' }, { status: 500 });
+	let built: BuildResult;
+	try {
+		if (format === 'csv') {
+			built = await writeCsv(upload, runsPage, budget);
+		} else if (format === 'gpx') {
+			built = await writeGpxZip(upload, adminSupabase, runsPage, budget);
+		} else {
+			built = await writeBackupZip(upload, adminSupabase, user.id, runsPage, budget);
+		}
+	} catch (e) {
+		// Abort the tus session so no object is left behind: an archive
+		// that stopped half-way must not exist, let alone be signed.
+		await upload.abort();
+		if (e instanceof RunFetchError) {
+			return Response.json({ error: 'run fetch failed' }, { status: 500 });
+		}
+		console.error(
+			'export-data: archive build failed:',
+			e instanceof Error ? e.message : String(e),
+		);
+		return Response.json({ error: 'export failed' }, { status: 500 });
 	}
 
 	const { data: signed, error: signErr } = await adminSupabase.storage
-		.from('runs')
+		.from(EXPORT_BUCKET)
 		.createSignedUrl(path, SIGNED_URL_TTL_S);
 	if (signErr || !signed) {
 		// Log message only — the full error object can carry storage
@@ -208,79 +262,92 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	// later be re-used (within owner-folder Storage SELECT) without
 	// the time-bounded signed URL. /audit/all storage Low.
 	// `count` is what the archive carries; `total` is what the database
-	// holds and `complete` whether the two agree. A runner past MAX_RUNS
-	// gets a truncated CSV/GPX and has to be told so — the backup format
-	// says the same thing in manifest.json, in more detail.
+	// holds and `complete` whether the two agree AND no section was cut
+	// short. The backup format says the same thing in manifest.json, in
+	// more detail.
 	return Response.json({
 		url: signed.signedUrl,
 		expires_in: SIGNED_URL_TTL_S,
-		count: runs.length,
-		total: runsPaged.total,
-		complete: runsPaged.complete,
+		count: built.runs.written,
+		total: built.runs.total,
+		complete: built.runs.complete && built.incomplete.length === 0,
 		format,
 	});
 }));
 
-function buildCsv(runs: RunRow[]): string {
-	// Field set kept stable across the GDPR export so a user-owned
-	// pipeline can rely on the column shape. New metadata keys go in
-	// the `metadata` column as JSON rather than expanding the header.
-	const cols = [
-		'id',
-		'started_at',
-		'distance_m',
-		'duration_s',
-		'source',
-		'activity_type',
-		'is_dnf',
-		'title',
-		'avg_bpm',
-		'steps',
-		'elevation_m',
-		'route_id',
-		'event_id',
-		'external_id',
-		'is_public',
-		// `track_url` deliberately omitted: the GPX export already
-		// includes the actual track bytes per run; the CSV consumer
-		// needs the run shape, not the Storage path. Removing it
-		// closes a leak path where the CSV (which the user might
-		// share or store off-device) carries the raw owner-folder
-		// Storage path that bypasses the clip-public-track EF for any
-		// active session JWT. /audit/all storage Low.
-		'metadata',
-		'created_at',
-		'updated_at',
-	];
+// Field set kept stable across the GDPR export so a user-owned
+// pipeline can rely on the column shape. New metadata keys go in
+// the `metadata` column as JSON rather than expanding the header.
+const CSV_COLS = [
+	'id',
+	'started_at',
+	'distance_m',
+	'duration_s',
+	'source',
+	'activity_type',
+	'is_dnf',
+	'title',
+	'avg_bpm',
+	'steps',
+	'elevation_m',
+	'route_id',
+	'event_id',
+	'external_id',
+	'is_public',
+	// `track_url` deliberately omitted: the GPX export already
+	// includes the actual track bytes per run; the CSV consumer
+	// needs the run shape, not the Storage path. Removing it
+	// closes a leak path where the CSV (which the user might
+	// share or store off-device) carries the raw owner-folder
+	// Storage path that bypasses the clip-public-track EF for any
+	// active session JWT. /audit/all storage Low.
+	'metadata',
+	'created_at',
+	'updated_at',
+];
 
-	const lines = [cols.join(',')];
-	for (const r of runs) {
-		const md = r.metadata ?? {};
-		lines.push(
-			[
-				csvEscape(r.id),
-				csvEscape(r.started_at),
-				String(r.distance_m),
-				String(r.duration_s),
-				csvEscape(r.source),
-				// activity_type + is_dnf are real columns now (F3).
-				csvEscape(r.activity_type ?? ''),
-				csvEscape(String(r.is_dnf ?? false)),
-				csvEscape((md.title as string | undefined) ?? ''),
-				csvEscape(stringy(md.avg_bpm)),
-				csvEscape(stringy(md.steps)),
-				csvEscape(stringy(md.elevation_m)),
-				csvEscape(r.route_id ?? ''),
-				csvEscape(r.event_id ?? ''),
-				csvEscape(r.external_id ?? ''),
-				csvEscape(String(r.is_public ?? false)),
-				csvEscape(JSON.stringify(md)),
-				csvEscape(r.created_at),
-				csvEscape(r.updated_at),
-			].join(','),
-		);
-	}
-	return lines.join('\n') + '\n';
+function csvRow(r: RunRow): string {
+	const md = r.metadata ?? {};
+	return [
+		csvEscape(r.id),
+		csvEscape(r.started_at),
+		String(r.distance_m),
+		String(r.duration_s),
+		csvEscape(r.source),
+		// activity_type + is_dnf are real columns now (F3).
+		csvEscape(r.activity_type ?? ''),
+		csvEscape(String(r.is_dnf ?? false)),
+		csvEscape((md.title as string | undefined) ?? ''),
+		csvEscape(stringy(md.avg_bpm)),
+		csvEscape(stringy(md.steps)),
+		csvEscape(stringy(md.elevation_m)),
+		csvEscape(r.route_id ?? ''),
+		csvEscape(r.event_id ?? ''),
+		csvEscape(r.external_id ?? ''),
+		csvEscape(String(r.is_public ?? false)),
+		csvEscape(JSON.stringify(md)),
+		csvEscape(r.created_at),
+		csvEscape(r.updated_at),
+	].join(',');
+}
+
+async function writeCsv(
+	upload: ResumableUpload,
+	runsPage: PageFetcher<RunRow>,
+	budget: ExportBudget,
+): Promise<BuildResult> {
+	const enc = new TextEncoder();
+	await upload.write(enc.encode(CSV_COLS.join(',') + '\n'));
+	const runs = await walkPages<RunRow>(
+		runsPage,
+		async (r) => {
+			await upload.write(enc.encode(csvRow(r) + '\n'));
+		},
+		{ budget, label: 'runs' },
+	);
+	if (runs.written === 0 && !runs.complete) throw new RunFetchError('runs read failed');
+	await upload.finish();
+	return { runs, incomplete: budget.deadlineSkipped() };
 }
 
 function csvEscape(v: string): string {
@@ -307,60 +374,86 @@ function stringy(v: unknown): string {
 // into the service-role downloader. The CHECK constraint in
 // 20260621_001 means new writes always match this shape; these are the
 // runtime backstop.
-function hasCanonicalTrackUrl(r: RunRow): boolean {
-	if (!r.track_url) return false;
-	const expectedTrackUrl = `${r.user_id}/${r.id}.json.gz`;
-	return r.track_url === expectedTrackUrl;
+function canonicalTrackUrl(r: RunRow): string | null {
+	if (!r.track_url) return null;
+	return r.track_url === `${r.user_id}/${r.id}.json.gz` ? r.track_url : null;
 }
 
-function hasCanonicalHrUrl(r: RunRow): boolean {
-	if (!r.hr_series_url) return false;
-	const expectedHrUrl = `${r.user_id}/${r.id}.hr.json.gz`;
-	return r.hr_series_url === expectedHrUrl;
+function canonicalHrUrl(r: RunRow): string | null {
+	if (!r.hr_series_url) return null;
+	return r.hr_series_url === `${r.user_id}/${r.id}.hr.json.gz` ? r.hr_series_url : null;
 }
 
-async function buildGpxZip(
+/// Wrap a pooled `load` so it stops fetching once the wall clock is
+/// spent, and records that it did. Returning null is what the pipeline
+/// already treats as "nothing to add".
+function budgeted<T, R>(
+	budget: ExportBudget,
+	label: string,
+	load: (item: T) => Promise<R | null>,
+): (item: T) => Promise<R | null> {
+	return (item) => {
+		if (budget.expired()) {
+			budget.noteSkipped(label);
+			return Promise.resolve(null);
+		}
+		return load(item);
+	};
+}
+
+async function writeGpxZip(
+	upload: ResumableUpload,
 	supabase: ReturnType<typeof createClient>,
-	runs: RunRow[],
-): Promise<Uint8Array> {
-	const blobWriter = new BlobWriter('application/zip');
-	const zip = new ZipWriter(blobWriter);
+	runsPage: PageFetcher<RunRow>,
+	budget: ExportBudget,
+): Promise<BuildResult> {
+	const gpxRefs: GpxRef[] = [];
+	const section = await openJsonSection<RunRow>(runsPage, {
+		budget,
+		label: 'runs',
+		keep: (r) => {
+			const key = canonicalTrackUrl(r);
+			if (!key) return;
+			gpxRefs.push({
+				id: r.id,
+				startedAt: r.started_at,
+				title: ((r.metadata ?? {}).title as string | undefined) ?? `Run ${r.id}`,
+				key,
+			});
+		},
+		shape: (r) => ({
+			id: r.id,
+			started_at: r.started_at,
+			distance_m: r.distance_m,
+			duration_s: r.duration_s,
+			source: r.source,
+			activity_type: r.activity_type,
+			is_dnf: r.is_dnf,
+			external_id: r.external_id,
+			metadata: r.metadata,
+			is_public: r.is_public,
+			event_id: r.event_id,
+			route_id: r.route_id,
+		}),
+	});
+	if (!section.opened && !section.summary.complete) {
+		throw new RunFetchError('runs read failed');
+	}
 
+	const zip = new ZipWriter(resumableWritable(upload));
 	// Manifest first so a partial / corrupt zip still has it.
-	await zip.add(
-		'runs.json',
-		new TextReader(
-			JSON.stringify(
-				runs.map((r) => ({
-					id: r.id,
-					started_at: r.started_at,
-					distance_m: r.distance_m,
-					duration_s: r.duration_s,
-					source: r.source,
-					activity_type: r.activity_type,
-					is_dnf: r.is_dnf,
-					external_id: r.external_id,
-					metadata: r.metadata,
-					is_public: r.is_public,
-					event_id: r.event_id,
-					route_id: r.route_id,
-				})),
-				null,
-				2,
-			),
-		),
-	);
+	await zip.add('runs.json', section.opened ? section.body : new TextReader('[]\n'));
 
-	// Runs without a track still appear in the manifest, just without a
-	// per-run GPX — filtering them out first saves the round trip.
+	// Runs without a track never entered `gpxRefs`, so no round trip is
+	// spent on them; they still appear in runs.json.
 	await pooledPipeline(
-		runs.filter(hasCanonicalTrackUrl),
+		gpxRefs,
 		EXPORT_FETCH_CONCURRENCY,
 		// The gzipped blob is what travels through the pool, not the
 		// decoded points: a 5 MB track inflates to tens of MB of point
 		// objects, and only one of those is alive at a time if the
 		// decode happens on the single-threaded consume side.
-		(r) => downloadBlob(supabase, 'runs', r.track_url!),
+		budgeted(budget, 'tracks', (r: GpxRef) => downloadBlob(supabase, 'runs', r.key)),
 		async (r, blob) => {
 			let track: TrackPoint[];
 			try {
@@ -374,9 +467,7 @@ async function buildGpxZip(
 	);
 
 	await zip.close();
-	const blob = await blobWriter.getData();
-	const buf = await blob.arrayBuffer();
-	return new Uint8Array(buf);
+	return { runs: section.summary, incomplete: budget.deadlineSkipped() };
 }
 
 async function downloadBlob(
@@ -415,18 +506,16 @@ async function decodeTrack(blob: Blob): Promise<TrackPoint[]> {
 	return (await _decodeTrack(blob)) as TrackPoint[];
 }
 
-function buildGpx(run: RunRow, track: TrackPoint[]): string {
+function buildGpx(run: GpxRef, track: TrackPoint[]): string {
 	// Minimal GPX 1.1 — track points only, no waypoints / routes. Loaders
 	// (Strava, Garmin Connect, GPX viewers) handle this shape uniformly.
-	const md = run.metadata ?? {};
-	const title = (md.title as string | undefined) ?? `Run ${run.id}`;
-	const escapedTitle = xmlEscape(title);
+	const escapedTitle = xmlEscape(run.title);
 	const lines: string[] = [];
 	lines.push('<?xml version="1.0" encoding="UTF-8"?>');
 	lines.push(
 		'<gpx version="1.1" creator="Runonward" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">',
 	);
-	lines.push(`  <metadata><name>${escapedTitle}</name><time>${run.started_at}</time></metadata>`);
+	lines.push(`  <metadata><name>${escapedTitle}</name><time>${run.startedAt}</time></metadata>`);
 	lines.push('  <trk>');
 	lines.push(`    <name>${escapedTitle}</name>`);
 	lines.push('    <trkseg>');
@@ -481,19 +570,60 @@ import {
 	summariseJobsByKind,
 } from './backup_spec.ts';
 
-async function buildBackupZip(
+async function writeBackupZip(
+	upload: ResumableUpload,
 	supabase: ReturnType<typeof createClient>,
 	userId: string,
-	runsPaged: PagedRows<RunRow>,
-): Promise<Uint8Array> {
-	const runs = runsPaged.rows;
-	const blobWriter = new BlobWriter('application/zip');
-	const zip = new ZipWriter(blobWriter);
+	runsPage: PageFetcher<RunRow>,
+	budget: ExportBudget,
+): Promise<BuildResult> {
+	const trackRefs: BlobRef[] = [];
+	const hrRefs: BlobRef[] = [];
+	const photoPaths: string[] = [];
+	const gearIds: string[] = [];
 
+	// Opened before the zip so a runs read that failed outright answers
+	// 500 with nothing uploaded, rather than shipping an archive whose
+	// runs.json is empty for a reason nobody can see.
+	const runsSection = await openJsonSection<RunRow>(runsPage, {
+		budget,
+		label: 'runs',
+		keep: (r) => {
+			const track = canonicalTrackUrl(r);
+			if (track) trackRefs.push({ id: r.id, key: track });
+			const hr = canonicalHrUrl(r);
+			if (hr) hrRefs.push({ id: r.id, key: hr });
+		},
+		// Same projection as the Go worker's backup (track_url +
+		// hr_series_url + created_at/updated_at included; user_id
+		// stripped for re-homeability).
+		shape: (r) => ({
+			id: r.id,
+			started_at: r.started_at,
+			duration_s: r.duration_s,
+			distance_m: r.distance_m,
+			source: r.source,
+			activity_type: r.activity_type,
+			is_dnf: r.is_dnf,
+			external_id: r.external_id,
+			metadata: r.metadata,
+			track_url: r.track_url,
+			hr_series_url: r.hr_series_url,
+			is_public: r.is_public,
+			event_id: r.event_id,
+			route_id: r.route_id,
+			created_at: r.created_at,
+			updated_at: r.updated_at,
+		}),
+	});
+	if (!runsSection.opened && !runsSection.summary.complete) {
+		throw new RunFetchError('runs read failed');
+	}
+
+	const zip = new ZipWriter(resumableWritable(upload));
 	const specs = buildBackupSpecs(userId);
 	const counts: Record<string, number> = {};
 	const incomplete: string[] = [];
-	const fetchedRows: Record<string, Record<string, unknown>[]> = {};
 
 	// The count published for a section is the database's own total, so a
 	// short file reads as a shortfall instead of as the whole set. An
@@ -501,97 +631,118 @@ async function buildBackupZip(
 	// paths share), but a section that FAILED short is recorded even at
 	// zero rows — an absent key must not be readable as "the subject has
 	// none of these".
-	const note = (key: string, fetched: number, paged: { total: number; complete: boolean }) => {
-		const short = !paged.complete || fetched < paged.total;
-		if (fetched > 0 || short) counts[key] = Math.max(paged.total, fetched);
+	const note = (key: string, s: SectionSummary) => {
+		const short = !s.complete || s.written < s.total;
+		if (s.written > 0 || short) counts[key] = Math.max(s.total, s.written);
 		if (short) incomplete.push(key);
 	};
 
+	// `load` opens each table (its first page, and the `count=exact`
+	// query that goes with it) `EXPORT_FETCH_CONCURRENCY`-wide, because
+	// that round trip is the dominant cost across 61 mostly-small
+	// tables. `consume` drains the rest of a multi-page table on the
+	// single zip stream, in input order.
 	await pooledPipeline(
 		specs,
 		EXPORT_FETCH_CONCURRENCY,
-		(spec) => fetchBackupTable(spec),
-		async (spec, paged) => {
-			const projected = spec.redact ? paged.rows.map(spec.redact) : paged.rows;
-			fetchedRows[spec.entry] = projected;
-			note(spec.entry.replace(/\.json$/, ''), projected.length, paged);
-			if (projected.length === 0) return;
-			await zip.add(spec.entry, new TextReader(JSON.stringify(projected, null, 2)));
+		(spec) =>
+			openJsonSection<Record<string, unknown>>(backupTablePage(spec), {
+				budget,
+				label: spec.entry.replace(/\.json$/, ''),
+				shape: spec.redact,
+				keep: keepFromSpec(spec, gearIds, photoPaths),
+			}),
+		async (spec, section) => {
+			if (section.opened) await zip.add(spec.entry, section.body);
+			note(spec.entry.replace(/\.json$/, ''), section.summary);
 		},
 	);
 
 	// run_gear — two-step fetch mirroring the Go worker: PostgREST's
 	// `in.()` takes a literal value list, not a subselect, so pull the
 	// already-fetched gear ids and filter run_gear by that list.
-	const gearIds = (fetchedRows['gear.json'] ?? [])
-		.map((g) => g.id)
-		.filter((id): id is string => typeof id === 'string' && id !== '');
 	if (gearIds.length > 0) {
-		const paged = await fetchBackupTable({
-			entry: 'run_gear.json',
-			table: 'run_gear',
-			filter: `gear_id=in.(${gearIds.join(',')})`,
-			select: '*',
-		});
-		note('run_gear', paged.rows.length, paged);
-		if (paged.rows.length > 0) {
-			await zip.add('run_gear.json', new TextReader(JSON.stringify(paged.rows, null, 2)));
-		}
+		const section = await openJsonSection<Record<string, unknown>>(
+			backupTablePage({
+				entry: 'run_gear.json',
+				table: 'run_gear',
+				filter: `gear_id=in.(${gearIds.join(',')})`,
+				select: '*',
+			}),
+			{ budget, label: 'run_gear' },
+		);
+		if (section.opened) await zip.add('run_gear.json', section.body);
+		note('run_gear', section.summary);
 	}
 
 	// jobs summary — count by kind. Audit's preferred shape over the
 	// raw payload (which would leak internal retry state). Aggregation
 	// helper lives in backup_spec.ts so it can be unit-tested.
-	const jobsPaged = await fetchAllPages<{ kind: string }>(async (offset, limit) => {
-		try {
-			const { data, error, count } = await supabase
-				.from('jobs')
-				.select('kind', offset === 0 ? { count: 'exact' } : {})
-				.filter('payload->>user_id', 'eq', userId)
-				.order('id', { ascending: true })
-				.range(offset, offset + limit - 1);
-			if (error) {
-				console.error('export-data backup: jobs summary failed:', error.message);
+	const jobKinds: Array<{ kind: string }> = [];
+	const jobsSummary = await walkPages<{ kind: string }>(
+		async (offset, limit) => {
+			try {
+				const { data, error, count } = await supabase
+					.from('jobs')
+					.select('kind', offset === 0 ? { count: 'exact' } : {})
+					.filter('payload->>user_id', 'eq', userId)
+					.order('id', { ascending: true })
+					.range(offset, offset + limit - 1);
+				if (error) {
+					console.error('export-data backup: jobs summary failed:', error.message);
+					return null;
+				}
+				return {
+					rows: (data ?? []) as unknown as Array<{ kind: string }>,
+					total: count ?? null,
+				};
+			} catch (e) {
+				console.error(
+					'export-data backup: jobs summary failed:',
+					e instanceof Error ? e.message : String(e),
+				);
 				return null;
 			}
-			return { rows: (data ?? []) as unknown as Array<{ kind: string }>, total: count ?? null };
-		} catch (e) {
-			console.error(
-				'export-data backup: jobs summary failed:',
-				e instanceof Error ? e.message : String(e),
-			);
-			return null;
-		}
-	});
-	if (jobsPaged.rows.length > 0) {
-		const summary = summariseJobsByKind(jobsPaged.rows);
+		},
+		(row) => {
+			jobKinds.push(row);
+		},
+		{ budget, label: 'jobs_summary' },
+	);
+	if (jobKinds.length > 0) {
+		const summary = summariseJobsByKind(jobKinds);
 		await zip.add('jobs_summary.json', new TextReader(JSON.stringify(summary, null, 2)));
 		// One row per kind, not one per job — but the aggregate is only
 		// trustworthy if every job row was scanned.
 		counts['jobs_summary'] = summary.length;
 	}
-	if (!jobsPaged.complete) incomplete.push('jobs_summary');
+	if (!jobsSummary.complete) incomplete.push('jobs_summary');
 
 	// routes.json — the user's own created routes (geometry included),
 	// shaped like the Go worker's ExportRoute projection.
-	const routesPaged = await fetchAllPages<Record<string, unknown>>(async (offset, limit) => {
-		const { data, error, count } = await supabase
-			.from('routes')
-			.select('*', offset === 0 ? { count: 'exact' } : {})
-			.eq('user_id', userId)
-			.order('id', { ascending: true })
-			.range(offset, offset + limit - 1);
-		if (error) {
-			console.error('export-data backup: routes fetch failed:', error.message);
-			return null;
-		}
-		return { rows: (data ?? []) as Record<string, unknown>[], total: count ?? null };
-	});
-	if (!routesPaged.complete && routesPaged.rows.length === 0) {
+	const routesSection = await openJsonSection<Record<string, unknown>>(
+		async (offset, limit) => {
+			const { data, error, count } = await supabase
+				.from('routes')
+				.select('*', offset === 0 ? { count: 'exact' } : {})
+				.eq('user_id', userId)
+				.order('id', { ascending: true })
+				.range(offset, offset + limit - 1);
+			if (error) {
+				console.error('export-data backup: routes fetch failed:', error.message);
+				return null;
+			}
+			return { rows: (data ?? []) as Record<string, unknown>[], total: count ?? null };
+		},
+		{ budget, label: 'routes', shape: shapeExportRoute },
+	);
+	if (!routesSection.opened && !routesSection.summary.complete) {
 		throw new Error('routes fetch failed');
 	}
-	const routesOut = routesPaged.rows.map(shapeExportRoute);
-	await zip.add('routes.json', new TextReader(JSON.stringify(routesOut, null, 2)));
+	await zip.add(
+		'routes.json',
+		routesSection.opened ? routesSection.body : new TextReader('[]\n'),
+	);
 
 	// profile.json — user_profiles projection (incl. the subscription
 	// columns) + user_settings.prefs, `id` stripped for re-homeability.
@@ -637,52 +788,26 @@ async function buildBackupZip(
 		),
 	);
 
-	// runs.json — same projection as the Go worker's backup (track_url
-	// + hr_series_url + created_at/updated_at included; user_id
-	// stripped for re-homeability).
 	await zip.add(
 		'runs.json',
-		new TextReader(
-			JSON.stringify(
-				runs.map((r) => ({
-					id: r.id,
-					started_at: r.started_at,
-					duration_s: r.duration_s,
-					distance_m: r.distance_m,
-					source: r.source,
-					activity_type: r.activity_type,
-					is_dnf: r.is_dnf,
-					external_id: r.external_id,
-					metadata: r.metadata,
-					track_url: r.track_url,
-					hr_series_url: r.hr_series_url,
-					is_public: r.is_public,
-					event_id: r.event_id,
-					route_id: r.route_id,
-					created_at: r.created_at,
-					updated_at: r.updated_at,
-				})),
-				null,
-				2,
-			),
-		),
+		runsSection.opened ? runsSection.body : new TextReader('[]\n'),
 	);
 
 	// Per-run track bytes — raw gzipped `.json.gz`, archived verbatim
 	// under `tracks/` (level 0: the source is already deflated) so the
 	// restore paths can re-upload byte-for-byte. Same path-shape
-	// assertion + RLS guarantee as buildGpxZip. The GPX rendering lives
+	// assertion + RLS guarantee as writeGpxZip. The GPX rendering lives
 	// in the `gpx` format; the backup format matches the Go layout.
 	const archivedRunObjects = new Set<string>();
 	const archivedPhotoObjects = new Set<string>();
 	let tracksAdded = 0;
 	await pooledPipeline(
-		runs.filter(hasCanonicalTrackUrl),
+		trackRefs,
 		EXPORT_FETCH_CONCURRENCY,
-		(r) => downloadBytes(supabase, 'runs', r.track_url!),
+		budgeted(budget, 'tracks', (r: BlobRef) => downloadBytes(supabase, 'runs', r.key)),
 		async (r, bytes) => {
 			await zip.add(`tracks/${r.id}.json.gz`, new Uint8ArrayReader(bytes), { level: 0 });
-			archivedRunObjects.add(r.track_url!);
+			archivedRunObjects.add(r.key);
 			tracksAdded++;
 		},
 	);
@@ -691,12 +816,12 @@ async function buildBackupZip(
 	// verbatim-bytes + path-shape-assertion shape as the tracks loop.
 	let hrAdded = 0;
 	await pooledPipeline(
-		runs.filter(hasCanonicalHrUrl),
+		hrRefs,
 		EXPORT_FETCH_CONCURRENCY,
-		(r) => downloadBytes(supabase, 'runs', r.hr_series_url!),
+		budgeted(budget, 'hr_series', (r: BlobRef) => downloadBytes(supabase, 'runs', r.key)),
 		async (r, bytes) => {
 			await zip.add(`hr/${r.id}.hr.json.gz`, new Uint8ArrayReader(bytes), { level: 0 });
-			archivedRunObjects.add(r.hr_series_url!);
+			archivedRunObjects.add(r.key);
 			hrAdded++;
 		},
 	);
@@ -707,11 +832,9 @@ async function buildBackupZip(
 	// storage_path; per-photo failures are tolerated.
 	let photosAdded = 0;
 	await pooledPipeline(
-		(fetchedRows['run_photos.json'] ?? [])
-			.map((row) => row.storage_path)
-			.filter((sp): sp is string => typeof sp === 'string' && isSafeStoragePath(sp)),
+		photoPaths,
 		EXPORT_FETCH_CONCURRENCY,
-		(sp) => downloadBytes(supabase, 'run-photos', sp),
+		budgeted(budget, 'photos', (sp: string) => downloadBytes(supabase, 'run-photos', sp)),
 		async (sp, bytes) => {
 			await zip.add(`photos/${sp.split('/').pop()!}`, new Uint8ArrayReader(bytes), { level: 0 });
 			archivedPhotoObjects.add(sp);
@@ -727,7 +850,7 @@ async function buildBackupZip(
 	await pooledPipeline(
 		avatarCandidatePaths(userId),
 		EXPORT_FETCH_CONCURRENCY,
-		(p) => downloadBytes(supabase, 'avatars', p),
+		budgeted(budget, 'avatars', (p: string) => downloadBytes(supabase, 'avatars', p)),
 		async (p, bytes) => {
 			await zip.add(`avatar.${p.split('.').pop()}`, new Uint8ArrayReader(bytes), { level: 0 });
 			avatarsAdded++;
@@ -751,7 +874,8 @@ async function buildBackupZip(
 			await pooledPipeline(
 				orphanStorageEntries({ bucket, keys, userId, archived }),
 				EXPORT_FETCH_CONCURRENCY,
-				({ key }) => downloadBytes(supabase, bucket, key),
+				budgeted(budget, 'storage_orphans', ({ key }: { key: string }) =>
+					downloadBytes(supabase, bucket, key)),
 				async ({ entry }, bytes) => {
 					await zip.add(entry, new Uint8ArrayReader(bytes), { level: 0 });
 					orphansAdded++;
@@ -768,23 +892,48 @@ async function buildBackupZip(
 	// manifest.json last so the counts reflect what actually made it in.
 	// `runs` / `routes` carry the database's own total; the storage
 	// sections carry what was archived, a per-object download failure
-	// being tolerated by contract.
-	note('runs', runs.length, runsPaged);
-	note('routes', routesOut.length, routesPaged);
+	// being tolerated by contract — but a section the wall clock cut off
+	// is a systematic shortfall and is named in `incomplete`.
+	note('runs', runsSection.summary);
+	note('routes', routesSection.summary);
 	counts['tracks'] = tracksAdded;
 	counts['hr_series'] = hrAdded;
 	counts['photos'] = photosAdded;
 	counts['avatars'] = avatarsAdded;
 	counts['storage_orphans'] = orphansAdded;
+	const shortfall = [...new Set([...incomplete, ...budget.deadlineSkipped()])];
 	await zip.add(
 		'manifest.json',
-		new TextReader(JSON.stringify(buildBackupManifest({ userId, counts, incomplete }), null, 2)),
+		new TextReader(
+			JSON.stringify(buildBackupManifest({ userId, counts, incomplete: shortfall }), null, 2),
+		),
 	);
 
 	await zip.close();
-	const blob = await blobWriter.getData();
-	const buf = await blob.arrayBuffer();
-	return new Uint8Array(buf);
+	return { runs: runsSection.summary, incomplete: shortfall };
+}
+
+/// The two sections whose VALUES a later step needs: `gear` ids feed the
+/// `run_gear` filter, `run_photos` storage paths feed the photo sweep.
+/// Everything else is copied straight through and retained nowhere.
+function keepFromSpec(
+	spec: BackupTableSpec,
+	gearIds: string[],
+	photoPaths: string[],
+): ((row: Record<string, unknown>) => void) | undefined {
+	if (spec.entry === 'gear.json') {
+		return (row) => {
+			const id = row.id;
+			if (typeof id === 'string' && id !== '') gearIds.push(id);
+		};
+	}
+	if (spec.entry === 'run_photos.json') {
+		return (row) => {
+			const sp = row.storage_path;
+			if (typeof sp === 'string' && isSafeStoragePath(sp)) photoPaths.push(sp);
+		};
+	}
+	return undefined;
 }
 
 // listAllObjects walks a Storage bucket folder recursively, returning
@@ -825,9 +974,7 @@ async function listAllObjects(
 	}
 }
 
-function fetchBackupTable(
-	spec: BackupTableSpec,
-): Promise<PagedRows<Record<string, unknown>>> {
+function backupTablePage(spec: BackupTableSpec): PageFetcher<Record<string, unknown>> {
 	// Run a raw PostgREST query so the `target_kind=eq.user&target_id=eq.X`
 	// filter (two params) works the same way the Go worker passes it.
 	// Using `from(...).select(...)` doesn't natively combine arbitrary
@@ -840,7 +987,7 @@ function fetchBackupTable(
 	// authoritative total costs one COUNT per table rather than one per
 	// page.
 	const order = orderForTable(spec.table);
-	return fetchAllPages<Record<string, unknown>>(async (offset, limit) => {
+	return async (offset: number, limit: number) => {
 		const url = `${Deno.env.get('SUPABASE_URL')!}/rest/v1/${spec.table}` +
 			`?select=${encodeURIComponent(spec.select)}&order=${order}` +
 			`&limit=${limit}&offset=${offset}&${spec.filter}`;
@@ -867,6 +1014,5 @@ function fetchBackupTable(
 			);
 			return null;
 		}
-	});
+	};
 }
-

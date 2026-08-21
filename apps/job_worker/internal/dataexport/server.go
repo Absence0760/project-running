@@ -265,9 +265,14 @@ type TrackPoint struct {
 }
 
 const (
-	// MaxRunsPerExport caps a single export at 5000 runs. Mirrors
-	// the EF cap. A serious power-user still sees every run; a
-	// runaway loop on a corrupt account can't run forever.
+	// MaxRunsPerExport caps a single export at 5000 runs — a memory
+	// bound, because this path builds the whole archive in one
+	// bytes.Buffer before uploading it.
+	//
+	// The Edge Function no longer has this cap: it streams into a
+	// chunked tus Storage upload (decisions.md §703). So the two rails
+	// are deliberately out of lockstep, and lifting this one means
+	// streaming here too rather than picking a bigger number.
 	MaxRunsPerExport = 5000
 	// SignedURLTTLSec is the 10-min window the client has to
 	// download. Matches the EF.

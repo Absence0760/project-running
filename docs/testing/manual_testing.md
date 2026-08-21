@@ -187,6 +187,7 @@ The most-tested surface in the codebase. The recording state machine + filter ch
 | Standalone recording | Watch app → Start → walk → Stop | Run records via `HKWorkoutSession` + `CLLocationManager`; transfers to phone on stop via WatchConnectivity. |
 | BPM stream | Wear the watch → record a run | `metadata.avg_bpm` is set on the run; track points carry per-point `bpm` (the recorder pulls `HKLiveWorkoutBuilder` HR samples). |
 | Phone ingest | After Stop, open the iOS Flutter app | Run appears in the home list within a few seconds; `lib/watch_ingest_queue.dart` decoded the payload via the `run_app/watch_ingest` method channel and saved through `LocalRunStore.save`. |
+| In-run mini-map | Start a run, swipe left off the stats page | Page two draws the track so far and a white position dot, auto-fitting as the run grows; an armed route draws as a lilac line with a start marker. Before the first fix it reads "Waiting for GPS" with no dot — never a dot at the centre of the map. Swiping back leaves the clock, distance and Pause/Stop exactly where they were. |
 
 ---
 
@@ -405,7 +406,7 @@ See [paywall.md](../features/paywall.md) for the full tier matrix and feature ga
 | Web full backup ZIP | `/settings/account` → Create backup | Downloads a `run-app-backup` v1 ZIP with `runs.json` + `routes.json` + `profile.json` + `manifest.json` + per-run gzipped tracks. |
 | Web restore | Same screen → Restore | Round-trips the same ZIP; idempotent on `external_id`. |
 | Web single-file export | Same screen → Export runs JSON | Downloads `runs-{ts}.json` (no tracks, `user_id` stripped). Identical row shape to the ZIP's `runs.json`. |
-| GDPR export (Edge Function, CSV) | `POST /functions/v1/export-data` with `{format:'csv'}` and a user JWT | Returns `{url, path, expires_in:600, count, format:'csv'}`. The signed URL downloads a single CSV with one row per run (columns: `id, started_at, distance_m, duration_s, source, activity_type, title, avg_bpm, steps, elevation_m, route_id, event_id, external_id, is_public, track_url, metadata, created_at, updated_at`). Capped at 5000 runs; rate-limit 2/h free, 8/h pro. |
+| GDPR export (Edge Function, CSV) | `POST /functions/v1/export-data` with `{format:'csv'}` and a user JWT | Returns `{url, path, expires_in:600, count, format:'csv'}`. The signed URL downloads a single CSV with one row per run (columns: `id, started_at, distance_m, duration_s, source, activity_type, title, avg_bpm, steps, elevation_m, route_id, event_id, external_id, is_public, track_url, metadata, created_at, updated_at`). No run cap (the archive streams into Storage in 6 MiB chunks, decisions § 703); an export that runs past the 120 s budget reports `complete: false`. Rate-limit 2/h free, 8/h pro. |
 | GDPR export (Edge Function, GPX zip) | Same EF with `{format:'gpx'}` | Same response shape; the signed URL downloads a `.zip` containing one `.gpx` per run plus a `manifest.json`. GPX 1.1 with `<ele>`, `<time>`, and `<gpxtpx:hr>` extensions when the source data carries them. |
 | GDPR export (rate limit) | Hit the EF 3× as a free user within an hour | Third call returns 429 with `Retry-After`. |
 | Account deletion | Web `/settings/account` → Delete account | `delete-account` EF runs admin delete (User JWT + service role); cascading FKs clear `runs`, `routes`, `clubs` membership, etc. |

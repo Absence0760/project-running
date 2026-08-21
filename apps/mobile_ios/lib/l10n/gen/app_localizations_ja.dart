@@ -494,6 +494,88 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => '近くのランナー';
+
+  @override
+  String get peopleNearbySubtitle =>
+      '設定したエリア付近で参加を選んだランナーです。表示はおよその距離のみで、リアルタイムの位置は含まれません。';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'まだ近くに誰もいません';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      '設定 → 環境設定 → プライバシーで「近くのランナーに自分を表示」をオンにし、エリアを設定してください。同じ設定をしたランナーだけがあなたを見つけられます。';
+
+  @override
+  String get peopleNearbyLoadFailed => '近くのランナーを読み込めませんでした。';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return '$distance以内';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return '$distanceより遠く';
+  }
+
+  @override
+  String get prefsDiscoverableNearby => '近くのランナーに自分を表示';
+
+  @override
+  String get prefsDiscoverableNearbySubtitle =>
+      '既定ではオフです。オンにすると、同じく参加を選んだ他のランナーに、あなたがおおよそ近くにいることが表示されます。表示されるのは設定したエリアからのおおよその距離だけで、現在地ではありません。';
+
+  @override
+  String get nearbyAreaTitle => 'あなたのエリア';
+
+  @override
+  String get nearbyAreaExplainer =>
+      '走っている街や地区を選んでください。約1キロメートル単位に丸めて保存され、リアルタイムの位置情報は含まれません。他のランナーにはおおよその距離だけが表示され、エリア自体は表示されません。';
+
+  @override
+  String get nearbyAreaNone => 'エリア未設定';
+
+  @override
+  String nearbyAreaCurrent(String label) {
+    return '現在のエリア: $label';
+  }
+
+  @override
+  String get nearbyAreaSearchHint => '街や地区を検索';
+
+  @override
+  String get nearbyAreaSearchUnavailable => '現在、場所の検索を利用できません。';
+
+  @override
+  String get nearbyAreaNoResults => 'その検索に一致する場所はありません。';
+
+  @override
+  String get nearbyAreaSaved => 'エリアを保存しました';
+
+  @override
+  String get nearbyAreaSaveFailed => 'エリアを保存できませんでした。';
+
+  @override
+  String get nearbyAreaLoadFailed => 'エリアを読み込めませんでした。';
+
+  @override
+  String get nearbyAreaForget => 'エリアを削除';
+
+  @override
+  String get nearbyAreaForgetConfirmTitle => 'エリアを削除しますか？';
+
+  @override
+  String get nearbyAreaForgetConfirmBody => '再びエリアを設定するまで、近くのランナーに表示されなくなります。';
+
+  @override
+  String get nearbyAreaForgotten => 'エリアを削除しました';
+
+  @override
+  String get nearbyAreaForgetFailed => 'エリアを削除できませんでした。';
+
+  @override
   String get peopleFallbackDisplayName => 'ランナー';
 
   @override
@@ -1601,6 +1683,12 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runTreadmillNotFound => 'トレッドミルに接続できませんでした';
+
+  @override
+  String get runTreadmillConnecting => 'トレッドミルに接続中…';
+
+  @override
+  String get runTreadmillNoBeltData => 'ベルトのデータなし — 距離はGPSから';
 
   @override
   String get runSaveFailedRelaunch => 'ローカルに保存できませんでした。アプリを再起動して復元してください。';

@@ -291,7 +291,28 @@ struct PreRunView: View {
 
 // MARK: - Running View
 
+/// Two pages: the stats and controls a runner glances at, and the live-position
+/// mini-map behind a swipe. The controls keep the page they have always had —
+/// the map is additive, and a Stop button that moved would be a regression on
+/// the core surface for the sake of an auxiliary one.
 struct RunningView: View {
+    @ObservedObject var workoutManager: WorkoutManager
+    @ObservedObject var healthKit: HealthKitManager
+
+    var body: some View {
+        TabView {
+            RunStatsView(workoutManager: workoutManager, healthKit: healthKit)
+            RunMiniMapView(
+                route: workoutManager.mapRoute,
+                trail: workoutManager.mapTrail.points,
+                current: workoutManager.mapPosition
+            )
+        }
+        .tabViewStyle(.page)
+    }
+}
+
+struct RunStatsView: View {
     @ObservedObject var workoutManager: WorkoutManager
     @ObservedObject var healthKit: HealthKitManager
 

@@ -146,6 +146,7 @@ void main() async {
   const googleWebClientIdDef = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
   const revenueCatAndroidDef = String.fromEnvironment('REVENUECAT_API_KEY_ANDROID');
   const revenueCatIosDef = String.fromEnvironment('REVENUECAT_API_KEY_IOS');
+  const enableNearbyRunnersDef = String.fromEnvironment('ENABLE_NEARBY_RUNNERS');
   dotenv.loadFromString(
     envString: [
       if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
@@ -161,6 +162,8 @@ void main() async {
       if (googleWebClientIdDef.isNotEmpty) 'GOOGLE_WEB_CLIENT_ID=$googleWebClientIdDef',
       if (revenueCatAndroidDef.isNotEmpty) 'REVENUECAT_API_KEY_ANDROID=$revenueCatAndroidDef',
       if (revenueCatIosDef.isNotEmpty) 'REVENUECAT_API_KEY_IOS=$revenueCatIosDef',
+      if (enableNearbyRunnersDef.isNotEmpty)
+        'ENABLE_NEARBY_RUNNERS=$enableNearbyRunnersDef',
     ].join('\n'),
     isOptional: true,
   );

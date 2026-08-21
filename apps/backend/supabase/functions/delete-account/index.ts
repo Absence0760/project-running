@@ -667,8 +667,9 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   }
   deletedCounts.segments_anonymised = segs.count;
 
-  // Delete Storage files. The `runs` bucket holds gzipped tracks +
-  // per-user export blobs at `{user.id}/exports/<ts>.{csv,zip}`; the
+  // Delete Storage files. The `runs` bucket holds gzipped tracks + the
+  // LEGACY per-user export blobs at `{user.id}/exports/<ts>.{csv,zip}`
+  // (new ones land in `exports`, migration `20270602_001`); the
   // photo buckets hold user-uploaded imagery, all keyed under the
   // owner's `{user.id}/` prefix (each bucket's path-shape CHECK or
   // policy enforces it). The route-photos / club-photos rows cascade
@@ -680,7 +681,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   // blobs with no row to point at them, so we abort before deleting
   // the auth user — the user can retry once Storage recovers.
   try {
-    for (const bucket of ['runs', 'run-photos', 'route-photos', 'club-photos']) {
+    for (const bucket of ['runs', 'exports', 'run-photos', 'route-photos', 'club-photos']) {
       deletedCounts[`storage_${bucket}`] = await deletePrefix(
         adminClient,
         bucket,

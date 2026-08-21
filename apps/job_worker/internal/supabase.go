@@ -1312,12 +1312,17 @@ func (c *SupabaseClient) CheckRateLimitTiered(ctx context.Context, userID, bucke
 // per request buys nothing.
 const exportPageSize = 1000
 
-// exportRowCeiling bounds a single section. Both export paths assemble
-// the whole archive in memory before uploading it, so an unbounded walk
-// of a high-cardinality table (`live_run_pings` runs into the millions
-// on a deep history) is an OOM, not a slow export. Reaching it marks the
-// section incomplete rather than silently truncating it. Keep in
-// lockstep with EXPORT_ROW_CEILING in the EF's paging.ts.
+// exportRowCeiling bounds a single section. THIS path assembles the
+// whole archive in one bytes.Buffer before uploading it, so an unbounded
+// walk of a high-cardinality table (`live_run_pings` runs into the
+// millions on a deep history) is an OOM, not a slow export. Reaching it
+// marks the section incomplete rather than silently truncating it.
+//
+// Deliberately NOT in lockstep with the Edge Function any more: the EF
+// streams its archive into a chunked tus Storage upload and has no row
+// ceiling at all (decisions.md §703). Removing this one means giving
+// this rail the same treatment — an io.Pipe into a chunked upload — not
+// raising the number.
 const exportRowCeiling = 50_000
 
 // orderByTable holds the export tables whose primary key is not a bare
@@ -1618,7 +1623,7 @@ func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) 
 	// user_profiles is the only place it lives (RevenueCat keys by the
 	// Supabase user id). Keep in lockstep with the EF twin's
 	// PROFILE_SELECT in export-data/backup_spec.ts.
-	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default,subscription_tier,subscription_at,billing_issue_at")
+	q.Set("select", "id,display_name,avatar_url,preferred_unit,created_at,date_of_birth,parkrun_number,gender,subscription_tier,subscription_at,billing_issue_at")
 	q.Set("limit", "1")
 	u := c.BaseURL + "/rest/v1/" + schema.TableUserProfiles + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -2211,7 +2216,7 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			name:   "reports_against_me.json",
 			table:  "reports",
 			filter: "target_kind=eq.user&target_id=eq." + uid,
-			sel:    "id,target_kind,target_id,reason,status,notes,created_at,resolved_at",
+			sel:    "id,target_kind,target_id,reason,status,notes,created_at,reviewed_at",
 		},
 		// direct_messages — private 1:1 conversations, both directions
 		// (messages the user sent and messages they received). `body`

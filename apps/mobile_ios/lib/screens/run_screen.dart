@@ -1850,7 +1850,11 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
             onAction: _reconnectTreadmill,
           );
         case BleTreadmillStatus.connecting:
-          break;
+          // No banner — a link being established is not news. It still has
+          // to clear the reading and rebuild: connecting means the belt is
+          // NOT feeding, and leaving the last speed on screen presents a
+          // figure the belt is no longer sending as current.
+          setState(() => _treadmillSpeedKmh = null);
       }
     });
 
@@ -4551,21 +4555,35 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
   }
 
   /// The treadmill live-mode toggle card shown over the recording view.
-  /// When on, the subtitle shows the live belt speed (unit-aware); while the
-  /// belt is reconnecting it shows an inline hint rather than freezing the
-  /// last speed read-out.
+  ///
+  /// The subtitle is switched on the belt's own status rather than only on
+  /// whether a speed is known, so a non-feeding belt stays disclosed after the
+  /// drop banner has expired — an engaged toggle with a blank subtitle reads
+  /// identically to "connected, first sample pending", which is the one thing
+  /// it must never claim while the headline distance is really coming from
+  /// GPS. Making [BleTreadmillStatus.connected] the only arm that can format a
+  /// speed also means no belt-derived figure can survive a drop even if the
+  /// status listener's null-out were missed.
   Widget _buildTreadmillToggle(BuildContext context, AppLocalizations l10n) {
     final theme = Theme.of(context);
     String? subtitle;
     if (_treadmillMode) {
-      if (_treadmillStatus == BleTreadmillStatus.reconnecting) {
-        subtitle = l10n.runTreadmillLostReconnecting;
-      } else if (_treadmillSpeedKmh != null) {
-        final kmh = _treadmillSpeedKmh!;
-        final value = _unit == DistanceUnit.mi ? kmh / 1.609344 : kmh;
-        final speed =
-            '${formatFixed(value, 1, activeLocaleTag)} ${UnitFormat.speedLabel(_unit)}';
-        subtitle = l10n.runTreadmillModeSpeed(speed);
+      switch (_treadmillStatus) {
+        case BleTreadmillStatus.reconnecting:
+          subtitle = l10n.runTreadmillLostReconnecting;
+        case BleTreadmillStatus.connecting:
+          subtitle = l10n.runTreadmillConnecting;
+        case BleTreadmillStatus.disconnected:
+        case BleTreadmillStatus.connectFailed:
+          subtitle = l10n.runTreadmillNoBeltData;
+        case BleTreadmillStatus.connected:
+          final kmh = _treadmillSpeedKmh;
+          if (kmh != null) {
+            final value = _unit == DistanceUnit.mi ? kmh / 1.609344 : kmh;
+            final speed =
+                '${formatFixed(value, 1, activeLocaleTag)} ${UnitFormat.speedLabel(_unit)}';
+            subtitle = l10n.runTreadmillModeSpeed(speed);
+          }
       }
     }
     return Card(
