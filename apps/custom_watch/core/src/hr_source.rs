@@ -88,8 +88,10 @@ pub fn advertises_heart_rate_service(ad: &[u8]) -> bool {
             continue;
         }
         if payload
-            .chunks_exact(2)
-            .any(|u| u16::from_le_bytes([u[0], u[1]]) == HR_SERVICE_UUID16)
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .any(|u| u16::from_le_bytes(*u) == HR_SERVICE_UUID16)
         {
             return true;
         }

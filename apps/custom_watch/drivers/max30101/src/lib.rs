@@ -405,8 +405,8 @@ impl<I2C: I2c> Max30101<I2C> {
         }
         let mut buf = [0u8; SLOTS * SAMPLE_BYTES];
         self.read_regs(reg::FIFO_DATA, &mut buf)?;
-        for (i, chunk) in buf.chunks_exact(SAMPLE_BYTES).enumerate() {
-            self.frame[i] = decode_sample([chunk[0], chunk[1], chunk[2]]);
+        for (i, chunk) in buf.as_chunks::<SAMPLE_BYTES>().0.iter().enumerate() {
+            self.frame[i] = decode_sample(*chunk);
         }
         self.frame_len = SLOTS;
         self.frame_pos = 0;
