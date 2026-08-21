@@ -40,6 +40,18 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// auxiliary (L4) effect — see `didUpdateLocations`.
     @Published var routeNavigator: RouteNavigator?
 
+    /// The armed route as the mini-map draws it, empty for an unguided run.
+    /// Held apart from `routeNavigator`, which consumes the line and publishes
+    /// only its projection of the current fix.
+    @Published var mapRoute: [MiniMapPoint] = []
+
+    /// The mini-map's own bounded breadcrumb of the run — see `MiniMapTrail`
+    /// for why the map cannot be fed from `track`.
+    @Published var mapTrail = MiniMapTrail()
+
+    /// The last accepted fix, or nil while this run has none.
+    @Published var mapPosition: MiniMapPoint?
+
     /// The completed run data, available after stop() or recovery.
     var finishedRun: FinishedRun?
 
@@ -209,8 +221,13 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
         lastLocationForDistance = nil
-        routeNavigator = ArmedRouteStore.load()
-            .map { RouteNavigator(routePoints: $0.locations) }
+        let armedRoute = ArmedRouteStore.load()
+        routeNavigator = armedRoute.map { RouteNavigator(routePoints: $0.locations) }
+        mapRoute = armedRoute?.coordinates.map {
+            MiniMapPoint(latitude: $0.latitude, longitude: $0.longitude)
+        } ?? []
+        mapTrail.reset()
+        mapPosition = nil
         healthKit.reset()
 
         let store = CheckpointStore(runId: runId)
@@ -333,6 +350,9 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastTooSlowHaptic = nil
         lastLocationForDistance = nil
         routeNavigator = nil
+        mapRoute = []
+        mapTrail.reset()
+        mapPosition = nil
         checkpointStore = nil
         currentRunId = nil
         state = .idle
@@ -504,6 +524,19 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         // so a route with no usable geometry costs the run nothing.
         if let navigator = routeNavigator, let fix = lastAcceptedFix {
             navigator.update(currentLocation: fix)
+        }
+
+        // The mini-map is the last auxiliary read, and a read only: pure value
+        // maths over points the steps above have already committed, with no
+        // framework call to fail and nothing the recording stack waits on.
+        for record in newPoints {
+            mapTrail.append(MiniMapPoint(latitude: record.lat, longitude: record.lng))
+        }
+        if let fix = lastAcceptedFix {
+            mapPosition = MiniMapPoint(
+                latitude: fix.coordinate.latitude,
+                longitude: fix.coordinate.longitude
+            )
         }
     }
 
