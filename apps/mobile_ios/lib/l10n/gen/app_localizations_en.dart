@@ -538,6 +538,63 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get prefsDiscoverableNearby => 'Show me to runners nearby';
+
+  @override
+  String get prefsDiscoverableNearbySubtitle =>
+      'Off by default. When on, other runners who also opted in can see that you are roughly nearby — an approximate distance from the area you set, never your location.';
+
+  @override
+  String get nearbyAreaTitle => 'Your area';
+
+  @override
+  String get nearbyAreaExplainer =>
+      'Pick the city or neighbourhood you run in. It is stored rounded to about a kilometre and is never your live location. Other runners only ever see an approximate distance, never the area itself.';
+
+  @override
+  String get nearbyAreaNone => 'No area set';
+
+  @override
+  String nearbyAreaCurrent(String label) {
+    return 'Current area: $label';
+  }
+
+  @override
+  String get nearbyAreaSearchHint => 'Search for a city or neighbourhood';
+
+  @override
+  String get nearbyAreaSearchUnavailable =>
+      'Place search is unavailable right now.';
+
+  @override
+  String get nearbyAreaNoResults => 'No places matched that search.';
+
+  @override
+  String get nearbyAreaSaved => 'Area saved';
+
+  @override
+  String get nearbyAreaSaveFailed => 'Could not save your area.';
+
+  @override
+  String get nearbyAreaLoadFailed => 'Could not load your area.';
+
+  @override
+  String get nearbyAreaForget => 'Forget my area';
+
+  @override
+  String get nearbyAreaForgetConfirmTitle => 'Forget your area?';
+
+  @override
+  String get nearbyAreaForgetConfirmBody =>
+      'You will stop appearing to runners nearby until you set an area again.';
+
+  @override
+  String get nearbyAreaForgotten => 'Area forgotten';
+
+  @override
+  String get nearbyAreaForgetFailed => 'Could not forget your area.';
+
+  @override
   String get peopleFallbackDisplayName => 'Runner';
 
   @override

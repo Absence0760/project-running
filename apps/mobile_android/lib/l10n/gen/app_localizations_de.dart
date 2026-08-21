@@ -544,6 +544,65 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get prefsDiscoverableNearby => 'Mich Läufern in der Nähe zeigen';
+
+  @override
+  String get prefsDiscoverableNearbySubtitle =>
+      'Standardmäßig aus. Wenn aktiviert, sehen andere Läufer, die sich ebenfalls angemeldet haben, dass du ungefähr in der Nähe bist — eine ungefähre Entfernung zu dem von dir gesetzten Gebiet, niemals dein Standort.';
+
+  @override
+  String get nearbyAreaTitle => 'Dein Gebiet';
+
+  @override
+  String get nearbyAreaExplainer =>
+      'Wähle die Stadt oder das Viertel, in dem du läufst. Es wird auf etwa einen Kilometer gerundet gespeichert und ist niemals dein Live-Standort. Andere Läufer sehen nur eine ungefähre Entfernung, niemals das Gebiet selbst.';
+
+  @override
+  String get nearbyAreaNone => 'Kein Gebiet gesetzt';
+
+  @override
+  String nearbyAreaCurrent(String label) {
+    return 'Aktuelles Gebiet: $label';
+  }
+
+  @override
+  String get nearbyAreaSearchHint => 'Nach Stadt oder Viertel suchen';
+
+  @override
+  String get nearbyAreaSearchUnavailable =>
+      'Die Ortssuche ist derzeit nicht verfügbar.';
+
+  @override
+  String get nearbyAreaNoResults => 'Keine Orte für diese Suche gefunden.';
+
+  @override
+  String get nearbyAreaSaved => 'Gebiet gespeichert';
+
+  @override
+  String get nearbyAreaSaveFailed =>
+      'Dein Gebiet konnte nicht gespeichert werden.';
+
+  @override
+  String get nearbyAreaLoadFailed => 'Dein Gebiet konnte nicht geladen werden.';
+
+  @override
+  String get nearbyAreaForget => 'Mein Gebiet vergessen';
+
+  @override
+  String get nearbyAreaForgetConfirmTitle => 'Dein Gebiet vergessen?';
+
+  @override
+  String get nearbyAreaForgetConfirmBody =>
+      'Du erscheinst Läufern in der Nähe nicht mehr, bis du wieder ein Gebiet setzt.';
+
+  @override
+  String get nearbyAreaForgotten => 'Gebiet vergessen';
+
+  @override
+  String get nearbyAreaForgetFailed =>
+      'Dein Gebiet konnte nicht vergessen werden.';
+
+  @override
   String get peopleFallbackDisplayName => 'Läufer';
 
   @override

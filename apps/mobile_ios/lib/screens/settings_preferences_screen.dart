@@ -10,12 +10,14 @@ import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../locale_defaults.dart';
 import '../main.dart' show themeModeNotifier, localeNotifier;
+import '../nearby_flag.dart';
 import '../preferences.dart';
 import '../push_messaging_bridge.dart';
 import '../settings_sync.dart';
 import '../typed_decimal.dart';
 import '../undo_queue.dart';
 import '../widgets/top_banner.dart';
+import 'nearby_area_screen.dart';
 import 'privacy_zones_screen.dart';
 import 'settings_body_metrics_screen.dart';
 
@@ -87,12 +89,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   bool _darkMode = themeModeNotifier.value == ThemeMode.dark;
   bool _localeBackfillDone = false;
 
+  /// Read once per mount, not per build: the whole runners-nearby surface —
+  /// the opt-in switch, the area row, and the `my_discoverable_area` read
+  /// behind it — must be absent while the sign-off gate is off (decisions §270).
+  final bool _nearbyGate = nearbyRunnersGate;
+  String? _nearbyAreaLabel;
+
   @override
   void initState() {
     super.initState();
     widget.preferences.addListener(_onChange);
     widget.settingsSync?.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeBackfillLocale());
+    if (_nearbyGate) _loadNearbyAreaLabel();
   }
 
   @override
@@ -907,6 +916,36 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     await _putUniversal(SettingsKeys.discoverableInSearch, !current);
   }
 
+  Future<void> _editDiscoverableNearby() async {
+    final current = _bagValue<bool>(SettingsKeys.discoverableNearby) ?? false;
+    await _putUniversal(SettingsKeys.discoverableNearby, !current);
+  }
+
+  /// Best-effort (L4): the label is a nicety on a row that still navigates, so
+  /// a failed read discloses in the log and shows "no area set" rather than
+  /// throwing out of initState.
+  Future<void> _loadNearbyAreaLabel() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final label = await api.fetchMyDiscoverableArea();
+      if (!mounted) return;
+      setState(() => _nearbyAreaLabel = label);
+    } catch (e) {
+      debugPrint('discoverable area label read failed: $e');
+    }
+  }
+
+  Future<void> _openNearbyArea() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => NearbyAreaScreen(api: api)),
+    );
+    await _loadNearbyAreaLabel();
+  }
+
   Future<void> _editExcludeGymFromReadiness() async {
     final current =
         _bagValue<bool>(SettingsKeys.excludeGymFromReadiness) ?? false;
@@ -1714,6 +1753,33 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                           ? (_) => _editDiscoverableInSearch()
                           : null,
                     ),
+                    // Opt-in coarse-location discovery (issue #466). Both
+                    // rows are absent — not merely disabled — while the
+                    // default-off deploy gate holds, and the area row needs an
+                    // ApiClient to reach its definer RPCs at all.
+                    if (_nearbyGate) ...[
+                      SwitchListTile(
+                        title: Text(l10n.prefsDiscoverableNearby),
+                        subtitle: Text(l10n.prefsDiscoverableNearbySubtitle),
+                        value:
+                            _bagValue<bool>(SettingsKeys.discoverableNearby) ??
+                            false,
+                        onChanged: _bagReady
+                            ? (_) => _editDiscoverableNearby()
+                            : null,
+                      ),
+                      if (widget.apiClient != null)
+                        ListTile(
+                          title: Text(l10n.nearbyAreaTitle),
+                          subtitle: Text(
+                            _nearbyAreaLabel == null
+                                ? l10n.nearbyAreaNone
+                                : l10n.nearbyAreaCurrent(_nearbyAreaLabel!),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: _openNearbyArea,
+                        ),
+                    ],
                     // Mirrors web's `/settings/preferences` privacy-zones
                     // section (#666 I11). It used to sit under Account, which
                     // is sign-in / backup / deletion — a zone is a sharing
