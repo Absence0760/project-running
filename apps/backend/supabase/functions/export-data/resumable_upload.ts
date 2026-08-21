@@ -83,6 +83,11 @@ export function createResumableUpload(init: ResumableUploadInit): ResumableUploa
 	const createUrl = `${init.supabaseUrl.replace(/\/+$/, '')}/storage/v1/upload/resumable`;
 
 	let pending: Uint8Array[] = [];
+	// Head index rather than `shift()`: a CSV export hands over one small
+	// array per run, so a 6 MiB chunk is tens of thousands of pieces and
+	// shifting each one off the front is quadratic in the run count.
+	let head = 0;
+	let headOffset = 0;
 	let pendingBytes = 0;
 	let uploaded = 0;
 	let location: string | null = null;
@@ -93,19 +98,28 @@ export function createResumableUpload(init: ResumableUploadInit): ResumableUploa
 		const out = new Uint8Array(n);
 		let filled = 0;
 		while (filled < n) {
-			const head = pending[0];
+			const piece = pending[head];
+			const avail = piece.length - headOffset;
 			const want = n - filled;
-			if (head.length <= want) {
-				out.set(head, filled);
-				filled += head.length;
-				pending.shift();
+			if (avail <= want) {
+				out.set(piece.subarray(headOffset), filled);
+				filled += avail;
+				head++;
+				headOffset = 0;
 			} else {
-				out.set(head.subarray(0, want), filled);
-				pending[0] = head.subarray(want);
+				out.set(piece.subarray(headOffset, headOffset + want), filled);
+				headOffset += want;
 				filled = n;
 			}
 		}
 		pendingBytes -= n;
+		if (head === pending.length) {
+			pending = [];
+			head = 0;
+		} else if (head > 4096) {
+			pending = pending.slice(head);
+			head = 0;
+		}
 		return out;
 	};
 
@@ -156,7 +170,9 @@ export function createResumableUpload(init: ResumableUploadInit): ResumableUploa
 		const res = await doFetch(location, {
 			method: 'PATCH',
 			headers,
-			body: chunk,
+			// Blob, and cast: Deno's `BodyInit` does not admit the
+			// `Uint8Array<ArrayBufferLike>` the buffer helpers produce.
+			body: new Blob([chunk as unknown as BlobPart]),
 		});
 		if (res.status !== 204 && res.status !== 200) {
 			await res.body?.cancel();
@@ -201,6 +217,8 @@ export function createResumableUpload(init: ResumableUploadInit): ResumableUploa
 			if (!location) await create(total);
 			if (pendingBytes > 0) await patch(takeExactly(pendingBytes), total);
 			pending = [];
+			head = 0;
+			headOffset = 0;
 			if (uploaded !== total) {
 				throw new Error(`resumable finish short: ${uploaded} of ${total}`);
 			}
@@ -208,6 +226,8 @@ export function createResumableUpload(init: ResumableUploadInit): ResumableUploa
 
 		async abort(): Promise<void> {
 			pending = [];
+			head = 0;
+			headOffset = 0;
 			pendingBytes = 0;
 			if (!location) return;
 			try {

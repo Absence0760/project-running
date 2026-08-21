@@ -92,7 +92,7 @@ function emptyStream(): ReadableStream<Uint8Array> {
 /// (the jobs count-by-kind summary).
 export async function walkPages<T>(
 	fetchPage: (offset: number, limit: number) => Promise<SectionPage<T> | null>,
-	onRow: (row: T) => void,
+	onRow: (row: T) => void | Promise<void>,
 	opts: Pick<SectionOptions<T>, 'pageSize' | 'budget' | 'label'> = {},
 ): Promise<SectionSummary> {
 	const pageSize = opts.pageSize ?? EXPORT_PAGE_SIZE;
@@ -111,7 +111,7 @@ export async function walkPages<T>(
 		}
 		if (page.total != null) summary.total = page.total;
 		for (const row of page.rows) {
-			onRow(row);
+			await onRow(row);
 			summary.written++;
 		}
 		offset += page.rows.length;
@@ -131,6 +131,13 @@ export async function openJsonSection<T>(
 ): Promise<JsonSection> {
 	const pageSize = opts.pageSize ?? EXPORT_PAGE_SIZE;
 	const summary: SectionSummary = { written: 0, total: 0, complete: false };
+	// Shed load rather than spend the dying request's last seconds on a
+	// count query whose rows will never be written. Reported, not hidden:
+	// the section is named in `incomplete` exactly as a cut-off walk is.
+	if (opts.budget?.expired()) {
+		if (opts.label) opts.budget.noteSkipped(opts.label);
+		return { opened: false, summary, body: emptyStream() };
+	}
 	const first = await fetchPage(0, pageSize);
 
 	if (!first) {

@@ -44,8 +44,8 @@ function fakeStorage(
 			Object.entries((init?.headers ?? {}) as Record<string, string>)
 				.map(([k, v]) => [k.toLowerCase(), v]),
 		);
-		const bodyBytes = init?.body instanceof Uint8Array
-			? (init.body as Uint8Array)
+		const bodyBytes = init?.body instanceof Blob
+			? new Uint8Array(await init.body.arrayBuffer())
 			: new Uint8Array(0);
 		rec.calls.push({ method, url, headers, bytes: bodyBytes.length });
 		if (method === 'POST') {
@@ -312,4 +312,20 @@ Deno.test('an entry streamed from a ReadableStream needs no known size', async (
 	);
 	assertEquals(text, 'page-0\npage-1\npage-2\n');
 	await reader.close();
+});
+
+Deno.test('tens of thousands of tiny writes stay linear and byte-exact', async () => {
+	// A CSV export hands the sink one small array per run, so the pending
+	// queue is compacted by a head index rather than shifted piece by
+	// piece — 100k runs through a shift() queue is quadratic.
+	const { rec, fetchImpl } = fakeStorage();
+	const up = sink(fetchImpl, 4096);
+	const started = Date.now();
+	for (let i = 0; i < 60_000; i++) await up.write(new Uint8Array([i & 0xff]));
+	await up.finish();
+	assertEquals(rec.body.length, 60_000);
+	assertEquals(up.uploaded, 60_000);
+	assertEquals(rec.body[59_999], 59_999 & 0xff);
+	for (const n of rec.received.slice(0, -1)) assertEquals(n, 4096);
+	assert(Date.now() - started < 10_000, 'the pending queue is not linear');
 });

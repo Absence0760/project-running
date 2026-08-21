@@ -184,3 +184,13 @@ Deno.test('the budget leaves the platform timeout room to finalise', () => {
 	assertEquals(budget.remainingMs(), 1000);
 	assertEquals(budget.deadlineSkipped(), []);
 });
+
+Deno.test('a section opened past the deadline is shed, not read', async () => {
+	const { calls, fetchPage } = clampedServer(50);
+	const budget = createExportBudget(0, () => 1);
+	const section = await openJsonSection(fetchPage, { pageSize: 10, budget, label: 'gym_sets' });
+	assertEquals(section.opened, false);
+	assertEquals(section.summary.complete, false);
+	assertEquals(calls.length, 0, 'not even the count query should be spent');
+	assertEquals(budget.deadlineSkipped(), ['gym_sets']);
+});
