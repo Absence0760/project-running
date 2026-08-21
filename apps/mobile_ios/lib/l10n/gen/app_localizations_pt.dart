@@ -516,6 +516,34 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => 'Corredores por perto';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Corredores que optaram por participar perto da área que definiu. Apenas distância aproximada, nunca uma localização em tempo real.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Ainda não há ninguém por perto';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Ative «Mostrar-me a corredores por perto» em Configurações → Preferências → Privacidade e defina a sua área. Só os corredores que fizeram o mesmo o podem encontrar.';
+
+  @override
+  String get peopleNearbyLoadFailed =>
+      'Não foi possível carregar os corredores por perto.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'A menos de $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'A mais de $distance';
+  }
+
+  @override
   String get peopleFallbackDisplayName => 'Corredor';
 
   @override
@@ -13852,6 +13880,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       one: '1 clube em comum',
     );
     return '$_temp0';
+  }
+
+  @override
+  String get peopleNearbyHeader => 'Corredores por perto';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Corredores que optaram por participar perto da área que você definiu. Apenas distância aproximada, nunca uma localização em tempo real.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Ainda não há ninguém por perto';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Ative “Mostrar meu perfil a corredores por perto” em Configurações → Preferências → Privacidade e defina sua área. Só os corredores que fizeram o mesmo podem te encontrar.';
+
+  @override
+  String get peopleNearbyLoadFailed =>
+      'Não foi possível carregar os corredores por perto.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'A menos de $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'A mais de $distance';
   }
 
   @override

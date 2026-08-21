@@ -511,6 +511,33 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => 'Runners nearby';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Runners who opted in near the area you set. Approximate distance only — never a live location.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Nobody nearby yet';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Turn on \"Show me to runners nearby\" in Settings → Preferences → Privacy and set your area. Only runners who did the same can find you.';
+
+  @override
+  String get peopleNearbyLoadFailed => 'Could not load runners nearby.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'Within $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'Beyond $distance';
+  }
+
+  @override
   String get peopleFallbackDisplayName => 'Runner';
 
   @override

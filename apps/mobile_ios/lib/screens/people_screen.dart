@@ -7,6 +7,9 @@ import 'package:ui_kit/ui_kit.dart' show IdentityAvatar;
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../nearby.dart';
+import '../nearby_flag.dart';
+import '../preferences.dart' show formatDistanceForPref;
 import '../widgets/error_state.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
@@ -17,6 +20,11 @@ import 'profile_screen.dart';
 /// + the People tab on web's `/social` hub. Mounted as the **People**
 /// sub-tab of `social_screen.dart` (the Social bottom-nav destination); the
 /// standalone Scaffold path is kept for any direct caller.
+///
+/// Also hosts the opt-in coarse-location "runners nearby" list (issue #466),
+/// which renders only while the default-off `ENABLE_NEARBY_RUNNERS` deploy gate
+/// is on. With the gate off the surface is wholly inert: no heading, no empty
+/// state, and no `discoverable_runners_near` call.
 class PeopleScreen extends StatefulWidget {
   final ApiClient api;
   /// Embedded mode skips the Scaffold/AppBar wrapping — the search
@@ -42,14 +50,24 @@ class _PeopleScreenState extends State<PeopleScreen> {
   bool _signedOut = false;
   List<PeopleSuggestion> _suggestions = const [];
   List<PeopleSuggestion> _results = const [];
+  List<NearbyRunner> _nearby = const [];
+  bool _loadingNearby = false;
+  bool _nearbyError = false;
   String _query = '';
+
+  /// Read once per mount rather than per build so a mid-session env mutation
+  /// can't leave the surface half-rendered against a half-loaded list.
+  final bool _nearbyGate = nearbyRunnersGate;
 
   final Set<String> _rowBusy = <String>{};
 
   @override
   void initState() {
     super.initState();
-    if (widget.api.userId != null) _loadSuggestions();
+    if (widget.api.userId != null) {
+      _loadSuggestions();
+      if (_nearbyGate) _loadNearby();
+    }
   }
 
   @override
@@ -87,6 +105,33 @@ class _PeopleScreenState extends State<PeopleScreen> {
       _suggestionsError = false;
     });
     _loadSuggestions();
+  }
+
+  /// Only ever called behind [_nearbyGate] — the RPC must not be reached at
+  /// all while the sign-off gate is off.
+  Future<void> _loadNearby() async {
+    setState(() {
+      _loadingNearby = true;
+      _nearbyError = false;
+    });
+    try {
+      final rows = await widget.api.fetchNearbyRunners();
+      if (!mounted) return;
+      setState(() {
+        _nearby = rows;
+        _loadingNearby = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (isSignedOutError(e)) {
+          _signedOut = true;
+        } else {
+          _nearbyError = true;
+        }
+        _loadingNearby = false;
+      });
+    }
   }
 
   void _onSearchChanged(String value) {
@@ -147,24 +192,23 @@ class _PeopleScreenState extends State<PeopleScreen> {
     _onSearchChanged('');
   }
 
-  Future<void> _toggleFollow(PeopleSuggestion target) async {
-    if (_rowBusy.contains(target.id)) return;
-    final wasFollowing = target.viewerFollows;
+  Future<void> _toggleFollow(String id, bool wasFollowing) async {
+    if (_rowBusy.contains(id)) return;
     setState(() {
-      _rowBusy.add(target.id);
-      _flipFollow(target.id, !wasFollowing);
+      _rowBusy.add(id);
+      _flipFollow(id, !wasFollowing);
     });
     try {
       if (wasFollowing) {
-        await widget.api.unfollowUser(target.id);
+        await widget.api.unfollowUser(id);
       } else {
-        await widget.api.followUser(target.id);
+        await widget.api.followUser(id);
       }
     } catch (e) {
       if (!mounted) return;
       final signedOut = isSignedOutError(e);
       setState(() {
-        _flipFollow(target.id, wasFollowing);
+        _flipFollow(id, wasFollowing);
         if (signedOut) _signedOut = true;
       });
       if (!signedOut) {
@@ -172,7 +216,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
           context, AppLocalizations.of(context).peopleFollowFailedBanner(e));
       }
     } finally {
-      if (mounted) setState(() => _rowBusy.remove(target.id));
+      if (mounted) setState(() => _rowBusy.remove(id));
     }
   }
 
@@ -182,6 +226,9 @@ class _PeopleScreenState extends State<PeopleScreen> {
         .toList();
     _suggestions = _suggestions
         .map((p) => p.id == id ? _withFollow(p, viewerFollows) : p)
+        .toList();
+    _nearby = _nearby
+        .map((p) => p.id == id ? _withFollowNearby(p, viewerFollows) : p)
         .toList();
   }
 
@@ -195,6 +242,26 @@ class _PeopleScreenState extends State<PeopleScreen> {
         viewerFollows: follows,
       );
 
+  static NearbyRunner _withFollowNearby(NearbyRunner p, bool follows) =>
+      NearbyRunner(
+        id: p.id,
+        displayName: p.displayName,
+        avatarUrl: p.avatarUrl,
+        bucket: p.bucket,
+        viewerFollows: follows,
+      );
+
+  /// The coarse bucket as a label. Only ever the bucket's upper BOUND, formatted
+  /// in the runner's own unit — never the exact distance, which the RPC
+  /// deliberately never sends.
+  static String _bucketLabel(AppLocalizations l10n, int bucket) {
+    final bound = nearbyBucketUpperBoundM(bucket);
+    return bound == null
+        ? l10n.peopleNearbyBeyond(
+            formatDistanceForPref(kNearbyBucketBoundsM.last.toDouble()))
+        : l10n.peopleNearbyWithin(formatDistanceForPref(bound.toDouble()));
+  }
+
   void _handleSignedIn() {
     if (!mounted) return;
     setState(() {
@@ -204,6 +271,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
       _searchError = false;
     });
     _loadSuggestions();
+    if (_nearbyGate) _loadNearby();
     if (_query.isNotEmpty) _runSearch();
   }
 
@@ -341,7 +409,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
               itemBuilder: (_, i) => _PersonRow(
                 person: visible[i],
                 busy: _rowBusy.contains(visible[i].id),
-                onToggleFollow: () => _toggleFollow(visible[i]),
+                onToggleFollow: () =>
+                    _toggleFollow(visible[i].id, visible[i].viewerFollows),
                 onOpenProfile: () {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(
@@ -356,6 +425,84 @@ class _PeopleScreenState extends State<PeopleScreen> {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemCount: visible.length,
             ),
+          // Opt-in coarse-location discovery. Suppressed while a search is
+          // active (mirrors SocialPeople.svelte) and entirely absent while the
+          // deploy gate is off.
+          if (_nearbyGate && !hasQuery) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.peopleNearbyHeader,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.peopleNearbySubtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_loadingNearby)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (_nearbyError)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: ErrorState(
+                    message: l10n.peopleNearbyLoadFailed,
+                    onRetry: _loadNearby,
+                  ),
+                ),
+              )
+            else if (_nearby.isEmpty)
+              SliverToBoxAdapter(
+                child: _Empty(
+                  icon: Icons.near_me_outlined,
+                  title: l10n.peopleNearbyEmptyTitle,
+                  body: l10n.peopleNearbyEmptyBody,
+                ),
+              )
+            else
+              SliverList.separated(
+                itemBuilder: (_, i) => _NearbyRow(
+                  person: _nearby[i],
+                  bucketLabel: _bucketLabel(l10n, _nearby[i].bucket),
+                  busy: _rowBusy.contains(_nearby[i].id),
+                  onToggleFollow: () => _toggleFollow(
+                      _nearby[i].id, _nearby[i].viewerFollows),
+                  onOpenProfile: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ProfileScreen(
+                          api: widget.api,
+                          userId: _nearby[i].id,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemCount: _nearby.length,
+              ),
+          ],
         ],
       ),
     );
@@ -426,6 +573,51 @@ class _PersonRow extends StatelessWidget {
       ),
       title: Text(person.displayName ?? l10n.peopleFallbackDisplayName),
       subtitle: subtitle,
+      trailing: FilledButton.tonal(
+        onPressed: busy ? null : onToggleFollow,
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+        ),
+        child: Text(person.viewerFollows
+            ? l10n.peopleFollowingButton
+            : l10n.peopleFollowButton),
+      ),
+      onTap: onOpenProfile,
+    );
+  }
+}
+
+/// A nearby runner's row. Deliberately NOT the same widget as [_PersonRow]:
+/// the only thing known about this person's location is a coarse bucket, so the
+/// row has no place to put a run count, a shared-club count, or anything a map
+/// could pin.
+class _NearbyRow extends StatelessWidget {
+  final NearbyRunner person;
+  final String bucketLabel;
+  final bool busy;
+  final VoidCallback onToggleFollow;
+  final VoidCallback onOpenProfile;
+
+  const _NearbyRow({
+    required this.person,
+    required this.bucketLabel,
+    required this.busy,
+    required this.onToggleFollow,
+    required this.onOpenProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListTile(
+      leading: IdentityAvatar(
+        seed: person.id,
+        name: person.displayName,
+        size: 40,
+        imageUrl: person.avatarUrl,
+      ),
+      title: Text(person.displayName ?? l10n.peopleFallbackDisplayName),
+      subtitle: Text(bucketLabel),
       trailing: FilledButton.tonal(
         onPressed: busy ? null : onToggleFollow,
         style: FilledButton.styleFrom(

@@ -494,6 +494,33 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => '近くのランナー';
+
+  @override
+  String get peopleNearbySubtitle =>
+      '設定したエリア付近で参加を選んだランナーです。表示はおよその距離のみで、リアルタイムの位置は含まれません。';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'まだ近くに誰もいません';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      '設定 → 環境設定 → プライバシーで「近くのランナーに自分を表示」をオンにし、エリアを設定してください。同じ設定をしたランナーだけがあなたを見つけられます。';
+
+  @override
+  String get peopleNearbyLoadFailed => '近くのランナーを読み込めませんでした。';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return '$distance以内';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return '$distanceより遠く';
+  }
+
+  @override
   String get peopleFallbackDisplayName => 'ランナー';
 
   @override

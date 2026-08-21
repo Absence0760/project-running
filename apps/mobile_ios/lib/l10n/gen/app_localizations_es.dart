@@ -514,6 +514,34 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => 'Corredores cerca';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Corredores que se han dado de alta cerca de la zona que has fijado. Solo distancia aproximada, nunca una ubicación en vivo.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Todavía no hay nadie cerca';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Activa «Mostrarme a corredores cercanos» en Ajustes → Preferencias → Privacidad y fija tu zona. Solo pueden encontrarte los corredores que hayan hecho lo mismo.';
+
+  @override
+  String get peopleNearbyLoadFailed =>
+      'No se pudieron cargar los corredores cercanos.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'A menos de $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'A más de $distance';
+  }
+
+  @override
   String get peopleFallbackDisplayName => 'Corredor';
 
   @override

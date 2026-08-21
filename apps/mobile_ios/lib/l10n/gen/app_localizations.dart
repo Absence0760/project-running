@@ -839,6 +839,48 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{1 club together} other{{count} clubs together}}'**
   String peopleSharedClubsCount(num count);
 
+  /// Section heading for the opt-in coarse-location runners-nearby list on the People screen
+  ///
+  /// In en, this message translates to:
+  /// **'Runners nearby'**
+  String get peopleNearbyHeader;
+
+  /// Explanatory subtitle under the runners-nearby heading
+  ///
+  /// In en, this message translates to:
+  /// **'Runners who opted in near the area you set. Approximate distance only — never a live location.'**
+  String get peopleNearbySubtitle;
+
+  /// Empty-state title when the runners-nearby list comes back with no one
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody nearby yet'**
+  String get peopleNearbyEmptyTitle;
+
+  /// Empty-state body for the runners-nearby list, pointing at the opt-in and area setter
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on \"Show me to runners nearby\" in Settings → Preferences → Privacy and set your area. Only runners who did the same can find you.'**
+  String get peopleNearbyEmptyBody;
+
+  /// Error-state message when the runners-nearby list fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load runners nearby.'**
+  String get peopleNearbyLoadFailed;
+
+  /// Coarse distance label for a nearby runner — the bucket's upper bound, never an exact distance
+  ///
+  /// In en, this message translates to:
+  /// **'Within {distance}'**
+  String peopleNearbyWithin(String distance);
+
+  /// Coarse distance label for the open-ended furthest bucket
+  ///
+  /// In en, this message translates to:
+  /// **'Beyond {distance}'**
+  String peopleNearbyBeyond(String distance);
+
   /// Fallback display name for a person with no name set
   ///
   /// In en, this message translates to:

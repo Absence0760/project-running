@@ -516,6 +516,34 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get peopleNearbyHeader => 'Läufer in der Nähe';
+
+  @override
+  String get peopleNearbySubtitle =>
+      'Läufer, die sich in der Nähe des von dir gesetzten Gebiets angemeldet haben. Nur ungefähre Entfernung — niemals ein Live-Standort.';
+
+  @override
+  String get peopleNearbyEmptyTitle => 'Noch niemand in der Nähe';
+
+  @override
+  String get peopleNearbyEmptyBody =>
+      'Aktiviere „Mich Läufern in der Nähe zeigen“ unter Einstellungen → Präferenzen → Privatsphäre und setze dein Gebiet. Nur Läufer, die dasselbe getan haben, können dich finden.';
+
+  @override
+  String get peopleNearbyLoadFailed =>
+      'Läufer in der Nähe konnten nicht geladen werden.';
+
+  @override
+  String peopleNearbyWithin(String distance) {
+    return 'Innerhalb von $distance';
+  }
+
+  @override
+  String peopleNearbyBeyond(String distance) {
+    return 'Weiter als $distance';
+  }
+
+  @override
   String get peopleFallbackDisplayName => 'Läufer';
 
   @override
