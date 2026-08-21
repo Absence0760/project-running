@@ -468,6 +468,8 @@
   "runTreadmillReconnected": "Passadeira reconectada",
   "runTreadmillLostFallback": "Passadeira perdida — distância a voltar para o GPS",
   "runTreadmillNotFound": "Não foi possível conectar à passadeira",
+  "runTreadmillConnecting": "A conectar à passadeira…",
+  "runTreadmillNoBeltData": "Sem dados da passadeira — distância pelo GPS",
   "runSaveFailedRelaunch": "Não foi possível salvar localmente. Reinicie o app para recuperar.",
   "runSyncFailedSaveOffline": "Salva offline. Sincronize em Corridas.",
   "runSavedOffline": "Salva offline.",

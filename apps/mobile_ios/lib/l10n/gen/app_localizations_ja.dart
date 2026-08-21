@@ -1603,6 +1603,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runTreadmillNotFound => 'トレッドミルに接続できませんでした';
 
   @override
+  String get runTreadmillConnecting => 'トレッドミルに接続中…';
+
+  @override
+  String get runTreadmillNoBeltData => 'ベルトのデータなし — 距離はGPSから';
+
+  @override
   String get runSaveFailedRelaunch => 'ローカルに保存できませんでした。アプリを再起動して復元してください。';
 
   @override

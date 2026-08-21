@@ -1681,6 +1681,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runTreadmillNotFound => 'Não foi possível conectar à passadeira';
 
   @override
+  String get runTreadmillConnecting => 'A conectar à passadeira…';
+
+  @override
+  String get runTreadmillNoBeltData =>
+      'Sem dados da passadeira — distância pelo GPS';
+
+  @override
   String get runSaveFailedRelaunch =>
       'Não foi possível salvar localmente. Reinicie o app para recuperar.';
 
@@ -15017,6 +15024,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runTreadmillNotFound => 'Não foi possível conectar à esteira';
+
+  @override
+  String get runTreadmillConnecting => 'Conectando à esteira…';
+
+  @override
+  String get runTreadmillNoBeltData =>
+      'Sem dados da esteira — distância pelo GPS';
 
   @override
   String get runSaveFailedRelaunch =>

@@ -468,6 +468,8 @@
   "runTreadmillReconnected": "Tapis de course reconnecté",
   "runTreadmillLostFallback": "Tapis de course perdu — distance basculée sur le GPS",
   "runTreadmillNotFound": "Impossible de joindre le tapis de course",
+  "runTreadmillConnecting": "Connexion au tapis de course…",
+  "runTreadmillNoBeltData": "Aucune donnée du tapis — distance via GPS",
   "runSaveFailedRelaunch": "Impossible d'enregistrer localement. Relancez l'app pour récupérer.",
   "runSyncFailedSaveOffline": "Enregistré hors ligne. Synchronisez depuis Courses.",
   "runSavedOffline": "Enregistré hors ligne.",

@@ -2169,6 +2169,14 @@
   "@runTreadmillNotFound": {
     "description": "Banner shown when treadmill mode is turned on but the belt can't be reached"
   },
+  "runTreadmillConnecting": "Connecting to the treadmill…",
+  "@runTreadmillConnecting": {
+    "description": "Treadmill-mode toggle subtitle while the belt link is still being established"
+  },
+  "runTreadmillNoBeltData": "No belt data — distance from GPS",
+  "@runTreadmillNoBeltData": {
+    "description": "Treadmill-mode toggle subtitle while the belt is not feeding, so the headline distance comes from the GPS/pedometer path"
+  },
   "runSaveFailedRelaunch": "Couldn't save locally. Relaunch the app to recover.",
   "@runSaveFailedRelaunch": {
     "description": "Finish-summary error shown when the local save of a run failed"

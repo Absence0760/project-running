@@ -2921,6 +2921,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t reach the treadmill'**
   String get runTreadmillNotFound;
 
+  /// Treadmill-mode toggle subtitle while the belt link is still being established
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to the treadmill…'**
+  String get runTreadmillConnecting;
+
+  /// Treadmill-mode toggle subtitle while the belt is not feeding, so the headline distance comes from the GPS/pedometer path
+  ///
+  /// In en, this message translates to:
+  /// **'No belt data — distance from GPS'**
+  String get runTreadmillNoBeltData;
+
   /// Finish-summary error shown when the local save of a run failed
   ///
   /// In en, this message translates to:
