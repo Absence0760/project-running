@@ -301,15 +301,22 @@ void main() {
       // The toggle lives in the recording view (_buildLive). Pairing a belt
       // must not surface it on the idle screen — it only appears once a run
       // is in flight. This also guards the new plumbing renders idle cleanly.
-      await tester.runAsync(() async {
-        SharedPreferences.setMockInitialValues({
-          'treadmill_device_id': 'AA:BB:CC:DD:EE:FF',
-          'treadmill_device_name': 'NordicTrack T9',
-        });
-      });
+      //
+      // The keys must be seeded AFTER _makeStores, which resets the mock
+      // store: seeded before it, the pairing was wiped and this asserted
+      // nothing (the toggle is hidden at idle whether or not a belt exists).
       final s = await _makeStores();
+      SharedPreferences.setMockInitialValues({
+        'treadmill_device_id': 'AA:BB:CC:DD:EE:FF',
+        'treadmill_device_name': 'NordicTrack T9',
+      });
+      expect(await s.treadmill.pairedName(), 'NordicTrack T9',
+          reason: 'the precondition this case is named for must actually hold');
       await _pump(tester, s);
       // Let the post-frame pairedName() read settle.
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      });
       await tester.pump();
       expect(find.text('Treadmill mode'), findsNothing);
     });
