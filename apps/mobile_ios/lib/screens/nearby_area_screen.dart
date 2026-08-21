@@ -276,7 +276,7 @@ class _NearbyAreaScreenState extends State<NearbyAreaScreen> {
             else
               for (final r in _results)
                 ListTile(
-                  leading: const Icon(Icons.place_outlined),
+                  leading: const Icon(Icons.place),
                   title: Text(r.name),
                   enabled: !_busy,
                   onTap: () => _pick(r),

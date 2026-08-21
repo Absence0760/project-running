@@ -490,7 +490,7 @@ void main() {
       expect(api.nearbyCalls, 0);
       expect(find.text('Runners nearby'), findsNothing);
       expect(find.text('Nearby Nia'), findsNothing);
-      expect(find.byIcon(Icons.near_me_outlined), findsNothing);
+      expect(find.byIcon(Icons.near_me), findsNothing);
     });
 
     testWidgets('with the gate on the list renders coarse buckets only',
@@ -524,7 +524,7 @@ void main() {
       await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
       await _settle(tester);
 
-      expect(find.byIcon(Icons.near_me_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.near_me), findsOneWidget);
       expect(find.text('Nobody nearby yet'), findsOneWidget);
     });
 
@@ -537,7 +537,7 @@ void main() {
 
       // A failed load is not the same claim as "nobody is nearby".
       expect(find.text('Could not load runners nearby.'), findsOneWidget);
-      expect(find.byIcon(Icons.near_me_outlined), findsNothing);
+      expect(find.byIcon(Icons.near_me), findsNothing);
       expect(api.nearbyCalls, 1);
 
       api.nearbyError = null;

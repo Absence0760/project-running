@@ -475,7 +475,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
             else if (_nearby.isEmpty)
               SliverToBoxAdapter(
                 child: _Empty(
-                  icon: Icons.near_me_outlined,
+                  icon: Icons.near_me,
                   title: l10n.peopleNearbyEmptyTitle,
                   body: l10n.peopleNearbyEmptyBody,
                 ),
