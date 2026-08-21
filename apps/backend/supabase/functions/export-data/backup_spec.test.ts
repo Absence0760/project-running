@@ -521,6 +521,12 @@ Deno.test('PROFILE_SELECT carries the subscription columns and matches the Go pr
 	// holds about the subject (Art 15(1) / CCPA right-to-know) and were
 	// missing from BOTH export paths. Must stay in lockstep with the Go
 	// worker's FetchExportProfile select.
+	//
+	// `hr_zones`, `activity_default` and `privacy_default` were dropped
+	// from this list when the projections were corrected: they are not
+	// columns of `user_profiles` (they live in the `user_settings.prefs`
+	// bag both rails export separately), so asking for them 400'd the
+	// whole profile read on both rails.
 	for (
 		const col of [
 			'subscription_tier',
@@ -529,10 +535,7 @@ Deno.test('PROFILE_SELECT carries the subscription columns and matches the Go pr
 			'display_name',
 			'date_of_birth',
 			'parkrun_number',
-			'hr_zones',
 			'gender',
-			'activity_default',
-			'privacy_default',
 		]
 	) {
 		assertEquals(PROFILE_SELECT.includes(col), true, `PROFILE_SELECT must carry ${col}`);
@@ -691,4 +694,117 @@ Deno.test('kudos + comments received are exported via a parent-run inner join (G
 	assertEquals(comments!.table, 'run_comments');
 	assertEquals(comments!.filter, `runs.user_id=eq.${TEST_UID}`);
 	assertEquals(comments!.select, '*,runs!inner(user_id)');
+});
+
+// Every projection in this file is a string, so a column that does not
+// exist is not a type error — it is a PostgREST 400 at runtime, and the
+// export tolerates a failed section by design. That combination is how
+// `reports_against_me.json` asked for `resolved_at` (the column is
+// `reviewed_at`) and `profile.json` asked for `bio,location` (neither
+// exists) for as long as they did: the subject's export silently shipped
+// without their reports and with a null profile, and only a log line
+// said so. The generated row types are the schema's own account of what
+// exists, so the projections are checked against them here.
+function schemaColumns(): Map<string, Set<string>> {
+	const typesPath = new URL('../../../../web/src/lib/database.types.ts', import.meta.url);
+	const src = Deno.readTextFileSync(typesPath);
+	const byTable = new Map<string, Set<string>>();
+	// The generated file nests `Tables`/`Views` two levels in, so a
+	// six-space `name: {` followed by an eight-space `Row: {` is the
+	// shape being read; anything shallower is a schema or section key.
+	const lines = src.split('\n');
+	let table: string | null = null;
+	let inRow = false;
+	for (const line of lines) {
+		const entry = line.match(/^ {6}([A-Za-z_][A-Za-z0-9_]*): \{$/);
+		if (entry) {
+			table = entry[1];
+			inRow = false;
+			continue;
+		}
+		if (table && /^ {8}Row: \{$/.test(line)) {
+			inRow = true;
+			byTable.set(table, new Set());
+			continue;
+		}
+		if (inRow) {
+			if (/^ {8}\}$/.test(line)) {
+				inRow = false;
+				continue;
+			}
+			const col = line.match(/^ {10}([A-Za-z_][A-Za-z0-9_]*)\??:/);
+			if (col) byTable.get(table!)!.add(col[1]);
+		}
+	}
+	return byTable;
+}
+
+/// Top-level comma split that does not cut inside an embed's parens.
+function topLevelParts(select: string): string[] {
+	const out: string[] = [];
+	let depth = 0;
+	let cur = '';
+	for (const ch of select) {
+		if (ch === '(') depth++;
+		if (ch === ')') depth--;
+		if (ch === ',' && depth === 0) {
+			out.push(cur);
+			cur = '';
+			continue;
+		}
+		cur += ch;
+	}
+	if (cur) out.push(cur);
+	return out;
+}
+
+/// Only the plain columns are checked. `*`, an embed (`a(b)`), an alias
+/// (`x:y`) and a hint (`runs!inner`) all name something other than a
+/// column of this table.
+function plainColumns(select: string): string[] {
+	return topLevelParts(select)
+		.map((p) => p.trim())
+		.filter((p) => p.length > 0 && p !== '*' && !/[():!]/.test(p));
+}
+
+Deno.test('every backup projection names columns the schema actually has', () => {
+	const schema = schemaColumns();
+	const uid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+	const missing: string[] = [];
+	for (const spec of buildBackupSpecs(uid)) {
+		const cols = schema.get(spec.table);
+		if (!cols || cols.size === 0) {
+			missing.push(`${spec.entry}: table '${spec.table}' is not in the generated row types`);
+			continue;
+		}
+		for (const col of plainColumns(spec.select)) {
+			if (!cols.has(col)) missing.push(`${spec.entry}: ${spec.table}.${col}`);
+		}
+	}
+	assertEquals(missing, [], `backup specs project columns that do not exist:\n${missing.join('\n')}`);
+});
+
+Deno.test('every backup filter names columns the schema actually has', () => {
+	const schema = schemaColumns();
+	const uid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+	const missing: string[] = [];
+	for (const spec of buildBackupSpecs(uid)) {
+		const cols = schema.get(spec.table);
+		if (!cols) continue;
+		for (const clause of spec.filter.split('&')) {
+			const lhs = clause.split('=')[0];
+			// An embedded filter (`runs.user_id`) constrains the embed,
+			// not this table, and `or`/`and` are operators.
+			if (!lhs || lhs.includes('.') || lhs === 'or' || lhs === 'and') continue;
+			if (!cols.has(lhs)) missing.push(`${spec.entry}: ${spec.table}.${lhs}`);
+		}
+	}
+	assertEquals(missing, [], `backup filters name columns that do not exist:\n${missing.join('\n')}`);
+});
+
+Deno.test('PROFILE_SELECT names columns user_profiles actually has', () => {
+	const cols = schemaColumns().get('user_profiles');
+	assertExists(cols, 'user_profiles must be in the generated row types');
+	const missing = plainColumns(PROFILE_SELECT).filter((c) => !cols!.has(c));
+	assertEquals(missing, [], `PROFILE_SELECT asks for absent columns: ${missing.join(', ')}`);
 });

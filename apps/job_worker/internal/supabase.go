@@ -1623,7 +1623,7 @@ func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) 
 	// user_profiles is the only place it lives (RevenueCat keys by the
 	// Supabase user id). Keep in lockstep with the EF twin's
 	// PROFILE_SELECT in export-data/backup_spec.ts.
-	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default,subscription_tier,subscription_at,billing_issue_at")
+	q.Set("select", "id,display_name,avatar_url,preferred_unit,created_at,date_of_birth,parkrun_number,gender,subscription_tier,subscription_at,billing_issue_at")
 	q.Set("limit", "1")
 	u := c.BaseURL + "/rest/v1/" + schema.TableUserProfiles + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -2216,7 +2216,7 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 			name:   "reports_against_me.json",
 			table:  "reports",
 			filter: "target_kind=eq.user&target_id=eq." + uid,
-			sel:    "id,target_kind,target_id,reason,status,notes,created_at,resolved_at",
+			sel:    "id,target_kind,target_id,reason,status,notes,created_at,reviewed_at",
 		},
 		// direct_messages — private 1:1 conversations, both directions
 		// (messages the user sent and messages they received). `body`

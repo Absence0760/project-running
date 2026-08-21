@@ -223,7 +223,6 @@ func TestFetchExportProfile_IncludesPersonalDataColumns(t *testing.T) {
 		"date_of_birth",
 		"parkrun_number",
 		"display_name",
-		"hr_zones",
 		"gender",
 	}
 	for _, col := range required {
@@ -231,8 +230,24 @@ func TestFetchExportProfile_IncludesPersonalDataColumns(t *testing.T) {
 			t.Errorf("profile select must request %q: %q", col, capturedRaw)
 		}
 	}
-	if strings.Contains(capturedRaw, "birth_year") {
-		t.Errorf("profile select must not request birth_year — column does not exist (typo for date_of_birth)")
+	// Same failure mode as the birth_year typo above, and it outlived
+	// that fix: PostgREST rejects the WHOLE read when any projected
+	// column is absent, so one stale name means the subject's export
+	// ships no profile at all. `hr_zones`, `activity_default` and
+	// `privacy_default` live in the `user_settings.prefs` bag this
+	// worker exports separately (FetchUserSettingsPrefs); `bio` and
+	// `location` do not exist anywhere.
+	for _, col := range []string{
+		"birth_year",
+		"bio",
+		"location",
+		"hr_zones",
+		"activity_default",
+		"privacy_default",
+	} {
+		if strings.Contains(capturedRaw, col) {
+			t.Errorf("profile select must not request %q — user_profiles has no such column: %q", col, capturedRaw)
+		}
 	}
 }
 

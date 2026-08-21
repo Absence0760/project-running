@@ -174,7 +174,7 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			entry: 'reports_against_me.json',
 			table: 'reports',
 			filter: `target_kind=eq.user&target_id=eq.${uid}`,
-			select: 'id,target_kind,target_id,reason,status,notes,created_at,resolved_at',
+			select: 'id,target_kind,target_id,reason,status,notes,created_at,reviewed_at',
 		},
 		// direct_messages — private 1:1 conversations, both directions.
 		// `body` is the subject's own correspondence and ships verbatim.
@@ -435,7 +435,7 @@ export const BACKUP_VERSION = 1;
 /// (audit/data-export-completeness 2026-07-02 High). Service-role
 /// reads bypass the 20260707_001 column-level revokes.
 export const PROFILE_SELECT =
-	'id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default,subscription_tier,subscription_at,billing_issue_at';
+	'id,display_name,avatar_url,preferred_unit,created_at,date_of_birth,parkrun_number,gender,subscription_tier,subscription_at,billing_issue_at';
 
 /// Strip `id` from the profile so the archive is re-homeable —
 /// restore stamps the new owner's uid. Mirrors the Go worker's
