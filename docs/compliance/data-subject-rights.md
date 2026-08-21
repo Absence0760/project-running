@@ -50,22 +50,40 @@ named in `incomplete`; it is never silently dropped, and never counted
 as whole. The CSV and GPX formats carry the same signal in the endpoint's
 JSON response (`count` / `total` / `complete`).
 
-**Known bounds, stated rather than hidden.** Two caps can legitimately
-produce `complete: false`, and both are visible in the manifest:
+**Known bounds, stated rather than hidden — and they now differ per
+rail.** The Edge Function streams; the Go worker does not yet. Whatever
+bound applies, it is visible in the manifest.
 
-- **5000 runs per export** (`MaxRunsPerExport` / `MAX_RUNS`) — the
-  archive bundles every run's GPS track and HR sidecar, so the cap is a
-  time/memory bound, not a data-minimisation one.
-- **50,000 rows per section** (`exportRowCeiling` / `EXPORT_ROW_CEILING`)
-  — both paths assemble the whole archive in memory before uploading it,
-  so an unbounded walk of a high-cardinality table (`live_run_pings` runs
-  into the millions on a deep history) is an OOM rather than a slow
-  export.
+*The `export-data` Edge Function has no row bounds at all* since
+2026-08-21 ([decisions § 703](../architecture/decisions.md)). It streams
+the archive into Storage through a chunked tus upload (6 MiB chunks) and
+serialises each section page by page, so `MAX_RUNS` and
+`EXPORT_ROW_CEILING` are deleted rather than raised. Its one remaining
+bound is a genuine platform limit: the function is killed at 150 s, so
+the builders run against an explicit 120 s budget and any section the
+clock cuts short is named in `incomplete`. It also fails closed harder
+than before — tus publishes the object only once the declared length
+arrives, so a build that dies produces no artifact instead of a short
+one.
 
-A subject who hits either cap has not received everything, and the
-manifest says so. Art 20 is satisfied by re-running or by an operator
-export; a streaming (chunked-upload) builder that removes both caps is
-the durable fix and is tracked as a follow-up.
+*The Go worker's `/v1/export`, which production traffic uses, still
+carries both caps* because it still assembles the archive in one
+`bytes.Buffer`:
+
+- **5000 runs per export** (`MaxRunsPerExport`) — the archive bundles
+  every run's GPS track and HR sidecar, so the cap is a memory bound,
+  not a data-minimisation one.
+- **50,000 rows per section** (`exportRowCeiling`) — an unbounded walk of
+  a high-cardinality table (`live_run_pings` runs into the millions on a
+  deep history) is an OOM rather than a slow export.
+
+A subject who hits either cap, or the Edge Function's clock, has not
+received everything, and the manifest says so. Art 20 is satisfied by
+re-running or by an operator export. Giving the Go rail the same
+streaming treatment — and then moving it to an async job so no client
+connection is held open for a multi-gigabyte archive — is the remaining
+durable fix and is tracked as a follow-up; because that rail has no
+request clock, it is the one that can end up with no bound at all.
 
 ## Art 18 (restriction) + Art 21 (objection) — operator SOP
 
