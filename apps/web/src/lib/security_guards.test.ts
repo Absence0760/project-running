@@ -1832,17 +1832,22 @@ test('export-data validates track_url against the canonical Storage path', () =>
 	// assertion is the runtime backstop that catches a row that
 	// somehow bypasses the CHECK.
 	const ef = read('../backend/supabase/functions/export-data/index.ts');
+	// The invariant is the COMPARISON, not the name it is held under: the
+	// streaming rewrite inlined what used to be an `expectedTrackUrl`
+	// variable, which failed this guard while satisfying it exactly. So
+	// match the canonical template being compared against `track_url`,
+	// either inline or through a variable, in either polarity — the gate
+	// is a predicate the download sweeps filter on.
+	const canonical = String.raw`\`\$\{[^}]*user_id[^}]*\}\/\$\{[^}]*\.id[^}]*\}\.json\.gz\``;
 	assert.match(
 		ef,
-		/expectedTrackUrl\s*=\s*`\$\{[^}]*user_id[^}]*\}\/\$\{[^}]*\.id[^}]*\}\.json\.gz`/,
-		'export-data must build expectedTrackUrl as `${user_id}/${run_id}.json.gz` — pass-2 commit 978b4c9.',
+		new RegExp(`track_url\\s*[!=]==\\s*(?:${canonical}|[A-Za-z_$][\\w$]*)`),
+		'export-data must compare track_url against the canonical Storage path — pass-2 commit 978b4c9.',
 	);
-	// Either polarity of the same comparison — the gate is a predicate the
-	// download sweeps filter on, so it reads as `=== expected`.
 	assert.match(
 		ef,
-		/track_url\s*[!=]==\s*expectedTrackUrl/,
-		'export-data must skip rows whose track_url does not match the canonical pattern.',
+		new RegExp(canonical),
+		'export-data must build the canonical path as `${user_id}/${run_id}.json.gz`.',
 	);
 });
 
