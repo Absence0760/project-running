@@ -1312,12 +1312,17 @@ func (c *SupabaseClient) CheckRateLimitTiered(ctx context.Context, userID, bucke
 // per request buys nothing.
 const exportPageSize = 1000
 
-// exportRowCeiling bounds a single section. Both export paths assemble
-// the whole archive in memory before uploading it, so an unbounded walk
-// of a high-cardinality table (`live_run_pings` runs into the millions
-// on a deep history) is an OOM, not a slow export. Reaching it marks the
-// section incomplete rather than silently truncating it. Keep in
-// lockstep with EXPORT_ROW_CEILING in the EF's paging.ts.
+// exportRowCeiling bounds a single section. THIS path assembles the
+// whole archive in one bytes.Buffer before uploading it, so an unbounded
+// walk of a high-cardinality table (`live_run_pings` runs into the
+// millions on a deep history) is an OOM, not a slow export. Reaching it
+// marks the section incomplete rather than silently truncating it.
+//
+// Deliberately NOT in lockstep with the Edge Function any more: the EF
+// streams its archive into a chunked tus Storage upload and has no row
+// ceiling at all (decisions.md §703). Removing this one means giving
+// this rail the same treatment — an io.Pipe into a chunked upload — not
+// raising the number.
 const exportRowCeiling = 50_000
 
 // orderByTable holds the export tables whose primary key is not a bare

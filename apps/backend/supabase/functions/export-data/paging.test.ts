@@ -1,94 +1,10 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { EXPORT_PAGE_SIZE, fetchAllPages, parseContentRangeTotal } from './paging.ts';
+import { EXPORT_PAGE_SIZE, parseContentRangeTotal } from './paging.ts';
 
-/// A server holding `n` rows that clamps every response to PostgREST's
-/// `db-max-rows`, exactly as Supabase does — including clamping a
-/// larger client-supplied limit.
-function clampedServer(n: number, cap = EXPORT_PAGE_SIZE, countOn = true) {
-	const calls: Array<[number, number]> = [];
-	const fetchPage = (offset: number, limit: number) => {
-		calls.push([offset, limit]);
-		const take = Math.min(limit, cap);
-		return Promise.resolve({
-			rows: Array.from(
-				{ length: Math.max(0, Math.min(take, n - offset)) },
-				(_, i) => offset + i,
-			),
-			total: countOn && offset === 0 ? n : null,
-		});
-	};
-	return { calls, fetchPage };
-}
-
-Deno.test('fetchAllPages — a 2400-row table is read whole, not capped at one page', async () => {
-	const { calls, fetchPage } = clampedServer(2400);
-	const out = await fetchAllPages(fetchPage);
-	assertEquals(out.rows.length, 2400);
-	assertEquals(out.total, 2400);
-	assertEquals(out.complete, true);
-	assertEquals(calls.length, 3);
-	assertEquals(calls[0], [0, 1000]);
-	assertEquals(calls[2], [2000, 1000]);
-});
-
-Deno.test('fetchAllPages — an exact multiple of the page size costs one more empty page', async () => {
-	const { calls, fetchPage } = clampedServer(2000);
-	const out = await fetchAllPages(fetchPage);
-	assertEquals(out.rows.length, 2000);
-	assertEquals(out.complete, true);
-	assertEquals(calls.length, 3);
-});
-
-Deno.test('fetchAllPages — a single short page needs no second call', async () => {
-	const { calls, fetchPage } = clampedServer(7);
-	const out = await fetchAllPages(fetchPage);
-	assertEquals(out.rows.length, 7);
-	assertEquals(out.total, 7);
-	assertEquals(out.complete, true);
-	assertEquals(calls.length, 1);
-});
-
-Deno.test('fetchAllPages — a failed page keeps the rows read but never claims completeness', async () => {
-	const { fetchPage } = clampedServer(2400);
-	const out = await fetchAllPages((offset, limit) => offset === 0 ? fetchPage(offset, limit) : Promise.resolve(null));
-	assertEquals(out.rows.length, 1000);
-	assertEquals(out.total, 2400);
-	assertEquals(out.complete, false);
-});
-
-Deno.test('fetchAllPages — a first-page failure yields nothing and is not complete', async () => {
-	const out = await fetchAllPages(() => Promise.resolve(null));
-	assertEquals(out.rows.length, 0);
-	assertEquals(out.total, 0);
-	assertEquals(out.complete, false);
-});
-
-Deno.test('fetchAllPages — the ceiling truncates but still reports the true total', async () => {
-	const { fetchPage } = clampedServer(5000);
-	const out = await fetchAllPages(fetchPage, EXPORT_PAGE_SIZE, 2000);
-	assertEquals(out.rows.length, 2000);
-	assertEquals(out.total, 5000);
-	assertEquals(out.complete, false);
-});
-
-Deno.test('fetchAllPages — without a server count a short page still proves completeness', async () => {
-	const { fetchPage } = clampedServer(1500, EXPORT_PAGE_SIZE, false);
-	const out = await fetchAllPages(fetchPage);
-	assertEquals(out.rows.length, 1500);
-	assertEquals(out.total, 1500);
-	assertEquals(out.complete, true);
-});
-
-Deno.test('fetchAllPages — a server total above the rows read forces incomplete', async () => {
-	const out = await fetchAllPages((offset) =>
-		Promise.resolve({
-			rows: offset === 0 ? [1, 2, 3] : [],
-			total: offset === 0 ? 9 : null,
-		})
-	);
-	assertEquals(out.rows.length, 3);
-	assertEquals(out.total, 9);
-	assertEquals(out.complete, false);
+Deno.test('the page size matches PostgREST db-max-rows', () => {
+	// Asking for more per request buys nothing — the server clamps to
+	// this and says so nowhere.
+	assertEquals(EXPORT_PAGE_SIZE, 1000);
 });
 
 Deno.test('parseContentRangeTotal reads the total and refuses the countless forms', () => {
@@ -118,4 +34,15 @@ Deno.test('every multi-row read in the export walks pages', async () => {
 	// The raw-REST table walk builds its own window rather than going
 	// through the query builder.
 	assertEquals(src.includes('&limit=${limit}&offset=${offset}'), true);
+});
+
+Deno.test('paging.ts no longer offers a per-section row ceiling', async () => {
+	// The ceiling existed only because the archive was assembled in
+	// memory; the streaming sink removed the reason for it, and leaving
+	// the constant around would invite a caller to reintroduce a bound
+	// with no remaining justification. The wall clock is the only bound
+	// (export_budget.ts).
+	const src = await Deno.readTextFile(new URL('./paging.ts', import.meta.url));
+	assertEquals(src.includes('EXPORT_ROW_CEILING'), false);
+	assertEquals(src.includes('ceiling'), true, 'the removal should still be explained');
 });
